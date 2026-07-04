@@ -1,0 +1,247 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, Text, View, Image } from 'react-native';
+
+// ============================================================
+// HelpTooltip — original was a hover-to-show "?" bubble; RN has
+// no hover, so this is tap-to-toggle (the web original already
+// supported tap-to-toggle as a fallback via its onClick handler).
+// ============================================================
+type TooltipPosition = 'top' | 'bottom' | 'left' | 'right';
+
+const tooltipPositionClasses: Record<TooltipPosition, string> = {
+  top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
+  bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
+  left: 'right-full top-1/2 -translate-y-1/2 mr-2',
+  right: 'left-full top-1/2 -translate-y-1/2 ml-2',
+};
+
+export function HelpTooltip({ text, position = 'top' }: { text: string; position?: TooltipPosition }) {
+  const [show, setShow] = useState(false);
+  return (
+    <View className="relative ml-1.5 shrink-0">
+      <Pressable
+        onPress={() => setShow((s) => !s)}
+        className="w-4 h-4 rounded-full border border-neutral-300 items-center justify-center bg-white/95"
+      >
+        <Text className="text-[9px] font-sans font-black text-neutral-400">?</Text>
+      </Pressable>
+      {show && (
+        <View
+          className={`absolute z-50 w-52 p-2.5 bg-white border border-neutral-300 rounded-xl shadow-lg ${tooltipPositionClasses[position]}`}
+        >
+          <Text className="text-[10px] leading-relaxed font-sans font-normal text-neutral-800 text-left">{text}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ============================================================
+// ChipRow — replaces web <select>/<option> dropdowns with the
+// same horizontal segmented-chip pattern the rest of the app
+// already uses, so pickers stay visually consistent.
+// ============================================================
+export interface ChipOption<T extends string | number> {
+  id: T;
+  label: string;
+}
+
+export function ChipRow<T extends string | number>({
+  options,
+  value,
+  onChange,
+  columns,
+  wrap,
+}: {
+  options: ChipOption<T>[];
+  value: T;
+  onChange: (id: T) => void;
+  /** Optional fixed column count (grid-like wrapping); defaults to a scrolling/wrapping row. */
+  columns?: number;
+  /**
+   * Chips size to their own content and wrap onto new lines, instead of
+   * dividing the row width evenly (`flex-1`) or by a fixed column count.
+   * Use this for lists whose length isn't known ahead of time (e.g. chapter
+   * numbers 1..150) — with `flex-1`/`columns`, a long list either overflows
+   * unscrollably or squeezes every label down to an unreadable sliver.
+   */
+  wrap?: boolean;
+}) {
+  // NOTE: column width uses an inline `style` (not a NativeWind className) because
+  // NativeWind statically scans source text for class names — a computed/interpolated
+  // class name like `basis-[${n}%]` never appears literally in the file, so it would
+  // silently fail to generate any style at all.
+  return (
+    <View className={columns || wrap ? 'flex-row flex-wrap gap-1' : 'flex-row gap-1'}>
+      {options.map((opt) => {
+        const active = opt.id === value;
+        return (
+          <Pressable
+            key={String(opt.id)}
+            onPress={() => onChange(opt.id)}
+            style={columns ? { width: `${100 / columns}%`, padding: 2 } : wrap ? { minWidth: 30 } : undefined}
+            className={`py-1 rounded-lg border ${wrap ? 'px-2.5' : 'px-2'} ${columns || wrap ? '' : 'flex-1'} ${
+              active ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
+            }`}
+          >
+            <Text
+              className={`text-[9.5px] font-bold text-center ${active ? 'text-white' : 'text-neutral-600'}`}
+              numberOfLines={1}
+            >
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// ============================================================
+// AvatarCircle — letter-avatar or photo, used across profile,
+// community, and recording-attribution UI.
+// ============================================================
+export function AvatarCircle({
+  name,
+  photoUri,
+  size = 44,
+}: {
+  name?: string | null;
+  photoUri?: string | null;
+  size?: number;
+}) {
+  if (photoUri) {
+    return (
+      <Image
+        source={{ uri: photoUri }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        className="border-2 border-[#1A1A1A]"
+      />
+    );
+  }
+  const initial = (name || 'K').trim().charAt(0).toUpperCase() || 'K';
+  return (
+    <View
+      style={{ width: size, height: size, borderRadius: size / 2 }}
+      className="border-2 border-[#1A1A1A] bg-[#F3F2F1] items-center justify-center"
+    >
+      <Text className="font-serif font-bold text-[#1A1A1A]" style={{ fontSize: size * 0.4 }}>
+        {initial}
+      </Text>
+    </View>
+  );
+}
+
+// ============================================================
+// ProgressBar — simple filled percentage bar.
+// ============================================================
+export function ProgressBar({ percent, className = 'h-1.5' }: { percent: number; className?: string }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  return (
+    <View className={`w-full bg-neutral-200 rounded-full overflow-hidden ${className}`}>
+      <View className="bg-[#1A1A1A] h-full" style={{ width: `${clamped}%` }} />
+    </View>
+  );
+}
+
+// ============================================================
+// Animated wrappers replacing Tailwind's animate-fade-in / -pulse
+// / -spin / -bounce utilities, implemented with RN's built-in
+// Animated API (no extra runtime dependency, guaranteed to work
+// regardless of NativeWind's custom-keyframe support).
+// ============================================================
+export function FadeInView({ children, style }: { children: React.ReactNode; style?: any }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(4)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+  }, [opacity, translateY]);
+  return <Animated.View style={[{ opacity, transform: [{ translateY }] }, style]}>{children}</Animated.View>;
+}
+
+export function PulseView({ children, style }: { children: React.ReactNode; style?: any }) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.4, duration: 750, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 750, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return <Animated.View style={[{ opacity }, style]}>{children}</Animated.View>;
+}
+
+export function SpinView({ children, style }: { children: React.ReactNode; style?: any }) {
+  const rotate = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(rotate, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [rotate]);
+  const spin = rotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  return <Animated.View style={[{ transform: [{ rotate: spin }] }, style]}>{children}</Animated.View>;
+}
+
+export function BounceView({ children, style }: { children: React.ReactNode; style?: any }) {
+  const translateY = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateY, { toValue: -6, duration: 400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: 0, duration: 400, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [translateY]);
+  return <Animated.View style={[{ transform: [{ translateY }] }, style]}>{children}</Animated.View>;
+}
+
+/** Bars used by the Listen-mode "sound wave" indicator — animates height randomly while `active`. */
+export function WaveBars({ active, count = 5 }: { active: boolean; count?: number }) {
+  return (
+    <View className="flex-row items-end gap-0.5 h-5">
+      {Array.from({ length: count }).map((_, i) => (
+        <WaveBar key={i} active={active} delay={i * 90} />
+      ))}
+    </View>
+  );
+}
+
+function WaveBar({ active, delay }: { active: boolean; delay: number }) {
+  const height = useRef(new Animated.Value(active ? 100 : 15)).current;
+  useEffect(() => {
+    if (!active) {
+      height.setValue(15);
+      return;
+    }
+    let cancelled = false;
+    const step = () => {
+      if (cancelled) return;
+      Animated.timing(height, {
+        toValue: 20 + Math.random() * 80,
+        duration: 350,
+        useNativeDriver: false,
+      }).start(() => step());
+    };
+    const t = setTimeout(step, delay);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [active, delay, height]);
+  return (
+    <Animated.View
+      className="w-0.5 bg-[#1A1A1A] rounded-full"
+      style={{ height: height.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }}
+    />
+  );
+}

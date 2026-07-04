@@ -1,0 +1,10 @@
+{
+  "name": "import-bible",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Standalone admin script to populate Firestore's scripture translations collection. Not part of the Expo app bundle.",
+  "main": "run.js",
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

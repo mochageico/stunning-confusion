@@ -1,0 +1,6 @@
+{
+  "name": "Scripture Memory",
+  "description": "An interactive Scripture Memory application utilizing an elegant editorial aesthetic, featuring verse progress dashboards, a comprehensive chapter search, and an active teleprompter recorder.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

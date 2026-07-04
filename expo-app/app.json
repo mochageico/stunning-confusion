@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Scripture Memory",
+    "slug": "scripture-memory",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "scripturememory",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.scripturememory.app"
+    },
+    "android": {
+      "package": "com.scripturememory.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-dev-client",
+      "@react-native-google-signin/google-signin",
+      "expo-audio"
+    ]
+  }
+}

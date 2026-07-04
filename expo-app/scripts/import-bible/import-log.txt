@@ -1,0 +1,1618 @@
+
+Genesis (50 chapters)
+  ✓ Genesis 1: 31 verses
+  ✓ Genesis 2: 25 verses
+  ✓ Genesis 3: 24 verses
+  ✓ Genesis 4: 26 verses
+  ✓ Genesis 5: 32 verses
+  ✓ Genesis 6: 22 verses
+  ✓ Genesis 7: 24 verses
+  ✓ Genesis 8: 22 verses
+  ✓ Genesis 9: 29 verses
+  ✓ Genesis 10: 32 verses
+  ✓ Genesis 11: 32 verses
+  ✓ Genesis 12: 20 verses
+  ✓ Genesis 13: 18 verses
+  ✓ Genesis 14: 24 verses
+  ✓ Genesis 15: 21 verses
+  ✓ Genesis 16: 16 verses
+  ✓ Genesis 17: 27 verses
+  ✓ Genesis 18: 33 verses
+  ✓ Genesis 19: 38 verses
+  ✓ Genesis 20: 18 verses
+  ✓ Genesis 21: 34 verses
+  ✓ Genesis 22: 24 verses
+  ✓ Genesis 23: 20 verses
+  ✓ Genesis 24: 67 verses
+  ✓ Genesis 25: 34 verses
+  ✓ Genesis 26: 35 verses
+  ✓ Genesis 27: 46 verses
+  ✓ Genesis 28: 22 verses
+  ✓ Genesis 29: 35 verses
+  ✓ Genesis 30: 43 verses
+  ✓ Genesis 31: 55 verses
+  ✓ Genesis 32: 32 verses
+  ✓ Genesis 33: 20 verses
+  ✓ Genesis 34: 31 verses
+  ✓ Genesis 35: 29 verses
+  ✓ Genesis 36: 43 verses
+  ✓ Genesis 37: 36 verses
+  ✓ Genesis 38: 30 verses
+  ✓ Genesis 39: 23 verses
+  ✓ Genesis 40: 23 verses
+  ✓ Genesis 41: 57 verses
+  ✓ Genesis 42: 38 verses
+  ✓ Genesis 43: 34 verses
+  ✓ Genesis 44: 34 verses
+  ✓ Genesis 45: 28 verses
+  ✓ Genesis 46: 34 verses
+  ✓ Genesis 47: 31 verses
+  ✓ Genesis 48: 22 verses
+  ✓ Genesis 49: 33 verses
+  ✓ Genesis 50: 26 verses
+
+Exodus (40 chapters)
+  ✓ Exodus 1: 22 verses
+  ✓ Exodus 2: 25 verses
+  ✓ Exodus 3: 22 verses
+  ✓ Exodus 4: 31 verses
+  ✓ Exodus 5: 23 verses
+  ✓ Exodus 6: 30 verses
+  ✓ Exodus 7: 25 verses
+  ✓ Exodus 8: 32 verses
+  ✓ Exodus 9: 35 verses
+Error: ESV API request failed (429) for Exodus 10: {"detail": "Request was throttled. Try again in 2 seconds."}
+    at fetchRawChapterText (C:\Users\micah\Downloads\scripture-memory (3)\expo-app\scripts\import-bible\adapters\esv.js:46:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Object.fetchChapter (C:\Users\micah\Downloads\scripture-memory (3)\expo-app\scripts\import-bible\adapters\esv.js:54:16)
+    at async main (C:\Users\micah\Downloads\scripture-memory (3)\expo-app\scripts\import-bible\run.js:62:22)
+
+Genesis (50 chapters)
+
+Exodus (40 chapters)
+  ✓ Exodus 10: 29 verses
+  ✓ Exodus 11: 10 verses
+  ✓ Exodus 12: 51 verses
+  ✓ Exodus 13: 22 verses
+  ✓ Exodus 14: 31 verses
+  ✓ Exodus 15: 27 verses
+  ✓ Exodus 16: 36 verses
+  ✓ Exodus 17: 16 verses
+  ✓ Exodus 18: 27 verses
+  ✓ Exodus 19: 25 verses
+  ✓ Exodus 20: 26 verses
+  ✓ Exodus 21: 36 verses
+  ✓ Exodus 22: 31 verses
+  ✓ Exodus 23: 33 verses
+  ✓ Exodus 24: 18 verses
+  ✓ Exodus 25: 40 verses
+  ✓ Exodus 26: 37 verses
+  ✓ Exodus 27: 21 verses
+  ✓ Exodus 28: 43 verses
+  ✓ Exodus 29: 46 verses
+  ✓ Exodus 30: 38 verses
+  ✓ Exodus 31: 18 verses
+  ✓ Exodus 32: 35 verses
+  ✓ Exodus 33: 23 verses
+  ✓ Exodus 34: 35 verses
+  ✓ Exodus 35: 35 verses
+  ✓ Exodus 36: 38 verses
+  ✓ Exodus 37: 29 verses
+  ✓ Exodus 38: 31 verses
+  ✓ Exodus 39: 43 verses
+  ✓ Exodus 40: 38 verses
+
+Leviticus (27 chapters)
+  ✓ Leviticus 1: 17 verses
+  ✓ Leviticus 2: 16 verses
+  ✓ Leviticus 3: 17 verses
+  ✓ Leviticus 4: 35 verses
+  ✓ Leviticus 5: 19 verses
+  ✓ Leviticus 6: 30 verses
+  ✓ Leviticus 7: 38 verses
+  ✓ Leviticus 8: 36 verses
+  ✓ Leviticus 9: 24 verses
+  ✓ Leviticus 10: 20 verses
+  ✓ Leviticus 11: 47 verses
+  ✓ Leviticus 12: 8 verses
+  ✓ Leviticus 13: 59 verses
+  ✓ Leviticus 14: 57 verses
+  ✓ Leviticus 15: 33 verses
+  ✓ Leviticus 16: 34 verses
+  ✓ Leviticus 17: 16 verses
+  ✓ Leviticus 18: 30 verses
+  ✓ Leviticus 19: 37 verses
+  ✓ Leviticus 20: 27 verses
+  ✓ Leviticus 21: 24 verses
+  ✓ Leviticus 22: 33 verses
+  ✓ Leviticus 23: 44 verses
+  ✓ Leviticus 24: 23 verses
+  ✓ Leviticus 25: 55 verses
+  ✓ Leviticus 26: 46 verses
+  ✓ Leviticus 27: 34 verses
+
+Numbers (36 chapters)
+  ✓ Numbers 1: 54 verses
+  ✓ Numbers 2: 34 verses
+  (rate limited on Numbers 3, waiting 12250ms — attempt 1/6)
+  ✓ Numbers 3: 51 verses
+  ✓ Numbers 4: 49 verses
+  ✓ Numbers 5: 31 verses
+  ✓ Numbers 6: 27 verses
+  ✓ Numbers 7: 89 verses
+  ✓ Numbers 8: 26 verses
+  ✓ Numbers 9: 23 verses
+  ✓ Numbers 10: 36 verses
+  ✓ Numbers 11: 35 verses
+  ✓ Numbers 12: 16 verses
+  ✓ Numbers 13: 33 verses
+  ✓ Numbers 14: 45 verses
+  ✓ Numbers 15: 41 verses
+  ✓ Numbers 16: 50 verses
+  ✓ Numbers 17: 13 verses
+  ✓ Numbers 18: 32 verses
+  ✓ Numbers 19: 22 verses
+  ✓ Numbers 20: 29 verses
+  ✓ Numbers 21: 35 verses
+  ✓ Numbers 22: 41 verses
+  ✓ Numbers 23: 30 verses
+  ✓ Numbers 24: 25 verses
+  ✓ Numbers 25: 18 verses
+  ✓ Numbers 26: 65 verses
+  ✓ Numbers 27: 23 verses
+  ✓ Numbers 28: 31 verses
+  ✓ Numbers 29: 40 verses
+  ✓ Numbers 30: 16 verses
+  ✓ Numbers 31: 54 verses
+  ✓ Numbers 32: 42 verses
+  ✓ Numbers 33: 56 verses
+  ✓ Numbers 34: 29 verses
+  ✓ Numbers 35: 34 verses
+  ✓ Numbers 36: 13 verses
+
+Deuteronomy (34 chapters)
+  ✓ Deuteronomy 1: 46 verses
+  ✓ Deuteronomy 2: 37 verses
+  ✓ Deuteronomy 3: 29 verses
+  ✓ Deuteronomy 4: 49 verses
+  ✓ Deuteronomy 5: 33 verses
+  ✓ Deuteronomy 6: 25 verses
+  ✓ Deuteronomy 7: 26 verses
+  ✓ Deuteronomy 8: 20 verses
+  ✓ Deuteronomy 9: 29 verses
+  (rate limited on Deuteronomy 10, waiting 250ms — attempt 1/6)
+  ✓ Deuteronomy 10: 22 verses
+  ✓ Deuteronomy 11: 32 verses
+  ✓ Deuteronomy 12: 32 verses
+  ✓ Deuteronomy 13: 18 verses
+  ✓ Deuteronomy 14: 29 verses
+  ✓ Deuteronomy 15: 23 verses
+  ✓ Deuteronomy 16: 22 verses
+  ✓ Deuteronomy 17: 20 verses
+  ✓ Deuteronomy 18: 22 verses
+  ✓ Deuteronomy 19: 21 verses
+  ✓ Deuteronomy 20: 20 verses
+  ✓ Deuteronomy 21: 23 verses
+  ✓ Deuteronomy 22: 30 verses
+  ✓ Deuteronomy 23: 25 verses
+  ✓ Deuteronomy 24: 22 verses
+  ✓ Deuteronomy 25: 19 verses
+  ✓ Deuteronomy 26: 19 verses
+  (rate limited on Deuteronomy 27, waiting 12250ms — attempt 1/6)
+  ✓ Deuteronomy 27: 26 verses
+  ✓ Deuteronomy 28: 68 verses
+  ✓ Deuteronomy 29: 29 verses
+  ✓ Deuteronomy 30: 20 verses
+  ✓ Deuteronomy 31: 30 verses
+  ✓ Deuteronomy 32: 52 verses
+  ✓ Deuteronomy 33: 29 verses
+  ✓ Deuteronomy 34: 12 verses
+
+Joshua (24 chapters)
+  ✓ Joshua 1: 18 verses
+  ✓ Joshua 2: 24 verses
+  ✓ Joshua 3: 17 verses
+  ✓ Joshua 4: 24 verses
+  ✓ Joshua 5: 15 verses
+  ✓ Joshua 6: 27 verses
+  ✓ Joshua 7: 26 verses
+  ✓ Joshua 8: 35 verses
+  ✓ Joshua 9: 27 verses
+  ✓ Joshua 10: 43 verses
+  ✓ Joshua 11: 23 verses
+  ✓ Joshua 12: 24 verses
+  ✓ Joshua 13: 33 verses
+  ✓ Joshua 14: 15 verses
+  ✓ Joshua 15: 63 verses
+  ✓ Joshua 16: 10 verses
+  ✓ Joshua 17: 18 verses
+  ✓ Joshua 18: 28 verses
+  ✓ Joshua 19: 51 verses
+  ✓ Joshua 20: 9 verses
+  ✓ Joshua 21: 45 verses
+  ✓ Joshua 22: 34 verses
+  ✓ Joshua 23: 16 verses
+  ✓ Joshua 24: 33 verses
+
+Judges (21 chapters)
+  ✓ Judges 1: 36 verses
+  ✓ Judges 2: 23 verses
+  ✓ Judges 3: 31 verses
+  ✓ Judges 4: 24 verses
+  ✓ Judges 5: 31 verses
+  ✓ Judges 6: 40 verses
+  ✓ Judges 7: 25 verses
+  ✓ Judges 8: 35 verses
+  ✓ Judges 9: 57 verses
+  ✓ Judges 10: 18 verses
+  ✓ Judges 11: 40 verses
+  ✓ Judges 12: 15 verses
+  ✓ Judges 13: 25 verses
+  ✓ Judges 14: 20 verses
+  ✓ Judges 15: 20 verses
+  ✓ Judges 16: 31 verses
+  ✓ Judges 17: 13 verses
+  ✓ Judges 18: 31 verses
+  ✓ Judges 19: 30 verses
+  ✓ Judges 20: 48 verses
+  ✓ Judges 21: 25 verses
+
+Ruth (4 chapters)
+  ✓ Ruth 1: 22 verses
+  ✓ Ruth 2: 23 verses
+  ✓ Ruth 3: 18 verses
+  ✓ Ruth 4: 22 verses
+
+1 Samuel (31 chapters)
+  ✓ 1 Samuel 1: 28 verses
+  ✓ 1 Samuel 2: 36 verses
+  ✓ 1 Samuel 3: 21 verses
+  (rate limited on 1 Samuel 4, waiting 9250ms — attempt 1/6)
+  ✓ 1 Samuel 4: 22 verses
+  ✓ 1 Samuel 5: 12 verses
+  ✓ 1 Samuel 6: 21 verses
+  ✓ 1 Samuel 7: 17 verses
+  ✓ 1 Samuel 8: 22 verses
+  ✓ 1 Samuel 9: 27 verses
+  ✓ 1 Samuel 10: 27 verses
+  ✓ 1 Samuel 11: 15 verses
+  (rate limited on 1 Samuel 12, waiting 250ms — attempt 1/6)
+  ✓ 1 Samuel 12: 25 verses
+  ✓ 1 Samuel 13: 23 verses
+  ✓ 1 Samuel 14: 52 verses
+  ✓ 1 Samuel 15: 35 verses
+  ✓ 1 Samuel 16: 23 verses
+  (rate limited on 1 Samuel 17, waiting 250ms — attempt 1/6)
+  ✓ 1 Samuel 17: 58 verses
+  ✓ 1 Samuel 18: 30 verses
+  ✓ 1 Samuel 19: 24 verses
+  ✓ 1 Samuel 20: 42 verses
+  ✓ 1 Samuel 21: 15 verses
+  ✓ 1 Samuel 22: 23 verses
+  ✓ 1 Samuel 23: 29 verses
+  ✓ 1 Samuel 24: 22 verses
+  ✓ 1 Samuel 25: 44 verses
+  ✓ 1 Samuel 26: 25 verses
+  ✓ 1 Samuel 27: 12 verses
+  ✓ 1 Samuel 28: 25 verses
+  ✓ 1 Samuel 29: 11 verses
+  ✓ 1 Samuel 30: 31 verses
+  ✓ 1 Samuel 31: 13 verses
+
+2 Samuel (24 chapters)
+  ✓ 2 Samuel 1: 27 verses
+  ✓ 2 Samuel 2: 32 verses
+  ✓ 2 Samuel 3: 39 verses
+  ✓ 2 Samuel 4: 12 verses
+  ✓ 2 Samuel 5: 25 verses
+  ✓ 2 Samuel 6: 23 verses
+  ✓ 2 Samuel 7: 29 verses
+  ✓ 2 Samuel 8: 18 verses
+  ✓ 2 Samuel 9: 13 verses
+  ✓ 2 Samuel 10: 19 verses
+  ✓ 2 Samuel 11: 27 verses
+  ✓ 2 Samuel 12: 31 verses
+  ✓ 2 Samuel 13: 39 verses
+  (rate limited on 2 Samuel 14, waiting 250ms — attempt 1/6)
+  ✓ 2 Samuel 14: 33 verses
+  ✓ 2 Samuel 15: 37 verses
+  ✓ 2 Samuel 16: 23 verses
+  ✓ 2 Samuel 17: 29 verses
+  (rate limited on 2 Samuel 18, waiting 250ms — attempt 1/6)
+  ✓ 2 Samuel 18: 33 verses
+  ✓ 2 Samuel 19: 43 verses
+  ✓ 2 Samuel 20: 26 verses
+  (rate limited on 2 Samuel 21, waiting 250ms — attempt 1/6)
+  ✓ 2 Samuel 21: 22 verses
+  ✓ 2 Samuel 22: 51 verses
+  (rate limited on 2 Samuel 23, waiting 250ms — attempt 1/6)
+  ✓ 2 Samuel 23: 39 verses
+  ✓ 2 Samuel 24: 25 verses
+
+1 Kings (22 chapters)
+  ✓ 1 Kings 1: 53 verses
+  (rate limited on 1 Kings 2, waiting 250ms — attempt 1/6)
+  ✓ 1 Kings 2: 46 verses
+  ✓ 1 Kings 3: 28 verses
+  ✓ 1 Kings 4: 34 verses
+  ✓ 1 Kings 5: 18 verses
+  ✓ 1 Kings 6: 38 verses
+  ✓ 1 Kings 7: 51 verses
+  (rate limited on 1 Kings 8, waiting 250ms — attempt 1/6)
+  ✓ 1 Kings 8: 66 verses
+  (rate limited on 1 Kings 9, waiting 9250ms — attempt 1/6)
+  ✓ 1 Kings 9: 28 verses
+  ✓ 1 Kings 10: 29 verses
+  (rate limited on 1 Kings 11, waiting 250ms — attempt 1/6)
+  (rate limited on 1 Kings 11, waiting 250ms — attempt 2/6)
+  ✓ 1 Kings 11: 43 verses
+  ✓ 1 Kings 12: 33 verses
+  ✓ 1 Kings 13: 34 verses
+  ✓ 1 Kings 14: 31 verses
+  ✓ 1 Kings 15: 34 verses
+  ✓ 1 Kings 16: 34 verses
+  ✓ 1 Kings 17: 24 verses
+  ✓ 1 Kings 18: 46 verses
+  ✓ 1 Kings 19: 21 verses
+  ✓ 1 Kings 20: 43 verses
+  ✓ 1 Kings 21: 29 verses
+  (rate limited on 1 Kings 22, waiting 250ms — attempt 1/6)
+  (rate limited on 1 Kings 22, waiting 250ms — attempt 2/6)
+  ✓ 1 Kings 22: 53 verses
+
+2 Kings (25 chapters)
+  ✓ 2 Kings 1: 18 verses
+  ✓ 2 Kings 2: 25 verses
+  ✓ 2 Kings 3: 27 verses
+  ✓ 2 Kings 4: 44 verses
+  ✓ 2 Kings 5: 27 verses
+  ✓ 2 Kings 6: 33 verses
+  ✓ 2 Kings 7: 20 verses
+  ✓ 2 Kings 8: 29 verses
+  ✓ 2 Kings 9: 37 verses
+  ✓ 2 Kings 10: 36 verses
+  ✓ 2 Kings 11: 21 verses
+  ✓ 2 Kings 12: 21 verses
+  ✓ 2 Kings 13: 25 verses
+  (rate limited on 2 Kings 14, waiting 250ms — attempt 1/6)
+  ✓ 2 Kings 14: 29 verses
+  ✓ 2 Kings 15: 38 verses
+  ✓ 2 Kings 16: 20 verses
+  (rate limited on 2 Kings 17, waiting 250ms — attempt 1/6)
+  ✓ 2 Kings 17: 41 verses
+  ✓ 2 Kings 18: 37 verses
+  ✓ 2 Kings 19: 37 verses
+  ✓ 2 Kings 20: 21 verses
+  ✓ 2 Kings 21: 26 verses
+  ✓ 2 Kings 22: 20 verses
+  ✓ 2 Kings 23: 37 verses
+  ✓ 2 Kings 24: 20 verses
+  ✓ 2 Kings 25: 30 verses
+
+1 Chronicles (29 chapters)
+  ✓ 1 Chronicles 1: 54 verses
+  ✓ 1 Chronicles 2: 55 verses
+  ✓ 1 Chronicles 3: 24 verses
+  ✓ 1 Chronicles 4: 43 verses
+  ✓ 1 Chronicles 5: 26 verses
+  ✓ 1 Chronicles 6: 81 verses
+  (rate limited on 1 Chronicles 7, waiting 250ms — attempt 1/6)
+  ✓ 1 Chronicles 7: 40 verses
+  ✓ 1 Chronicles 8: 40 verses
+  ✓ 1 Chronicles 9: 44 verses
+  (rate limited on 1 Chronicles 10, waiting 250ms — attempt 1/6)
+  ✓ 1 Chronicles 10: 14 verses
+  ✓ 1 Chronicles 11: 47 verses
+  (rate limited on 1 Chronicles 12, waiting 250ms — attempt 1/6)
+  ✓ 1 Chronicles 12: 40 verses
+  ✓ 1 Chronicles 13: 14 verses
+  ✓ 1 Chronicles 14: 17 verses
+  (rate limited on 1 Chronicles 15, waiting 250ms — attempt 1/6)
+  ✓ 1 Chronicles 15: 29 verses
+  ✓ 1 Chronicles 16: 43 verses
+  ✓ 1 Chronicles 17: 27 verses
+  ✓ 1 Chronicles 18: 17 verses
+  ✓ 1 Chronicles 19: 19 verses
+  ✓ 1 Chronicles 20: 8 verses
+  (rate limited on 1 Chronicles 21, waiting 250ms — attempt 1/6)
+  ✓ 1 Chronicles 21: 30 verses
+  (rate limited on 1 Chronicles 22, waiting 9250ms — attempt 1/6)
+  (rate limited on 1 Chronicles 22, waiting 250ms — attempt 2/6)
+  ✓ 1 Chronicles 22: 19 verses
+  ✓ 1 Chronicles 23: 32 verses
+  ✓ 1 Chronicles 24: 31 verses
+  ✓ 1 Chronicles 25: 31 verses
+  ✓ 1 Chronicles 26: 32 verses
+  ✓ 1 Chronicles 27: 34 verses
+  (rate limited on 1 Chronicles 28, waiting 250ms — attempt 1/6)
+  ✓ 1 Chronicles 28: 21 verses
+  ✓ 1 Chronicles 29: 30 verses
+
+2 Chronicles (36 chapters)
+  ✓ 2 Chronicles 1: 17 verses
+  ✓ 2 Chronicles 2: 18 verses
+  ✓ 2 Chronicles 3: 17 verses
+  ✓ 2 Chronicles 4: 22 verses
+  ✓ 2 Chronicles 5: 14 verses
+  (rate limited on 2 Chronicles 6, waiting 250ms — attempt 1/6)
+  (rate limited on 2 Chronicles 6, waiting 250ms — attempt 2/6)
+  ✓ 2 Chronicles 6: 42 verses
+  ✓ 2 Chronicles 7: 22 verses
+  ✓ 2 Chronicles 8: 18 verses
+  ✓ 2 Chronicles 9: 31 verses
+  ✓ 2 Chronicles 10: 19 verses
+  ✓ 2 Chronicles 11: 23 verses
+  ✓ 2 Chronicles 12: 16 verses
+  ✓ 2 Chronicles 13: 22 verses
+  ✓ 2 Chronicles 14: 15 verses
+  ✓ 2 Chronicles 15: 19 verses
+  ✓ 2 Chronicles 16: 14 verses
+  ✓ 2 Chronicles 17: 19 verses
+  ✓ 2 Chronicles 18: 34 verses
+  ✓ 2 Chronicles 19: 11 verses
+  ✓ 2 Chronicles 20: 37 verses
+  ✓ 2 Chronicles 21: 20 verses
+  ✓ 2 Chronicles 22: 12 verses
+  (rate limited on 2 Chronicles 23, waiting 250ms — attempt 1/6)
+  ✓ 2 Chronicles 23: 21 verses
+  (rate limited on 2 Chronicles 24, waiting 250ms — attempt 1/6)
+  ✓ 2 Chronicles 24: 27 verses
+  ✓ 2 Chronicles 25: 28 verses
+  ✓ 2 Chronicles 26: 23 verses
+  ✓ 2 Chronicles 27: 9 verses
+  ✓ 2 Chronicles 28: 27 verses
+  ✓ 2 Chronicles 29: 36 verses
+  ✓ 2 Chronicles 30: 27 verses
+  ✓ 2 Chronicles 31: 21 verses
+  ✓ 2 Chronicles 32: 33 verses
+  ✓ 2 Chronicles 33: 25 verses
+  ✓ 2 Chronicles 34: 33 verses
+  ✓ 2 Chronicles 35: 27 verses
+  ✓ 2 Chronicles 36: 23 verses
+
+Ezra (10 chapters)
+  ✓ Ezra 1: 11 verses
+  ✓ Ezra 2: 70 verses
+  ✓ Ezra 3: 13 verses
+  ✓ Ezra 4: 24 verses
+  (rate limited on Ezra 5, waiting 250ms — attempt 1/6)
+  (rate limited on Ezra 5, waiting 250ms — attempt 2/6)
+  ✓ Ezra 5: 17 verses
+  ✓ Ezra 6: 22 verses
+  ✓ Ezra 7: 28 verses
+  ✓ Ezra 8: 36 verses
+  ✓ Ezra 9: 15 verses
+  ✓ Ezra 10: 44 verses
+
+Nehemiah (13 chapters)
+  ✓ Nehemiah 1: 11 verses
+  ✓ Nehemiah 2: 20 verses
+  ✓ Nehemiah 3: 32 verses
+  ✓ Nehemiah 4: 23 verses
+  ✓ Nehemiah 5: 19 verses
+  (rate limited on Nehemiah 6, waiting 250ms — attempt 1/6)
+  ✓ Nehemiah 6: 19 verses
+  (rate limited on Nehemiah 7, waiting 9250ms — attempt 1/6)
+  ✓ Nehemiah 7: 73 verses
+  ✓ Nehemiah 8: 18 verses
+  ✓ Nehemiah 9: 38 verses
+  ✓ Nehemiah 10: 39 verses
+  ✓ Nehemiah 11: 36 verses
+  ✓ Nehemiah 12: 47 verses
+  (rate limited on Nehemiah 13, waiting 250ms — attempt 1/6)
+  ✓ Nehemiah 13: 31 verses
+
+Esther (10 chapters)
+  ✓ Esther 1: 22 verses
+  ✓ Esther 2: 23 verses
+  ✓ Esther 3: 15 verses
+  (rate limited on Esther 4, waiting 250ms — attempt 1/6)
+  ✓ Esther 4: 17 verses
+  ✓ Esther 5: 14 verses
+  ✓ Esther 6: 14 verses
+  (rate limited on Esther 7, waiting 1250ms — attempt 1/6)
+  ✓ Esther 7: 10 verses
+  ✓ Esther 8: 17 verses
+  ✓ Esther 9: 32 verses
+  ✓ Esther 10: 3 verses
+
+Job (42 chapters)
+  ✓ Job 1: 22 verses
+  ✓ Job 2: 13 verses
+  ✓ Job 3: 26 verses
+  ✓ Job 4: 21 verses
+  ✓ Job 5: 27 verses
+  ✓ Job 6: 30 verses
+  ✓ Job 7: 21 verses
+  ✓ Job 8: 22 verses
+  ✓ Job 9: 35 verses
+  ✓ Job 10: 22 verses
+  ✓ Job 11: 20 verses
+  ✓ Job 12: 25 verses
+  ✓ Job 13: 28 verses
+  ✓ Job 14: 22 verses
+  ✓ Job 15: 35 verses
+  (rate limited on Job 16, waiting 250ms — attempt 1/6)
+  ✓ Job 16: 22 verses
+  ✓ Job 17: 16 verses
+  ✓ Job 18: 21 verses
+  ✓ Job 19: 29 verses
+  ✓ Job 20: 29 verses
+  ✓ Job 21: 34 verses
+  ✓ Job 22: 30 verses
+  ✓ Job 23: 17 verses
+  ✓ Job 24: 25 verses
+  ✓ Job 25: 6 verses
+  ✓ Job 26: 14 verses
+  ✓ Job 27: 23 verses
+  ✓ Job 28: 28 verses
+  ✓ Job 29: 25 verses
+  ✓ Job 30: 31 verses
+  ✓ Job 31: 40 verses
+  (rate limited on Job 32, waiting 250ms — attempt 1/6)
+  ✓ Job 32: 22 verses
+  ✓ Job 33: 33 verses
+  ✓ Job 34: 37 verses
+  ✓ Job 35: 16 verses
+  ✓ Job 36: 33 verses
+  ✓ Job 37: 24 verses
+  ✓ Job 38: 41 verses
+  ✓ Job 39: 30 verses
+  ✓ Job 40: 24 verses
+  ✓ Job 41: 34 verses
+  ✓ Job 42: 17 verses
+
+Psalms (150 chapters)
+  ✓ Psalms 1: 6 verses
+  (rate limited on Psalms 2, waiting 9250ms — attempt 1/6)
+  ✓ Psalms 2: 12 verses
+  ✓ Psalms 3: 8 verses
+  ✓ Psalms 4: 8 verses
+  ✓ Psalms 5: 12 verses
+  ✓ Psalms 6: 10 verses
+  ✓ Psalms 7: 17 verses
+  ✓ Psalms 8: 9 verses
+  ✓ Psalms 9: 20 verses
+  ✓ Psalms 10: 18 verses
+  ✓ Psalms 11: 7 verses
+  ✓ Psalms 12: 8 verses
+  ✓ Psalms 13: 6 verses
+  ✓ Psalms 14: 7 verses
+  ✓ Psalms 15: 5 verses
+  ✓ Psalms 16: 11 verses
+  ✓ Psalms 17: 15 verses
+  ✓ Psalms 18: 50 verses
+  ✓ Psalms 19: 14 verses
+  ✓ Psalms 20: 9 verses
+  ✓ Psalms 21: 13 verses
+  ✓ Psalms 22: 31 verses
+  ✓ Psalms 23: 6 verses
+  ✓ Psalms 24: 10 verses
+  ✓ Psalms 25: 22 verses
+  ✓ Psalms 26: 12 verses
+  ✓ Psalms 27: 14 verses
+  ✓ Psalms 28: 9 verses
+  ✓ Psalms 29: 11 verses
+  ✓ Psalms 30: 12 verses
+  ✓ Psalms 31: 24 verses
+  ✓ Psalms 32: 11 verses
+  ✓ Psalms 33: 22 verses
+  ✓ Psalms 34: 22 verses
+  ✓ Psalms 35: 28 verses
+  ✓ Psalms 36: 12 verses
+  ✓ Psalms 37: 40 verses
+  ✓ Psalms 38: 22 verses
+  ✓ Psalms 39: 13 verses
+  ✓ Psalms 40: 17 verses
+  ✓ Psalms 41: 13 verses
+  ✓ Psalms 42: 11 verses
+  ✓ Psalms 43: 5 verses
+  ✓ Psalms 44: 26 verses
+  ✓ Psalms 45: 17 verses
+  ✓ Psalms 46: 11 verses
+  ✓ Psalms 47: 9 verses
+  ✓ Psalms 48: 14 verses
+  ✓ Psalms 49: 20 verses
+  ✓ Psalms 50: 23 verses
+  ✓ Psalms 51: 19 verses
+  ✓ Psalms 52: 9 verses
+  ✓ Psalms 53: 6 verses
+  ✓ Psalms 54: 7 verses
+  ✓ Psalms 55: 23 verses
+  ✓ Psalms 56: 13 verses
+  ✓ Psalms 57: 11 verses
+  ✓ Psalms 58: 11 verses
+  ✓ Psalms 59: 17 verses
+  ✓ Psalms 60: 12 verses
+  ✓ Psalms 61: 8 verses
+  (rate limited on Psalms 62, waiting 250ms — attempt 1/6)
+  ✓ Psalms 62: 12 verses
+  ✓ Psalms 63: 11 verses
+  ✓ Psalms 64: 10 verses
+  ✓ Psalms 65: 13 verses
+  (rate limited on Psalms 66, waiting 250ms — attempt 1/6)
+  ✓ Psalms 66: 20 verses
+  ✓ Psalms 67: 7 verses
+  ✓ Psalms 68: 35 verses
+  (rate limited on Psalms 69, waiting 250ms — attempt 1/6)
+  (rate limited on Psalms 69, waiting 250ms — attempt 2/6)
+  ✓ Psalms 69: 36 verses
+  ✓ Psalms 70: 5 verses
+  ✓ Psalms 71: 24 verses
+  ✓ Psalms 72: 20 verses
+  (rate limited on Psalms 73, waiting 250ms — attempt 1/6)
+  ✓ Psalms 73: 28 verses
+  ✓ Psalms 74: 23 verses
+  ✓ Psalms 75: 10 verses
+  (rate limited on Psalms 76, waiting 250ms — attempt 1/6)
+  ✓ Psalms 76: 12 verses
+  ✓ Psalms 77: 20 verses
+  (rate limited on Psalms 78, waiting 250ms — attempt 1/6)
+  ✓ Psalms 78: 72 verses
+  ✓ Psalms 79: 13 verses
+  ✓ Psalms 80: 19 verses
+  ✓ Psalms 81: 16 verses
+  (rate limited on Psalms 82, waiting 250ms — attempt 1/6)
+  ✓ Psalms 82: 8 verses
+  ✓ Psalms 83: 18 verses
+  (rate limited on Psalms 84, waiting 250ms — attempt 1/6)
+  ✓ Psalms 84: 12 verses
+  ✓ Psalms 85: 13 verses
+  ✓ Psalms 86: 17 verses
+  ✓ Psalms 87: 7 verses
+  ✓ Psalms 88: 18 verses
+  ✓ Psalms 89: 52 verses
+  (rate limited on Psalms 90, waiting 250ms — attempt 1/6)
+  ✓ Psalms 90: 17 verses
+  ✓ Psalms 91: 16 verses
+  ✓ Psalms 92: 15 verses
+  ✓ Psalms 93: 5 verses
+  ✓ Psalms 94: 23 verses
+  ✓ Psalms 95: 11 verses
+  (rate limited on Psalms 96, waiting 250ms — attempt 1/6)
+  ✓ Psalms 96: 13 verses
+  ✓ Psalms 97: 12 verses
+  ✓ Psalms 98: 9 verses
+  ✓ Psalms 99: 9 verses
+  ✓ Psalms 100: 5 verses
+  ✓ Psalms 101: 8 verses
+  ✓ Psalms 102: 28 verses
+  ✓ Psalms 103: 22 verses
+  ✓ Psalms 104: 35 verses
+  ✓ Psalms 105: 45 verses
+  ✓ Psalms 106: 48 verses
+  ✓ Psalms 107: 43 verses
+  ✓ Psalms 108: 13 verses
+  ✓ Psalms 109: 31 verses
+  ✓ Psalms 110: 7 verses
+  ✓ Psalms 111: 10 verses
+  ✓ Psalms 112: 10 verses
+  ✓ Psalms 113: 9 verses
+  ✓ Psalms 114: 8 verses
+  ✓ Psalms 115: 18 verses
+  ✓ Psalms 116: 19 verses
+  ✓ Psalms 117: 2 verses
+  ✓ Psalms 118: 29 verses
+  ✓ Psalms 119: 176 verses
+  ✓ Psalms 120: 7 verses
+  ✓ Psalms 121: 8 verses
+  (rate limited on Psalms 122, waiting 250ms — attempt 1/6)
+  ✓ Psalms 122: 9 verses
+  (rate limited on Psalms 123, waiting 250ms — attempt 1/6)
+  ✓ Psalms 123: 4 verses
+  ✓ Psalms 124: 8 verses
+  ✓ Psalms 125: 5 verses
+  (rate limited on Psalms 126, waiting 250ms — attempt 1/6)
+  ✓ Psalms 126: 6 verses
+  ✓ Psalms 127: 5 verses
+  ✓ Psalms 128: 6 verses
+  (rate limited on Psalms 129, waiting 250ms — attempt 1/6)
+  ✓ Psalms 129: 8 verses
+  ✓ Psalms 130: 8 verses
+  ✓ Psalms 131: 3 verses
+  ✓ Psalms 132: 18 verses
+  (rate limited on Psalms 133, waiting 250ms — attempt 1/6)
+  ✓ Psalms 133: 3 verses
+  ✓ Psalms 134: 3 verses
+  ✓ Psalms 135: 21 verses
+  (rate limited on Psalms 136, waiting 250ms — attempt 1/6)
+  ✓ Psalms 136: 26 verses
+  ✓ Psalms 137: 9 verses
+  (rate limited on Psalms 138, waiting 250ms — attempt 1/6)
+  ✓ Psalms 138: 8 verses
+  ✓ Psalms 139: 24 verses
+  ✓ Psalms 140: 13 verses
+  ✓ Psalms 141: 10 verses
+  (rate limited on Psalms 142, waiting 250ms — attempt 1/6)
+  ✓ Psalms 142: 7 verses
+  ✓ Psalms 143: 12 verses
+  ✓ Psalms 144: 15 verses
+  ✓ Psalms 145: 21 verses
+  ✓ Psalms 146: 10 verses
+  ✓ Psalms 147: 20 verses
+  ✓ Psalms 148: 14 verses
+  ✓ Psalms 149: 9 verses
+  (rate limited on Psalms 150, waiting 250ms — attempt 1/6)
+  (rate limited on Psalms 150, waiting 250ms — attempt 2/6)
+  ✓ Psalms 150: 6 verses
+
+Proverbs (31 chapters)
+  ✓ Proverbs 1: 33 verses
+  (rate limited on Proverbs 2, waiting 250ms — attempt 1/6)
+  ✓ Proverbs 2: 22 verses
+  ✓ Proverbs 3: 35 verses
+  ✓ Proverbs 4: 27 verses
+  ✓ Proverbs 5: 23 verses
+  (rate limited on Proverbs 6, waiting 250ms — attempt 1/6)
+  ✓ Proverbs 6: 35 verses
+  ✓ Proverbs 7: 27 verses
+  ✓ Proverbs 8: 36 verses
+  ✓ Proverbs 9: 18 verses
+  ✓ Proverbs 10: 32 verses
+  (rate limited on Proverbs 11, waiting 250ms — attempt 1/6)
+  ✓ Proverbs 11: 31 verses
+  ✓ Proverbs 12: 28 verses
+  ✓ Proverbs 13: 25 verses
+  ✓ Proverbs 14: 35 verses
+  ✓ Proverbs 15: 33 verses
+  ✓ Proverbs 16: 33 verses
+  ✓ Proverbs 17: 28 verses
+  ✓ Proverbs 18: 24 verses
+  ✓ Proverbs 19: 29 verses
+  (rate limited on Proverbs 20, waiting 250ms — attempt 1/6)
+  ✓ Proverbs 20: 30 verses
+  ✓ Proverbs 21: 31 verses
+  (rate limited on Proverbs 22, waiting 250ms — attempt 1/6)
+  ✓ Proverbs 22: 29 verses
+  ✓ Proverbs 23: 35 verses
+  (rate limited on Proverbs 24, waiting 250ms — attempt 1/6)
+  ✓ Proverbs 24: 34 verses
+  ✓ Proverbs 25: 28 verses
+  (rate limited on Proverbs 26, waiting 250ms — attempt 1/6)
+  ✓ Proverbs 26: 28 verses
+  (rate limited on Proverbs 27, waiting 250ms — attempt 1/6)
+  ✓ Proverbs 27: 27 verses
+  ✓ Proverbs 28: 28 verses
+  ✓ Proverbs 29: 27 verses
+  ✓ Proverbs 30: 33 verses
+  (rate limited on Proverbs 31, waiting 250ms — attempt 1/6)
+  ✓ Proverbs 31: 31 verses
+
+Ecclesiastes (12 chapters)
+  (rate limited on Ecclesiastes 1, waiting 250ms — attempt 1/6)
+  ✓ Ecclesiastes 1: 18 verses
+  (rate limited on Ecclesiastes 2, waiting 250ms — attempt 1/6)
+  ✓ Ecclesiastes 2: 26 verses
+  (rate limited on Ecclesiastes 3, waiting 250ms — attempt 1/6)
+  ✓ Ecclesiastes 3: 22 verses
+  ✓ Ecclesiastes 4: 16 verses
+  (rate limited on Ecclesiastes 5, waiting 1250ms — attempt 1/6)
+  ✓ Ecclesiastes 5: 20 verses
+  ✓ Ecclesiastes 6: 12 verses
+  ✓ Ecclesiastes 7: 29 verses
+  (rate limited on Ecclesiastes 8, waiting 250ms — attempt 1/6)
+  ✓ Ecclesiastes 8: 17 verses
+  (rate limited on Ecclesiastes 9, waiting 250ms — attempt 1/6)
+  ✓ Ecclesiastes 9: 18 verses
+  (rate limited on Ecclesiastes 10, waiting 250ms — attempt 1/6)
+  ✓ Ecclesiastes 10: 20 verses
+  ✓ Ecclesiastes 11: 10 verses
+  (rate limited on Ecclesiastes 12, waiting 250ms — attempt 1/6)
+  (rate limited on Ecclesiastes 12, waiting 250ms — attempt 2/6)
+  ✓ Ecclesiastes 12: 14 verses
+
+Song of Solomon (8 chapters)
+  (rate limited on Song of Solomon 1, waiting 250ms — attempt 1/6)
+  ✓ Song of Solomon 1: 17 verses
+  ✓ Song of Solomon 2: 17 verses
+  (rate limited on Song of Solomon 3, waiting 250ms — attempt 1/6)
+  (rate limited on Song of Solomon 3, waiting 250ms — attempt 2/6)
+  ✓ Song of Solomon 3: 11 verses
+  ✓ Song of Solomon 4: 16 verses
+  (rate limited on Song of Solomon 5, waiting 250ms — attempt 1/6)
+  (rate limited on Song of Solomon 5, waiting 250ms — attempt 2/6)
+  ✓ Song of Solomon 5: 16 verses
+  (rate limited on Song of Solomon 6, waiting 250ms — attempt 1/6)
+  ✓ Song of Solomon 6: 13 verses
+  ✓ Song of Solomon 7: 13 verses
+  (rate limited on Song of Solomon 8, waiting 250ms — attempt 1/6)
+  ✓ Song of Solomon 8: 14 verses
+
+Isaiah (66 chapters)
+  (rate limited on Isaiah 1, waiting 250ms — attempt 1/6)
+  (rate limited on Isaiah 1, waiting 250ms — attempt 2/6)
+  ✓ Isaiah 1: 31 verses
+  ✓ Isaiah 2: 22 verses
+  ✓ Isaiah 3: 26 verses
+  ✓ Isaiah 4: 6 verses
+  ✓ Isaiah 5: 30 verses
+  ✓ Isaiah 6: 13 verses
+  ✓ Isaiah 7: 25 verses
+  ✓ Isaiah 8: 22 verses
+  (rate limited on Isaiah 9, waiting 1250ms — attempt 1/6)
+  ✓ Isaiah 9: 21 verses
+  ✓ Isaiah 10: 34 verses
+  ✓ Isaiah 11: 16 verses
+  ✓ Isaiah 12: 6 verses
+  ✓ Isaiah 13: 22 verses
+  ✓ Isaiah 14: 32 verses
+  (rate limited on Isaiah 15, waiting 250ms — attempt 1/6)
+  ✓ Isaiah 15: 9 verses
+  ✓ Isaiah 16: 14 verses
+  ✓ Isaiah 17: 14 verses
+  ✓ Isaiah 18: 7 verses
+  ✓ Isaiah 19: 25 verses
+  (rate limited on Isaiah 20, waiting 250ms — attempt 1/6)
+  ✓ Isaiah 20: 6 verses
+  ✓ Isaiah 21: 17 verses
+  ✓ Isaiah 22: 25 verses
+  ✓ Isaiah 23: 18 verses
+  ✓ Isaiah 24: 23 verses
+  ✓ Isaiah 25: 12 verses
+  ✓ Isaiah 26: 21 verses
+  ✓ Isaiah 27: 13 verses
+  ✓ Isaiah 28: 29 verses
+  (rate limited on Isaiah 29, waiting 250ms — attempt 1/6)
+  ✓ Isaiah 29: 24 verses
+  ✓ Isaiah 30: 33 verses
+  ✓ Isaiah 31: 9 verses
+  ✓ Isaiah 32: 20 verses
+  (rate limited on Isaiah 33, waiting 250ms — attempt 1/6)
+  ✓ Isaiah 33: 24 verses
+  ✓ Isaiah 34: 17 verses
+  ✓ Isaiah 35: 10 verses
+  (rate limited on Isaiah 36, waiting 250ms — attempt 1/6)
+  ✓ Isaiah 36: 22 verses
+  ✓ Isaiah 37: 38 verses
+  ✓ Isaiah 38: 22 verses
+  ✓ Isaiah 39: 8 verses
+  ✓ Isaiah 40: 31 verses
+  (rate limited on Isaiah 41, waiting 250ms — attempt 1/6)
+  ✓ Isaiah 41: 29 verses
+  (rate limited on Isaiah 42, waiting 250ms — attempt 1/6)
+  ✓ Isaiah 42: 25 verses
+  ✓ Isaiah 43: 28 verses
+  ✓ Isaiah 44: 28 verses
+  (rate limited on Isaiah 45, waiting 1250ms — attempt 1/6)
+  ✓ Isaiah 45: 25 verses
+  ✓ Isaiah 46: 13 verses
+  ✓ Isaiah 47: 15 verses
+  ✓ Isaiah 48: 22 verses
+  ✓ Isaiah 49: 26 verses
+  ✓ Isaiah 50: 11 verses
+  ✓ Isaiah 51: 23 verses
+  (rate limited on Isaiah 52, waiting 250ms — attempt 1/6)
+  ✓ Isaiah 52: 15 verses
+  ✓ Isaiah 53: 12 verses
+  ✓ Isaiah 54: 17 verses
+  (rate limited on Isaiah 55, waiting 250ms — attempt 1/6)
+  ✓ Isaiah 55: 13 verses
+  ✓ Isaiah 56: 12 verses
+  (rate limited on Isaiah 57, waiting 250ms — attempt 1/6)
+  ✓ Isaiah 57: 21 verses
+  ✓ Isaiah 58: 14 verses
+  ✓ Isaiah 59: 21 verses
+  ✓ Isaiah 60: 22 verses
+  (rate limited on Isaiah 61, waiting 250ms — attempt 1/6)
+  (rate limited on Isaiah 61, waiting 250ms — attempt 2/6)
+  ✓ Isaiah 61: 11 verses
+  ✓ Isaiah 62: 12 verses
+  ✓ Isaiah 63: 19 verses
+  ✓ Isaiah 64: 12 verses
+  ✓ Isaiah 65: 25 verses
+  ✓ Isaiah 66: 24 verses
+
+Jeremiah (52 chapters)
+  ✓ Jeremiah 1: 19 verses
+  ✓ Jeremiah 2: 37 verses
+  (rate limited on Jeremiah 3, waiting 1250ms — attempt 1/6)
+  ✓ Jeremiah 3: 25 verses
+  ✓ Jeremiah 4: 31 verses
+  ✓ Jeremiah 5: 31 verses
+  ✓ Jeremiah 6: 30 verses
+  ✓ Jeremiah 7: 34 verses
+  ✓ Jeremiah 8: 22 verses
+  ✓ Jeremiah 9: 26 verses
+  ✓ Jeremiah 10: 25 verses
+  (rate limited on Jeremiah 11, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 11: 23 verses
+  ✓ Jeremiah 12: 17 verses
+  ✓ Jeremiah 13: 27 verses
+  (rate limited on Jeremiah 14, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 14: 22 verses
+  ✓ Jeremiah 15: 21 verses
+  ✓ Jeremiah 16: 21 verses
+  ✓ Jeremiah 17: 27 verses
+  ✓ Jeremiah 18: 23 verses
+  (rate limited on Jeremiah 19, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 19: 15 verses
+  ✓ Jeremiah 20: 18 verses
+  ✓ Jeremiah 21: 14 verses
+  ✓ Jeremiah 22: 30 verses
+  (rate limited on Jeremiah 23, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 23: 40 verses
+  ✓ Jeremiah 24: 10 verses
+  ✓ Jeremiah 25: 38 verses
+  ✓ Jeremiah 26: 24 verses
+  (rate limited on Jeremiah 27, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 27: 22 verses
+  ✓ Jeremiah 28: 17 verses
+  (rate limited on Jeremiah 29, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 29: 32 verses
+  (rate limited on Jeremiah 30, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 30: 24 verses
+  ✓ Jeremiah 31: 40 verses
+  ✓ Jeremiah 32: 44 verses
+  ✓ Jeremiah 33: 26 verses
+  ✓ Jeremiah 34: 22 verses
+  (rate limited on Jeremiah 35, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 35: 19 verses
+  (rate limited on Jeremiah 36, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 36: 32 verses
+  (rate limited on Jeremiah 37, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 37: 21 verses
+  ✓ Jeremiah 38: 28 verses
+  (rate limited on Jeremiah 39, waiting 1250ms — attempt 1/6)
+  ✓ Jeremiah 39: 18 verses
+  ✓ Jeremiah 40: 16 verses
+  ✓ Jeremiah 41: 18 verses
+  ✓ Jeremiah 42: 22 verses
+  ✓ Jeremiah 43: 13 verses
+  ✓ Jeremiah 44: 30 verses
+  ✓ Jeremiah 45: 5 verses
+  ✓ Jeremiah 46: 28 verses
+  ✓ Jeremiah 47: 7 verses
+  ✓ Jeremiah 48: 47 verses
+  ✓ Jeremiah 49: 39 verses
+  ✓ Jeremiah 50: 46 verses
+  ✓ Jeremiah 51: 64 verses
+  (rate limited on Jeremiah 52, waiting 250ms — attempt 1/6)
+  ✓ Jeremiah 52: 34 verses
+
+Lamentations (5 chapters)
+  ✓ Lamentations 1: 22 verses
+  ✓ Lamentations 2: 22 verses
+  (rate limited on Lamentations 3, waiting 250ms — attempt 1/6)
+  (rate limited on Lamentations 3, waiting 250ms — attempt 2/6)
+  ✓ Lamentations 3: 66 verses
+  ✓ Lamentations 4: 22 verses
+  ✓ Lamentations 5: 22 verses
+
+Ezekiel (48 chapters)
+  ✓ Ezekiel 1: 28 verses
+  (rate limited on Ezekiel 2, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 2: 10 verses
+  ✓ Ezekiel 3: 27 verses
+  ✓ Ezekiel 4: 17 verses
+  ✓ Ezekiel 5: 17 verses
+  (rate limited on Ezekiel 6, waiting 1250ms — attempt 1/6)
+  ✓ Ezekiel 6: 14 verses
+  ✓ Ezekiel 7: 27 verses
+  ✓ Ezekiel 8: 18 verses
+  ✓ Ezekiel 9: 11 verses
+  (rate limited on Ezekiel 10, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 10: 22 verses
+  ✓ Ezekiel 11: 25 verses
+  ✓ Ezekiel 12: 28 verses
+  ✓ Ezekiel 13: 23 verses
+  (rate limited on Ezekiel 14, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 14: 23 verses
+  ✓ Ezekiel 15: 8 verses
+  ✓ Ezekiel 16: 63 verses
+  ✓ Ezekiel 17: 24 verses
+  (rate limited on Ezekiel 18, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 18: 32 verses
+  ✓ Ezekiel 19: 14 verses
+  ✓ Ezekiel 20: 49 verses
+  ✓ Ezekiel 21: 32 verses
+  ✓ Ezekiel 22: 31 verses
+  ✓ Ezekiel 23: 49 verses
+  (rate limited on Ezekiel 24, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 24: 27 verses
+  ✓ Ezekiel 25: 17 verses
+  (rate limited on Ezekiel 26, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 26: 21 verses
+  ✓ Ezekiel 27: 36 verses
+  ✓ Ezekiel 28: 26 verses
+  ✓ Ezekiel 29: 21 verses
+  (rate limited on Ezekiel 30, waiting 250ms — attempt 1/6)
+  (rate limited on Ezekiel 30, waiting 250ms — attempt 2/6)
+  ✓ Ezekiel 30: 26 verses
+  ✓ Ezekiel 31: 18 verses
+  (rate limited on Ezekiel 32, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 32: 32 verses
+  (rate limited on Ezekiel 33, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 33: 33 verses
+  ✓ Ezekiel 34: 31 verses
+  ✓ Ezekiel 35: 15 verses
+  ✓ Ezekiel 36: 38 verses
+  ✓ Ezekiel 37: 28 verses
+  (rate limited on Ezekiel 38, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 38: 23 verses
+  (rate limited on Ezekiel 39, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 39: 29 verses
+  (rate limited on Ezekiel 40, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 40: 49 verses
+  ✓ Ezekiel 41: 26 verses
+  (rate limited on Ezekiel 42, waiting 1250ms — attempt 1/6)
+  ✓ Ezekiel 42: 20 verses
+  (rate limited on Ezekiel 43, waiting 250ms — attempt 1/6)
+  ✓ Ezekiel 43: 27 verses
+  ✓ Ezekiel 44: 31 verses
+  ✓ Ezekiel 45: 25 verses
+  ✓ Ezekiel 46: 24 verses
+  ✓ Ezekiel 47: 23 verses
+  ✓ Ezekiel 48: 35 verses
+
+Daniel (12 chapters)
+  ✓ Daniel 1: 21 verses
+  ✓ Daniel 2: 49 verses
+  ✓ Daniel 3: 30 verses
+  ✓ Daniel 4: 37 verses
+  ✓ Daniel 5: 31 verses
+  ✓ Daniel 6: 28 verses
+  (rate limited on Daniel 7, waiting 250ms — attempt 1/6)
+  (rate limited on Daniel 7, waiting 250ms — attempt 2/6)
+  ✓ Daniel 7: 28 verses
+  ✓ Daniel 8: 27 verses
+  ✓ Daniel 9: 27 verses
+  (rate limited on Daniel 10, waiting 250ms — attempt 1/6)
+  ✓ Daniel 10: 21 verses
+  ✓ Daniel 11: 45 verses
+  ✓ Daniel 12: 13 verses
+
+Hosea (14 chapters)
+  ✓ Hosea 1: 11 verses
+  (rate limited on Hosea 2, waiting 250ms — attempt 1/6)
+  (rate limited on Hosea 2, waiting 250ms — attempt 2/6)
+  ✓ Hosea 2: 23 verses
+  ✓ Hosea 3: 5 verses
+  ✓ Hosea 4: 19 verses
+  (rate limited on Hosea 5, waiting 250ms — attempt 1/6)
+  ✓ Hosea 5: 15 verses
+  (rate limited on Hosea 6, waiting 1250ms — attempt 1/6)
+  ✓ Hosea 6: 11 verses
+  ✓ Hosea 7: 16 verses
+  ✓ Hosea 8: 14 verses
+  ✓ Hosea 9: 17 verses
+  ✓ Hosea 10: 15 verses
+  ✓ Hosea 11: 12 verses
+  ✓ Hosea 12: 14 verses
+  (rate limited on Hosea 13, waiting 250ms — attempt 1/6)
+  ✓ Hosea 13: 16 verses
+  ✓ Hosea 14: 9 verses
+
+Joel (3 chapters)
+  (rate limited on Joel 1, waiting 250ms — attempt 1/6)
+  ✓ Joel 1: 20 verses
+  ✓ Joel 2: 32 verses
+  ✓ Joel 3: 21 verses
+
+Amos (9 chapters)
+  ✓ Amos 1: 15 verses
+  ✓ Amos 2: 16 verses
+  ✓ Amos 3: 15 verses
+  ✓ Amos 4: 13 verses
+  ✓ Amos 5: 27 verses
+  ✓ Amos 6: 14 verses
+  (rate limited on Amos 7, waiting 250ms — attempt 1/6)
+  (rate limited on Amos 7, waiting 250ms — attempt 2/6)
+  ✓ Amos 7: 17 verses
+  ✓ Amos 8: 14 verses
+  ✓ Amos 9: 15 verses
+
+Obadiah (1 chapters)
+
+Jonah (4 chapters)
+  ✓ Jonah 1: 17 verses
+  ✓ Jonah 2: 10 verses
+  ✓ Jonah 3: 10 verses
+  (rate limited on Jonah 4, waiting 1250ms — attempt 1/6)
+  ✓ Jonah 4: 11 verses
+
+Micah (7 chapters)
+  ✓ Micah 1: 16 verses
+  ✓ Micah 2: 13 verses
+  (rate limited on Micah 3, waiting 250ms — attempt 1/6)
+  ✓ Micah 3: 12 verses
+  ✓ Micah 4: 13 verses
+  (rate limited on Micah 5, waiting 250ms — attempt 1/6)
+  ✓ Micah 5: 15 verses
+  ✓ Micah 6: 16 verses
+  (rate limited on Micah 7, waiting 250ms — attempt 1/6)
+  ✓ Micah 7: 20 verses
+
+Nahum (3 chapters)
+  (rate limited on Nahum 1, waiting 250ms — attempt 1/6)
+  ✓ Nahum 1: 15 verses
+  (rate limited on Nahum 2, waiting 250ms — attempt 1/6)
+  ✓ Nahum 2: 13 verses
+  (rate limited on Nahum 3, waiting 250ms — attempt 1/6)
+  ✓ Nahum 3: 19 verses
+
+Habakkuk (3 chapters)
+  ✓ Habakkuk 1: 17 verses
+  (rate limited on Habakkuk 2, waiting 2250ms — attempt 1/6)
+  ✓ Habakkuk 2: 20 verses
+  ✓ Habakkuk 3: 19 verses
+
+Zephaniah (3 chapters)
+  ✓ Zephaniah 1: 18 verses
+  ✓ Zephaniah 2: 15 verses
+  (rate limited on Zephaniah 3, waiting 250ms — attempt 1/6)
+  ✓ Zephaniah 3: 20 verses
+
+Haggai (2 chapters)
+  ✓ Haggai 1: 15 verses
+  (rate limited on Haggai 2, waiting 250ms — attempt 1/6)
+  ✓ Haggai 2: 23 verses
+
+Zechariah (14 chapters)
+  (rate limited on Zechariah 1, waiting 250ms — attempt 1/6)
+  ✓ Zechariah 1: 21 verses
+  (rate limited on Zechariah 2, waiting 250ms — attempt 1/6)
+  ✓ Zechariah 2: 13 verses
+  ✓ Zechariah 3: 10 verses
+  (rate limited on Zechariah 4, waiting 250ms — attempt 1/6)
+  ✓ Zechariah 4: 14 verses
+  ✓ Zechariah 5: 11 verses
+  (rate limited on Zechariah 6, waiting 250ms — attempt 1/6)
+  ✓ Zechariah 6: 15 verses
+  (rate limited on Zechariah 7, waiting 1250ms — attempt 1/6)
+  ✓ Zechariah 7: 14 verses
+  ✓ Zechariah 8: 23 verses
+  ✓ Zechariah 9: 17 verses
+  (rate limited on Zechariah 10, waiting 250ms — attempt 1/6)
+  ✓ Zechariah 10: 12 verses
+  ✓ Zechariah 11: 17 verses
+  (rate limited on Zechariah 12, waiting 250ms — attempt 1/6)
+  ✓ Zechariah 12: 14 verses
+  ✓ Zechariah 13: 9 verses
+  (rate limited on Zechariah 14, waiting 250ms — attempt 1/6)
+  (rate limited on Zechariah 14, waiting 250ms — attempt 2/6)
+  ✓ Zechariah 14: 21 verses
+
+Malachi (4 chapters)
+  ✓ Malachi 1: 14 verses
+  ✓ Malachi 2: 17 verses
+  (rate limited on Malachi 3, waiting 250ms — attempt 1/6)
+  ✓ Malachi 3: 18 verses
+  (rate limited on Malachi 4, waiting 1250ms — attempt 1/6)
+  ✓ Malachi 4: 6 verses
+
+Matthew (28 chapters)
+  (rate limited on Matthew 1, waiting 250ms — attempt 1/6)
+  ✓ Matthew 1: 25 verses
+  ✓ Matthew 2: 23 verses
+  (rate limited on Matthew 3, waiting 250ms — attempt 1/6)
+  ✓ Matthew 3: 17 verses
+  ✓ Matthew 4: 25 verses
+  (rate limited on Matthew 5, waiting 250ms — attempt 1/6)
+  ✓ Matthew 5: 48 verses
+  ✓ Matthew 6: 34 verses
+  (rate limited on Matthew 7, waiting 250ms — attempt 1/6)
+  ✓ Matthew 7: 29 verses
+  ✓ Matthew 8: 34 verses
+  (rate limited on Matthew 9, waiting 250ms — attempt 1/6)
+  ✓ Matthew 9: 38 verses
+  (rate limited on Matthew 10, waiting 250ms — attempt 1/6)
+  ✓ Matthew 10: 42 verses
+  ✓ Matthew 11: 30 verses
+  (rate limited on Matthew 12, waiting 250ms — attempt 1/6)
+  ✓ Matthew 12: 49 verses
+  ✓ Matthew 13: 58 verses
+  (rate limited on Matthew 14, waiting 250ms — attempt 1/6)
+  ✓ Matthew 14: 36 verses
+  ✓ Matthew 15: 39 verses
+  ✓ Matthew 16: 28 verses
+  ✓ Matthew 17: 26 verses
+  ✓ Matthew 18: 34 verses
+  ✓ Matthew 19: 30 verses
+  ✓ Matthew 20: 34 verses
+  ✓ Matthew 21: 46 verses
+  ✓ Matthew 22: 46 verses
+  ✓ Matthew 23: 38 verses
+  (rate limited on Matthew 24, waiting 250ms — attempt 1/6)
+  ✓ Matthew 24: 51 verses
+  ✓ Matthew 25: 46 verses
+  ✓ Matthew 26: 75 verses
+  ✓ Matthew 27: 66 verses
+  ✓ Matthew 28: 20 verses
+
+Mark (16 chapters)
+  ✓ Mark 1: 45 verses
+  ✓ Mark 2: 28 verses
+  ✓ Mark 3: 35 verses
+  ✓ Mark 4: 41 verses
+  (rate limited on Mark 5, waiting 250ms — attempt 1/6)
+  ✓ Mark 5: 43 verses
+  (rate limited on Mark 6, waiting 250ms — attempt 1/6)
+  ✓ Mark 6: 56 verses
+  ✓ Mark 7: 36 verses
+  (rate limited on Mark 8, waiting 2250ms — attempt 1/6)
+  ✓ Mark 8: 38 verses
+  ✓ Mark 9: 48 verses
+  ✓ Mark 10: 52 verses
+  ✓ Mark 11: 32 verses
+  ✓ Mark 12: 44 verses
+  ✓ Mark 13: 37 verses
+  (rate limited on Mark 14, waiting 250ms — attempt 1/6)
+  ✓ Mark 14: 72 verses
+  (rate limited on Mark 15, waiting 250ms — attempt 1/6)
+  ✓ Mark 15: 46 verses
+  ✓ Mark 16: 20 verses
+
+Luke (24 chapters)
+  ✓ Luke 1: 80 verses
+  (rate limited on Luke 2, waiting 250ms — attempt 1/6)
+  ✓ Luke 2: 52 verses
+  ✓ Luke 3: 38 verses
+  ✓ Luke 4: 44 verses
+  (rate limited on Luke 5, waiting 1250ms — attempt 1/6)
+  ✓ Luke 5: 39 verses
+  ✓ Luke 6: 49 verses
+  ✓ Luke 7: 50 verses
+  (rate limited on Luke 8, waiting 250ms — attempt 1/6)
+  ✓ Luke 8: 56 verses
+  ✓ Luke 9: 62 verses
+  ✓ Luke 10: 42 verses
+  ✓ Luke 11: 54 verses
+  (rate limited on Luke 12, waiting 250ms — attempt 1/6)
+  ✓ Luke 12: 59 verses
+  ✓ Luke 13: 35 verses
+  ✓ Luke 14: 35 verses
+  ✓ Luke 15: 32 verses
+  (rate limited on Luke 16, waiting 1250ms — attempt 1/6)
+  ✓ Luke 16: 31 verses
+  ✓ Luke 17: 36 verses
+  ✓ Luke 18: 43 verses
+  ✓ Luke 19: 48 verses
+  ✓ Luke 20: 47 verses
+  ✓ Luke 21: 38 verses
+  ✓ Luke 22: 71 verses
+  ✓ Luke 23: 55 verses
+  ✓ Luke 24: 53 verses
+
+John (21 chapters)
+  ✓ John 1: 51 verses
+  (rate limited on John 2, waiting 250ms — attempt 1/6)
+  ✓ John 2: 25 verses
+  ✓ John 3: 36 verses
+  (rate limited on John 4, waiting 2452250ms — attempt 1/6)
+
+Genesis (50 chapters)
+
+Exodus (40 chapters)
+
+Leviticus (27 chapters)
+
+Numbers (36 chapters)
+
+Deuteronomy (34 chapters)
+
+Joshua (24 chapters)
+
+Judges (21 chapters)
+
+Ruth (4 chapters)
+
+1 Samuel (31 chapters)
+
+2 Samuel (24 chapters)
+
+1 Kings (22 chapters)
+
+2 Kings (25 chapters)
+
+1 Chronicles (29 chapters)
+
+2 Chronicles (36 chapters)
+
+Ezra (10 chapters)
+
+Nehemiah (13 chapters)
+
+Esther (10 chapters)
+
+Job (42 chapters)
+
+Psalms (150 chapters)
+
+Proverbs (31 chapters)
+
+Ecclesiastes (12 chapters)
+
+Song of Solomon (8 chapters)
+
+Isaiah (66 chapters)
+
+Jeremiah (52 chapters)
+
+Lamentations (5 chapters)
+
+Ezekiel (48 chapters)
+
+Daniel (12 chapters)
+
+Hosea (14 chapters)
+
+Joel (3 chapters)
+
+Amos (9 chapters)
+
+Obadiah (1 chapters)
+
+Jonah (4 chapters)
+
+Micah (7 chapters)
+
+Nahum (3 chapters)
+
+Habakkuk (3 chapters)
+
+Zephaniah (3 chapters)
+
+Haggai (2 chapters)
+
+Zechariah (14 chapters)
+
+Malachi (4 chapters)
+
+Matthew (28 chapters)
+
+Mark (16 chapters)
+
+Luke (24 chapters)
+
+John (21 chapters)
+  ✓ John 4: 54 verses
+  ✓ John 5: 46 verses
+  ✓ John 6: 71 verses
+  ✓ John 7: 53 verses
+  ✓ John 8: 59 verses
+  ✓ John 9: 41 verses
+  ✓ John 10: 42 verses
+  ✓ John 11: 57 verses
+  ✓ John 12: 50 verses
+  ✓ John 13: 38 verses
+  ✓ John 14: 31 verses
+  ✓ John 15: 27 verses
+  ✓ John 16: 33 verses
+  ✓ John 17: 26 verses
+  ✓ John 18: 40 verses
+  ✓ John 19: 42 verses
+  ✓ John 20: 31 verses
+  ✓ John 21: 25 verses
+
+Acts (28 chapters)
+  ✓ Acts 1: 26 verses
+  ✓ Acts 2: 47 verses
+  ✓ Acts 3: 26 verses
+  ✓ Acts 4: 37 verses
+  ✓ Acts 5: 42 verses
+  ✓ Acts 6: 15 verses
+  ✓ Acts 7: 60 verses
+  ✓ Acts 8: 39 verses
+  ✓ Acts 9: 43 verses
+  ✓ Acts 10: 48 verses
+  ✓ Acts 11: 30 verses
+  ✓ Acts 12: 25 verses
+  ✓ Acts 13: 52 verses
+  ✓ Acts 14: 28 verses
+  ✓ Acts 15: 40 verses
+  ✓ Acts 16: 40 verses
+  ✓ Acts 17: 34 verses
+  ✓ Acts 18: 28 verses
+  ✓ Acts 19: 41 verses
+  ✓ Acts 20: 38 verses
+  ✓ Acts 21: 40 verses
+  ✓ Acts 22: 30 verses
+  ✓ Acts 23: 35 verses
+  ✓ Acts 24: 26 verses
+  ✓ Acts 25: 27 verses
+  ✓ Acts 26: 32 verses
+  ✓ Acts 27: 44 verses
+  ✓ Acts 28: 30 verses
+
+Romans (16 chapters)
+  ✓ Romans 1: 32 verses
+  ✓ Romans 2: 29 verses
+  ✓ Romans 3: 31 verses
+  ✓ Romans 4: 25 verses
+  ✓ Romans 5: 21 verses
+  ✓ Romans 6: 23 verses
+  ✓ Romans 7: 25 verses
+  ✓ Romans 8: 39 verses
+  ✓ Romans 9: 33 verses
+  ✓ Romans 10: 21 verses
+  ✓ Romans 11: 36 verses
+  ✓ Romans 12: 21 verses
+  ✓ Romans 13: 14 verses
+  ✓ Romans 14: 23 verses
+  (rate limited on Romans 15, waiting 14250ms — attempt 1/6)
+  ✓ Romans 15: 33 verses
+  ✓ Romans 16: 26 verses
+
+1 Corinthians (16 chapters)
+  ✓ 1 Corinthians 1: 31 verses
+  ✓ 1 Corinthians 2: 16 verses
+  ✓ 1 Corinthians 3: 23 verses
+  ✓ 1 Corinthians 4: 21 verses
+  ✓ 1 Corinthians 5: 13 verses
+  ✓ 1 Corinthians 6: 20 verses
+  ✓ 1 Corinthians 7: 40 verses
+  ✓ 1 Corinthians 8: 13 verses
+  ✓ 1 Corinthians 9: 27 verses
+  ✓ 1 Corinthians 10: 33 verses
+  ✓ 1 Corinthians 11: 34 verses
+  ✓ 1 Corinthians 12: 31 verses
+  ✓ 1 Corinthians 13: 13 verses
+  (rate limited on 1 Corinthians 14, waiting 250ms — attempt 1/6)
+  ✓ 1 Corinthians 14: 40 verses
+  ✓ 1 Corinthians 15: 58 verses
+  ✓ 1 Corinthians 16: 24 verses
+
+2 Corinthians (13 chapters)
+  ✓ 2 Corinthians 1: 24 verses
+  ✓ 2 Corinthians 2: 17 verses
+  ✓ 2 Corinthians 3: 18 verses
+  (rate limited on 2 Corinthians 4, waiting 250ms — attempt 1/6)
+  ✓ 2 Corinthians 4: 18 verses
+  ✓ 2 Corinthians 5: 21 verses
+  ✓ 2 Corinthians 6: 18 verses
+  ✓ 2 Corinthians 7: 16 verses
+  ✓ 2 Corinthians 8: 24 verses
+  ✓ 2 Corinthians 9: 15 verses
+  ✓ 2 Corinthians 10: 18 verses
+  ✓ 2 Corinthians 11: 33 verses
+  ✓ 2 Corinthians 12: 21 verses
+  ✓ 2 Corinthians 13: 14 verses
+
+Galatians (6 chapters)
+  ✓ Galatians 1: 24 verses
+  ✓ Galatians 2: 21 verses
+  ✓ Galatians 3: 29 verses
+  ✓ Galatians 4: 31 verses
+  ✓ Galatians 5: 26 verses
+  ✓ Galatians 6: 18 verses
+
+Ephesians (6 chapters)
+  ✓ Ephesians 1: 23 verses
+  (rate limited on Ephesians 2, waiting 250ms — attempt 1/6)
+  ✓ Ephesians 2: 22 verses
+  ✓ Ephesians 3: 21 verses
+  ✓ Ephesians 4: 32 verses
+  ✓ Ephesians 5: 33 verses
+  ✓ Ephesians 6: 24 verses
+
+Philippians (4 chapters)
+  ✓ Philippians 1: 30 verses
+  ✓ Philippians 2: 30 verses
+  ✓ Philippians 3: 21 verses
+  (rate limited on Philippians 4, waiting 250ms — attempt 1/6)
+  ✓ Philippians 4: 23 verses
+
+Colossians (4 chapters)
+  ✓ Colossians 1: 29 verses
+  ✓ Colossians 2: 23 verses
+  ✓ Colossians 3: 25 verses
+  ✓ Colossians 4: 18 verses
+
+1 Thessalonians (5 chapters)
+  ✓ 1 Thessalonians 1: 10 verses
+  ✓ 1 Thessalonians 2: 20 verses
+  ✓ 1 Thessalonians 3: 13 verses
+  ✓ 1 Thessalonians 4: 18 verses
+  ✓ 1 Thessalonians 5: 28 verses
+
+2 Thessalonians (3 chapters)
+  ✓ 2 Thessalonians 1: 12 verses
+  ✓ 2 Thessalonians 2: 17 verses
+  ✓ 2 Thessalonians 3: 18 verses
+
+1 Timothy (6 chapters)
+  ✓ 1 Timothy 1: 20 verses
+  (rate limited on 1 Timothy 2, waiting 14250ms — attempt 1/6)
+  ✓ 1 Timothy 2: 15 verses
+  ✓ 1 Timothy 3: 16 verses
+  ✓ 1 Timothy 4: 16 verses
+  ✓ 1 Timothy 5: 25 verses
+  ✓ 1 Timothy 6: 21 verses
+
+2 Timothy (4 chapters)
+  ✓ 2 Timothy 1: 18 verses
+  ✓ 2 Timothy 2: 26 verses
+  ✓ 2 Timothy 3: 17 verses
+  ✓ 2 Timothy 4: 22 verses
+
+Titus (3 chapters)
+  ✓ Titus 1: 16 verses
+  ✓ Titus 2: 15 verses
+  ✓ Titus 3: 15 verses
+
+Philemon (1 chapters)
+  ✓ Philemon 1: 25 verses
+
+Hebrews (13 chapters)
+  ✓ Hebrews 1: 14 verses
+  ✓ Hebrews 2: 18 verses
+  (rate limited on Hebrews 3, waiting 250ms — attempt 1/6)
+  ✓ Hebrews 3: 19 verses
+  ✓ Hebrews 4: 16 verses
+  (rate limited on Hebrews 5, waiting 250ms — attempt 1/6)
+  ✓ Hebrews 5: 14 verses
+  ✓ Hebrews 6: 20 verses
+  ✓ Hebrews 7: 28 verses
+  ✓ Hebrews 8: 13 verses
+  ✓ Hebrews 9: 28 verses
+  (rate limited on Hebrews 10, waiting 250ms — attempt 1/6)
+  ✓ Hebrews 10: 39 verses
+  (rate limited on Hebrews 11, waiting 250ms — attempt 1/6)
+  ✓ Hebrews 11: 40 verses
+  ✓ Hebrews 12: 29 verses
+  ✓ Hebrews 13: 25 verses
+
+James (5 chapters)
+  ✓ James 1: 27 verses
+  ✓ James 2: 26 verses
+  ✓ James 3: 18 verses
+  ✓ James 4: 17 verses
+  ✓ James 5: 20 verses
+
+1 Peter (5 chapters)
+  ✓ 1 Peter 1: 25 verses
+  (rate limited on 1 Peter 2, waiting 250ms — attempt 1/6)
+  ✓ 1 Peter 2: 25 verses
+  ✓ 1 Peter 3: 22 verses
+  ✓ 1 Peter 4: 19 verses
+  ✓ 1 Peter 5: 14 verses
+
+2 Peter (3 chapters)
+  ✓ 2 Peter 1: 21 verses
+  ✓ 2 Peter 2: 22 verses
+  ✓ 2 Peter 3: 18 verses
+
+1 John (5 chapters)
+  (rate limited on 1 John 1, waiting 250ms — attempt 1/6)
+  ✓ 1 John 1: 10 verses
+  ✓ 1 John 2: 29 verses
+  ✓ 1 John 3: 24 verses
+  ✓ 1 John 4: 21 verses
+  ✓ 1 John 5: 21 verses
+
+2 John (1 chapters)
+  ✓ 2 John 1: 13 verses
+
+3 John (1 chapters)
+  ✓ 3 John 1: 15 verses
+
+Jude (1 chapters)
+  (rate limited on Jude 1, waiting 250ms — attempt 1/6)
+  ✓ Jude 1: 25 verses
+
+Revelation (22 chapters)
+  ✓ Revelation 1: 20 verses
+  ✓ Revelation 2: 29 verses
+  ✓ Revelation 3: 22 verses
+  ✓ Revelation 4: 11 verses
+  ✓ Revelation 5: 14 verses
+  ✓ Revelation 6: 17 verses
+  ✓ Revelation 7: 17 verses
+  ✓ Revelation 8: 13 verses
+  ✓ Revelation 9: 21 verses
+  ✓ Revelation 10: 11 verses
+  ✓ Revelation 11: 19 verses
+  ✓ Revelation 12: 17 verses
+  ✓ Revelation 13: 18 verses
+  (rate limited on Revelation 14, waiting 14250ms — attempt 1/6)
+  ✓ Revelation 14: 20 verses
+  ✓ Revelation 15: 8 verses
+  ✓ Revelation 16: 21 verses
+  ✓ Revelation 17: 18 verses
+  ✓ Revelation 18: 24 verses
+  ✓ Revelation 19: 21 verses
+  ✓ Revelation 20: 15 verses
+  ✓ Revelation 21: 27 verses
+  ✓ Revelation 22: 21 verses
+
+Done. Wrote 189 chapters / 4940 verses to translations/ESV (1000 already-imported chapters skipped).

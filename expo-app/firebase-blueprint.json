@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "streakDays": { "type": "integer" }
+      },
+      "required": ["displayName", "email", "createdAt", "updatedAt", "streakDays"]
+    },
+    "MemoryPlan": {
+      "title": "MemoryPlan",
+      "description": "User's personalized scripture memory rhythm and pacing settings",
+      "type": "object",
+      "properties": {
+        "preset": { "type": "string" },
+        "learningDays": { "type": "array" },
+        "reviewingDays": { "type": "array" },
+        "primingDays": { "type": "array" },
+        "newVersesPace": { "type": "integer" },
+        "maxReviewCap": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["preset", "learningDays", "reviewingDays", "primingDays", "newVersesPace", "maxReviewCap", "updatedAt"]
+    },
+    "UserVerse": {
+      "title": "UserVerse",
+      "description": "User-specific learning state for a specific scripture verse",
+      "type": "object",
+      "properties": {
+        "book": { "type": "string" },
+        "chapter": { "type": "integer" },
+        "verse": { "type": "integer" },
+        "status": { "type": "string", "enum": ["memorized", "learning", "untouched"] },
+        "dueDate": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["book", "chapter", "verse", "status", "updatedAt"]
+    },
+    "QueueItem": {
+      "title": "QueueItem",
+      "description": "Single ordered item in the user's scripture memory queue",
+      "type": "object",
+      "properties": {
+        "verseId": { "type": "string" },
+        "book": { "type": "string" },
+        "chapter": { "type": "integer" },
+        "verseNumber": { "type": "integer" },
+        "text": { "type": "string" },
+        "orderIndex": { "type": "integer" },
+        "status": { "type": "string", "enum": ["queued", "learning", "reviewing", "retained"] },
+        "retentionPhase": { "type": "string", "enum": ["none", "daily", "weekly", "monthly"] },
+        "dateStarted": { "type": "string" },
+        "lastReviewDate": { "type": "string" },
+        "nextReviewDueDate": { "type": "string" },
+        "currentStreakCount": { "type": "integer" },
+        "totalSuccessfulReviews: ": { "type": "integer" },
+        "gracePeriodUsedToday": { "type": "boolean" }
+      },
+      "required": ["verseId", "book", "chapter", "verseNumber", "text", "orderIndex", "status", "retentionPhase"]
+    },
+    "SharedPlan": {
+      "title": "SharedPlan",
+      "description": "Community-shared scripture memory plan",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "preset": { "type": "string" },
+        "learningDays": { "type": "array" },
+        "reviewingDays": { "type": "array" },
+        "primingDays": { "type": "array" },
+        "newVersesPace": { "type": "integer" },
+        "maxReviewCap": { "type": "integer" },
+        "creatorName": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "downloadsCount": { "type": "integer" }
+      },
+      "required": ["name", "preset", "learningDays", "reviewingDays", "primingDays", "newVersesPace", "maxReviewCap", "creatorName", "creatorId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "profiles/{userId}": {
+      "schema": "Profile",
+      "description": "Public and private profile data for each user"
+    },
+    "memoryPlans/{userId}": {
+      "schema": "MemoryPlan",
+      "description": "Pacing and scheduling presets for each user"
+    },
+    "users/{userId}/verses/{verseId}": {
+      "schema": "UserVerse",
+      "description": "Tracking of individual verse memorization states for a specific user"
+    },
+    "users/{userId}/memoryQueue/{verseId}": {
+      "schema": "QueueItem",
+      "description": "The user's unified scripture memory queue in order"
+    },
+    "sharedPlans/{planId}": {
+      "schema": "SharedPlan",
+      "description": "Community-shared scripture memory plans"
+    }
+  }
+}

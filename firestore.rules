@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Default Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helper Functions ---
+    
+    // Checks if the user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Checks if the user is the owner of the document being requested
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Prevent ID Poisoning by verifying document ID format and size
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Collection Matching and Access Rules ---
+
+    // Users and Profiles collection
+    match /profiles/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Memory plans collection
+    match /memoryPlans/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // User verses collection (nested under users/{userId})
+    match /users/{userId}/verses/{verseId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Unified Memory Queue collection
+    match /users/{userId}/memoryQueue/{verseId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Shared plans collection for community memory plans
+    match /sharedPlans/{planId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+  }
+}

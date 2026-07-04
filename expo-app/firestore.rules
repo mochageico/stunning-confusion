@@ -1,0 +1,108 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Default Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helper Functions ---
+    
+    // Checks if the user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Checks if the user is the owner of the document being requested
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Prevent ID Poisoning by verifying document ID format and size
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Collection Matching and Access Rules ---
+
+    // Users and Profiles collection. Read is open to any signed-in user (not
+    // just the owner) so real circle co-members can see each other's name,
+    // avatar, and streak — write stays owner-only.
+    match /profiles/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId);
+    }
+
+    // Memory plans collection
+    match /memoryPlans/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // User verses collection (nested under users/{userId})
+    match /users/{userId}/verses/{verseId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Unified Memory Queue collection
+    match /users/{userId}/memoryQueue/{verseId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Voice recordings of chapter recitations. Private to the owner for now
+    // (no circle/friend sharing yet) — audioPath here must match the Storage
+    // object's path so storage.rules can independently verify ownership.
+    match /users/{userId}/recordings/{recordingId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Shared plans collection for community memory plans
+    match /sharedPlans/{planId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Scripture Circles: community/small-group pacing circles. No Cloud
+    // Functions in this project, so private-circle invite codes are checked
+    // client-side, not server-side — acceptable at this app's small-group
+    // trust level. Only the original creator is ever a 'leader' (ownerId) —
+    // there's no promote/demote feature yet, so member docs are immutable
+    // after creation.
+    match /circles/{circleId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /members/{memberId} {
+        allow read: if isSignedIn();
+        allow create: if isOwner(memberId); // self-service join
+        allow delete: if isOwner(memberId) // self-service leave
+          || get(/databases/$(database)/documents/circles/$(circleId)).data.ownerId == request.auth.uid; // or owner kicks
+        allow update: if false;
+      }
+
+      match /groupPlans/{planId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && get(/databases/$(database)/documents/circles/$(circleId)).data.ownerId == request.auth.uid;
+      }
+    }
+
+    // Scripture text library: translations/{translationId} (metadata) and
+    // translations/{translationId}/books/{bookId}/chapters/{chapterNumber}
+    // (verse text). Readable by everyone (including signed-out users browsing
+    // scripture), never writable from the client — populated only by the
+    // admin import script running with a service account, which bypasses
+    // these rules entirely.
+    match /translations/{translationId} {
+      allow read: if true;
+      allow write: if false;
+
+      match /books/{bookId}/chapters/{chapterId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+
+  }
+}
