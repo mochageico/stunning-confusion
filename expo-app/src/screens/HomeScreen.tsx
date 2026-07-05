@@ -46,6 +46,7 @@ function groupQueueItems(items: QueueItem[]): GroupedItem[] {
 
 export default function HomeScreen({ state }: { state: AppState }) {
   const {
+    user,
     memoryQueue,
     primingLookahead,
     setPrimingLookahead,
@@ -62,6 +63,11 @@ export default function HomeScreen({ state }: { state: AppState }) {
   } = state;
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // Guest/signed-out preview falls back to the same "Kenneth Carter" demo
+  // persona used elsewhere (ProfileScreen, INITIAL_VERSES) — but a real
+  // signed-in user's actual name should always take priority.
+  const firstName = (user?.displayName || 'Kenneth Carter').split(' ')[0];
 
   const learningItems = memoryQueue.filter((item) => item.status === 'learning');
   const dueReviewItems = memoryQueue.filter(
@@ -108,7 +114,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
           <Text className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#888]">
             {getTodayDateString()}
           </Text>
-          <Text className="text-xl font-serif font-black mt-0.5 text-[#1A1A1A]">Good morning, Kenneth.</Text>
+          <Text className="text-xl font-serif font-black mt-0.5 text-[#1A1A1A]">Good morning, {firstName}.</Text>
         </View>
 
         {/* TODAY'S CORE DASHBOARD CARD */}

@@ -31,6 +31,7 @@ const getAvatarStyle = (user: string = '') => {
 
 export default function AudioFeedScreen({ state }: { state: AppState }) {
   const {
+    user,
     handleBack,
     audioSearchQuery,
     setAudioSearchQuery,
@@ -45,8 +46,11 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     playingRecProgress,
     setPlayingRecProgress,
     feedRecordings,
+    loadingFeedRecordings,
     userRecordings,
-    setUserRecordings,
+    friends,
+    circleFriends,
+    saveSharedRecordingToLibrary,
     formatTime,
     triggerToast,
   } = state;
@@ -62,17 +66,20 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
       ]
     : [];
 
-  // 1. Filter by category
+  // 1. Filter by category — real recordings are matched by userId against
+  // real friends/circleFriends; r.category is only ever set on the
+  // illustrative guest-preview mock feed (SUGGESTED_FEED_RECORDINGS), kept
+  // here so that still filters sensibly when signed out.
+  const friendUids = new Set(friends.map((f) => f.uid));
+  const circleUids = new Set(circleFriends.map((f) => f.uid));
   let filtered = feedRecordings;
   if (activeFeedFilter === 'group') {
-    filtered = feedRecordings.filter((r) => r.category === 'group' || r.user === 'Kenneth Carter');
+    filtered = feedRecordings.filter(
+      (r) => (r.userId && (circleUids.has(r.userId) || r.userId === user?.uid)) || r.category === 'group'
+    );
   } else if (activeFeedFilter === 'friends') {
     filtered = feedRecordings.filter(
-      (r) =>
-        r.category === 'friends' ||
-        r.user === 'Sarah Miller' ||
-        r.user === 'Elizabeth K.' ||
-        r.user === 'Kenneth Carter'
+      (r) => (r.userId && (friendUids.has(r.userId) || r.userId === user?.uid)) || r.category === 'friends'
     );
   }
 
@@ -202,23 +209,31 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
 
         {/* List of recordings */}
         <View className="gap-3">
-          {filtered.length === 0 ? (
+          {loadingFeedRecordings ? (
+            <View className="py-8 items-center">
+              <Text className="text-xs text-neutral-400 font-sans">Loading recordings...</Text>
+            </View>
+          ) : filtered.length === 0 ? (
             <View className="items-center p-8 bg-neutral-50 rounded-xl border border-dashed border-[#E5E5E5] gap-2">
               <Volume2 size={32} color="#d4d4d4" />
               <Text className="font-sans font-bold text-xs text-neutral-400">No recordings matched your criteria</Text>
               <Text className="text-[10px] font-sans text-neutral-400 text-center">
-                Be the first to share! Record a recitation under the Record tab and save it to your profile feed.
+                Be the first to share! Record a recitation under the Record tab and choose Circle or Public visibility.
               </Text>
             </View>
           ) : (
             filtered.map((rec) => {
               const isPlaying = playingRecordingId === rec.id;
               const avatarStyle = getAvatarStyle(rec.user);
-              const isSaved = userRecordings.some(
-                (ur) =>
-                  ur.id === rec.id ||
-                  (ur.book === rec.book && ur.chapter === rec.chapter && ur.user === rec.user && ur.translation === rec.translation)
-              );
+              const isOwnRecording = !!rec.userId && !!user?.uid && rec.userId === user.uid;
+              const isSaved =
+                isOwnRecording ||
+                userRecordings.some(
+                  (ur) =>
+                    ur.savedFromRecordingId === rec.id ||
+                    ur.id === rec.id ||
+                    (ur.book === rec.book && ur.chapter === rec.chapter && ur.user === rec.user && ur.translation === rec.translation)
+                );
 
               return (
                 <View key={rec.id} className="border border-[#E5E5E5] rounded-xl p-3.5 bg-white gap-3 shadow-xs">
@@ -307,13 +322,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                           triggerToast(`"${rec.title}" is already in your library!`);
                           return;
                         }
-                        // Save to user's library
-                        const savedRec = {
-                          ...rec,
-                          id: `saved_${Date.now()}_${rec.id}`,
-                        };
-                        setUserRecordings((prev) => [savedRec, ...prev]);
-                        triggerToast(`Saved to My Library! Added to your ${rec.book} ${rec.chapter} options. 📚`);
+                        saveSharedRecordingToLibrary(rec);
                       }}
                       className={`flex-row items-center gap-1 py-1.5 px-3 rounded-lg ${
                         isSaved ? 'bg-emerald-50 border border-emerald-200' : 'bg-neutral-50 border border-[#E5E5E5]'

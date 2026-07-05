@@ -83,6 +83,22 @@ export interface VerseTimestamp {
   endSec: number;
 }
 
+// Real memorization-milestone event (Community activity feed) — fires only
+// when a verse actually reaches the deep 'retained' status, the same
+// long-term-mastery threshold that already drives "Memorized" everywhere
+// else in the app (ProfileScreen's count, HomeScreen's grouping).
+export interface ActivityEvent {
+  id: string;
+  uid: string;
+  authorName: string;
+  book: string;
+  chapter: number;
+  type: 'verse' | 'chapter';
+  verse?: number; // set when type === 'verse'
+  verseCount?: number; // set when type === 'chapter'
+  createdAtMs: number; // client-side snapshot for sorting/display; Firestore createdAt is the source of truth
+}
+
 export interface Recording {
   id: string;
   title: string;
@@ -99,6 +115,9 @@ export interface Recording {
   category?: 'global' | 'group' | 'friends';
   versesStr?: string;
   verseTimestamps?: VerseTimestamp[]; // populated once auto-alignment (phase 2) runs; empty until then
+  sharedVisibility?: 'private' | 'circle' | 'public'; // absent/undefined == 'private' (recordings predating this field)
+  savedFromUid?: string; // set only on a reference copy saved via "Save to Library" — the original owner's uid
+  savedFromRecordingId?: string; // the original sharedRecordings/recording id — used to detect "already saved"
 }
 
 export interface GroupedQueueItem {
@@ -143,6 +162,26 @@ export interface CircleMember {
   avatarUrl: string;
   role: 'leader' | 'member';    // set once at creation, immutable in v1
   joinedAt: string;
+}
+
+// Real, mutual, persistent friend connection — independent of circle
+// membership (survives leaving a shared circle), unlike the old
+// "circleFriends" (real co-members across your circles, recomputed live).
+export interface FriendRequest {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  toUid: string;
+  toName: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
+export interface Friend {
+  uid: string;
+  displayName: string;
+  avatarUrl: string;
+  friendsSince: string;
 }
 
 // Real user profile, stored at profiles/{uid}. memorizedCount/learningCount are

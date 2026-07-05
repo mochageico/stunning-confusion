@@ -17,7 +17,8 @@ export default function ProfileScreen({ state }: { state: AppState }) {
     memoryStreak,
     viewMemberProfileById,
     myCircles,
-    circleFriends,
+    friends,
+    incomingFriendRequests,
     openCircle,
     setCurrentTab,
     userRecordings,
@@ -246,21 +247,35 @@ export default function ProfileScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
-        {/* MY FRIENDS SECTION — real co-members from circles you've joined */}
+        {/* MY FRIENDS SECTION — real, mutual, persistent connections
+            (independent of circle membership, unlike the old circleFriends) */}
         <View className="gap-1.5">
-          <View className="flex-row items-center px-1">
-            <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
-              FRIENDS ({circleFriends.length})
-            </Text>
-            <HelpTooltip text="People you share a Scripture Circle with. Tap to view their memory level and progress." />
+          <View className="flex-row items-center justify-between px-1">
+            <View className="flex-row items-center">
+              <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+                FRIENDS ({friends.length})
+              </Text>
+              <HelpTooltip text="Real, mutual friend connections — these persist even if you're no longer in a circle together." />
+            </View>
+            <Pressable
+              onPress={() => navigateTo('findFriends')}
+              className="bg-[#1A1A1A] px-2 py-1 rounded relative"
+            >
+              <Text className="text-[9px] text-white font-sans font-bold uppercase tracking-wider">Find Friends +</Text>
+              {incomingFriendRequests.length > 0 && (
+                <View className="absolute -top-1.5 -right-1.5 bg-red-600 w-4 h-4 rounded-full items-center justify-center border border-white">
+                  <Text className="text-white text-[8px] font-black">{incomingFriendRequests.length}</Text>
+                </View>
+              )}
+            </Pressable>
           </View>
-          {circleFriends.length === 0 ? (
+          {friends.length === 0 ? (
             <Text className="text-[10px] text-neutral-400 font-sans italic px-1">
-              Join a Scripture Circle to see other members here.
+              No friends yet — search for people to add above.
             </Text>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 6 }}>
-              {circleFriends.map((f) => (
+              {friends.map((f) => (
                 <Pressable
                   key={f.uid}
                   onPress={() => viewMemberProfileById(f.uid)}

@@ -9,6 +9,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
@@ -22,6 +23,7 @@ import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
+  setAudioModeAsync,
   useAudioPlayer,
   useAudioPlayerStatus,
   useAudioRecorder,
@@ -42,14 +44,18 @@ import {
 } from '../data';
 import { fetchChapterText, useChapterText } from './useScripture';
 import {
+  ActivityEvent,
   Circle,
   CircleMember,
+  Friend,
+  FriendRequest,
   GroupPlan,
   MemoryPlan,
   QueueItem,
   Recording,
   TouchLog,
   VerseState,
+  VerseTimestamp,
 } from '../types';
 
 export type ScreenName =
@@ -64,7 +70,8 @@ export type ScreenName =
   | 'memberProfile'
   | 'analyzePlan'
   | 'fullHistory'
-  | 'recordingDetail';
+  | 'recordingDetail'
+  | 'findFriends';
 
 // Screens App.tsx's router only renders while currentTab === 'home' (see
 // Screens() in App.tsx). navigateTo() needs this list so it can switch tabs
@@ -241,15 +248,10 @@ export function useAppState() {
   const [selectedVerseNumbers, setSelectedVerseNumbers] = useState<number[]>([]);
   const [chapterViewMode, setChapterViewMode] = useState<'list' | 'grid'>('list');
 
-  // Verse audio-sync offset editor states
+  // Verse audio-sync offset editor states — populated from the real
+  // selectedRecording.verseTimestamps by the effect below, not hardcoded.
   const [isEditingSync, setIsEditingSync] = useState<boolean>(false);
-  const [recSyncOffsets, setRecSyncOffsets] = useState<Array<{ verse: number; start: string; end: string }>>([
-    { verse: 1, start: '0:00', end: '0:08' },
-    { verse: 2, start: '0:08', end: '0:15' },
-    { verse: 3, start: '0:15', end: '0:22' },
-    { verse: 4, start: '0:22', end: '0:30' },
-    { verse: 5, start: '0:30', end: '0:38' },
-  ]);
+  const [recSyncOffsets, setRecSyncOffsets] = useState<Array<{ verse: number; start: string; end: string }>>([]);
 
   // Memory Plan Designer States
   const [preset, setPreset] = useState<'drip' | 'warrior' | 'custom'>('custom');
@@ -266,28 +268,52 @@ export function useAppState() {
   // Teleprompter / Recording State (fully simulated — no real microphone capture in the web original)
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  // Snapshot of recordingSeconds taken the instant recording stops — the Save
+  // Recitation dialog reads this (not recordingSeconds directly), since the
+  // recording timer effect zeroes recordingSeconds out as soon as isRecording
+  // flips false, well before the dialog is dismissed.
+  const [lastRecordingDuration, setLastRecordingDuration] = useState(0);
+  // Tap-to-mark verse timestamps (Option 1 of timestamp automation): verse
+  // number -> audioRecorder.currentTime at the moment the user tapped that
+  // verse in the teleprompter. Reset on every new recording, seeded with the
+  // chapter's first verse at t=0 so the user only needs to tap starting from
+  // the second verse onward.
+  const [verseTapTimestamps, setVerseTapTimestamps] = useState<Record<number, number>>({});
   const [recordingBook, setRecordingBook] = useState('Romans');
   const [recordingChapter, setRecordingChapter] = useState(8);
   const [recordingTranslation, setRecordingTranslation] = useState('ESV');
   const [userRecordings, setUserRecordings] = useState<Recording[]>(INITIAL_RECORDINGS);
   const [saveRecordingDialog, setSaveRecordingDialog] = useState(false);
+  // Per-recording visibility choice for the Save dialog. Pre-filled from
+  // profiles/{uid}.defaultRecordingVisibility (whatever the user picked the
+  // very first time they saved a recording); null means "no default yet,"
+  // in which case the dialog defaults its picker to 'private' but does not
+  // treat that as an already-set preference.
+  const [defaultRecordingVisibility, setDefaultRecordingVisibility] = useState<
+    'private' | 'circle' | 'public' | null
+  >(null);
+  const [pickedRecordingVisibility, setPickedRecordingVisibility] = useState<'private' | 'circle' | 'public'>(
+    'private'
+  );
   const [typedRecordingName, setTypedRecordingName] = useState('');
 
-  // Suggested Feed Recordings, Search & Filters
+  // Real shared-recordings feed (guest/signed-out preview still falls back
+  // to the illustrative SUGGESTED_FEED_RECORDINGS, same "try before sign up"
+  // pattern as INITIAL_VERSES/INITIAL_RECORDINGS).
   const [feedRecordings, setFeedRecordings] = useState<Recording[]>(SUGGESTED_FEED_RECORDINGS);
+  const [loadingFeedRecordings, setLoadingFeedRecordings] = useState(false);
   const [audioSearchQuery, setAudioSearchQuery] = useState('');
   const [activeFeedFilter, setActiveFeedFilter] = useState<'global' | 'group' | 'friends'>('global');
   const [feedBookFilter, setFeedBookFilter] = useState<string>('');
   const [feedChapterFilter, setFeedChapterFilter] = useState<string>('');
 
-  // Audio Selection mapping for specific chapters
+  // Audio Selection mapping for specific chapters — which real recording
+  // (from userRecordings) is chosen as the narration for a given chapter.
+  // Playback itself uses the same playingRecordingId/playingRecProgress
+  // mechanism as everywhere else in the app (Profile, RecordingDetail, the
+  // floating now-playing bar), not a separate simulation.
   const [selectedChapterAudios, setSelectedChapterAudios] = useState<Record<string, Recording | null>>({});
   const [showAudioSelector, setShowAudioSelector] = useState(false);
-
-  // Audio Playback Simulation in Chapter Landing Card
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const [audioPlaybackProgress, setAudioPlaybackProgress] = useState(0);
-  const audioTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // General App Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -314,6 +340,23 @@ export function useAppState() {
   // "Friends" = real co-members across every circle the user belongs to
   // (deduped, self excluded) — there's no separate friend-request system.
   const [circleFriends, setCircleFriends] = useState<CircleMember[]>([]);
+
+  // Real memorization-milestone activity feed (Community) — events from the
+  // signed-in user and their real circleFriends.
+  const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
+  const [loadingActivityEvents, setLoadingActivityEvents] = useState(false);
+
+  // Real friends — a mutual, persistent connection independent of circle
+  // membership, replacing "Friends" being just live circle co-membership.
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [incomingFriendRequests, setIncomingFriendRequests] = useState<FriendRequest[]>([]);
+  const [outgoingFriendRequests, setOutgoingFriendRequests] = useState<FriendRequest[]>([]);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<
+    Array<{ uid: string; displayName: string; avatarUrl: string; email: string }>
+  >([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
 
   // Selected Recording for Chapter Recording Landing Page
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
@@ -348,9 +391,17 @@ export function useAppState() {
   const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
   const [playingRecProgress, setPlayingRecProgress] = useState(0);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Set by seekRecordingToTime when asked to jump to a segment of a recording
+  // that wasn't already playing — consumed once playback actually starts.
+  const pendingSeekSecondsRef = useRef<number | null>(null);
 
   // Real audio recorder (mic capture) for the Record tab
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  // Captured the instant recording stops — audioRecorder.currentTime resets
+  // once stop() resolves, and recordingSeconds gets zeroed by the recording
+  // timer effect (below) well before the user taps "Confirm & Save" in the
+  // dialog, so neither is safe to read directly inside saveRecordedAudio.
+  const capturedDurationRef = useRef(0);
 
   // Real audio player for saved recordings that have a Storage-backed audioUrl.
   // Recordings without one (e.g. the illustrative community feed placeholders)
@@ -410,8 +461,6 @@ export function useAppState() {
     setCurrentScreen(screen);
     // Reset selections on screen change
     setSelectedVerseNumbers([]);
-    setAudioPlaying(false);
-    setAudioPlaybackProgress(0);
   };
 
   const handleBack = () => {
@@ -427,16 +476,14 @@ export function useAppState() {
       setCurrentScreen('home');
     }
     setSelectedVerseNumbers([]);
-    setAudioPlaying(false);
-    setAudioPlaybackProgress(0);
   };
 
   // Tab controller
   const selectTab = (tab: TabName) => {
     setCurrentTab(tab);
-    setAudioPlaying(false);
-    setAudioPlaybackProgress(0);
-    setPlayingRecordingId(null);
+    // Recording playback (playingRecordingId) is intentionally left running
+    // across tab switches — that's the whole point of the floating
+    // now-playing bar.
 
     if (
       currentScreen === 'memberProfile' ||
@@ -539,6 +586,251 @@ export function useAppState() {
       setCircleFriends(Array.from(byUid.values()));
     } catch (err) {
       console.error('Failed to load circle friends:', err);
+    }
+  };
+
+  // Real activity feed: events from the signed-in user and their real
+  // circleFriends. Re-run this (not just rely on the reactive effect below)
+  // after actions that might change circleFriends but wouldn't otherwise
+  // trigger it quickly enough, e.g. a manual refresh button.
+  const loadActivityFeed = async () => {
+    if (!auth.currentUser) {
+      setActivityEvents([]);
+      return;
+    }
+    const uids = Array.from(
+      new Set([auth.currentUser.uid, ...circleFriends.map((f) => f.uid), ...friends.map((f) => f.uid)])
+    ).slice(0, 30);
+    setLoadingActivityEvents(true);
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'activityEvents'), where('uid', 'in', uids), orderBy('createdAt', 'desc'), limit(20))
+      );
+      const events: ActivityEvent[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          uid: data.uid,
+          authorName: data.authorName,
+          book: data.book,
+          chapter: data.chapter,
+          type: data.type,
+          verse: data.verse,
+          verseCount: data.verseCount,
+          createdAtMs: data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now(),
+        };
+      });
+      setActivityEvents(events);
+    } catch (err) {
+      console.error('Failed to load activity feed:', err);
+    } finally {
+      setLoadingActivityEvents(false);
+    }
+  };
+
+  // Real Community audio feed: every 'public' sharedRecordings doc, plus
+  // every 'circle' one whose snapshot sharedWithUids includes the signed-in
+  // user (see firestore.rules for why that's a snapshot, not a live check).
+  // Signed-out/guest keeps the illustrative SUGGESTED_FEED_RECORDINGS.
+  const loadSharedRecordings = async () => {
+    if (!auth.currentUser) {
+      setFeedRecordings(SUGGESTED_FEED_RECORDINGS);
+      return;
+    }
+    setLoadingFeedRecordings(true);
+    try {
+      const uid = auth.currentUser.uid;
+      const [publicSnap, circleSnap] = await Promise.all([
+        getDocs(query(collection(db, 'sharedRecordings'), where('visibility', '==', 'public'), orderBy('createdAt', 'desc'), limit(30))),
+        getDocs(
+          query(
+            collection(db, 'sharedRecordings'),
+            where('sharedWithUids', 'array-contains', uid),
+            orderBy('createdAt', 'desc'),
+            limit(30)
+          )
+        ),
+      ]);
+      const byId = new Map<string, Recording>();
+      [...publicSnap.docs, ...circleSnap.docs].forEach((d) => {
+        byId.set(d.id, { id: d.id, ...d.data() } as Recording);
+      });
+      setFeedRecordings(Array.from(byId.values()));
+    } catch (err) {
+      console.error('Failed to load shared recordings feed:', err);
+    } finally {
+      setLoadingFeedRecordings(false);
+    }
+  };
+
+  // ==========================================
+  // REAL FRIENDS SYSTEM — search, requests, accept/decline, unfriend.
+  // Independent of circles: a friendship is mutual and persists even if you
+  // never share a circle again (unlike circleFriends, live-recomputed
+  // co-membership).
+  // ==========================================
+  const loadFriends = async () => {
+    if (!auth.currentUser) {
+      setFriends([]);
+      return;
+    }
+    setLoadingFriends(true);
+    try {
+      const snap = await getDocs(collection(db, 'profiles', auth.currentUser.uid, 'friends'));
+      setFriends(snap.docs.map((d) => d.data() as Friend));
+    } catch (err) {
+      console.error('Failed to load friends:', err);
+    } finally {
+      setLoadingFriends(false);
+    }
+  };
+
+  const loadFriendRequests = async () => {
+    if (!auth.currentUser) {
+      setIncomingFriendRequests([]);
+      setOutgoingFriendRequests([]);
+      return;
+    }
+    const uid = auth.currentUser.uid;
+    try {
+      const [incomingSnap, outgoingSnap] = await Promise.all([
+        getDocs(query(collection(db, 'friendRequests'), where('toUid', '==', uid), where('status', '==', 'pending'))),
+        getDocs(query(collection(db, 'friendRequests'), where('fromUid', '==', uid), where('status', '==', 'pending'))),
+      ]);
+      setIncomingFriendRequests(incomingSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as FriendRequest));
+      setOutgoingFriendRequests(outgoingSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as FriendRequest));
+    } catch (err) {
+      console.error('Failed to load friend requests:', err);
+    }
+  };
+
+  // No backend/search service in this project, so this is the standard
+  // Firestore-only approach: exact match on email, or a prefix range-query
+  // on the lowercased name (see displayNameLower in loadUserData).
+  const searchUsers = async (rawQuery: string) => {
+    const q = rawQuery.trim();
+    if (!q || !auth.currentUser) {
+      setUserSearchResults([]);
+      return;
+    }
+    setSearchingUsers(true);
+    try {
+      let snap;
+      if (q.includes('@')) {
+        snap = await getDocs(query(collection(db, 'profiles'), where('email', '==', q.toLowerCase()), limit(10)));
+      } else {
+        const lower = q.toLowerCase();
+        snap = await getDocs(
+          query(
+            collection(db, 'profiles'),
+            orderBy('displayNameLower'),
+            where('displayNameLower', '>=', lower),
+            where('displayNameLower', '<', lower + '\uf8ff'),
+            limit(10)
+          )
+        );
+      }
+      const results = snap.docs
+        .filter((d) => d.id !== auth.currentUser?.uid)
+        .map((d) => {
+          const data = d.data();
+          return {
+            uid: d.id,
+            displayName: data.displayName || 'Anonymous Disciple',
+            avatarUrl: data.avatarUrl || '',
+            email: data.email || '',
+          };
+        });
+      setUserSearchResults(results);
+    } catch (err) {
+      console.error('Failed to search users:', err);
+      triggerToast('Search failed — please try again.');
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
+
+  // Deterministic doc id (not auto-generated) so re-sending a request to the
+  // same person is idempotent rather than creating duplicates.
+  const sendFriendRequest = async (toUid: string, toName: string) => {
+    if (!auth.currentUser || auth.currentUser.uid === toUid) return;
+    const fromUid = auth.currentUser.uid;
+    const requestId = `${fromUid}_${toUid}`;
+    try {
+      await setDoc(doc(db, 'friendRequests', requestId), {
+        fromUid,
+        fromName: auth.currentUser.displayName || 'Anonymous Disciple',
+        toUid,
+        toName,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      });
+      triggerToast(`Friend request sent to ${toName}! 🤝`);
+      loadFriendRequests();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `friendRequests/${requestId}`);
+    }
+  };
+
+  const acceptFriendRequest = async (request: FriendRequest) => {
+    if (!auth.currentUser) return;
+    const myUid = auth.currentUser.uid;
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'friendRequests', request.id), { status: 'accepted' });
+      const friendsSince = new Date().toISOString();
+      batch.set(doc(db, 'profiles', myUid, 'friends', request.fromUid), {
+        uid: request.fromUid,
+        displayName: request.fromName,
+        avatarUrl: '',
+        friendsSince,
+      });
+      batch.set(doc(db, 'profiles', request.fromUid, 'friends', myUid), {
+        uid: myUid,
+        displayName: auth.currentUser.displayName || 'Anonymous Disciple',
+        avatarUrl: '',
+        friendsSince,
+      });
+      await batch.commit();
+      triggerToast(`You and ${request.fromName} are now friends! 🎉`);
+      loadFriendRequests();
+      loadFriends();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `friendRequests/${request.id}`);
+    }
+  };
+
+  const declineFriendRequest = async (request: FriendRequest) => {
+    try {
+      await updateDoc(doc(db, 'friendRequests', request.id), { status: 'declined' });
+      setIncomingFriendRequests((prev) => prev.filter((r) => r.id !== request.id));
+      triggerToast('Request declined.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `friendRequests/${request.id}`);
+    }
+  };
+
+  const cancelFriendRequest = async (request: FriendRequest) => {
+    try {
+      await deleteDoc(doc(db, 'friendRequests', request.id));
+      setOutgoingFriendRequests((prev) => prev.filter((r) => r.id !== request.id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `friendRequests/${request.id}`);
+    }
+  };
+
+  const removeFriend = async (friend: Friend) => {
+    if (!auth.currentUser) return;
+    const myUid = auth.currentUser.uid;
+    try {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'profiles', myUid, 'friends', friend.uid));
+      batch.delete(doc(db, 'profiles', friend.uid, 'friends', myUid));
+      await batch.commit();
+      setFriends((prev) => prev.filter((f) => f.uid !== friend.uid));
+      triggerToast(`Removed ${friend.displayName} from friends.`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `profiles/${myUid}/friends/${friend.uid}`);
     }
   };
 
@@ -1313,8 +1605,6 @@ export function useAppState() {
     setCurrentTab('home');
     setCurrentScreen('activePlan');
     setSelectedVerseNumbers([]);
-    setAudioPlaying(false);
-    setAudioPlaybackProgress(0);
   };
 
   const publishSharedPlan = async () => {
@@ -1414,6 +1704,29 @@ export function useAppState() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reload the activity feed whenever the signed-in user or their real
+  // circleFriends/friends lists change (sign-in/out, joining a new circle,
+  // accepting a friend, etc.) — reactive rather than sequenced after
+  // loadMyCircles(), since loadCircleFriends() inside it isn't awaited and
+  // can finish later.
+  useEffect(() => {
+    loadActivityFeed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, circleFriends, friends]);
+
+  // Same reasoning, for the real shared-recordings feed.
+  useEffect(() => {
+    loadSharedRecordings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, circleFriends, friends]);
+
+  // Load real friends + pending requests on sign-in/out.
+  useEffect(() => {
+    loadFriends();
+    loadFriendRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const loadUserData = async (currentUser: any) => {
     console.log('loadUserData started for UID:', currentUser.uid);
     try {
@@ -1428,9 +1741,19 @@ export function useAppState() {
         handleFirestoreError(e, OperationType.GET, `profiles/${currentUser.uid}`);
       }
 
+      if (profileSnap && profileSnap.exists()) {
+        setDefaultRecordingVisibility(profileSnap.data().defaultRecordingVisibility || null);
+      }
+
       if (profileSnap && !profileSnap.exists()) {
         const newProfile = {
           displayName: currentUser.displayName || 'Anonymous',
+          // Lowercased once at creation for prefix-match user search (Find
+          // Friends) — this app has no backend/search service, so this is
+          // the standard Firestore-only trick (range query on a normalized
+          // field). Doesn't need to stay in sync with displayName since
+          // there's no rename feature yet.
+          displayNameLower: (currentUser.displayName || 'anonymous').toLowerCase(),
           email: currentUser.email || '',
           avatarUrl: currentUser.photoURL || '',
           createdAt: new Date(),
@@ -1656,6 +1979,7 @@ export function useAppState() {
         setMaxReviewCap(15);
         setMyCircles([]);
         setCircleFriends([]);
+        setDefaultRecordingVisibility(null);
         // Signed-out/guest preview only — matches the same "try before you
         // sign up" pattern as INITIAL_VERSES.
         setUserRecordings(INITIAL_RECORDINGS);
@@ -1692,36 +2016,33 @@ export function useAppState() {
     };
   }, [isRecording]);
 
-  // Audio Playback Simulation (Chapter Landing)
-  useEffect(() => {
-    if (audioPlaying) {
-      audioTimerRef.current = setInterval(() => {
-        setAudioPlaybackProgress((prev) => {
-          if (prev >= 100) {
-            setAudioPlaying(false);
-            triggerToast('Audio playback completed.');
-            return 0;
-          }
-          return prev + 1.5;
-        });
-      }, 150);
-    } else {
-      if (audioTimerRef.current) clearInterval(audioTimerRef.current);
-    }
-    return () => {
-      if (audioTimerRef.current) clearInterval(audioTimerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audioPlaying]);
-
   // Saved Recording Playback — real audio (via expo-audio) for recordings with
   // a Storage-backed audioUrl; falls back to a simulated progress timer for
   // mock entries that don't have one (e.g. the illustrative community feed).
   useEffect(() => {
     if (!playingRecordingId || !nowPlayingRecording?.audioUrl) return;
-    recordingPlayer.play();
+    // Recording leaves iOS's audio session configured for recording, which
+    // can make playback silent/misrouted or end almost instantly — switch it
+    // back to a playback-friendly mode every time before actually playing,
+    // regardless of whether handleStopRecording already did so.
+    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).finally(() => {
+      recordingPlayer.play();
+      if (pendingSeekSecondsRef.current != null) {
+        recordingPlayer.seekTo(pendingSeekSecondsRef.current);
+        pendingSeekSecondsRef.current = null;
+      }
+    });
     return () => {
-      recordingPlayer.pause();
+      // By the time this cleanup runs, playingRecordingId may have already
+      // changed (e.g. playback just finished), which swaps recordingPlayer's
+      // source and releases the underlying native player before this fires —
+      // calling .pause() on it then throws NativeSharedObjectNotFoundException.
+      // Pausing an already-released player is a no-op anyway, so swallow it.
+      try {
+        recordingPlayer.pause();
+      } catch {
+        // already released — nothing to pause
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playingRecordingId, nowPlayingRecording?.audioUrl]);
@@ -1770,6 +2091,20 @@ export function useAppState() {
     await recordingPlayer.seekTo(newTime);
   };
 
+  // Jumps to an absolute point in a recording — used by the Verse Audio-Sync
+  // Matrix's "tap a segment to preview it" buttons. If that recording isn't
+  // already the one playing, starts it and defers the seek until playback
+  // actually begins (recordingPlayer's source only exists once it's playing).
+  const seekRecordingToTime = async (recording: Recording, seconds: number) => {
+    if (playingRecordingId === recording.id) {
+      await recordingPlayer.seekTo(seconds);
+      return;
+    }
+    pendingSeekSecondsRef.current = seconds;
+    setPlayingRecordingId(recording.id);
+    setPlayingRecProgress(0);
+  };
+
   // Memory Queue Auto-Sync: several actions (reordering, adding verses, deleting)
   // only mutate memoryQueue locally without their own explicit Firestore write.
   // Rather than remembering to add a batch write to every future mutation site,
@@ -1813,6 +2148,31 @@ export function useAppState() {
     const secs = totalSec % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  const parseTimeToSeconds = (val: string): number => {
+    const parts = val.split(':').map((p) => parseInt(p, 10));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return parts[0] * 60 + parts[1];
+    }
+    const n = parseInt(val, 10);
+    return isNaN(n) ? 0 : n;
+  };
+
+  // Load the Verse Audio-Sync Matrix's editable rows from whichever
+  // recording is opened in RecordingDetailScreen — replaces the fixed
+  // 5-row placeholder that was shown for every recording regardless of its
+  // real verseTimestamps (or lack thereof, if tap-to-mark wasn't used).
+  useEffect(() => {
+    if (!selectedRecording) return;
+    setRecSyncOffsets(
+      (selectedRecording.verseTimestamps || []).map((vt) => ({
+        verse: vt.verse,
+        start: formatTime(vt.startSec),
+        end: formatTime(vt.endSec),
+      }))
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRecording?.id]);
 
   // Date formatter
   const getTodayDateString = () => {
@@ -2085,6 +2445,33 @@ export function useAppState() {
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `users/${auth.currentUser.uid}/memoryQueue/${item.verseId}`);
       }
+
+      // Real activity-feed milestone: only fires on the actual queued->retained
+      // transition (never re-fires on subsequent successful reviews of an
+      // already-retained item). If every other verse from this same
+      // book+chapter already in the queue is also retained, this is a whole
+      // chapter finishing, not just one verse.
+      const justRetained = item.status !== 'retained' && updatedItem.status === 'retained';
+      if (justRetained) {
+        const chapterMates = memoryQueue.filter((q) => q.book === item.book && q.chapter === item.chapter);
+        const isChapterComplete = chapterMates.every((q) => q.verseId === item.verseId || q.status === 'retained');
+        const eventId = `evt_${Date.now()}`;
+        const eventData = {
+          uid: auth.currentUser.uid,
+          authorName: auth.currentUser.displayName || 'Someone',
+          book: item.book,
+          chapter: item.chapter,
+          ...(isChapterComplete
+            ? { type: 'chapter' as const, verseCount: chapterMates.length }
+            : { type: 'verse' as const, verse: item.verseNumber }),
+          createdAt: serverTimestamp(),
+        };
+        try {
+          await setDoc(doc(db, 'activityEvents', eventId), eventData);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.CREATE, `activityEvents/${eventId}`);
+        }
+      }
     }
   };
 
@@ -2306,6 +2693,30 @@ export function useAppState() {
         })
     : [];
 
+  // Real chapter text for the Record tab's teleprompter (previously showed
+  // verses.filter(...) — this user's own partial memory-queue verses for the
+  // chapter, not the full chapter — which broke "Full Chapter Recitation"
+  // for any chapter not fully added to the queue, and ignored the translation
+  // dropdown entirely). Tap-to-mark timestamps need the complete verse list.
+  const recordingBookId = recordingBook ? getBookByName(recordingBook)?.id ?? null : null;
+  const { data: recordingChapterTextData } = useChapterText(recordingTranslation, recordingBookId, recordingChapter);
+  const recordingChapterVerses: { verse: number; text: string }[] = recordingChapterTextData
+    ? Object.keys(recordingChapterTextData.verses)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .map((verseNum) => ({ verse: verseNum, text: recordingChapterTextData.verses[String(verseNum)] }))
+    : [];
+
+  // Real chapter text for whichever recording is open in RecordingDetailScreen
+  // — drives the Verse Audio-Sync Matrix's preview text (previously a fixed,
+  // Romans-8-specific SYNC_VERSE_PREVIEWS array shown for every recording).
+  const selectedRecordingBookId = selectedRecording ? getBookByName(selectedRecording.book)?.id ?? null : null;
+  const { data: selectedRecordingChapterTextData } = useChapterText(
+    selectedRecording?.translation ?? null,
+    selectedRecordingBookId,
+    selectedRecording?.chapter ?? null
+  );
+
   const isVerseSelected = (vNum: number) => selectedVerseNumbers.includes(vNum);
 
   const toggleVerseSelection = (vNum: number) => {
@@ -2340,11 +2751,18 @@ export function useAppState() {
         triggerToast('Microphone permission is required to record.');
         return;
       }
+      // Required on iOS — expo-audio refuses to record until the audio
+      // session is explicitly switched into recording mode.
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
       setIsRecording(true);
       setRecordingSeconds(0);
-      triggerToast('Recording started... Speak clearly.');
+      // Seed the chapter's first verse at t=0 — recording always starts on
+      // verse 1, so the user only needs to tap starting from the next verse.
+      const firstVerse = recordingChapterVerses[0]?.verse;
+      setVerseTapTimestamps(firstVerse !== undefined ? { [firstVerse]: 0 } : {});
+      triggerToast('Recording started — tap each verse number as you reach it.');
     } catch (err) {
       console.error('Failed to start recording:', err);
       triggerToast('Could not start recording — check microphone permissions.');
@@ -2352,13 +2770,65 @@ export function useAppState() {
   };
 
   const handleStopRecording = async () => {
+    capturedDurationRef.current = Math.round(audioRecorder.currentTime) || recordingSeconds || 1;
+    setLastRecordingDuration(capturedDurationRef.current);
     try {
       await audioRecorder.stop();
     } catch (err) {
       console.error('Failed to stop recording:', err);
     }
+    try {
+      // Switch back out of recording mode immediately, so anything played
+      // back before the next recording starts doesn't inherit a session
+      // still configured for recording.
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+    } catch (err) {
+      console.error('Failed to reset audio mode after recording:', err);
+    }
     setIsRecording(false);
+    setPickedRecordingVisibility(defaultRecordingVisibility || 'private');
     setSaveRecordingDialog(true);
+  };
+
+  // Tap-to-mark: called when the user taps a verse in the teleprompter while
+  // recording. Re-tapping the same verse overwrites its mark with the newer
+  // time, so an accidental early tap can just be corrected with another tap.
+  const handleMarkVerseTap = (verseNumber: number) => {
+    if (!isRecording) return;
+    setVerseTapTimestamps((prev) => ({ ...prev, [verseNumber]: audioRecorder.currentTime }));
+  };
+
+  // Turns the sparse verse->tap-time map into a contiguous per-verse
+  // start/end range: a verse's start is its own tap (or the previous verse's
+  // end, if it was never tapped), and its end is the next tapped verse found
+  // ahead of it (or the total recording duration, if none of the remaining
+  // verses were tapped). Returns [] if nothing was tapped at all, rather than
+  // producing a single verse spanning the whole recording followed by
+  // degenerate zero-length ones — that's just "the feature wasn't used."
+  const buildVerseTimestamps = (
+    verseNumbers: number[],
+    tapTimestamps: Record<number, number>,
+    totalDurationSec: number
+  ): VerseTimestamp[] => {
+    if (Object.keys(tapTimestamps).length === 0) return [];
+
+    const sorted = [...verseNumbers].sort((a, b) => a - b);
+    const result: VerseTimestamp[] = [];
+    let cursor = 0;
+    for (let i = 0; i < sorted.length; i++) {
+      const v = sorted[i];
+      const start = tapTimestamps[v] !== undefined ? tapTimestamps[v] : cursor;
+      let end = totalDurationSec;
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (tapTimestamps[sorted[j]] !== undefined) {
+          end = tapTimestamps[sorted[j]];
+          break;
+        }
+      }
+      result.push({ verse: v, startSec: Math.round(start), endSec: Math.round(end) });
+      cursor = end;
+    }
+    return result;
   };
 
   const saveRecordedAudio = async () => {
@@ -2396,7 +2866,7 @@ export function useAppState() {
         book: recordingBook,
         chapter: recordingChapter,
         translation: recordingTranslation,
-        duration: recordingSeconds || Math.round(audioRecorder.currentTime) || 1,
+        duration: capturedDurationRef.current,
         date: new Date().toISOString().split('T')[0],
         userId: uid,
         user: auth.currentUser?.displayName || 'Me',
@@ -2404,10 +2874,46 @@ export function useAppState() {
         audioUrl,
         audioPath,
         versesStr: 'Full Chapter',
-        verseTimestamps: [],
+        verseTimestamps: buildVerseTimestamps(
+          recordingChapterVerses.map((v) => v.verse),
+          verseTapTimestamps,
+          capturedDurationRef.current
+        ),
+        sharedVisibility: pickedRecordingVisibility,
       };
 
       await setDoc(doc(db, 'users', uid, 'recordings', id), { ...newRec, createdAt: serverTimestamp() });
+
+      if (pickedRecordingVisibility !== 'private') {
+        // Snapshot ACL (see firestore.rules comment on sharedRecordings for
+        // why this can't just be a live circle-membership check) — everyone
+        // this recording is visible to right now, computed once at share
+        // time: every real co-member across the owner's circles, plus real
+        // friends (so friends can see circle-shared recordings too, even
+        // outside a shared circle, per the explicit design decision).
+        const sharedWithUids = Array.from(
+          new Set([...circleFriends.map((f) => f.uid), ...friends.map((f) => f.uid)])
+        );
+        try {
+          await setDoc(doc(db, 'sharedRecordings', id), {
+            ...newRec,
+            ownerId: uid,
+            visibility: pickedRecordingVisibility,
+            sharedWithUids,
+            createdAt: serverTimestamp(),
+          });
+        } catch (err) {
+          console.error('Failed to publish shared recording copy:', err);
+        }
+      }
+
+      if (defaultRecordingVisibility === null) {
+        setDefaultRecordingVisibility(pickedRecordingVisibility);
+        updateDoc(doc(db, 'profiles', uid), { defaultRecordingVisibility: pickedRecordingVisibility }).catch((err) =>
+          console.error('Failed to save default recording visibility:', err)
+        );
+      }
+
       setUserRecordings((prev) => [newRec, ...prev]);
       triggerToast('Chapter recitation saved! 🎙️');
     } catch (err) {
@@ -2426,6 +2932,62 @@ export function useAppState() {
       setUserRecordings((prev) => prev.filter((r) => r.id !== recording.id));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `users/${uid}/recordings/${recording.id}`);
+    }
+  };
+
+  // Persists manual edits made in the Verse Audio-Sync Matrix's "Edit Sync"
+  // mode — previously this just showed a toast and never actually saved
+  // anything anywhere.
+  const saveVerseSyncOffsets = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !selectedRecording) return;
+
+    const verseTimestamps: VerseTimestamp[] = recSyncOffsets.map((o) => ({
+      verse: o.verse,
+      startSec: parseTimeToSeconds(o.start),
+      endSec: parseTimeToSeconds(o.end),
+    }));
+
+    try {
+      await updateDoc(doc(db, 'users', uid, 'recordings', selectedRecording.id), { verseTimestamps });
+      const updated = { ...selectedRecording, verseTimestamps };
+      setSelectedRecording(updated);
+      setUserRecordings((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      triggerToast('Verse sync offsets updated! 🔄');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/recordings/${selectedRecording.id}`);
+    }
+  };
+
+  // Real "Save to My Library": creates a lightweight reference doc in the
+  // saver's own recordings pointing at the SAME audioUrl/audioPath — no
+  // re-upload/duplicate audio, matching how this app already stores audio
+  // (one Storage object per recording, everything just references it).
+  const saveSharedRecordingToLibrary = async (rec: Recording) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      triggerToast('Sign in to save recordings.');
+      return;
+    }
+    if (userRecordings.some((r) => r.savedFromRecordingId === rec.id) || rec.userId === uid) {
+      triggerToast('Already in your library!');
+      return;
+    }
+    const id = `saved_${Date.now()}`;
+    const savedRec: Recording = {
+      ...rec,
+      id,
+      userId: uid,
+      savedFromUid: rec.userId,
+      savedFromRecordingId: rec.id,
+      sharedVisibility: 'private',
+    };
+    try {
+      await setDoc(doc(db, 'users', uid, 'recordings', id), { ...savedRec, createdAt: serverTimestamp() });
+      setUserRecordings((prev) => [savedRec, ...prev]);
+      triggerToast(`Saved to My Library! Added to your ${rec.book} ${rec.chapter} options. 📚`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `users/${uid}/recordings/${id}`);
     }
   };
 
@@ -2466,21 +3028,25 @@ export function useAppState() {
     modalVerses, setModalVerses,
     isRecording, setIsRecording,
     recordingSeconds, setRecordingSeconds,
+    lastRecordingDuration,
+    verseTapTimestamps,
     recordingBook, setRecordingBook,
     recordingChapter, setRecordingChapter,
     recordingTranslation, setRecordingTranslation,
+    recordingChapterVerses,
+    selectedRecordingChapterTextData,
     userRecordings, setUserRecordings,
     saveRecordingDialog, setSaveRecordingDialog,
+    defaultRecordingVisibility,
+    pickedRecordingVisibility, setPickedRecordingVisibility,
     typedRecordingName, setTypedRecordingName,
-    feedRecordings, setFeedRecordings,
+    feedRecordings, setFeedRecordings, loadingFeedRecordings, loadSharedRecordings, saveSharedRecordingToLibrary,
     audioSearchQuery, setAudioSearchQuery,
     activeFeedFilter, setActiveFeedFilter,
     feedBookFilter, setFeedBookFilter,
     feedChapterFilter, setFeedChapterFilter,
     selectedChapterAudios, setSelectedChapterAudios,
     showAudioSelector, setShowAudioSelector,
-    audioPlaying, setAudioPlaying,
-    audioPlaybackProgress, setAudioPlaybackProgress,
     toastMessage, setToastMessage,
     masteryTouches, setMasteryTouches,
     reviewsRequired, setReviewsRequired,
@@ -2490,6 +3056,11 @@ export function useAppState() {
     publicCircles, loadingPublicCircles,
     activeCircle, activeCircleMembers, activeCircleGroupPlans, loadingActiveCircle,
     circleFriends, loadCircleFriends,
+    activityEvents, loadingActivityEvents, loadActivityFeed,
+    friends, loadingFriends, loadFriends,
+    incomingFriendRequests, outgoingFriendRequests, loadFriendRequests,
+    userSearchQuery, setUserSearchQuery, userSearchResults, searchingUsers, searchUsers,
+    sendFriendRequest, acceptFriendRequest, declineFriendRequest, cancelFriendRequest, removeFriend,
     selectedRecording, setSelectedRecording,
     communitySubView, setCommunitySubView,
     activeGroupId,
@@ -2510,7 +3081,9 @@ export function useAppState() {
     showProgressModal, setShowProgressModal,
     playingRecordingId, setPlayingRecordingId,
     playingRecProgress, setPlayingRecProgress,
+    nowPlayingRecording,
     seekRecordingBy,
+    seekRecordingToTime,
     selectedUserProfile, setSelectedUserProfile,
     sharedPlans, setSharedPlans,
     loadingSharedPlans, setLoadingSharedPlans,
@@ -2595,8 +3168,10 @@ export function useAppState() {
     // voice recorder flow
     handleStartRecording,
     handleStopRecording,
+    handleMarkVerseTap,
     saveRecordedAudio,
     deleteRecording,
+    saveVerseSyncOffsets,
   };
 }
 

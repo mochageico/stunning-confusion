@@ -10,7 +10,7 @@ import {
   PlayfairDisplay_600SemiBold,
   PlayfairDisplay_700Bold,
 } from '@expo-google-fonts/playfair-display';
-import { Check, Home as HomeIcon, Mic, Sliders, User, Users, X } from 'lucide-react-native';
+import { Check, Home as HomeIcon, Mic, Pause, Sliders, User, Users, X } from 'lucide-react-native';
 
 import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
@@ -34,6 +34,7 @@ import CommunityFindScreen from './src/screens/CommunityFindScreen';
 import CommunityCreateScreen from './src/screens/CommunityCreateScreen';
 import RecordScreen from './src/screens/RecordScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import FindFriendsScreen from './src/screens/FindFriendsScreen';
 
 // The original web app has no router — it's a hand-rolled state machine on
 // `currentTab` / `currentScreen`. This mirrors that structure 1:1 instead of
@@ -64,6 +65,9 @@ function Screens({ state }: { state: AppState }) {
   }
   if (state.currentScreen === 'fullHistory') {
     return <FullHistoryScreen state={state} />;
+  }
+  if (state.currentScreen === 'findFriends') {
+    return <FindFriendsScreen state={state} />;
   }
 
   if (state.currentTab === 'home') {
@@ -100,8 +104,26 @@ function Screens({ state }: { state: AppState }) {
   return <ProfileScreen state={state} />;
 }
 
+const RECORDING_VISIBILITY_OPTIONS: Array<{ id: 'private' | 'circle' | 'public'; label: string; desc: string }> = [
+  { id: 'private', label: 'Private', desc: 'Only you' },
+  { id: 'circle', label: 'Circle', desc: 'Your circles + friends' },
+  { id: 'public', label: 'Public', desc: 'Anyone signed in' },
+];
+
 function SaveRecordingDialog({ state }: { state: AppState }) {
-  const { recordingBook, recordingChapter, recordingTranslation, recordingSeconds, formatTime, setSaveRecordingDialog, saveRecordedAudio, triggerToast } = state;
+  const {
+    recordingBook,
+    recordingChapter,
+    recordingTranslation,
+    lastRecordingDuration,
+    formatTime,
+    setSaveRecordingDialog,
+    saveRecordedAudio,
+    triggerToast,
+    defaultRecordingVisibility,
+    pickedRecordingVisibility,
+    setPickedRecordingVisibility,
+  } = state;
   return (
     <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
       <FadeInView style={{ width: '100%', maxWidth: 320 }}>
@@ -126,7 +148,7 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
             </View>
             <View className="flex-row justify-between">
               <Text className="text-neutral-400 font-bold uppercase text-[9px] font-sans">Duration:</Text>
-              <Text className="text-[#1A1A1A] font-bold font-sans text-xs">{formatTime(recordingSeconds)}</Text>
+              <Text className="text-[#1A1A1A] font-bold font-sans text-xs">{formatTime(lastRecordingDuration)}</Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-neutral-400 font-bold uppercase text-[9px] font-sans">Scope:</Text>
@@ -134,9 +156,38 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
             </View>
           </View>
 
-          <Text className="text-[10px] text-neutral-400 font-sans leading-relaxed">
-            * This recitation will be uploaded and added to your profile library as a selectable audio narration for this chapter.
-          </Text>
+          <View className="gap-2">
+            <Text className="text-[9px] font-bold uppercase text-neutral-400 tracking-wider font-sans">
+              Who can see this recitation?
+            </Text>
+            <View className="flex-row gap-1.5">
+              {RECORDING_VISIBILITY_OPTIONS.map((opt) => {
+                const isSelected = pickedRecordingVisibility === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    onPress={() => setPickedRecordingVisibility(opt.id)}
+                    className={`flex-1 py-2 rounded-lg items-center border ${
+                      isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-[#E5E5E5]'
+                    }`}
+                  >
+                    <Text className={`text-[10px] font-bold ${isSelected ? 'text-white' : 'text-neutral-700'}`}>
+                      {opt.label}
+                    </Text>
+                    <Text className={`text-[8px] mt-0.5 ${isSelected ? 'text-white/70' : 'text-neutral-400'}`}>
+                      {opt.desc}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {defaultRecordingVisibility === null && (
+              <Text className="text-[9px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg p-2 leading-relaxed">
+                Whatever you pick here becomes your default for future recordings — you can still change it each time,
+                and eventually from Settings too.
+              </Text>
+            )}
+          </View>
 
           <View className="flex-row gap-2.5 pt-1">
             <Pressable
@@ -231,6 +282,51 @@ function ProgressModal({ state }: { state: AppState }) {
   );
 }
 
+// Persistent mini-player, shown above the tab bar whenever a recording is
+// playing, so playback keeps going (and stays controllable) while navigating
+// to a different tab — previously play/pause controls only existed on the
+// screen you started playback from.
+function NowPlayingBar({ state }: { state: AppState }) {
+  const { playingRecordingId, nowPlayingRecording, playingRecProgress, setPlayingRecordingId, setSelectedRecording, navigateTo } = state;
+
+  if (!playingRecordingId || !nowPlayingRecording) return null;
+
+  return (
+    <FadeInView>
+      <Pressable
+        onPress={() => {
+          setSelectedRecording(nowPlayingRecording);
+          navigateTo('recordingDetail');
+        }}
+        className="mx-3 mt-2 mb-1 bg-[#1A1A1A] rounded-xl px-3 py-2 flex-row items-center gap-3"
+      >
+        <View className="w-8 h-8 rounded-lg bg-white/15 items-center justify-center shrink-0">
+          <Mic size={14} color="#FFFFFF" />
+        </View>
+
+        <View className="flex-1" style={{ gap: 4 }}>
+          <Text numberOfLines={1} className="text-white font-sans font-bold text-xs">
+            {nowPlayingRecording.book} {nowPlayingRecording.chapter}
+          </Text>
+          <View className="w-full bg-white/20 h-1 rounded-full overflow-hidden">
+            <View className="bg-white h-full" style={{ width: `${playingRecProgress}%` }} />
+          </View>
+        </View>
+
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            setPlayingRecordingId(null);
+          }}
+          className="w-8 h-8 rounded-full bg-white/15 items-center justify-center shrink-0"
+        >
+          <Pause size={13} color="#FFFFFF" />
+        </Pressable>
+      </Pressable>
+    </FadeInView>
+  );
+}
+
 function AppShell() {
   const state = useAppState();
 
@@ -244,6 +340,7 @@ function AppShell() {
       </SafeAreaView>
 
       <SafeAreaView edges={['bottom', 'left', 'right']}>
+        <NowPlayingBar state={state} />
         <View className="h-16 bg-white border-t border-[#E5E5E5] px-6 flex-row items-center justify-between">
           {TABS.map((tab) => {
             const isActive = state.currentTab === tab.id;

@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { Mic } from 'lucide-react-native';
+import { Check, Mic } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, PulseView, WaveBars } from '../components/ui';
@@ -16,18 +16,20 @@ const TRANSLATION_OPTIONS = [
 
 export default function RecordScreen({ state }: { state: AppState }) {
   const {
-    verses,
     isRecording,
     recordingSeconds,
     recordingBook,
     recordingChapter,
     recordingTranslation,
+    recordingChapterVerses,
+    verseTapTimestamps,
     setRecordingBook,
     setRecordingChapter,
     setRecordingTranslation,
     formatTime,
     handleStartRecording,
     handleStopRecording,
+    handleMarkVerseTap,
   } = state;
 
   const recordingBookMeta = getBookByName(recordingBook);
@@ -35,7 +37,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
     ? Array.from({ length: recordingBookMeta.chapters }, (_, i) => ({ id: i + 1, label: String(i + 1) }))
     : [];
 
-  const matchedVerses = verses.filter((v) => v.book === recordingBook && v.chapter === recordingChapter);
+  const taggedVerseCount = Object.keys(verseTapTimestamps).length;
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -107,6 +109,23 @@ export default function RecordScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
+        {/* Tap-to-mark instructions — only relevant, and only shown, while
+            actually recording (this is the whole mechanism behind automatic
+            per-verse timestamps, so it needs to be impossible to miss). */}
+        {isRecording && (
+          <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-3" style={{ gap: 2 }}>
+            <Text className="text-xs font-sans font-bold text-indigo-900">
+              💡 Tap each verse number the instant you begin reciting it
+            </Text>
+            <Text className="text-[10px] font-sans text-indigo-700">
+              This times your recitation automatically. Verse 1 is already marked —{' '}
+              {recordingChapterVerses.length > 1 ? 'start tapping from verse 2.' : ''}
+              {'  '}
+              {taggedVerseCount}/{recordingChapterVerses.length} verses marked.
+            </Text>
+          </View>
+        )}
+
         {/* Teleprompter Scrollable text display */}
         <ScrollView
           className="border border-[#1A1A1A] rounded-xl bg-[#F3F2F1]/35 p-4"
@@ -117,15 +136,38 @@ export default function RecordScreen({ state }: { state: AppState }) {
             TELEPROMPTER SCRIPT
           </Text>
 
-          {matchedVerses.length === 0 ? (
-            <Text className="text-xs text-neutral-400 italic">No scripture loaded.</Text>
+          {recordingChapterVerses.length === 0 ? (
+            <Text className="text-xs text-neutral-400 italic">
+              No scripture loaded for {recordingTranslation} — try ESV, the only translation currently imported.
+            </Text>
           ) : (
-            matchedVerses.map((v) => (
-              <Text key={v.verse} className="font-serif text-lg leading-relaxed text-neutral-800">
-                <Text className="font-sans text-[10px] font-bold text-neutral-400">{v.verse} </Text>
-                {v.text}
-              </Text>
-            ))
+            recordingChapterVerses.map((v) => {
+              const isTapped = verseTapTimestamps[v.verse] !== undefined;
+              return (
+                <Pressable
+                  key={v.verse}
+                  disabled={!isRecording}
+                  onPress={() => handleMarkVerseTap(v.verse)}
+                  className={`flex-row gap-2 -m-1 p-1 rounded-lg ${isRecording && isTapped ? 'bg-emerald-50' : ''}`}
+                >
+                  <View
+                    className={`shrink-0 h-5 min-w-5 px-1 rounded items-center justify-center flex-row gap-0.5 ${
+                      isRecording ? (isTapped ? 'bg-emerald-600' : 'bg-indigo-600') : ''
+                    }`}
+                  >
+                    {isRecording && isTapped && <Check size={10} color="#FFFFFF" />}
+                    <Text
+                      className={`font-sans text-[10px] font-bold ${
+                        isRecording ? 'text-white' : 'text-neutral-400'
+                      }`}
+                    >
+                      {v.verse}
+                    </Text>
+                  </View>
+                  <Text className="flex-1 font-serif text-lg leading-relaxed text-neutral-800">{v.text}</Text>
+                </Pressable>
+              );
+            })
           )}
         </ScrollView>
 

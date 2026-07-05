@@ -18,7 +18,19 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
     sharedPlans,
     joinSharedPlan,
     viewMemberProfile,
+    viewMemberProfileById,
+    activityEvents,
+    loadingActivityEvents,
+    loadActivityFeed,
   } = state;
+
+  const formatEventAge = (createdAtMs: number) => {
+    const minutes = Math.max(1, Math.round((Date.now() - createdAtMs) / 60000));
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.round(hours / 24)}d ago`;
+  };
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -206,75 +218,69 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
 
         {/* Community Activity Feed */}
         <View className="gap-2.5">
-          <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
-            RECENT GROUP FEED
-          </Text>
-
-          <View className="border border-neutral-200 rounded-xl p-4 bg-white gap-3.5 shadow-sm">
-            {/* Event 1 */}
-            <View className="flex-row items-start gap-3">
-              <View className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5" />
-              <View className="gap-0.5 flex-1">
-                <Text className="text-xs font-sans text-neutral-700 leading-relaxed">
-                  <Text onPress={() => viewMemberProfile('Sarah Miller')} className="font-black text-black">
-                    Sarah Miller
-                  </Text>{' '}
-                  completed memorizing the entire chapter of{' '}
-                  <Text className="font-bold text-neutral-900">Romans 8</Text> (39 verses)! 👑
-                </Text>
-                <Text className="text-[9px] text-neutral-400 font-mono">Today • Milestone Achievement</Text>
-              </View>
-            </View>
-
-            <View className="border-t border-neutral-100" />
-
-            {/* Event 2 */}
-            <View className="flex-row items-start gap-3">
-              <View className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5" />
-              <View className="gap-0.5 flex-1">
-                <Text className="text-xs font-sans text-neutral-700 leading-relaxed">
-                  <Text onPress={() => viewMemberProfile('Thomas Wright')} className="font-black text-black">
-                    Thomas Wright
-                  </Text>{' '}
-                  completed memorizing <Text className="font-bold text-neutral-900">Genesis 1:5-6</Text>.
-                </Text>
-                <Text className="text-[9px] text-neutral-400 font-mono">Today</Text>
-              </View>
-            </View>
-
-            <View className="border-t border-neutral-100" />
-
-            {/* Event 3 */}
-            <View className="flex-row items-start gap-3">
-              <View className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5" />
-              <View className="gap-0.5 flex-1">
-                <Text className="text-xs font-sans text-neutral-700 leading-relaxed">
-                  <Text onPress={() => viewMemberProfile('Esther Vance')} className="font-black text-black">
-                    Esther Vance
-                  </Text>{' '}
-                  completed memorizing the entire chapter of{' '}
-                  <Text className="font-bold text-neutral-900">John 15</Text> (27 verses)! 🎉
-                </Text>
-                <Text className="text-[9px] text-neutral-400 font-mono">Today • Milestone Achievement</Text>
-              </View>
-            </View>
-
-            <View className="border-t border-neutral-100" />
-
-            {/* Event 4 */}
-            <View className="flex-row items-start gap-3">
-              <View className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5" />
-              <View className="gap-0.5 flex-1">
-                <Text className="text-xs font-sans text-neutral-700 leading-relaxed">
-                  <Text onPress={() => viewMemberProfile('Chloe Vance')} className="font-black text-black">
-                    Chloe Vance
-                  </Text>{' '}
-                  completed memorizing <Text className="font-bold text-neutral-900">Psalm 23:1-3</Text>.
-                </Text>
-                <Text className="text-[9px] text-neutral-400 font-mono">Today</Text>
-              </View>
-            </View>
+          <View className="flex-row justify-between items-center">
+            <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+              RECENT GROUP FEED
+            </Text>
+            <Pressable onPress={loadActivityFeed} className="flex-row items-center gap-1">
+              <RefreshCw size={8} color="#1A1A1A" />
+              <Text className="text-[9px] font-sans font-bold uppercase text-[#1A1A1A]">Refresh</Text>
+            </Pressable>
           </View>
+
+          {loadingActivityEvents ? (
+            <View className="py-4 items-center">
+              <Text className="text-xs text-neutral-400 font-sans">Loading activity...</Text>
+            </View>
+          ) : activityEvents.length === 0 ? (
+            <View className="border border-dashed border-neutral-200 rounded-xl p-4 items-center">
+              <Text className="text-xs text-neutral-400 font-sans text-center">
+                No milestones yet. This fills in as you or your real circle members fully memorize a verse or chapter —
+                keep at it! 🌱
+              </Text>
+            </View>
+          ) : (
+            <View className="border border-neutral-200 rounded-xl p-4 bg-white gap-3.5 shadow-sm">
+              {activityEvents.map((event, idx) => (
+                <View key={event.id}>
+                  <View className="flex-row items-start gap-3">
+                    <View
+                      className={`w-2 h-2 rounded-full mt-1.5 ${event.type === 'chapter' ? 'bg-emerald-500' : 'bg-emerald-400'}`}
+                    />
+                    <View className="gap-0.5 flex-1">
+                      <Text className="text-xs font-sans text-neutral-700 leading-relaxed">
+                        <Text onPress={() => viewMemberProfileById(event.uid)} className="font-black text-black">
+                          {event.uid === user?.uid ? 'You' : event.authorName}
+                        </Text>{' '}
+                        {event.type === 'chapter' ? (
+                          <>
+                            completed memorizing the entire chapter of{' '}
+                            <Text className="font-bold text-neutral-900">
+                              {event.book} {event.chapter}
+                            </Text>{' '}
+                            ({event.verseCount} verses)! 👑
+                          </>
+                        ) : (
+                          <>
+                            completed memorizing{' '}
+                            <Text className="font-bold text-neutral-900">
+                              {event.book} {event.chapter}:{event.verse}
+                            </Text>
+                            .
+                          </>
+                        )}
+                      </Text>
+                      <Text className="text-[9px] text-neutral-400 font-mono">
+                        {formatEventAge(event.createdAtMs)}
+                        {event.type === 'chapter' ? ' • Milestone Achievement' : ''}
+                      </Text>
+                    </View>
+                  </View>
+                  {idx < activityEvents.length - 1 && <View className="border-t border-neutral-100 mt-3.5" />}
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </FadeInView>

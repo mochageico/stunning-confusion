@@ -35,10 +35,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     showAudioSelector,
     setShowAudioSelector,
     userRecordings,
-    audioPlaying,
-    setAudioPlaying,
-    audioPlaybackProgress,
-    setAudioPlaybackProgress,
+    playingRecordingId,
+    setPlayingRecordingId,
+    playingRecProgress,
+    setPlayingRecProgress,
     formatTime,
     setFeedBookFilter,
     setFeedChapterFilter,
@@ -47,30 +47,17 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   } = state;
 
   const activeChapterKey = `${selectedBook}_${selectedChapter}`;
-  const currentAudio = selectedChapterAudios[activeChapterKey] || {
-    id: 'default_narration',
-    title: `${selectedBook} ${selectedChapter} Official Audio Narration`,
-    user: 'Kenneth Carter',
-    translation: 'ESV',
-    duration: 120,
-  };
 
-  // Filter user recordings saved in library that match this chapter
+  // Filter user recordings saved in library that match this chapter — these
+  // are real Recording objects (with a real audioUrl), so selecting one here
+  // and playing it uses the exact same playingRecordingId/playingRecProgress
+  // mechanism as Profile/RecordingDetail/the floating now-playing bar.
   const availableNarrations = userRecordings.filter(
     (r) => r.book.toLowerCase() === (selectedBook || '').toLowerCase() && r.chapter === selectedChapter
   );
-
-  // Ensure default narration is always an option
-  const optionsList = [
-    {
-      id: 'default_narration',
-      title: `${selectedBook} ${selectedChapter} Official Narration`,
-      user: 'Kenneth Carter',
-      translation: 'ESV',
-      duration: 120,
-    },
-    ...availableNarrations,
-  ];
+  const optionsList = availableNarrations;
+  const currentAudio = selectedChapterAudios[activeChapterKey] || availableNarrations[0] || null;
+  const isPlayingThis = !!currentAudio && playingRecordingId === currentAudio.id;
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -136,23 +123,43 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
 
         {/* Playable Custom Audio Card */}
         <View className="border border-[#1A1A1A] rounded-xl p-3 bg-white gap-2.5">
+          {!currentAudio ? (
+            <View className="items-center py-2 gap-1.5">
+              <Text className="text-xs font-sans font-bold text-neutral-500">No recordings yet for this chapter</Text>
+              <Text className="text-[10px] font-sans text-neutral-400 text-center">
+                Record one from the Record tab, or find one in the community library.
+              </Text>
+              <Pressable
+                onPress={() => {
+                  setFeedBookFilter(selectedBook || '');
+                  setFeedChapterFilter(String(selectedChapter ?? ''));
+                  navigateTo('audioFeed');
+                  triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`);
+                }}
+                className="mt-1 py-1.5 px-3 bg-[#1A1A1A] rounded-md flex-row items-center justify-center gap-1"
+              >
+                <Search size={11} color="#FFFFFF" />
+                <Text className="text-white font-sans font-bold text-[10px] uppercase tracking-wider">Find Recordings</Text>
+              </Pressable>
+            </View>
+          ) : (
           <View className="gap-3">
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
                 <Pressable
                   onPress={() => {
-                    if (audioPlaying) {
-                      setAudioPlaying(false);
+                    if (isPlayingThis) {
+                      setPlayingRecordingId(null);
                     } else {
-                      setAudioPlaying(true);
-                      setAudioPlaybackProgress(0);
+                      setPlayingRecordingId(currentAudio.id);
+                      setPlayingRecProgress(0);
                     }
                   }}
                   className={`w-8 h-8 rounded-full items-center justify-center ${
-                    audioPlaying ? 'bg-[#1A1A1A]' : 'border border-[#1A1A1A]'
+                    isPlayingThis ? 'bg-[#1A1A1A]' : 'border border-[#1A1A1A]'
                   }`}
                 >
-                  {audioPlaying ? (
+                  {isPlayingThis ? (
                     <Pause size={13} color="#FFFFFF" />
                   ) : (
                     <Play size={13} color="#1A1A1A" style={{ marginLeft: 2 }} />
@@ -176,15 +183,15 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               </Pressable>
             </View>
 
-            {/* Simulated playing progress bar */}
-            {audioPlaying && (
+            {/* Real playback progress bar */}
+            {isPlayingThis && (
               <View className="gap-0.5">
                 <View className="w-full bg-neutral-100 h-1 rounded-full overflow-hidden">
-                  <View className="bg-[#1A1A1A] h-full" style={{ width: `${audioPlaybackProgress}%` }} />
+                  <View className="bg-[#1A1A1A] h-full" style={{ width: `${playingRecProgress}%` }} />
                 </View>
                 <View className="flex-row justify-between">
                   <Text className="text-[8px] font-mono font-semibold text-neutral-400">
-                    {formatTime(Math.round((audioPlaybackProgress / 100) * currentAudio.duration))}
+                    {formatTime(Math.round((playingRecProgress / 100) * currentAudio.duration))}
                   </Text>
                   <Text className="text-[8px] font-mono font-semibold text-neutral-400">{formatTime(currentAudio.duration)}</Text>
                 </View>
@@ -207,7 +214,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                             [activeChapterKey]: opt as Recording,
                           }));
                           setShowAudioSelector(false);
-                          setAudioPlaying(false);
+                          setPlayingRecordingId(null);
                           triggerToast(`Audio changed to ${opt.user}'s recitation`);
                         }}
                         className={`w-full p-2 rounded-md border flex-row items-center justify-between ${
@@ -248,6 +255,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               </View>
             )}
           </View>
+          )}
         </View>
 
         {/* Grid / List view Toggle */}

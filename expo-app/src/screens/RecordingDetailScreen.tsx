@@ -4,18 +4,25 @@ import { ArrowLeft, Pause, Play } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView, HelpTooltip, PulseView } from '../components/ui';
 
-const SYNC_VERSE_PREVIEWS = [
-  'No condemnation to those who are in Christ...',
-  'For the law of the Spirit of life has set you free...',
-  'For God has done what the law could not do...',
-  'In order that the righteous requirement might be met...',
-  'For those who live according to the flesh...',
-];
+const TRANSLATION_FULL_NAMES: Record<string, string> = {
+  ESV: 'English Standard Version',
+  NIV: 'New International Version',
+  NKJV: 'New King James Version',
+  NLT: 'New Living Translation',
+};
 
 const WAVEFORM_HEIGHTS = [
   8, 16, 24, 12, 20, 28, 32, 16, 24, 20, 12, 24, 32, 28, 20, 16, 12, 20, 28, 24, 32, 20, 16, 24, 28,
   12, 20, 24, 32, 16, 8, 12,
 ];
+
+function toSeconds(mmss: string): number {
+  const parts = mmss.split(':').map((p) => parseInt(p, 10));
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return parts[0] * 60 + parts[1];
+  }
+  return 0;
+}
 
 export default function RecordingDetailScreen({ state }: { state: AppState }) {
   const {
@@ -28,10 +35,13 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
     playingRecProgress,
     setPlayingRecProgress,
     seekRecordingBy,
+    seekRecordingToTime,
     isEditingSync,
     setIsEditingSync,
     recSyncOffsets,
     setRecSyncOffsets,
+    saveVerseSyncOffsets,
+    selectedRecordingChapterTextData,
   } = state;
 
   if (!selectedRecording) return null;
@@ -94,7 +104,8 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
             <View style={{ width: '45%' }}>
               <Text className="text-[8px] uppercase tracking-wider text-neutral-400 font-bold font-sans">Translation</Text>
               <Text className="font-extrabold text-neutral-800 text-xs font-sans">
-                {selectedRecording.translation} (English Standard Version)
+                {selectedRecording.translation}
+                {TRANSLATION_FULL_NAMES[selectedRecording.translation] ? ` (${TRANSLATION_FULL_NAMES[selectedRecording.translation]})` : ''}
               </Text>
             </View>
             <View style={{ width: '45%' }}>
@@ -107,7 +118,7 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
             </View>
             <View style={{ width: '45%' }}>
               <Text className="text-[8px] uppercase tracking-wider text-neutral-400 font-bold font-sans">Speaker</Text>
-              <Text className="font-extrabold text-neutral-800 text-xs font-sans">Kenneth Carter (Me)</Text>
+              <Text className="font-extrabold text-neutral-800 text-xs font-sans">{selectedRecording.user || 'Me'}</Text>
             </View>
           </View>
         </View>
@@ -216,9 +227,9 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
             ) : (
               <View className="flex-row gap-1.5">
                 <Pressable
-                  onPress={() => {
+                  onPress={async () => {
                     setIsEditingSync(false);
-                    triggerToast('Verse sync offsets updated! 🔄');
+                    await saveVerseSyncOffsets();
                   }}
                   className="bg-emerald-600 px-2 py-1 rounded"
                 >
@@ -234,6 +245,14 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
             )}
           </View>
 
+          {recSyncOffsets.length === 0 ? (
+            <View className="items-center p-4 bg-[#F3F2F1]/55 rounded-xl border border-dashed border-[#E5E5E5]">
+              <Text className="text-xs text-[#888] text-center">
+                No verse timestamps for this recording — tap each verse number as you reach it next time you record this
+                chapter, and they'll show up here automatically.
+              </Text>
+            </View>
+          ) : (
           <View className="border border-neutral-200 rounded-2xl bg-white overflow-hidden">
             <View className="bg-neutral-50 px-3.5 py-2.5 border-b border-neutral-200 flex-row justify-between">
               <Text className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider font-sans">Verse Reference</Text>
@@ -251,7 +270,7 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
                   <View style={{ maxWidth: 140 }}>
                     <Text className="font-extrabold text-[#1A1A1A] text-xs font-sans">Verse {offset.verse}</Text>
                     <Text className="text-[9px] text-neutral-400 mt-0.5" numberOfLines={1} ellipsizeMode="tail">
-                      {SYNC_VERSE_PREVIEWS[idx % 5]}
+                      {selectedRecordingChapterTextData?.verses[String(offset.verse)] ?? ''}
                     </Text>
                   </View>
 
@@ -275,7 +294,14 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
                     </View>
                   ) : (
                     <Pressable
-                      onPress={() => triggerToast(`Playing segment for Verse ${offset.verse} (${offset.start} - ${offset.end})`)}
+                      onPress={() => {
+                        if (hasRealAudio) {
+                          seekRecordingToTime(selectedRecording, toSeconds(offset.start));
+                          triggerToast(`Jumping to Verse ${offset.verse}...`);
+                        } else {
+                          triggerToast(`Playing segment for Verse ${offset.verse} (${offset.start} - ${offset.end})`);
+                        }
+                      }}
                       className="bg-neutral-100 px-2.5 py-1 rounded border border-neutral-200"
                     >
                       <Text className="font-mono font-bold text-[#1A1A1A] text-xs">
@@ -287,6 +313,7 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
               ))}
             </View>
           </View>
+          )}
         </View>
       </ScrollView>
     </FadeInView>
