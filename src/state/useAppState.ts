@@ -1767,7 +1767,14 @@ export function useAppState() {
   // Verses already in progress are left untouched -- a goal doesn't reset
   // work already underway. setMemoryQueue triggers the existing debounced
   // auto-sync effect, so no manual queue write is needed here.
-  const setMemorizationGoalRange = async (book: string, startChapter: number, endChapter: number, targetDate: string) => {
+  const setMemorizationGoalRange = async (
+    book: string,
+    startChapter: number,
+    endChapter: number,
+    startVerse: number,
+    endVerse: number,
+    targetDate: string
+  ) => {
     const bookMeta = getBookByName(book);
     if (!bookMeta) {
       triggerToast(`Unrecognized book: ${book}`);
@@ -1782,15 +1789,22 @@ export function useAppState() {
       const verseIds: string[] = [];
       const candidateItems: { verseId: string; chapter: number; verseNumber: number; text: string }[] = [];
       let skippedChapters = 0;
+      // Verse bounds only restrict a single-chapter goal (e.g. "Romans 8:1-10")
+      // -- multi-chapter goals still use every verse in each chapter, since
+      // "verse 5 of every chapter" isn't a meaningful range.
+      const singleChapter = startChapter === endChapter;
       for (let ch = startChapter; ch <= endChapter; ch++) {
         const chapterData = await fetchChapterText(DEFAULT_TRANSLATION_ID, bookMeta.id, ch);
         if (!chapterData) {
           skippedChapters++;
           continue;
         }
-        const verseNumbers = Object.keys(chapterData.verses)
+        let verseNumbers = Object.keys(chapterData.verses)
           .map(Number)
           .sort((a, b) => a - b);
+        if (singleChapter) {
+          verseNumbers = verseNumbers.filter((v) => v >= startVerse && v <= endVerse);
+        }
         verseNumbers.forEach((v) => {
           const verseId = `${bookMeta.id}_${ch}_${v}`;
           verseIds.push(verseId);
@@ -1799,7 +1813,7 @@ export function useAppState() {
       }
 
       if (verseIds.length === 0) {
-        triggerToast(`Couldn't find any verses for ${book} ${startChapter}-${endChapter} in the scripture library yet.`);
+        triggerToast(`Couldn't find any verses for ${book} ${startChapter}${singleChapter ? `:${startVerse}-${endVerse}` : `-${endChapter}`} in the scripture library yet.`);
         return;
       }
 
@@ -1838,6 +1852,8 @@ export function useAppState() {
         book,
         startChapter,
         endChapter,
+        startVerse: singleChapter ? startVerse : verseIds.length ? candidateItems[0].verseNumber : 1,
+        endVerse: singleChapter ? endVerse : candidateItems[candidateItems.length - 1]?.verseNumber || 1,
         targetDate,
         totalVerses: verseIds.length,
         verseIds,
@@ -1858,9 +1874,10 @@ export function useAppState() {
         skippedChapters > 0
           ? ` (${skippedChapters} chapter${skippedChapters > 1 ? 's' : ''} not yet available were skipped)`
           : '';
-      triggerToast(
-        `Goal set: ${book} ${startChapter}${endChapter > startChapter ? `-${endChapter}` : ''} — ${verseIds.length} verses${skippedNote}. 🎯`
-      );
+      const rangeLabel = singleChapter
+        ? `${startChapter}:${startVerse}-${endVerse}`
+        : `${startChapter}-${endChapter}`;
+      triggerToast(`Goal set: ${book} ${rangeLabel} — ${verseIds.length} verses${skippedNote}. 🎯`);
     } finally {
       setIsCalculatingGoal(false);
     }

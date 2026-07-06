@@ -187,6 +187,8 @@ export interface MemorizationGoal {
   book: string;
   startChapter: number;
   endChapter: number;
+  startVerse: number; // only restricts range when startChapter === endChapter
+  endVerse: number;
   targetDate: string; // ISO date string (no time component)
   totalVerses: number;
   verseIds: string[]; // ordered verseIds in the range, for front-of-queue enqueueing

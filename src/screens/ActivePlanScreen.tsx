@@ -100,6 +100,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const [goalBook, setGoalBook] = useState('Romans');
   const [goalStartChapter, setGoalStartChapter] = useState(1);
   const [goalEndChapter, setGoalEndChapter] = useState(1);
+  const [goalStartVerse, setGoalStartVerse] = useState(1);
+  const [goalEndVerse, setGoalEndVerse] = useState(5);
   const [goalMonth, setGoalMonth] = useState(todayForGoal.getMonth() + 1);
   const [goalDay, setGoalDay] = useState(todayForGoal.getDate());
   const [goalYear, setGoalYear] = useState(todayForGoal.getFullYear());
@@ -383,8 +385,10 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
               <View className="flex-row justify-between items-start">
                 <View style={{ gap: 2 }}>
                   <Text className="text-xs font-serif font-black text-[#1A1A1A]">
-                    {memorizationGoal.book} {memorizationGoal.startChapter}
-                    {memorizationGoal.endChapter > memorizationGoal.startChapter ? `-${memorizationGoal.endChapter}` : ''}
+                    {memorizationGoal.book}{' '}
+                    {memorizationGoal.startChapter === memorizationGoal.endChapter
+                      ? `${memorizationGoal.startChapter}:${memorizationGoal.startVerse}-${memorizationGoal.endVerse}`
+                      : `${memorizationGoal.startChapter}-${memorizationGoal.endChapter}`}
                   </Text>
                   <Text className="text-[9px] text-neutral-400 font-mono">
                     {goalRetained}/{memorizationGoal.totalVerses} verses fully retained
@@ -492,6 +496,38 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     </View>
                   </View>
 
+                  {goalStartChapter === goalEndChapter && (
+                    <View className="flex-row gap-2.5">
+                      <View className="flex-1" style={{ gap: 4 }}>
+                        <Text className="text-[9px] font-bold text-neutral-400 uppercase">Start Verse</Text>
+                        <TextInput
+                          keyboardType="numeric"
+                          value={String(goalStartVerse)}
+                          onChangeText={(t) => {
+                            const n = parseInt(t, 10) || 1;
+                            setGoalStartVerse(n);
+                            if (n > goalEndVerse) setGoalEndVerse(n);
+                          }}
+                          className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
+                        />
+                      </View>
+                      <View className="flex-1" style={{ gap: 4 }}>
+                        <Text className="text-[9px] font-bold text-neutral-400 uppercase">End Verse</Text>
+                        <TextInput
+                          keyboardType="numeric"
+                          value={String(goalEndVerse)}
+                          onChangeText={(t) => setGoalEndVerse(Math.max(parseInt(t, 10) || 1, goalStartVerse))}
+                          className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
+                        />
+                      </View>
+                    </View>
+                  )}
+                  <Text className="text-[9px] text-neutral-400 -mt-2">
+                    {goalStartChapter === goalEndChapter
+                      ? 'Pick a small verse range within this one chapter -- a whole chapter (or book!) is unreachable for most people.'
+                      : 'Spanning multiple chapters uses every verse in each one.'}
+                  </Text>
+
                   <View style={{ gap: 4 }}>
                     <Text className="text-[9px] font-bold text-neutral-400 uppercase">Target Date</Text>
                     <View className="flex-row gap-2 items-center">
@@ -529,7 +565,14 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                       disabled={isCalculatingGoal}
                       onPress={async () => {
                         const d = new Date(goalYear, goalMonth - 1, goalDay);
-                        await setMemorizationGoalRange(goalBook, goalStartChapter, goalEndChapter, d.toISOString());
+                        await setMemorizationGoalRange(
+                          goalBook,
+                          goalStartChapter,
+                          goalEndChapter,
+                          goalStartVerse,
+                          goalEndVerse,
+                          d.toISOString()
+                        );
                         setShowGoalForm(false);
                       }}
                       className={`px-4 py-2 rounded-xl ${isCalculatingGoal ? 'bg-neutral-300' : 'bg-[#1A1A1A]'}`}
@@ -804,7 +847,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           </ScrollView>
         </View>
 
-        {/* MEMORY LOAD FORECAST SECTION */}
+        {/* MEMORY LOAD FORECAST SECTION -- nothing to forecast with an empty queue */}
+        {memoryQueue.length > 0 && (
         <View style={{ gap: 12 }}>
           <View>
             <Text className="text-sm font-serif font-black text-[#1A1A1A]">Memory Load Forecast</Text>
@@ -846,6 +890,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             ))}
           </View>
         </View>
+        )}
       </ScrollView>
     </FadeInView>
   );
