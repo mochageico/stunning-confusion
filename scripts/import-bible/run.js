@@ -37,7 +37,7 @@ async function main() {
 
   // This project uses a non-default named Firestore database (the same one
   // the app itself connects to via firebaseConfig.firestoreDatabaseId in
-  // expo-app/src/firebase.ts) — admin.firestore() alone targets "(default)"
+  // src/firebase.ts) — admin.firestore() alone targets "(default)"
   // and would fail with NOT_FOUND since that database was never provisioned.
   const app = admin.initializeApp({ credential: admin.credential.applicationDefault() });
   const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);

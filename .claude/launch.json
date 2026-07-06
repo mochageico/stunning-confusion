@@ -4,13 +4,13 @@
     {
       "name": "expo-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "expo-app", "run", "web", "--", "--port", "8099"],
+      "runtimeArgs": ["run", "web", "--", "--port", "8099"],
       "port": 8099
     },
     {
       "name": "expo-native",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "expo-app", "run", "start", "--", "--port", "8100"],
+      "runtimeArgs": ["run", "start", "--", "--port", "8100"],
       "port": 8100
     }
   ]

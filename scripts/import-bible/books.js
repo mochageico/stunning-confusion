@@ -1,6 +1,6 @@
 // Plain CommonJS copy of the 66-book canon (structural data only: names,
 // USFM ids, chapter counts) so this standalone Node script doesn't need a
-// TypeScript build step to import expo-app/src/data.ts. Keep in sync with
+// TypeScript build step to import src/data.ts. Keep in sync with
 // that file if the canon list ever changes (it won't — this is fixed).
 const ALL_BIBLE_BOOKS = [
   { id: 'GEN', name: 'Genesis', testament: 'ot', chapters: 50 },

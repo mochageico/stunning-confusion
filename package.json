@@ -1,36 +1,44 @@
 {
-  "name": "react-example",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
-    "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
-  },
+  "name": "expo-app",
+  "version": "1.0.0",
+  "main": "index.ts",
   "dependencies": {
-    "@google/genai": "^2.4.0",
-    "@tailwindcss/vite": "^4.1.14",
-    "@vitejs/plugin-react": "^5.0.4",
-    "dotenv": "^17.2.3",
-    "express": "^4.21.2",
+    "@expo-google-fonts/inter": "^0.4.2",
+    "@expo-google-fonts/playfair-display": "^0.4.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/slider": "5.0.1",
+    "@react-native-google-signin/google-signin": "^16.1.2",
+    "expo": "^54.0.35",
+    "expo-audio": "~1.1.1",
+    "expo-clipboard": "~8.0.8",
+    "expo-dev-client": "~6.0.21",
+    "expo-file-system": "~19.0.23",
+    "expo-font": "~14.0.12",
+    "expo-status-bar": "~3.0.9",
     "firebase": "^12.15.0",
-    "lucide-react": "^0.546.0",
-    "motion": "^12.23.24",
-    "react": "^19.0.1",
-    "react-dom": "^19.0.1",
-    "vite": "^6.2.3"
+    "lucide-react-native": "^1.23.0",
+    "nativewind": "^4.2.6",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-reanimated": "~4.1.1",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-svg": "15.12.1",
+    "react-native-web": "^0.21.2",
+    "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/node": "^22.14.0",
-    "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
-    "tailwindcss": "^4.1.14",
-    "tsx": "^4.21.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.3"
-  }
+    "@types/react": "~19.1.10",
+    "babel-preset-expo": "~54.0.10",
+    "prettier-plugin-tailwindcss": "^0.5.14",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~5.9.2"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
 }

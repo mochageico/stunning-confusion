@@ -1,6 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Play, Pause, X, RefreshCw, Sparkles, Sliders, Volume2, Eye, EyeOff, Check, Info, Repeat, Keyboard, Mic, MicOff } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import Slider from '@react-native-community/slider';
+import { Check, Eye, EyeOff, Info, Keyboard, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Sliders, Sparkles, X } from 'lucide-react-native';
+
 import { VerseState, QueueItem } from '../types';
+import { BounceView, ChipRow, FadeInView, SpinView, WaveBars } from './ui';
+import { Dropdown } from './Dropdown';
 
 interface PracticeModalsProps {
   type: 'listen' | 'type' | 'reveal';
@@ -13,15 +18,15 @@ interface PracticeModalsProps {
   setPrimingLookahead?: (val: number) => void;
 }
 
-export default function PracticeModals({ 
-  type, 
-  verses, 
-  allVerses, 
-  onClose, 
+export default function PracticeModals({
+  type,
+  verses,
+  allVerses,
+  onClose,
   onUpdateStatus,
   memoryQueue,
   primingLookahead = 30,
-  setPrimingLookahead
+  setPrimingLookahead,
 }: PracticeModalsProps) {
   if (!verses || verses.length === 0) return null;
 
@@ -50,19 +55,19 @@ export default function PracticeModals({
           chapter: item.chapter,
           verse: item.verseNumber,
           text: item.text,
-          status: item.status === 'retained' ? 'memorized' : 'learning'
+          status: item.status === 'retained' ? 'memorized' : 'learning',
         });
 
-        dbLearning = memoryQueue.filter(item => item.status === 'learning').map(mapQueueItemToVerse);
-        dbReviewing = memoryQueue.filter(
-          item => item.status === 'reviewing' && (!item.nextReviewDueDate || new Date(item.nextReviewDueDate) <= new Date())
-        ).map(mapQueueItemToVerse);
-        dbPriming = memoryQueue.filter(item => item.status === 'queued').slice(0, primingLookahead).map(mapQueueItemToVerse);
+        dbLearning = memoryQueue.filter((item) => item.status === 'learning').map(mapQueueItemToVerse);
+        dbReviewing = memoryQueue
+          .filter((item) => item.status === 'reviewing' && (!item.nextReviewDueDate || new Date(item.nextReviewDueDate) <= new Date()))
+          .map(mapQueueItemToVerse);
+        dbPriming = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead).map(mapQueueItemToVerse);
       } else {
         // Fallback
-        dbLearning = (allVerses || []).filter(v => v.book === 'Genesis' && v.chapter === 1 && (v.verse === 3 || v.verse === 4 || v.verse === 5 || v.verse === 6));
-        dbReviewing = (allVerses || []).filter(v => (v.book === 'Romans' && v.chapter === 8 && (v.verse === 1 || v.verse === 2)) || (v.book === 'John' && v.chapter === 15));
-        dbPriming = (allVerses || []).filter(v => (v.book === 'Genesis' && v.chapter === 1 && v.verse >= 7) || (v.book === 'Genesis' && v.chapter === 2));
+        dbLearning = (allVerses || []).filter((v) => v.book === 'Genesis' && v.chapter === 1 && (v.verse === 3 || v.verse === 4 || v.verse === 5 || v.verse === 6));
+        dbReviewing = (allVerses || []).filter((v) => (v.book === 'Romans' && v.chapter === 8 && (v.verse === 1 || v.verse === 2)) || (v.book === 'John' && v.chapter === 15));
+        dbPriming = (allVerses || []).filter((v) => (v.book === 'Genesis' && v.chapter === 1 && v.verse >= 7) || (v.book === 'Genesis' && v.chapter === 2));
       }
 
       if (playSource === 'memorization') {
@@ -79,11 +84,12 @@ export default function PracticeModals({
     setListenWordIndex(0);
     setSelectionStart(null);
     setSelectionEnd(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playSource, verses, allVerses, memoryQueue, primingLookahead]);
 
   // Header reference text
   const referenceText = useMemo(() => {
-    const targetVerses = (type === 'type' || type === 'reveal') ? verses : activePlayVerses;
+    const targetVerses = type === 'type' || type === 'reveal' ? verses : activePlayVerses;
 
     if (targetVerses.length === 0) return 'No verses selected';
     if (targetVerses.length === 1) {
@@ -91,7 +97,7 @@ export default function PracticeModals({
     }
     const first = targetVerses[0];
     const last = targetVerses[targetVerses.length - 1];
-    
+
     // Check if they are in the same chapter
     if (first.book === last.book && first.chapter === last.chapter) {
       return `${first.book} ${first.chapter}:${first.verse}-${last.verse}`;
@@ -106,17 +112,19 @@ export default function PracticeModals({
   const [listenSpeed, setListenSpeed] = useState(1.0); // Increments of 0.2: 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, etc.
   const [listenWordIndex, setListenWordIndex] = useState(0);
   const [repeatMode, setRepeatMode] = useState<'off' | 'playlist'>('playlist'); // default to loop playlist
-  const listenTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const listenTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Map each word to its containing verse object and index
   const wordObjects = useMemo(() => {
-    const list: { word: string; verseObj: VerseState; indexInVerse: number }[] = [];
+    const list: { word: string; verseObj: VerseState; verseKey: string; indexInVerse: number }[] = [];
     activePlayVerses.forEach((verseObj) => {
+      const verseKey = `${verseObj.book}-${verseObj.chapter}-${verseObj.verse}`;
       const words = `${verseObj.verse} ${verseObj.text}`.split(/\s+/);
       words.forEach((w, idx) => {
         list.push({
           word: w,
           verseObj,
+          verseKey,
           indexInVerse: idx,
         });
       });
@@ -126,13 +134,13 @@ export default function PracticeModals({
 
   useEffect(() => {
     if (type !== 'listen') return;
-    
+
     if (listenPlaying && wordObjects.length > 0) {
-      const delay = (60000 / 125) / listenSpeed; // ~125 words per minute base rate, adjusted by speed
+      const delay = 60000 / 125 / listenSpeed; // ~125 words per minute base rate, adjusted by speed
       listenTimerRef.current = setInterval(() => {
-        setListenWordIndex(prev => {
-          const actualStart = (playSource === 'selection' && selectionStart !== null) ? selectionStart : 0;
-          const actualEnd = (playSource === 'selection' && selectionEnd !== null) ? selectionEnd : wordObjects.length - 1;
+        setListenWordIndex((prev) => {
+          const actualStart = playSource === 'selection' && selectionStart !== null ? selectionStart : 0;
+          const actualEnd = playSource === 'selection' && selectionEnd !== null ? selectionEnd : wordObjects.length - 1;
 
           // End of segment/playlist reached
           if (prev >= actualEnd) {
@@ -168,7 +176,7 @@ export default function PracticeModals({
 
   const restartListen = () => {
     setListenPlaying(false);
-    const actualStart = (playSource === 'selection' && selectionStart !== null) ? selectionStart : 0;
+    const actualStart = playSource === 'selection' && selectionStart !== null ? selectionStart : 0;
     setListenWordIndex(actualStart);
     setTimeout(() => setListenPlaying(true), 150);
   };
@@ -201,7 +209,7 @@ export default function PracticeModals({
   const triggerLocalToast = (msg: string) => {
     setLocalToast(msg);
     setTimeout(() => {
-      setLocalToast(prev => prev === msg ? null : prev);
+      setLocalToast((prev) => (prev === msg ? null : prev));
     }, 2500);
   };
 
@@ -214,8 +222,8 @@ export default function PracticeModals({
     return clean.length > 0 ? clean.charAt(0).toLowerCase() : '';
   };
 
-  const handleTypeChar = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+  // NOTE: onChangeText passes the string directly (unlike web's onChange event).
+  const handleTypeChar = (val: string) => {
     if (isFinishedTyping || !activeVerseToType || showStrikeResetAlert) return;
 
     if (val.length === 0) {
@@ -232,21 +240,21 @@ export default function PracticeModals({
         if (currentTypeVerseIdx >= verses.length - 1) {
           setIsFinishedTyping(true);
         } else {
-          setCurrentTypeVerseIdx(prev => prev + 1);
+          setCurrentTypeVerseIdx((prev) => prev + 1);
           setTypeWordIdx(0);
           setVerseStrikes(0); // reset strikes on new verse
         }
       } else {
-        setTypeWordIdx(prev => prev + 1);
+        setTypeWordIdx((prev) => prev + 1);
       }
       setTypedInput('');
     } else {
       const nextStrikes = verseStrikes + 1;
-      setTypeErrors(prev => prev + 1);
+      setTypeErrors((prev) => prev + 1);
       setVerseStrikes(nextStrikes);
       setFlashError(true);
       setTypedInput(''); // Clear on error so user doesn't have to backspace
-      
+
       if (strikeLimit !== 'unlimited' && nextStrikes >= strikeLimit) {
         setShowStrikeResetAlert(true);
         setTypeWordIdx(0);
@@ -255,7 +263,7 @@ export default function PracticeModals({
           setShowStrikeResetAlert(false);
         }, 1500);
       }
-      
+
       setTimeout(() => setFlashError(false), 200);
     }
   };
@@ -265,12 +273,12 @@ export default function PracticeModals({
       if (currentTypeVerseIdx >= verses.length - 1) {
         setIsFinishedTyping(true);
       } else {
-        setCurrentTypeVerseIdx(prev => prev + 1);
+        setCurrentTypeVerseIdx((prev) => prev + 1);
         setTypeWordIdx(0);
         setVerseStrikes(0);
       }
     } else {
-      setTypeWordIdx(prev => prev + 1);
+      setTypeWordIdx((prev) => prev + 1);
     }
   };
 
@@ -302,11 +310,19 @@ export default function PracticeModals({
     return hash < maskLevel;
   };
 
+  // Renders one verse's masked text. NOTE: the web original used an
+  // invisible-sizer + absolute-overlay trick to keep word width perfectly
+  // stable when toggling between masked dots and the real word (which use
+  // different fonts). RN's text layout model doesn't support that overlay
+  // compositing the same way, and `maskLetters` already produces a
+  // same-length string, so we render one or the other directly as nested
+  // <Text> — width may shift very slightly on peek, which is an acceptable
+  // simplification.
   const renderMaskedText = (v: VerseState) => {
     const words = v.text.split(/\s+/);
     return (
-      <p className="font-serif text-[15px] leading-relaxed text-neutral-800 tracking-wide text-left mb-3">
-        <span className="font-sans text-[10px] font-bold text-neutral-400 mr-1 align-super">{v.verse}</span>
+      <Text className="font-serif text-[15px] leading-relaxed text-neutral-800 mb-3">
+        <Text className="font-sans text-[10px] font-bold text-neutral-400">{v.verse} </Text>
         {words.map((w, idx) => {
           const isHidden = shouldHideWord(w, idx);
           const wordKey = `${v.book}-${v.chapter}-${v.verse}-${idx}`;
@@ -314,44 +330,30 @@ export default function PracticeModals({
 
           if (isHidden) {
             return (
-              <React.Fragment key={idx}>
-                <span 
-                  className="relative inline-block mx-0.5 select-none align-baseline cursor-pointer transition-all"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSinglePeekedWords(prev => ({
-                      ...prev,
-                      [wordKey]: !prev[wordKey]
-                    }));
-                  }}
-                >
-                  {/* Invisible copy to preserve EXACT width and line wrapping */}
-                  <span className="invisible font-serif text-[15px] break-keep select-none">{w}</span>
-                  {/* Absolute overlay container */}
-                  <span className={`absolute inset-0 flex items-center justify-center rounded transition-all select-none font-serif text-[15px] leading-none px-1 ${
-                    isWordPeeked 
-                      ? 'bg-amber-100 text-neutral-900 border-b border-amber-400 font-medium' 
-                      : 'bg-neutral-100 text-neutral-400 font-mono font-bold hover:bg-neutral-200'
-                  }`}>
-                    {isWordPeeked ? w : maskLetters(w)}
-                  </span>
-                </span>
-                {' '}
-              </React.Fragment>
+              <Text
+                key={idx}
+                onPress={() =>
+                  setSinglePeekedWords((prev) => ({
+                    ...prev,
+                    [wordKey]: !prev[wordKey],
+                  }))
+                }
+                className={`font-serif text-[15px] rounded px-1 ${
+                  isWordPeeked ? 'bg-amber-100 text-neutral-900 font-medium' : 'bg-neutral-100 text-neutral-400 font-mono font-bold'
+                }`}
+              >
+                {isWordPeeked ? w : maskLetters(w)}{' '}
+              </Text>
             );
           }
 
-          // Unhidden word
           return (
-            <React.Fragment key={idx}>
-              <span className="inline-block mx-0.5 font-serif text-[15px] text-neutral-800 align-baseline select-none">
-                {w}
-              </span>
-              {' '}
-            </React.Fragment>
+            <Text key={idx} className="font-serif text-[15px] text-neutral-800">
+              {w}{' '}
+            </Text>
           );
         })}
-      </p>
+      </Text>
     );
   };
 
@@ -376,844 +378,704 @@ export default function PracticeModals({
   };
 
   return (
-    <div 
-      className="absolute inset-0 bg-white z-50 flex flex-col pt-11 pb-4 px-4 overflow-hidden" 
-      id="practice_overlay"
-    >
+    <View className="absolute inset-0 bg-white z-50 pt-11 pb-4 px-4" id="practice_overlay">
       {/* Header Bar */}
-      <div className="flex items-center justify-between border-b border-[#1A1A1A] pb-2 mb-3">
-        <div>
-          <span className="text-[9px] uppercase tracking-wider text-neutral-500 font-sans font-bold">
+      <View className="flex-row items-center justify-between border-b border-[#1A1A1A] pb-2 mb-3">
+        <View>
+          <Text className="text-[9px] uppercase tracking-wider text-neutral-500 font-sans font-bold">
             {type === 'listen' ? 'Audio Player & Looper' : type === 'type' ? 'Keyboard Recall practice' : 'Active Reveal practice'}
-          </span>
-          <h2 className="text-base font-serif font-bold text-neutral-900 leading-tight truncate max-w-[280px]">
+          </Text>
+          <Text className="text-base font-serif font-bold text-neutral-900 leading-tight max-w-[280px]" numberOfLines={1}>
             {referenceText}
-          </h2>
-        </div>
-        <button 
-          onClick={onClose} 
-          className="w-7 h-7 rounded-full border border-neutral-300 hover:border-[#1A1A1A] flex items-center justify-center text-neutral-800 hover:bg-neutral-50 transition cursor-pointer shrink-0"
-          id="close_practice_btn"
-        >
-          <X size={14} />
-        </button>
-      </div>
+          </Text>
+        </View>
+        <Pressable onPress={onClose} className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center shrink-0">
+          <X size={14} color="#262626" />
+        </Pressable>
+      </View>
 
-      {/* Main Panel - Dynamic containment, never overflows the phone frame */}
-      <div className="flex-1 min-h-0 flex flex-col justify-between py-1">
-        
+      {/* Main Panel */}
+      <View className="flex-1 justify-between py-1">
         {/* ======================================================== */}
         {/* LISTEN MODE VIEW */}
         {/* ======================================================== */}
         {type === 'listen' && (
-          <div className="flex-1 min-h-0 flex flex-col justify-between">
+          <View className="flex-1 justify-between">
             {/* Word Highlight Box */}
-            <div className="bg-neutral-50 border border-neutral-200 rounded-2xl flex-1 min-h-0 relative mb-3 flex flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
-                <div className="font-serif text-[15px] leading-relaxed text-neutral-800 text-left pb-12 space-y-3">
+            <View className="bg-neutral-50 border border-neutral-200 rounded-2xl flex-1 mb-3 overflow-hidden">
+              <ScrollView className="flex-1 p-4">
+                <Text className="font-serif text-[15px] leading-relaxed text-neutral-800 pb-12">
                   {wordObjects.map((item, index) => {
                     const isActive = index === listenWordIndex && listenPlaying;
                     const isRead = index < listenWordIndex;
-                    
-                    // Detect if this is the first word of a new verse
-                    const isFirstWordOfVerse = index === 0 || wordObjects[index - 1].verseObj.id !== item.verseObj.id;
-                    
-                    // In selection mode, is this word in the selected range?
-                    const inSelectionRange = playSource === 'selection' && 
-                      selectionStart !== null && 
-                      (selectionEnd !== null ? (index >= selectionStart && index <= selectionEnd) : (index === selectionStart));
+                    const isFirstWordOfVerse = index === 0 || wordObjects[index - 1].verseKey !== item.verseKey;
 
-                    let wordClass = "inline-block mx-0.5 cursor-pointer transition-all duration-150 rounded px-0.5 select-none ";
+                    const inSelectionRange =
+                      playSource === 'selection' &&
+                      selectionStart !== null &&
+                      (selectionEnd !== null ? index >= selectionStart && index <= selectionEnd : index === selectionStart);
+
+                    let wordClassName = 'mx-0.5 rounded px-0.5 ';
                     if (isActive) {
-                      wordClass += "bg-[#1A1A1A] text-white font-extrabold scale-105 shadow-xs px-1";
+                      wordClassName += 'bg-[#1A1A1A] text-white font-extrabold px-1';
                     } else if (playSource === 'selection' && selectionStart !== null) {
                       if (inSelectionRange) {
-                        wordClass += "bg-amber-100 text-amber-900 font-bold border-b-2 border-amber-400 hover:bg-amber-200";
+                        wordClassName += 'bg-amber-100 text-amber-900 font-bold';
                       } else {
-                        wordClass += "opacity-35 text-neutral-400 hover:text-neutral-600";
+                        wordClassName += 'opacity-35 text-neutral-400';
                       }
                     } else {
                       if (isRead) {
-                        wordClass += "text-neutral-900 font-semibold bg-neutral-200/50 hover:bg-neutral-300/40";
+                        wordClassName += 'text-neutral-900 font-semibold bg-neutral-200/50';
                       } else {
-                        wordClass += "text-neutral-400 hover:text-neutral-700";
+                        wordClassName += 'text-neutral-400';
                       }
                     }
 
                     return (
-                      <React.Fragment key={index}>
+                      <Text key={index}>
                         {isFirstWordOfVerse && (
-                          <span className="block mt-3 first:mt-0 mb-1 font-sans text-[10px] font-extrabold text-[#444] bg-neutral-150 border border-neutral-200 rounded px-2 py-0.5 w-max tracking-wide uppercase">
+                          <Text className="mt-3 mb-1 font-sans text-[10px] font-extrabold text-[#444] bg-neutral-100 border border-neutral-200 rounded px-2 py-0.5 tracking-wide uppercase">
+                            {'\n'}
                             {item.verseObj.book} {item.verseObj.chapter}:{item.verseObj.verse}
-                          </span>
+                            {'\n'}
+                          </Text>
                         )}
-                        <span 
-                          onClick={() => handleWordClick(index)}
-                          className={wordClass}
-                        >
+                        <Text onPress={() => handleWordClick(index)} className={wordClassName}>
                           {item.word}{' '}
-                        </span>
-                      </React.Fragment>
+                        </Text>
+                      </Text>
                     );
                   })}
-                </div>
-              </div>
+                </Text>
+              </ScrollView>
 
               {/* Selection Mode Instructions overlay */}
               {playSource === 'selection' && (
-                <div className="absolute top-2 right-2 text-[8.5px] font-sans font-bold bg-amber-500/10 text-amber-850 px-2 py-1 rounded border border-amber-200 flex items-center gap-1 shadow-2xs z-10 pointer-events-none">
-                  <span>{selectionStart === null ? "Tap word to set start" : selectionEnd === null ? "Tap word to set end" : "Segment active"}</span>
-                </div>
+                <View className="absolute top-2 right-2 bg-amber-500/10 px-2 py-1 rounded border border-amber-200 z-10" pointerEvents="none">
+                  <Text className="text-[8.5px] font-sans font-bold text-amber-800">
+                    {selectionStart === null ? 'Tap word to set start' : selectionEnd === null ? 'Tap word to set end' : 'Segment active'}
+                  </Text>
+                </View>
               )}
 
               {/* Static Segment control and Audio wave indicator footer bar */}
-              <div className="bg-neutral-100 border-t border-neutral-200 px-3 py-2 flex justify-between items-center shrink-0 z-10">
-                <div className="flex items-center gap-2">
+              <View className="bg-neutral-100 border-t border-neutral-200 px-3 py-2 flex-row justify-between items-center z-10">
+                <View className="flex-row items-center gap-2">
                   {playSource === 'selection' && selectionStart !== null ? (
-                    <button 
-                      onClick={() => {
+                    <Pressable
+                      onPress={() => {
                         setSelectionStart(null);
                         setSelectionEnd(null);
                         setListenWordIndex(0);
                       }}
-                      className="text-[8.5px] font-sans font-extrabold bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-800 px-2.5 py-1 rounded-lg shadow-3xs cursor-pointer flex items-center gap-1.5 transition-all"
+                      className="flex-row items-center gap-1.5 bg-white border border-neutral-300 px-2.5 py-1 rounded-lg"
                     >
-                      <RefreshCw size={10} />
-                      <span>Reset Segment</span>
-                    </button>
+                      <RefreshCw size={10} color="#262626" />
+                      <Text className="text-[8.5px] font-sans font-extrabold text-neutral-800">Reset Segment</Text>
+                    </Pressable>
                   ) : (
-                    <span className="text-[8.5px] font-sans font-bold text-neutral-450 uppercase tracking-wider">
-                      {playSource === 'selection' ? "Tap word to select segment" : "Playlist Auto-playback"}
-                    </span>
+                    <Text className="text-[8.5px] font-sans font-bold text-neutral-400 uppercase tracking-wider">
+                      {playSource === 'selection' ? 'Tap word to select segment' : 'Playlist Auto-playback'}
+                    </Text>
                   )}
-                </div>
+                </View>
 
-                {/* Sound Wave dynamic indicator */}
-                <div className="flex items-end space-x-0.5 h-5 bg-white border border-neutral-200 px-2 py-1 rounded-lg shadow-3xs">
-                  {[1, 2, 3, 4, 5].map((bar) => {
-                    const delay = (bar * 0.18).toFixed(2);
-                    return (
-                      <div 
-                        key={bar} 
-                        className="w-0.5 bg-[#1A1A1A] rounded-full"
-                        style={{
-                          height: listenPlaying ? '100%' : '15%',
-                          animationName: listenPlaying ? 'listenWave' : 'none',
-                          animationDuration: listenPlaying ? '1s' : '0s',
-                          animationTimingFunction: listenPlaying ? 'ease-in-out' : 'ease',
-                          animationIterationCount: listenPlaying ? 'infinite' : '1',
-                          animationDirection: listenPlaying ? 'alternate' : 'normal',
-                          animationDelay: `${delay}s`
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-                <style>{`
-                  @keyframes listenWave {
-                    0% { height: 10%; }
-                    100% { height: 100%; }
-                  }
-                `}</style>
-              </div>
-            </div>
+                <View className="bg-white border border-neutral-200 px-2 py-1 rounded-lg">
+                  <WaveBars active={listenPlaying} count={5} />
+                </View>
+              </View>
+            </View>
 
             {/* Custom Control and Audio Looping Panel */}
-            <div className="space-y-3.5 bg-white pt-2">
-              
+            <View className="gap-3.5 bg-white pt-2">
               {/* playlist / source options */}
               {allVerses && allVerses.length > 0 && (
-                <div className="space-y-1 bg-neutral-50 p-2 rounded-xl border border-neutral-150">
-                  <div className="flex justify-between items-center px-1">
-                    <span className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
-                      Loop Target / Playlist
-                    </span>
-                    <span className="text-[9px] font-mono font-bold text-neutral-500 bg-neutral-200 px-1.5 py-0.2 rounded-full">
+                <View className="gap-1 bg-neutral-50 p-2 rounded-xl border border-neutral-200">
+                  <View className="flex-row justify-between items-center px-1">
+                    <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">Loop Target / Playlist</Text>
+                    <Text className="text-[9px] font-mono font-bold text-neutral-500 bg-neutral-200 px-1.5 rounded-full">
                       {activePlayVerses.length} verses
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-5 gap-1 pt-0.5">
-                    {[
+                    </Text>
+                  </View>
+                  <ChipRow
+                    columns={5}
+                    value={playSource}
+                    onChange={(id) => setPlaySource(id)}
+                    options={[
                       { id: 'all', label: 'All verses' },
                       { id: 'memorization', label: 'Learning' },
                       { id: 'reviewing', label: 'Review' },
                       { id: 'priming', label: 'Priming' },
                       { id: 'selection', label: 'Selected' },
-                    ].map((src) => (
-                      <button
-                        key={src.id}
-                        onClick={() => setPlaySource(src.id as any)}
-                        className={`text-[9.5px] py-1 px-0.5 rounded-lg font-bold border transition-all cursor-pointer truncate text-center ${
-                          playSource === src.id
-                            ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                            : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
-                        }`}
-                        title={`Loop ${src.label} verses`}
-                      >
-                        {src.label}
-                      </button>
-                    ))}
-                  </div>
+                    ]}
+                  />
 
                   {playSource === 'priming' && setPrimingLookahead && (
-                    <div className="flex items-center justify-between bg-amber-50 border border-amber-100 rounded-lg p-2 mt-2 text-left transition-all">
-                      <div className="space-y-0.5">
-                        <span className="text-[9px] font-sans font-bold text-amber-850 uppercase tracking-wider block">
-                          ⚡ Priming Window Size
-                        </span>
-                        <p className="text-[8.5px] font-sans text-amber-700 leading-none">
-                          Set lookahead priming size
-                        </p>
-                      </div>
-                      <select
-                        value={primingLookahead}
-                        onChange={(e) => setPrimingLookahead(Number(e.target.value))}
-                        className="bg-white border border-amber-200 rounded px-1.5 py-0.5 text-[10px] font-mono font-bold text-amber-900 focus:outline-none cursor-pointer hover:border-amber-400"
-                      >
-                        <option value="10">10 verses</option>
-                        <option value="20">20 verses</option>
-                        <option value="30">30 verses</option>
-                        <option value="40">40 verses</option>
-                        <option value="50">50 verses</option>
-                      </select>
-                    </div>
+                    <View className="flex-row items-center justify-between bg-amber-50 border border-amber-100 rounded-lg p-2 mt-2">
+                      <View>
+                        <Text className="text-[9px] font-sans font-bold text-amber-800 uppercase tracking-wider">⚡ Priming Window Size</Text>
+                        <Text className="text-[8.5px] font-sans text-amber-700 leading-none">Set lookahead priming size</Text>
+                      </View>
+                      <View style={{ width: 90 }}>
+                        <Dropdown
+                          value={primingLookahead}
+                          onChange={(v) => setPrimingLookahead(Number(v))}
+                          options={[10, 20, 30, 40, 50].map((n) => ({ id: n, label: `${n}` }))}
+                          title="Priming Window Size"
+                        />
+                      </View>
+                    </View>
                   )}
-                </div>
+                </View>
               )}
 
               {/* Adjusters: Speed (.2 steps) and Repeat mode */}
-              <div className="grid grid-cols-2 gap-2">
+              <View className="flex-row gap-2">
                 {/* 1. Playback Speed Selector (.2 increments) */}
-                <div className="flex flex-col justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 space-y-1">
-                  <span className="text-[9px] font-sans font-bold text-neutral-500 uppercase tracking-wider pl-1 flex items-center gap-1">
-                    <Sliders size={10} /> Speed (±0.2)
-                  </span>
-                  <div className="flex items-center justify-between bg-white px-2 py-1 rounded-lg border border-neutral-150">
-                    <button
-                      onClick={() => setListenSpeed(s => Math.max(0.4, Number((s - 0.2).toFixed(1))))}
-                      className="w-5 h-5 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 rounded font-black text-xs flex items-center justify-center cursor-pointer select-none text-neutral-800"
+                <View className="flex-1 justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 gap-1">
+                  <View className="flex-row items-center gap-1">
+                    <Sliders size={10} color="#737373" />
+                    <Text className="text-[9px] font-sans font-bold text-neutral-500 uppercase tracking-wider">Speed (±0.2)</Text>
+                  </View>
+                  <View className="flex-row items-center justify-between bg-white px-2 py-1 rounded-lg border border-neutral-200">
+                    <Pressable
+                      onPress={() => setListenSpeed((s) => Math.max(0.4, Number((s - 0.2).toFixed(1))))}
+                      className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
                     >
-                      -
-                    </button>
-                    <span className="text-xs font-mono font-bold text-neutral-900">{listenSpeed.toFixed(1)}x</span>
-                    <button
-                      onClick={() => setListenSpeed(s => Math.min(2.4, Number((s + 0.2).toFixed(1))))}
-                      className="w-5 h-5 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 rounded font-black text-xs flex items-center justify-center cursor-pointer select-none text-neutral-800"
+                      <Text className="font-black text-xs text-neutral-800">-</Text>
+                    </Pressable>
+                    <Text className="text-xs font-mono font-bold text-neutral-900">{listenSpeed.toFixed(1)}x</Text>
+                    <Pressable
+                      onPress={() => setListenSpeed((s) => Math.min(2.4, Number((s + 0.2).toFixed(1))))}
+                      className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
                     >
-                      +
-                    </button>
-                  </div>
-                </div>
+                      <Text className="font-black text-xs text-neutral-800">+</Text>
+                    </Pressable>
+                  </View>
+                </View>
 
                 {/* 2. Audio Repeat Control */}
-                <div className="flex flex-col justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 space-y-1">
-                  <span className="text-[9px] font-sans font-bold text-neutral-500 uppercase tracking-wider pl-1 flex items-center gap-1">
-                    <Repeat size={10} /> Repeat Setting
-                  </span>
-                  <div className="flex space-x-0.5 bg-white p-0.5 rounded-lg border border-neutral-150">
-                    {[
+                <View className="flex-1 justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 gap-1">
+                  <View className="flex-row items-center gap-1">
+                    <Repeat size={10} color="#737373" />
+                    <Text className="text-[9px] font-sans font-bold text-neutral-500 uppercase tracking-wider">Repeat Setting</Text>
+                  </View>
+                  <ChipRow
+                    value={repeatMode}
+                    onChange={(id) => setRepeatMode(id)}
+                    options={[
                       { id: 'off', label: 'Off' },
                       { id: 'playlist', label: 'Loop' },
-                    ].map((mode) => (
-                      <button
-                        key={mode.id}
-                        onClick={() => setRepeatMode(mode.id as any)}
-                        className={`text-[9.5px] py-1 px-1 flex-1 rounded-md font-bold transition-all cursor-pointer ${
-                          repeatMode === mode.id
-                            ? 'bg-[#1A1A1A] text-white font-black'
-                            : 'bg-white text-neutral-500 hover:text-neutral-850'
-                        }`}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                    ]}
+                  />
+                </View>
+              </View>
 
               {/* Progress Slider bar */}
-              <div className="space-y-0.5">
-                <div className="flex justify-between text-[8px] font-bold text-neutral-400 font-mono px-1">
-                  <span>START</span>
-                  <span>{wordObjects.length > 0 ? Math.round((listenWordIndex / wordObjects.length) * 100) : 0}%</span>
-                  <span>END</span>
-                </div>
-                <div className="w-full bg-neutral-150 h-1.5 rounded-full overflow-hidden">
-                  <div 
-                    className="bg-[#1A1A1A] h-full transition-all duration-150"
+              <View className="gap-0.5">
+                <View className="flex-row justify-between px-1">
+                  <Text className="text-[8px] font-bold text-neutral-400 font-mono">START</Text>
+                  <Text className="text-[8px] font-bold text-neutral-400 font-mono">
+                    {wordObjects.length > 0 ? Math.round((listenWordIndex / wordObjects.length) * 100) : 0}%
+                  </Text>
+                  <Text className="text-[8px] font-bold text-neutral-400 font-mono">END</Text>
+                </View>
+                <View className="w-full bg-neutral-200 h-1.5 rounded-full overflow-hidden">
+                  <View
+                    className="bg-[#1A1A1A] h-full"
                     style={{ width: `${wordObjects.length > 0 ? (listenWordIndex / wordObjects.length) * 100 : 0}%` }}
                   />
-                </div>
-              </div>
+                </View>
+              </View>
 
               {/* Main player controls row */}
-              <div className="flex space-x-2.5 pb-1">
-                <button
-                  onClick={restartListen}
-                  className="flex-1 py-2.5 px-3 border-2 border-[#1A1A1A] rounded-xl font-sans font-bold text-xs text-[#1A1A1A] hover:bg-neutral-50 active:bg-neutral-100 flex items-center justify-center gap-1.5 transition cursor-pointer"
-                >
-                  <RefreshCw size={12} /> Restart
-                </button>
-                <button
-                  onClick={() => setListenPlaying(!listenPlaying)}
-                  className={`flex-[2] py-2.5 px-3 rounded-xl font-sans font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm text-white ${
-                    listenPlaying ? 'bg-neutral-900 hover:bg-black text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              <View className="flex-row gap-2.5 pb-1">
+                <Pressable onPress={restartListen} className="flex-1 py-2.5 px-3 border-2 border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5">
+                  <RefreshCw size={12} color="#1A1A1A" />
+                  <Text className="font-sans font-bold text-xs text-[#1A1A1A]">Restart</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setListenPlaying(!listenPlaying)}
+                  className={`flex-[2] py-2.5 px-3 rounded-xl flex-row items-center justify-center gap-1.5 ${
+                    listenPlaying ? 'bg-neutral-900' : 'bg-emerald-600'
                   }`}
                 >
-                  {listenPlaying ? <Pause size={12} className="text-white" /> : <Play size={12} className="text-white" />}
-                  <span className="text-white">{listenPlaying ? 'Pause Audio' : 'Start Looping'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
+                  {listenPlaying ? <Pause size={12} color="#ffffff" /> : <Play size={12} color="#ffffff" />}
+                  <Text className="font-sans font-bold text-xs text-white">{listenPlaying ? 'Pause Audio' : 'Start Looping'}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
         )}
 
         {/* ======================================================== */}
         {/* TYPE MODE VIEW */}
         {/* ======================================================== */}
         {type === 'type' && (
-          <div className="flex-1 min-h-0 flex flex-col justify-between relative">
+          <View className="flex-1 justify-between relative">
             {/* Local custom toast alert */}
             {localToast && (
-              <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-[#1A1A1A] text-white text-[10px] font-sans font-bold px-3.5 py-1.5 rounded-full shadow-lg z-30 animate-bounce tracking-wide shrink-0">
-                {localToast}
-              </div>
+              <BounceView style={{ position: 'absolute', top: 56, left: '50%', marginLeft: -100, zIndex: 30 }}>
+                <View className="bg-[#1A1A1A] px-3.5 py-1.5 rounded-full">
+                  <Text className="text-white text-[10px] font-sans font-bold">{localToast}</Text>
+                </View>
+              </BounceView>
             )}
 
             {/* Sub Mode Selection Tab bar */}
-            <div className="flex bg-neutral-100 p-1 rounded-xl mb-3.5 border border-neutral-200 shrink-0">
-              <button
-                onClick={() => {
+            <View className="flex-row bg-neutral-100 p-1 rounded-xl mb-3.5 border border-neutral-200 shrink-0">
+              <Pressable
+                onPress={() => {
                   setTypeSubMode('type');
                   resetTypeGame();
                 }}
-                className={`flex-1 py-1.5 rounded-lg text-[10px] uppercase tracking-wider font-sans font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  typeSubMode === 'type'
-                    ? 'bg-[#1A1A1A] text-white shadow-xs'
-                    : 'text-neutral-500 hover:text-neutral-800'
-                }`}
+                className={`flex-1 py-1.5 rounded-lg flex-row items-center justify-center gap-1.5 ${typeSubMode === 'type' ? 'bg-[#1A1A1A]' : ''}`}
               >
-                <Keyboard size={12} />
-                <span>Type Practice</span>
-              </button>
-              <button
-                onClick={() => {
+                <Keyboard size={12} color={typeSubMode === 'type' ? '#ffffff' : '#737373'} />
+                <Text className={`text-[10px] uppercase tracking-wider font-sans font-extrabold ${typeSubMode === 'type' ? 'text-white' : 'text-neutral-500'}`}>
+                  Type Practice
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
                   setTypeSubMode('speak');
                   resetTypeGame();
                 }}
-                className={`flex-1 py-1.5 rounded-lg text-[10px] uppercase tracking-wider font-sans font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  typeSubMode === 'speak'
-                    ? 'bg-[#1A1A1A] text-white shadow-xs'
-                    : 'text-neutral-500 hover:text-neutral-800'
-                }`}
+                className={`flex-1 py-1.5 rounded-lg flex-row items-center justify-center gap-1.5 ${typeSubMode === 'speak' ? 'bg-[#1A1A1A]' : ''}`}
               >
-                <Mic size={12} />
-                <span>Speak Practice</span>
-              </button>
-            </div>
+                <Mic size={12} color={typeSubMode === 'speak' ? '#ffffff' : '#737373'} />
+                <Text className={`text-[10px] uppercase tracking-wider font-sans font-extrabold ${typeSubMode === 'speak' ? 'text-white' : 'text-neutral-500'}`}>
+                  Speak Practice
+                </Text>
+              </Pressable>
+            </View>
 
             {!isFinishedTyping ? (
               typeSubMode === 'type' ? (
-                <div className="flex-1 min-h-0 flex flex-col justify-between">
+                <View className="flex-1 justify-between">
                   {/* Typing card frame */}
-                  <div className={`border-2 rounded-2xl p-4 flex-1 min-h-0 flex flex-col justify-between transition-colors duration-150 relative ${
-                    flashError ? 'border-red-500 bg-red-50' : 'border-[#1A1A1A] bg-white'
-                  }`}>
+                  <View className={`border-2 rounded-2xl p-4 flex-1 justify-between relative ${flashError ? 'border-red-500 bg-red-50' : 'border-[#1A1A1A] bg-white'}`}>
                     {/* Strike Reset Alert Overlay */}
                     {showStrikeResetAlert && (
-                      <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center text-center p-4 rounded-xl z-20 animate-fade-in">
-                        <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 mb-2">
-                          <RefreshCw size={20} className="animate-spin" />
-                        </div>
-                        <h4 className="text-sm font-sans font-extrabold text-red-900">Verse Restarting!</h4>
-                        <p className="text-[10px] text-red-700/85 font-medium px-4">
-                          You reached the strike limit. Let's try this verse again from the beginning!
-                        </p>
-                      </div>
+                      <FadeInView style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
+                        <View className="flex-1 bg-white/95 items-center justify-center p-4 rounded-xl">
+                          <SpinView>
+                            <View className="w-10 h-10 rounded-full bg-red-100 items-center justify-center mb-2">
+                              <RefreshCw size={20} color="#dc2626" />
+                            </View>
+                          </SpinView>
+                          <Text className="text-sm font-sans font-extrabold text-red-900">Verse Restarting!</Text>
+                          <Text className="text-[10px] text-red-700/85 font-medium px-4 text-center">
+                            You reached the strike limit. Let's try this verse again from the beginning!
+                          </Text>
+                        </View>
+                      </FadeInView>
                     )}
 
-                    <div className="overflow-y-auto flex-1 mb-2 scrollbar-thin text-left">
-                      <span className="text-[9px] font-sans font-bold text-neutral-400 tracking-wider block mb-1">
+                    <ScrollView className="flex-1 mb-2">
+                      <Text className="text-[9px] font-sans font-bold text-neutral-400 tracking-wider mb-1">
                         Typing Practice Passage — {verses.length} {verses.length === 1 ? 'verse' : 'verses'} ({referenceText})
-                      </span>
-                      
-                      <div className="font-serif text-[15px] leading-relaxed text-neutral-800 text-left space-y-3">
+                      </Text>
+
+                      <View className="gap-3">
                         {verses.map((v, vIdx) => {
                           const isPastVerse = vIdx < currentTypeVerseIdx;
                           const isCurrentVerse = vIdx === currentTypeVerseIdx;
                           const words = v.text.split(/\s+/);
 
                           return (
-                            <div key={`${v.book}-${v.chapter}-${v.verse}`} className="mb-2">
-                              <p className="font-serif text-[15px] leading-relaxed text-neutral-800 tracking-wide">
-                                <span className="font-sans text-[10px] font-bold text-neutral-400 mr-1 align-super">
-                                  {v.verse}
-                                </span>
-                                {words.map((w, idx) => {
-                                  let isWordTyped = false;
-                                  let isWordCurrent = false;
+                            <Text key={`${v.book}-${v.chapter}-${v.verse}`} className="font-serif text-[15px] leading-relaxed text-neutral-800">
+                              <Text className="font-sans text-[10px] font-bold text-neutral-400">{v.verse} </Text>
+                              {words.map((w, idx) => {
+                                let isWordTyped = false;
+                                let isWordCurrent = false;
 
-                                  if (isPastVerse) {
+                                if (isPastVerse) {
+                                  isWordTyped = true;
+                                } else if (isCurrentVerse) {
+                                  if (idx < typeWordIdx) {
                                     isWordTyped = true;
-                                  } else if (isCurrentVerse) {
-                                    if (idx < typeWordIdx) {
-                                      isWordTyped = true;
-                                    } else if (idx === typeWordIdx) {
-                                      isWordCurrent = true;
-                                    }
+                                  } else if (idx === typeWordIdx) {
+                                    isWordCurrent = true;
                                   }
+                                }
 
-                                  if (isWordTyped) {
-                                    return (
-                                      <React.Fragment key={idx}>
-                                        <span className="inline-block mx-0.5 font-serif text-[15px] text-neutral-900 font-semibold align-baseline">
-                                          {w}
-                                        </span>
-                                        {' '}
-                                      </React.Fragment>
-                                    );
-                                  }
-
+                                if (isWordTyped) {
                                   return (
-                                    <React.Fragment key={idx}>
-                                      <span 
-                                        className={`relative inline-block mx-0.5 select-none align-baseline transition-all rounded ${
-                                          isWordCurrent ? 'ring-2 ring-neutral-400' : ''
-                                        }`}
-                                      >
-                                        {/* Invisible copy to preserve exact dimension stability */}
-                                        <span className="invisible font-serif text-[15px] break-keep select-none">{w}</span>
-                                        {/* Absolute masked dots overlay */}
-                                        <span className={`absolute inset-0 flex items-center justify-center rounded transition-all select-none font-serif text-[15px] leading-none px-1 ${
-                                          isWordCurrent 
-                                            ? 'bg-amber-50 text-neutral-500 font-mono font-bold animate-pulse' 
-                                            : 'bg-neutral-50/50 text-neutral-300 font-mono font-bold'
-                                        }`}>
-                                          {maskLetters(w)}
-                                        </span>
-                                      </span>
-                                      {' '}
-                                    </React.Fragment>
+                                    <Text key={idx} className="font-serif text-[15px] text-neutral-900 font-semibold">
+                                      {w}{' '}
+                                    </Text>
                                   );
-                                })}
-                              </p>
-                            </div>
+                                }
+
+                                return (
+                                  <Text
+                                    key={idx}
+                                    className={`font-serif text-[15px] rounded px-1 font-mono font-bold ${
+                                      isWordCurrent ? 'bg-amber-50 text-neutral-500' : 'bg-neutral-50 text-neutral-300'
+                                    }`}
+                                  >
+                                    {maskLetters(w)}{' '}
+                                  </Text>
+                                );
+                              })}
+                            </Text>
                           );
                         })}
-                      </div>
-                    </div>
+                      </View>
+                    </ScrollView>
 
                     {/* Input row */}
-                    <div className="space-y-2.5 pt-2">
-                      <div className="flex justify-between items-center text-[10px] text-neutral-450 font-bold px-1">
-                        <div className="flex items-center gap-2">
-                          <span>STRIKES: <span className={typeErrors > 0 ? 'text-red-600' : ''}>{typeErrors}</span></span>
+                    <View className="gap-2.5 pt-2">
+                      <View className="flex-row justify-between items-center px-1">
+                        <View className="flex-row items-center gap-2">
+                          <Text className="text-[10px] text-neutral-400 font-bold">
+                            STRIKES: <Text className={typeErrors > 0 ? 'text-red-600' : ''}>{typeErrors}</Text>
+                          </Text>
                           {strikeLimit !== 'unlimited' && (
-                            <>
-                              <span className="text-neutral-300">|</span>
-                              <span className="text-red-500 font-medium">Verse errors: {verseStrikes}/{strikeLimit}</span>
-                            </>
+                            <Text className="text-[10px] text-red-500 font-medium">Verse errors: {verseStrikes}/{strikeLimit}</Text>
                           )}
-                        </div>
-                        <span>{typeWordIdx} of {typeWords.length} words</span>
-                      </div>
+                        </View>
+                        <Text className="text-[10px] text-neutral-400 font-bold">{typeWordIdx} of {typeWords.length} words</Text>
+                      </View>
 
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={typedInput}
-                          onChange={handleTypeChar}
-                          placeholder={showStrikeResetAlert ? "Resetting..." : "Type first letter of each word..."}
-                          className="w-full bg-neutral-50 border border-neutral-300 rounded-xl py-2 px-3 text-center font-sans font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-[#1A1A1A] text-neutral-900"
-                          autoFocus
-                          disabled={showStrikeResetAlert}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                      <TextInput
+                        value={typedInput}
+                        onChangeText={handleTypeChar}
+                        placeholder={showStrikeResetAlert ? 'Resetting...' : 'Type first letter of each word...'}
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl py-2 px-3 text-center font-sans font-semibold text-xs text-neutral-900"
+                        autoFocus
+                        editable={!showStrikeResetAlert}
+                      />
+                    </View>
+                  </View>
 
                   {/* Accuracy Settings Bar */}
-                  <div className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 space-y-1.5 text-left">
-                    <div className="flex justify-between items-center px-1">
-                      <span className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
-                        Strike Reset Limit (Accuracy Assist)
-                      </span>
-                      <span className="text-[9px] font-mono font-bold text-neutral-500">
+                  <View className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-1.5">
+                    <View className="flex-row justify-between items-center px-1">
+                      <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">Strike Reset Limit (Accuracy Assist)</Text>
+                      <Text className="text-[9px] font-mono font-bold text-neutral-500">
                         {strikeLimit === 'unlimited' ? 'No Reset' : `${strikeLimit} Max Strikes`}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1">
-                      {([3, 5, 10, 'unlimited'] as const).map((limit) => (
-                        <button
-                          key={limit}
-                          onClick={() => {
-                            setStrikeLimit(limit);
-                            setVerseStrikes(0);
-                          }}
-                          className={`text-[9.5px] py-1 rounded-lg font-bold border transition-all cursor-pointer text-center ${
-                            strikeLimit === limit
-                              ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                              : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
-                          }`}
-                        >
-                          {limit === 'unlimited' ? 'Off' : `${limit} errors`}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                      </Text>
+                    </View>
+                    <ChipRow
+                      columns={4}
+                      value={strikeLimit === 'unlimited' ? 'unlimited' : strikeLimit}
+                      onChange={(id) => {
+                        const limit = id === 'unlimited' ? 'unlimited' : Number(id);
+                        setStrikeLimit(limit as number | 'unlimited');
+                        setVerseStrikes(0);
+                      }}
+                      options={[3, 5, 10, 'unlimited'].map((limit) => ({
+                        id: limit as number | 'unlimited',
+                        label: limit === 'unlimited' ? 'Off' : `${limit} errors`,
+                      }))}
+                    />
+                  </View>
 
                   {/* Keyboard Game Options */}
-                  <div className="mt-2 flex space-x-2.5">
-                    <button
-                      onClick={resetTypeGame}
-                      className="flex-1 py-2 px-3 border border-neutral-300 rounded-xl font-sans font-bold text-xs text-neutral-600 hover:bg-neutral-50 flex items-center justify-center gap-1.5 transition cursor-pointer"
-                    >
-                      <RefreshCw size={12} /> Reset Passage
-                    </button>
-                    <button
-                      onClick={handleHint}
-                      className="flex-1 py-2 px-3 border-2 border-[#1A1A1A] rounded-xl font-sans font-bold text-xs text-neutral-900 hover:bg-neutral-50 flex items-center justify-center gap-1.5 transition cursor-pointer"
-                    >
-                      Reveal Word
-                    </button>
-                  </div>
-                </div>
+                  <View className="mt-2 flex-row gap-2.5">
+                    <Pressable onPress={resetTypeGame} className="flex-1 py-2 px-3 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5">
+                      <RefreshCw size={12} color="#525252" />
+                      <Text className="font-sans font-bold text-xs text-neutral-600">Reset Passage</Text>
+                    </Pressable>
+                    <Pressable onPress={handleHint} className="flex-1 py-2 px-3 border-2 border-[#1A1A1A] rounded-xl items-center justify-center">
+                      <Text className="font-sans font-bold text-xs text-neutral-900">Reveal Word</Text>
+                    </Pressable>
+                  </View>
+                </View>
               ) : (
                 /* SPEAK SUB-MODE SKELETON */
-                <div className="flex-1 min-h-0 flex flex-col justify-between">
-                  <div className="border border-neutral-200 rounded-2xl p-4 flex-1 min-h-0 flex flex-col justify-between bg-white relative">
-                    <div className="overflow-y-auto flex-1 mb-2 scrollbar-thin text-left">
-                      <span className="text-[9px] font-sans font-bold text-[#1A1A1A] tracking-wider block mb-1">
+                <View className="flex-1 justify-between">
+                  <View className="border border-neutral-200 rounded-2xl p-4 flex-1 justify-between bg-white relative">
+                    <ScrollView className="flex-1 mb-2">
+                      <Text className="text-[9px] font-sans font-bold text-[#1A1A1A] tracking-wider mb-1">
                         Spoken Practice Passage — {verses.length} {verses.length === 1 ? 'verse' : 'verses'} ({referenceText})
-                      </span>
-                      
-                      <div className="font-serif text-[15px] leading-relaxed text-neutral-800 text-left space-y-3">
+                      </Text>
+
+                      <View className="gap-3">
                         {verses.map((v, vIdx) => {
                           const words = v.text.split(/\s+/);
                           const isPastVerse = vIdx < currentTypeVerseIdx;
                           const isCurrentVerse = vIdx === currentTypeVerseIdx;
 
                           return (
-                            <div key={`${v.book}-${v.chapter}-${v.verse}`} className="mb-2">
-                              <p className="font-serif text-[15px] leading-relaxed text-neutral-800 tracking-wide">
-                                <span className="font-sans text-[10px] font-bold text-neutral-400 mr-1 align-super">
-                                  {v.verse}
-                                </span>
-                                {words.map((w, idx) => {
-                                  let isWordSpoken = false;
-                                  let isWordCurrent = false;
+                            <Text key={`${v.book}-${v.chapter}-${v.verse}`} className="font-serif text-[15px] leading-relaxed text-neutral-800">
+                              <Text className="font-sans text-[10px] font-bold text-neutral-400">{v.verse} </Text>
+                              {words.map((w, idx) => {
+                                let isWordSpoken = false;
+                                let isWordCurrent = false;
 
-                                  if (isPastVerse) {
+                                if (isPastVerse) {
+                                  isWordSpoken = true;
+                                } else if (isCurrentVerse) {
+                                  if (idx < typeWordIdx) {
                                     isWordSpoken = true;
-                                  } else if (isCurrentVerse) {
-                                    if (idx < typeWordIdx) {
-                                      isWordSpoken = true;
-                                    } else if (idx === typeWordIdx) {
-                                      isWordCurrent = true;
-                                    }
+                                  } else if (idx === typeWordIdx) {
+                                    isWordCurrent = true;
                                   }
+                                }
 
-                                  if (isWordSpoken) {
-                                    return (
-                                      <span key={idx} className="inline-block mx-0.5 text-emerald-600 font-semibold transition-all">
-                                        {w}{' '}
-                                      </span>
-                                    );
-                                  }
-
+                                if (isWordSpoken) {
                                   return (
-                                    <span 
-                                      key={idx} 
-                                      className={`relative inline-block mx-0.5 select-none align-baseline transition-all rounded ${
-                                        isWordCurrent ? 'ring-2 ring-indigo-500 bg-indigo-50/50' : ''
-                                      }`}
-                                    >
-                                      <span className="invisible font-serif text-[15px] break-keep select-none">{w}</span>
-                                      <span className={`absolute inset-0 flex items-center justify-center rounded transition-all select-none font-serif text-[15px] leading-none px-1 ${
-                                        isWordCurrent 
-                                          ? 'bg-indigo-50 text-indigo-600 font-bold animate-pulse' 
-                                          : 'bg-neutral-50/50 text-neutral-300 font-mono font-bold'
-                                      }`}>
-                                        {maskLetters(w)}
-                                      </span>
-                                    </span>
+                                    <Text key={idx} className="text-emerald-600 font-semibold">
+                                      {w}{' '}
+                                    </Text>
                                   );
-                                })}
-                              </p>
-                            </div>
+                                }
+
+                                return (
+                                  <Text
+                                    key={idx}
+                                    className={`rounded px-1 font-mono font-bold ${
+                                      isWordCurrent ? 'bg-indigo-50 text-indigo-600' : 'bg-neutral-50 text-neutral-300'
+                                    }`}
+                                  >
+                                    {maskLetters(w)}{' '}
+                                  </Text>
+                                );
+                              })}
+                            </Text>
                           );
                         })}
-                      </div>
-                    </div>
+                      </View>
+                    </ScrollView>
 
                     {/* Microphone waveform visualization card */}
-                    <div className="bg-neutral-50 border border-neutral-150 rounded-xl p-3.5 space-y-3 mt-2">
-                      <div className="flex justify-between items-center text-[10px] text-neutral-550 font-bold font-sans">
-                        <span className="text-neutral-450 uppercase tracking-wider">Voice Assist Status</span>
-                        <span className="font-mono font-extrabold text-neutral-600">
-                          {isListeningSpeak ? 'LISTENING...' : 'MIC STANDBY'}
-                        </span>
-                      </div>
+                    <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-3.5 gap-3 mt-2">
+                      <View className="flex-row justify-between items-center">
+                        <Text className="text-[10px] text-neutral-400 font-bold font-sans uppercase tracking-wider">Voice Assist Status</Text>
+                        <Text className="text-[10px] font-mono font-extrabold text-neutral-600">{isListeningSpeak ? 'LISTENING...' : 'MIC STANDBY'}</Text>
+                      </View>
 
-                      {/* Animated audio wave or standby text */}
-                      <div className="h-9 flex items-center justify-center bg-white rounded-lg border border-neutral-150 px-3 relative overflow-hidden">
+                      <View className="h-9 items-center justify-center bg-white rounded-lg border border-neutral-200 px-3">
                         {isListeningSpeak ? (
-                          <div className="flex items-center gap-[3px]">
-                            {Array.from({ length: 18 }).map((_, idx) => (
-                              <div
-                                key={idx}
-                                className="w-0.5 bg-indigo-600 rounded-full animate-pulse"
-                                style={{
-                                  height: `${Math.floor(Math.random() * 22) + 6}px`,
-                                  animationDelay: `${idx * 0.04}s`,
-                                  animationDuration: '0.65s'
-                                }}
-                              />
-                            ))}
-                          </div>
+                          <WaveBars active count={18} />
                         ) : (
-                          <span className="text-[10px] text-neutral-400 font-sans font-semibold">
-                            Tap microphone below to speak and recite
-                          </span>
+                          <Text className="text-[10px] text-neutral-400 font-sans font-semibold">Tap microphone below to speak and recite</Text>
                         )}
-                      </div>
+                      </View>
 
                       {/* Microphone control button */}
-                      <div className="flex justify-center py-0.5">
-                        <button
-                          onClick={() => {
+                      <View className="items-center py-0.5">
+                        <Pressable
+                          onPress={() => {
                             const next = !isListeningSpeak;
                             setIsListeningSpeak(next);
                             if (next) {
-                              triggerLocalToast("Microphone active! Speak now... 🎙️");
+                              triggerLocalToast('Microphone active! Speak now... 🎙️');
                             } else {
-                              triggerLocalToast("Microphone in standby.");
+                              triggerLocalToast('Microphone in standby.');
                             }
                           }}
-                          className={`w-11 h-11 rounded-full flex items-center justify-center transition shadow-md cursor-pointer ${
-                            isListeningSpeak 
-                              ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' 
-                              : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                          }`}
+                          className={`w-11 h-11 rounded-full items-center justify-center ${isListeningSpeak ? 'bg-red-500' : 'bg-indigo-600'}`}
                         >
-                          {isListeningSpeak ? <MicOff size={18} /> : <Mic size={18} />}
-                        </button>
-                      </div>
+                          {isListeningSpeak ? <MicOff size={18} color="#ffffff" /> : <Mic size={18} color="#ffffff" />}
+                        </Pressable>
+                      </View>
 
                       {/* Simulate speech button for high-fidelity evaluation interaction */}
-                      <div className="flex justify-between items-center border-t border-neutral-150 pt-2.5">
-                        <span className="text-[9px] text-neutral-400 font-bold font-sans uppercase">
-                          Recital Simulation
-                        </span>
-                        <button
-                          onClick={() => {
+                      <View className="flex-row justify-between items-center border-t border-neutral-200 pt-2.5">
+                        <Text className="text-[9px] text-neutral-400 font-bold font-sans uppercase">Recital Simulation</Text>
+                        <Pressable
+                          onPress={() => {
                             if (currentTypeVerseIdx >= verses.length) return;
                             if (typeWordIdx < typeWords.length - 1) {
                               const spokenWord = typeWords[typeWordIdx];
-                              setTypeWordIdx(prev => prev + 1);
+                              setTypeWordIdx((prev) => prev + 1);
                               triggerLocalToast(`Spoken word: "${spokenWord}" ✓`);
                             } else {
                               if (currentTypeVerseIdx < verses.length - 1) {
-                                setCurrentTypeVerseIdx(prev => prev + 1);
+                                setCurrentTypeVerseIdx((prev) => prev + 1);
                                 setTypeWordIdx(0);
-                                triggerLocalToast("Great! Next verse ➔");
+                                triggerLocalToast('Great! Next verse ➔');
                               } else {
                                 setIsFinishedTyping(true);
-                                triggerLocalToast("Perfect recital completed! 🎉");
+                                triggerLocalToast('Perfect recital completed! 🎉');
                               }
                             }
                           }}
-                          className="px-2.5 py-1 text-[9px] font-sans font-extrabold uppercase bg-white border border-neutral-250 hover:bg-neutral-50 text-neutral-700 rounded-lg transition-all shadow-3xs flex items-center gap-1 cursor-pointer"
+                          className="px-2.5 py-1 bg-white border border-neutral-200 rounded-lg"
                         >
-                          <span>Simulate Voice Word ➔</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                          <Text className="text-[9px] font-sans font-extrabold uppercase text-neutral-700">Simulate Voice Word ➔</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
 
                   {/* Reset controls */}
-                  <div className="mt-2.5 flex gap-2">
-                    <button
-                      onClick={() => {
+                  <View className="mt-2.5 flex-row gap-2">
+                    <Pressable
+                      onPress={() => {
                         resetTypeGame();
                         setIsListeningSpeak(false);
-                        triggerLocalToast("Recital practice reset.");
+                        triggerLocalToast('Recital practice reset.');
                       }}
-                      className="flex-1 py-2 px-3 border border-neutral-300 rounded-xl font-sans font-bold text-xs text-neutral-600 hover:bg-neutral-50 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      className="flex-1 py-2 px-3 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5"
                     >
-                      <RefreshCw size={12} /> Reset Recital
-                    </button>
-                  </div>
-                </div>
+                      <RefreshCw size={12} color="#525252" />
+                      <Text className="font-sans font-bold text-xs text-neutral-600">Reset Recital</Text>
+                    </Pressable>
+                  </View>
+                </View>
               )
             ) : (
-              /* Success panel - ensures everything fits */
-              <div className="flex-1 flex flex-col justify-center items-center text-center p-4 space-y-4 overflow-y-auto scrollbar-thin">
-                <div className="w-12 h-12 bg-neutral-100 border-2 border-[#1A1A1A] rounded-full flex items-center justify-center text-neutral-900 shrink-0">
-                  <Sparkles size={24} className="animate-bounce" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-serif font-bold text-neutral-900 leading-tight">Excellent Memory Recall!</h3>
-                  <p className="text-xs text-neutral-500 font-sans mt-0.5">
+              /* Success panel */
+              <ScrollView className="flex-1" contentContainerClassName="items-center justify-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
+                <BounceView>
+                  <View className="w-12 h-12 bg-neutral-100 border-2 border-[#1A1A1A] rounded-full items-center justify-center">
+                    <Sparkles size={24} color="#171717" />
+                  </View>
+                </BounceView>
+                <View className="items-center">
+                  <Text className="text-lg font-serif font-bold text-neutral-900 leading-tight">Excellent Memory Recall!</Text>
+                  <Text className="text-xs text-neutral-500 font-sans mt-0.5">
                     Completed typing with {typeErrors} {typeErrors === 1 ? 'mistake' : 'mistakes'}.
-                  </p>
-                </div>
+                  </Text>
+                </View>
 
-                <div className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-left font-serif italic text-xs text-neutral-600 space-y-1.5 max-h-[110px] overflow-y-auto scrollbar-thin">
-                  {verses.map(v => (
-                    <p key={v.verse}>
-                      <span className="font-sans text-[9px] font-bold text-neutral-400 not-italic mr-1">{v.verse}</span>
-                      {v.text}
-                    </p>
-                  ))}
-                </div>
+                <View className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 gap-1.5 max-h-[110px]">
+                  <ScrollView>
+                    {verses.map((v) => (
+                      <Text key={v.verse} className="font-serif italic text-xs text-neutral-600">
+                        <Text className="font-sans text-[9px] font-bold text-neutral-400 not-italic">{v.verse} </Text>
+                        {v.text}
+                      </Text>
+                    ))}
+                  </ScrollView>
+                </View>
 
-                <div className="w-full space-y-2 shrink-0">
-                  <button
-                    onClick={() => {
+                <View className="w-full gap-2">
+                  <Pressable
+                    onPress={() => {
                       onUpdateStatus(verses, 'memorized', 'type');
                       onClose();
                     }}
-                    className="w-full py-2.5 px-3 bg-emerald-600 text-white rounded-xl font-sans font-bold text-xs hover:bg-emerald-700 flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                    className="w-full py-2.5 px-3 bg-emerald-600 rounded-xl flex-row items-center justify-center gap-1.5"
                   >
-                    <Check size={14} /> Mark as Memorized
-                  </button>
-                  <button
-                    onClick={() => {
+                    <Check size={14} color="#ffffff" />
+                    <Text className="font-sans font-bold text-xs text-white">Mark as Memorized</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
                       onUpdateStatus(verses, 'learning');
                       onClose();
                     }}
-                    className="w-full py-2.5 px-3 bg-[#1A1A1A] text-white rounded-xl font-sans font-bold text-xs hover:bg-neutral-800 transition cursor-pointer"
+                    className="w-full py-2.5 px-3 bg-[#1A1A1A] rounded-xl items-center"
                   >
-                    Mark as Practiced
-                  </button>
-                  <button
-                    onClick={resetTypeGame}
-                    className="w-full py-1 text-[10.5px] text-neutral-500 hover:text-neutral-900 font-bold transition cursor-pointer"
-                  >
-                    Practice Again
-                  </button>
-                </div>
-              </div>
+                    <Text className="font-sans font-bold text-xs text-white">Mark as Practiced</Text>
+                  </Pressable>
+                  <Pressable onPress={resetTypeGame} className="w-full py-1 items-center">
+                    <Text className="text-[10.5px] text-neutral-500 font-bold">Practice Again</Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
             )}
-          </div>
+          </View>
         )}
 
         {/* ======================================================== */}
         {/* REVEAL MODE VIEW */}
         {/* ======================================================== */}
         {type === 'reveal' && (
-          <div className="flex-1 min-h-0 flex flex-col justify-between">
+          <View className="flex-1 justify-between">
             {/* Reading Box */}
-            <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 flex-1 overflow-y-auto min-h-0 flex flex-col justify-start relative scrollbar-thin mb-3">
-              <div className="space-y-3 pb-8">
-                {verses.map((v) => (
-                  <div key={v.verse}>
-                    {renderMaskedText(v)}
-                  </div>
-                ))}
-              </div>
-
-              <div className="absolute bottom-3 left-3 flex items-center gap-1 text-[9px] text-neutral-400 font-bold font-sans bg-white/90 p-1 rounded border border-neutral-100">
-                <Info size={10} />
-                <span>Tap dots to peek, or use slider below</span>
-              </div>
-            </div>
+            <ScrollView className="bg-neutral-50 border border-neutral-200 rounded-2xl flex-1 mb-3" contentContainerClassName="p-4 gap-3 pb-8">
+              {verses.map((v) => (
+                <View key={v.verse}>{renderMaskedText(v)}</View>
+              ))}
+              <View className="flex-row items-center gap-1 bg-white/90 p-1 rounded border border-neutral-100 self-start">
+                <Info size={10} color="#a3a3a3" />
+                <Text className="text-[9px] text-neutral-400 font-bold font-sans">Tap dots to peek, or use slider below</Text>
+              </View>
+            </ScrollView>
 
             {/* Bottom Slider & Feedback buttons */}
-            <div className="space-y-3 shrink-0">
+            <View className="gap-3 shrink-0">
               {/* Slider Control */}
-              <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-3 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-sans font-bold text-neutral-600">Masking Strength</span>
-                  <span className="text-[10px] font-mono font-bold text-neutral-900">{maskLevel}% Hidden</span>
-                </div>
-                
-                <div className="flex items-center space-x-2.5">
-                  <button
-                    onClick={() => setMaskLevel(0)}
-                    className="text-[9px] font-sans font-extrabold text-neutral-400 hover:text-[#1A1A1A] transition cursor-pointer"
-                  >
-                    VISIBLE
-                  </button>
-                  
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="25"
-                    value={maskLevel}
-                    onChange={(e) => setMaskLevel(Number(e.target.value))}
-                    className="flex-1 h-1.5 bg-neutral-300 rounded-lg appearance-none cursor-pointer accent-[#1A1A1A] focus:outline-none"
-                  />
-                  
-                  <button
-                    onClick={() => setMaskLevel(100)}
-                    className="text-[9px] font-sans font-extrabold text-neutral-400 hover:text-[#1A1A1A] transition cursor-pointer"
-                  >
-                    BLANK
-                  </button>
-                </div>
+              <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-3 gap-2">
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-[10px] font-sans font-bold text-neutral-600">Masking Strength</Text>
+                  <Text className="text-[10px] font-mono font-bold text-neutral-900">{maskLevel}% Hidden</Text>
+                </View>
 
-                <button
-                  onMouseDown={() => setPeekActive(true)}
-                  onMouseUp={() => setPeekActive(false)}
-                  onMouseLeave={() => setPeekActive(false)}
-                  onTouchStart={() => setPeekActive(true)}
-                  onTouchEnd={() => setPeekActive(false)}
-                  className={`w-full py-1.5 border rounded-lg flex items-center justify-center gap-1.5 font-sans font-bold text-[11px] transition cursor-pointer ${
-                    peekActive 
-                      ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' 
-                      : 'bg-white text-neutral-800 border-neutral-300 hover:bg-neutral-50'
+                <View className="flex-row items-center gap-2.5">
+                  <Pressable onPress={() => setMaskLevel(0)}>
+                    <Text className="text-[9px] font-sans font-extrabold text-neutral-400">VISIBLE</Text>
+                  </Pressable>
+
+                  <Slider
+                    style={{ flex: 1, height: 24 }}
+                    minimumValue={0}
+                    maximumValue={100}
+                    step={25}
+                    value={maskLevel}
+                    onValueChange={setMaskLevel}
+                    minimumTrackTintColor="#1A1A1A"
+                    maximumTrackTintColor="#d4d4d4"
+                  />
+
+                  <Pressable onPress={() => setMaskLevel(100)}>
+                    <Text className="text-[9px] font-sans font-extrabold text-neutral-400">BLANK</Text>
+                  </Pressable>
+                </View>
+
+                <Pressable
+                  onPressIn={() => setPeekActive(true)}
+                  onPressOut={() => setPeekActive(false)}
+                  className={`w-full py-1.5 border rounded-lg flex-row items-center justify-center gap-1.5 ${
+                    peekActive ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-300'
                   }`}
                 >
-                  {peekActive ? <EyeOff size={12} /> : <Eye size={12} />}
-                  {peekActive ? 'Peeking (release to hide)' : 'Hold to Peek All'}
-                </button>
-              </div>
+                  {peekActive ? <EyeOff size={12} color="#ffffff" /> : <Eye size={12} color="#262626" />}
+                  <Text className={`font-sans font-bold text-[11px] ${peekActive ? 'text-white' : 'text-neutral-800'}`}>
+                    {peekActive ? 'Peeking (release to hide)' : 'Hold to Peek All'}
+                  </Text>
+                </Pressable>
+              </View>
 
               {/* Assessment Panel */}
-              <div>
-                <p className="text-center text-[9px] font-sans font-bold text-neutral-400 tracking-wider mb-1.5 uppercase">
+              <View>
+                <Text className="text-center text-[9px] font-sans font-bold text-neutral-400 tracking-wider mb-1.5 uppercase">
                   How well did you recall this passage?
-                </p>
-                <div className="flex flex-col space-y-2">
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => {
+                </Text>
+                <View className="gap-2">
+                  <View className="flex-row gap-2">
+                    <Pressable
+                      onPress={() => {
                         onUpdateStatus(verses, 'memorized', 'reveal');
                         onClose();
                       }}
-                      className="flex-1 py-2 px-1 bg-emerald-600 text-white rounded-xl font-sans font-bold text-[10.5px] hover:bg-emerald-700 flex items-center justify-center gap-1 transition shadow-xs cursor-pointer"
+                      className="flex-1 py-2 px-1 bg-emerald-600 rounded-xl items-center"
                     >
-                      I Got It! (Log Reveal) 🌟
-                    </button>
-                    <button
-                      onClick={() => {
+                      <Text className="font-sans font-bold text-[10.5px] text-white">I Got It! (Log Reveal) 🌟</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
                         onUpdateStatus(verses, 'memorized', 'speak');
                         onClose();
                       }}
-                      className="flex-1 py-2 px-1 bg-indigo-600 text-white rounded-xl font-sans font-bold text-[10.5px] hover:bg-indigo-700 flex items-center justify-center gap-1 transition shadow-xs cursor-pointer"
+                      className="flex-1 py-2 px-1 bg-indigo-600 rounded-xl items-center"
                     >
-                      Perfect Recital! (Voice) 🎙️
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => {
+                      <Text className="font-sans font-bold text-[10.5px] text-white">Perfect Recital! (Voice) 🎙️</Text>
+                    </Pressable>
+                  </View>
+                  <Pressable
+                    onPress={() => {
                       onUpdateStatus(verses, 'learning');
                       onClose();
                     }}
-                    className="w-full py-1.5 border border-dashed border-neutral-300 hover:border-neutral-800 rounded-xl font-sans font-bold text-[10.5px] text-neutral-500 hover:text-neutral-900 transition cursor-pointer"
+                    className="w-full py-1.5 border border-dashed border-neutral-300 rounded-xl items-center"
                   >
-                    Need Practice 🔄
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+                    <Text className="font-sans font-bold text-[10.5px] text-neutral-500">Need Practice 🔄</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </View>
         )}
-
-      </div>
-    </div>
+      </View>
+    </View>
   );
 }
