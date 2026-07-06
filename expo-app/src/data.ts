@@ -264,6 +264,10 @@ export const DEFAULT_PLANS: MemoryPlan[] = [
     dailyPhaseWeeks: 7,
     weeklyPhaseMonths: 6,
     monthlyPhaseYears: 5,
+    masteryTouches: 3,
+    reviewsRequired: 1,
+    sabbathEnabled: false,
+    sabbathDay: 'Su',
     isActive: true,
     updatedAt: new Date().toISOString()
   },
@@ -280,6 +284,10 @@ export const DEFAULT_PLANS: MemoryPlan[] = [
     dailyPhaseWeeks: 7,
     weeklyPhaseMonths: 6,
     monthlyPhaseYears: 5,
+    masteryTouches: 3,
+    reviewsRequired: 1,
+    sabbathEnabled: false,
+    sabbathDay: 'Su',
     isActive: false,
     updatedAt: new Date().toISOString()
   },
@@ -296,6 +304,10 @@ export const DEFAULT_PLANS: MemoryPlan[] = [
     dailyPhaseWeeks: 7,
     weeklyPhaseMonths: 6,
     monthlyPhaseYears: 5,
+    masteryTouches: 3,
+    reviewsRequired: 1,
+    sabbathEnabled: false,
+    sabbathDay: 'Su',
     isActive: false,
     updatedAt: new Date().toISOString()
   }

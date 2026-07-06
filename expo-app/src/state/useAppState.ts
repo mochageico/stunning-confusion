@@ -290,6 +290,32 @@ const describeMissOutcome = (
   }
 };
 
+// Sabbath support: a plan can designate one weekday as a full day off from
+// both learning and review. The engine treats it as not existing for
+// scheduling purposes -- due dates never land on it, and time spent on it
+// doesn't count as elapsed when detecting silently-missed review cycles.
+const DAY_ABBREVS = ['Su', 'M', 'T', 'W', 'Th', 'F', 'S']; // index matches Date.getDay()
+
+const advancePastSabbath = (date: Date, sabbathEnabled: boolean, sabbathDay: string): Date => {
+  if (!sabbathEnabled) return date;
+  const result = new Date(date);
+  while (DAY_ABBREVS[result.getDay()] === sabbathDay) {
+    result.setDate(result.getDate() + 1);
+  }
+  return result;
+};
+
+const countSabbathDaysInRange = (from: Date, to: Date, sabbathDay: string): number => {
+  let count = 0;
+  const cursor = new Date(from);
+  cursor.setDate(cursor.getDate() + 1);
+  while (cursor <= to) {
+    if (DAY_ABBREVS[cursor.getDay()] === sabbathDay) count++;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+};
+
 /**
  * Centralizes every piece of state and business-logic handler from the original
  * web app's single-file App component. Screens receive the return value of this
@@ -410,6 +436,10 @@ export function useAppState() {
   // 3-Touch Mastery & Group Plan States
   const [masteryTouches, setMasteryTouches] = useState<number>(3);
   const [reviewsRequired, setReviewsRequired] = useState<number>(1);
+  // Sabbath: an optional single weekday, off by default, free from both
+  // learning and reviewing -- the engine treats it as not existing at all.
+  const [sabbathEnabled, setSabbathEnabled] = useState<boolean>(false);
+  const [sabbathDay, setSabbathDay] = useState<string>('Su');
   const [activeGroupPlan, setActiveGroupPlan] = useState<GroupPlan | null>(null);
   const [viewingGroupDetail, setViewingGroupDetail] = useState<boolean>(false);
 
@@ -1324,6 +1354,14 @@ export function useAppState() {
       setPrimingDays(plan.primingDays);
       setNewVersesPace(plan.newVersesPace);
       setMaxReviewCap(plan.maxReviewCap);
+      setRetentionRigor(plan.retentionRigor || 'standard');
+      setDailyPhaseWeeks(plan.dailyPhaseWeeks ?? 7);
+      setWeeklyPhaseMonths(plan.weeklyPhaseMonths ?? 6);
+      setMonthlyPhaseYears(plan.monthlyPhaseYears ?? 5);
+      setMasteryTouches(plan.masteryTouches ?? 3);
+      setReviewsRequired(plan.reviewsRequired ?? 1);
+      setSabbathEnabled(plan.sabbathEnabled ?? false);
+      setSabbathDay(plan.sabbathDay || 'Su');
       setCustomPlanName(plan.name || 'Custom Plan');
 
       if (auth.currentUser) {
@@ -1335,6 +1373,14 @@ export function useAppState() {
           primingDays: plan.primingDays,
           newVersesPace: plan.newVersesPace,
           maxReviewCap: plan.maxReviewCap,
+          retentionRigor: plan.retentionRigor || 'standard',
+          dailyPhaseWeeks: plan.dailyPhaseWeeks ?? 7,
+          weeklyPhaseMonths: plan.weeklyPhaseMonths ?? 6,
+          monthlyPhaseYears: plan.monthlyPhaseYears ?? 5,
+          masteryTouches: plan.masteryTouches ?? 3,
+          reviewsRequired: plan.reviewsRequired ?? 1,
+          sabbathEnabled: plan.sabbathEnabled ?? false,
+          sabbathDay: plan.sabbathDay || 'Su',
           name: plan.name || 'Custom Plan',
           updatedAt: new Date(),
         });
@@ -1453,6 +1499,14 @@ export function useAppState() {
       setPrimingDays(activePlan.primingDays);
       setNewVersesPace(activePlan.newVersesPace);
       setMaxReviewCap(activePlan.maxReviewCap);
+      setRetentionRigor(activePlan.retentionRigor);
+      setDailyPhaseWeeks(activePlan.dailyPhaseWeeks);
+      setWeeklyPhaseMonths(activePlan.weeklyPhaseMonths);
+      setMonthlyPhaseYears(activePlan.monthlyPhaseYears);
+      setMasteryTouches(activePlan.masteryTouches);
+      setReviewsRequired(activePlan.reviewsRequired);
+      setSabbathEnabled(activePlan.sabbathEnabled);
+      setSabbathDay(activePlan.sabbathDay);
       setCustomPlanName(activePlan.name);
 
       triggerToast(`Activated plan: "${activePlan.name}" ⚡`);
@@ -1468,6 +1522,14 @@ export function useAppState() {
             primingDays: activePlan.primingDays,
             newVersesPace: activePlan.newVersesPace,
             maxReviewCap: activePlan.maxReviewCap,
+            retentionRigor: activePlan.retentionRigor,
+            dailyPhaseWeeks: activePlan.dailyPhaseWeeks,
+            weeklyPhaseMonths: activePlan.weeklyPhaseMonths,
+            monthlyPhaseYears: activePlan.monthlyPhaseYears,
+            masteryTouches: activePlan.masteryTouches,
+            reviewsRequired: activePlan.reviewsRequired,
+            sabbathEnabled: activePlan.sabbathEnabled,
+            sabbathDay: activePlan.sabbathDay,
             name: activePlan.name,
             updatedAt: new Date(),
           });
@@ -1490,6 +1552,10 @@ export function useAppState() {
     setDailyPhaseWeeks(plan.dailyPhaseWeeks ?? 7);
     setWeeklyPhaseMonths(plan.weeklyPhaseMonths ?? 6);
     setMonthlyPhaseYears(plan.monthlyPhaseYears ?? 5);
+    setMasteryTouches(plan.masteryTouches ?? 3);
+    setReviewsRequired(plan.reviewsRequired ?? 1);
+    setSabbathEnabled(plan.sabbathEnabled ?? false);
+    setSabbathDay(plan.sabbathDay || 'Su');
     setCustomPlanName(plan.name);
     navigateTo('planDesigner');
   };
@@ -1506,6 +1572,10 @@ export function useAppState() {
     setDailyPhaseWeeks(7);
     setWeeklyPhaseMonths(6);
     setMonthlyPhaseYears(5);
+    setMasteryTouches(3);
+    setReviewsRequired(1);
+    setSabbathEnabled(false);
+    setSabbathDay('Su');
     setCustomPlanName('New Custom Plan');
     navigateTo('planDesigner');
   };
@@ -1529,6 +1599,10 @@ export function useAppState() {
             dailyPhaseWeeks,
             weeklyPhaseMonths,
             monthlyPhaseYears,
+            masteryTouches,
+            reviewsRequired,
+            sabbathEnabled,
+            sabbathDay,
             updatedAt: new Date().toISOString(),
           };
         }
@@ -1550,6 +1624,10 @@ export function useAppState() {
         dailyPhaseWeeks,
         weeklyPhaseMonths,
         monthlyPhaseYears,
+        masteryTouches,
+        reviewsRequired,
+        sabbathEnabled,
+        sabbathDay,
         isActive: true,
         updatedAt: new Date().toISOString(),
       };
@@ -1567,6 +1645,14 @@ export function useAppState() {
       setPrimingDays(activePlan.primingDays);
       setNewVersesPace(activePlan.newVersesPace);
       setMaxReviewCap(activePlan.maxReviewCap);
+      setRetentionRigor(activePlan.retentionRigor);
+      setDailyPhaseWeeks(activePlan.dailyPhaseWeeks);
+      setWeeklyPhaseMonths(activePlan.weeklyPhaseMonths);
+      setMonthlyPhaseYears(activePlan.monthlyPhaseYears);
+      setMasteryTouches(activePlan.masteryTouches);
+      setReviewsRequired(activePlan.reviewsRequired);
+      setSabbathEnabled(activePlan.sabbathEnabled);
+      setSabbathDay(activePlan.sabbathDay);
       setCustomPlanName(activePlan.name);
     }
 
@@ -1658,6 +1744,10 @@ export function useAppState() {
     dailyPhaseWeeks?: number;
     weeklyPhaseMonths?: number;
     monthlyPhaseYears?: number;
+    masteryTouches?: number;
+    reviewsRequired?: number;
+    sabbathEnabled?: boolean;
+    sabbathDay?: string;
   }) => {
     const newPlan: MemoryPlan = {
       id: 'plan-' + Date.now(),
@@ -1672,6 +1762,10 @@ export function useAppState() {
       dailyPhaseWeeks: profile.dailyPhaseWeeks ?? 7,
       weeklyPhaseMonths: profile.weeklyPhaseMonths ?? 6,
       monthlyPhaseYears: profile.monthlyPhaseYears ?? 5,
+      masteryTouches: profile.masteryTouches ?? 3,
+      reviewsRequired: profile.reviewsRequired ?? 1,
+      sabbathEnabled: profile.sabbathEnabled ?? false,
+      sabbathDay: profile.sabbathDay || 'Su',
       isActive: true,
       updatedAt: new Date().toISOString(),
     };
@@ -1690,6 +1784,10 @@ export function useAppState() {
     setDailyPhaseWeeks(newPlan.dailyPhaseWeeks);
     setWeeklyPhaseMonths(newPlan.weeklyPhaseMonths);
     setMonthlyPhaseYears(newPlan.monthlyPhaseYears);
+    setMasteryTouches(newPlan.masteryTouches);
+    setReviewsRequired(newPlan.reviewsRequired);
+    setSabbathEnabled(newPlan.sabbathEnabled);
+    setSabbathDay(newPlan.sabbathDay);
     setEditingPlanId(newPlan.id);
 
     if (auth.currentUser) {
@@ -1707,6 +1805,10 @@ export function useAppState() {
           dailyPhaseWeeks: newPlan.dailyPhaseWeeks,
           weeklyPhaseMonths: newPlan.weeklyPhaseMonths,
           monthlyPhaseYears: newPlan.monthlyPhaseYears,
+          masteryTouches: newPlan.masteryTouches,
+          reviewsRequired: newPlan.reviewsRequired,
+          sabbathEnabled: newPlan.sabbathEnabled,
+          sabbathDay: newPlan.sabbathDay,
           name: newPlan.name,
           updatedAt: new Date(),
         });
@@ -1746,6 +1848,10 @@ export function useAppState() {
         dailyPhaseWeeks,
         weeklyPhaseMonths,
         monthlyPhaseYears,
+        masteryTouches,
+        reviewsRequired,
+        sabbathEnabled,
+        sabbathDay,
         creatorName: user?.displayName || 'Anonymous Disciple',
         creatorId: user?.uid || 'anonymous',
         createdAt: new Date().toISOString(),
@@ -1774,6 +1880,10 @@ export function useAppState() {
                 dailyPhaseWeeks,
                 weeklyPhaseMonths,
                 monthlyPhaseYears,
+                masteryTouches,
+                reviewsRequired,
+                sabbathEnabled,
+                sabbathDay,
                 updatedAt: new Date().toISOString(),
               };
             }
@@ -1794,6 +1904,10 @@ export function useAppState() {
             dailyPhaseWeeks,
             weeklyPhaseMonths,
             monthlyPhaseYears,
+            masteryTouches,
+            reviewsRequired,
+            sabbathEnabled,
+            sabbathDay,
             isActive: true,
             updatedAt: new Date().toISOString(),
           };
@@ -1932,21 +2046,30 @@ export function useAppState() {
             dailyPhaseWeeks: planData.dailyPhaseWeeks ?? 7,
             weeklyPhaseMonths: planData.weeklyPhaseMonths ?? 6,
             monthlyPhaseYears: planData.monthlyPhaseYears ?? 5,
+            masteryTouches: planData.masteryTouches ?? 3,
+            reviewsRequired: planData.reviewsRequired ?? 1,
+            sabbathEnabled: planData.sabbathEnabled ?? false,
+            sabbathDay: planData.sabbathDay || 'Su',
             isActive: true,
             updatedAt: new Date().toISOString(),
           };
           plansList = [activePlan];
         }
 
-        // Back-compat: plans saved before retention-rigor existed won't have
-        // these fields in Firestore — default them to 7-6-5 (prior hardcoded
-        // behavior) so existing plans don't change behavior silently.
+        // Back-compat: plans saved before retention-rigor/mastery-touches/
+        // sabbath existed won't have these fields in Firestore — default
+        // them to prior hardcoded behavior so existing plans don't change
+        // silently.
         plansList = plansList.map((p) => ({
           ...p,
           retentionRigor: p.retentionRigor || 'standard',
           dailyPhaseWeeks: p.dailyPhaseWeeks ?? 7,
           weeklyPhaseMonths: p.weeklyPhaseMonths ?? 6,
           monthlyPhaseYears: p.monthlyPhaseYears ?? 5,
+          masteryTouches: p.masteryTouches ?? 3,
+          reviewsRequired: p.reviewsRequired ?? 1,
+          sabbathEnabled: p.sabbathEnabled ?? false,
+          sabbathDay: p.sabbathDay || 'Su',
         }));
 
         setSavedPlans(plansList);
@@ -1964,6 +2087,10 @@ export function useAppState() {
           setDailyPhaseWeeks(active.dailyPhaseWeeks);
           setWeeklyPhaseMonths(active.weeklyPhaseMonths);
           setMonthlyPhaseYears(active.monthlyPhaseYears);
+          setMasteryTouches(active.masteryTouches);
+          setReviewsRequired(active.reviewsRequired);
+          setSabbathEnabled(active.sabbathEnabled);
+          setSabbathDay(active.sabbathDay);
           setCustomPlanName(active.name);
         }
       } else {
@@ -1982,6 +2109,10 @@ export function useAppState() {
             dailyPhaseWeeks: DEFAULT_PLANS[0].dailyPhaseWeeks,
             weeklyPhaseMonths: DEFAULT_PLANS[0].weeklyPhaseMonths,
             monthlyPhaseYears: DEFAULT_PLANS[0].monthlyPhaseYears,
+            masteryTouches: DEFAULT_PLANS[0].masteryTouches,
+            reviewsRequired: DEFAULT_PLANS[0].reviewsRequired,
+            sabbathEnabled: DEFAULT_PLANS[0].sabbathEnabled,
+            sabbathDay: DEFAULT_PLANS[0].sabbathDay,
             name: DEFAULT_PLANS[0].name,
             updatedAt: new Date(),
           });
@@ -2351,7 +2482,17 @@ export function useAppState() {
 
   const isTodayLearningDay = () => {
     const todayAbbr = getTodayAbbreviation();
+    if (sabbathEnabled && todayAbbr === sabbathDay) return false;
     return learningDays.includes(todayAbbr);
+  };
+
+  // Wraps setDate + sabbath-adjustment + toISOString for the many places
+  // handleReviewCompleted schedules a next-due date, so a sabbath day never
+  // ends up as a scheduled due date.
+  const nextDueDateISO = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return advancePastSabbath(d, sabbathEnabled, sabbathDay).toISOString();
   };
 
   const validateTouch = (item: QueueItem, _type: 'speak' | 'type' | 'reveal'): boolean => {
@@ -2363,23 +2504,67 @@ export function useAppState() {
     return now - lastTime >= ONE_HOUR;
   };
 
-  const getEstimatedReviewTime = (queue: QueueItem[], sensitivity: 'low' | 'medium' | 'high') => {
-    let totalSeconds = 0;
+  // Shared by getEstimatedReviewTime (today only) and getMemoryLoadForecast
+  // (today + future days), so both always price a "due review" the same
+  // way and never quietly disagree. For today, a missing due date or one
+  // in the past both count as due (matches the original today-only
+  // behavior); for a future day, only an exact due-date match counts.
+  const computeDayReviewLoad = (queue: QueueItem[], date: Date, isToday: boolean) => {
+    let seconds = 0;
+    let count = 0;
     queue.forEach((item) => {
-      const isDue = item.status === 'reviewing' && (!item.nextReviewDueDate || new Date(item.nextReviewDueDate) <= new Date());
-      const isLearning = item.status === 'learning';
-
-      if (isLearning) {
-        totalSeconds += 120; // 2 minutes
-      } else if (isDue) {
-        if (item.retentionPhase === 'daily') totalSeconds += 30;
-        else if (item.retentionPhase === 'weekly') totalSeconds += 45;
-        else if (item.retentionPhase === 'monthly') totalSeconds += 60;
-      }
+      if (item.status !== 'reviewing') return;
+      const due = item.nextReviewDueDate ? new Date(item.nextReviewDueDate) : null;
+      const isDue = isToday ? !due || due <= date : !!due && due.toDateString() === date.toDateString();
+      if (!isDue) return;
+      count += 1;
+      if (item.retentionPhase === 'daily') seconds += 30;
+      else if (item.retentionPhase === 'weekly') seconds += 45;
+      else if (item.retentionPhase === 'monthly') seconds += 60;
     });
+    return { seconds, count };
+  };
 
+  const getEstimatedReviewTime = (queue: QueueItem[], sensitivity: 'low' | 'medium' | 'high') => {
+    const learningSeconds = queue.filter((item) => item.status === 'learning').length * 120;
+    const { seconds: reviewSeconds } = computeDayReviewLoad(queue, new Date(), true);
     const multiplier = sensitivity === 'low' ? 0.75 : sensitivity === 'high' ? 1.5 : 1.0;
-    return Math.ceil((totalSeconds * multiplier) / 60);
+    return Math.ceil(((learningSeconds + reviewSeconds) * multiplier) / 60);
+  };
+
+  // Projects daily memorization workload for the next `days` days, sharing
+  // computeDayReviewLoad's math with getEstimatedReviewTime so "today" here
+  // always matches Home's real today-estimate, and using the plan's actual
+  // learningDays instead of a fake "every other day" guess. Learning-phase
+  // items are treated as an ongoing cost that doesn't shrink (this doesn't
+  // simulate future mastery graduations); verses newly pulled on a future
+  // learning day join that ongoing cost starting the day they're pulled.
+  const getMemoryLoadForecast = (
+    queue: QueueItem[],
+    sensitivity: 'low' | 'medium' | 'high',
+    learningDaysList: string[],
+    pace: number,
+    days: number
+  ) => {
+    const dayAbbrevs = ['Su', 'M', 'T', 'W', 'Th', 'F', 'S']; // index matches Date.getDay()
+    const baseLearningCount = queue.filter((item) => item.status === 'learning').length;
+    const multiplier = sensitivity === 'low' ? 0.75 : sensitivity === 'high' ? 1.5 : 1.0;
+    let cumulativeNewVerses = 0;
+
+    return Array.from({ length: days }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() + i);
+      const isLearnDay = learningDaysList.includes(dayAbbrevs[date.getDay()]);
+      // Today's own pull, if any, is already reflected in the real queue
+      // (baseLearningCount) -- only project pulls for days after today.
+      if (i > 0 && isLearnDay) cumulativeNewVerses += pace;
+
+      const { seconds: reviewSeconds, count: dueReviewCount } = computeDayReviewLoad(queue, date, i === 0);
+      const learningCount = baseLearningCount + cumulativeNewVerses;
+      const loadMins = Math.ceil(((reviewSeconds + learningCount * 120) * multiplier) / 60);
+
+      return { date, isLearnDay, loadMins, versesCount: learningCount + dueReviewCount };
+    });
   };
 
   const triggerDailyPull = async () => {
@@ -2474,12 +2659,16 @@ export function useAppState() {
     // failed attempt, just detected from elapsed time instead of a tap.
     // Being less than one full cycle late isn't a miss at all, which is
     // also what gives due dates their day-or-two of natural flexibility.
+    // Any sabbath days in the elapsed span don't count as elapsed time --
+    // the engine treats them as though they didn't happen at all.
     if (item.status === 'reviewing' && updatedItem.nextReviewDueDate) {
       const cycleLengthDays = updatedItem.retentionPhase === 'weekly' ? 7 : updatedItem.retentionPhase === 'monthly' ? 30 : 1;
-      const missedCycles = Math.max(
-        0,
-        Math.floor((Date.now() - new Date(updatedItem.nextReviewDueDate).getTime()) / (cycleLengthDays * 24 * 3600 * 1000))
-      );
+      const dueDate = new Date(updatedItem.nextReviewDueDate);
+      const now = new Date();
+      const rawElapsedDays = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 3600 * 1000));
+      const sabbathDaysElapsed = sabbathEnabled ? countSabbathDaysInRange(dueDate, now, sabbathDay) : 0;
+      const adjustedElapsedDays = Math.max(0, rawElapsedDays - sabbathDaysElapsed);
+      const missedCycles = Math.max(0, Math.floor(adjustedElapsedDays / cycleLengthDays));
       let lastMissTag: ReturnType<typeof applyMissToItem> = 'none';
       for (let i = 0; i < missedCycles; i++) {
         lastMissTag = applyMissToItem(updatedItem);
@@ -2517,9 +2706,7 @@ export function useAppState() {
             updatedItem.retentionPhase = 'daily';
             updatedItem.dateStarted = new Date().toISOString();
             updatedItem.currentStreakCount = 1;
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            updatedItem.nextReviewDueDate = tomorrow.toISOString();
+            updatedItem.nextReviewDueDate = nextDueDateISO(1);
             updatedItem.reviewsToday = 0;
             triggerToast('Passage mastered! Transitioned to 7-6-5 spaced review. 🎉');
           } else {
@@ -2563,16 +2750,12 @@ export function useAppState() {
               delete updatedItem.refresherReturnPhase;
               delete updatedItem.refresherReturnProgress;
               delete updatedItem.refresherTargetUnits;
-              const nextDue = new Date();
-              nextDue.setDate(nextDue.getDate() + (returnPhase === 'monthly' ? 30 : 7));
-              updatedItem.nextReviewDueDate = nextDue.toISOString();
+              updatedItem.nextReviewDueDate = nextDueDateISO(returnPhase === 'monthly' ? 30 : 7);
               triggerToast(
                 `Refresher complete! Back to ${returnPhase === 'monthly' ? 'Monthly' : 'Weekly'} review, resuming right where you left off. 🌟`
               );
             } else {
-              const nextDue = new Date();
-              nextDue.setDate(nextDue.getDate() + (updatedItem.retentionPhase === 'weekly' ? 7 : 1));
-              updatedItem.nextReviewDueDate = nextDue.toISOString();
+              updatedItem.nextReviewDueDate = nextDueDateISO(updatedItem.retentionPhase === 'weekly' ? 7 : 1);
               triggerToast(`Refresher review complete! (${updatedItem.currentStreakCount}/${updatedItem.refresherTargetUnits}) 📅`);
             }
           } else if (updatedItem.retentionPhase === 'daily') {
@@ -2580,28 +2763,20 @@ export function useAppState() {
               updatedItem.retentionPhase = 'weekly';
               updatedItem.currentStreakCount = 1;
               updatedItem.dailyPhaseExtensionDays = 0;
-              const nextDue = new Date();
-              nextDue.setDate(nextDue.getDate() + 7);
-              updatedItem.nextReviewDueDate = nextDue.toISOString();
+              updatedItem.nextReviewDueDate = nextDueDateISO(7);
               triggerToast('Graduated to Weekly Review phase! 🌟');
             } else {
-              const nextDue = new Date();
-              nextDue.setDate(nextDue.getDate() + 1);
-              updatedItem.nextReviewDueDate = nextDue.toISOString();
+              updatedItem.nextReviewDueDate = nextDueDateISO(1);
               triggerToast('Daily reviews complete! Spaced date advanced. 📅');
             }
           } else if (updatedItem.retentionPhase === 'weekly') {
             if (updatedItem.currentStreakCount >= weeklyGraduationReviews) {
               updatedItem.retentionPhase = 'monthly';
               updatedItem.currentStreakCount = 1;
-              const nextDue = new Date();
-              nextDue.setDate(nextDue.getDate() + 30);
-              updatedItem.nextReviewDueDate = nextDue.toISOString();
+              updatedItem.nextReviewDueDate = nextDueDateISO(30);
               triggerToast('Graduated to Monthly Review phase! 🌟');
             } else {
-              const nextDue = new Date();
-              nextDue.setDate(nextDue.getDate() + 7);
-              updatedItem.nextReviewDueDate = nextDue.toISOString();
+              updatedItem.nextReviewDueDate = nextDueDateISO(7);
               triggerToast('Weekly review complete! Spaced date advanced. 📅');
             }
           } else if (updatedItem.retentionPhase === 'monthly') {
@@ -2611,9 +2786,7 @@ export function useAppState() {
               updatedItem.nextReviewDueDate = null;
               triggerToast('Successfully RETAINED forever! 🏆🎉');
             } else {
-              const nextDue = new Date();
-              nextDue.setDate(nextDue.getDate() + 30);
-              updatedItem.nextReviewDueDate = nextDue.toISOString();
+              updatedItem.nextReviewDueDate = nextDueDateISO(30);
               triggerToast('Monthly review complete! Spaced date advanced. 📅');
             }
           }
@@ -3255,6 +3428,8 @@ export function useAppState() {
     toastMessage, setToastMessage,
     masteryTouches, setMasteryTouches,
     reviewsRequired, setReviewsRequired,
+    sabbathEnabled, setSabbathEnabled,
+    sabbathDay, setSabbathDay,
     activeGroupPlan, setActiveGroupPlan,
     viewingGroupDetail, setViewingGroupDetail,
     myCircles, loadingMyCircles,
@@ -3349,6 +3524,7 @@ export function useAppState() {
     isTodayLearningDay,
     validateTouch,
     getEstimatedReviewTime,
+    getMemoryLoadForecast,
     triggerDailyPull,
     handleReviewCompleted,
     triggerMockDueReviews,

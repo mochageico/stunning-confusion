@@ -33,6 +33,10 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     setMasteryTouches,
     reviewsRequired,
     setReviewsRequired,
+    sabbathEnabled,
+    setSabbathEnabled,
+    sabbathDay,
+    setSabbathDay,
     retentionRigor,
     setRetentionRigor,
     dailyPhaseWeeks,
@@ -223,6 +227,48 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                   );
                 })}
               </View>
+            </View>
+
+            {/* Sabbath Day (optional, off by default) */}
+            <View style={{ gap: 6 }} className="pt-2 border-t border-[#F3F2F1]">
+              <View className="flex-row items-center justify-between">
+                <View style={{ gap: 2 }} className="flex-1 pr-2">
+                  <Text className="text-xs font-serif font-bold text-[#1A1A1A]">Sabbath Day</Text>
+                  <Text className="text-[9px] text-neutral-400 font-sans leading-tight">
+                    A day fully free from learning and reviewing. The engine treats it as if it doesn't exist.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setSabbathEnabled(!sabbathEnabled)}
+                  className={`w-10 h-6 rounded-full justify-center px-0.5 ${sabbathEnabled ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
+                >
+                  <View
+                    className="w-5 h-5 rounded-full bg-white shadow"
+                    style={{ transform: [{ translateX: sabbathEnabled ? 16 : 0 }] }}
+                  />
+                </Pressable>
+              </View>
+
+              {sabbathEnabled && (
+                <View className="flex-row justify-between pt-2">
+                  {DAYS.map((day) => {
+                    const isActive = sabbathDay === day;
+                    return (
+                      <Pressable
+                        key={`sabbath-${day}`}
+                        onPress={() => setSabbathDay(day)}
+                        className={`w-7 h-7 rounded-full border items-center justify-center ${
+                          isActive ? 'bg-[#1A1A1A] border-[#1A1A1A] shadow-sm' : 'bg-white border-neutral-200'
+                        }`}
+                      >
+                        <Text className={`font-sans font-bold text-[10px] ${isActive ? 'text-white' : 'text-neutral-500'}`}>
+                          {day}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </View>
 
             {/* Reviewing Days */}

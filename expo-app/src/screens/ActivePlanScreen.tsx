@@ -85,6 +85,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     savedPlans,
     editingPlanId,
     saveActivePlanRhythm,
+    getMemoryLoadForecast,
+    cognitiveLoadSensitivity,
   } = state;
 
   const [isAddingVerses, setIsAddingVerses] = useState(false);
@@ -143,30 +145,23 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     triggerToast('Moved consecutive group down.');
   };
 
+  // Real 7-day projection: same time-per-verse math as HomeScreen's today
+  // estimate (via getMemoryLoadForecast, sharing computeDayReviewLoad under
+  // the hood) and the plan's actual learningDays, instead of a hardcoded
+  // "every other day" guess with its own made-up time constants.
   const forecastDays = (() => {
-    const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const todayIndex = new Date().getDay(); // 0 is Sunday, 1 is Monday
-    return Array.from({ length: 7 }, (_, i) => {
-      const targetIdx = (todayIndex + i) % 7;
-      const mappedName = daysOfWeek[targetIdx === 0 ? 6 : targetIdx - 1];
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const forecast = getMemoryLoadForecast(memoryQueue, cognitiveLoadSensitivity, learningDays, newVersesPace, 7);
 
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-      const isLearnDay = i % 2 === 0; // Simulated schedule
-
-      const lVerses = isLearnDay ? newVersesPace : 0;
-      const rVerses = Math.max(3, Math.min(20, memoryQueue.filter((q) => q.status === 'learning').length + Math.round(i * 1.5)));
-
-      const totalMinutes = Math.round(lVerses * 3 + rVerses * 1.2 + 2);
-      const heightPercent = Math.min(100, Math.max(15, (totalMinutes / 30) * 100));
+    return forecast.map((day, i) => {
+      const dateStr = day.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const heightPercent = Math.min(100, Math.max(15, (day.loadMins / 30) * 100));
 
       return {
-        dayName: mappedName,
+        dayName: daysOfWeek[day.date.getDay()],
         dateStr,
-        loadMins: totalMinutes,
-        versesCount: lVerses + rVerses,
+        loadMins: day.loadMins,
+        versesCount: day.versesCount,
         barHeight: heightPercent,
         isToday: i === 0,
       };

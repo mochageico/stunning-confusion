@@ -160,6 +160,17 @@ export interface MemoryPlan {
   dailyPhaseWeeks: number;
   weeklyPhaseMonths: number;
   monthlyPhaseYears: number;
+  // Mastery-gate settings: these were previously live useState values that
+  // drove the engine but were never part of the saved plan, so they didn't
+  // survive a save/switch/reload. Now part of the plan like everything else.
+  masteryTouches: number;
+  reviewsRequired: number;
+  // Sabbath: an optional single weekday, off by default, free from both
+  // learning and reviewing -- the engine treats it as not existing at all
+  // (due dates never land on it, and it doesn't count as elapsed time when
+  // detecting silently-missed review cycles).
+  sabbathEnabled: boolean;
+  sabbathDay: string;
   isActive: boolean;
   updatedAt: string | Date;
 }
