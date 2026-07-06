@@ -148,8 +148,6 @@ export interface MemoryPlan {
   name: string;
   preset: 'drip' | 'warrior' | 'custom';
   learningDays: string[];
-  reviewingDays: string[];
-  primingDays: string[];
   newVersesPace: number;
   maxReviewCap: number;
   // Retention rigor: how many weeks/months/years a verse spends in each
@@ -171,8 +169,28 @@ export interface MemoryPlan {
   // detecting silently-missed review cycles).
   sabbathEnabled: boolean;
   sabbathDay: string;
+  // Multiplier applied to the daily time estimate (0.75/1.0/1.5 for
+  // low/medium/high) -- previously a live useState with no UI control and
+  // no persistence, so it silently reset to 'medium' every reload.
+  cognitiveLoadSensitivity: 'low' | 'medium' | 'high';
   isActive: boolean;
   updatedAt: string | Date;
+}
+
+// A single deadline-driven memorization target (e.g. "memorize Romans by
+// March 1"), separate from MemoryPlan since it represents *what* and *when*
+// rather than *how* someone studies. v1 supports one active goal at a time.
+// totalVerses/verseIds are cached the moment the range is set/changed, so
+// moving the pace slider or target date afterward is pure arithmetic --
+// no re-fetching scripture text on every interaction.
+export interface MemorizationGoal {
+  book: string;
+  startChapter: number;
+  endChapter: number;
+  targetDate: string; // ISO date string (no time component)
+  totalVerses: number;
+  verseIds: string[]; // ordered verseIds in the range, for front-of-queue enqueueing
+  createdAt: string;
 }
 
 export interface Circle {

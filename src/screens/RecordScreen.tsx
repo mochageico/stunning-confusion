@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { Check, Mic } from 'lucide-react-native';
+import { Check, Mic, Pause, Play, RotateCcw } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, PulseView, WaveBars } from '../components/ui';
@@ -17,6 +18,7 @@ const TRANSLATION_OPTIONS = [
 export default function RecordScreen({ state }: { state: AppState }) {
   const {
     isRecording,
+    isRecordingPaused,
     recordingSeconds,
     recordingBook,
     recordingChapter,
@@ -29,8 +31,13 @@ export default function RecordScreen({ state }: { state: AppState }) {
     formatTime,
     handleStartRecording,
     handleStopRecording,
+    handlePauseRecording,
+    handleResumeRecording,
+    handleResetRecording,
     handleMarkVerseTap,
   } = state;
+
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const recordingBookMeta = getBookByName(recordingBook);
   const chapterOptions = recordingBookMeta
@@ -173,13 +180,13 @@ export default function RecordScreen({ state }: { state: AppState }) {
 
         {/* Recording Animation Waveform Display */}
         {isRecording && (
-          <PulseView>
+          <PulseView style={isRecordingPaused ? { opacity: 1 } : undefined}>
             <View className="bg-[#1A1A1A] p-3 rounded-xl flex-row items-center justify-between gap-3.5">
               <Text className="text-[9px] uppercase font-bold tracking-wider font-sans text-neutral-400">
-                AUDIO SIGNAL
+                {isRecordingPaused ? 'PAUSED' : 'AUDIO SIGNAL'}
               </Text>
               <View className="flex-1 items-center">
-                <WaveBars active={isRecording} count={13} />
+                <WaveBars active={isRecording && !isRecordingPaused} count={13} />
               </View>
               <Text className="text-xs font-mono font-bold text-red-400">{formatTime(recordingSeconds)}</Text>
             </View>
@@ -196,16 +203,56 @@ export default function RecordScreen({ state }: { state: AppState }) {
               <Mic size={16} color="#FFFFFF" />
               <Text className="text-white font-sans font-bold text-sm">Tap to Record recitation</Text>
             </Pressable>
+          ) : showResetConfirm ? (
+            <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
+              <Text className="text-[11px] font-sans font-bold text-red-800">Discard this recording?</Text>
+              <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
+                You'll lose everything recorded so far ({formatTime(recordingSeconds)}) and any verse taps. This can't
+                be undone.
+              </Text>
+              <View className="flex-row gap-2 justify-end pt-1">
+                <Pressable
+                  onPress={() => setShowResetConfirm(false)}
+                  className="px-3 py-1.5 border border-neutral-300 rounded-lg"
+                >
+                  <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    handleResetRecording();
+                    setShowResetConfirm(false);
+                  }}
+                  className="px-3 py-1.5 bg-red-600 rounded-lg"
+                >
+                  <Text className="text-white font-sans font-bold text-[10px]">Discard</Text>
+                </Pressable>
+              </View>
+            </View>
           ) : (
-            <PulseView>
+            <View className="flex-row gap-2">
               <Pressable
-                onPress={handleStopRecording}
-                className="w-full bg-red-600 py-3.5 px-4 rounded-xl flex-row items-center justify-center gap-2 shadow-lg"
+                onPress={() => setShowResetConfirm(true)}
+                className="w-12 items-center justify-center border border-neutral-300 rounded-xl"
               >
-                <View className="w-3 h-3 bg-white rounded-sm" />
-                <Text className="text-white font-sans font-bold text-sm">Stop Recording</Text>
+                <RotateCcw size={16} color="#737373" />
               </Pressable>
-            </PulseView>
+              <Pressable
+                onPress={isRecordingPaused ? handleResumeRecording : handlePauseRecording}
+                className="flex-1 bg-neutral-800 py-3.5 px-4 rounded-xl flex-row items-center justify-center gap-2 shadow"
+              >
+                {isRecordingPaused ? <Play size={16} color="#FFFFFF" /> : <Pause size={16} color="#FFFFFF" />}
+                <Text className="text-white font-sans font-bold text-sm">{isRecordingPaused ? 'Resume' : 'Pause'}</Text>
+              </Pressable>
+              <PulseView>
+                <Pressable
+                  onPress={handleStopRecording}
+                  className="w-28 bg-red-600 py-3.5 px-4 rounded-xl flex-row items-center justify-center gap-2 shadow-lg"
+                >
+                  <View className="w-3 h-3 bg-white rounded-sm" />
+                  <Text className="text-white font-sans font-bold text-sm">Stop</Text>
+                </Pressable>
+              </PulseView>
+            </View>
           )}
         </View>
       </ScrollView>

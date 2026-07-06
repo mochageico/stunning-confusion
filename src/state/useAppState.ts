@@ -50,6 +50,7 @@ import {
   Friend,
   FriendRequest,
   GroupPlan,
+  MemorizationGoal,
   MemoryPlan,
   QueueItem,
   Recording,
@@ -316,6 +317,57 @@ const countSabbathDaysInRange = (from: Date, to: Date, sabbathDay: string): numb
   return count;
 };
 
+// Goal planning day-math: shared by both directions of the pace <-> target
+// date recalculation, so "8 verses/day finishes March 1" and "March 1 needs
+// 8 verses/day" are always consistent with each other and with the plan's
+// real learningDays + Sabbath.
+const isRealLearningDay = (date: Date, learningDaysList: string[], sabbathEnabled: boolean, sabbathDay: string): boolean => {
+  const abbrev = DAY_ABBREVS[date.getDay()];
+  if (sabbathEnabled && abbrev === sabbathDay) return false;
+  return learningDaysList.includes(abbrev);
+};
+
+// Counts real learning days from `from` through `to`, inclusive of both ends.
+const countLearningDaysBetween = (
+  from: Date,
+  to: Date,
+  learningDaysList: string[],
+  sabbathEnabled: boolean,
+  sabbathDay: string
+): number => {
+  let count = 0;
+  const cursor = new Date(from);
+  cursor.setHours(0, 0, 0, 0);
+  const end = new Date(to);
+  end.setHours(0, 0, 0, 0);
+  while (cursor <= end) {
+    if (isRealLearningDay(cursor, learningDaysList, sabbathEnabled, sabbathDay)) count++;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+};
+
+// Finds the date of the Nth real learning day starting from (and including) `from`.
+const dateAfterNLearningDays = (
+  from: Date,
+  n: number,
+  learningDaysList: string[],
+  sabbathEnabled: boolean,
+  sabbathDay: string
+): Date => {
+  const cursor = new Date(from);
+  cursor.setHours(0, 0, 0, 0);
+  if (n <= 0) return cursor;
+  let count = 0;
+  while (true) {
+    if (isRealLearningDay(cursor, learningDaysList, sabbathEnabled, sabbathDay)) {
+      count++;
+      if (count >= n) return cursor;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+};
+
 /**
  * Centralizes every piece of state and business-logic handler from the original
  * web app's single-file App component. Screens receive the return value of this
@@ -365,8 +417,6 @@ export function useAppState() {
   // Memory Plan Designer States
   const [preset, setPreset] = useState<'drip' | 'warrior' | 'custom'>('custom');
   const [learningDays, setLearningDays] = useState<string[]>(['M', 'W', 'F']);
-  const [reviewingDays, setReviewingDays] = useState<string[]>(['M', 'T', 'W', 'Th', 'F', 'S', 'Su']);
-  const [primingDays, setPrimingDays] = useState<string[]>(['T', 'Th', 'S']);
   const [newVersesPace, setNewVersesPace] = useState<number>(3);
   const [maxReviewCap, setMaxReviewCap] = useState<number>(15);
   // Retention rigor: how long a verse stays in each review phase before
@@ -382,6 +432,7 @@ export function useAppState() {
 
   // Teleprompter / Recording State (fully simulated — no real microphone capture in the web original)
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingPaused, setIsRecordingPaused] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   // Snapshot of recordingSeconds taken the instant recording stops — the Save
   // Recitation dialog reads this (not recordingSeconds directly), since the
@@ -442,6 +493,10 @@ export function useAppState() {
   const [sabbathDay, setSabbathDay] = useState<string>('Su');
   const [activeGroupPlan, setActiveGroupPlan] = useState<GroupPlan | null>(null);
   const [viewingGroupDetail, setViewingGroupDetail] = useState<boolean>(false);
+  // Single active deadline-driven goal (e.g. "memorize Romans by March 1").
+  // Loaded/saved alongside the memory plan doc rather than its own collection.
+  const [memorizationGoal, setMemorizationGoal] = useState<MemorizationGoal | null>(null);
+  const [isCalculatingGoal, setIsCalculatingGoal] = useState(false);
 
   // Scripture Circles (real Firestore-backed community groups — see circles/{id}
   // in firestore.rules). myCircles/publicCircles/activeCircle* replace the old
@@ -569,8 +624,6 @@ export function useAppState() {
         setEditingPlanId(active.id);
         setPreset(active.preset);
         setLearningDays(active.learningDays);
-        setReviewingDays(active.reviewingDays);
-        setPrimingDays(active.primingDays);
         setNewVersesPace(active.newVersesPace);
         setMaxReviewCap(active.maxReviewCap);
         setCustomPlanName(active.name);
@@ -1303,8 +1356,6 @@ export function useAppState() {
           name: 'The 30-Day Scripture Sprint',
           preset: 'sprint',
           learningDays: ['M', 'T', 'W', 'Th', 'F'],
-          reviewingDays: ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'],
-          primingDays: ['S', 'Su'],
           newVersesPace: 5,
           maxReviewCap: 20,
           creatorName: 'Pastor David',
@@ -1317,8 +1368,6 @@ export function useAppState() {
           name: 'Gentle Word Drip',
           preset: 'drip',
           learningDays: ['M', 'Th'],
-          reviewingDays: ['M', 'W', 'F'],
-          primingDays: ['S'],
           newVersesPace: 1,
           maxReviewCap: 10,
           creatorName: 'Esther Vance',
@@ -1331,8 +1380,6 @@ export function useAppState() {
           name: 'Warrior Pacing Routine',
           preset: 'warrior',
           learningDays: ['M', 'W', 'F', 'S'],
-          reviewingDays: ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'],
-          primingDays: ['T', 'Th', 'Su'],
           newVersesPace: 3,
           maxReviewCap: 15,
           creatorName: 'Sarah Miller',
@@ -1350,8 +1397,6 @@ export function useAppState() {
     try {
       setPreset(plan.preset);
       setLearningDays(plan.learningDays);
-      setReviewingDays(plan.reviewingDays);
-      setPrimingDays(plan.primingDays);
       setNewVersesPace(plan.newVersesPace);
       setMaxReviewCap(plan.maxReviewCap);
       setRetentionRigor(plan.retentionRigor || 'standard');
@@ -1362,6 +1407,7 @@ export function useAppState() {
       setReviewsRequired(plan.reviewsRequired ?? 1);
       setSabbathEnabled(plan.sabbathEnabled ?? false);
       setSabbathDay(plan.sabbathDay || 'Su');
+      setCognitiveLoadSensitivity(plan.cognitiveLoadSensitivity || 'medium');
       setCustomPlanName(plan.name || 'Custom Plan');
 
       if (auth.currentUser) {
@@ -1369,8 +1415,6 @@ export function useAppState() {
         await setDoc(planRef, {
           preset: plan.preset,
           learningDays: plan.learningDays,
-          reviewingDays: plan.reviewingDays,
-          primingDays: plan.primingDays,
           newVersesPace: plan.newVersesPace,
           maxReviewCap: plan.maxReviewCap,
           retentionRigor: plan.retentionRigor || 'standard',
@@ -1381,6 +1425,7 @@ export function useAppState() {
           reviewsRequired: plan.reviewsRequired ?? 1,
           sabbathEnabled: plan.sabbathEnabled ?? false,
           sabbathDay: plan.sabbathDay || 'Su',
+          cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity || 'medium',
           name: plan.name || 'Custom Plan',
           updatedAt: new Date(),
         });
@@ -1495,8 +1540,6 @@ export function useAppState() {
     if (activePlan) {
       setPreset(activePlan.preset);
       setLearningDays(activePlan.learningDays);
-      setReviewingDays(activePlan.reviewingDays);
-      setPrimingDays(activePlan.primingDays);
       setNewVersesPace(activePlan.newVersesPace);
       setMaxReviewCap(activePlan.maxReviewCap);
       setRetentionRigor(activePlan.retentionRigor);
@@ -1507,6 +1550,7 @@ export function useAppState() {
       setReviewsRequired(activePlan.reviewsRequired);
       setSabbathEnabled(activePlan.sabbathEnabled);
       setSabbathDay(activePlan.sabbathDay);
+      setCognitiveLoadSensitivity(activePlan.cognitiveLoadSensitivity);
       setCustomPlanName(activePlan.name);
 
       triggerToast(`Activated plan: "${activePlan.name}" ⚡`);
@@ -1518,8 +1562,6 @@ export function useAppState() {
             savedPlans: updatedPlans,
             preset: activePlan.preset,
             learningDays: activePlan.learningDays,
-            reviewingDays: activePlan.reviewingDays,
-            primingDays: activePlan.primingDays,
             newVersesPace: activePlan.newVersesPace,
             maxReviewCap: activePlan.maxReviewCap,
             retentionRigor: activePlan.retentionRigor,
@@ -1530,6 +1572,7 @@ export function useAppState() {
             reviewsRequired: activePlan.reviewsRequired,
             sabbathEnabled: activePlan.sabbathEnabled,
             sabbathDay: activePlan.sabbathDay,
+            cognitiveLoadSensitivity: activePlan.cognitiveLoadSensitivity,
             name: activePlan.name,
             updatedAt: new Date(),
           });
@@ -1544,8 +1587,6 @@ export function useAppState() {
     setEditingPlanId(plan.id);
     setPreset(plan.preset);
     setLearningDays(plan.learningDays);
-    setReviewingDays(plan.reviewingDays);
-    setPrimingDays(plan.primingDays);
     setNewVersesPace(plan.newVersesPace);
     setMaxReviewCap(plan.maxReviewCap);
     setRetentionRigor(plan.retentionRigor || 'standard');
@@ -1556,6 +1597,7 @@ export function useAppState() {
     setReviewsRequired(plan.reviewsRequired ?? 1);
     setSabbathEnabled(plan.sabbathEnabled ?? false);
     setSabbathDay(plan.sabbathDay || 'Su');
+    setCognitiveLoadSensitivity(plan.cognitiveLoadSensitivity || 'medium');
     setCustomPlanName(plan.name);
     navigateTo('planDesigner');
   };
@@ -1564,8 +1606,6 @@ export function useAppState() {
     setEditingPlanId(null);
     setPreset('custom');
     setLearningDays(['M', 'W', 'F']);
-    setReviewingDays(['M', 'T', 'W', 'Th', 'F', 'S', 'Su']);
-    setPrimingDays(['T', 'Th']);
     setNewVersesPace(3);
     setMaxReviewCap(15);
     setRetentionRigor('standard');
@@ -1576,6 +1616,7 @@ export function useAppState() {
     setReviewsRequired(1);
     setSabbathEnabled(false);
     setSabbathDay('Su');
+    setCognitiveLoadSensitivity('medium');
     setCustomPlanName('New Custom Plan');
     navigateTo('planDesigner');
   };
@@ -1591,8 +1632,6 @@ export function useAppState() {
             name: customPlanName || 'My Custom Plan',
             preset,
             learningDays,
-            reviewingDays,
-            primingDays,
             newVersesPace,
             maxReviewCap,
             retentionRigor,
@@ -1603,6 +1642,7 @@ export function useAppState() {
             reviewsRequired,
             sabbathEnabled,
             sabbathDay,
+            cognitiveLoadSensitivity,
             updatedAt: new Date().toISOString(),
           };
         }
@@ -1616,8 +1656,6 @@ export function useAppState() {
         name: customPlanName || 'My Custom Plan',
         preset,
         learningDays,
-        reviewingDays,
-        primingDays,
         newVersesPace,
         maxReviewCap,
         retentionRigor,
@@ -1628,6 +1666,7 @@ export function useAppState() {
         reviewsRequired,
         sabbathEnabled,
         sabbathDay,
+        cognitiveLoadSensitivity,
         isActive: true,
         updatedAt: new Date().toISOString(),
       };
@@ -1641,8 +1680,6 @@ export function useAppState() {
     if (activePlan) {
       setPreset(activePlan.preset);
       setLearningDays(activePlan.learningDays);
-      setReviewingDays(activePlan.reviewingDays);
-      setPrimingDays(activePlan.primingDays);
       setNewVersesPace(activePlan.newVersesPace);
       setMaxReviewCap(activePlan.maxReviewCap);
       setRetentionRigor(activePlan.retentionRigor);
@@ -1653,6 +1690,7 @@ export function useAppState() {
       setReviewsRequired(activePlan.reviewsRequired);
       setSabbathEnabled(activePlan.sabbathEnabled);
       setSabbathDay(activePlan.sabbathDay);
+      setCognitiveLoadSensitivity(activePlan.cognitiveLoadSensitivity);
       setCustomPlanName(activePlan.name);
     }
 
@@ -1666,8 +1704,6 @@ export function useAppState() {
           savedPlans: updatedPlans,
           preset: activePlan.preset,
           learningDays: activePlan.learningDays,
-          reviewingDays: activePlan.reviewingDays,
-          primingDays: activePlan.primingDays,
           newVersesPace: activePlan.newVersesPace,
           maxReviewCap: activePlan.maxReviewCap,
           name: activePlan.name,
@@ -1681,10 +1717,10 @@ export function useAppState() {
     navigateTo('savedPlans');
   };
 
-  // Persists just the Memory Rhythm fields (learning/reviewing/priming days,
-  // pace, and review cap) to whichever plan is currently selected, in place —
-  // unlike handleSavePlan, this doesn't navigate away or clear editingPlanId,
-  // since it's used inline on the Memory Plan & Queue screen.
+  // Persists just the Memory Rhythm fields (learning days, pace, and review
+  // cap) to whichever plan is currently selected, in place — unlike
+  // handleSavePlan, this doesn't navigate away or clear editingPlanId, since
+  // it's used inline on the Memory Plan & Queue screen.
   const saveActivePlanRhythm = async () => {
     const targetId = editingPlanId || savedPlans.find((p) => p.isActive)?.id || savedPlans[0]?.id;
     if (!targetId) {
@@ -1694,7 +1730,7 @@ export function useAppState() {
 
     const updatedPlans = savedPlans.map((p) =>
       p.id === targetId
-        ? { ...p, learningDays, reviewingDays, primingDays, newVersesPace, maxReviewCap, preset, updatedAt: new Date().toISOString() }
+        ? { ...p, learningDays, newVersesPace, maxReviewCap, preset, updatedAt: new Date().toISOString() }
         : p
     );
     setSavedPlans(updatedPlans);
@@ -1709,8 +1745,6 @@ export function useAppState() {
           {
             savedPlans: updatedPlans,
             learningDays: targetPlan.learningDays,
-            reviewingDays: targetPlan.reviewingDays,
-            primingDays: targetPlan.primingDays,
             newVersesPace: targetPlan.newVersesPace,
             maxReviewCap: targetPlan.maxReviewCap,
             preset: targetPlan.preset,
@@ -1726,6 +1760,142 @@ export function useAppState() {
     triggerToast(`Memory rhythm saved to "${targetPlan.name}"! 🎯`);
   };
 
+  // Sets (or replaces) the single active memorization goal: fetches real
+  // verse text for the whole chapter range once (so pace/date recalculation
+  // afterward is pure arithmetic, no re-fetching), then front-of-queues
+  // whichever of those verses aren't already learning/reviewing/retained.
+  // Verses already in progress are left untouched -- a goal doesn't reset
+  // work already underway. setMemoryQueue triggers the existing debounced
+  // auto-sync effect, so no manual queue write is needed here.
+  const setMemorizationGoalRange = async (book: string, startChapter: number, endChapter: number, targetDate: string) => {
+    const bookMeta = getBookByName(book);
+    if (!bookMeta) {
+      triggerToast(`Unrecognized book: ${book}`);
+      return;
+    }
+    if (endChapter < startChapter) {
+      triggerToast('End chapter must be on or after the start chapter.');
+      return;
+    }
+    setIsCalculatingGoal(true);
+    try {
+      const verseIds: string[] = [];
+      const candidateItems: { verseId: string; chapter: number; verseNumber: number; text: string }[] = [];
+      let skippedChapters = 0;
+      for (let ch = startChapter; ch <= endChapter; ch++) {
+        const chapterData = await fetchChapterText(DEFAULT_TRANSLATION_ID, bookMeta.id, ch);
+        if (!chapterData) {
+          skippedChapters++;
+          continue;
+        }
+        const verseNumbers = Object.keys(chapterData.verses)
+          .map(Number)
+          .sort((a, b) => a - b);
+        verseNumbers.forEach((v) => {
+          const verseId = `${bookMeta.id}_${ch}_${v}`;
+          verseIds.push(verseId);
+          candidateItems.push({ verseId, chapter: ch, verseNumber: v, text: chapterData.verses[String(v)] });
+        });
+      }
+
+      if (verseIds.length === 0) {
+        triggerToast(`Couldn't find any verses for ${book} ${startChapter}-${endChapter} in the scripture library yet.`);
+        return;
+      }
+
+      const goalIdSet = new Set(verseIds);
+      const existingByVerseId = new Map(memoryQueue.map((q) => [q.verseId, q]));
+      const frontOfQueue: QueueItem[] = verseIds
+        .map((vid) => {
+          const existing = existingByVerseId.get(vid);
+          if (existing) return existing.status === 'queued' ? existing : null;
+          const candidate = candidateItems.find((c) => c.verseId === vid)!;
+          return {
+            verseId: vid,
+            book,
+            chapter: candidate.chapter,
+            verseNumber: candidate.verseNumber,
+            text: candidate.text,
+            orderIndex: 0,
+            status: 'queued' as const,
+            origin: 'individual' as const,
+            retentionPhase: 'none' as const,
+            dateStarted: null,
+            lastReviewDate: null,
+            nextReviewDueDate: null,
+            currentStreakCount: 0,
+            totalSuccessfulReviews: 0,
+            gracePeriodUsedToday: false,
+          };
+        })
+        .filter((q): q is QueueItem => !!q);
+
+      const rest = memoryQueue.filter((q) => !(goalIdSet.has(q.verseId) && q.status === 'queued'));
+      const reordered = [...frontOfQueue, ...rest].map((q, i) => ({ ...q, orderIndex: i }));
+      setMemoryQueue(reordered);
+
+      const goal: MemorizationGoal = {
+        book,
+        startChapter,
+        endChapter,
+        targetDate,
+        totalVerses: verseIds.length,
+        verseIds,
+        createdAt: new Date().toISOString(),
+      };
+      setMemorizationGoal(goal);
+
+      if (auth.currentUser) {
+        try {
+          const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
+          await setDoc(planRef, { memorizationGoal: goal }, { merge: true });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
+        }
+      }
+
+      const skippedNote =
+        skippedChapters > 0
+          ? ` (${skippedChapters} chapter${skippedChapters > 1 ? 's' : ''} not yet available were skipped)`
+          : '';
+      triggerToast(
+        `Goal set: ${book} ${startChapter}${endChapter > startChapter ? `-${endChapter}` : ''} — ${verseIds.length} verses${skippedNote}. 🎯`
+      );
+    } finally {
+      setIsCalculatingGoal(false);
+    }
+  };
+
+  const clearMemorizationGoal = async () => {
+    setMemorizationGoal(null);
+    if (auth.currentUser) {
+      try {
+        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
+        await setDoc(planRef, { memorizationGoal: null }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
+      }
+    }
+    triggerToast('Memorization goal cleared.');
+  };
+
+  // Updates just the target date on the active goal -- unlike
+  // setMemorizationGoalRange, this doesn't re-fetch scripture text or touch
+  // the queue, since the verse range itself hasn't changed.
+  const updateGoalTargetDate = async (newTargetDate: string) => {
+    if (!memorizationGoal) return;
+    const updated = { ...memorizationGoal, targetDate: newTargetDate };
+    setMemorizationGoal(updated);
+    if (auth.currentUser) {
+      try {
+        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
+        await setDoc(planRef, { memorizationGoal: updated }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
+      }
+    }
+  };
+
   // Adopts an externally-sourced pacing configuration (e.g. copying another
   // member's plan from AnalyzePlanScreen) as a brand-new saved plan, active
   // immediately. Builds the plan from the passed-in values directly rather
@@ -1736,8 +1906,6 @@ export function useAppState() {
     planName?: string;
     preset?: 'drip' | 'warrior' | 'custom';
     learningDays?: string[];
-    reviewingDays?: string[];
-    primingDays?: string[];
     newVersesPace?: number;
     maxReviewCap?: number;
     retentionRigor?: 'light' | 'standard' | 'deep' | 'custom';
@@ -1748,14 +1916,13 @@ export function useAppState() {
     reviewsRequired?: number;
     sabbathEnabled?: boolean;
     sabbathDay?: string;
+    cognitiveLoadSensitivity?: 'low' | 'medium' | 'high';
   }) => {
     const newPlan: MemoryPlan = {
       id: 'plan-' + Date.now(),
       name: profile.planName || 'Adopted Plan',
       preset: profile.preset || 'custom',
       learningDays: profile.learningDays || ['M', 'W', 'F'],
-      reviewingDays: profile.reviewingDays || ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'],
-      primingDays: profile.primingDays || ['T', 'Th'],
       newVersesPace: profile.newVersesPace ?? 3,
       maxReviewCap: profile.maxReviewCap ?? 15,
       retentionRigor: profile.retentionRigor || 'standard',
@@ -1766,6 +1933,7 @@ export function useAppState() {
       reviewsRequired: profile.reviewsRequired ?? 1,
       sabbathEnabled: profile.sabbathEnabled ?? false,
       sabbathDay: profile.sabbathDay || 'Su',
+      cognitiveLoadSensitivity: profile.cognitiveLoadSensitivity || 'medium',
       isActive: true,
       updatedAt: new Date().toISOString(),
     };
@@ -1776,8 +1944,6 @@ export function useAppState() {
     setCustomPlanName(newPlan.name);
     setPreset(newPlan.preset);
     setLearningDays(newPlan.learningDays);
-    setReviewingDays(newPlan.reviewingDays);
-    setPrimingDays(newPlan.primingDays);
     setNewVersesPace(newPlan.newVersesPace);
     setMaxReviewCap(newPlan.maxReviewCap);
     setRetentionRigor(newPlan.retentionRigor);
@@ -1788,6 +1954,7 @@ export function useAppState() {
     setReviewsRequired(newPlan.reviewsRequired);
     setSabbathEnabled(newPlan.sabbathEnabled);
     setSabbathDay(newPlan.sabbathDay);
+    setCognitiveLoadSensitivity(newPlan.cognitiveLoadSensitivity);
     setEditingPlanId(newPlan.id);
 
     if (auth.currentUser) {
@@ -1797,8 +1964,6 @@ export function useAppState() {
           savedPlans: updatedPlans,
           preset: newPlan.preset,
           learningDays: newPlan.learningDays,
-          reviewingDays: newPlan.reviewingDays,
-          primingDays: newPlan.primingDays,
           newVersesPace: newPlan.newVersesPace,
           maxReviewCap: newPlan.maxReviewCap,
           retentionRigor: newPlan.retentionRigor,
@@ -1809,6 +1974,7 @@ export function useAppState() {
           reviewsRequired: newPlan.reviewsRequired,
           sabbathEnabled: newPlan.sabbathEnabled,
           sabbathDay: newPlan.sabbathDay,
+          cognitiveLoadSensitivity: newPlan.cognitiveLoadSensitivity,
           name: newPlan.name,
           updatedAt: new Date(),
         });
@@ -1840,8 +2006,6 @@ export function useAppState() {
         name: customPlanName,
         preset,
         learningDays,
-        reviewingDays,
-        primingDays,
         newVersesPace,
         maxReviewCap,
         retentionRigor,
@@ -1852,6 +2016,7 @@ export function useAppState() {
         reviewsRequired,
         sabbathEnabled,
         sabbathDay,
+        cognitiveLoadSensitivity,
         creatorName: user?.displayName || 'Anonymous Disciple',
         creatorId: user?.uid || 'anonymous',
         createdAt: new Date().toISOString(),
@@ -1872,8 +2037,6 @@ export function useAppState() {
                 name: customPlanName,
                 preset,
                 learningDays,
-                reviewingDays,
-                primingDays,
                 newVersesPace,
                 maxReviewCap,
                 retentionRigor,
@@ -1884,6 +2047,7 @@ export function useAppState() {
                 reviewsRequired,
                 sabbathEnabled,
                 sabbathDay,
+                cognitiveLoadSensitivity,
                 updatedAt: new Date().toISOString(),
               };
             }
@@ -1896,8 +2060,6 @@ export function useAppState() {
             name: customPlanName,
             preset,
             learningDays,
-            reviewingDays,
-            primingDays,
             newVersesPace,
             maxReviewCap,
             retentionRigor,
@@ -1908,6 +2070,7 @@ export function useAppState() {
             reviewsRequired,
             sabbathEnabled,
             sabbathDay,
+            cognitiveLoadSensitivity,
             isActive: true,
             updatedAt: new Date().toISOString(),
           };
@@ -1924,8 +2087,6 @@ export function useAppState() {
           savedPlans: updatedPlans,
           preset: activePlan.preset,
           learningDays: activePlan.learningDays,
-          reviewingDays: activePlan.reviewingDays,
-          primingDays: activePlan.primingDays,
           newVersesPace: activePlan.newVersesPace,
           maxReviewCap: activePlan.maxReviewCap,
           name: activePlan.name,
@@ -2038,8 +2199,6 @@ export function useAppState() {
             name: planData.name || 'Genesis — Foundations Track',
             preset: planData.preset || 'custom',
             learningDays: planData.learningDays || ['M', 'T', 'W', 'Th', 'F'],
-            reviewingDays: planData.reviewingDays || ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'],
-            primingDays: planData.primingDays || ['W', 'F'],
             newVersesPace: planData.newVersesPace || 3,
             maxReviewCap: planData.maxReviewCap || 15,
             retentionRigor: planData.retentionRigor || 'standard',
@@ -2050,6 +2209,7 @@ export function useAppState() {
             reviewsRequired: planData.reviewsRequired ?? 1,
             sabbathEnabled: planData.sabbathEnabled ?? false,
             sabbathDay: planData.sabbathDay || 'Su',
+            cognitiveLoadSensitivity: planData.cognitiveLoadSensitivity || 'medium',
             isActive: true,
             updatedAt: new Date().toISOString(),
           };
@@ -2057,9 +2217,9 @@ export function useAppState() {
         }
 
         // Back-compat: plans saved before retention-rigor/mastery-touches/
-        // sabbath existed won't have these fields in Firestore — default
-        // them to prior hardcoded behavior so existing plans don't change
-        // silently.
+        // sabbath/cognitiveLoadSensitivity existed won't have these fields
+        // in Firestore — default them to prior hardcoded behavior so
+        // existing plans don't change silently.
         plansList = plansList.map((p) => ({
           ...p,
           retentionRigor: p.retentionRigor || 'standard',
@@ -2070,6 +2230,7 @@ export function useAppState() {
           reviewsRequired: p.reviewsRequired ?? 1,
           sabbathEnabled: p.sabbathEnabled ?? false,
           sabbathDay: p.sabbathDay || 'Su',
+          cognitiveLoadSensitivity: p.cognitiveLoadSensitivity || 'medium',
         }));
 
         setSavedPlans(plansList);
@@ -2079,8 +2240,6 @@ export function useAppState() {
         if (active) {
           setPreset(active.preset);
           setLearningDays(active.learningDays);
-          setReviewingDays(active.reviewingDays);
-          setPrimingDays(active.primingDays);
           setNewVersesPace(active.newVersesPace);
           setMaxReviewCap(active.maxReviewCap);
           setRetentionRigor(active.retentionRigor);
@@ -2091,8 +2250,11 @@ export function useAppState() {
           setReviewsRequired(active.reviewsRequired);
           setSabbathEnabled(active.sabbathEnabled);
           setSabbathDay(active.sabbathDay);
+          setCognitiveLoadSensitivity(active.cognitiveLoadSensitivity);
           setCustomPlanName(active.name);
         }
+
+        setMemorizationGoal(planData.memorizationGoal || null);
       } else {
         console.log('Creating new memory plan...');
         setSavedPlans(DEFAULT_PLANS);
@@ -2101,8 +2263,6 @@ export function useAppState() {
             savedPlans: DEFAULT_PLANS,
             preset: DEFAULT_PLANS[0].preset,
             learningDays: DEFAULT_PLANS[0].learningDays,
-            reviewingDays: DEFAULT_PLANS[0].reviewingDays,
-            primingDays: DEFAULT_PLANS[0].primingDays,
             newVersesPace: DEFAULT_PLANS[0].newVersesPace,
             maxReviewCap: DEFAULT_PLANS[0].maxReviewCap,
             retentionRigor: DEFAULT_PLANS[0].retentionRigor,
@@ -2113,6 +2273,7 @@ export function useAppState() {
             reviewsRequired: DEFAULT_PLANS[0].reviewsRequired,
             sabbathEnabled: DEFAULT_PLANS[0].sabbathEnabled,
             sabbathDay: DEFAULT_PLANS[0].sabbathDay,
+            cognitiveLoadSensitivity: DEFAULT_PLANS[0].cognitiveLoadSensitivity,
             name: DEFAULT_PLANS[0].name,
             updatedAt: new Date(),
           });
@@ -2265,8 +2426,6 @@ export function useAppState() {
         setMemoryQueue(generateInitialQueue(INITIAL_VERSES));
         setPreset('custom');
         setLearningDays(['M', 'W', 'F']);
-        setReviewingDays(['M', 'T', 'W', 'Th', 'F', 'S', 'Su']);
-        setPrimingDays(['T', 'Th', 'S']);
         setNewVersesPace(3);
         setMaxReviewCap(15);
         setMyCircles([]);
@@ -2293,20 +2452,22 @@ export function useAppState() {
   // container; here each screen is its own mounted component, so its ScrollView
   // naturally starts at the top on mount and no equivalent effect is needed.
 
-  // Recording Timer
+  // Recording Timer -- keeps ticking while recording and not paused. Only
+  // resets to 0 when recording stops entirely, not when merely paused, so
+  // resuming continues from where the elapsed time left off.
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
-    if (isRecording) {
+    if (isRecording && !isRecordingPaused) {
       interval = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
-    } else {
+    } else if (!isRecording) {
       setRecordingSeconds(0);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isRecording]);
+  }, [isRecording, isRecordingPaused]);
 
   // Saved Recording Playback — real audio (via expo-audio) for recordings with
   // a Storage-backed audioUrl; falls back to a simulated progress timer for
@@ -2702,13 +2863,28 @@ export function useAppState() {
           updatedItem.currentStreakCount += 1;
 
           if (updatedLogs.length >= masteryTouches) {
-            updatedItem.status = 'reviewing';
-            updatedItem.retentionPhase = 'daily';
-            updatedItem.dateStarted = new Date().toISOString();
-            updatedItem.currentStreakCount = 1;
-            updatedItem.nextReviewDueDate = nextDueDateISO(1);
-            updatedItem.reviewsToday = 0;
-            triggerToast('Passage mastered! Transitioned to 7-6-5 spaced review. 🎉');
+            // Retention beats new learning: a verse can bank all its touches,
+            // but doesn't actually graduate to spaced review while other
+            // verses still have reviews due today. It releases automatically
+            // the moment the last due review clears (see the sweep at the
+            // end of this function).
+            const dueReviewsPending = memoryQueue.some(
+              (q) =>
+                q.verseId !== item.verseId &&
+                q.status === 'reviewing' &&
+                (!q.nextReviewDueDate || new Date(q.nextReviewDueDate) <= new Date())
+            );
+            if (dueReviewsPending) {
+              triggerToast(`Mastery touches complete (${updatedLogs.length}/${masteryTouches})! Finish today's reviews to lock this verse in. 🔒`);
+            } else {
+              updatedItem.status = 'reviewing';
+              updatedItem.retentionPhase = 'daily';
+              updatedItem.dateStarted = new Date().toISOString();
+              updatedItem.currentStreakCount = 1;
+              updatedItem.nextReviewDueDate = nextDueDateISO(1);
+              updatedItem.reviewsToday = 0;
+              triggerToast('Passage mastered! Transitioned to 7-6-5 spaced review. 🎉');
+            }
           } else {
             triggerToast(`Recall logged! Mastery progress: ${updatedLogs.length}/${masteryTouches} touches. 🌟`);
           }
@@ -2810,7 +2986,42 @@ export function useAppState() {
       }
     }
 
-    setMemoryQueue((prev) => prev.map((q) => (q.verseId === item.verseId ? updatedItem : q)));
+    // A "reviewing" item was just resolved (success or failure), which may
+    // have cleared the last due review for today. If so, release any
+    // learning verses that banked all their mastery touches while reviews
+    // were still pending (see the touch-gate above) -- retention comes
+    // first, but a fully-touched verse shouldn't wait a moment longer than
+    // it has to once nothing is left to review.
+    let finalQueue = memoryQueue.map((q) => (q.verseId === item.verseId ? updatedItem : q));
+    if (item.status === 'reviewing') {
+      const dueReviewsRemaining = finalQueue.some(
+        (q) => q.status === 'reviewing' && (!q.nextReviewDueDate || new Date(q.nextReviewDueDate) <= new Date())
+      );
+      if (!dueReviewsRemaining) {
+        let releasedCount = 0;
+        finalQueue = finalQueue.map((q) => {
+          if (q.status === 'learning' && (q.touchLogs?.length || 0) >= masteryTouches) {
+            releasedCount++;
+            return {
+              ...q,
+              status: 'reviewing' as const,
+              retentionPhase: 'daily' as const,
+              dateStarted: new Date().toISOString(),
+              currentStreakCount: 1,
+              nextReviewDueDate: nextDueDateISO(1),
+              reviewsToday: 0,
+            };
+          }
+          return q;
+        });
+        if (releasedCount > 0) {
+          triggerToast(
+            `All reviews done! ${releasedCount} verse${releasedCount > 1 ? 's' : ''} locked in and moved to spaced review. 🔓`
+          );
+        }
+      }
+    }
+    setMemoryQueue(finalQueue);
 
     if (auth.currentUser) {
       try {
@@ -3131,6 +3342,7 @@ export function useAppState() {
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
       setIsRecording(true);
+      setIsRecordingPaused(false);
       setRecordingSeconds(0);
       // Seed the chapter's first verse at t=0 — recording always starts on
       // verse 1, so the user only needs to tap starting from the next verse.
@@ -3160,15 +3372,52 @@ export function useAppState() {
       console.error('Failed to reset audio mode after recording:', err);
     }
     setIsRecording(false);
+    setIsRecordingPaused(false);
     setPickedRecordingVisibility(defaultRecordingVisibility || 'private');
     setSaveRecordingDialog(true);
+  };
+
+  // Pauses mid-recording without finalizing it -- the recording timer holds
+  // at its current value (see the Recording Timer effect) rather than
+  // resetting, since only a real stop should do that.
+  const handlePauseRecording = () => {
+    if (!isRecording || isRecordingPaused) return;
+    audioRecorder.pause();
+    setIsRecordingPaused(true);
+    triggerToast('Recording paused.');
+  };
+
+  const handleResumeRecording = () => {
+    if (!isRecording || !isRecordingPaused) return;
+    audioRecorder.record();
+    setIsRecordingPaused(false);
+    triggerToast('Recording resumed.');
+  };
+
+  // Discards the in-progress recording entirely (no save dialog) and
+  // returns to the idle state so the user can start a fresh take.
+  const handleResetRecording = async () => {
+    try {
+      await audioRecorder.stop();
+    } catch (err) {
+      console.error('Failed to stop recording during reset:', err);
+    }
+    try {
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+    } catch (err) {
+      console.error('Failed to reset audio mode after resetting recording:', err);
+    }
+    setIsRecording(false);
+    setIsRecordingPaused(false);
+    setVerseTapTimestamps({});
+    triggerToast('Recording discarded — tap to start again.');
   };
 
   // Tap-to-mark: called when the user taps a verse in the teleprompter while
   // recording. Re-tapping the same verse overwrites its mark with the newer
   // time, so an accidental early tap can just be corrected with another tap.
   const handleMarkVerseTap = (verseNumber: number) => {
-    if (!isRecording) return;
+    if (!isRecording || isRecordingPaused) return;
     setVerseTapTimestamps((prev) => ({ ...prev, [verseNumber]: audioRecorder.currentTime }));
   };
 
@@ -3394,8 +3643,6 @@ export function useAppState() {
     recSyncOffsets, setRecSyncOffsets,
     preset, setPreset,
     learningDays, setLearningDays,
-    reviewingDays, setReviewingDays,
-    primingDays, setPrimingDays,
     newVersesPace, setNewVersesPace,
     maxReviewCap, setMaxReviewCap,
     retentionRigor, setRetentionRigor,
@@ -3405,6 +3652,7 @@ export function useAppState() {
     activeModal, setActiveModal,
     modalVerses, setModalVerses,
     isRecording, setIsRecording,
+    isRecordingPaused,
     recordingSeconds, setRecordingSeconds,
     lastRecordingDuration,
     verseTapTimestamps,
@@ -3432,6 +3680,9 @@ export function useAppState() {
     sabbathDay, setSabbathDay,
     activeGroupPlan, setActiveGroupPlan,
     viewingGroupDetail, setViewingGroupDetail,
+    memorizationGoal, isCalculatingGoal,
+    setMemorizationGoalRange, clearMemorizationGoal, updateGoalTargetDate,
+    countLearningDaysBetween, dateAfterNLearningDays,
     myCircles, loadingMyCircles,
     publicCircles, loadingPublicCircles,
     activeCircle, activeCircleMembers, activeCircleGroupPlans, loadingActiveCircle,
@@ -3549,6 +3800,9 @@ export function useAppState() {
     // voice recorder flow
     handleStartRecording,
     handleStopRecording,
+    handlePauseRecording,
+    handleResumeRecording,
+    handleResetRecording,
     handleMarkVerseTap,
     saveRecordedAudio,
     deleteRecording,

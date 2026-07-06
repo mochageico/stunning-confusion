@@ -13,8 +13,6 @@ export default function AnalyzePlanScreen({ state }: { state: AppState }) {
 
   const rows: Array<{ label: string; days: string[]; activeClassName: string }> = [
     { label: 'Learning Days', days: selectedUserProfile.learningDays || [], activeClassName: 'bg-indigo-600 border-transparent' },
-    { label: 'Reviewing Days', days: selectedUserProfile.reviewingDays || [], activeClassName: 'bg-emerald-600 border-transparent' },
-    { label: 'Priming Days', days: selectedUserProfile.primingDays || [], activeClassName: 'bg-amber-500 border-transparent' },
   ];
 
   return (
@@ -59,8 +57,6 @@ export default function AnalyzePlanScreen({ state }: { state: AppState }) {
                   planName: selectedUserProfile.planName,
                   preset: selectedUserProfile.preset,
                   learningDays: selectedUserProfile.learningDays,
-                  reviewingDays: selectedUserProfile.reviewingDays,
-                  primingDays: selectedUserProfile.primingDays,
                   newVersesPace: selectedUserProfile.newVersesPace,
                   maxReviewCap: selectedUserProfile.maxReviewCap,
                 });

@@ -13,6 +13,12 @@ const RIGOR_TIERS: { key: 'light' | 'standard' | 'deep'; label: string; weeks: n
   { key: 'deep', label: 'Deep', weeks: 9, months: 8, years: 7 },
 ];
 
+const COGNITIVE_LOAD_TIERS: { key: 'low' | 'medium' | 'high'; label: string }[] = [
+  { key: 'low', label: 'Relaxed' },
+  { key: 'medium', label: 'Balanced' },
+  { key: 'high', label: 'Intense' },
+];
+
 export default function PlanDesignerScreen({ state }: { state: AppState }) {
   const {
     handleBack,
@@ -21,10 +27,6 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     setPreset,
     learningDays,
     setLearningDays,
-    reviewingDays,
-    setReviewingDays,
-    primingDays,
-    setPrimingDays,
     newVersesPace,
     setNewVersesPace,
     maxReviewCap,
@@ -37,6 +39,8 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     setSabbathEnabled,
     sabbathDay,
     setSabbathDay,
+    cognitiveLoadSensitivity,
+    setCognitiveLoadSensitivity,
     retentionRigor,
     setRetentionRigor,
     dailyPhaseWeeks,
@@ -103,8 +107,6 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               onPress={() => {
                 setPreset('drip');
                 setLearningDays(['M', 'T', 'W', 'Th', 'F']);
-                setReviewingDays(['M', 'T', 'W', 'Th', 'F', 'S', 'Su']);
-                setPrimingDays(['M', 'T', 'W', 'Th', 'F']);
                 setNewVersesPace(2);
                 setMaxReviewCap(10);
                 triggerToast("Loaded 'The Daily Drip' preset! \u{1F4A7}");
@@ -139,8 +141,6 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               onPress={() => {
                 setPreset('warrior');
                 setLearningDays(['S', 'Su']);
-                setReviewingDays(['M', 'T', 'W', 'Th', 'F', 'S', 'Su']);
-                setPrimingDays(['M', 'T', 'W', 'Th', 'F']);
                 setNewVersesPace(5);
                 setMaxReviewCap(20);
                 triggerToast("Loaded 'Weekend Warrior' preset! ⚔️");
@@ -271,57 +271,6 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               )}
             </View>
 
-            {/* Reviewing Days */}
-            <View style={{ gap: 6 }}>
-              <View className="flex-row justify-between items-center">
-                <Text className="text-xs font-serif font-bold text-[#1A1A1A]">Reviewing Days</Text>
-                <Text className="text-[9px] font-mono font-bold text-neutral-400 bg-neutral-50 border border-neutral-200 px-1 rounded">
-                  {reviewingDays.length}/7 active
-                </Text>
-              </View>
-              <View className="flex-row justify-between">
-                {DAYS.map((day) => {
-                  const isActive = reviewingDays.includes(day);
-                  return (
-                    <Pressable
-                      key={`review-${day}`}
-                      onPress={() => toggleDay(day, reviewingDays, setReviewingDays)}
-                      className={`w-7 h-7 rounded-full border items-center justify-center ${
-                        isActive ? 'bg-[#1A1A1A] border-[#1A1A1A] shadow-sm' : 'bg-white border-neutral-200'
-                      }`}
-                    >
-                      <Text className={`font-sans font-bold text-[10px] ${isActive ? 'text-white' : 'text-neutral-500'}`}>{day}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Priming Days */}
-            <View style={{ gap: 6 }}>
-              <View className="flex-row justify-between items-center">
-                <Text className="text-xs font-serif font-bold text-[#1A1A1A]">Priming Days</Text>
-                <Text className="text-[9px] font-mono font-bold text-neutral-400 bg-neutral-50 border border-neutral-200 px-1 rounded">
-                  {primingDays.length}/7 active
-                </Text>
-              </View>
-              <View className="flex-row justify-between">
-                {DAYS.map((day) => {
-                  const isActive = primingDays.includes(day);
-                  return (
-                    <Pressable
-                      key={`prime-${day}`}
-                      onPress={() => toggleDay(day, primingDays, setPrimingDays)}
-                      className={`w-7 h-7 rounded-full border items-center justify-center ${
-                        isActive ? 'bg-[#1A1A1A] border-[#1A1A1A] shadow-sm' : 'bg-white border-neutral-200'
-                      }`}
-                    >
-                      <Text className={`font-sans font-bold text-[10px] ${isActive ? 'text-white' : 'text-neutral-500'}`}>{day}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
           </View>
         </View>
 
@@ -429,6 +378,32 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             <View className="flex-row justify-between">
               <Text className="text-[8px] text-neutral-400 font-mono">1 review</Text>
               <Text className="text-[8px] text-neutral-400 font-mono">3 reviews</Text>
+            </View>
+          </View>
+
+          {/* Time Estimate Buffer (cognitiveLoadSensitivity) */}
+          <View style={{ gap: 6 }} className="pt-4 border-t border-[#F3F2F1]">
+            <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Time Estimate Buffer</Text>
+            <Text className="text-[9px] text-neutral-400 font-sans leading-relaxed">
+              How much extra time to build into your daily estimate, in case reviews take you longer than average.
+            </Text>
+            <View className="flex-row gap-2 pt-1">
+              {COGNITIVE_LOAD_TIERS.map((tier) => {
+                const isActive = cognitiveLoadSensitivity === tier.key;
+                return (
+                  <Pressable
+                    key={tier.key}
+                    onPress={() => setCognitiveLoadSensitivity(tier.key)}
+                    className={`flex-1 border-2 rounded-xl p-2 items-center ${
+                      isActive ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
+                    }`}
+                  >
+                    <Text className={`text-[11px] font-serif font-black ${isActive ? 'text-white' : 'text-[#1A1A1A]'}`}>
+                      {tier.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
         </View>

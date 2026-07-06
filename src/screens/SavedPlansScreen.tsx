@@ -79,8 +79,7 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                       </Text>
                     </View>
                     <Text className="text-[10px] font-sans text-neutral-400">
-                      {plan.learningDays.length} learning · {plan.reviewingDays.length} reviewing ·{' '}
-                      {plan.primingDays.length} priming days · {plan.newVersesPace} v/day
+                      {plan.learningDays.length} learning days · {plan.newVersesPace} v/day
                     </Text>
                   </View>
 

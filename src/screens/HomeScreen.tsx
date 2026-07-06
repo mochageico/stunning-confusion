@@ -177,10 +177,13 @@ export default function HomeScreen({ state }: { state: AppState }) {
                     <View className="flex-row flex-wrap gap-x-2 gap-y-1 pt-1.5 border-t border-neutral-100">
                       {group.items.map((item) => {
                         const touchesCount = item.touchLogs ? item.touchLogs.length : 0;
+                        const isBankedAwaitingReview = touchesCount >= masteryTouches;
                         return (
                           <View
                             key={item.verseId}
-                            className="flex-row items-center gap-1.5 bg-white px-2 py-0.5 rounded-md border border-neutral-100"
+                            className={`flex-row items-center gap-1.5 px-2 py-0.5 rounded-md border ${
+                              isBankedAwaitingReview ? 'bg-neutral-100 border-neutral-200 opacity-60' : 'bg-white border-neutral-100'
+                            }`}
                           >
                             <Text className="text-[9.5px] font-sans font-bold text-neutral-500">v{item.verseNumber}</Text>
                             <View className="flex-row gap-0.5">
@@ -196,6 +199,12 @@ export default function HomeScreen({ state }: { state: AppState }) {
                             <Text className="text-[8px] font-mono font-black text-neutral-400">
                               {touchesCount}/{masteryTouches}
                             </Text>
+                            {isBankedAwaitingReview && (
+                              <HelpTooltip
+                                text="Fully touched, but retention comes first: this verse will lock in and move to spaced review automatically as soon as today's due reviews are finished."
+                                position="top"
+                              />
+                            )}
                           </View>
                         );
                       })}
