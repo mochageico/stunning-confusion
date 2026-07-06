@@ -139,6 +139,14 @@ export interface MemoryPlan {
   primingDays: string[];
   newVersesPace: number;
   maxReviewCap: number;
+  // Retention rigor: how many weeks/months/years a verse spends in each
+  // review phase before graduating. 'light'/'standard'/'deep' are named
+  // presets (5-4-3 / 7-6-5 / 9-8-7); 'custom' means the three *PhaseX
+  // fields below were hand-set and don't match a named preset.
+  retentionRigor: 'light' | 'standard' | 'deep' | 'custom';
+  dailyPhaseWeeks: number;
+  weeklyPhaseMonths: number;
+  monthlyPhaseYears: number;
   isActive: boolean;
   updatedAt: string | Date;
 }

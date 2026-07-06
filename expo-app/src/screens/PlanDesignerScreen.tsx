@@ -7,6 +7,12 @@ import { FadeInView, PulseView } from '../components/ui';
 
 const DAYS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
 
+const RIGOR_TIERS: { key: 'light' | 'standard' | 'deep'; label: string; weeks: number; months: number; years: number }[] = [
+  { key: 'light', label: 'Light', weeks: 5, months: 4, years: 3 },
+  { key: 'standard', label: 'Standard', weeks: 7, months: 6, years: 5 },
+  { key: 'deep', label: 'Deep', weeks: 9, months: 8, years: 7 },
+];
+
 export default function PlanDesignerScreen({ state }: { state: AppState }) {
   const {
     handleBack,
@@ -27,6 +33,14 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     setMasteryTouches,
     reviewsRequired,
     setReviewsRequired,
+    retentionRigor,
+    setRetentionRigor,
+    dailyPhaseWeeks,
+    setDailyPhaseWeeks,
+    weeklyPhaseMonths,
+    setWeeklyPhaseMonths,
+    monthlyPhaseYears,
+    setMonthlyPhaseYears,
     customPlanName,
     setCustomPlanName,
     shareWithCommunity,
@@ -34,6 +48,19 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     handleSavePlan,
     publishSharedPlan,
   } = state;
+
+  const applyRigorPreset = (tier: 'light' | 'standard' | 'deep') => {
+    const cfg = RIGOR_TIERS.find((t) => t.key === tier)!;
+    setRetentionRigor(tier);
+    setDailyPhaseWeeks(cfg.weeks);
+    setWeeklyPhaseMonths(cfg.months);
+    setMonthlyPhaseYears(cfg.years);
+    triggerToast(`Retention rigor set to ${cfg.label} (${cfg.weeks}-${cfg.months}-${cfg.years})! 🎯`);
+  };
+
+  const totalRigorDays = dailyPhaseWeeks * 7 + weeklyPhaseMonths * 30 + monthlyPhaseYears * 365;
+  const totalRigorLabel =
+    totalRigorDays >= 365 ? `${(totalRigorDays / 365).toFixed(1)} years` : `${Math.round(totalRigorDays)} days`;
 
   const toggleDay = (day: string, list: string[], setList: (v: string[]) => void) => {
     if (list.includes(day)) {
@@ -358,6 +385,137 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               <Text className="text-[8px] text-neutral-400 font-mono">3 reviews</Text>
             </View>
           </View>
+        </View>
+
+        {/* Retention Rigor */}
+        <View className="border-2 border-[#1A1A1A] rounded-xl p-3.5 bg-white shadow-sm" style={{ gap: 16 }}>
+          <View className="flex-row items-center justify-between border-b border-neutral-100 pb-2">
+            <Text className="text-xs font-sans font-extrabold uppercase tracking-widest text-[#1A1A1A]">Retention Rigor</Text>
+            <Text className="text-[8px] bg-neutral-100 text-[#1A1A1A] border border-neutral-300 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
+              {dailyPhaseWeeks}-{weeklyPhaseMonths}-{monthlyPhaseYears}
+            </Text>
+          </View>
+
+          <Text className="text-[10px] text-neutral-500 font-sans -mt-2 leading-relaxed">
+            How long a verse stays in Daily, then Weekly, then Monthly review before it's retained for good. Higher
+            numbers mean deeper, more permanent memorization.
+          </Text>
+
+          <View className="flex-row gap-2">
+            {RIGOR_TIERS.map((tier) => {
+              const isActive = retentionRigor === tier.key;
+              return (
+                <Pressable
+                  key={tier.key}
+                  onPress={() => applyRigorPreset(tier.key)}
+                  className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
+                    isActive ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
+                  }`}
+                  style={{ height: 76 }}
+                >
+                  <Text className={`text-[11px] font-serif font-black leading-tight ${isActive ? 'text-white' : 'text-[#1A1A1A]'}`}>
+                    {tier.label}
+                  </Text>
+                  <Text className={`text-[8px] font-mono leading-tight ${isActive ? 'text-neutral-200' : 'text-neutral-500'}`}>
+                    {tier.weeks}-{tier.months}-{tier.years}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => setRetentionRigor('custom')}
+              className={`flex-1 rounded-xl p-2.5 justify-between ${
+                retentionRigor === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6] shadow-md' : 'border-2 border-[#E5E5E5] bg-white'
+              }`}
+              style={{ height: 76 }}
+            >
+              <View className="flex-row justify-between items-center">
+                <Text className="text-[11px] font-serif font-black leading-tight text-[#1A1A1A]">Custom</Text>
+                {retentionRigor === 'custom' && <View className="w-1.5 h-1.5 bg-amber-500 rounded-full" />}
+              </View>
+              <Text className="text-[8px] font-mono leading-tight text-neutral-500">Fine-tune</Text>
+            </Pressable>
+          </View>
+
+          {retentionRigor === 'custom' && (
+            <View style={{ gap: 16 }} className="pt-2 border-t border-[#F3F2F1]">
+              {/* Daily Phase Length */}
+              <View style={{ gap: 6 }}>
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Daily Phase Length</Text>
+                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
+                    {dailyPhaseWeeks} weeks
+                  </Text>
+                </View>
+                <Slider
+                  style={{ width: '100%', height: 32 }}
+                  minimumValue={3}
+                  maximumValue={14}
+                  step={1}
+                  value={dailyPhaseWeeks}
+                  onValueChange={(v: number) => setDailyPhaseWeeks(v)}
+                  minimumTrackTintColor="#1A1A1A"
+                  maximumTrackTintColor="#d4d4d4"
+                />
+                <View className="flex-row justify-between">
+                  <Text className="text-[8px] text-neutral-400 font-mono">3 weeks</Text>
+                  <Text className="text-[8px] text-neutral-400 font-mono">14 weeks</Text>
+                </View>
+              </View>
+
+              {/* Weekly Phase Length */}
+              <View style={{ gap: 6 }}>
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Weekly Phase Length</Text>
+                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
+                    {weeklyPhaseMonths} months
+                  </Text>
+                </View>
+                <Slider
+                  style={{ width: '100%', height: 32 }}
+                  minimumValue={2}
+                  maximumValue={12}
+                  step={1}
+                  value={weeklyPhaseMonths}
+                  onValueChange={(v: number) => setWeeklyPhaseMonths(v)}
+                  minimumTrackTintColor="#1A1A1A"
+                  maximumTrackTintColor="#d4d4d4"
+                />
+                <View className="flex-row justify-between">
+                  <Text className="text-[8px] text-neutral-400 font-mono">2 months</Text>
+                  <Text className="text-[8px] text-neutral-400 font-mono">12 months</Text>
+                </View>
+              </View>
+
+              {/* Monthly Phase Length */}
+              <View style={{ gap: 6 }}>
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Monthly Phase Length</Text>
+                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
+                    {monthlyPhaseYears} years
+                  </Text>
+                </View>
+                <Slider
+                  style={{ width: '100%', height: 32 }}
+                  minimumValue={1}
+                  maximumValue={10}
+                  step={1}
+                  value={monthlyPhaseYears}
+                  onValueChange={(v: number) => setMonthlyPhaseYears(v)}
+                  minimumTrackTintColor="#1A1A1A"
+                  maximumTrackTintColor="#d4d4d4"
+                />
+                <View className="flex-row justify-between">
+                  <Text className="text-[8px] text-neutral-400 font-mono">1 year</Text>
+                  <Text className="text-[8px] text-neutral-400 font-mono">10 years</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          <Text className="text-[10px] text-neutral-500 font-sans pt-2 border-t border-[#F3F2F1] leading-relaxed">
+            At this rigor, a verse is fully retained for good after about <Text className="font-bold text-[#1A1A1A]">{totalRigorLabel}</Text>.
+          </Text>
         </View>
 
         {/* Custom naming & community sharing options */}

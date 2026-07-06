@@ -260,6 +260,12 @@ export function useAppState() {
   const [primingDays, setPrimingDays] = useState<string[]>(['T', 'Th', 'S']);
   const [newVersesPace, setNewVersesPace] = useState<number>(3);
   const [maxReviewCap, setMaxReviewCap] = useState<number>(15);
+  // Retention rigor: how long a verse stays in each review phase before
+  // graduating (default 7-6-5 == today's previously-hardcoded behavior).
+  const [retentionRigor, setRetentionRigor] = useState<'light' | 'standard' | 'deep' | 'custom'>('standard');
+  const [dailyPhaseWeeks, setDailyPhaseWeeks] = useState<number>(7);
+  const [weeklyPhaseMonths, setWeeklyPhaseMonths] = useState<number>(6);
+  const [monthlyPhaseYears, setMonthlyPhaseYears] = useState<number>(5);
 
   // Practice Overlays
   const [activeModal, setActiveModal] = useState<'listen' | 'type' | 'reveal' | null>(null);
@@ -1397,6 +1403,10 @@ export function useAppState() {
     setPrimingDays(plan.primingDays);
     setNewVersesPace(plan.newVersesPace);
     setMaxReviewCap(plan.maxReviewCap);
+    setRetentionRigor(plan.retentionRigor || 'standard');
+    setDailyPhaseWeeks(plan.dailyPhaseWeeks ?? 7);
+    setWeeklyPhaseMonths(plan.weeklyPhaseMonths ?? 6);
+    setMonthlyPhaseYears(plan.monthlyPhaseYears ?? 5);
     setCustomPlanName(plan.name);
     navigateTo('planDesigner');
   };
@@ -1409,6 +1419,10 @@ export function useAppState() {
     setPrimingDays(['T', 'Th']);
     setNewVersesPace(3);
     setMaxReviewCap(15);
+    setRetentionRigor('standard');
+    setDailyPhaseWeeks(7);
+    setWeeklyPhaseMonths(6);
+    setMonthlyPhaseYears(5);
     setCustomPlanName('New Custom Plan');
     navigateTo('planDesigner');
   };
@@ -1428,6 +1442,10 @@ export function useAppState() {
             primingDays,
             newVersesPace,
             maxReviewCap,
+            retentionRigor,
+            dailyPhaseWeeks,
+            weeklyPhaseMonths,
+            monthlyPhaseYears,
             updatedAt: new Date().toISOString(),
           };
         }
@@ -1445,6 +1463,10 @@ export function useAppState() {
         primingDays,
         newVersesPace,
         maxReviewCap,
+        retentionRigor,
+        dailyPhaseWeeks,
+        weeklyPhaseMonths,
+        monthlyPhaseYears,
         isActive: true,
         updatedAt: new Date().toISOString(),
       };
@@ -1549,6 +1571,10 @@ export function useAppState() {
     primingDays?: string[];
     newVersesPace?: number;
     maxReviewCap?: number;
+    retentionRigor?: 'light' | 'standard' | 'deep' | 'custom';
+    dailyPhaseWeeks?: number;
+    weeklyPhaseMonths?: number;
+    monthlyPhaseYears?: number;
   }) => {
     const newPlan: MemoryPlan = {
       id: 'plan-' + Date.now(),
@@ -1559,6 +1585,10 @@ export function useAppState() {
       primingDays: profile.primingDays || ['T', 'Th'],
       newVersesPace: profile.newVersesPace ?? 3,
       maxReviewCap: profile.maxReviewCap ?? 15,
+      retentionRigor: profile.retentionRigor || 'standard',
+      dailyPhaseWeeks: profile.dailyPhaseWeeks ?? 7,
+      weeklyPhaseMonths: profile.weeklyPhaseMonths ?? 6,
+      monthlyPhaseYears: profile.monthlyPhaseYears ?? 5,
       isActive: true,
       updatedAt: new Date().toISOString(),
     };
@@ -1573,6 +1603,10 @@ export function useAppState() {
     setPrimingDays(newPlan.primingDays);
     setNewVersesPace(newPlan.newVersesPace);
     setMaxReviewCap(newPlan.maxReviewCap);
+    setRetentionRigor(newPlan.retentionRigor);
+    setDailyPhaseWeeks(newPlan.dailyPhaseWeeks);
+    setWeeklyPhaseMonths(newPlan.weeklyPhaseMonths);
+    setMonthlyPhaseYears(newPlan.monthlyPhaseYears);
     setEditingPlanId(newPlan.id);
 
     if (auth.currentUser) {
@@ -1586,6 +1620,10 @@ export function useAppState() {
           primingDays: newPlan.primingDays,
           newVersesPace: newPlan.newVersesPace,
           maxReviewCap: newPlan.maxReviewCap,
+          retentionRigor: newPlan.retentionRigor,
+          dailyPhaseWeeks: newPlan.dailyPhaseWeeks,
+          weeklyPhaseMonths: newPlan.weeklyPhaseMonths,
+          monthlyPhaseYears: newPlan.monthlyPhaseYears,
           name: newPlan.name,
           updatedAt: new Date(),
         });
@@ -1621,6 +1659,10 @@ export function useAppState() {
         primingDays,
         newVersesPace,
         maxReviewCap,
+        retentionRigor,
+        dailyPhaseWeeks,
+        weeklyPhaseMonths,
+        monthlyPhaseYears,
         creatorName: user?.displayName || 'Anonymous Disciple',
         creatorId: user?.uid || 'anonymous',
         createdAt: new Date().toISOString(),
@@ -1645,6 +1687,10 @@ export function useAppState() {
                 primingDays,
                 newVersesPace,
                 maxReviewCap,
+                retentionRigor,
+                dailyPhaseWeeks,
+                weeklyPhaseMonths,
+                monthlyPhaseYears,
                 updatedAt: new Date().toISOString(),
               };
             }
@@ -1661,6 +1707,10 @@ export function useAppState() {
             primingDays,
             newVersesPace,
             maxReviewCap,
+            retentionRigor,
+            dailyPhaseWeeks,
+            weeklyPhaseMonths,
+            monthlyPhaseYears,
             isActive: true,
             updatedAt: new Date().toISOString(),
           };
@@ -1795,11 +1845,26 @@ export function useAppState() {
             primingDays: planData.primingDays || ['W', 'F'],
             newVersesPace: planData.newVersesPace || 3,
             maxReviewCap: planData.maxReviewCap || 15,
+            retentionRigor: planData.retentionRigor || 'standard',
+            dailyPhaseWeeks: planData.dailyPhaseWeeks ?? 7,
+            weeklyPhaseMonths: planData.weeklyPhaseMonths ?? 6,
+            monthlyPhaseYears: planData.monthlyPhaseYears ?? 5,
             isActive: true,
             updatedAt: new Date().toISOString(),
           };
           plansList = [activePlan];
         }
+
+        // Back-compat: plans saved before retention-rigor existed won't have
+        // these fields in Firestore — default them to 7-6-5 (prior hardcoded
+        // behavior) so existing plans don't change behavior silently.
+        plansList = plansList.map((p) => ({
+          ...p,
+          retentionRigor: p.retentionRigor || 'standard',
+          dailyPhaseWeeks: p.dailyPhaseWeeks ?? 7,
+          weeklyPhaseMonths: p.weeklyPhaseMonths ?? 6,
+          monthlyPhaseYears: p.monthlyPhaseYears ?? 5,
+        }));
 
         setSavedPlans(plansList);
 
@@ -1812,6 +1877,10 @@ export function useAppState() {
           setPrimingDays(active.primingDays);
           setNewVersesPace(active.newVersesPace);
           setMaxReviewCap(active.maxReviewCap);
+          setRetentionRigor(active.retentionRigor);
+          setDailyPhaseWeeks(active.dailyPhaseWeeks);
+          setWeeklyPhaseMonths(active.weeklyPhaseMonths);
+          setMonthlyPhaseYears(active.monthlyPhaseYears);
           setCustomPlanName(active.name);
         }
       } else {
@@ -1826,6 +1895,10 @@ export function useAppState() {
             primingDays: DEFAULT_PLANS[0].primingDays,
             newVersesPace: DEFAULT_PLANS[0].newVersesPace,
             maxReviewCap: DEFAULT_PLANS[0].maxReviewCap,
+            retentionRigor: DEFAULT_PLANS[0].retentionRigor,
+            dailyPhaseWeeks: DEFAULT_PLANS[0].dailyPhaseWeeks,
+            weeklyPhaseMonths: DEFAULT_PLANS[0].weeklyPhaseMonths,
+            monthlyPhaseYears: DEFAULT_PLANS[0].monthlyPhaseYears,
             name: DEFAULT_PLANS[0].name,
             updatedAt: new Date(),
           });
@@ -2350,10 +2423,16 @@ export function useAppState() {
         updatedItem.currentStreakCount += 1;
         updatedItem.gracePeriodUsedToday = false;
 
+        // Graduation thresholds derived from the plan's retention rigor
+        // (weeks/months/years -> review-count thresholds the engine checks).
+        const dailyGraduationDays = dailyPhaseWeeks * 7;
+        const weeklyGraduationReviews = Math.round(weeklyPhaseMonths * (52 / 12));
+        const monthlyGraduationReviews = monthlyPhaseYears * 12;
+
         if (currentReviewsToday >= reviewsRequired) {
           if (item.retentionPhase === 'daily') {
             const daysInPhase = Math.floor((Date.now() - new Date(item.dateStarted!).getTime()) / (24 * 3600 * 1000));
-            if (daysInPhase >= 49 || updatedItem.currentStreakCount >= 49) {
+            if (daysInPhase >= dailyGraduationDays || updatedItem.currentStreakCount >= dailyGraduationDays) {
               updatedItem.retentionPhase = 'weekly';
               updatedItem.currentStreakCount = 1;
               const nextDue = new Date();
@@ -2367,7 +2446,7 @@ export function useAppState() {
               triggerToast('Daily reviews complete! Spaced date advanced. 📅');
             }
           } else if (item.retentionPhase === 'weekly') {
-            if (updatedItem.currentStreakCount >= 26) {
+            if (updatedItem.currentStreakCount >= weeklyGraduationReviews) {
               updatedItem.retentionPhase = 'monthly';
               updatedItem.currentStreakCount = 1;
               const nextDue = new Date();
@@ -2381,7 +2460,7 @@ export function useAppState() {
               triggerToast('Weekly review complete! Spaced date advanced. 📅');
             }
           } else if (item.retentionPhase === 'monthly') {
-            if (updatedItem.currentStreakCount >= 60) {
+            if (updatedItem.currentStreakCount >= monthlyGraduationReviews) {
               updatedItem.status = 'retained';
               updatedItem.retentionPhase = 'none';
               updatedItem.nextReviewDueDate = null;
@@ -3024,6 +3103,10 @@ export function useAppState() {
     primingDays, setPrimingDays,
     newVersesPace, setNewVersesPace,
     maxReviewCap, setMaxReviewCap,
+    retentionRigor, setRetentionRigor,
+    dailyPhaseWeeks, setDailyPhaseWeeks,
+    weeklyPhaseMonths, setWeeklyPhaseMonths,
+    monthlyPhaseYears, setMonthlyPhaseYears,
     activeModal, setActiveModal,
     modalVerses, setModalVerses,
     isRecording, setIsRecording,

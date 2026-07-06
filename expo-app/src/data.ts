@@ -260,6 +260,10 @@ export const DEFAULT_PLANS: MemoryPlan[] = [
     primingDays: ['W', 'F'],
     newVersesPace: 3,
     maxReviewCap: 15,
+    retentionRigor: 'standard',
+    dailyPhaseWeeks: 7,
+    weeklyPhaseMonths: 6,
+    monthlyPhaseYears: 5,
     isActive: true,
     updatedAt: new Date().toISOString()
   },
@@ -272,6 +276,10 @@ export const DEFAULT_PLANS: MemoryPlan[] = [
     primingDays: ['T', 'Th', 'S'],
     newVersesPace: 5,
     maxReviewCap: 30,
+    retentionRigor: 'standard',
+    dailyPhaseWeeks: 7,
+    weeklyPhaseMonths: 6,
+    monthlyPhaseYears: 5,
     isActive: false,
     updatedAt: new Date().toISOString()
   },
@@ -284,6 +292,10 @@ export const DEFAULT_PLANS: MemoryPlan[] = [
     primingDays: ['F'],
     newVersesPace: 1,
     maxReviewCap: 10,
+    retentionRigor: 'standard',
+    dailyPhaseWeeks: 7,
+    weeklyPhaseMonths: 6,
+    monthlyPhaseYears: 5,
     isActive: false,
     updatedAt: new Date().toISOString()
   }
