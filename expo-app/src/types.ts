@@ -75,6 +75,19 @@ export interface QueueItem {
   // 3-Touch Mastery State
   touchLogs?: TouchLog[];      // Tracks valid, hour-separated touches
   reviewsToday?: number;       // Tracks successful reviews for today
+
+  // Demotion softening: a miss while in Daily doesn't send the verse back to
+  // Learning anymore -- it just makes Daily's own graduation target longer.
+  dailyPhaseExtensionDays?: number; // Extra days added to Daily's graduation target by misses (default 0)
+
+  // Demotion softening: a miss while in Weekly/Monthly sends the verse down
+  // for a temporary "refresher" stint instead of a full phase demotion. Its
+  // progress in the original phase is preserved and resumed once the
+  // refresher is cleared, rather than lost.
+  refresherActive?: boolean;               // True while doing a temporary refresher stint
+  refresherReturnPhase?: 'weekly' | 'monthly'; // Phase to resume once the refresher is cleared
+  refresherReturnProgress?: number;        // currentStreakCount to restore on return
+  refresherTargetUnits?: number;           // Successful reviews needed to clear the refresher (days if refreshing via Daily, weeks if refreshing via Weekly)
 }
 
 export interface VerseTimestamp {

@@ -207,6 +207,89 @@ const generateInitialQueue = (verses: VerseState[]): QueueItem[] => {
   }) as QueueItem[];
 };
 
+// Demotion softening: base length of a temporary "refresher" stint. A miss
+// out of Weekly drops to Daily for this many days; a miss out of Monthly
+// drops to Weekly for this many weeks. Each additional consecutive
+// non-grace miss adds one more base unit (7, then 14, then 21 days, etc.),
+// matching how Daily's own graduation target grows by a day per miss.
+const REFRESHER_BASE_DAILY_DAYS = 7;
+const REFRESHER_BASE_WEEKLY_WEEKS = 4;
+
+// Applies exactly one "miss" to a draft QueueItem (mutated in place) and
+// returns a tag describing what happened, so callers can build a toast.
+// Called once per real failed review, and once per calendar cycle silently
+// skipped while the app wasn't opened (see the catch-up loop in
+// handleReviewCompleted) -- both are the same kind of "miss" to this engine.
+const applyMissToItem = (draft: QueueItem): 'grace' | 'daily-extended' | 'refresher-start' | 'refresher-extended' | 'none' => {
+  if (!draft.gracePeriodUsedToday) {
+    draft.gracePeriodUsedToday = true;
+    return 'grace';
+  }
+
+  const priorStreak = draft.currentStreakCount;
+  draft.currentStreakCount = 0;
+  // gracePeriodUsedToday stays true here -- grace only refills on an actual
+  // success (handled in handleReviewCompleted's success branch). Otherwise
+  // consecutive misses would each get a fresh grace instead of escalating.
+
+  if (draft.refresherActive) {
+    const extension = draft.refresherReturnPhase === 'monthly' ? REFRESHER_BASE_WEEKLY_WEEKS : REFRESHER_BASE_DAILY_DAYS;
+    draft.refresherTargetUnits = (draft.refresherTargetUnits || 0) + extension;
+    return 'refresher-extended';
+  }
+
+  if (draft.retentionPhase === 'daily') {
+    draft.dailyPhaseExtensionDays = (draft.dailyPhaseExtensionDays || 0) + 1;
+    return 'daily-extended';
+  }
+
+  if (draft.retentionPhase === 'weekly') {
+    draft.refresherActive = true;
+    draft.refresherReturnPhase = 'weekly';
+    draft.refresherReturnProgress = priorStreak;
+    draft.refresherTargetUnits = REFRESHER_BASE_DAILY_DAYS;
+    draft.retentionPhase = 'daily';
+    return 'refresher-start';
+  }
+
+  if (draft.retentionPhase === 'monthly') {
+    draft.refresherActive = true;
+    draft.refresherReturnPhase = 'monthly';
+    draft.refresherReturnProgress = priorStreak;
+    draft.refresherTargetUnits = REFRESHER_BASE_WEEKLY_WEEKS;
+    draft.retentionPhase = 'weekly';
+    return 'refresher-start';
+  }
+
+  return 'none';
+};
+
+// Builds the toast copy for a single miss tag (see applyMissToItem). Shared
+// between the "silently missed cycles while away" catch-up and today's own
+// failed attempt, so both describe the same outcomes the same way.
+const describeMissOutcome = (
+  tag: 'grace' | 'daily-extended' | 'refresher-start' | 'refresher-extended' | 'none',
+  draft: QueueItem,
+  dailyGraduationDaysTotal: number
+): string | null => {
+  const returnLabel = draft.refresherReturnPhase === 'monthly' ? 'Monthly' : 'Weekly';
+  const unitLabel = draft.refresherReturnPhase === 'monthly' ? 'weeks' : 'days';
+  switch (tag) {
+    case 'grace':
+      return 'Grace period used! Get it right next time to avoid falling back. 🛡️';
+    case 'daily-extended':
+      return `Missed after your grace period was already used -- streak reset, and Daily now needs ${dailyGraduationDaysTotal} days total instead of fewer. Still Daily, just a bit longer. 🔄`;
+    case 'refresher-start':
+      return `Missed after your grace period was already used -- sent to a ${draft.refresherTargetUnits}-${
+        unitLabel === 'weeks' ? 'week' : 'day'
+      } refresher, then back to ${returnLabel} review right where you left off. 🔄`;
+    case 'refresher-extended':
+      return `Missed again during the refresher -- it's now ${draft.refresherTargetUnits} ${unitLabel} before you return to ${returnLabel} review. 🔄`;
+    default:
+      return null;
+  }
+};
+
 /**
  * Centralizes every piece of state and business-logic handler from the original
  * web app's single-file App component. Screens receive the return value of this
@@ -1980,6 +2063,11 @@ export function useAppState() {
             currentStreakCount: data.currentStreakCount || 0,
             totalSuccessfulReviews: data.totalSuccessfulReviews || 0,
             gracePeriodUsedToday: data.gracePeriodUsedToday || false,
+            dailyPhaseExtensionDays: data.dailyPhaseExtensionDays || 0,
+            refresherActive: data.refresherActive || false,
+            refresherReturnPhase: data.refresherReturnPhase || undefined,
+            refresherReturnProgress: data.refresherReturnProgress ?? undefined,
+            refresherTargetUnits: data.refresherTargetUnits ?? undefined,
           });
         });
         loadedQueue.sort((a, b) => a.orderIndex - b.orderIndex);
@@ -2381,6 +2469,33 @@ export function useAppState() {
     let updatedItem = { ...item };
     updatedItem.lastReviewDate = new Date().toISOString();
 
+    // Catch up on any full review cycles silently missed while the app
+    // wasn't opened -- being late is the same kind of "miss" as an active
+    // failed attempt, just detected from elapsed time instead of a tap.
+    // Being less than one full cycle late isn't a miss at all, which is
+    // also what gives due dates their day-or-two of natural flexibility.
+    if (item.status === 'reviewing' && updatedItem.nextReviewDueDate) {
+      const cycleLengthDays = updatedItem.retentionPhase === 'weekly' ? 7 : updatedItem.retentionPhase === 'monthly' ? 30 : 1;
+      const missedCycles = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(updatedItem.nextReviewDueDate).getTime()) / (cycleLengthDays * 24 * 3600 * 1000))
+      );
+      let lastMissTag: ReturnType<typeof applyMissToItem> = 'none';
+      for (let i = 0; i < missedCycles; i++) {
+        lastMissTag = applyMissToItem(updatedItem);
+      }
+      if (missedCycles > 0) {
+        if (lastMissTag !== 'grace' && lastMissTag !== 'none') {
+          updatedItem.reviewsToday = 0;
+        }
+        const dailyGraduationDaysTotal = dailyPhaseWeeks * 7 + (updatedItem.dailyPhaseExtensionDays || 0);
+        const message = describeMissOutcome(lastMissTag, updatedItem, dailyGraduationDaysTotal);
+        if (message) {
+          triggerToast(`${missedCycles} review cycle${missedCycles > 1 ? 's' : ''} passed unattempted. ${message}`);
+        }
+      }
+    }
+
     if (success) {
       if (item.status === 'learning') {
         // 3-Touch Mastery Gate checks
@@ -2420,21 +2535,51 @@ export function useAppState() {
         const currentReviewsToday = isSameDay ? (item.reviewsToday || 0) + 1 : 1;
         updatedItem.reviewsToday = currentReviewsToday;
         updatedItem.totalSuccessfulReviews += 1;
-        updatedItem.currentStreakCount += 1;
         updatedItem.gracePeriodUsedToday = false;
 
         // Graduation thresholds derived from the plan's retention rigor
         // (weeks/months/years -> review-count thresholds the engine checks).
-        const dailyGraduationDays = dailyPhaseWeeks * 7;
+        // Daily's own target also grows permanently from past misses (see
+        // applyMissToItem); Weekly/Monthly instead send misses to a
+        // temporary refresher rather than extending their own target.
+        const dailyGraduationDays = dailyPhaseWeeks * 7 + (updatedItem.dailyPhaseExtensionDays || 0);
         const weeklyGraduationReviews = Math.round(weeklyPhaseMonths * (52 / 12));
         const monthlyGraduationReviews = monthlyPhaseYears * 12;
 
         if (currentReviewsToday >= reviewsRequired) {
-          if (item.retentionPhase === 'daily') {
-            const daysInPhase = Math.floor((Date.now() - new Date(item.dateStarted!).getTime()) / (24 * 3600 * 1000));
-            if (daysInPhase >= dailyGraduationDays || updatedItem.currentStreakCount >= dailyGraduationDays) {
+          // Advances once per completed day/week/month cycle (not once per
+          // rep), so it accurately tracks elapsed cycles even when "Reviews
+          // Required per Day" is set above 1.
+          updatedItem.currentStreakCount += 1;
+
+          if (updatedItem.refresherActive) {
+            if (updatedItem.currentStreakCount >= (updatedItem.refresherTargetUnits || 1)) {
+              const returnPhase = updatedItem.refresherReturnPhase || 'weekly';
+              updatedItem.retentionPhase = returnPhase;
+              updatedItem.currentStreakCount = updatedItem.refresherReturnProgress || 1;
+              updatedItem.refresherActive = false;
+              // delete rather than set to undefined -- Firestore's setDoc()
+              // rejects explicit undefined field values at runtime.
+              delete updatedItem.refresherReturnPhase;
+              delete updatedItem.refresherReturnProgress;
+              delete updatedItem.refresherTargetUnits;
+              const nextDue = new Date();
+              nextDue.setDate(nextDue.getDate() + (returnPhase === 'monthly' ? 30 : 7));
+              updatedItem.nextReviewDueDate = nextDue.toISOString();
+              triggerToast(
+                `Refresher complete! Back to ${returnPhase === 'monthly' ? 'Monthly' : 'Weekly'} review, resuming right where you left off. 🌟`
+              );
+            } else {
+              const nextDue = new Date();
+              nextDue.setDate(nextDue.getDate() + (updatedItem.retentionPhase === 'weekly' ? 7 : 1));
+              updatedItem.nextReviewDueDate = nextDue.toISOString();
+              triggerToast(`Refresher review complete! (${updatedItem.currentStreakCount}/${updatedItem.refresherTargetUnits}) 📅`);
+            }
+          } else if (updatedItem.retentionPhase === 'daily') {
+            if (updatedItem.currentStreakCount >= dailyGraduationDays) {
               updatedItem.retentionPhase = 'weekly';
               updatedItem.currentStreakCount = 1;
+              updatedItem.dailyPhaseExtensionDays = 0;
               const nextDue = new Date();
               nextDue.setDate(nextDue.getDate() + 7);
               updatedItem.nextReviewDueDate = nextDue.toISOString();
@@ -2445,7 +2590,7 @@ export function useAppState() {
               updatedItem.nextReviewDueDate = nextDue.toISOString();
               triggerToast('Daily reviews complete! Spaced date advanced. 📅');
             }
-          } else if (item.retentionPhase === 'weekly') {
+          } else if (updatedItem.retentionPhase === 'weekly') {
             if (updatedItem.currentStreakCount >= weeklyGraduationReviews) {
               updatedItem.retentionPhase = 'monthly';
               updatedItem.currentStreakCount = 1;
@@ -2459,7 +2604,7 @@ export function useAppState() {
               updatedItem.nextReviewDueDate = nextDue.toISOString();
               triggerToast('Weekly review complete! Spaced date advanced. 📅');
             }
-          } else if (item.retentionPhase === 'monthly') {
+          } else if (updatedItem.retentionPhase === 'monthly') {
             if (updatedItem.currentStreakCount >= monthlyGraduationReviews) {
               updatedItem.status = 'retained';
               updatedItem.retentionPhase = 'none';
@@ -2478,40 +2623,17 @@ export function useAppState() {
         }
       }
     } else {
-      // FAILED REVIEW
-      if (!item.gracePeriodUsedToday && item.status === 'reviewing') {
-        updatedItem.gracePeriodUsedToday = true;
-        triggerToast('Grace Period applied! Complete review successfully tomorrow to avoid demotion. 🛡️');
-      } else {
-        updatedItem.currentStreakCount = 0;
-        updatedItem.gracePeriodUsedToday = false;
-
-        if (item.status === 'reviewing') {
-          if (item.retentionPhase === 'monthly') {
-            updatedItem.retentionPhase = 'weekly';
-            const nextDue = new Date();
-            nextDue.setDate(nextDue.getDate() + 7);
-            updatedItem.nextReviewDueDate = nextDue.toISOString();
-            updatedItem.reviewsToday = 0;
-            triggerToast('Incorrect. Demoted from Monthly to Weekly phase. 🔄');
-          } else if (item.retentionPhase === 'weekly') {
-            updatedItem.retentionPhase = 'daily';
-            const nextDue = new Date();
-            nextDue.setDate(nextDue.getDate() + 1);
-            updatedItem.nextReviewDueDate = nextDue.toISOString();
-            updatedItem.reviewsToday = 0;
-            triggerToast('Incorrect. Demoted from Weekly to Daily phase. 🔄');
-          } else if (item.retentionPhase === 'daily') {
-            updatedItem.status = 'learning';
-            updatedItem.retentionPhase = 'none';
-            updatedItem.nextReviewDueDate = null;
-            updatedItem.touchLogs = []; // Reset touch logs on demotion
-            updatedItem.reviewsToday = 0;
-            triggerToast('Incorrect. Demoted from Daily to Learning status (3-Touch Mastery reset). 🔄');
-          }
-        } else {
-          triggerToast('Incorrect. Keep practicing! 🔄');
+      // FAILED REVIEW (today's actual attempt, on top of any catch-up above)
+      if (item.status === 'reviewing') {
+        const tag = applyMissToItem(updatedItem);
+        if (tag !== 'grace' && tag !== 'none') {
+          updatedItem.reviewsToday = 0;
         }
+        const dailyGraduationDaysTotal = dailyPhaseWeeks * 7 + (updatedItem.dailyPhaseExtensionDays || 0);
+        const message = describeMissOutcome(tag, updatedItem, dailyGraduationDaysTotal);
+        if (message) triggerToast(message);
+      } else {
+        triggerToast('Incorrect. Keep practicing! 🔄');
       }
     }
 
