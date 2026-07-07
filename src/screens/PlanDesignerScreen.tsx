@@ -79,6 +79,8 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
   const totalRigorLabel =
     totalRigorDays >= 365 ? `${(totalRigorDays / 365).toFixed(1)} years` : `${Math.round(totalRigorDays)} days`;
 
+  console.log('[DIAG] checkpoint A: pre-return, totalRigorLabel computed', totalRigorLabel);
+
   const toggleDay = (day: string, list: string[], setList: (v: string[]) => void) => {
     console.log('[DIAG] toggleDay start', day, list);
     if (list.includes(day)) {
@@ -235,6 +237,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               </View>
               <View className="flex-row justify-between">
                 {DAYS.map((day) => {
+                  console.log('[DIAG] checkpoint B: learning-day map item', day);
                   const isActive = learningDays.includes(day);
                   return (
                     <Pressable
@@ -278,6 +281,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               {sabbathEnabled && (
                 <View className="flex-row justify-between pt-2">
                   {DAYS.map((day) => {
+                    console.log('[DIAG] checkpoint C: sabbath-day map item', day);
                     const isActive = sabbathDay === day;
                     return (
                       <Pressable
@@ -643,6 +647,10 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             </Pressable>
           </PulseView>
         </View>
+        {(() => {
+          console.log('[DIAG] checkpoint D: end of JSX tree reached');
+          return null;
+        })()}
       </ScrollView>
     </FadeInView>
   );
