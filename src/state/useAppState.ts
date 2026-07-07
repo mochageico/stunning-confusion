@@ -306,13 +306,22 @@ const advancePastSabbath = (date: Date, sabbathEnabled: boolean, sabbathDay: str
   return result;
 };
 
+// Shared iteration cap for the day-by-day scans below, so a corrupted or
+// mistyped date (e.g. a garbled year from a date picker, or a stale due-date
+// far in the past) can't turn a bounded loop into a multi-million-iteration
+// scan that hangs the JS thread for a very long time -- past the cap, the
+// range is treated as unreasonable and scanning just stops early.
+const MAX_LEARNING_DAY_SCAN = 18250; // ~50 years
+
 const countSabbathDaysInRange = (from: Date, to: Date, sabbathDay: string): number => {
   let count = 0;
   const cursor = new Date(from);
   cursor.setDate(cursor.getDate() + 1);
-  while (cursor <= to) {
+  let scanned = 0;
+  while (cursor <= to && scanned < MAX_LEARNING_DAY_SCAN) {
     if (DAY_ABBREVS[cursor.getDay()] === sabbathDay) count++;
     cursor.setDate(cursor.getDate() + 1);
+    scanned++;
   }
   return count;
 };
@@ -340,9 +349,11 @@ const countLearningDaysBetween = (
   cursor.setHours(0, 0, 0, 0);
   const end = new Date(to);
   end.setHours(0, 0, 0, 0);
-  while (cursor <= end) {
+  let scanned = 0;
+  while (cursor <= end && scanned < MAX_LEARNING_DAY_SCAN) {
     if (isRealLearningDay(cursor, learningDaysList, sabbathEnabled, sabbathDay)) count++;
     cursor.setDate(cursor.getDate() + 1);
+    scanned++;
   }
   return count;
 };

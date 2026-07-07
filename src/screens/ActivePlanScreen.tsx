@@ -148,7 +148,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const endVerseField = useClampedNumberField(goalEndVerse, setGoalEndVerse, (n) => Math.max(goalStartVerse, n));
   const monthField = useClampedNumberField(goalMonth, setGoalMonth, (n) => Math.min(12, Math.max(1, n)));
   const dayField = useClampedNumberField(goalDay, setGoalDay, (n) => Math.min(31, Math.max(1, n)));
-  const yearField = useClampedNumberField(goalYear, setGoalYear, (n) => n);
+  const yearField = useClampedNumberField(goalYear, setGoalYear, (n) =>
+    Math.min(todayForGoal.getFullYear() + 50, Math.max(todayForGoal.getFullYear(), n))
+  );
 
   const grouped = groupQueueItems(memoryQueue);
 
