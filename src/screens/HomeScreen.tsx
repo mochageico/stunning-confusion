@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { Volume2, Sliders, BookMarked } from 'lucide-react-native';
+import { Volume2, Sliders, BookMarked, FolderOpen } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, VerseState } from '../types';
@@ -444,42 +444,58 @@ export default function HomeScreen({ state }: { state: AppState }) {
         </View>
 
         {/* FEATURES GRID */}
-        <View className="flex-row gap-3">
-          {/* Feature 1 */}
-          <Pressable
-            onPress={() => navigateTo('audioFeed')}
-            className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
-            style={{ gap: 6 }}
-          >
-            <Volume2 size={18} color="#1A1A1A" />
-            <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
-              Find Audio Recordings
-            </Text>
-          </Pressable>
+        <View style={{ gap: 12 }}>
+          <View className="flex-row gap-3">
+            {/* Feature 1 */}
+            <Pressable
+              onPress={() => navigateTo('audioFeed')}
+              className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
+              style={{ gap: 6 }}
+            >
+              <Volume2 size={18} color="#1A1A1A" />
+              <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
+                Find Audio Recordings
+              </Text>
+            </Pressable>
 
-          {/* Feature 2: Plan Designer */}
-          <Pressable
-            onPress={() => navigateTo('planDesigner')}
-            className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
-            style={{ gap: 6 }}
-          >
-            <Sliders size={18} color="#1A1A1A" />
-            <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
-              Memory Plan Designer
-            </Text>
-          </Pressable>
+            {/* Feature 2: Plan Designer */}
+            <Pressable
+              onPress={() => navigateTo('planDesigner')}
+              className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
+              style={{ gap: 6 }}
+            >
+              <Sliders size={18} color="#1A1A1A" />
+              <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
+                Memory Plan Designer
+              </Text>
+            </Pressable>
+          </View>
 
-          {/* Feature 3: Verse Search / Bible */}
-          <Pressable
-            onPress={() => navigateTo('books')}
-            className="flex-1 border-2 border-[#1A1A1A] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
-            style={{ gap: 6 }}
-          >
-            <BookMarked size={18} color="#1A1A1A" />
-            <Text className="text-[10px] font-extrabold font-sans text-[#1A1A1A] leading-tight text-center">
-              Verse Search / Bible
-            </Text>
-          </Pressable>
+          <View className="flex-row gap-3">
+            {/* Feature 3: My Plans */}
+            <Pressable
+              onPress={() => navigateTo('savedPlans')}
+              className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
+              style={{ gap: 6 }}
+            >
+              <FolderOpen size={18} color="#1A1A1A" />
+              <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
+                My Plans
+              </Text>
+            </Pressable>
+
+            {/* Feature 4: Verse Search / Bible */}
+            <Pressable
+              onPress={() => navigateTo('books')}
+              className="flex-1 border-2 border-[#1A1A1A] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
+              style={{ gap: 6 }}
+            >
+              <BookMarked size={18} color="#1A1A1A" />
+              <Text className="text-[10px] font-extrabold font-sans text-[#1A1A1A] leading-tight text-center">
+                Verse Search / Bible
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </FadeInView>

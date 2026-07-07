@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 
@@ -13,21 +13,48 @@ const DATE_FILTER_OPTIONS = [
   { id: '90', label: 'Last 90 Days' },
 ];
 
-const TIMELINE_ITEMS = [
-  { title: 'Memorized Romans 8:1–5', subtitle: 'Jun 22, 2026 • ESV • Completed with 100% typing test score.', book: 'Romans', date: '2026-06-22' },
-  { title: 'Memorized Psalms 23:1–3', subtitle: 'Jun 18, 2026 • NIV • Perfect active recall rating.', book: 'Psalms', date: '2026-06-18' },
-  { title: 'Completed Genesis 1:1–10', subtitle: 'Jun 10, 2026 • KJV • Read aloud and recited successfully.', book: 'Genesis', date: '2026-06-10' },
-  { title: 'First verse: Genesis 1:1', subtitle: 'May 28, 2026 • ESV • Initial scripture memory milestone.', book: 'Genesis', date: '2026-05-28' },
-  { title: 'Memorized John 15:1–4', subtitle: 'May 22, 2026 • NIV • Retained in permanent mental vault.', book: 'John', date: '2026-05-22' },
-  { title: 'Memorized John 15:5', subtitle: 'May 18, 2026 • NIV • Learned during morning devotion pacing.', book: 'John', date: '2026-05-18' },
-];
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+type HistoryEntry = { title: string; subtitle: string; book: string; date: string };
 
 export default function FullHistoryScreen({ state }: { state: AppState }) {
-  const { handleBack, triggerToast } = state;
+  const { handleBack, triggerToast, memoryQueue } = state;
   const [bookFilter, setBookFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
 
-  const filteredItems = TIMELINE_ITEMS.filter((item) => {
+  // Real timeline, derived from the actual memory queue rather than fake
+  // sample data: each verse contributes a "started learning" event (from
+  // dateStarted) and, once it graduates all the way through the retention
+  // phases, a "memorized" event (dated by its last real review).
+  const timelineItems = useMemo<HistoryEntry[]>(() => {
+    const items: HistoryEntry[] = [];
+    memoryQueue.forEach((item) => {
+      const ref = `${item.book} ${item.chapter}:${item.verseNumber}`;
+      if (item.dateStarted) {
+        items.push({
+          title: `Started learning ${ref}`,
+          subtitle: `${formatDate(item.dateStarted)} • Added to your active memorization queue`,
+          book: item.book,
+          date: item.dateStarted,
+        });
+      }
+      if (item.status === 'retained') {
+        const retainedDate = item.lastReviewDate || item.dateStarted;
+        if (retainedDate) {
+          items.push({
+            title: `Memorized ${ref}`,
+            subtitle: `${formatDate(retainedDate)} • Fully memorized — reached long-term retention`,
+            book: item.book,
+            date: retainedDate,
+          });
+        }
+      }
+    });
+    return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [memoryQueue]);
+
+  const filteredItems = timelineItems.filter((item) => {
     if (bookFilter && item.book !== bookFilter) return false;
     if (dateFilter !== 'all') {
       const cutoff = new Date(Date.now() - Number(dateFilter) * 24 * 3600 * 1000);
@@ -99,7 +126,9 @@ export default function FullHistoryScreen({ state }: { state: AppState }) {
           <View className="border border-neutral-200 rounded-2xl p-4 bg-white shadow-xs">
             {filteredItems.length === 0 ? (
               <Text className="text-xs text-neutral-400 italic text-center py-4">
-                No history matches these filters.
+                {timelineItems.length === 0
+                  ? "You haven't started memorizing any verses yet."
+                  : 'No history matches these filters.'}
               </Text>
             ) : (
               <View className="relative pl-5 border-l border-neutral-200" style={{ gap: 18 }}>

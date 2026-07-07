@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, ArrowUp, ArrowDown, Plus, X, Trash2 } from 'lucide-react-native';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
@@ -11,6 +11,28 @@ import { fetchChapterText } from '../state/useScripture';
 import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 
 const WEEK_DAYS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
+
+// Backs a numeric TextInput with its own free-typed string so clearing the
+// field doesn't instantly snap back to the clamped minimum (which used to
+// force the *next* keystroke to land next to a phantom "1" instead of into
+// an empty box). The real number only updates -- and the box only re-clamps
+// -- once the user leaves the field.
+function useClampedNumberField(value: number, commit: (n: number) => void, clamp: (n: number) => number) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+  return {
+    value: text,
+    onChangeText: setText,
+    onBlur: () => {
+      const parsed = parseInt(text, 10);
+      const next = clamp(Number.isNaN(parsed) ? value : parsed);
+      commit(next);
+      setText(String(next));
+    },
+  };
+}
 
 function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
   if (items.length === 0) return [];
@@ -105,6 +127,28 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const [goalMonth, setGoalMonth] = useState(todayForGoal.getMonth() + 1);
   const [goalDay, setGoalDay] = useState(todayForGoal.getDate());
   const [goalYear, setGoalYear] = useState(todayForGoal.getFullYear());
+
+  const startChapterField = useClampedNumberField(
+    goalStartChapter,
+    (n) => {
+      setGoalStartChapter(n);
+      if (n > goalEndChapter) setGoalEndChapter(n);
+    },
+    (n) => Math.max(1, n)
+  );
+  const endChapterField = useClampedNumberField(goalEndChapter, setGoalEndChapter, (n) => Math.max(goalStartChapter, n));
+  const startVerseField = useClampedNumberField(
+    goalStartVerse,
+    (n) => {
+      setGoalStartVerse(n);
+      if (n > goalEndVerse) setGoalEndVerse(n);
+    },
+    (n) => Math.max(1, n)
+  );
+  const endVerseField = useClampedNumberField(goalEndVerse, setGoalEndVerse, (n) => Math.max(goalStartVerse, n));
+  const monthField = useClampedNumberField(goalMonth, setGoalMonth, (n) => Math.min(12, Math.max(1, n)));
+  const dayField = useClampedNumberField(goalDay, setGoalDay, (n) => Math.min(31, Math.max(1, n)));
+  const yearField = useClampedNumberField(goalYear, setGoalYear, (n) => n);
 
   const grouped = groupQueueItems(memoryQueue);
 
@@ -421,24 +465,21 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                 <View className="flex-row gap-2 items-center">
                   <TextInput
                     keyboardType="numeric"
-                    value={String(goalMonth)}
-                    onChangeText={(t) => setGoalMonth(Math.min(12, Math.max(1, parseInt(t, 10) || 1)))}
+                    {...monthField}
                     placeholder="MM"
                     className="w-12 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
                   />
                   <Text className="text-neutral-300">/</Text>
                   <TextInput
                     keyboardType="numeric"
-                    value={String(goalDay)}
-                    onChangeText={(t) => setGoalDay(Math.min(31, Math.max(1, parseInt(t, 10) || 1)))}
+                    {...dayField}
                     placeholder="DD"
                     className="w-12 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
                   />
                   <Text className="text-neutral-300">/</Text>
                   <TextInput
                     keyboardType="numeric"
-                    value={String(goalYear)}
-                    onChangeText={(t) => setGoalYear(parseInt(t, 10) || todayForGoal.getFullYear())}
+                    {...yearField}
                     placeholder="YYYY"
                     className="w-16 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
                   />
@@ -476,12 +517,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                       <Text className="text-[9px] font-bold text-neutral-400 uppercase">Start Chapter</Text>
                       <TextInput
                         keyboardType="numeric"
-                        value={String(goalStartChapter)}
-                        onChangeText={(t) => {
-                          const n = parseInt(t, 10) || 1;
-                          setGoalStartChapter(n);
-                          if (n > goalEndChapter) setGoalEndChapter(n);
-                        }}
+                        {...startChapterField}
                         className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
                       />
                     </View>
@@ -489,8 +525,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                       <Text className="text-[9px] font-bold text-neutral-400 uppercase">End Chapter</Text>
                       <TextInput
                         keyboardType="numeric"
-                        value={String(goalEndChapter)}
-                        onChangeText={(t) => setGoalEndChapter(Math.max(parseInt(t, 10) || 1, goalStartChapter))}
+                        {...endChapterField}
                         className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
                       />
                     </View>
@@ -502,12 +537,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                         <Text className="text-[9px] font-bold text-neutral-400 uppercase">Start Verse</Text>
                         <TextInput
                           keyboardType="numeric"
-                          value={String(goalStartVerse)}
-                          onChangeText={(t) => {
-                            const n = parseInt(t, 10) || 1;
-                            setGoalStartVerse(n);
-                            if (n > goalEndVerse) setGoalEndVerse(n);
-                          }}
+                          {...startVerseField}
                           className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
                         />
                       </View>
@@ -515,8 +545,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                         <Text className="text-[9px] font-bold text-neutral-400 uppercase">End Verse</Text>
                         <TextInput
                           keyboardType="numeric"
-                          value={String(goalEndVerse)}
-                          onChangeText={(t) => setGoalEndVerse(Math.max(parseInt(t, 10) || 1, goalStartVerse))}
+                          {...endVerseField}
                           className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
                         />
                       </View>
@@ -533,24 +562,21 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     <View className="flex-row gap-2 items-center">
                       <TextInput
                         keyboardType="numeric"
-                        value={String(goalMonth)}
-                        onChangeText={(t) => setGoalMonth(Math.min(12, Math.max(1, parseInt(t, 10) || 1)))}
+                        {...monthField}
                         placeholder="MM"
                         className="w-14 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
                       />
                       <Text className="text-neutral-300">/</Text>
                       <TextInput
                         keyboardType="numeric"
-                        value={String(goalDay)}
-                        onChangeText={(t) => setGoalDay(Math.min(31, Math.max(1, parseInt(t, 10) || 1)))}
+                        {...dayField}
                         placeholder="DD"
                         className="w-14 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
                       />
                       <Text className="text-neutral-300">/</Text>
                       <TextInput
                         keyboardType="numeric"
-                        value={String(goalYear)}
-                        onChangeText={(t) => setGoalYear(parseInt(t, 10) || todayForGoal.getFullYear())}
+                        {...yearField}
                         placeholder="YYYY"
                         className="w-20 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
                       />

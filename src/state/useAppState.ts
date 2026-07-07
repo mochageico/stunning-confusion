@@ -347,17 +347,25 @@ const countLearningDaysBetween = (
   return count;
 };
 
-// Finds the date of the Nth real learning day starting from (and including) `from`.
+// Finds the date of the Nth real learning day starting from (and including)
+// `from`. Returns null (rather than looping forever) if no day of the week
+// is ever a real learning day -- e.g. every learningDay coincides with the
+// Sabbath, or learningDays was toggled down to empty -- since in that case
+// no future date would ever satisfy the search.
 const dateAfterNLearningDays = (
   from: Date,
   n: number,
   learningDaysList: string[],
   sabbathEnabled: boolean,
   sabbathDay: string
-): Date => {
+): Date | null => {
   const cursor = new Date(from);
   cursor.setHours(0, 0, 0, 0);
   if (n <= 0) return cursor;
+  const hasAnyValidLearningDay = DAY_ABBREVS.some(
+    (abbrev) => !(sabbathEnabled && abbrev === sabbathDay) && learningDaysList.includes(abbrev)
+  );
+  if (!hasAnyValidLearningDay) return null;
   let count = 0;
   while (true) {
     if (isRealLearningDay(cursor, learningDaysList, sabbathEnabled, sabbathDay)) {
@@ -531,6 +539,7 @@ export function useAppState() {
     Array<{ uid: string; displayName: string; avatarUrl: string; email: string }>
   >([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
+  const userSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Selected Recording for Chapter Recording Landing Page
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
@@ -921,6 +930,25 @@ export function useAppState() {
       setSearchingUsers(false);
     }
   };
+
+  // Live "as you type" friend search, debounced so it does not fire a
+  // Firestore query on every keystroke. searchUsers itself already does a
+  // prefix match on displayNameLower, so this just makes results appear
+  // while typing instead of requiring Enter or the Search button.
+  useEffect(() => {
+    if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current);
+    if (!userSearchQuery.trim()) {
+      setUserSearchResults([]);
+      return;
+    }
+    userSearchDebounceRef.current = setTimeout(() => {
+      searchUsers(userSearchQuery);
+    }, 300);
+    return () => {
+      if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userSearchQuery]);
 
   // Deterministic doc id (not auto-generated) so re-sending a request to the
   // same person is idempotent rather than creating duplicates.
