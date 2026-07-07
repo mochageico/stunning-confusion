@@ -57,6 +57,15 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     publishSharedPlan,
   } = state;
 
+  console.log('[DIAG] PlanDesignerScreen render', {
+    preset,
+    learningDays,
+    sabbathEnabled,
+    sabbathDay,
+    newVersesPace,
+    maxReviewCap,
+  });
+
   const applyRigorPreset = (tier: 'light' | 'standard' | 'deep') => {
     const cfg = RIGOR_TIERS.find((t) => t.key === tier)!;
     setRetentionRigor(tier);
@@ -71,12 +80,15 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     totalRigorDays >= 365 ? `${(totalRigorDays / 365).toFixed(1)} years` : `${Math.round(totalRigorDays)} days`;
 
   const toggleDay = (day: string, list: string[], setList: (v: string[]) => void) => {
+    console.log('[DIAG] toggleDay start', day, list);
     if (list.includes(day)) {
       setList(list.filter((d) => d !== day));
     } else {
       setList([...list, day]);
     }
+    console.log('[DIAG] toggleDay setList done, calling setPreset');
     setPreset('custom');
+    console.log('[DIAG] toggleDay end');
   };
 
   return (
@@ -105,11 +117,17 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           <View className="flex-row gap-2">
             <Pressable
               onPress={() => {
+                console.log('[DIAG] Daily Drip preset pressed, start');
                 setPreset('drip');
+                console.log('[DIAG] Daily Drip: setPreset done');
                 setLearningDays(['M', 'T', 'W', 'Th', 'F']);
+                console.log('[DIAG] Daily Drip: setLearningDays done');
                 setNewVersesPace(2);
+                console.log('[DIAG] Daily Drip: setNewVersesPace done');
                 setMaxReviewCap(10);
+                console.log('[DIAG] Daily Drip: setMaxReviewCap done');
                 triggerToast("Loaded 'The Daily Drip' preset! \u{1F4A7}");
+                console.log('[DIAG] Daily Drip preset pressed, end');
               }}
               className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
                 preset === 'drip' ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
@@ -139,11 +157,13 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
 
             <Pressable
               onPress={() => {
+                console.log('[DIAG] Weekend Warrior preset pressed, start');
                 setPreset('warrior');
                 setLearningDays(['S', 'Su']);
                 setNewVersesPace(5);
                 setMaxReviewCap(20);
                 triggerToast("Loaded 'Weekend Warrior' preset! ⚔️");
+                console.log('[DIAG] Weekend Warrior preset pressed, end');
               }}
               className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
                 preset === 'warrior' ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
@@ -173,8 +193,10 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
 
             <Pressable
               onPress={() => {
+                console.log('[DIAG] Custom preset pressed, start');
                 setPreset('custom');
                 triggerToast('Switched to Custom configuration.');
+                console.log('[DIAG] Custom preset pressed, end');
               }}
               className={`flex-1 rounded-xl p-2.5 justify-between ${
                 preset === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6] shadow-md' : 'border-2 border-[#E5E5E5] bg-white'
@@ -239,7 +261,11 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                   </Text>
                 </View>
                 <Pressable
-                  onPress={() => setSabbathEnabled(!sabbathEnabled)}
+                  onPress={() => {
+                    console.log('[DIAG] Sabbath toggle pressed, before:', sabbathEnabled);
+                    setSabbathEnabled(!sabbathEnabled);
+                    console.log('[DIAG] Sabbath toggle pressed, after setSabbathEnabled call');
+                  }}
                   className={`w-10 h-6 rounded-full justify-center px-0.5 ${sabbathEnabled ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
                 >
                   <View
@@ -256,7 +282,11 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                     return (
                       <Pressable
                         key={`sabbath-${day}`}
-                        onPress={() => setSabbathDay(day)}
+                        onPress={() => {
+                          console.log('[DIAG] Sabbath day pressed:', day);
+                          setSabbathDay(day);
+                          console.log('[DIAG] Sabbath day setSabbathDay call done');
+                        }}
                         className={`w-7 h-7 rounded-full border items-center justify-center ${
                           isActive ? 'bg-[#1A1A1A] border-[#1A1A1A] shadow-sm' : 'bg-white border-neutral-200'
                         }`}
