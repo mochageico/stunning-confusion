@@ -5,8 +5,11 @@ module.exports = function (api) {
       ['babel-preset-expo', { jsxImportSource: 'nativewind' }],
       'nativewind/babel',
     ],
-    // Must be listed last — react-native-reanimated v4 moved its worklet
-    // compilation into this separate package.
-    plugins: ['react-native-worklets/plugin'],
+    // react-native-worklets/plugin (Reanimated v4's worklet compiler)
+    // temporarily removed while debugging a native-only Expo Go freeze —
+    // nothing in this app's own code uses Reanimated/worklets directly,
+    // so this transform runs over every file for no functional benefit
+    // and is the current top suspect for the hang.
+    plugins: [],
   };
 };
