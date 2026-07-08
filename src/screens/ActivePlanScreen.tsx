@@ -7,7 +7,7 @@ import { AppState } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
 import { FadeInView, ChipRow, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
-import { fetchChapterText } from '../state/useScripture';
+import { fetchChapterText, useChapterText } from '../state/useScripture';
 import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 
 const WEEK_DAYS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
@@ -142,6 +142,13 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const addEndVerseField = useClampedNumberField(selectedAddEndVerse, setSelectedAddEndVerse, (n) =>
     Math.max(selectedAddVerse, n)
   );
+
+  // Real verse counts for the "max N" hints next to End Verse fields --
+  // most people don't know offhand how many verses are in a given chapter.
+  const goalChapterId = goalStartChapter === goalEndChapter ? getBookByName(goalBook)?.id || null : null;
+  const { data: goalChapterData } = useChapterText(DEFAULT_TRANSLATION_ID, goalChapterId, goalEndChapter);
+  const addChapterId = getBookByName(selectedAddBook)?.id || null;
+  const { data: addChapterData } = useChapterText(DEFAULT_TRANSLATION_ID, addChapterId, selectedAddChapter);
 
   const grouped = groupQueueItems(memoryQueue);
 
@@ -535,7 +542,12 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                         />
                       </View>
                       <View className="flex-1" style={{ gap: 4 }}>
-                        <Text className="text-[9px] font-bold text-neutral-400 uppercase">End Verse</Text>
+                        <View className="flex-row items-center justify-between">
+                          <Text className="text-[9px] font-bold text-neutral-400 uppercase">End Verse</Text>
+                          {goalChapterData && (
+                            <Text className="text-[8px] font-mono text-neutral-400">max {goalChapterData.verseCount}</Text>
+                          )}
+                        </View>
                         <TextInput
                           keyboardType="numeric"
                           {...endVerseField}
@@ -659,7 +671,12 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     />
                   </View>
                   <View className="flex-1" style={{ gap: 4 }}>
-                    <Text className="text-[9px] font-bold text-neutral-400 uppercase">End Verse</Text>
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-[9px] font-bold text-neutral-400 uppercase">End Verse</Text>
+                      {addChapterData && (
+                        <Text className="text-[8px] font-mono text-neutral-400">max {addChapterData.verseCount}</Text>
+                      )}
+                    </View>
                     <TextInput
                       keyboardType="numeric"
                       {...addEndVerseField}

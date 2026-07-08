@@ -1,11 +1,18 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, ChevronRight, Plus } from 'lucide-react-native';
+import { ArrowLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, PulseView } from '../components/ui';
 
 export default function SavedPlansScreen({ state }: { state: AppState }) {
-  const { handleBack, handleCreateNewPlan, handleActivatePlan, handleEditPlan, savedPlans } = state;
+  const { handleBack, handleCreateNewPlan, handleActivatePlan, handleDeletePlan, handleEditPlan, savedPlans } = state;
+
+  // Alert.alert is a no-op on React Native Web, so deletion confirmation is
+  // a plain in-app panel (like Home's "Reset Reviews" confirm) instead --
+  // works identically on native and web. Keyed by plan id so only the
+  // card being deleted shows its confirm panel.
+  const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -83,21 +90,35 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                     </Text>
                   </View>
 
-                  {plan.isActive ? (
-                    <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full flex-row items-center gap-1 border border-emerald-500/20">
-                      <Text className="text-[8px] font-sans font-bold text-emerald-700 uppercase tracking-wider">
-                        Active
-                      </Text>
-                    </View>
-                  ) : (
-                    <Pressable
-                      onPress={() => handleEditPlan(plan)}
-                      className="flex-row items-center gap-0.5"
-                    >
-                      <Text className="text-[9px] font-sans font-extrabold text-neutral-400">Edit</Text>
-                      <ChevronRight size={10} color="#a3a3a3" />
-                    </Pressable>
-                  )}
+                  <View className="flex-row items-center gap-3">
+                    {plan.isActive ? (
+                      <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full flex-row items-center gap-1 border border-emerald-500/20">
+                        <Text className="text-[8px] font-sans font-bold text-emerald-700 uppercase tracking-wider">
+                          Active
+                        </Text>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => handleEditPlan(plan)}
+                        className="flex-row items-center gap-0.5"
+                      >
+                        <Text className="text-[9px] font-sans font-extrabold text-neutral-400">Edit</Text>
+                        <ChevronRight size={10} color="#a3a3a3" />
+                      </Pressable>
+                    )}
+                    {savedPlans.length > 1 && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setDeletingPlanId(plan.id);
+                        }}
+                        className="w-6 h-6 rounded-full items-center justify-center"
+                        hitSlop={8}
+                      >
+                        <Trash2 size={13} color="#d4d4d4" />
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
 
                 {plan.isActive && (
@@ -109,6 +130,36 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                       <Text className="text-[9px] font-sans font-extrabold text-neutral-500">Edit Settings</Text>
                       <ChevronRight size={10} color="#737373" />
                     </Pressable>
+                  </View>
+                )}
+
+                {deletingPlanId === plan.id && (
+                  <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
+                    <Text className="text-[11px] font-sans font-bold text-red-800">Delete "{plan.name}"?</Text>
+                    <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
+                      This permanently removes this plan. It can't be undone.
+                    </Text>
+                    <View className="flex-row gap-2 justify-end pt-1">
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setDeletingPlanId(null);
+                        }}
+                        className="px-3 py-1.5 border border-neutral-300 rounded-lg bg-white"
+                      >
+                        <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeletePlan(plan.id);
+                          setDeletingPlanId(null);
+                        }}
+                        className="px-3 py-1.5 bg-red-600 rounded-lg"
+                      >
+                        <Text className="text-white font-sans font-bold text-[10px]">Yes, Delete</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 )}
               </Pressable>

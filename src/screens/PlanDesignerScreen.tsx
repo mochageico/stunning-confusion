@@ -3,7 +3,7 @@ import Slider from '@react-native-community/slider';
 import { ArrowLeft, Check, Share2, TrendingUp } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { FadeInView, PulseView } from '../components/ui';
+import { FadeInView, HelpTooltip, PulseView } from '../components/ui';
 
 const DAYS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
 
@@ -265,9 +265,13 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                 </View>
                 <Pressable
                   onPress={() => {
-                    console.log('[DIAG] Sabbath toggle pressed, before:', sabbathEnabled);
-                    setSabbathEnabled(!sabbathEnabled);
-                    console.log('[DIAG] Sabbath toggle pressed, after setSabbathEnabled call');
+                    const turningOn = !sabbathEnabled;
+                    setSabbathEnabled(turningOn);
+                    // A day can't be both a learning day and the Sabbath at
+                    // once -- turning Sabbath on immediately frees up its day.
+                    if (turningOn && learningDays.includes(sabbathDay)) {
+                      setLearningDays(learningDays.filter((d) => d !== sabbathDay));
+                    }
                   }}
                   className={`w-10 h-6 rounded-full justify-center px-0.5 ${sabbathEnabled ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
                 >
@@ -281,15 +285,15 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               {sabbathEnabled && (
                 <View className="flex-row justify-between pt-2">
                   {DAYS.map((day) => {
-                    console.log('[DIAG] checkpoint C: sabbath-day map item', day);
                     const isActive = sabbathDay === day;
                     return (
                       <Pressable
                         key={`sabbath-${day}`}
                         onPress={() => {
-                          console.log('[DIAG] Sabbath day pressed:', day);
                           setSabbathDay(day);
-                          console.log('[DIAG] Sabbath day setSabbathDay call done');
+                          if (learningDays.includes(day)) {
+                            setLearningDays(learningDays.filter((d) => d !== day));
+                          }
                         }}
                         className={`w-7 h-7 rounded-full border items-center justify-center ${
                           isActive ? 'bg-[#1A1A1A] border-[#1A1A1A] shadow-sm' : 'bg-white border-neutral-200'
@@ -370,7 +374,10 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           {/* 3-Touch Mastery Gate setting */}
           <View style={{ gap: 6 }} className="pt-4 border-t border-[#F3F2F1]">
             <View className="flex-row justify-between items-center">
-              <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Mastery Touch Gate Requirement</Text>
+              <View className="flex-row items-center">
+                <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Touches to Graduate a Verse</Text>
+                <HelpTooltip text="How many times you have to successfully recall a verse -- at least an hour apart each time -- before it can graduate out of Learning and into spaced review. Spacing the touches out like this stops cramming from counting as real mastery. Once a verse hits this count, it's 'banked' and will graduate automatically as soon as your other due reviews for the day are cleared." />
+              </View>
               <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
                 {masteryTouches} touches
               </Text>
@@ -394,7 +401,10 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           {/* Standard Reviews Required setting */}
           <View style={{ gap: 6 }} className="pt-4 border-t border-[#F3F2F1]">
             <View className="flex-row justify-between items-center">
-              <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Standard Reviews Required per Day</Text>
+              <View className="flex-row items-center">
+                <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Reviews Needed Per Day to Advance</Text>
+                <HelpTooltip text="Once a verse is in spaced review (Daily/Weekly/Monthly), this is how many times you must successfully review it on the SAME day before that day counts toward its streak. Raising this means more repetition per sitting -- it doesn't add extra days between reviews." />
+              </View>
               <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
                 {reviewsRequired} reps
               </Text>

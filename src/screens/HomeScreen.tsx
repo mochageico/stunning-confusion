@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { Volume2, Sliders, BookMarked, FolderOpen } from 'lucide-react-native';
+import { Volume2, BookMarked, FolderOpen } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, VerseState } from '../types';
@@ -133,7 +133,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 <Text className="text-xs font-sans font-extrabold uppercase tracking-wider text-neutral-400">
                   Learning phase...
                 </Text>
-                <HelpTooltip text="Verses currently in active study phase. Requires 3 successful touches in separate hours to graduate to Spaced Repetition." />
+                <HelpTooltip
+                  text={`Verses currently in active study phase. Requires ${masteryTouches} successful touches, at least an hour apart each, to graduate to Spaced Repetition.`}
+                />
               </View>
               <Text className="text-[10px] font-mono text-neutral-400 font-bold">
                 {learningItems.length} verses today
@@ -458,21 +460,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
               </Text>
             </Pressable>
 
-            {/* Feature 2: Plan Designer */}
-            <Pressable
-              onPress={() => navigateTo('planDesigner')}
-              className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
-              style={{ gap: 6 }}
-            >
-              <Sliders size={18} color="#1A1A1A" />
-              <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
-                Memory Plan Designer
-              </Text>
-            </Pressable>
-          </View>
-
-          <View className="flex-row gap-3">
-            {/* Feature 3: My Plans */}
+            {/* Feature 2: My Memory Plans */}
             <Pressable
               onPress={() => navigateTo('savedPlans')}
               className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
@@ -484,7 +472,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
               </Text>
             </Pressable>
 
-            {/* Feature 4: Verse Search / Bible */}
+            {/* Feature 3: Verse Search / Bible */}
             <Pressable
               onPress={() => navigateTo('books')}
               className="flex-1 border-2 border-[#1A1A1A] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"

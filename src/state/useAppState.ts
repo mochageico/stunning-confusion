@@ -1622,6 +1622,76 @@ export function useAppState() {
     }
   };
 
+  // Deletes a saved plan. Refuses to delete the last remaining plan (a user
+  // must always have at least one). If the deleted plan was the active one,
+  // the first remaining plan becomes active and its settings are synced into
+  // the live editing state, the same way switching plans normally works.
+  const handleDeletePlan = async (planId: string) => {
+    if (savedPlans.length <= 1) {
+      triggerToast("Can't delete your only plan — save another one first.");
+      return;
+    }
+    const deletedPlan = savedPlans.find((p) => p.id === planId);
+    const wasActive = !!deletedPlan?.isActive;
+    let updatedPlans = savedPlans.filter((p) => p.id !== planId);
+    if (wasActive) {
+      updatedPlans = updatedPlans.map((p, i) => ({ ...p, isActive: i === 0 }));
+    }
+
+    if (wasActive) {
+      const newActive = updatedPlans[0];
+      setPreset(newActive.preset);
+      setLearningDays(newActive.learningDays);
+      setNewVersesPace(newActive.newVersesPace);
+      setMaxReviewCap(newActive.maxReviewCap);
+      setRetentionRigor(newActive.retentionRigor);
+      setDailyPhaseWeeks(newActive.dailyPhaseWeeks);
+      setWeeklyPhaseMonths(newActive.weeklyPhaseMonths);
+      setMonthlyPhaseYears(newActive.monthlyPhaseYears);
+      setMasteryTouches(newActive.masteryTouches);
+      setReviewsRequired(newActive.reviewsRequired);
+      setSabbathEnabled(newActive.sabbathEnabled);
+      setSabbathDay(newActive.sabbathDay);
+      setCognitiveLoadSensitivity(newActive.cognitiveLoadSensitivity);
+      setCustomPlanName(newActive.name);
+    }
+    if (editingPlanId === planId) setEditingPlanId(null);
+
+    setSavedPlans(updatedPlans);
+    triggerToast(`Deleted "${deletedPlan?.name || 'plan'}".`);
+
+    if (auth.currentUser) {
+      try {
+        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
+        const activePlan = updatedPlans.find((p) => p.isActive) || updatedPlans[0];
+        await setDoc(
+          planRef,
+          {
+            savedPlans: updatedPlans,
+            preset: activePlan.preset,
+            learningDays: activePlan.learningDays,
+            newVersesPace: activePlan.newVersesPace,
+            maxReviewCap: activePlan.maxReviewCap,
+            retentionRigor: activePlan.retentionRigor,
+            dailyPhaseWeeks: activePlan.dailyPhaseWeeks,
+            weeklyPhaseMonths: activePlan.weeklyPhaseMonths,
+            monthlyPhaseYears: activePlan.monthlyPhaseYears,
+            masteryTouches: activePlan.masteryTouches,
+            reviewsRequired: activePlan.reviewsRequired,
+            sabbathEnabled: activePlan.sabbathEnabled,
+            sabbathDay: activePlan.sabbathDay,
+            cognitiveLoadSensitivity: activePlan.cognitiveLoadSensitivity,
+            name: activePlan.name,
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
+      }
+    }
+  };
+
   const handleEditPlan = (plan: MemoryPlan) => {
     setEditingPlanId(plan.id);
     setPreset(plan.preset);
@@ -3814,6 +3884,7 @@ export function useAppState() {
     joinSharedPlan,
     joinGroupPlan,
     handleActivatePlan,
+    handleDeletePlan,
     handleEditPlan,
     handleCreateNewPlan,
     handleSavePlan,
