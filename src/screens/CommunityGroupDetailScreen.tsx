@@ -18,7 +18,7 @@ import {
 
 import { AppState } from '../state/useAppState';
 import { Circle } from '../types';
-import { FadeInView } from '../components/ui';
+import { FadeInView, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 
 export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
@@ -63,6 +63,8 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
   // an uncontrolled web <form> input in the original with no equivalent
   // global state field.
   const [announcementDraft, setAnnouncementDraft] = useState('');
+
+  const newPlanPacingField = useClampedNumberField(newPlanPacing, setNewPlanPacing, (n) => Math.max(1, Math.min(10, n)));
 
   const isLeaderOrAdmin = !!activeCircle && !!user && activeCircle.ownerId === user.uid;
 
@@ -346,11 +348,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                     <View className="flex-1">
                       <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Speed (verses/wk)</Text>
                       <TextInput
-                        value={String(newPlanPacing)}
-                        onChangeText={(text) => {
-                          const n = parseInt(text, 10);
-                          setNewPlanPacing(Number.isNaN(n) ? 1 : Math.max(1, Math.min(10, n)));
-                        }}
+                        {...newPlanPacingField}
                         keyboardType="numeric"
                         className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white"
                       />

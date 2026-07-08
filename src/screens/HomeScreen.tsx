@@ -424,7 +424,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
               onPress={() => navigateTo('activePlan')}
               className="flex-1 py-2.5 border-2 border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5 shadow-3xs"
             >
-              <Text className="text-[#1A1A1A] font-sans font-bold text-xs">Edit Memory Plan</Text>
+              <Text className="text-[#1A1A1A] font-sans font-bold text-xs">Edit Memory Verse Queue</Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -480,7 +480,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
             >
               <FolderOpen size={18} color="#1A1A1A" />
               <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
-                My Plans
+                My Memory Plans
               </Text>
             </Pressable>
 

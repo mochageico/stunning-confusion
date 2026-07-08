@@ -1,38 +1,16 @@
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, ArrowUp, ArrowDown, Plus, X, Trash2 } from 'lucide-react-native';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
-import { FadeInView, ChipRow } from '../components/ui';
+import { FadeInView, ChipRow, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { fetchChapterText } from '../state/useScripture';
 import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 
 const WEEK_DAYS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
-
-// Backs a numeric TextInput with its own free-typed string so clearing the
-// field doesn't instantly snap back to the clamped minimum (which used to
-// force the *next* keystroke to land next to a phantom "1" instead of into
-// an empty box). The real number only updates -- and the box only re-clamps
-// -- once the user leaves the field.
-function useClampedNumberField(value: number, commit: (n: number) => void, clamp: (n: number) => number) {
-  const [text, setText] = useState(String(value));
-  useEffect(() => {
-    setText(String(value));
-  }, [value]);
-  return {
-    value: text,
-    onChangeText: setText,
-    onBlur: () => {
-      const parsed = parseInt(text, 10);
-      const next = clamp(Number.isNaN(parsed) ? value : parsed);
-      commit(next);
-      setText(String(next));
-    },
-  };
-}
 
 function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
   if (items.length === 0) return [];
@@ -150,6 +128,19 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const dayField = useClampedNumberField(goalDay, setGoalDay, (n) => Math.min(31, Math.max(1, n)));
   const yearField = useClampedNumberField(goalYear, setGoalYear, (n) =>
     Math.min(todayForGoal.getFullYear() + 50, Math.max(todayForGoal.getFullYear(), n))
+  );
+
+  const addChapterField = useClampedNumberField(selectedAddChapter, setSelectedAddChapter, (n) => Math.max(1, n));
+  const addStartVerseField = useClampedNumberField(
+    selectedAddVerse,
+    (n) => {
+      setSelectedAddVerse(n);
+      if (n > selectedAddEndVerse) setSelectedAddEndVerse(n);
+    },
+    (n) => Math.max(1, n)
+  );
+  const addEndVerseField = useClampedNumberField(selectedAddEndVerse, setSelectedAddEndVerse, (n) =>
+    Math.max(selectedAddVerse, n)
   );
 
   const grouped = groupQueueItems(memoryQueue);
@@ -652,8 +643,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     <Text className="text-[9px] font-bold text-neutral-400 uppercase">Chapter</Text>
                     <TextInput
                       keyboardType="numeric"
-                      value={String(selectedAddChapter)}
-                      onChangeText={(text) => setSelectedAddChapter(parseInt(text, 10) || 1)}
+                      {...addChapterField}
                       className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
                     />
                   </View>
@@ -664,13 +654,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     <Text className="text-[9px] font-bold text-neutral-400 uppercase">Start Verse</Text>
                     <TextInput
                       keyboardType="numeric"
-                      value={String(selectedAddVerse)}
-                      onChangeText={(text) => {
-                        const n = parseInt(text, 10) || 1;
-                        setSelectedAddVerse(n);
-                        // Keep the range valid if start is dragged past end
-                        if (n > selectedAddEndVerse) setSelectedAddEndVerse(n);
-                      }}
+                      {...addStartVerseField}
                       className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
                     />
                   </View>
@@ -678,11 +662,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     <Text className="text-[9px] font-bold text-neutral-400 uppercase">End Verse</Text>
                     <TextInput
                       keyboardType="numeric"
-                      value={String(selectedAddEndVerse)}
-                      onChangeText={(text) => {
-                        const n = parseInt(text, 10) || 1;
-                        setSelectedAddEndVerse(Math.max(n, selectedAddVerse));
-                      }}
+                      {...addEndVerseField}
                       className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
                     />
                   </View>

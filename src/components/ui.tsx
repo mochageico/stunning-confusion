@@ -145,6 +145,31 @@ export function ProgressBar({ percent, className = 'h-1.5' }: { percent: number;
 }
 
 // ============================================================
+// useClampedNumberField — backs a numeric TextInput with its own
+// free-typed string so clearing the field doesn't instantly snap back
+// to the clamped minimum (which used to force the *next* keystroke to
+// land next to a phantom "1" instead of into an empty box). The real
+// number only updates -- and the box only re-clamps -- once the user
+// leaves the field.
+// ============================================================
+export function useClampedNumberField(value: number, commit: (n: number) => void, clamp: (n: number) => number) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+  return {
+    value: text,
+    onChangeText: setText,
+    onBlur: () => {
+      const parsed = parseInt(text, 10);
+      const next = clamp(Number.isNaN(parsed) ? value : parsed);
+      commit(next);
+      setText(String(next));
+    },
+  };
+}
+
+// ============================================================
 // Animated wrappers replacing Tailwind's animate-fade-in / -pulse
 // / -spin / -bounce utilities, implemented with RN's built-in
 // Animated API (no extra runtime dependency, guaranteed to work
