@@ -2483,9 +2483,14 @@ export function useAppState() {
             gracePeriodUsedToday: data.gracePeriodUsedToday || false,
             dailyPhaseExtensionDays: data.dailyPhaseExtensionDays || 0,
             refresherActive: data.refresherActive || false,
-            refresherReturnPhase: data.refresherReturnPhase || undefined,
-            refresherReturnProgress: data.refresherReturnProgress ?? undefined,
-            refresherTargetUnits: data.refresherTargetUnits ?? undefined,
+            // Omit these three entirely rather than setting them to
+            // `undefined` when absent -- Firestore's SDK throws on a field
+            // literally valued `undefined` (unlike simply not having the
+            // key), which was breaking the memory-queue auto-sync for every
+            // verse not currently in a refresher.
+            ...(data.refresherReturnPhase !== undefined ? { refresherReturnPhase: data.refresherReturnPhase } : {}),
+            ...(data.refresherReturnProgress !== undefined ? { refresherReturnProgress: data.refresherReturnProgress } : {}),
+            ...(data.refresherTargetUnits !== undefined ? { refresherTargetUnits: data.refresherTargetUnits } : {}),
           });
         });
         loadedQueue.sort((a, b) => a.orderIndex - b.orderIndex);

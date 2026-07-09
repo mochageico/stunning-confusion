@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {
   ArrowLeft,
@@ -101,28 +101,23 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setNewPlanDesc('');
   };
 
+  const [showLeaveDisbandConfirm, setShowLeaveDisbandConfirm] = useState(false);
+
   const handleLeaveOrDisband = () => {
     if (!activeCircle) return;
     if (isLeaderOrAdmin) {
-      Alert.alert(
-        'Disband Scripture Circle',
-        `Are you absolutely sure you want to permanently disband and delete the "${activeCircle.name}" Scripture Circle?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Disband',
-            style: 'destructive',
-            onPress: async () => {
-              await disbandCircle(activeCircle.id);
-              setActiveGroupPlan(null);
-            },
-          },
-        ]
-      );
+      setShowLeaveDisbandConfirm(true);
     } else {
       leaveCircle(activeCircle.id);
       setActiveGroupPlan(null);
     }
+  };
+
+  const confirmDisband = async () => {
+    if (!activeCircle) return;
+    setShowLeaveDisbandConfirm(false);
+    await disbandCircle(activeCircle.id);
+    setActiveGroupPlan(null);
   };
 
   if (loadingActiveCircle || !activeCircle) {
@@ -688,11 +683,31 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         </View>
 
         {/* LEAVE OR DISBAND ACTIONS */}
-        <Pressable onPress={handleLeaveOrDisband} className="w-full py-2.5 bg-red-50 border border-red-200 rounded-xl items-center justify-center">
-          <Text className="text-red-600 font-sans font-bold text-xs text-center">
-            {isLeaderOrAdmin ? 'Disband & Delete Scripture Circle' : 'Leave Circle'}
-          </Text>
-        </Pressable>
+        {showLeaveDisbandConfirm ? (
+          <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
+            <Text className="text-[11px] font-sans font-bold text-red-800">Disband this circle?</Text>
+            <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
+              "{activeCircle.name}" and its shared plans will be permanently deleted for everyone. This can't be undone.
+            </Text>
+            <View className="flex-row gap-2 justify-end pt-1">
+              <Pressable
+                onPress={() => setShowLeaveDisbandConfirm(false)}
+                className="px-3 py-1.5 border border-neutral-300 rounded-lg bg-white"
+              >
+                <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+              </Pressable>
+              <Pressable onPress={confirmDisband} className="px-3 py-1.5 bg-red-600 rounded-lg">
+                <Text className="text-white font-sans font-bold text-[10px]">Yes, Disband</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <Pressable onPress={handleLeaveOrDisband} className="w-full py-2.5 bg-red-50 border border-red-200 rounded-xl items-center justify-center">
+            <Text className="text-red-600 font-sans font-bold text-xs text-center">
+              {isLeaderOrAdmin ? 'Disband & Delete Scripture Circle' : 'Leave Circle'}
+            </Text>
+          </Pressable>
+        )}
       </ScrollView>
     </FadeInView>
   );

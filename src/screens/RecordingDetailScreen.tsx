@@ -1,4 +1,5 @@
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Pause, Play } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
@@ -44,29 +45,12 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
     selectedRecordingChapterTextData,
   } = state;
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   if (!selectedRecording) return null;
 
   const isPlayingThis = playingRecordingId === selectedRecording.id;
   const hasRealAudio = !!selectedRecording.audioUrl;
-
-  const handleDelete = () => {
-    Alert.alert(
-      'Delete Recording',
-      `Are you sure you want to delete the recording for ${selectedRecording.book} ${selectedRecording.chapter}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteRecording(selectedRecording);
-            triggerToast(`Recitation for ${selectedRecording.book} ${selectedRecording.chapter} deleted. 🗑️`);
-            handleBack();
-          },
-        },
-      ]
-    );
-  };
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -91,12 +75,41 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
           </View>
 
           <Pressable
-            onPress={handleDelete}
+            onPress={() => setShowDeleteConfirm(true)}
             className="px-2 py-1 bg-red-50 border border-red-200 rounded-lg"
           >
             <Text className="text-[9px] font-sans font-bold uppercase tracking-wider text-red-600">Delete Rec</Text>
           </Pressable>
         </View>
+
+        {showDeleteConfirm && (
+          <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
+            <Text className="text-[11px] font-sans font-bold text-red-800">Delete this recording?</Text>
+            <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
+              The recitation for {selectedRecording.book} {selectedRecording.chapter} will be permanently removed.
+              This can't be undone.
+            </Text>
+            <View className="flex-row gap-2 justify-end pt-1">
+              <Pressable
+                onPress={() => setShowDeleteConfirm(false)}
+                className="px-3 py-1.5 border border-neutral-300 rounded-lg bg-white"
+              >
+                <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  setShowDeleteConfirm(false);
+                  await deleteRecording(selectedRecording);
+                  triggerToast(`Recitation for ${selectedRecording.book} ${selectedRecording.chapter} deleted. 🗑️`);
+                  handleBack();
+                }}
+                className="px-3 py-1.5 bg-red-600 rounded-lg"
+              >
+                <Text className="text-white font-sans font-bold text-[10px]">Yes, Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
 
         {/* Recording Metadata Card */}
         <View className="border border-neutral-200 rounded-2xl p-4 bg-neutral-50/50" style={{ gap: 12 }}>
