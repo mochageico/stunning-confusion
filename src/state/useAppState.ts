@@ -2949,7 +2949,19 @@ export function useAppState() {
     }
   };
 
-  const handleReviewCompleted = async (item: QueueItem, success: boolean, drillType?: 'speak' | 'type' | 'reveal') => {
+  // `opts.perfect` — accuracy tier of the practice run behind this result
+  // (graded in src/lib/recitation.ts). A success with perfect === false was
+  // "close enough" (>= 90% word accuracy): it still counts as a completed
+  // spaced-repetition review, but does NOT bank a mastery touch for a
+  // learning verse — touches require a perfect run. Omitted (undefined)
+  // means the drill couldn't measure accuracy (e.g. reveal mode's
+  // self-assessment) and is treated as the user claiming a perfect run.
+  const handleReviewCompleted = async (
+    item: QueueItem,
+    success: boolean,
+    drillType?: 'speak' | 'type' | 'reveal',
+    opts?: { perfect?: boolean }
+  ) => {
     let updatedItem = { ...item };
     updatedItem.lastReviewDate = new Date().toISOString();
 
@@ -2986,6 +2998,12 @@ export function useAppState() {
 
     if (success) {
       if (item.status === 'learning') {
+        // Perfection gate: a run with any missed words never banks a touch,
+        // no matter how close — "close enough" only exists for reviews.
+        if (opts?.perfect === false) {
+          triggerToast('Good recall! A run must be perfect (no missed words) to bank a mastery touch. 🔒');
+          return;
+        }
         // 3-Touch Mastery Gate checks
         const inferredType = drillType || (activeModal === 'type' ? 'type' : activeModal === 'reveal' ? 'reveal' : 'speak');
         const isValid = validateTouch(item, inferredType);
@@ -3246,7 +3264,8 @@ export function useAppState() {
   const handleUpdateVerseStatus = async (
     versesToUpdate: VerseState[],
     newStatus: 'memorized' | 'learning',
-    customDrillType?: 'speak' | 'type' | 'reveal'
+    customDrillType?: 'speak' | 'type' | 'reveal',
+    opts?: { perfect?: boolean }
   ) => {
     setVerses((prev) => {
       return prev.map((v) => {
@@ -3294,7 +3313,7 @@ export function useAppState() {
         (q) => q.book === v.book && q.chapter === v.chapter && q.verseNumber === v.verse
       );
       if (itemInQueue) {
-        await handleReviewCompleted(itemInQueue, success, drillType);
+        await handleReviewCompleted(itemInQueue, success, drillType, opts);
       }
     }
 

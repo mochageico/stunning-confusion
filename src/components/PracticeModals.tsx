@@ -4,6 +4,17 @@ import Slider from '@react-native-community/slider';
 import { Check, Eye, EyeOff, Info, Keyboard, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Sliders, Sparkles, X } from 'lucide-react-native';
 
 import { VerseState, QueueItem } from '../types';
+import {
+  classifyFirstLetterAttempt,
+  getSpeechRecognizer,
+  gradeTranscript,
+  matchTranscriptLive,
+  summarizeOutcomes,
+  tokenizeWords,
+  REVIEW_PASS_ACCURACY,
+  SpeechRecognizer,
+  WordOutcome,
+} from '../lib/recitation';
 import { BounceView, ChipRow, FadeInView, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
 
@@ -12,7 +23,12 @@ interface PracticeModalsProps {
   verses: VerseState[];
   allVerses?: VerseState[];
   onClose: () => void;
-  onUpdateStatus: (versesToUpdate: VerseState[], newStatus: 'memorized' | 'learning', customDrillType?: 'speak' | 'type' | 'reveal') => void;
+  onUpdateStatus: (
+    versesToUpdate: VerseState[],
+    newStatus: 'memorized' | 'learning',
+    customDrillType?: 'speak' | 'type' | 'reveal',
+    opts?: { perfect?: boolean }
+  ) => void;
   memoryQueue?: QueueItem[];
   primingLookahead?: number;
   setPrimingLookahead?: (val: number) => void;
@@ -209,10 +225,34 @@ function PracticeModalsInner({
   const [isFinishedTyping, setIsFinishedTyping] = useState(false);
   const [flashError, setFlashError] = useState(false);
 
-  // New Voice Recital / Speak Practice skeleton states
+  // Per-word grading (see src/lib/recitation.ts). Keyed "verseIdx:wordIdx"
+  // so a strike-limit verse restart overwrites instead of double-counting —
+  // except a word already graded 'missed' stays missed for the session
+  // (retyping it correctly after a restart doesn't buy the accuracy back).
+  const [wordOutcomes, setWordOutcomes] = useState<Record<string, WordOutcome>>({});
+  // Final graded outcomes for the finished session (typing or speaking) —
+  // drives the accuracy summary + which logging buttons the user gets.
+  const [finalOutcomes, setFinalOutcomes] = useState<WordOutcome[] | null>(null);
+
+  // Voice Recital / Speak Practice
   const [typeSubMode, setTypeSubMode] = useState<'type' | 'speak'>('type');
   const [isListeningSpeak, setIsListeningSpeak] = useState(false);
   const [localToast, setLocalToast] = useState<string | null>(null);
+  // Full transcript so far (live engine) or the typed fallback text.
+  const [speakTranscript, setSpeakTranscript] = useState('');
+  const [manualTranscript, setManualTranscript] = useState('');
+  // One engine per mounted modal; null when this platform has no live speech
+  // engine (native Expo Go) — the typed-transcript fallback still works.
+  const speechEngineRef = useRef<SpeechRecognizer | null>(null);
+  const [speechAvailable] = useState(() => {
+    speechEngineRef.current = getSpeechRecognizer();
+    return speechEngineRef.current !== null;
+  });
+
+  // Make sure the engine never keeps listening past the modal's lifetime.
+  useEffect(() => {
+    return () => speechEngineRef.current?.stop();
+  }, []);
 
   const triggerLocalToast = (msg: string) => {
     setLocalToast(msg);
@@ -224,10 +264,35 @@ function PracticeModalsInner({
   const activeVerseToType = verses[currentTypeVerseIdx];
   const typeWords = activeVerseToType ? activeVerseToType.text.split(/\s+/) : [];
 
-  const getCleanFirstChar = (word: string) => {
-    if (!word) return '';
-    const clean = word.replace(/[^a-zA-Z0-9]/g, '');
-    return clean.length > 0 ? clean.charAt(0).toLowerCase() : '';
+  // Assembles every word's outcome across the whole passage from the keyed
+  // record; a word somehow never graded counts as missed rather than free.
+  const buildTypedOutcomes = (record: Record<string, WordOutcome>): WordOutcome[] => {
+    const all: WordOutcome[] = [];
+    verses.forEach((v, vIdx) => {
+      v.text.split(/\s+/).forEach((_, wIdx) => {
+        all.push(record[`${vIdx}:${wIdx}`] || 'missed');
+      });
+    });
+    return all;
+  };
+
+  // Records the current word's grade and moves to the next word/verse.
+  // `record` is threaded through explicitly because the finishing branch
+  // needs the final, complete map before React has re-rendered.
+  const advanceTypedWord = (record: Record<string, WordOutcome>) => {
+    setWordOutcomes(record);
+    if (typeWordIdx >= typeWords.length - 1) {
+      if (currentTypeVerseIdx >= verses.length - 1) {
+        setFinalOutcomes(buildTypedOutcomes(record));
+        setIsFinishedTyping(true);
+      } else {
+        setCurrentTypeVerseIdx((prev) => prev + 1);
+        setTypeWordIdx(0);
+        setVerseStrikes(0); // reset strikes on new verse
+      }
+    } else {
+      setTypeWordIdx((prev) => prev + 1);
+    }
   };
 
   // NOTE: onChangeText passes the string directly (unlike web's onChange event).
@@ -239,22 +304,19 @@ function PracticeModalsInner({
       return;
     }
 
-    const lastChar = val.charAt(val.length - 1).toLowerCase();
+    const lastChar = val.charAt(val.length - 1);
     const currentWord = typeWords[typeWordIdx];
-    const targetChar = getCleanFirstChar(currentWord);
+    const wordKey = `${currentTypeVerseIdx}:${typeWordIdx}`;
+    // Near-miss forgiveness: 'close' means a QWERTY key adjacent to the
+    // right letter — accepted and advanced just like 'exact', but graded
+    // separately so a perfect-run check can still see the difference
+    // between clean recall and fat-fingered recall (both count as correct).
+    const verdict = classifyFirstLetterAttempt(lastChar, currentWord);
 
-    if (targetChar === '' || lastChar === targetChar) {
-      if (typeWordIdx >= typeWords.length - 1) {
-        if (currentTypeVerseIdx >= verses.length - 1) {
-          setIsFinishedTyping(true);
-        } else {
-          setCurrentTypeVerseIdx((prev) => prev + 1);
-          setTypeWordIdx(0);
-          setVerseStrikes(0); // reset strikes on new verse
-        }
-      } else {
-        setTypeWordIdx((prev) => prev + 1);
-      }
+    if (verdict !== 'wrong') {
+      const alreadyMissed = wordOutcomes[wordKey] === 'missed';
+      const outcome: WordOutcome = alreadyMissed ? 'missed' : verdict === 'close' ? 'close' : 'perfect';
+      advanceTypedWord({ ...wordOutcomes, [wordKey]: outcome });
       setTypedInput('');
     } else {
       const nextStrikes = verseStrikes + 1;
@@ -262,6 +324,10 @@ function PracticeModalsInner({
       setVerseStrikes(nextStrikes);
       setFlashError(true);
       setTypedInput(''); // Clear on error so user doesn't have to backspace
+      // One wrong attempt permanently marks this word missed for the session
+      // (getting it right on the next try lets you continue, but the
+      // accuracy score keeps the miss).
+      setWordOutcomes((prev) => ({ ...prev, [wordKey]: 'missed' }));
 
       if (strikeLimit !== 'unlimited' && nextStrikes >= strikeLimit) {
         setShowStrikeResetAlert(true);
@@ -276,18 +342,11 @@ function PracticeModalsInner({
     }
   };
 
+  // Revealing a word is a miss for grading purposes — the user didn't
+  // recall it.
   const handleHint = () => {
-    if (typeWordIdx >= typeWords.length - 1) {
-      if (currentTypeVerseIdx >= verses.length - 1) {
-        setIsFinishedTyping(true);
-      } else {
-        setCurrentTypeVerseIdx((prev) => prev + 1);
-        setTypeWordIdx(0);
-        setVerseStrikes(0);
-      }
-    } else {
-      setTypeWordIdx((prev) => prev + 1);
-    }
+    const wordKey = `${currentTypeVerseIdx}:${typeWordIdx}`;
+    advanceTypedWord({ ...wordOutcomes, [wordKey]: 'missed' });
   };
 
   const resetTypeGame = () => {
@@ -298,6 +357,60 @@ function PracticeModalsInner({
     setTypedInput('');
     setIsFinishedTyping(false);
     setShowStrikeResetAlert(false);
+    setWordOutcomes({});
+    setFinalOutcomes(null);
+    speechEngineRef.current?.stop();
+    setIsListeningSpeak(false);
+    setSpeakTranscript('');
+    setManualTranscript('');
+  };
+
+  // ==========================================
+  // SPEAK MODE — live recitation pipeline
+  // ==========================================
+  // Flattened expected tokens for the whole passage, plus each verse's word
+  // count so the live matcher's flat indices map back to rendered verses.
+  const speakExpectedTokens = useMemo(() => verses.flatMap((v) => tokenizeWords(v.text)), [verses]);
+  const fullPassageText = useMemo(() => verses.map((v) => v.text).join(' '), [verses]);
+  const liveMatch = useMemo(
+    () => matchTranscriptLive(speakExpectedTokens, speakTranscript),
+    [speakExpectedTokens, speakTranscript]
+  );
+
+  const startListening = () => {
+    const engine = speechEngineRef.current;
+    if (!engine) {
+      triggerLocalToast('No speech engine on this device yet — type your recitation below. ⌨️');
+      return;
+    }
+    setSpeakTranscript('');
+    setIsListeningSpeak(true);
+    engine.start({
+      onTranscript: (fullTranscript) => setSpeakTranscript(fullTranscript),
+      onEnd: () => setIsListeningSpeak(false),
+      onError: (message) => {
+        setIsListeningSpeak(false);
+        triggerLocalToast(`Speech engine error: ${message}`);
+      },
+    });
+    triggerLocalToast('Microphone active! Recite the passage... 🎙️');
+  };
+
+  const stopListening = () => {
+    speechEngineRef.current?.stop();
+    setIsListeningSpeak(false);
+  };
+
+  // Grades whatever recitation exists (live transcript, or the typed
+  // fallback) against the full passage and opens the shared results panel.
+  const finishRecital = (transcript: string) => {
+    stopListening();
+    if (!tokenizeWords(transcript).length) {
+      triggerLocalToast('Nothing to grade yet — recite (or type) the passage first.');
+      return;
+    }
+    setFinalOutcomes(gradeTranscript(fullPassageText, transcript));
+    setIsFinishedTyping(true);
   };
 
   // ==========================================
@@ -710,8 +823,17 @@ function PracticeModalsInner({
                                 }
 
                                 if (isWordTyped) {
+                                  // Grade coloring: clean recall reads black,
+                                  // near-miss keys amber, missed words red.
+                                  const outcome = wordOutcomes[`${vIdx}:${idx}`];
+                                  const gradeClass =
+                                    outcome === 'missed'
+                                      ? 'text-red-600'
+                                      : outcome === 'close'
+                                        ? 'text-amber-600'
+                                        : 'text-neutral-900';
                                   return (
-                                    <Text key={idx} className="font-serif text-[15px] text-neutral-900 font-semibold">
+                                    <Text key={idx} className={`font-serif text-[15px] font-semibold ${gradeClass}`}>
                                       {w}{' '}
                                     </Text>
                                   );
@@ -751,7 +873,7 @@ function PracticeModalsInner({
                       <TextInput
                         value={typedInput}
                         onChangeText={handleTypeChar}
-                        placeholder={showStrikeResetAlert ? 'Resetting...' : 'Type first letter of each word...'}
+                        placeholder={showStrikeResetAlert ? 'Resetting...' : 'Type first letter of each word (nearby keys count)...'}
                         className="w-full bg-neutral-50 border border-neutral-300 rounded-xl py-2 px-3 text-center font-sans font-semibold text-xs text-neutral-900"
                         autoFocus
                         editable={!showStrikeResetAlert}
@@ -794,7 +916,10 @@ function PracticeModalsInner({
                   </View>
                 </View>
               ) : (
-                /* SPEAK SUB-MODE SKELETON */
+                /* SPEAK SUB-MODE — live recitation, graded by the shared
+                   recitation engine. Words turn green as they're heard;
+                   platforms without a speech engine (native Expo Go) use the
+                   typed-transcript fallback, graded identically. */
                 <View className="flex-1 justify-between">
                   <View className="border border-neutral-200 rounded-2xl p-4 flex-1 justify-between bg-white relative">
                     <ScrollView className="flex-1 mb-2">
@@ -803,110 +928,112 @@ function PracticeModalsInner({
                       </Text>
 
                       <View className="gap-3">
-                        {verses.map((v, vIdx) => {
-                          const words = v.text.split(/\s+/);
-                          const isPastVerse = vIdx < currentTypeVerseIdx;
-                          const isCurrentVerse = vIdx === currentTypeVerseIdx;
+                        {(() => {
+                          // Map each rendered word to its flat index in the
+                          // live matcher's expected-token list.
+                          let flatIdx = 0;
+                          return verses.map((v) => {
+                            const words = v.text.split(/\s+/);
+                            return (
+                              <Text key={`${v.book}-${v.chapter}-${v.verse}`} className="font-serif text-[15px] leading-relaxed text-neutral-800">
+                                <Text className="font-sans text-[10px] font-bold text-neutral-400">{v.verse} </Text>
+                                {words.map((w, idx) => {
+                                  const g = flatIdx++;
+                                  const isHeard = liveMatch.matched[g];
+                                  const isSkipped = !isHeard && g < liveMatch.pointer;
+                                  const isCurrent = g === liveMatch.pointer;
 
-                          return (
-                            <Text key={`${v.book}-${v.chapter}-${v.verse}`} className="font-serif text-[15px] leading-relaxed text-neutral-800">
-                              <Text className="font-sans text-[10px] font-bold text-neutral-400">{v.verse} </Text>
-                              {words.map((w, idx) => {
-                                let isWordSpoken = false;
-                                let isWordCurrent = false;
-
-                                if (isPastVerse) {
-                                  isWordSpoken = true;
-                                } else if (isCurrentVerse) {
-                                  if (idx < typeWordIdx) {
-                                    isWordSpoken = true;
-                                  } else if (idx === typeWordIdx) {
-                                    isWordCurrent = true;
+                                  if (isHeard) {
+                                    return (
+                                      <Text key={idx} className="text-emerald-600 font-semibold">
+                                        {w}{' '}
+                                      </Text>
+                                    );
                                   }
-                                }
-
-                                if (isWordSpoken) {
+                                  if (isSkipped) {
+                                    return (
+                                      <Text key={idx} className="text-red-500 font-semibold">
+                                        {w}{' '}
+                                      </Text>
+                                    );
+                                  }
                                   return (
-                                    <Text key={idx} className="text-emerald-600 font-semibold">
-                                      {w}{' '}
+                                    <Text
+                                      key={idx}
+                                      className={`rounded px-1 font-mono font-bold ${
+                                        isCurrent ? 'bg-indigo-50 text-indigo-600' : 'bg-neutral-50 text-neutral-300'
+                                      }`}
+                                    >
+                                      {maskLetters(w)}{' '}
                                     </Text>
                                   );
-                                }
-
-                                return (
-                                  <Text
-                                    key={idx}
-                                    className={`rounded px-1 font-mono font-bold ${
-                                      isWordCurrent ? 'bg-indigo-50 text-indigo-600' : 'bg-neutral-50 text-neutral-300'
-                                    }`}
-                                  >
-                                    {maskLetters(w)}{' '}
-                                  </Text>
-                                );
-                              })}
-                            </Text>
-                          );
-                        })}
+                                })}
+                              </Text>
+                            );
+                          });
+                        })()}
                       </View>
                     </ScrollView>
 
-                    {/* Microphone waveform visualization card */}
+                    {/* Microphone / recitation control card */}
                     <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-3.5 gap-3 mt-2">
                       <View className="flex-row justify-between items-center">
-                        <Text className="text-[10px] text-neutral-400 font-bold font-sans uppercase tracking-wider">Voice Assist Status</Text>
-                        <Text className="text-[10px] font-mono font-extrabold text-neutral-600">{isListeningSpeak ? 'LISTENING...' : 'MIC STANDBY'}</Text>
+                        <Text className="text-[10px] text-neutral-400 font-bold font-sans uppercase tracking-wider">Voice Recital Status</Text>
+                        <Text className="text-[10px] font-mono font-extrabold text-neutral-600">
+                          {isListeningSpeak
+                            ? 'LISTENING...'
+                            : speechAvailable
+                              ? 'MIC STANDBY'
+                              : 'NO SPEECH ENGINE'}
+                        </Text>
                       </View>
 
                       <View className="h-9 items-center justify-center bg-white rounded-lg border border-neutral-200 px-3">
                         {isListeningSpeak ? (
                           <WaveBars active count={18} />
                         ) : (
-                          <Text className="text-[10px] text-neutral-400 font-sans font-semibold">Tap microphone below to speak and recite</Text>
+                          <Text className="text-[10px] text-neutral-400 font-sans font-semibold" numberOfLines={1}>
+                            {speakTranscript
+                              ? `Heard: "...${speakTranscript.slice(-60)}"`
+                              : speechAvailable
+                                ? 'Tap the microphone and recite the passage aloud'
+                                : 'Speech-to-text arrives with the dev build — type your recitation below'}
+                          </Text>
                         )}
                       </View>
 
-                      {/* Microphone control button */}
-                      <View className="items-center py-0.5">
-                        <Pressable
-                          onPress={() => {
-                            const next = !isListeningSpeak;
-                            setIsListeningSpeak(next);
-                            if (next) {
-                              triggerLocalToast('Microphone active! Speak now... 🎙️');
-                            } else {
-                              triggerLocalToast('Microphone in standby.');
-                            }
-                          }}
-                          className={`w-11 h-11 rounded-full items-center justify-center ${isListeningSpeak ? 'bg-red-500' : 'bg-indigo-600'}`}
-                        >
-                          {isListeningSpeak ? <MicOff size={18} color="#ffffff" /> : <Mic size={18} color="#ffffff" />}
-                        </Pressable>
-                      </View>
+                      {speechAvailable ? (
+                        <View className="items-center py-0.5">
+                          <Pressable
+                            onPress={() => (isListeningSpeak ? stopListening() : startListening())}
+                            className={`w-11 h-11 rounded-full items-center justify-center ${isListeningSpeak ? 'bg-red-500' : 'bg-indigo-600'}`}
+                          >
+                            {isListeningSpeak ? <MicOff size={18} color="#ffffff" /> : <Mic size={18} color="#ffffff" />}
+                          </Pressable>
+                        </View>
+                      ) : (
+                        /* Typed-transcript fallback: exercises the exact same
+                           grading pipeline a speech engine will feed later. */
+                        <TextInput
+                          value={manualTranscript}
+                          onChangeText={setManualTranscript}
+                          placeholder="Recite from memory here, word for word..."
+                          multiline
+                          className="w-full bg-white border border-neutral-300 rounded-lg py-2 px-3 font-sans text-xs text-neutral-900 min-h-[52px]"
+                        />
+                      )}
 
-                      {/* Simulate speech button for high-fidelity evaluation interaction */}
                       <View className="flex-row justify-between items-center border-t border-neutral-200 pt-2.5">
-                        <Text className="text-[9px] text-neutral-400 font-bold font-sans uppercase">Recital Simulation</Text>
+                        <Text className="text-[9px] text-neutral-400 font-bold font-sans uppercase">
+                          {speakExpectedTokens.length > 0
+                            ? `${liveMatch.matched.filter(Boolean).length}/${speakExpectedTokens.length} words heard`
+                            : ''}
+                        </Text>
                         <Pressable
-                          onPress={() => {
-                            if (currentTypeVerseIdx >= verses.length) return;
-                            if (typeWordIdx < typeWords.length - 1) {
-                              const spokenWord = typeWords[typeWordIdx];
-                              setTypeWordIdx((prev) => prev + 1);
-                              triggerLocalToast(`Spoken word: "${spokenWord}" ✓`);
-                            } else {
-                              if (currentTypeVerseIdx < verses.length - 1) {
-                                setCurrentTypeVerseIdx((prev) => prev + 1);
-                                setTypeWordIdx(0);
-                                triggerLocalToast('Great! Next verse ➔');
-                              } else {
-                                setIsFinishedTyping(true);
-                                triggerLocalToast('Perfect recital completed! 🎉');
-                              }
-                            }
-                          }}
-                          className="px-2.5 py-1 bg-white border border-neutral-200 rounded-lg"
+                          onPress={() => finishRecital(speechAvailable ? speakTranscript : manualTranscript)}
+                          className="px-2.5 py-1 bg-[#1A1A1A] rounded-lg"
                         >
-                          <Text className="text-[9px] font-sans font-extrabold uppercase text-neutral-700">Simulate Voice Word ➔</Text>
+                          <Text className="text-[9px] font-sans font-extrabold uppercase text-white">Finish & Grade ➔</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -917,7 +1044,6 @@ function PracticeModalsInner({
                     <Pressable
                       onPress={() => {
                         resetTypeGame();
-                        setIsListeningSpeak(false);
                         triggerLocalToast('Recital practice reset.');
                       }}
                       className="flex-1 py-2 px-3 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5"
@@ -929,56 +1055,91 @@ function PracticeModalsInner({
                 </View>
               )
             ) : (
-              /* Success panel */
-              <ScrollView className="flex-1" contentContainerClassName="items-center justify-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
-                <BounceView>
-                  <View className="w-12 h-12 bg-neutral-100 border-2 border-[#1A1A1A] rounded-full items-center justify-center">
-                    <Sparkles size={24} color="#171717" />
-                  </View>
-                </BounceView>
-                <View className="items-center">
-                  <Text className="text-lg font-serif font-bold text-neutral-900 leading-tight">Excellent Memory Recall!</Text>
-                  <Text className="text-xs text-neutral-500 font-sans mt-0.5">
-                    Completed typing with {typeErrors} {typeErrors === 1 ? 'mistake' : 'mistakes'}.
-                  </Text>
-                </View>
-
-                <View className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 gap-1.5 max-h-[110px]">
-                  <ScrollView>
-                    {verses.map((v) => (
-                      <Text key={v.verse} className="font-serif italic text-xs text-neutral-600">
-                        <Text className="font-sans text-[9px] font-bold text-neutral-400 not-italic">{v.verse} </Text>
-                        {v.text}
+              /* Graded results panel — shared by typing and speaking. The
+                 accuracy tier decides which logging actions exist:
+                 perfect (no missed words) -> counts as a mastery touch AND a
+                 review; >= REVIEW_PASS_ACCURACY -> counts as a review only;
+                 below that -> the run logs as a failed attempt. */
+              (() => {
+                const summary = summarizeOutcomes(finalOutcomes || []);
+                const drill: 'speak' | 'type' = typeSubMode === 'speak' ? 'speak' : 'type';
+                const pct = Math.round(summary.accuracy * 100);
+                const passPct = Math.round(REVIEW_PASS_ACCURACY * 100);
+                return (
+                  <ScrollView className="flex-1" contentContainerClassName="items-center justify-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
+                    <BounceView>
+                      <View className="w-12 h-12 bg-neutral-100 border-2 border-[#1A1A1A] rounded-full items-center justify-center">
+                        <Sparkles size={24} color="#171717" />
+                      </View>
+                    </BounceView>
+                    <View className="items-center">
+                      <Text className="text-lg font-serif font-bold text-neutral-900 leading-tight">
+                        {summary.isPerfect ? 'Perfect Recall!' : summary.passesReview ? 'Close Enough!' : 'Keep Practicing!'}
                       </Text>
-                    ))}
-                  </ScrollView>
-                </View>
+                      <Text className="text-xs text-neutral-500 font-sans mt-0.5">
+                        {pct}% word accuracy — {summary.perfectWords} exact
+                        {summary.closeWords > 0 ? `, ${summary.closeWords} near-miss` : ''}
+                        {summary.missedWords > 0 ? `, ${summary.missedWords} missed` : ''} of {summary.totalWords} words.
+                      </Text>
+                    </View>
 
-                <View className="w-full gap-2">
-                  <Pressable
-                    onPress={() => {
-                      onUpdateStatus(verses, 'memorized', 'type');
-                      onClose();
-                    }}
-                    className="w-full py-2.5 px-3 bg-emerald-600 rounded-xl flex-row items-center justify-center gap-1.5"
-                  >
-                    <Check size={14} color="#ffffff" />
-                    <Text className="font-sans font-bold text-xs text-white">Mark as Memorized</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      onUpdateStatus(verses, 'learning');
-                      onClose();
-                    }}
-                    className="w-full py-2.5 px-3 bg-[#1A1A1A] rounded-xl items-center"
-                  >
-                    <Text className="font-sans font-bold text-xs text-white">Mark as Practiced</Text>
-                  </Pressable>
-                  <Pressable onPress={resetTypeGame} className="w-full py-1 items-center">
-                    <Text className="text-[10.5px] text-neutral-500 font-bold">Practice Again</Text>
-                  </Pressable>
-                </View>
-              </ScrollView>
+                    <View className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 gap-1.5 max-h-[110px]">
+                      <ScrollView>
+                        {verses.map((v) => (
+                          <Text key={v.verse} className="font-serif italic text-xs text-neutral-600">
+                            <Text className="font-sans text-[9px] font-bold text-neutral-400 not-italic">{v.verse} </Text>
+                            {v.text}
+                          </Text>
+                        ))}
+                      </ScrollView>
+                    </View>
+
+                    <View className="w-full gap-2">
+                      {summary.isPerfect ? (
+                        <Pressable
+                          onPress={() => {
+                            onUpdateStatus(verses, 'memorized', drill, { perfect: true });
+                            onClose();
+                          }}
+                          className="w-full py-2.5 px-3 bg-emerald-600 rounded-xl flex-row items-center justify-center gap-1.5"
+                        >
+                          <Check size={14} color="#ffffff" />
+                          <Text className="font-sans font-bold text-xs text-white">Log Perfect Recall (counts toward mastery)</Text>
+                        </Pressable>
+                      ) : summary.passesReview ? (
+                        <>
+                          <Pressable
+                            onPress={() => {
+                              onUpdateStatus(verses, 'memorized', drill, { perfect: false });
+                              onClose();
+                            }}
+                            className="w-full py-2.5 px-3 bg-indigo-600 rounded-xl flex-row items-center justify-center gap-1.5"
+                          >
+                            <Check size={14} color="#ffffff" />
+                            <Text className="font-sans font-bold text-xs text-white">Count as Review ({pct}% ≥ {passPct}%)</Text>
+                          </Pressable>
+                          <Text className="text-center text-[9px] text-neutral-400 font-sans font-bold px-4">
+                            Counts for verses in spaced review. Learning verses only bank a mastery touch on a perfect run.
+                          </Text>
+                        </>
+                      ) : (
+                        <Pressable
+                          onPress={() => {
+                            onUpdateStatus(verses, 'learning', drill);
+                            onClose();
+                          }}
+                          className="w-full py-2.5 px-3 bg-[#1A1A1A] rounded-xl items-center"
+                        >
+                          <Text className="font-sans font-bold text-xs text-white">Log as Needs Practice (below {passPct}%)</Text>
+                        </Pressable>
+                      )}
+                      <Pressable onPress={resetTypeGame} className="w-full py-1 items-center">
+                        <Text className="text-[10.5px] text-neutral-500 font-bold">Practice Again</Text>
+                      </Pressable>
+                    </View>
+                  </ScrollView>
+                );
+              })()
             )}
           </View>
         )}
