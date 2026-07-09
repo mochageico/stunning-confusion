@@ -78,6 +78,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     setSelectedAddEndVerse,
     memoryQueue,
     setMemoryQueue,
+    triggerDailyPull,
+    promoteToLearning,
     savedPlans,
     editingPlanId,
     saveActivePlanRhythm,
@@ -843,6 +845,14 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 
                     {/* Right column status & delete */}
                     <View className="flex-row items-center gap-3">
+                      {group.status === 'queued' && (
+                        <Pressable
+                          onPress={() => promoteToLearning(group.items.map((item) => item.verseId))}
+                          className="px-2 py-0.5 rounded-full border border-[#1A1A1A] bg-white"
+                        >
+                          <Text className="text-[9px] font-sans font-bold text-[#1A1A1A]">Start Learning</Text>
+                        </Pressable>
+                      )}
                       <Text
                         className={`text-[9px] font-sans font-bold px-2 py-0.5 rounded-full border uppercase ${
                           group.status === 'learning'

@@ -2942,6 +2942,38 @@ export function useAppState() {
     );
   };
 
+  // Manually moves specific queued verses straight into Learning, bypassing
+  // triggerDailyPull's pace/learning-day/review-cap gating -- those exist to
+  // keep the *automatic* daily pull from overloading a non-learning day, but
+  // a deliberate "start this verse now" action is a different, intentional
+  // choice and shouldn't be blocked by them. Persistence is handled by the
+  // existing debounced memoryQueue auto-sync effect, same as every other
+  // queue mutation (reorder, delete, add).
+  const promoteToLearning = (verseIds: string[]) => {
+    const idSet = new Set(verseIds);
+    const nowISO = new Date().toISOString();
+    let promotedCount = 0;
+    setMemoryQueue((prev) =>
+      prev.map((item) => {
+        if (!idSet.has(item.verseId) || item.status !== 'queued') return item;
+        promotedCount++;
+        return {
+          ...item,
+          status: 'learning' as const,
+          dateStarted: nowISO,
+          lastReviewDate: null,
+          nextReviewDueDate: null,
+          currentStreakCount: 0,
+          totalSuccessfulReviews: 0,
+          gracePeriodUsedToday: false,
+        };
+      })
+    );
+    if (promotedCount > 0) {
+      triggerToast(`Moved ${promotedCount === 1 ? 'that verse' : `${promotedCount} verses`} into Learning! 📖`);
+    }
+  };
+
   const handleReviewCompleted = async (item: QueueItem, success: boolean, drillType?: 'speak' | 'type' | 'reveal') => {
     let updatedItem = { ...item };
     updatedItem.lastReviewDate = new Date().toISOString();
@@ -3909,6 +3941,7 @@ export function useAppState() {
     getEstimatedReviewTime,
     getMemoryLoadForecast,
     triggerDailyPull,
+    promoteToLearning,
     handleReviewCompleted,
     triggerMockDueReviews,
     handleUpdateVerseStatus,

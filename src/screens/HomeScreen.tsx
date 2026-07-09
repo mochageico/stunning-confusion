@@ -60,6 +60,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     triggerMockDueReviews,
     masteryTouches,
     startPractice,
+    triggerDailyPull,
   } = state;
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -136,6 +137,14 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 <HelpTooltip
                   text={`Verses currently in active study phase. Requires ${masteryTouches} successful touches, at least an hour apart each, to graduate to Spaced Repetition.`}
                 />
+                {memoryQueue.some((item) => item.status === 'queued') && (
+                  <Pressable
+                    onPress={triggerDailyPull}
+                    className="ml-2 bg-neutral-900 px-1.5 py-0.5 rounded flex-row items-center gap-0.5"
+                  >
+                    <Text className="text-[8px] text-white font-sans font-extrabold">Pull New Verses</Text>
+                  </Pressable>
+                )}
               </View>
               <Text className="text-[10px] font-mono text-neutral-400 font-bold">
                 {learningItems.length} verses today
