@@ -502,6 +502,7 @@ export function useAppState() {
 
   // General App Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 3-Touch Mastery & Group Plan States
   const [masteryTouches, setMasteryTouches] = useState<number>(3);
@@ -607,6 +608,11 @@ export function useAppState() {
   // Memory Queue auto-sync bookkeeping (debounce timer + last-synced verseIds, for deletion diffing)
   const queueSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSyncedQueueIdsRef = useRef<Set<string>>(new Set());
+  // Guards the auto-sync until this user's real queue has been loaded from
+  // Firestore. Without it, the sign-in/account-switch transition (which
+  // clears memoryQueue synchronously) could commit an empty/stale queue —
+  // including deletions — into the NEW account before loadUserData finishes.
+  const queueHydratedRef = useRef(false);
 
   // Profile public-stats auto-sync debounce timer (memorizedCount/learningCount)
   const profileStatsSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -623,6 +629,69 @@ export function useAppState() {
   // Multi-Plan States
   const [savedPlans, setSavedPlans] = useState<MemoryPlan[]>(DEFAULT_PLANS);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+
+  // ==========================================
+  // MEMORY QUEUE — SYNCHRONOUS MIRROR
+  // ==========================================
+  // React state reads inside an async handler see the render-time snapshot,
+  // not updates made moments earlier in the same interaction. That silently
+  // lost progress when several verses finished practice together: each
+  // handleReviewCompleted call rebuilt the queue from the same stale
+  // snapshot, so only the last verse's update survived. This ref is always
+  // current; every queue *mutation* below goes through updateMemoryQueue so
+  // sequential updates compose instead of clobbering each other.
+  const memoryQueueRef = useRef(memoryQueue);
+  useEffect(() => {
+    memoryQueueRef.current = memoryQueue;
+  }, [memoryQueue]);
+
+  const updateMemoryQueue = (updater: (prev: QueueItem[]) => QueueItem[]) => {
+    memoryQueueRef.current = updater(memoryQueueRef.current);
+    setMemoryQueue(memoryQueueRef.current);
+  };
+
+  // ==========================================
+  // PLAN <-> DESIGNER STATE SYNC HELPERS
+  // ==========================================
+  // Single source of truth for "load a plan's settings into the live
+  // designer state" and "flatten a plan into the memoryPlans/{uid} doc's
+  // top-level fields". Previously this was six hand-copied 14-setter
+  // blocks, several of which had drifted out of sync (navigateTo('activePlan')
+  // only synced 5 of the 14 fields; handleSavePlan's Firestore write dropped
+  // the rigor/mastery/sabbath fields entirely).
+  const syncDesignerFromPlan = (plan: MemoryPlan) => {
+    setPreset(plan.preset);
+    setLearningDays(plan.learningDays);
+    setNewVersesPace(plan.newVersesPace);
+    setMaxReviewCap(plan.maxReviewCap);
+    setRetentionRigor(plan.retentionRigor || 'standard');
+    setDailyPhaseWeeks(plan.dailyPhaseWeeks ?? 7);
+    setWeeklyPhaseMonths(plan.weeklyPhaseMonths ?? 6);
+    setMonthlyPhaseYears(plan.monthlyPhaseYears ?? 5);
+    setMasteryTouches(plan.masteryTouches ?? 3);
+    setReviewsRequired(plan.reviewsRequired ?? 1);
+    setSabbathEnabled(plan.sabbathEnabled ?? false);
+    setSabbathDay(plan.sabbathDay || 'Su');
+    setCognitiveLoadSensitivity(plan.cognitiveLoadSensitivity || 'medium');
+    setCustomPlanName(plan.name);
+  };
+
+  const planTopLevelFields = (plan: MemoryPlan) => ({
+    preset: plan.preset,
+    learningDays: plan.learningDays,
+    newVersesPace: plan.newVersesPace,
+    maxReviewCap: plan.maxReviewCap,
+    retentionRigor: plan.retentionRigor,
+    dailyPhaseWeeks: plan.dailyPhaseWeeks,
+    weeklyPhaseMonths: plan.weeklyPhaseMonths,
+    monthlyPhaseYears: plan.monthlyPhaseYears,
+    masteryTouches: plan.masteryTouches,
+    reviewsRequired: plan.reviewsRequired,
+    sabbathEnabled: plan.sabbathEnabled,
+    sabbathDay: plan.sabbathDay,
+    cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity,
+    name: plan.name,
+  });
 
   // ==========================================
   // NAVIGATION HANDLERS
@@ -642,11 +711,7 @@ export function useAppState() {
       const active = savedPlans.find((p) => p.isActive) || savedPlans[0];
       if (active) {
         setEditingPlanId(active.id);
-        setPreset(active.preset);
-        setLearningDays(active.learningDays);
-        setNewVersesPace(active.newVersesPace);
-        setMaxReviewCap(active.maxReviewCap);
-        setCustomPlanName(active.name);
+        syncDesignerFromPlan(active);
       }
     }
 
@@ -704,9 +769,14 @@ export function useAppState() {
   // ==========================================
   // TOAST HELPER
   // ==========================================
+  // Tracks the active hide-timer so showing a new toast cancels the old
+  // one's timer — otherwise an earlier toast's 3s timeout would hide a
+  // newer message early (very visible during multi-verse practice, where
+  // several toasts fire back-to-back).
   const triggerToast = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 3000);
   };
 
   // ==========================================
@@ -1434,40 +1504,42 @@ export function useAppState() {
 
   const joinSharedPlan = async (plan: any) => {
     try {
-      setPreset(plan.preset);
-      setLearningDays(plan.learningDays);
-      setNewVersesPace(plan.newVersesPace);
-      setMaxReviewCap(plan.maxReviewCap);
-      setRetentionRigor(plan.retentionRigor || 'standard');
-      setDailyPhaseWeeks(plan.dailyPhaseWeeks ?? 7);
-      setWeeklyPhaseMonths(plan.weeklyPhaseMonths ?? 6);
-      setMonthlyPhaseYears(plan.monthlyPhaseYears ?? 5);
-      setMasteryTouches(plan.masteryTouches ?? 3);
-      setReviewsRequired(plan.reviewsRequired ?? 1);
-      setSabbathEnabled(plan.sabbathEnabled ?? false);
-      setSabbathDay(plan.sabbathDay || 'Su');
-      setCognitiveLoadSensitivity(plan.cognitiveLoadSensitivity || 'medium');
-      setCustomPlanName(plan.name || 'Custom Plan');
+      // Normalize the loosely-typed shared-plan doc into a full MemoryPlan
+      // once, then reuse it for both the designer sync and the Firestore
+      // write, so defaults can't drift between the two.
+      const adopted: MemoryPlan = {
+        id: 'shared-' + (plan.id || Date.now()),
+        name: plan.name || 'Custom Plan',
+        preset: plan.preset || 'custom',
+        learningDays: plan.learningDays || ['M', 'W', 'F'],
+        newVersesPace: plan.newVersesPace ?? 3,
+        maxReviewCap: plan.maxReviewCap ?? 15,
+        retentionRigor: plan.retentionRigor || 'standard',
+        dailyPhaseWeeks: plan.dailyPhaseWeeks ?? 7,
+        weeklyPhaseMonths: plan.weeklyPhaseMonths ?? 6,
+        monthlyPhaseYears: plan.monthlyPhaseYears ?? 5,
+        masteryTouches: plan.masteryTouches ?? 3,
+        reviewsRequired: plan.reviewsRequired ?? 1,
+        sabbathEnabled: plan.sabbathEnabled ?? false,
+        sabbathDay: plan.sabbathDay || 'Su',
+        cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity || 'medium',
+        isActive: true,
+        updatedAt: new Date().toISOString(),
+      };
+      syncDesignerFromPlan(adopted);
 
       if (auth.currentUser) {
         const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(planRef, {
-          preset: plan.preset,
-          learningDays: plan.learningDays,
-          newVersesPace: plan.newVersesPace,
-          maxReviewCap: plan.maxReviewCap,
-          retentionRigor: plan.retentionRigor || 'standard',
-          dailyPhaseWeeks: plan.dailyPhaseWeeks ?? 7,
-          weeklyPhaseMonths: plan.weeklyPhaseMonths ?? 6,
-          monthlyPhaseYears: plan.monthlyPhaseYears ?? 5,
-          masteryTouches: plan.masteryTouches ?? 3,
-          reviewsRequired: plan.reviewsRequired ?? 1,
-          sabbathEnabled: plan.sabbathEnabled ?? false,
-          sabbathDay: plan.sabbathDay || 'Su',
-          cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity || 'medium',
-          name: plan.name || 'Custom Plan',
-          updatedAt: new Date(),
-        });
+        // merge: true — this doc also holds savedPlans, memorizationGoal and
+        // activeGroupPlanId; a plain setDoc here silently erased all of them.
+        await setDoc(
+          planRef,
+          {
+            ...planTopLevelFields(adopted),
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
 
         if (plan.id && !plan.id.startsWith('mock-')) {
           try {
@@ -1496,7 +1568,7 @@ export function useAppState() {
 
   const joinGroupPlan = async (groupPlan: GroupPlan) => {
     try {
-      const currentQueueIds = memoryQueue.map((item) => item.verseId);
+      const currentQueueIds = memoryQueueRef.current.map((item) => item.verseId);
       const missingVerseIds = groupPlan.scriptureRange.filter((id) => !currentQueueIds.includes(id));
 
       // Group missing verseIds (e.g. "GEN_1_3") by book+chapter so each real
@@ -1525,7 +1597,7 @@ export function useAppState() {
             chapter,
             verseNumber,
             text,
-            orderIndex: memoryQueue.length + newItems.length,
+            orderIndex: memoryQueueRef.current.length + newItems.length,
             status: 'queued',
             origin: 'group',
             retentionPhase: 'none',
@@ -1540,9 +1612,9 @@ export function useAppState() {
       }
 
       // No manual Firestore batch write here — the memoryQueue auto-sync
-      // effect (added last session) picks up this setMemoryQueue and
+      // effect (added last session) picks up this queue update and
       // persists it (including deletion-diffing), debounced.
-      setMemoryQueue((prev) => [...prev, ...newItems]);
+      updateMemoryQueue((prev) => [...prev, ...newItems]);
 
       setActiveGroupPlan(groupPlan);
 
@@ -1577,44 +1649,24 @@ export function useAppState() {
 
     const activePlan = updatedPlans.find((p) => p.isActive);
     if (activePlan) {
-      setPreset(activePlan.preset);
-      setLearningDays(activePlan.learningDays);
-      setNewVersesPace(activePlan.newVersesPace);
-      setMaxReviewCap(activePlan.maxReviewCap);
-      setRetentionRigor(activePlan.retentionRigor);
-      setDailyPhaseWeeks(activePlan.dailyPhaseWeeks);
-      setWeeklyPhaseMonths(activePlan.weeklyPhaseMonths);
-      setMonthlyPhaseYears(activePlan.monthlyPhaseYears);
-      setMasteryTouches(activePlan.masteryTouches);
-      setReviewsRequired(activePlan.reviewsRequired);
-      setSabbathEnabled(activePlan.sabbathEnabled);
-      setSabbathDay(activePlan.sabbathDay);
-      setCognitiveLoadSensitivity(activePlan.cognitiveLoadSensitivity);
-      setCustomPlanName(activePlan.name);
+      syncDesignerFromPlan(activePlan);
 
       triggerToast(`Activated plan: "${activePlan.name}" ⚡`);
 
       if (auth.currentUser) {
         try {
           const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-          await setDoc(planRef, {
-            savedPlans: updatedPlans,
-            preset: activePlan.preset,
-            learningDays: activePlan.learningDays,
-            newVersesPace: activePlan.newVersesPace,
-            maxReviewCap: activePlan.maxReviewCap,
-            retentionRigor: activePlan.retentionRigor,
-            dailyPhaseWeeks: activePlan.dailyPhaseWeeks,
-            weeklyPhaseMonths: activePlan.weeklyPhaseMonths,
-            monthlyPhaseYears: activePlan.monthlyPhaseYears,
-            masteryTouches: activePlan.masteryTouches,
-            reviewsRequired: activePlan.reviewsRequired,
-            sabbathEnabled: activePlan.sabbathEnabled,
-            sabbathDay: activePlan.sabbathDay,
-            cognitiveLoadSensitivity: activePlan.cognitiveLoadSensitivity,
-            name: activePlan.name,
-            updatedAt: new Date(),
-          });
+          // merge: true — preserve memorizationGoal/activeGroupPlanId, which
+          // live on this same doc but aren't part of this write.
+          await setDoc(
+            planRef,
+            {
+              savedPlans: updatedPlans,
+              ...planTopLevelFields(activePlan),
+              updatedAt: new Date(),
+            },
+            { merge: true }
+          );
         } catch (error) {
           handleFirestoreError(error, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
         }
@@ -1639,21 +1691,7 @@ export function useAppState() {
     }
 
     if (wasActive) {
-      const newActive = updatedPlans[0];
-      setPreset(newActive.preset);
-      setLearningDays(newActive.learningDays);
-      setNewVersesPace(newActive.newVersesPace);
-      setMaxReviewCap(newActive.maxReviewCap);
-      setRetentionRigor(newActive.retentionRigor);
-      setDailyPhaseWeeks(newActive.dailyPhaseWeeks);
-      setWeeklyPhaseMonths(newActive.weeklyPhaseMonths);
-      setMonthlyPhaseYears(newActive.monthlyPhaseYears);
-      setMasteryTouches(newActive.masteryTouches);
-      setReviewsRequired(newActive.reviewsRequired);
-      setSabbathEnabled(newActive.sabbathEnabled);
-      setSabbathDay(newActive.sabbathDay);
-      setCognitiveLoadSensitivity(newActive.cognitiveLoadSensitivity);
-      setCustomPlanName(newActive.name);
+      syncDesignerFromPlan(updatedPlans[0]);
     }
     if (editingPlanId === planId) setEditingPlanId(null);
 
@@ -1668,20 +1706,7 @@ export function useAppState() {
           planRef,
           {
             savedPlans: updatedPlans,
-            preset: activePlan.preset,
-            learningDays: activePlan.learningDays,
-            newVersesPace: activePlan.newVersesPace,
-            maxReviewCap: activePlan.maxReviewCap,
-            retentionRigor: activePlan.retentionRigor,
-            dailyPhaseWeeks: activePlan.dailyPhaseWeeks,
-            weeklyPhaseMonths: activePlan.weeklyPhaseMonths,
-            monthlyPhaseYears: activePlan.monthlyPhaseYears,
-            masteryTouches: activePlan.masteryTouches,
-            reviewsRequired: activePlan.reviewsRequired,
-            sabbathEnabled: activePlan.sabbathEnabled,
-            sabbathDay: activePlan.sabbathDay,
-            cognitiveLoadSensitivity: activePlan.cognitiveLoadSensitivity,
-            name: activePlan.name,
+            ...planTopLevelFields(activePlan),
             updatedAt: new Date(),
           },
           { merge: true }
@@ -1694,20 +1719,7 @@ export function useAppState() {
 
   const handleEditPlan = (plan: MemoryPlan) => {
     setEditingPlanId(plan.id);
-    setPreset(plan.preset);
-    setLearningDays(plan.learningDays);
-    setNewVersesPace(plan.newVersesPace);
-    setMaxReviewCap(plan.maxReviewCap);
-    setRetentionRigor(plan.retentionRigor || 'standard');
-    setDailyPhaseWeeks(plan.dailyPhaseWeeks ?? 7);
-    setWeeklyPhaseMonths(plan.weeklyPhaseMonths ?? 6);
-    setMonthlyPhaseYears(plan.monthlyPhaseYears ?? 5);
-    setMasteryTouches(plan.masteryTouches ?? 3);
-    setReviewsRequired(plan.reviewsRequired ?? 1);
-    setSabbathEnabled(plan.sabbathEnabled ?? false);
-    setSabbathDay(plan.sabbathDay || 'Su');
-    setCognitiveLoadSensitivity(plan.cognitiveLoadSensitivity || 'medium');
-    setCustomPlanName(plan.name);
+    syncDesignerFromPlan(plan);
     navigateTo('planDesigner');
   };
 
@@ -1787,20 +1799,7 @@ export function useAppState() {
 
     const activePlan = updatedPlans.find((p) => p.isActive) || updatedPlans[0];
     if (activePlan) {
-      setPreset(activePlan.preset);
-      setLearningDays(activePlan.learningDays);
-      setNewVersesPace(activePlan.newVersesPace);
-      setMaxReviewCap(activePlan.maxReviewCap);
-      setRetentionRigor(activePlan.retentionRigor);
-      setDailyPhaseWeeks(activePlan.dailyPhaseWeeks);
-      setWeeklyPhaseMonths(activePlan.weeklyPhaseMonths);
-      setMonthlyPhaseYears(activePlan.monthlyPhaseYears);
-      setMasteryTouches(activePlan.masteryTouches);
-      setReviewsRequired(activePlan.reviewsRequired);
-      setSabbathEnabled(activePlan.sabbathEnabled);
-      setSabbathDay(activePlan.sabbathDay);
-      setCognitiveLoadSensitivity(activePlan.cognitiveLoadSensitivity);
-      setCustomPlanName(activePlan.name);
+      syncDesignerFromPlan(activePlan);
     }
 
     setSavedPlans(updatedPlans);
@@ -1809,15 +1808,19 @@ export function useAppState() {
     if (auth.currentUser) {
       try {
         const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(planRef, {
-          savedPlans: updatedPlans,
-          preset: activePlan.preset,
-          learningDays: activePlan.learningDays,
-          newVersesPace: activePlan.newVersesPace,
-          maxReviewCap: activePlan.maxReviewCap,
-          name: activePlan.name,
-          updatedAt: new Date(),
-        });
+        // merge: true — a plain setDoc here erased memorizationGoal and
+        // activeGroupPlanId every time a plan was saved. The full
+        // planTopLevelFields spread also fixes this write silently dropping
+        // the rigor/mastery/sabbath fields.
+        await setDoc(
+          planRef,
+          {
+            savedPlans: updatedPlans,
+            ...planTopLevelFields(activePlan),
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
       }
@@ -1927,7 +1930,7 @@ export function useAppState() {
       }
 
       const goalIdSet = new Set(verseIds);
-      const existingByVerseId = new Map(memoryQueue.map((q) => [q.verseId, q]));
+      const existingByVerseId = new Map(memoryQueueRef.current.map((q) => [q.verseId, q]));
       const frontOfQueue: QueueItem[] = verseIds
         .map((vid) => {
           const existing = existingByVerseId.get(vid);
@@ -1953,9 +1956,9 @@ export function useAppState() {
         })
         .filter((q): q is QueueItem => !!q);
 
-      const rest = memoryQueue.filter((q) => !(goalIdSet.has(q.verseId) && q.status === 'queued'));
+      const rest = memoryQueueRef.current.filter((q) => !(goalIdSet.has(q.verseId) && q.status === 'queued'));
       const reordered = [...frontOfQueue, ...rest].map((q, i) => ({ ...q, orderIndex: i }));
-      setMemoryQueue(reordered);
+      updateMemoryQueue(() => reordered);
 
       const goal: MemorizationGoal = {
         book,
@@ -2067,43 +2070,21 @@ export function useAppState() {
     const updatedPlans = [...savedPlans.map((p) => ({ ...p, isActive: false })), newPlan];
     setSavedPlans(updatedPlans);
 
-    setCustomPlanName(newPlan.name);
-    setPreset(newPlan.preset);
-    setLearningDays(newPlan.learningDays);
-    setNewVersesPace(newPlan.newVersesPace);
-    setMaxReviewCap(newPlan.maxReviewCap);
-    setRetentionRigor(newPlan.retentionRigor);
-    setDailyPhaseWeeks(newPlan.dailyPhaseWeeks);
-    setWeeklyPhaseMonths(newPlan.weeklyPhaseMonths);
-    setMonthlyPhaseYears(newPlan.monthlyPhaseYears);
-    setMasteryTouches(newPlan.masteryTouches);
-    setReviewsRequired(newPlan.reviewsRequired);
-    setSabbathEnabled(newPlan.sabbathEnabled);
-    setSabbathDay(newPlan.sabbathDay);
-    setCognitiveLoadSensitivity(newPlan.cognitiveLoadSensitivity);
+    syncDesignerFromPlan(newPlan);
     setEditingPlanId(newPlan.id);
 
     if (auth.currentUser) {
       try {
         const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(planRef, {
-          savedPlans: updatedPlans,
-          preset: newPlan.preset,
-          learningDays: newPlan.learningDays,
-          newVersesPace: newPlan.newVersesPace,
-          maxReviewCap: newPlan.maxReviewCap,
-          retentionRigor: newPlan.retentionRigor,
-          dailyPhaseWeeks: newPlan.dailyPhaseWeeks,
-          weeklyPhaseMonths: newPlan.weeklyPhaseMonths,
-          monthlyPhaseYears: newPlan.monthlyPhaseYears,
-          masteryTouches: newPlan.masteryTouches,
-          reviewsRequired: newPlan.reviewsRequired,
-          sabbathEnabled: newPlan.sabbathEnabled,
-          sabbathDay: newPlan.sabbathDay,
-          cognitiveLoadSensitivity: newPlan.cognitiveLoadSensitivity,
-          name: newPlan.name,
-          updatedAt: new Date(),
-        });
+        await setDoc(
+          planRef,
+          {
+            savedPlans: updatedPlans,
+            ...planTopLevelFields(newPlan),
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
       }
@@ -2209,15 +2190,15 @@ export function useAppState() {
         setEditingPlanId(null);
 
         const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(planRef, {
-          savedPlans: updatedPlans,
-          preset: activePlan.preset,
-          learningDays: activePlan.learningDays,
-          newVersesPace: activePlan.newVersesPace,
-          maxReviewCap: activePlan.maxReviewCap,
-          name: activePlan.name,
-          updatedAt: new Date(),
-        });
+        await setDoc(
+          planRef,
+          {
+            savedPlans: updatedPlans,
+            ...planTopLevelFields(activePlan),
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
 
         triggerToast(`"${customPlanName}" published to Scripture Circles! 🚀`);
       } else {
@@ -2364,20 +2345,7 @@ export function useAppState() {
         // Find the active plan and sync current state
         const active = plansList.find((p) => p.isActive) || plansList[0];
         if (active) {
-          setPreset(active.preset);
-          setLearningDays(active.learningDays);
-          setNewVersesPace(active.newVersesPace);
-          setMaxReviewCap(active.maxReviewCap);
-          setRetentionRigor(active.retentionRigor);
-          setDailyPhaseWeeks(active.dailyPhaseWeeks);
-          setWeeklyPhaseMonths(active.weeklyPhaseMonths);
-          setMonthlyPhaseYears(active.monthlyPhaseYears);
-          setMasteryTouches(active.masteryTouches);
-          setReviewsRequired(active.reviewsRequired);
-          setSabbathEnabled(active.sabbathEnabled);
-          setSabbathDay(active.sabbathDay);
-          setCognitiveLoadSensitivity(active.cognitiveLoadSensitivity);
-          setCustomPlanName(active.name);
+          syncDesignerFromPlan(active);
         }
 
         setMemorizationGoal(planData.memorizationGoal || null);
@@ -2387,20 +2355,7 @@ export function useAppState() {
         try {
           await setDoc(planRef, {
             savedPlans: DEFAULT_PLANS,
-            preset: DEFAULT_PLANS[0].preset,
-            learningDays: DEFAULT_PLANS[0].learningDays,
-            newVersesPace: DEFAULT_PLANS[0].newVersesPace,
-            maxReviewCap: DEFAULT_PLANS[0].maxReviewCap,
-            retentionRigor: DEFAULT_PLANS[0].retentionRigor,
-            dailyPhaseWeeks: DEFAULT_PLANS[0].dailyPhaseWeeks,
-            weeklyPhaseMonths: DEFAULT_PLANS[0].weeklyPhaseMonths,
-            monthlyPhaseYears: DEFAULT_PLANS[0].monthlyPhaseYears,
-            masteryTouches: DEFAULT_PLANS[0].masteryTouches,
-            reviewsRequired: DEFAULT_PLANS[0].reviewsRequired,
-            sabbathEnabled: DEFAULT_PLANS[0].sabbathEnabled,
-            sabbathDay: DEFAULT_PLANS[0].sabbathDay,
-            cognitiveLoadSensitivity: DEFAULT_PLANS[0].cognitiveLoadSensitivity,
-            name: DEFAULT_PLANS[0].name,
+            ...planTopLevelFields(DEFAULT_PLANS[0]),
             updatedAt: new Date(),
           });
           console.log('Memory plan created successfully.');
@@ -2461,7 +2416,8 @@ export function useAppState() {
       // partway "learned". Real content now comes from the Add Verses flow
       // or joining a circle's group plan, both backed by real ESV text.
       if (qSnap && qSnap.empty) {
-        setMemoryQueue([]);
+        updateMemoryQueue(() => []);
+        prevSyncedQueueIdsRef.current = new Set();
       } else if (qSnap) {
         const loadedQueue: QueueItem[] = [];
         qSnap.forEach((docSnap) => {
@@ -2483,18 +2439,28 @@ export function useAppState() {
             gracePeriodUsedToday: data.gracePeriodUsedToday || false,
             dailyPhaseExtensionDays: data.dailyPhaseExtensionDays || 0,
             refresherActive: data.refresherActive || false,
-            // Omit these three entirely rather than setting them to
+            // These were previously dropped on load, which silently reset
+            // banked mastery touches, the activity heatmap/streak (both
+            // derived from touchLogs), and the individual/group badge on
+            // every app restart.
+            touchLogs: data.touchLogs || [],
+            reviewsToday: data.reviewsToday || 0,
+            // Omit these entirely rather than setting them to
             // `undefined` when absent -- Firestore's SDK throws on a field
             // literally valued `undefined` (unlike simply not having the
             // key), which was breaking the memory-queue auto-sync for every
             // verse not currently in a refresher.
+            ...(data.origin !== undefined ? { origin: data.origin } : {}),
             ...(data.refresherReturnPhase !== undefined ? { refresherReturnPhase: data.refresherReturnPhase } : {}),
             ...(data.refresherReturnProgress !== undefined ? { refresherReturnProgress: data.refresherReturnProgress } : {}),
             ...(data.refresherTargetUnits !== undefined ? { refresherTargetUnits: data.refresherTargetUnits } : {}),
           });
         });
         loadedQueue.sort((a, b) => a.orderIndex - b.orderIndex);
-        setMemoryQueue(loadedQueue);
+        updateMemoryQueue(() => loadedQueue);
+        // Baseline for the auto-sync's deletion diffing: what's in Firestore
+        // right now is by definition already synced.
+        prevSyncedQueueIdsRef.current = new Set(loadedQueue.map((i) => i.verseId));
       }
 
       // 4. Saved voice recordings (private to this user)
@@ -2541,8 +2507,16 @@ export function useAppState() {
       // still-in-state queue but the NEW user's uid already active, writing
       // stale data into the new account's real Firestore memoryQueue before
       // loadUserData below even gets a chance to establish a clean baseline.
+      // Belt-and-suspenders on top of that: mark the queue un-hydrated (the
+      // auto-sync refuses to run at all until this user's real queue has
+      // loaded — otherwise a slow load could let the debounced sync commit
+      // this transitional empty queue, deleting the account's real docs) and
+      // reset the deletion-diff baseline, which still described the previous
+      // account.
+      queueHydratedRef.current = false;
+      prevSyncedQueueIdsRef.current = new Set();
       setVerses([]);
-      setMemoryQueue([]);
+      updateMemoryQueue(() => []);
       // Same reasoning applies to saved recordings — clear synchronously so a
       // just-signed-out or just-switched-to account never briefly shows the
       // previous user's "Recorded Chapters" list.
@@ -2550,11 +2524,13 @@ export function useAppState() {
 
       if (currentUser) {
         await loadUserData(currentUser);
+        queueHydratedRef.current = true;
         await loadMyCircles();
       } else {
         // Reset state to initial local data
         setVerses(INITIAL_VERSES);
-        setMemoryQueue(generateInitialQueue(INITIAL_VERSES));
+        updateMemoryQueue(() => generateInitialQueue(INITIAL_VERSES));
+        queueHydratedRef.current = true;
         setPreset('custom');
         setLearningDays(['M', 'W', 'F']);
         setNewVersesPace(3);
@@ -2696,11 +2672,14 @@ export function useAppState() {
   // including deleting documents for verses that were removed from the queue.
   useEffect(() => {
     if (!auth.currentUser) return;
+    // Never sync before this user's real queue has been loaded — see the
+    // auth listener for the account-switch race this prevents.
+    if (!queueHydratedRef.current) return;
     if (queueSyncTimerRef.current) clearTimeout(queueSyncTimerRef.current);
 
     queueSyncTimerRef.current = setTimeout(async () => {
       const uid = auth.currentUser?.uid;
-      if (!uid) return;
+      if (!uid || !queueHydratedRef.current) return;
 
       const currentIds = new Set(memoryQueue.map((item) => item.verseId));
       const removedIds = [...prevSyncedQueueIdsRef.current].filter((id) => !currentIds.has(id));
@@ -2767,10 +2746,7 @@ export function useAppState() {
   // ==========================================
   // 7-6-5 DETERMINISTIC RETENTION ENGINE & HELPERS
   // ==========================================
-  const getTodayAbbreviation = () => {
-    const days = ['Su', 'M', 'T', 'W', 'Th', 'F', 'S'];
-    return days[new Date().getDay()];
-  };
+  const getTodayAbbreviation = () => DAY_ABBREVS[new Date().getDay()];
 
   const isTodayLearningDay = () => {
     const todayAbbr = getTodayAbbreviation();
@@ -2838,7 +2814,6 @@ export function useAppState() {
     pace: number,
     days: number
   ) => {
-    const dayAbbrevs = ['Su', 'M', 'T', 'W', 'Th', 'F', 'S']; // index matches Date.getDay()
     const baseLearningCount = queue.filter((item) => item.status === 'learning').length;
     const multiplier = sensitivity === 'low' ? 0.75 : sensitivity === 'high' ? 1.5 : 1.0;
     let cumulativeNewVerses = 0;
@@ -2846,7 +2821,7 @@ export function useAppState() {
     return Array.from({ length: days }, (_, i) => {
       const date = new Date();
       date.setDate(date.getDate() + i);
-      const isLearnDay = learningDaysList.includes(dayAbbrevs[date.getDay()]);
+      const isLearnDay = learningDaysList.includes(DAY_ABBREVS[date.getDay()]);
       // Today's own pull, if any, is already reflected in the real queue
       // (baseLearningCount) -- only project pulls for days after today.
       if (i > 0 && isLearnDay) cumulativeNewVerses += pace;
@@ -2896,7 +2871,7 @@ export function useAppState() {
     const toPullCount = Math.min(actualPace, queuedItems.length);
     const itemsToPull = queuedItems.slice(0, toPullCount);
 
-    const updatedQueue = memoryQueue.map((item) => {
+    const updatedQueue = memoryQueueRef.current.map((item) => {
       const isTarget = itemsToPull.some((p) => p.verseId === item.verseId);
       if (isTarget) {
         return {
@@ -2913,7 +2888,7 @@ export function useAppState() {
       return item;
     });
 
-    setMemoryQueue(updatedQueue);
+    updateMemoryQueue(() => updatedQueue);
 
     if (auth.currentUser) {
       try {
@@ -2953,7 +2928,7 @@ export function useAppState() {
     const idSet = new Set(verseIds);
     const nowISO = new Date().toISOString();
     let promotedCount = 0;
-    setMemoryQueue((prev) =>
+    updateMemoryQueue((prev) =>
       prev.map((item) => {
         if (!idSet.has(item.verseId) || item.status !== 'queued') return item;
         promotedCount++;
@@ -3031,7 +3006,7 @@ export function useAppState() {
             // verses still have reviews due today. It releases automatically
             // the moment the last due review clears (see the sweep at the
             // end of this function).
-            const dueReviewsPending = memoryQueue.some(
+            const dueReviewsPending = memoryQueueRef.current.some(
               (q) =>
                 q.verseId !== item.verseId &&
                 q.status === 'reviewing' &&
@@ -3155,36 +3130,43 @@ export function useAppState() {
     // were still pending (see the touch-gate above) -- retention comes
     // first, but a fully-touched verse shouldn't wait a moment longer than
     // it has to once nothing is left to review.
-    let finalQueue = memoryQueue.map((q) => (q.verseId === item.verseId ? updatedItem : q));
-    if (item.status === 'reviewing') {
-      const dueReviewsRemaining = finalQueue.some(
-        (q) => q.status === 'reviewing' && (!q.nextReviewDueDate || new Date(q.nextReviewDueDate) <= new Date())
-      );
-      if (!dueReviewsRemaining) {
-        let releasedCount = 0;
-        finalQueue = finalQueue.map((q) => {
-          if (q.status === 'learning' && (q.touchLogs?.length || 0) >= masteryTouches) {
-            releasedCount++;
-            return {
-              ...q,
-              status: 'reviewing' as const,
-              retentionPhase: 'daily' as const,
-              dateStarted: new Date().toISOString(),
-              currentStreakCount: 1,
-              nextReviewDueDate: nextDueDateISO(1),
-              reviewsToday: 0,
-            };
-          }
-          return q;
-        });
-        if (releasedCount > 0) {
-          triggerToast(
-            `All reviews done! ${releasedCount} verse${releasedCount > 1 ? 's' : ''} locked in and moved to spaced review. 🔓`
-          );
+    // Built through updateMemoryQueue (the always-current ref), NOT the
+    // render-time memoryQueue snapshot: when a passage of several verses is
+    // completed together, this function runs once per verse in the same
+    // interaction, and rebuilding from the stale snapshot made each call
+    // erase the previous verse's update.
+    let releasedCount = 0;
+    updateMemoryQueue((prev) => {
+      let finalQueue = prev.map((q) => (q.verseId === item.verseId ? updatedItem : q));
+      if (item.status === 'reviewing') {
+        const dueReviewsRemaining = finalQueue.some(
+          (q) => q.status === 'reviewing' && (!q.nextReviewDueDate || new Date(q.nextReviewDueDate) <= new Date())
+        );
+        if (!dueReviewsRemaining) {
+          finalQueue = finalQueue.map((q) => {
+            if (q.status === 'learning' && (q.touchLogs?.length || 0) >= masteryTouches) {
+              releasedCount++;
+              return {
+                ...q,
+                status: 'reviewing' as const,
+                retentionPhase: 'daily' as const,
+                dateStarted: new Date().toISOString(),
+                currentStreakCount: 1,
+                nextReviewDueDate: nextDueDateISO(1),
+                reviewsToday: 0,
+              };
+            }
+            return q;
+          });
         }
       }
+      return finalQueue;
+    });
+    if (releasedCount > 0) {
+      triggerToast(
+        `All reviews done! ${releasedCount} verse${releasedCount > 1 ? 's' : ''} locked in and moved to spaced review. 🔓`
+      );
     }
-    setMemoryQueue(finalQueue);
 
     if (auth.currentUser) {
       try {
@@ -3201,7 +3183,7 @@ export function useAppState() {
       // chapter finishing, not just one verse.
       const justRetained = item.status !== 'retained' && updatedItem.status === 'retained';
       if (justRetained) {
-        const chapterMates = memoryQueue.filter((q) => q.book === item.book && q.chapter === item.chapter);
+        const chapterMates = memoryQueueRef.current.filter((q) => q.book === item.book && q.chapter === item.chapter);
         const isChapterComplete = chapterMates.every((q) => q.verseId === item.verseId || q.status === 'retained');
         const eventId = `evt_${Date.now()}`;
         const eventData = {
@@ -3229,7 +3211,7 @@ export function useAppState() {
       return;
     }
 
-    const updatedQueue = memoryQueue.map((item, idx) => {
+    const updatedQueue = memoryQueueRef.current.map((item, idx) => {
       if (idx < 3) {
         return {
           ...item,
@@ -3244,7 +3226,7 @@ export function useAppState() {
       return item;
     });
 
-    setMemoryQueue(updatedQueue);
+    updateMemoryQueue(() => updatedQueue);
 
     if (auth.currentUser) {
       try {
@@ -3306,7 +3288,11 @@ export function useAppState() {
     const success = newStatus === 'memorized';
     const drillType = customDrillType || (activeModal === 'type' ? 'type' : activeModal === 'reveal' ? 'reveal' : 'speak');
     for (const v of versesToUpdate) {
-      const itemInQueue = memoryQueue.find((q) => q.book === v.book && q.chapter === v.chapter && q.verseNumber === v.verse);
+      // Read through the ref, not the render-time snapshot — each loop
+      // iteration must see the queue updates the previous iteration made.
+      const itemInQueue = memoryQueueRef.current.find(
+        (q) => q.book === v.book && q.chapter === v.chapter && q.verseNumber === v.verse
+      );
       if (itemInQueue) {
         await handleReviewCompleted(itemInQueue, success, drillType);
       }
@@ -3339,10 +3325,16 @@ export function useAppState() {
   // on each queue item (the same log the 3-Touch Mastery gate uses) — a
   // brand-new account with no practice history naturally gets all zeros
   // here, instead of the previous hardcoded demo grid every account showed.
+  // Days are keyed in LOCAL time, not UTC (toISOString): for anyone west of
+  // Greenwich, an evening practice session's UTC date is already "tomorrow",
+  // which shifted the activity grid and broke streaks at the day boundary.
+  const localDayKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
   const activityByDay = new Map<string, number>();
   memoryQueue.forEach((item) => {
     (item.touchLogs || []).forEach((log) => {
-      const day = log.timestamp.slice(0, 10); // 'YYYY-MM-DD'
+      const day = localDayKey(new Date(log.timestamp));
       activityByDay.set(day, (activityByDay.get(day) || 0) + 1);
     });
   });
@@ -3350,7 +3342,7 @@ export function useAppState() {
   const activityLast15Days = Array.from({ length: 15 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (14 - i));
-    const key = d.toISOString().slice(0, 10);
+    const key = localDayKey(d);
     return {
       day: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
       count: activityByDay.get(key) || 0,
@@ -3363,7 +3355,7 @@ export function useAppState() {
     const d = new Date();
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      const key = d.toISOString().slice(0, 10);
+      const key = localDayKey(d);
       if ((activityByDay.get(key) || 0) > 0) {
         streak++;
         d.setDate(d.getDate() - 1);
@@ -3784,7 +3776,7 @@ export function useAppState() {
 
     // core state
     verses, setVerses,
-    memoryQueue, setMemoryQueue,
+    memoryQueue, setMemoryQueue, updateMemoryQueue,
     primingLookahead, setPrimingLookahead,
     cognitiveLoadSensitivity, setCognitiveLoadSensitivity,
     showAddQueueItemModal, setShowAddQueueItemModal,

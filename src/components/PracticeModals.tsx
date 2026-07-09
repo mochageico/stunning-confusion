@@ -18,7 +18,17 @@ interface PracticeModalsProps {
   setPrimingLookahead?: (val: number) => void;
 }
 
-export default function PracticeModals({
+// Guard wrapper: the early "nothing to practice" return must happen OUTSIDE
+// the component that declares hooks. Returning before the useState/useEffect
+// calls below meant that if `verses` ever became empty while the modal was
+// mounted, React would see fewer hooks than the previous render and crash
+// ("Rendered fewer hooks than expected").
+export default function PracticeModals(props: PracticeModalsProps) {
+  if (!props.verses || props.verses.length === 0) return null;
+  return <PracticeModalsInner {...props} />;
+}
+
+function PracticeModalsInner({
   type,
   verses,
   allVerses,
@@ -28,8 +38,6 @@ export default function PracticeModals({
   primingLookahead = 30,
   setPrimingLookahead,
 }: PracticeModalsProps) {
-  if (!verses || verses.length === 0) return null;
-
   // ==========================================
   // PLAYLIST / PLAY-SOURCE STATE
   // ==========================================

@@ -59,6 +59,10 @@ export interface FirestoreErrorInfo {
   };
 }
 
+// Logs a structured error report. Deliberately does NOT throw: every caller
+// invokes this from inside a catch block as an error sink, and re-throwing
+// turned one failed step into an unhandled rejection (in UI handlers) or
+// aborted every later, independent load step (in loadUserData).
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
@@ -78,5 +82,4 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path,
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
 }

@@ -77,7 +77,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     selectedAddEndVerse,
     setSelectedAddEndVerse,
     memoryQueue,
-    setMemoryQueue,
+    updateMemoryQueue,
     triggerDailyPull,
     promoteToLearning,
     savedPlans,
@@ -209,7 +209,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     });
 
     const reindexed = flattened.map((q, qidx) => ({ ...q, orderIndex: qidx }));
-    setMemoryQueue(reindexed);
+    updateMemoryQueue(() => reindexed);
     triggerToast('Moved consecutive group up.');
   };
 
@@ -229,7 +229,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     });
 
     const reindexed = flattened.map((q, qidx) => ({ ...q, orderIndex: qidx }));
-    setMemoryQueue(reindexed);
+    updateMemoryQueue(() => reindexed);
     triggerToast('Moved consecutive group down.');
   };
 
@@ -752,7 +752,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                         gracePeriodUsedToday: false,
                       }));
 
-                      setMemoryQueue((prev) => [...prev, ...newItems]);
+                      updateMemoryQueue((prev) => [...prev, ...newItems]);
                       setShowAddQueueItemModal(false);
                       const skippedNotes = [
                         alreadyQueued.length > 0 ? `${alreadyQueued.length} already queued` : null,
@@ -867,7 +867,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                       <Pressable
                         onPress={() => {
                           const idsToDelete = new Set(group.items.map((item) => item.verseId));
-                          setMemoryQueue((prev) => prev.filter((item) => !idsToDelete.has(item.verseId)));
+                          updateMemoryQueue((prev) => prev.filter((item) => !idsToDelete.has(item.verseId)));
                           triggerToast('Removed consecutive group from Memory Queue.');
                         }}
                         className="p-1 rounded"

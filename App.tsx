@@ -211,7 +211,10 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
 
 function ProgressModal({ state }: { state: AppState }) {
   const { memorizedCount, learningCount, untouchedCount, verses, setShowProgressModal, navigateTo } = state;
-  const books = ['Genesis', 'Psalms', 'John', 'Romans'];
+  // Derive from the user's actual verses (previously a hardcoded demo list
+  // of four books, which showed empty 0/0 bars for anyone whose real verses
+  // were in other books).
+  const books = Array.from(new Set(verses.map((v) => v.book)));
   return (
     <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
       <FadeInView style={{ width: '100%', maxWidth: 340 }}>

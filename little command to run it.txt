@@ -1,0 +1,1 @@
+$env:EXPO_GO_MODE="1"; npx expo start

@@ -8,6 +8,12 @@
       "port": 8099
     },
     {
+      "name": "expo-web-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "web", "--", "--port", "8098"],
+      "port": 8098
+    },
+    {
       "name": "expo-native",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start", "--", "--port", "8100"],
