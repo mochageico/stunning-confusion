@@ -385,6 +385,9 @@ function PracticeModalsInner({
     }
     setSpeakTranscript('');
     setIsListeningSpeak(true);
+    // Engines that support contextual vocabulary hints get the exact passage
+    // text before listening starts (no-op on the web engine).
+    engine.prime?.(fullPassageText);
     engine.start({
       onTranscript: (fullTranscript) => setSpeakTranscript(fullTranscript),
       onEnd: () => setIsListeningSpeak(false),

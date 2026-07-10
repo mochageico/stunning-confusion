@@ -154,10 +154,34 @@ const levenshtein = (a: string, b: string): number => {
   return prev[n];
 };
 
-/** Exact match, or within one letter-edit for words of 4+ letters. */
+// Crude phonetic key: collapses the spelling differences behind the most
+// common same-sounding pairs a speech engine produces ("lite"/"light",
+// "thru"/"through", "sees"/"seas"). Deliberately rough — it only ever runs
+// on two words already suspected of being the same one.
+const roughPhoneticKey = (word: string): string =>
+  word
+    .replace(/([aeiou])gh/g, '$1') // light -> lit, through -> throu
+    .replace(/ph/g, 'f')
+    .replace(/ck/g, 'k')
+    .replace(/c/g, 'k')
+    .replace(/z/g, 's')
+    .replace(/(.)\1+/g, '$1') // collapse doubled letters
+    .replace(/e$/, ''); // silent trailing e
+
+/**
+ * Fuzzy spoken-word equality. Speech engines constantly bend a word slightly
+ * ("god" -> "got", "separated" -> "separate", "waters" -> "water's" — the
+ * last is already handled by normalization). Tolerance scales with length:
+ * one edit for 3+ letter words, two for 6+, exact only for the tiny words
+ * where one edit changes identity ("a"/"i", "an"/"at"). Homophone-style
+ * spellings match through the phonetic key.
+ */
 export const wordsRoughlyEqual = (a: string, b: string): boolean => {
   if (a === b) return true;
-  if (a.length >= 4 && b.length >= 4) return levenshtein(a, b) <= 1;
+  const minLen = Math.min(a.length, b.length);
+  if (minLen >= 6 && levenshtein(a, b) <= 2) return true;
+  if (minLen >= 3 && levenshtein(a, b) <= 1) return true;
+  if (minLen >= 3 && roughPhoneticKey(a) === roughPhoneticKey(b)) return true;
   return false;
 };
 
@@ -168,28 +192,57 @@ export interface LiveMatchResult {
   pointer: number;
 }
 
+// How far ahead of the current position the live matcher will search to
+// re-synchronize after a mis-heard word. Wide enough to absorb a bad word
+// plus a couple of engine hiccups; narrow enough that a common word
+// repeating later in the passage rarely causes a false jump (and the final
+// grade re-aligns the whole transcript anyway).
+export const RESYNC_WINDOW = 6;
+
 /**
  * Incremental matcher for LIVE recitation: recomputed from scratch on every
- * transcript update (transcripts are the only state, so pausing/resuming the
- * engine can't corrupt progress). Walks the transcript in order; a token that
- * matches the next expected word advances, a token matching the word AFTER
- * next means the expected word was skipped/mis-heard (marked unmatched), and
- * anything else is treated as noise and ignored.
+ * transcript update (transcripts are the only state, so an engine revising
+ * its interim results heals earlier mistakes automatically).
+ *
+ * The cardinal rule is NEVER STALL. The classic failure in recitation apps:
+ * the engine mis-hears one word, the matcher keeps comparing everything you
+ * say next against that stuck position, and the session hangs while you keep
+ * talking. Here, a token that doesn't match the next expected word searches
+ * up to RESYNC_WINDOW words ahead and re-anchors there, marking whatever it
+ * jumped over as (provisionally) missed. To keep tiny common words ("the",
+ * "and") from causing false jumps, a re-anchor needs confidence: either the
+ * matching word is 4+ letters, or the NEXT spoken token also matches the
+ * word right after the anchor (a two-word agreement).
  */
 export const matchTranscriptLive = (expectedTokens: string[], transcript: string): LiveMatchResult => {
   const spoken = tokenizeWords(transcript);
   const matched = new Array(expectedTokens.length).fill(false);
   let e = 0;
-  for (const token of spoken) {
+  for (let s = 0; s < spoken.length; s++) {
     if (e >= expectedTokens.length) break;
+    const token = spoken[s];
+
     if (wordsRoughlyEqual(token, expectedTokens[e])) {
       matched[e] = true;
       e += 1;
-    } else if (e + 1 < expectedTokens.length && wordsRoughlyEqual(token, expectedTokens[e + 1])) {
-      matched[e + 1] = true;
-      e += 2;
+      continue;
     }
-    // otherwise: extra/noise token — ignore
+
+    // Re-anchor: find this token a little further ahead in the passage.
+    const windowEnd = Math.min(e + RESYNC_WINDOW, expectedTokens.length - 1);
+    for (let j = e + 1; j <= windowEnd; j++) {
+      if (!wordsRoughlyEqual(token, expectedTokens[j])) continue;
+      const confident =
+        token.length >= 4 ||
+        (s + 1 < spoken.length && j + 1 < expectedTokens.length && wordsRoughlyEqual(spoken[s + 1], expectedTokens[j + 1]));
+      if (confident) {
+        matched[j] = true;
+        e = j + 1;
+        break;
+      }
+    }
+    // No confident anchor: treat the token as noise and move on — the next
+    // spoken word gets a fresh chance against the same position.
   }
   return { matched, pointer: e };
 };
@@ -264,6 +317,16 @@ export interface SpeechRecognizer {
     onError: (message: string) => void;
   }): void;
   stop(): void;
+  /**
+   * Optional: tell the engine what the user is ABOUT to say. A recitation
+   * checker knows the exact expected text, and on-device engines accept it
+   * as contextual vocabulary hints (iOS `contextualStrings`, Android
+   * `EXTRA_BIASING_STRINGS`) — a large accuracy boost for scripture words
+   * the engine would otherwise never guess ("propitiation", "thee"). Call
+   * before start(). The Web Speech API has no equivalent, so the web
+   * implementation omits this.
+   */
+  prime?(expectedText: string): void;
 }
 
 class WebSpeechRecognizer implements SpeechRecognizer {
