@@ -1,11 +1,5 @@
 import { useCallback, useEffect } from 'react';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
-import {
-  GoogleSignin,
-  isErrorWithCode,
-  isSuccessResponse,
-  statusCodes,
-} from '@react-native-google-signin/google-signin';
 
 import { auth } from '../firebase';
 
@@ -17,25 +11,53 @@ import { auth } from '../firebase';
  * (third-party native modules have never been loadable inside the generic Expo Go app;
  * see README for the dev-client build steps).
  *
+ * The module is therefore loaded lazily inside a try/catch: a plain static `import`
+ * executes the native-module lookup the moment the JS bundle loads, which crashed the
+ * whole app in Expo Go with "Invariant Violation: 'RNGoogleSignin' could not be found"
+ * before a single screen rendered. With the guarded require, Expo Go boots normally and
+ * the Google button simply reports that a dev build is needed; a dev-client/production
+ * build picks up the real native flow with no further code changes.
+ *
  * Requires EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (the Firebase project's "Web client" OAuth
  * client ID from the Google Cloud Console credentials page — Firebase Auth needs the WEB
  * client ID here even on native, because that's the audience it validates the ID token
  * against) to be set, e.g. via a `.env` file. See README for setup.
  */
+type GoogleSigninModule = typeof import('@react-native-google-signin/google-signin');
+
+const loadGoogleSignin = (): GoogleSigninModule | null => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('@react-native-google-signin/google-signin');
+  } catch {
+    // Native module not present in this binary (Expo Go).
+    return null;
+  }
+};
+
+const googleSignin = loadGoogleSignin();
+
 export function useGoogleSignIn() {
   useEffect(() => {
     const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-    if (!webClientId) return;
-    GoogleSignin.configure({ webClientId });
+    if (!webClientId || !googleSignin) return;
+    googleSignin.GoogleSignin.configure({ webClientId });
   }, []);
 
   const signInWithGoogle = useCallback(async (): Promise<{ ok: true } | { ok: false; message: string }> => {
+    if (!googleSignin) {
+      return {
+        ok: false,
+        message: 'Google Sign-In needs a custom dev build — it is not available inside Expo Go. Use email sign-in for now.',
+      };
+    }
     if (!process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) {
       return {
         ok: false,
         message: 'Google Sign-In is not configured. Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (see README) and rebuild the dev client.',
       };
     }
+    const { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } = googleSignin;
     try {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const response = await GoogleSignin.signIn();
