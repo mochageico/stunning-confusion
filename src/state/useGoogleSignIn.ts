@@ -18,6 +18,19 @@ import { auth } from '../firebase';
  * the Google button simply reports that a dev build is needed; a dev-client/production
  * build picks up the real native flow with no further code changes.
  *
+ * `require()` also fails on a REAL dev-client build right now, on purpose: package.json's
+ * `expo.autolinking.ios.exclude` deliberately keeps this package's native iOS pod out of
+ * the Podfile. Without that, `expo prebuild`/EAS Build pulls in GoogleSignIn-iOS's
+ * transitive pods (AppCheckCore/GoogleUtilities/RecaptchaInterop), none of which define
+ * Swift modules — CocoaPods refuses to link them as static libraries and the build fails
+ * ("The following Swift pods cannot yet be integrated as static libraries"). This
+ * package's own Expo config plugin (see app.json's dropped plugin entry, same reasoning)
+ * would normally patch the Podfile to fix this, but it hard-requires a real
+ * `iosUrlScheme` we haven't provisioned yet. Once Google Sign-In is actually configured
+ * (real OAuth client IDs, iOS URL scheme, GoogleService-Info.plist), both the plugin and
+ * the autolinking exclusion should come out together — not one without the other, or the
+ * Podfile error comes back.
+ *
  * Requires EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (the Firebase project's "Web client" OAuth
  * client ID from the Google Cloud Console credentials page — Firebase Auth needs the WEB
  * client ID here even on native, because that's the audience it validates the ID token

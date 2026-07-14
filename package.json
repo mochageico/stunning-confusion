@@ -41,5 +41,12 @@
     "ios": "expo start --ios",
     "web": "expo start --web"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "autolinking": {
+      "ios": {
+        "exclude": ["@react-native-google-signin/google-signin"]
+      }
+    }
+  }
 }
