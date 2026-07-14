@@ -28,7 +28,6 @@
     "plugins": [
       "expo-font",
       "expo-dev-client",
-      "@react-native-google-signin/google-signin",
       "expo-audio"
     ]
   }
