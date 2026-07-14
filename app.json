@@ -9,7 +9,10 @@
     "scheme": "scripturememory",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.scripturememory.app"
+      "bundleIdentifier": "com.micahgoeke.scripturememory.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.scripturememory.app",
@@ -19,7 +22,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -28,7 +35,15 @@
     "plugins": [
       "expo-font",
       "expo-dev-client",
-      "expo-audio"
-    ]
+      "expo-audio",
+      "expo-status-bar",
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e386c8cc-1d69-41c6-9af3-8de3e85d862d"
+      }
+    },
+    "owner": "mochageico"
   }
 }

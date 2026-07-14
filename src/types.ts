@@ -131,6 +131,10 @@ export interface Recording {
   sharedVisibility?: 'private' | 'circle' | 'public'; // absent/undefined == 'private' (recordings predating this field)
   savedFromUid?: string; // set only on a reference copy saved via "Save to Library" — the original owner's uid
   savedFromRecordingId?: string; // the original sharedRecordings/recording id — used to detect "already saved"
+  // 'imported' == tagged from a pre-existing audio file (see the Import
+  // Audio flow in RecordScreen) rather than captured live with the mic.
+  // Absent/undefined == 'recorded' (every recording before this field existed).
+  sourceType?: 'recorded' | 'imported';
 }
 
 export interface GroupedQueueItem {

@@ -28,6 +28,7 @@ import {
   useAudioPlayerStatus,
   useAudioRecorder,
 } from 'expo-audio';
+import * as DocumentPicker from 'expo-document-picker';
 
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
 import {
@@ -468,6 +469,24 @@ export function useAppState() {
   const [recordingChapter, setRecordingChapter] = useState(8);
   const [recordingTranslation, setRecordingTranslation] = useState('ESV');
   const [userRecordings, setUserRecordings] = useState<Recording[]>(INITIAL_RECORDINGS);
+
+  // Import-audio tagging: the reverse of live recording. Instead of tapping
+  // each verse while the mic records, the user picks an existing audio file
+  // and taps each verse while LISTENING BACK to it. Reuses the exact same
+  // teleprompter + buildVerseTimestamps mechanism as live recording — only
+  // the time source differs (playback position instead of recorder position).
+  const [importedAudioUri, setImportedAudioUri] = useState<string | null>(null);
+  const [importedAudioName, setImportedAudioName] = useState<string | null>(null);
+  // Deliberately NOT seeded with verse 1 at t=0 the way live recording is:
+  // a live recording's t=0 IS the moment the user hit Start, but an imported
+  // file may have lead-in silence or an intro before verse 1 actually
+  // begins, so verse 1 needs its own real tap like every other verse.
+  const [importTapTimestamps, setImportTapTimestamps] = useState<Record<number, number>>({});
+  // Which flow the open Save dialog belongs to — set right before opening
+  // it, read by saveRecordedAudio to route to the matching persist path and
+  // by App.tsx's dialog to label the "Scope" row correctly.
+  const [pendingRecordingSource, setPendingRecordingSource] = useState<'live' | 'import'>('live');
+
   const [saveRecordingDialog, setSaveRecordingDialog] = useState(false);
   // Per-recording visibility choice for the Save dialog. Pre-filled from
   // profiles/{uid}.defaultRecordingVisibility (whatever the user picked the
@@ -604,6 +623,13 @@ export function useAppState() {
   const nowPlayingRecording = [...userRecordings, ...feedRecordings].find((r) => r.id === playingRecordingId) || null;
   const recordingPlayer = useAudioPlayer(nowPlayingRecording?.audioUrl ?? undefined);
   const recordingPlayerStatus = useAudioPlayerStatus(recordingPlayer);
+
+  // Separate player for the import-audio tagging flow above — kept distinct
+  // from recordingPlayer (which is reserved for "now playing a saved
+  // Recording" everywhere else in the app: Profile, RecordingDetail, the
+  // floating now-playing bar) so tagging playback can't collide with those.
+  const importPlayer = useAudioPlayer(importedAudioUri ?? undefined);
+  const importPlayerStatus = useAudioPlayerStatus(importPlayer);
 
   // Memory Queue auto-sync bookkeeping (debounce timer + last-synced verseIds, for deletion diffing)
   const queueSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3547,6 +3573,7 @@ export function useAppState() {
     }
     setIsRecording(false);
     setIsRecordingPaused(false);
+    setPendingRecordingSource('live');
     setPickedRecordingVisibility(defaultRecordingVisibility || 'private');
     setSaveRecordingDialog(true);
   };
@@ -3595,6 +3622,74 @@ export function useAppState() {
     setVerseTapTimestamps((prev) => ({ ...prev, [verseNumber]: audioRecorder.currentTime }));
   };
 
+  // ==========================================
+  // IMPORT-AUDIO TAGGING FLOW — pick an existing audio file, then tap each
+  // verse while LISTENING BACK to it (mirrors handleMarkVerseTap above, but
+  // keyed to playback position instead of recorder position).
+  // ==========================================
+  const pickImportAudio = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*', copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      // Switch to playback mode up front -- picking a file mid-recording
+      // isn't a real flow, but if audio mode were ever left in "recording"
+      // from a previous take, playback would be silent/misrouted otherwise.
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      setImportedAudioUri(asset.uri);
+      setImportedAudioName(asset.name || 'Imported audio');
+      setImportTapTimestamps({});
+      triggerToast('Audio loaded — press play and tap each verse as you hear it start.');
+    } catch (err) {
+      console.error('Failed to pick import audio:', err);
+      triggerToast('Could not open that file — please try another.');
+    }
+  };
+
+  // Clears the picked file and any taps so far, returning to the "choose a
+  // file" state. Does NOT touch anything already saved.
+  const clearImportedAudio = () => {
+    // .pause() can throw if the native player was already released (same
+    // race the saved-recording player guards against elsewhere) — pausing
+    // an already-idle/released player is a no-op either way.
+    try {
+      importPlayer.pause();
+    } catch {
+      // already released — nothing to pause
+    }
+    setImportedAudioUri(null);
+    setImportedAudioName(null);
+    setImportTapTimestamps({});
+  };
+
+  const toggleImportPlayback = () => {
+    if (!importedAudioUri) return;
+    if (importPlayerStatus.playing) {
+      importPlayer.pause();
+    } else {
+      importPlayer.play();
+    }
+  };
+
+  const seekImportAudioBy = (deltaSeconds: number) => {
+    if (!importedAudioUri) return;
+    const total = importPlayerStatus.duration || 0;
+    const next = Math.max(0, Math.min(total, importPlayerStatus.currentTime + deltaSeconds));
+    importPlayer.seekTo(next);
+  };
+
+  // Re-tapping the same verse overwrites its mark with the newer time, same
+  // forgiving behavior as the live-recording version.
+  const handleMarkImportTap = (verseNumber: number) => {
+    if (!importedAudioUri) return;
+    setImportTapTimestamps((prev) => ({ ...prev, [verseNumber]: importPlayerStatus.currentTime }));
+  };
+
+  const resetImportTaps = () => {
+    setImportTapTimestamps({});
+    triggerToast('Verse tags cleared — tap through again from the top.');
+  };
+
   // Turns the sparse verse->tap-time map into a contiguous per-verse
   // start/end range: a verse's start is its own tap (or the previous verse's
   // end, if it was never tapped), and its end is the next tapped verse found
@@ -3628,30 +3723,40 @@ export function useAppState() {
     return result;
   };
 
-  const saveRecordedAudio = async () => {
+  // Shared upload + Firestore write for a finished recitation, used by both
+  // the live-record flow and the import-audio flow below — so visibility
+  // defaults, the sharedRecordings ACL snapshot, and the profile
+  // default-visibility bookkeeping can't drift between the two.
+  const persistRecording = async (params: {
+    uri: string;
+    durationSec: number;
+    verseTimestamps: VerseTimestamp[];
+    titleSuffix: string;
+    sourceType: 'recorded' | 'imported';
+  }) => {
     const uid = auth.currentUser?.uid;
-    const uri = audioRecorder.uri;
-    setSaveRecordingDialog(false);
-
     if (!uid) {
       triggerToast('Sign in to save recordings.');
-      return;
-    }
-    if (!uri) {
-      triggerToast('No recording captured — please try again.');
       return;
     }
 
     const id = `rec_${Date.now()}`;
     // On web, expo-audio's HIGH_QUALITY preset records to audio/webm regardless
     // of the .m4a extension used natively — match the actual encoded format.
-    const ext = Platform.OS === 'web' ? 'webm' : 'm4a';
-    const contentType = Platform.OS === 'web' ? 'audio/webm' : 'audio/m4a';
+    // An imported file keeps its own extension instead (whatever the user
+    // picked), read straight from its filename.
+    const ext =
+      params.sourceType === 'imported'
+        ? importedAudioName?.split('.').pop()?.toLowerCase() || 'm4a'
+        : Platform.OS === 'web'
+          ? 'webm'
+          : 'm4a';
+    const contentType = params.sourceType === 'imported' ? 'audio/*' : Platform.OS === 'web' ? 'audio/webm' : 'audio/m4a';
     const audioPath = `recordings/${uid}/${id}.${ext}`;
 
     triggerToast('Uploading recitation...');
     try {
-      const response = await fetch(uri);
+      const response = await fetch(params.uri);
       const blob = await response.blob();
       const fileRef = storageRef(storage, audioPath);
       await uploadBytes(fileRef, blob, { contentType });
@@ -3659,11 +3764,11 @@ export function useAppState() {
 
       const newRec: Recording = {
         id,
-        title: `${recordingBook} ${recordingChapter} Full Chapter Recitation`,
+        title: `${recordingBook} ${recordingChapter} ${params.titleSuffix}`,
         book: recordingBook,
         chapter: recordingChapter,
         translation: recordingTranslation,
-        duration: capturedDurationRef.current,
+        duration: params.durationSec,
         date: new Date().toISOString().split('T')[0],
         userId: uid,
         user: auth.currentUser?.displayName || 'Me',
@@ -3671,12 +3776,9 @@ export function useAppState() {
         audioUrl,
         audioPath,
         versesStr: 'Full Chapter',
-        verseTimestamps: buildVerseTimestamps(
-          recordingChapterVerses.map((v) => v.verse),
-          verseTapTimestamps,
-          capturedDurationRef.current
-        ),
+        verseTimestamps: params.verseTimestamps,
         sharedVisibility: pickedRecordingVisibility,
+        sourceType: params.sourceType,
       };
 
       await setDoc(doc(db, 'users', uid, 'recordings', id), { ...newRec, createdAt: serverTimestamp() });
@@ -3712,10 +3814,76 @@ export function useAppState() {
       }
 
       setUserRecordings((prev) => [newRec, ...prev]);
-      triggerToast('Chapter recitation saved! 🎙️');
+      triggerToast(`${params.titleSuffix} saved! 🎙️`);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${uid}/recordings/${id}`);
     }
+  };
+
+  const saveLiveRecordedAudio = async () => {
+    const uri = audioRecorder.uri;
+    if (!uri) {
+      triggerToast('No recording captured — please try again.');
+      return;
+    }
+    await persistRecording({
+      uri,
+      durationSec: capturedDurationRef.current,
+      verseTimestamps: buildVerseTimestamps(
+        recordingChapterVerses.map((v) => v.verse),
+        verseTapTimestamps,
+        capturedDurationRef.current
+      ),
+      titleSuffix: 'Full Chapter Recitation',
+      sourceType: 'recorded',
+    });
+  };
+
+  const saveImportedRecording = async () => {
+    if (!importedAudioUri) {
+      triggerToast('No imported audio to save — please choose a file first.');
+      return;
+    }
+    const durationSec = Math.round(importPlayerStatus.duration || 0) || 1;
+    await persistRecording({
+      uri: importedAudioUri,
+      durationSec,
+      verseTimestamps: buildVerseTimestamps(recordingChapterVerses.map((v) => v.verse), importTapTimestamps, durationSec),
+      titleSuffix: 'Imported Recitation',
+      sourceType: 'imported',
+    });
+    clearImportedAudio();
+  };
+
+  // Single entry point the Save dialog calls on "Confirm & Save" — routes to
+  // whichever flow opened it (see pendingRecordingSource).
+  const saveRecordedAudio = async () => {
+    setSaveRecordingDialog(false);
+    if (pendingRecordingSource === 'import') {
+      await saveImportedRecording();
+    } else {
+      await saveLiveRecordedAudio();
+    }
+  };
+
+  // Opens the same Save dialog the live-record flow uses, routed to the
+  // import path. Requires at least one verse tagged, since an imported
+  // recitation with zero tags has no reason to go through this screen at
+  // all (a plain upload with no per-verse sync isn't this feature's job).
+  const handleFinishImportTagging = () => {
+    if (!importedAudioUri) return;
+    if (Object.keys(importTapTimestamps).length === 0) {
+      triggerToast('Tap at least one verse while listening back before finishing.');
+      return;
+    }
+    try {
+      importPlayer.pause();
+    } catch {
+      // already released — nothing to pause
+    }
+    setPendingRecordingSource('import');
+    setPickedRecordingVisibility(defaultRecordingVisibility || 'private');
+    setSaveRecordingDialog(true);
   };
 
   const deleteRecording = async (recording: Recording) => {
@@ -3837,9 +4005,22 @@ export function useAppState() {
     selectedRecordingChapterTextData,
     userRecordings, setUserRecordings,
     saveRecordingDialog, setSaveRecordingDialog,
+    pendingRecordingSource,
     defaultRecordingVisibility,
     pickedRecordingVisibility, setPickedRecordingVisibility,
     typedRecordingName, setTypedRecordingName,
+    // import-audio tagging flow
+    importedAudioUri,
+    importedAudioName,
+    importTapTimestamps,
+    importPlayerStatus,
+    pickImportAudio,
+    clearImportedAudio,
+    toggleImportPlayback,
+    seekImportAudioBy,
+    handleMarkImportTap,
+    resetImportTaps,
+    handleFinishImportTagging,
     feedRecordings, setFeedRecordings, loadingFeedRecordings, loadSharedRecordings, saveSharedRecordingToLibrary,
     audioSearchQuery, setAudioSearchQuery,
     activeFeedFilter, setActiveFeedFilter,

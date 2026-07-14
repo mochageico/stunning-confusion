@@ -123,7 +123,11 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
     defaultRecordingVisibility,
     pickedRecordingVisibility,
     setPickedRecordingVisibility,
+    pendingRecordingSource,
+    importPlayerStatus,
   } = state;
+  const isImport = pendingRecordingSource === 'import';
+  const durationSec = isImport ? Math.round(importPlayerStatus.duration || 0) : lastRecordingDuration;
   return (
     <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
       <FadeInView style={{ width: '100%', maxWidth: 320 }}>
@@ -131,7 +135,9 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
           <View>
             <Text className="text-base font-serif font-bold text-[#1A1A1A]">Save Recitation</Text>
             <Text className="text-xs text-neutral-500 font-sans mt-1">
-              Review the details of your recorded chapter before saving and sharing.
+              {isImport
+                ? 'Review the details of your tagged audio before saving and sharing.'
+                : 'Review the details of your recorded chapter before saving and sharing.'}
             </Text>
           </View>
 
@@ -148,11 +154,13 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
             </View>
             <View className="flex-row justify-between">
               <Text className="text-neutral-400 font-bold uppercase text-[9px] font-sans">Duration:</Text>
-              <Text className="text-[#1A1A1A] font-bold font-sans text-xs">{formatTime(lastRecordingDuration)}</Text>
+              <Text className="text-[#1A1A1A] font-bold font-sans text-xs">{formatTime(durationSec)}</Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-neutral-400 font-bold uppercase text-[9px] font-sans">Scope:</Text>
-              <Text className="text-emerald-700 font-bold font-sans text-xs">Full Chapter Recitation</Text>
+              <Text className="text-emerald-700 font-bold font-sans text-xs">
+                {isImport ? 'Imported Audio Recitation' : 'Full Chapter Recitation'}
+              </Text>
             </View>
           </View>
 

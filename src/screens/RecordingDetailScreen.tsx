@@ -66,7 +66,7 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
             </Pressable>
             <View>
               <Text className="text-[9px] uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans self-start">
-                CHAPTER RECITATION
+                {selectedRecording.sourceType === 'imported' ? 'IMPORTED AUDIO' : 'CHAPTER RECITATION'}
               </Text>
               <Text className="text-base font-serif font-black text-neutral-900 leading-none mt-1">
                 {selectedRecording.book} {selectedRecording.chapter}
