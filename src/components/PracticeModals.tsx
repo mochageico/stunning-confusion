@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import Slider from '@react-native-community/slider';
 import { Check, Eye, EyeOff, Info, Keyboard, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Sliders, Sparkles, X } from 'lucide-react-native';
 
 import { VerseState, QueueItem } from '../types';
@@ -1159,39 +1158,34 @@ function PracticeModalsInner({
               ))}
               <View className="flex-row items-center gap-1 bg-white/90 p-1 rounded border border-neutral-100 self-start">
                 <Info size={10} color="#a3a3a3" />
-                <Text className="text-[9px] text-neutral-400 font-bold font-sans">Tap dots to peek, or use slider below</Text>
+                <Text className="text-[9px] text-neutral-400 font-bold font-sans">Tap dots to peek, or set masking below</Text>
               </View>
             </ScrollView>
 
-            {/* Bottom Slider & Feedback buttons */}
+            {/* Bottom masking control & Feedback buttons */}
             <View className="gap-3 shrink-0">
-              {/* Slider Control */}
+              {/* Masking Strength Control — was a native slider; the discrete
+                  25%-step chips it snapped to anyway are now the control
+                  itself (the native slider module was the prime suspect in
+                  an iOS New-Architecture freeze and has been removed). */}
               <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-3 gap-2">
                 <View className="flex-row justify-between items-center">
                   <Text className="text-[10px] font-sans font-bold text-neutral-600">Masking Strength</Text>
                   <Text className="text-[10px] font-mono font-bold text-neutral-900">{maskLevel}% Hidden</Text>
                 </View>
 
-                <View className="flex-row items-center gap-2.5">
-                  <Pressable onPress={() => setMaskLevel(0)}>
-                    <Text className="text-[9px] font-sans font-extrabold text-neutral-400">VISIBLE</Text>
-                  </Pressable>
-
-                  <Slider
-                    style={{ flex: 1, height: 24 }}
-                    minimumValue={0}
-                    maximumValue={100}
-                    step={25}
-                    value={maskLevel}
-                    onValueChange={setMaskLevel}
-                    minimumTrackTintColor="#1A1A1A"
-                    maximumTrackTintColor="#d4d4d4"
-                  />
-
-                  <Pressable onPress={() => setMaskLevel(100)}>
-                    <Text className="text-[9px] font-sans font-extrabold text-neutral-400">BLANK</Text>
-                  </Pressable>
-                </View>
+                <ChipRow
+                  columns={5}
+                  value={maskLevel}
+                  onChange={(v) => setMaskLevel(Number(v))}
+                  options={[
+                    { id: 0, label: 'Visible' },
+                    { id: 25, label: '25%' },
+                    { id: 50, label: '50%' },
+                    { id: 75, label: '75%' },
+                    { id: 100, label: 'Blank' },
+                  ]}
+                />
 
                 <Pressable
                   onPressIn={() => setPeekActive(true)}

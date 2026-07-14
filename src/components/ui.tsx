@@ -98,6 +98,64 @@ export function ChipRow<T extends string | number>({
 }
 
 // ============================================================
+// StepperRow — pure-JS replacement for @react-native-community/
+// slider. That package's native component was the prime suspect
+// in a hard iOS freeze on the New Architecture (JS thread dead
+// after a few state changes on the slider-heavy Plan Designer;
+// see the known New-Arch issues on callstack/react-native-slider).
+// Every setting it backed is a small discrete range, so −/+
+// steppers with a progress track lose nothing — and they're
+// ordinary Views/Pressables, with no native module to deadlock.
+// ============================================================
+export function StepperRow({
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (n: number) => void;
+}) {
+  // Snap to the step grid first so a legacy off-grid value (e.g. a review
+  // cap of 17 saved back when this was a step-1 slider) lands on a clean
+  // multiple after one press instead of walking off-grid forever.
+  const snapped = Math.round((value - min) / step) * step + min;
+  const setClamped = (n: number) => onChange(Math.max(min, Math.min(max, n)));
+  const percent = max === min ? 0 : ((Math.max(min, Math.min(max, value)) - min) / (max - min)) * 100;
+  const atMin = value <= min;
+  const atMax = value >= max;
+  return (
+    <View className="flex-row items-center gap-2.5" style={{ height: 32 }}>
+      <Pressable
+        onPress={() => setClamped(snapped - step)}
+        disabled={atMin}
+        className={`w-7 h-7 rounded-lg border items-center justify-center ${
+          atMin ? 'bg-neutral-50 border-neutral-200' : 'bg-white border-neutral-400'
+        }`}
+      >
+        <Text className={`font-black text-sm ${atMin ? 'text-neutral-300' : 'text-[#1A1A1A]'}`}>−</Text>
+      </Pressable>
+      <View className="flex-1 bg-neutral-200 h-1.5 rounded-full overflow-hidden">
+        <View className="bg-[#1A1A1A] h-full rounded-full" style={{ width: `${percent}%` }} />
+      </View>
+      <Pressable
+        onPress={() => setClamped(snapped + step)}
+        disabled={atMax}
+        className={`w-7 h-7 rounded-lg border items-center justify-center ${
+          atMax ? 'bg-neutral-50 border-neutral-200' : 'bg-white border-neutral-400'
+        }`}
+      >
+        <Text className={`font-black text-sm ${atMax ? 'text-neutral-300' : 'text-[#1A1A1A]'}`}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ============================================================
 // AvatarCircle — letter-avatar or photo, used across profile,
 // community, and recording-attribution UI.
 // ============================================================

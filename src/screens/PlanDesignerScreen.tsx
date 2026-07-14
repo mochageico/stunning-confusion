@@ -1,9 +1,8 @@
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import Slider from '@react-native-community/slider';
 import { ArrowLeft, Check, Share2, TrendingUp } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { FadeInView, HelpTooltip, PulseView } from '../components/ui';
+import { FadeInView, HelpTooltip, PulseView, StepperRow } from '../components/ui';
 
 const DAYS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
 
@@ -57,15 +56,6 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     publishSharedPlan,
   } = state;
 
-  console.log('[DIAG] PlanDesignerScreen render', {
-    preset,
-    learningDays,
-    sabbathEnabled,
-    sabbathDay,
-    newVersesPace,
-    maxReviewCap,
-  });
-
   const applyRigorPreset = (tier: 'light' | 'standard' | 'deep') => {
     const cfg = RIGOR_TIERS.find((t) => t.key === tier)!;
     setRetentionRigor(tier);
@@ -79,18 +69,13 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
   const totalRigorLabel =
     totalRigorDays >= 365 ? `${(totalRigorDays / 365).toFixed(1)} years` : `${Math.round(totalRigorDays)} days`;
 
-  console.log('[DIAG] checkpoint A: pre-return, totalRigorLabel computed', totalRigorLabel);
-
   const toggleDay = (day: string, list: string[], setList: (v: string[]) => void) => {
-    console.log('[DIAG] toggleDay start', day, list);
     if (list.includes(day)) {
       setList(list.filter((d) => d !== day));
     } else {
       setList([...list, day]);
     }
-    console.log('[DIAG] toggleDay setList done, calling setPreset');
     setPreset('custom');
-    console.log('[DIAG] toggleDay end');
   };
 
   return (
@@ -119,17 +104,11 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           <View className="flex-row gap-2">
             <Pressable
               onPress={() => {
-                console.log('[DIAG] Daily Drip preset pressed, start');
                 setPreset('drip');
-                console.log('[DIAG] Daily Drip: setPreset done');
                 setLearningDays(['M', 'T', 'W', 'Th', 'F']);
-                console.log('[DIAG] Daily Drip: setLearningDays done');
                 setNewVersesPace(2);
-                console.log('[DIAG] Daily Drip: setNewVersesPace done');
                 setMaxReviewCap(10);
-                console.log('[DIAG] Daily Drip: setMaxReviewCap done');
                 triggerToast("Loaded 'The Daily Drip' preset! \u{1F4A7}");
-                console.log('[DIAG] Daily Drip preset pressed, end');
               }}
               className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
                 preset === 'drip' ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
@@ -159,13 +138,11 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
 
             <Pressable
               onPress={() => {
-                console.log('[DIAG] Weekend Warrior preset pressed, start');
                 setPreset('warrior');
                 setLearningDays(['S', 'Su']);
                 setNewVersesPace(5);
                 setMaxReviewCap(20);
                 triggerToast("Loaded 'Weekend Warrior' preset! ⚔️");
-                console.log('[DIAG] Weekend Warrior preset pressed, end');
               }}
               className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
                 preset === 'warrior' ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
@@ -195,10 +172,8 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
 
             <Pressable
               onPress={() => {
-                console.log('[DIAG] Custom preset pressed, start');
                 setPreset('custom');
                 triggerToast('Switched to Custom configuration.');
-                console.log('[DIAG] Custom preset pressed, end');
               }}
               className={`flex-1 rounded-xl p-2.5 justify-between ${
                 preset === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6] shadow-md' : 'border-2 border-[#E5E5E5] bg-white'
@@ -237,7 +212,6 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               </View>
               <View className="flex-row justify-between">
                 {DAYS.map((day) => {
-                  console.log('[DIAG] checkpoint B: learning-day map item', day);
                   const isActive = learningDays.includes(day);
                   return (
                     <Pressable
@@ -322,18 +296,14 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                 {newVersesPace}
               </Text>
             </View>
-            <Slider
-              style={{ width: '100%', height: 32 }}
-              minimumValue={1}
-              maximumValue={10}
-              step={1}
+            <StepperRow
+              min={1}
+              max={10}
               value={newVersesPace}
-              onValueChange={(v: number) => {
+              onChange={(v) => {
                 setNewVersesPace(v);
                 setPreset('custom');
               }}
-              minimumTrackTintColor="#1A1A1A"
-              maximumTrackTintColor="#d4d4d4"
             />
             <View className="flex-row justify-between">
               <Text className="text-[8px] text-neutral-400 font-mono">1 verse (Gentle)</Text>
@@ -349,18 +319,15 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                 {maxReviewCap} mins
               </Text>
             </View>
-            <Slider
-              style={{ width: '100%', height: 32 }}
-              minimumValue={5}
-              maximumValue={30}
-              step={1}
+            <StepperRow
+              min={5}
+              max={30}
+              step={5}
               value={maxReviewCap}
-              onValueChange={(v: number) => {
+              onChange={(v) => {
                 setMaxReviewCap(v);
                 setPreset('custom');
               }}
-              minimumTrackTintColor="#1A1A1A"
-              maximumTrackTintColor="#d4d4d4"
             />
             <View className="flex-row justify-between">
               <Text className="text-[8px] text-neutral-400 font-mono">5 mins (Sprint)</Text>
@@ -382,16 +349,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                 {masteryTouches} touches
               </Text>
             </View>
-            <Slider
-              style={{ width: '100%', height: 32 }}
-              minimumValue={3}
-              maximumValue={10}
-              step={1}
-              value={masteryTouches}
-              onValueChange={(v: number) => setMasteryTouches(v)}
-              minimumTrackTintColor="#1A1A1A"
-              maximumTrackTintColor="#d4d4d4"
-            />
+            <StepperRow min={3} max={10} value={masteryTouches} onChange={setMasteryTouches} />
             <View className="flex-row justify-between">
               <Text className="text-[8px] text-neutral-400 font-mono">3 touches</Text>
               <Text className="text-[8px] text-neutral-400 font-mono">10 touches</Text>
@@ -409,16 +367,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                 {reviewsRequired} reps
               </Text>
             </View>
-            <Slider
-              style={{ width: '100%', height: 32 }}
-              minimumValue={1}
-              maximumValue={3}
-              step={1}
-              value={reviewsRequired}
-              onValueChange={(v: number) => setReviewsRequired(v)}
-              minimumTrackTintColor="#1A1A1A"
-              maximumTrackTintColor="#d4d4d4"
-            />
+            <StepperRow min={1} max={3} value={reviewsRequired} onChange={setReviewsRequired} />
             <View className="flex-row justify-between">
               <Text className="text-[8px] text-neutral-400 font-mono">1 review</Text>
               <Text className="text-[8px] text-neutral-400 font-mono">3 reviews</Text>
@@ -512,16 +461,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                     {dailyPhaseWeeks} weeks
                   </Text>
                 </View>
-                <Slider
-                  style={{ width: '100%', height: 32 }}
-                  minimumValue={3}
-                  maximumValue={14}
-                  step={1}
-                  value={dailyPhaseWeeks}
-                  onValueChange={(v: number) => setDailyPhaseWeeks(v)}
-                  minimumTrackTintColor="#1A1A1A"
-                  maximumTrackTintColor="#d4d4d4"
-                />
+                <StepperRow min={3} max={14} value={dailyPhaseWeeks} onChange={setDailyPhaseWeeks} />
                 <View className="flex-row justify-between">
                   <Text className="text-[8px] text-neutral-400 font-mono">3 weeks</Text>
                   <Text className="text-[8px] text-neutral-400 font-mono">14 weeks</Text>
@@ -536,16 +476,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                     {weeklyPhaseMonths} months
                   </Text>
                 </View>
-                <Slider
-                  style={{ width: '100%', height: 32 }}
-                  minimumValue={2}
-                  maximumValue={12}
-                  step={1}
-                  value={weeklyPhaseMonths}
-                  onValueChange={(v: number) => setWeeklyPhaseMonths(v)}
-                  minimumTrackTintColor="#1A1A1A"
-                  maximumTrackTintColor="#d4d4d4"
-                />
+                <StepperRow min={2} max={12} value={weeklyPhaseMonths} onChange={setWeeklyPhaseMonths} />
                 <View className="flex-row justify-between">
                   <Text className="text-[8px] text-neutral-400 font-mono">2 months</Text>
                   <Text className="text-[8px] text-neutral-400 font-mono">12 months</Text>
@@ -560,16 +491,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                     {monthlyPhaseYears} years
                   </Text>
                 </View>
-                <Slider
-                  style={{ width: '100%', height: 32 }}
-                  minimumValue={1}
-                  maximumValue={10}
-                  step={1}
-                  value={monthlyPhaseYears}
-                  onValueChange={(v: number) => setMonthlyPhaseYears(v)}
-                  minimumTrackTintColor="#1A1A1A"
-                  maximumTrackTintColor="#d4d4d4"
-                />
+                <StepperRow min={1} max={10} value={monthlyPhaseYears} onChange={setMonthlyPhaseYears} />
                 <View className="flex-row justify-between">
                   <Text className="text-[8px] text-neutral-400 font-mono">1 year</Text>
                   <Text className="text-[8px] text-neutral-400 font-mono">10 years</Text>
@@ -657,10 +579,6 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             </Pressable>
           </PulseView>
         </View>
-        {(() => {
-          console.log('[DIAG] checkpoint D: end of JSX tree reached');
-          return null;
-        })()}
       </ScrollView>
     </FadeInView>
   );
