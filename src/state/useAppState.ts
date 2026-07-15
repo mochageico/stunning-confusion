@@ -18,7 +18,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes, uploadString } from 'firebase/storage';
+import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import {
   RecordingPresets,
@@ -29,9 +29,6 @@ import {
   useAudioRecorder,
 } from 'expo-audio';
 import * as DocumentPicker from 'expo-document-picker';
-// Legacy (function-based) API deliberately -- see the upload-encoding
-// comment in persistRecording for why this is used instead of fetch().blob().
-import * as LegacyFileSystem from 'expo-file-system/legacy';
 
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
 import {
@@ -3795,28 +3792,30 @@ export function useAppState() {
     triggerToast('Uploading recitation...');
     try {
       const fileRef = storageRef(storage, audioPath);
-      if (Platform.OS === 'web') {
-        // Browsers have a real Blob/fetch implementation -- this path has
-        // always worked fine on web.
-        const response = await fetch(params.uri);
-        const blob = await response.blob();
-        await uploadBytes(fileRef, blob, { contentType });
-      } else {
-        // React Native 0.74+ removed ArrayBuffer/ArrayBufferView support
-        // from its Blob constructor. Firebase Storage's uploadBytes() needs
-        // to build a Blob from raw binary data internally, so the classic
-        // fetch(uri).blob() + uploadBytes() pair throws "Creating blobs
-        // from 'ArrayBuffer' and 'ArrayBufferView' are not supported" on a
-        // real device (confirmed on commit ee80e05's dev build -- this
-        // never reproduced on web, only iOS). Reading the file as base64
-        // and uploading via uploadString sidesteps Blob construction
-        // entirely, which is the standard workaround for Firebase JS SDK
-        // (not react-native-firebase) storage uploads on modern RN.
-        const base64Data = await LegacyFileSystem.readAsStringAsync(params.uri, {
-          encoding: LegacyFileSystem.EncodingType.Base64,
-        });
-        await uploadString(fileRef, base64Data, 'base64', { contentType });
-      }
+      // Firebase Storage's ONE-SHOT upload path (used by both uploadBytes()
+      // and uploadString(), regardless of the input form -- a base64 string
+      // just gets decoded to a Uint8Array first) always builds the final
+      // request body via `new Blob([multipartBoundaryText, ourData,
+      // multipartBoundaryText])` internally, to attach the JSON metadata and
+      // our bytes in one multipart/related request. React Native 0.74+'s
+      // Blob constructor rejects any part that isn't itself a Blob or a
+      // string, so that internal concat throws "Creating blobs from
+      // 'ArrayBuffer' and 'ArrayBufferView' are not supported" on a real
+      // device no matter what we hand the public API (confirmed: the
+      // previous fix here switched to uploadString + base64 and it crashed
+      // in exactly the same place, just later). uploadBytesResumable() uses
+      // a completely different wire protocol -- metadata goes in its own
+      // request, and each binary chunk is sent as a raw request body
+      // (FbsBlob.uploadData(), no Blob concatenation at all) -- so it never
+      // hits this restriction, on any platform. Confirmed via reading
+      // @firebase/storage's own source (node_modules/@firebase/storage/dist/
+      // index.cjs.js): multipartUpload() -> FbsBlob.getBlob() -> new Blob(...)
+      // vs. continueResumableUpload() -> blob.slice(...).uploadData() -> the
+      // raw bytes, untouched.
+      const response = await fetch(params.uri);
+      const arrayBuffer = await response.arrayBuffer();
+      const uploadTask = uploadBytesResumable(fileRef, arrayBuffer, { contentType });
+      await uploadTask;
       const audioUrl = await getDownloadURL(fileRef);
 
       const newRec: Recording = {
