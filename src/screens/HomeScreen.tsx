@@ -443,13 +443,13 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 if (allDashItems.length > 0) {
                   handleGroupPractice('listen', allDashItems);
                 } else {
-                  triggerToast("No items on dashboard to loop!");
+                  triggerToast("No items on dashboard to listen to!");
                 }
               }}
               className="flex-1 py-2.5 bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5 shadow-sm"
             >
               <Volume2 size={13} color="#FFFFFF" />
-              <Text className="text-white font-sans font-bold text-xs">Loop Today's Scripture</Text>
+              <Text className="text-white font-sans font-bold text-xs">Listen to Today's Scripture</Text>
             </Pressable>
           </View>
         </View>

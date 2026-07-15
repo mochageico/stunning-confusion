@@ -28,6 +28,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     activeChapterTextError,
     isVerseSelected,
     toggleVerseSelection,
+    setSelectedVerseNumbers,
+    addVersesToQueue,
     chapterViewMode,
     setChapterViewMode,
     selectedChapterAudios,
@@ -394,31 +396,47 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
 
         {/* Floating Action Menu (Appears when 1+ verses selected) */}
         {selectedVerseNumbers.length > 0 && (
-          <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-3 flex-row items-center justify-between">
-            <View className="pl-1">
-              <Text className="text-[9px] font-bold text-neutral-400 uppercase font-sans">SELECTED</Text>
-              <Text className="text-xs font-extrabold font-sans text-[#1A1A1A]">
-                {selectedVerseNumbers.length} {selectedVerseNumbers.length === 1 ? 'Verse' : 'Verses'}
-              </Text>
+          <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-3" style={{ gap: 8 }}>
+            <View className="flex-row items-center justify-between pl-1">
+              <View>
+                <Text className="text-[9px] font-bold text-neutral-400 uppercase font-sans">SELECTED</Text>
+                <Text className="text-xs font-extrabold font-sans text-[#1A1A1A]">
+                  {selectedVerseNumbers.length} {selectedVerseNumbers.length === 1 ? 'Verse' : 'Verses'}
+                </Text>
+              </View>
+              <Pressable onPress={() => setSelectedVerseNumbers([])} className="px-2 py-1">
+                <Text className="text-[10px] font-bold font-sans text-neutral-400">Clear</Text>
+              </Pressable>
             </View>
             <View className="flex-row gap-1.5">
               <Pressable
-                onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
-                className="py-1.5 px-3 bg-[#1A1A1A] rounded-lg"
+                onPress={() => {
+                  addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)));
+                  setSelectedVerseNumbers([]);
+                }}
+                className="flex-1 py-2 items-center bg-emerald-600 rounded-lg"
               >
-                <Text className="text-white text-[10px] font-bold uppercase tracking-wider">Listen</Text>
+                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide" numberOfLines={1}>
+                  Add to Queue
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
+                className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
+              >
+                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Listen</Text>
               </Pressable>
               <Pressable
                 onPress={() => startPractice('type', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
-                className="py-1.5 px-3 bg-[#1A1A1A] rounded-lg"
+                className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
               >
-                <Text className="text-white text-[10px] font-bold uppercase tracking-wider">Type</Text>
+                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Type</Text>
               </Pressable>
               <Pressable
                 onPress={() => startPractice('reveal', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
-                className="py-1.5 px-3 bg-[#1A1A1A] rounded-lg"
+                className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
               >
-                <Text className="text-white text-[10px] font-bold uppercase tracking-wider">Reveal</Text>
+                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Reveal</Text>
               </Pressable>
             </View>
           </View>

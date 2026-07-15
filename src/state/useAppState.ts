@@ -429,10 +429,12 @@ export function useAppState() {
   const [selectedVerseNumbers, setSelectedVerseNumbers] = useState<number[]>([]);
   const [chapterViewMode, setChapterViewMode] = useState<'list' | 'grid'>('list');
 
-  // Verse audio-sync offset editor states — populated from the real
-  // selectedRecording.verseTimestamps by the effect below, not hardcoded.
+  // Whether RecordingDetailScreen's verse-sync timeline is in edit mode.
+  // The draft marker positions themselves live as local component state in
+  // that screen (derived fresh from selectedRecording.verseTimestamps each
+  // time it's opened) rather than here, since they're pure editing-session
+  // scratch state with no reason to survive a navigation away and back.
   const [isEditingSync, setIsEditingSync] = useState<boolean>(false);
-  const [recSyncOffsets, setRecSyncOffsets] = useState<Array<{ verse: number; start: string; end: string }>>([]);
 
   // Memory Plan Designer States
   const [preset, setPreset] = useState<'drip' | 'warrior' | 'custom'>('custom');
@@ -2738,31 +2740,6 @@ export function useAppState() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const parseTimeToSeconds = (val: string): number => {
-    const parts = val.split(':').map((p) => parseInt(p, 10));
-    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      return parts[0] * 60 + parts[1];
-    }
-    const n = parseInt(val, 10);
-    return isNaN(n) ? 0 : n;
-  };
-
-  // Load the Verse Audio-Sync Matrix's editable rows from whichever
-  // recording is opened in RecordingDetailScreen — replaces the fixed
-  // 5-row placeholder that was shown for every recording regardless of its
-  // real verseTimestamps (or lack thereof, if tap-to-mark wasn't used).
-  useEffect(() => {
-    if (!selectedRecording) return;
-    setRecSyncOffsets(
-      (selectedRecording.verseTimestamps || []).map((vt) => ({
-        verse: vt.verse,
-        start: formatTime(vt.startSec),
-        end: formatTime(vt.endSec),
-      }))
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRecording?.id]);
-
   // Date formatter
   const getTodayDateString = () => {
     const options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' };
@@ -2973,6 +2950,60 @@ export function useAppState() {
     if (promotedCount > 0) {
       triggerToast(`Moved ${promotedCount === 1 ? 'that verse' : `${promotedCount} verses`} into Learning! 📖`);
     }
+  };
+
+  // Adds specific already-fetched verses (e.g. a selection made on
+  // ChapterLandingScreen, which already has real text loaded) to the queue
+  // as 'queued' items. Skips any verse whose verseId is already present in
+  // the queue in any status, rather than duplicating it -- selecting a mix
+  // of new and already-queued/learning/reviewing verses just adds the new
+  // ones. Persistence is handled by the existing debounced auto-sync
+  // effect, same as every other queue mutation.
+  const addVersesToQueue = (versesToAdd: VerseState[]) => {
+    const existingIds = new Set(memoryQueueRef.current.map((q) => q.verseId));
+    const newItems: QueueItem[] = [];
+    let skipped = 0;
+    versesToAdd.forEach((v) => {
+      const bookMeta = getBookByName(v.book);
+      if (!bookMeta) {
+        skipped++;
+        return;
+      }
+      const verseId = `${bookMeta.id}_${v.chapter}_${v.verse}`;
+      if (existingIds.has(verseId)) {
+        skipped++;
+        return;
+      }
+      existingIds.add(verseId); // guards against duplicate verses within versesToAdd itself
+      newItems.push({
+        verseId,
+        book: v.book,
+        chapter: v.chapter,
+        verseNumber: v.verse,
+        text: v.text,
+        orderIndex: memoryQueueRef.current.length + newItems.length,
+        status: 'queued',
+        origin: 'individual',
+        retentionPhase: 'none',
+        dateStarted: null,
+        lastReviewDate: null,
+        nextReviewDueDate: null,
+        currentStreakCount: 0,
+        totalSuccessfulReviews: 0,
+        gracePeriodUsedToday: false,
+      });
+    });
+
+    if (newItems.length === 0) {
+      triggerToast(skipped > 0 ? 'Those verses are already in your Memory Queue.' : 'No verses to add.');
+      return;
+    }
+
+    updateMemoryQueue((prev) => [...prev, ...newItems]);
+    const skippedNote = skipped > 0 ? ` (${skipped} already in queue, skipped)` : '';
+    triggerToast(
+      `Added ${newItems.length} ${newItems.length === 1 ? 'verse' : 'verses'} to your Memory Queue!${skippedNote} 📖`
+    );
   };
 
   // `opts.perfect` — accuracy tier of the practice run behind this result
@@ -3900,18 +3931,14 @@ export function useAppState() {
     }
   };
 
-  // Persists manual edits made in the Verse Audio-Sync Matrix's "Edit Sync"
-  // mode — previously this just showed a toast and never actually saved
-  // anything anywhere.
-  const saveVerseSyncOffsets = async () => {
+  // Persists edits made in the verse-sync timeline editor. Takes the
+  // computed ranges directly (the screen builds them from its draft marker
+  // positions via buildVerseTimestamps) rather than reading from any
+  // useAppState-owned draft state -- the editing session itself is local to
+  // RecordingDetailScreen.
+  const saveVerseSyncOffsets = async (verseTimestamps: VerseTimestamp[]) => {
     const uid = auth.currentUser?.uid;
     if (!uid || !selectedRecording) return;
-
-    const verseTimestamps: VerseTimestamp[] = recSyncOffsets.map((o) => ({
-      verse: o.verse,
-      startSec: parseTimeToSeconds(o.start),
-      endSec: parseTimeToSeconds(o.end),
-    }));
 
     try {
       await updateDoc(doc(db, 'users', uid, 'recordings', selectedRecording.id), { verseTimestamps });
@@ -3982,7 +4009,6 @@ export function useAppState() {
     selectedVerseNumbers, setSelectedVerseNumbers,
     chapterViewMode, setChapterViewMode,
     isEditingSync, setIsEditingSync,
-    recSyncOffsets, setRecSyncOffsets,
     preset, setPreset,
     learningDays, setLearningDays,
     newVersesPace, setNewVersesPace,
@@ -4134,6 +4160,7 @@ export function useAppState() {
     getMemoryLoadForecast,
     triggerDailyPull,
     promoteToLearning,
+    addVersesToQueue,
     handleReviewCompleted,
     triggerMockDueReviews,
     handleUpdateVerseStatus,
@@ -4164,6 +4191,7 @@ export function useAppState() {
     saveRecordedAudio,
     deleteRecording,
     saveVerseSyncOffsets,
+    buildVerseTimestamps,
   };
 }
 

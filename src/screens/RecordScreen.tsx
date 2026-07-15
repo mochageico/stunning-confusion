@@ -47,6 +47,14 @@ export default function RecordScreen({ state }: { state: AppState }) {
     handleMarkImportTap,
     resetImportTaps,
     handleFinishImportTagging,
+    // prior recordings list
+    userRecordings,
+    navigateTo,
+    setSelectedRecording,
+    playingRecordingId,
+    setPlayingRecordingId,
+    playingRecProgress,
+    setPlayingRecProgress,
   } = state;
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -476,6 +484,85 @@ export default function RecordScreen({ state }: { state: AppState }) {
             )}
           </>
         )}
+
+        {/* Prior Recordings — previously only reachable via Profile or a
+            chapter's landing page, which was inconvenient right where you're
+            about to make a new one. Same row layout/behavior as Profile's
+            "Recorded Chapters" list (tap opens RecordingDetailScreen, the
+            small play button plays it in place without navigating). */}
+        <View className="gap-2 pt-2 border-t border-neutral-100">
+          <View className="flex-row items-center px-1">
+            <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+              Prior Recordings ({userRecordings.length})
+            </Text>
+          </View>
+
+          {userRecordings.length === 0 ? (
+            <View className="items-center p-4 bg-[#F3F2F1]/55 rounded-xl border border-dashed border-[#E5E5E5]">
+              <Text className="text-xs text-[#888]">No recorded chapters yet — record or import one above!</Text>
+            </View>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {userRecordings.map((rec) => {
+                const isPlaying = playingRecordingId === rec.id;
+                return (
+                  <Pressable
+                    key={rec.id}
+                    onPress={() => {
+                      setSelectedRecording(rec);
+                      navigateTo('recordingDetail');
+                    }}
+                    className="border border-[#E5E5E5] rounded-xl p-3 bg-white gap-2"
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-1 pr-2">
+                        <View className="flex-row items-center gap-1.5">
+                          <Text className="text-xs font-black text-[#1A1A1A] leading-tight">
+                            {rec.book} {rec.chapter}
+                          </Text>
+                          {rec.sourceType === 'imported' && (
+                            <Text className="text-[8px] bg-indigo-50 text-indigo-600 font-sans border border-indigo-200 px-1.5 py-0.5 rounded font-bold uppercase">
+                              Imported
+                            </Text>
+                          )}
+                        </View>
+                        <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
+                          {rec.date} • {rec.translation} • {rec.duration} seconds
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          if (isPlaying) {
+                            setPlayingRecordingId(null);
+                          } else {
+                            setPlayingRecordingId(rec.id);
+                            setPlayingRecProgress(0);
+                          }
+                        }}
+                        className={`w-7 h-7 rounded-full items-center justify-center shrink-0 ${
+                          isPlaying ? 'bg-[#1A1A1A]' : 'border border-[#1A1A1A]'
+                        }`}
+                      >
+                        {isPlaying ? (
+                          <Pause size={12} color="#FFFFFF" />
+                        ) : (
+                          <Play size={12} color="#1A1A1A" style={{ marginLeft: 2 }} />
+                        )}
+                      </Pressable>
+                    </View>
+
+                    {isPlaying && (
+                      <View className="w-full bg-neutral-100 h-1.5 rounded-full overflow-hidden">
+                        <View className="bg-[#1A1A1A] h-full" style={{ width: `${playingRecProgress}%` }} />
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
       </ScrollView>
     </FadeInView>
   );
