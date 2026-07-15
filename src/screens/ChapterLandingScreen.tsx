@@ -427,16 +427,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Listen</Text>
               </Pressable>
               <Pressable
-                onPress={() => startPractice('type', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
+                onPress={() => startPractice('learn', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
                 className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
               >
-                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Type</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => startPractice('reveal', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
-                className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
-              >
-                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Reveal</Text>
+                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Learn</Text>
               </Pressable>
             </View>
           </View>

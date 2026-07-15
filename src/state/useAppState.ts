@@ -449,7 +449,7 @@ export function useAppState() {
   const [monthlyPhaseYears, setMonthlyPhaseYears] = useState<number>(5);
 
   // Practice Overlays
-  const [activeModal, setActiveModal] = useState<'listen' | 'type' | 'reveal' | null>(null);
+  const [activeModal, setActiveModal] = useState<'listen' | 'learn' | null>(null);
   const [modalVerses, setModalVerses] = useState<VerseState[]>([]);
 
   // Teleprompter / Recording State (fully simulated — no real microphone capture in the web original)
@@ -3061,8 +3061,10 @@ export function useAppState() {
           triggerToast('Good recall! A run must be perfect (no missed words) to bank a mastery touch. 🔒');
           return;
         }
-        // 3-Touch Mastery Gate checks
-        const inferredType = drillType || (activeModal === 'type' ? 'type' : activeModal === 'reveal' ? 'reveal' : 'speak');
+        // 3-Touch Mastery Gate checks. PracticeModals' Learn/Reveal tabs
+        // always pass an explicit drillType now; 'speak' only remains as a
+        // fallback for any caller that doesn't.
+        const inferredType = drillType || 'speak';
         const isValid = validateTouch(item, inferredType);
 
         if (isValid) {
@@ -3362,7 +3364,9 @@ export function useAppState() {
 
     // Route completion results to our 7-6-5 Deterministic Retention Engine!
     const success = newStatus === 'memorized';
-    const drillType = customDrillType || (activeModal === 'type' ? 'type' : activeModal === 'reveal' ? 'reveal' : 'speak');
+    // PracticeModals' Learn/Reveal tabs always pass an explicit
+    // customDrillType now; 'speak' only remains as a fallback.
+    const drillType = customDrillType || 'speak';
     for (const v of versesToUpdate) {
       // Read through the ref, not the render-time snapshot — each loop
       // iteration must see the queue updates the previous iteration made.
@@ -3383,7 +3387,7 @@ export function useAppState() {
   };
 
   // Launch practice session
-  const startPractice = (mode: 'listen' | 'type' | 'reveal', passageVerses: VerseState[]) => {
+  const startPractice = (mode: 'listen' | 'learn', passageVerses: VerseState[]) => {
     setModalVerses(passageVerses);
     setActiveModal(mode);
   };

@@ -102,7 +102,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     }));
   };
 
-  const handleGroupPractice = (mode: 'listen' | 'type' | 'reveal', items: QueueItem[]) => {
+  const handleGroupPractice = (mode: 'listen' | 'learn', items: QueueItem[]) => {
     const vStates = mapQueueToVerseStates(items);
     startPractice(mode, vStates);
   };
@@ -170,16 +170,10 @@ export default function HomeScreen({ state }: { state: AppState }) {
                           <Text className="text-neutral-700 text-[10px] font-bold">L</Text>
                         </Pressable>
                         <Pressable
-                          onPress={() => handleGroupPractice('type', group.items)}
-                          className="bg-white border border-neutral-300 w-6 h-5 items-center justify-center rounded"
+                          onPress={() => handleGroupPractice('learn', group.items)}
+                          className="bg-[#1A1A1A] px-2 h-5 items-center justify-center rounded"
                         >
-                          <Text className="text-[#1A1A1A] text-[10px] font-bold">T</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleGroupPractice('reveal', group.items)}
-                          className="bg-white border border-neutral-300 w-6 h-5 items-center justify-center rounded"
-                        >
-                          <Text className="text-neutral-700 text-[10px] font-bold">R</Text>
+                          <Text className="text-white text-[9px] font-bold">Learn</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -297,16 +291,10 @@ export default function HomeScreen({ state }: { state: AppState }) {
                             <Text className="text-emerald-700 text-[10px] font-bold">L</Text>
                           </Pressable>
                           <Pressable
-                            onPress={() => handleGroupPractice('type', group.items)}
-                            className="bg-white border border-emerald-200 w-6 h-5 items-center justify-center rounded"
+                            onPress={() => handleGroupPractice('learn', group.items)}
+                            className="bg-emerald-600 px-2 h-5 items-center justify-center rounded"
                           >
-                            <Text className="text-emerald-700 text-[10px] font-bold">T</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleGroupPractice('reveal', group.items)}
-                            className="bg-white border border-emerald-200 w-6 h-5 items-center justify-center rounded"
-                          >
-                            <Text className="text-emerald-700 text-[10px] font-bold">R</Text>
+                            <Text className="text-white text-[9px] font-bold">Learn</Text>
                           </Pressable>
                         </View>
                       </View>
@@ -333,16 +321,10 @@ export default function HomeScreen({ state }: { state: AppState }) {
                             <Text className="text-blue-700 text-[10px] font-bold">L</Text>
                           </Pressable>
                           <Pressable
-                            onPress={() => handleGroupPractice('type', group.items)}
-                            className="bg-white border border-blue-200 w-6 h-5 items-center justify-center rounded"
+                            onPress={() => handleGroupPractice('learn', group.items)}
+                            className="bg-blue-600 px-2 h-5 items-center justify-center rounded"
                           >
-                            <Text className="text-blue-700 text-[10px] font-bold">T</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleGroupPractice('reveal', group.items)}
-                            className="bg-white border border-blue-200 w-6 h-5 items-center justify-center rounded"
-                          >
-                            <Text className="text-blue-700 text-[10px] font-bold">R</Text>
+                            <Text className="text-white text-[9px] font-bold">Learn</Text>
                           </Pressable>
                         </View>
                       </View>
@@ -369,16 +351,10 @@ export default function HomeScreen({ state }: { state: AppState }) {
                             <Text className="text-amber-700 text-[10px] font-bold">L</Text>
                           </Pressable>
                           <Pressable
-                            onPress={() => handleGroupPractice('type', group.items)}
-                            className="bg-white border border-amber-200 w-6 h-5 items-center justify-center rounded"
+                            onPress={() => handleGroupPractice('learn', group.items)}
+                            className="bg-amber-600 px-2 h-5 items-center justify-center rounded"
                           >
-                            <Text className="text-amber-700 text-[10px] font-bold">T</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleGroupPractice('reveal', group.items)}
-                            className="bg-white border border-amber-200 w-6 h-5 items-center justify-center rounded"
-                          >
-                            <Text className="text-amber-700 text-[10px] font-bold">R</Text>
+                            <Text className="text-white text-[9px] font-bold">Learn</Text>
                           </Pressable>
                         </View>
                       </View>
