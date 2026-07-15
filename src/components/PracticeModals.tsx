@@ -245,8 +245,26 @@ function PracticeModalsInner({
   // when consecutive verses share the same recording the player is already
   // loaded, so this seeks immediately; when the recording changes, it waits
   // for isLoaded to flip true after the reload.
+  //
+  // IMPORTANT: skip the seek entirely when we're already essentially at this
+  // segment's start. Verse boundaries within one recording are contiguous by
+  // construction (buildVerseTimestamps sets a verse's endSec to the exact
+  // timestamp the next verse's startSec uses), so the ordinary case of
+  // advancing to the next verse in a continuously-playing recording needs no
+  // seek at all -- the audio is already flowing straight into it. Seeking
+  // anyway (even to a position we're already at) produced an audible
+  // stutter: seekTo is async, so by the time it actually lands, real
+  // playback has usually already continued a beat past that exact instant,
+  // and the seek yanks it back, replaying the start of the verse that had
+  // already begun. A genuine jump (switching recordings, looping back to the
+  // start, restarting, manually selecting a verse) still seeks normally.
   useEffect(() => {
     if (type !== 'listen' || !currentSegment?.recording || !listenPlayerStatus.isLoaded) return;
+    const alreadyThere = Math.abs(listenPlayerStatus.currentTime - currentSegment.startSec) < 0.35;
+    if (alreadyThere) {
+      seekedToCurrentSegmentRef.current = true;
+      return;
+    }
     listenPlayer.seekTo(currentSegment.startSec).then(() => {
       seekedToCurrentSegmentRef.current = true;
       if (listenPlaying) listenPlayer.play();
