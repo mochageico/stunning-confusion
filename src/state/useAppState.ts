@@ -307,6 +307,24 @@ const advancePastSabbath = (date: Date, sabbathEnabled: boolean, sabbathDay: str
   return result;
 };
 
+// Finds the next date (today counts) whose day-of-week matches `weekday`,
+// then nudges off the Sabbath if it happens to land there. Used by manual
+// memory-status overrides to let a batch's weekly/monthly review cycle
+// consistently land on a chosen weekday -- a phase's due date always
+// recurs by a fixed number of days from wherever it first starts (7 for
+// weekly, 30 for monthly), so picking which day the FIRST one lands on is
+// all that's needed; no scheduling-engine changes required.
+const nextOccurrenceOfWeekday = (from: Date, weekday: string, sabbathEnabled: boolean, sabbathDay: string): Date => {
+  const result = new Date(from);
+  result.setHours(0, 0, 0, 0);
+  let scanned = 0;
+  while (DAY_ABBREVS[result.getDay()] !== weekday && scanned < 7) {
+    result.setDate(result.getDate() + 1);
+    scanned++;
+  }
+  return advancePastSabbath(result, sabbathEnabled, sabbathDay);
+};
+
 // Shared iteration cap for the day-by-day scans below, so a corrupted or
 // mistyped date (e.g. a garbled year from a date picker, or a stale due-date
 // far in the past) can't turn a bounded loop into a multi-million-iteration
@@ -3025,6 +3043,126 @@ export function useAppState() {
     );
   };
 
+  // Manually places a set of verses at a specific point in the memory-
+  // progression ladder, bypassing the normal learn-then-graduate flow --
+  // for verses already memorized outside the app (e.g. "I already know all
+  // of Ephesians, put it straight into Weekly review"). Creates a fresh
+  // QueueItem for any verse not yet queued; overwrites an existing one's
+  // phase/streak/schedule fields in place otherwise. Every demotion-
+  // softening/mastery-touch field is cleared to a blank slate for the new
+  // phase, since this is a deliberate manual reset, not a real graduation.
+  //
+  // targetWeekday (weekly/monthly only) lets a batch's review cycle land on
+  // a chosen day of the week -- since a phase's due date always recurs by a
+  // fixed number of days from wherever it first starts (7 for weekly, 30
+  // for monthly), picking which day the FIRST one lands on is all that's
+  // needed to keep every future cycle on that same weekday.
+  const overrideVerseMemoryStatus = (
+    versesToOverride: VerseState[],
+    targetPhase: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained',
+    targetWeekday?: string
+  ) => {
+    const nowISO = new Date().toISOString();
+    const existingByVerseId = new Map(memoryQueueRef.current.map((q) => [q.verseId, q]));
+    const cycleDays = targetPhase === 'daily' ? 1 : targetPhase === 'weekly' ? 7 : 30;
+
+    const dueDateISO: string | null =
+      targetPhase === 'learning' || targetPhase === 'retained'
+        ? null
+        : targetWeekday && (targetPhase === 'weekly' || targetPhase === 'monthly')
+          ? nextOccurrenceOfWeekday(new Date(), targetWeekday, sabbathEnabled, sabbathDay).toISOString()
+          : nextDueDateISO(cycleDays);
+
+    const nextQueue = [...memoryQueueRef.current];
+    const additions: QueueItem[] = [];
+    let updatedCount = 0;
+
+    versesToOverride.forEach((v) => {
+      const bookMeta = getBookByName(v.book);
+      if (!bookMeta) return;
+      const verseId = `${bookMeta.id}_${v.chapter}_${v.verse}`;
+      const existing = existingByVerseId.get(verseId);
+
+      const base: QueueItem = existing
+        ? { ...existing }
+        : {
+            verseId,
+            book: v.book,
+            chapter: v.chapter,
+            verseNumber: v.verse,
+            text: v.text,
+            orderIndex: memoryQueueRef.current.length + additions.length,
+            status: 'queued',
+            origin: 'individual',
+            retentionPhase: 'none',
+            dateStarted: null,
+            lastReviewDate: null,
+            nextReviewDueDate: null,
+            currentStreakCount: 0,
+            totalSuccessfulReviews: 0,
+            gracePeriodUsedToday: false,
+          };
+
+      delete base.touchLogs;
+      base.reviewsToday = 0;
+      base.gracePeriodUsedToday = false;
+      base.dailyPhaseExtensionDays = 0;
+      delete base.refresherActive;
+      delete base.refresherReturnPhase;
+      delete base.refresherReturnProgress;
+      delete base.refresherTargetUnits;
+
+      if (targetPhase === 'learning') {
+        base.status = 'learning';
+        base.retentionPhase = 'none';
+        base.dateStarted = nowISO;
+        base.lastReviewDate = null;
+        base.nextReviewDueDate = null;
+        base.currentStreakCount = 0;
+      } else if (targetPhase === 'retained') {
+        base.status = 'retained';
+        base.retentionPhase = 'none';
+        base.dateStarted = base.dateStarted || nowISO;
+        base.nextReviewDueDate = null;
+        base.currentStreakCount = 0;
+      } else {
+        base.status = 'reviewing';
+        base.retentionPhase = targetPhase;
+        base.dateStarted = base.dateStarted || nowISO;
+        base.lastReviewDate = base.lastReviewDate || nowISO;
+        base.currentStreakCount = 1;
+        base.nextReviewDueDate = dueDateISO;
+      }
+
+      if (existing) {
+        const idx = nextQueue.findIndex((q) => q.verseId === verseId);
+        if (idx !== -1) nextQueue[idx] = base;
+        updatedCount++;
+      } else {
+        additions.push(base);
+      }
+    });
+
+    const total = updatedCount + additions.length;
+    if (total === 0) {
+      triggerToast('No recognized verses to update.');
+      return;
+    }
+
+    updateMemoryQueue(() => [...nextQueue, ...additions]);
+
+    const phaseLabel =
+      targetPhase === 'learning'
+        ? 'Learning'
+        : targetPhase === 'retained'
+          ? 'Retained'
+          : `${targetPhase[0].toUpperCase()}${targetPhase.slice(1)} Review`;
+    const dueNote = dueDateISO
+      ? ` Next due ${new Date(dueDateISO).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}.`
+      : '';
+    triggerToast(`Set ${total} ${total === 1 ? 'verse' : 'verses'} to ${phaseLabel}.${dueNote} 🎯`);
+  };
+
   // `opts.perfect` — accuracy tier of the practice run behind this result
   // (graded in src/lib/recitation.ts). A success with perfect === false was
   // "close enough" (>= 90% word accuracy): it still counts as a completed
@@ -4205,6 +4343,7 @@ export function useAppState() {
     triggerDailyPull,
     promoteToLearning,
     addVersesToQueue,
+    overrideVerseMemoryStatus,
     handleReviewCompleted,
     triggerMockDueReviews,
     handleUpdateVerseStatus,

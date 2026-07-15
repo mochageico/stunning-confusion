@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import {
   ArrowLeft,
@@ -8,12 +9,31 @@ import {
   Pause,
   Play,
   Search,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
-import { FadeInView } from '../components/ui';
+import { ChipRow, FadeInView } from '../components/ui';
 import { Recording } from '../types';
 import { ESV_COPYRIGHT_NOTICE } from '../data';
+
+const OVERRIDE_PHASE_OPTIONS: { id: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; label: string }[] = [
+  { id: 'learning', label: 'Learning' },
+  { id: 'daily', label: 'Daily' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
+  { id: 'retained', label: 'Retained' },
+];
+const OVERRIDE_WEEKDAY_OPTIONS = [
+  { id: 'M', label: 'Mon' },
+  { id: 'T', label: 'Tue' },
+  { id: 'W', label: 'Wed' },
+  { id: 'Th', label: 'Thu' },
+  { id: 'F', label: 'Fri' },
+  { id: 'S', label: 'Sat' },
+  { id: 'Su', label: 'Sun' },
+];
 
 export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const {
@@ -30,6 +50,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     toggleVerseSelection,
     setSelectedVerseNumbers,
     addVersesToQueue,
+    overrideVerseMemoryStatus,
     chapterViewMode,
     setChapterViewMode,
     selectedChapterAudios,
@@ -47,6 +68,14 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     triggerToast,
     startPractice,
   } = state;
+
+  // Manual memory-status override panel — for verses already memorized
+  // outside the app (e.g. "I already know all of Ephesians 1, put it
+  // straight into Weekly review"). Local to this screen since it only ever
+  // acts on the current selection; resets whenever it's closed/reopened.
+  const [showStatusOverride, setShowStatusOverride] = useState(false);
+  const [overridePhase, setOverridePhase] = useState<'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'>('weekly');
+  const [overrideWeekday, setOverrideWeekday] = useState<string | null>(null);
 
   const activeChapterKey = `${selectedBook}_${selectedChapter}`;
 
@@ -404,7 +433,13 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   {selectedVerseNumbers.length} {selectedVerseNumbers.length === 1 ? 'Verse' : 'Verses'}
                 </Text>
               </View>
-              <Pressable onPress={() => setSelectedVerseNumbers([])} className="px-2 py-1">
+              <Pressable
+                onPress={() => {
+                  setSelectedVerseNumbers([]);
+                  setShowStatusOverride(false);
+                }}
+                className="px-2 py-1"
+              >
                 <Text className="text-[10px] font-bold font-sans text-neutral-400">Clear</Text>
               </Pressable>
             </View>
@@ -432,7 +467,79 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               >
                 <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Learn</Text>
               </Pressable>
+              <Pressable
+                onPress={() => setShowStatusOverride((s) => !s)}
+                className={`flex-1 py-2 items-center rounded-lg flex-row justify-center gap-1 ${
+                  showStatusOverride ? 'bg-indigo-700' : 'bg-indigo-600'
+                }`}
+              >
+                <SlidersHorizontal size={10} color="#FFFFFF" />
+                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Status</Text>
+              </Pressable>
             </View>
+
+            {/* Manual memory-status override -- for verses already memorized
+                outside the app. Sets the selected verses directly to a
+                chosen phase, skipping the normal learn-then-graduate climb. */}
+            {showStatusOverride && (
+              <FadeInView>
+                <View className="bg-indigo-50/60 border border-indigo-200 rounded-xl p-3 mt-1" style={{ gap: 10 }}>
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-[9px] font-bold text-indigo-900 uppercase tracking-wide font-sans">
+                      Set Memory Status
+                    </Text>
+                    <Pressable onPress={() => setShowStatusOverride(false)}>
+                      <X size={13} color="#4338ca" />
+                    </Pressable>
+                  </View>
+                  <Text className="text-[9px] text-indigo-800/80 font-sans leading-relaxed -mt-1">
+                    Already know these from memory? Place them directly in the right phase instead of starting over from
+                    Learning.
+                  </Text>
+
+                  <View style={{ gap: 4 }}>
+                    <ChipRow
+                      wrap
+                      value={overridePhase}
+                      onChange={(id) => {
+                        setOverridePhase(id);
+                        if (id !== 'weekly' && id !== 'monthly') setOverrideWeekday(null);
+                      }}
+                      options={OVERRIDE_PHASE_OPTIONS}
+                    />
+                  </View>
+
+                  {(overridePhase === 'weekly' || overridePhase === 'monthly') && (
+                    <View style={{ gap: 4 }}>
+                      <Text className="text-[8px] font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
+                        Land review cycle on (optional) -- tap again to clear
+                      </Text>
+                      <ChipRow
+                        wrap
+                        value={overrideWeekday ?? ''}
+                        onChange={(id) => setOverrideWeekday((prev) => (prev === id ? null : (id as string)))}
+                        options={OVERRIDE_WEEKDAY_OPTIONS}
+                      />
+                    </View>
+                  )}
+
+                  <Pressable
+                    onPress={() => {
+                      overrideVerseMemoryStatus(
+                        activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)),
+                        overridePhase,
+                        overrideWeekday ?? undefined
+                      );
+                      setSelectedVerseNumbers([]);
+                      setShowStatusOverride(false);
+                    }}
+                    className="w-full py-2 items-center bg-indigo-700 rounded-lg"
+                  >
+                    <Text className="text-white text-[10px] font-bold uppercase tracking-wide">Apply Override</Text>
+                  </Pressable>
+                </View>
+              </FadeInView>
+            )}
           </View>
         )}
       </ScrollView>
