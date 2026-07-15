@@ -223,6 +223,23 @@ function PracticeModalsInner({
     return playableIndices.filter(inRange)[0] ?? 0;
   };
 
+  // Guards against a race that showed up specifically on LOOPING BACK to an
+  // earlier verse (e.g. a 1-3 selection finishing verse 3 and returning to
+  // verse 1): looping back seeks to an EARLIER position within the same
+  // still-loaded recording, but the player status can keep reporting the
+  // old, later currentTime (verse 3's, well past verse 1's endSec) for a
+  // beat before the seek actually takes effect. Without this guard, the
+  // end-of-segment check below saw that stale/still-later currentTime, read
+  // it as "verse 1 already finished" instantly, and skipped straight to
+  // verse 2 -- verse 1 would flash for a fraction of a second and never
+  // really play. Forward advances never hit this, since a stale slightly-
+  // behind currentTime is harmless against a LATER segment's endSec -- only
+  // seeking backward exposes it.
+  const seekedToCurrentSegmentRef = useRef(false);
+  useEffect(() => {
+    seekedToCurrentSegmentRef.current = false;
+  }, [currentVerseIndex]);
+
   // Once the (possibly just-swapped) player has finished loading this verse's
   // recording, cue up its start position. Fires on every verse change --
   // when consecutive verses share the same recording the player is already
@@ -231,6 +248,7 @@ function PracticeModalsInner({
   useEffect(() => {
     if (type !== 'listen' || !currentSegment?.recording || !listenPlayerStatus.isLoaded) return;
     listenPlayer.seekTo(currentSegment.startSec).then(() => {
+      seekedToCurrentSegmentRef.current = true;
       if (listenPlaying) listenPlayer.play();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -248,6 +266,12 @@ function PracticeModalsInner({
   // end of the (possibly selection-restricted) range.
   useEffect(() => {
     if (type !== 'listen' || !listenPlaying || !currentSegment?.recording) return;
+    // Don't trust currentTime until we've confirmed the seek to THIS verse's
+    // start actually landed (see seekedToCurrentSegmentRef above) -- and even
+    // then, ignore a reading that's still suspiciously behind this segment's
+    // own start, in case the status object hasn't caught up to the seek yet.
+    if (!seekedToCurrentSegmentRef.current) return;
+    if (listenPlayerStatus.currentTime < currentSegment.startSec - 0.5) return;
     if (listenPlayerStatus.currentTime < currentSegment.endSec - 0.05 && !listenPlayerStatus.didJustFinish) return;
     const next = findNextPlayableIndex(currentVerseIndex);
     if (next !== null) {
@@ -791,18 +815,18 @@ function PracticeModalsInner({
                     <View className="flex-1 justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 gap-1">
                       <View className="flex-row items-center gap-1">
                         <Sliders size={10} color="#737373" />
-                        <Text className="text-[9px] font-sans font-bold text-neutral-500 uppercase tracking-wider">Speed (±0.25)</Text>
+                        <Text className="text-[9px] font-sans font-bold text-neutral-500 uppercase tracking-wider">Speed (±0.2)</Text>
                       </View>
                       <View className="flex-row items-center justify-between bg-white px-2 py-1 rounded-lg border border-neutral-200">
                         <Pressable
-                          onPress={() => setListenSpeed((s) => Math.max(0.5, Number((s - 0.25).toFixed(2))))}
+                          onPress={() => setListenSpeed((s) => Math.max(0.4, Number((s - 0.2).toFixed(1))))}
                           className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
                         >
                           <Text className="font-black text-xs text-neutral-800">-</Text>
                         </Pressable>
-                        <Text className="text-xs font-mono font-bold text-neutral-900">{listenSpeed.toFixed(2)}x</Text>
+                        <Text className="text-xs font-mono font-bold text-neutral-900">{listenSpeed.toFixed(1)}x</Text>
                         <Pressable
-                          onPress={() => setListenSpeed((s) => Math.min(2.0, Number((s + 0.25).toFixed(2))))}
+                          onPress={() => setListenSpeed((s) => Math.min(2.0, Number((s + 0.2).toFixed(1))))}
                           className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
                         >
                           <Text className="font-black text-xs text-neutral-800">+</Text>
