@@ -388,6 +388,25 @@ const dateAfterNLearningDays = (
   }
 };
 
+// Resolves which of the user's own recordings represents a given chapter's
+// narration, mirroring the precedence ChapterLandingScreen's "Change"
+// selector already used inline: an explicit user choice always wins;
+// otherwise fall back to the first of this user's own recordings of that
+// chapter. Shared (rather than duplicated) so PracticeModals' real-audio
+// Listen mode and ChapterLandingScreen's audio card can never quietly
+// disagree about which recording is "the" audio for a chapter.
+export function resolveChapterAudio(
+  userRecordings: Recording[],
+  selectedChapterAudios: Record<string, Recording | null>,
+  book: string,
+  chapter: number
+): Recording | null {
+  const key = `${book}_${chapter}`;
+  const assigned = selectedChapterAudios[key];
+  if (assigned) return assigned;
+  return userRecordings.find((r) => r.book.toLowerCase() === book.toLowerCase() && r.chapter === chapter) || null;
+}
+
 /**
  * Centralizes every piece of state and business-logic handler from the original
  * web app's single-file App component. Screens receive the return value of this

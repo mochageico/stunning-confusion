@@ -10,7 +10,7 @@ import {
   Search,
 } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
+import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { Recording } from '../types';
 import { ESV_COPYRIGHT_NOTICE } from '../data';
@@ -58,7 +58,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     (r) => r.book.toLowerCase() === (selectedBook || '').toLowerCase() && r.chapter === selectedChapter
   );
   const optionsList = availableNarrations;
-  const currentAudio = selectedChapterAudios[activeChapterKey] || availableNarrations[0] || null;
+  const currentAudio = resolveChapterAudio(userRecordings, selectedChapterAudios, selectedBook || '', selectedChapter || 0);
   const isPlayingThis = !!currentAudio && playingRecordingId === currentAudio.id;
 
   return (

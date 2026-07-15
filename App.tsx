@@ -394,6 +394,8 @@ function AppShell() {
           memoryQueue={state.memoryQueue}
           primingLookahead={state.primingLookahead}
           setPrimingLookahead={state.setPrimingLookahead}
+          userRecordings={state.userRecordings}
+          selectedChapterAudios={state.selectedChapterAudios}
         />
       )}
 

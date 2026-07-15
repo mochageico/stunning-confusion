@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Check, Eye, EyeOff, Info, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Sliders, Sparkles, X } from 'lucide-react-native';
 
-import { VerseState, QueueItem } from '../types';
+import { VerseState, QueueItem, Recording } from '../types';
+import { resolveChapterAudio } from '../state/useAppState';
 import {
   classifyFirstLetterAttempt,
   getSpeechRecognizer,
@@ -31,6 +33,11 @@ interface PracticeModalsProps {
   memoryQueue?: QueueItem[];
   primingLookahead?: number;
   setPrimingLookahead?: (val: number) => void;
+  // Listen mode only — real audio playback needs to resolve which of the
+  // user's saved recordings represents each verse's chapter, exactly the
+  // way ChapterLandingScreen's audio card already does.
+  userRecordings?: Recording[];
+  selectedChapterAudios?: Record<string, Recording | null>;
 }
 
 // Guard wrapper: the early "nothing to practice" return must happen OUTSIDE
@@ -52,6 +59,8 @@ function PracticeModalsInner({
   memoryQueue,
   primingLookahead = 30,
   setPrimingLookahead,
+  userRecordings = [],
+  selectedChapterAudios = {},
 }: PracticeModalsProps) {
   // ==========================================
   // PLAYLIST / PLAY-SOURCE STATE (Listen mode only)
@@ -59,7 +68,8 @@ function PracticeModalsInner({
   const [playSource, setPlaySource] = useState<'selection' | 'memorization' | 'reviewing' | 'priming' | 'all'>('selection');
   const [activePlayVerses, setActivePlayVerses] = useState<VerseState[]>(verses);
 
-  // Segment selection states (indices in the wordObjects array)
+  // Segment selection states — indices into activePlayVerses (verse
+  // granularity; word-level selection was removed, see Listen mode below).
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
   const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
 
@@ -103,8 +113,8 @@ function PracticeModalsInner({
         setActivePlayVerses(allVerses && allVerses.length > 0 ? allVerses : verses);
       }
     }
-    // Reset word highlight position back to start
-    setListenWordIndex(0);
+    // Reset playback position back to the first verse
+    setCurrentVerseIndex(0);
     setSelectionStart(null);
     setSelectionEnd(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,79 +139,147 @@ function PracticeModalsInner({
   }, [type, verses, activePlayVerses]);
 
   // ==========================================
-  // LISTEN MODE STATE & LOGIC (unchanged)
+  // LISTEN MODE — real verse-by-verse audio playback. No word-level
+  // highlighting: word timing was always simulated (a fixed WPM guess), and
+  // the only real timing data this app has is per-VERSE (verseTimestamps),
+  // so that's the granularity this mode actually plays and highlights at.
   // ==========================================
   const [listenPlaying, setListenPlaying] = useState(false);
-  const [listenSpeed, setListenSpeed] = useState(1.0); // Increments of 0.2: 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, etc.
-  const [listenWordIndex, setListenWordIndex] = useState(0);
+  const [listenSpeed, setListenSpeed] = useState(1.0);
+  const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
   const [repeatMode, setRepeatMode] = useState<'off' | 'playlist'>('playlist'); // default to loop playlist
-  const listenTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Map each word to its containing verse object and index
-  const wordObjects = useMemo(() => {
-    const list: { word: string; verseObj: VerseState; verseKey: string; indexInVerse: number }[] = [];
-    activePlayVerses.forEach((verseObj) => {
-      const verseKey = `${verseObj.book}-${verseObj.chapter}-${verseObj.verse}`;
-      const words = `${verseObj.verse} ${verseObj.text}`.split(/\s+/);
-      words.forEach((w, idx) => {
-        list.push({
-          word: w,
-          verseObj,
-          verseKey,
-          indexInVerse: idx,
-        });
-      });
+  // For every verse in the active playlist, resolve which real recording (if
+  // any) covers it and that recording's tagged {startSec, endSec} for this
+  // specific verse. A verse with no matching recording, or a recording with
+  // no verseTimestamps entry for it, simply has no segment -- it's still
+  // shown in the reading pane (so the list doesn't mysteriously skip verses)
+  // but playback skips over it, since there's nothing to play.
+  const playableSegments = useMemo(() => {
+    return activePlayVerses.map((verseObj) => {
+      const recording = resolveChapterAudio(userRecordings, selectedChapterAudios, verseObj.book, verseObj.chapter);
+      const vt = recording?.audioUrl ? recording.verseTimestamps?.find((t) => t.verse === verseObj.verse) : undefined;
+      return vt ? { verseObj, recording: recording!, startSec: vt.startSec, endSec: vt.endSec } : { verseObj, recording: null, startSec: null, endSec: null };
     });
-    return list;
-  }, [activePlayVerses]);
+  }, [activePlayVerses, userRecordings, selectedChapterAudios]);
+
+  // Indices (into activePlayVerses/playableSegments) that actually have
+  // audio -- the only ones playback ever lands on.
+  const playableIndices = useMemo(
+    () => playableSegments.map((s, i) => (s.recording ? i : -1)).filter((i) => i >= 0),
+    [playableSegments]
+  );
+  const hasAnyAudio = playableIndices.length > 0;
+  const currentSegment = playableSegments[currentVerseIndex] ?? null;
+
+  // Real audio player for whichever recording covers the current verse.
+  // Swapping to a different chapter's recording (or none) just means this
+  // source string changes -- expo-audio reloads automatically, same pattern
+  // as recordingPlayer/importPlayer elsewhere in this app. Deliberately its
+  // own player rather than reusing the app-wide "now playing" system: Listen
+  // mode auto-advances across verses (and can switch recordings on its own),
+  // which shouldn't hijack whatever the floating mini-bar is doing elsewhere.
+  const listenPlayer = useAudioPlayer(currentSegment?.recording?.audioUrl ?? undefined);
+  const listenPlayerStatus = useAudioPlayerStatus(listenPlayer);
 
   useEffect(() => {
-    if (type !== 'listen') return;
-
-    if (listenPlaying && wordObjects.length > 0) {
-      const delay = 60000 / 125 / listenSpeed; // ~125 words per minute base rate, adjusted by speed
-      listenTimerRef.current = setInterval(() => {
-        setListenWordIndex((prev) => {
-          const actualStart = playSource === 'selection' && selectionStart !== null ? selectionStart : 0;
-          const actualEnd = playSource === 'selection' && selectionEnd !== null ? selectionEnd : wordObjects.length - 1;
-
-          // End of segment/playlist reached
-          if (prev >= actualEnd) {
-            if (repeatMode === 'playlist') {
-              // Loop back to start (or selection start)
-              return actualStart;
-            } else {
-              // Repeat is off
-              setListenPlaying(false);
-              if (listenTimerRef.current) clearInterval(listenTimerRef.current);
-              return prev;
-            }
-          }
-
-          // If somehow prev is outside the selection range, snap it back
-          if (prev < actualStart) {
-            return actualStart;
-          }
-
-          return prev + 1;
-        });
-      }, delay);
-    } else {
-      if (listenTimerRef.current) {
-        clearInterval(listenTimerRef.current);
-      }
-    }
-
     return () => {
-      if (listenTimerRef.current) clearInterval(listenTimerRef.current);
+      try {
+        listenPlayer.pause();
+      } catch {
+        // already released
+      }
     };
-  }, [listenPlaying, listenSpeed, wordObjects, type, repeatMode, playSource, selectionStart, selectionEnd]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (listenPlaying) {
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+    }
+  }, [listenPlaying]);
+
+  // Finds the next playable index after `from`, restricted to the active
+  // selection range when one is set. Returns null if there's nowhere to go
+  // (caller decides whether that means "loop back to the start" or "stop").
+  const findNextPlayableIndex = (from: number): number | null => {
+    const inRange = (i: number) => {
+      if (!(playSource === 'selection' && selectionStart !== null)) return true;
+      const end = selectionEnd ?? selectionStart;
+      return i >= selectionStart && i <= end;
+    };
+    const candidates = playableIndices.filter(inRange);
+    if (candidates.length === 0) return null;
+    const next = candidates.find((i) => i > from);
+    return next !== undefined ? next : null;
+  };
+
+  const firstPlayableIndexInRange = (): number => {
+    const inRange = (i: number) => {
+      if (!(playSource === 'selection' && selectionStart !== null)) return true;
+      const end = selectionEnd ?? selectionStart;
+      return i >= selectionStart && i <= end;
+    };
+    return playableIndices.filter(inRange)[0] ?? 0;
+  };
+
+  // Once the (possibly just-swapped) player has finished loading this verse's
+  // recording, cue up its start position. Fires on every verse change --
+  // when consecutive verses share the same recording the player is already
+  // loaded, so this seeks immediately; when the recording changes, it waits
+  // for isLoaded to flip true after the reload.
+  useEffect(() => {
+    if (type !== 'listen' || !currentSegment?.recording || !listenPlayerStatus.isLoaded) return;
+    listenPlayer.seekTo(currentSegment.startSec).then(() => {
+      if (listenPlaying) listenPlayer.play();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, currentVerseIndex, currentSegment?.recording?.id, listenPlayerStatus.isLoaded]);
+
+  // Keep the real playback rate in sync with the speed control, including
+  // right after a recording (re)loads.
+  useEffect(() => {
+    if (listenPlayerStatus.isLoaded) listenPlayer.setPlaybackRate(listenSpeed, 'high');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listenSpeed, listenPlayerStatus.isLoaded, currentSegment?.recording?.id]);
+
+  // Detects reaching the end of the current verse's segment and advances --
+  // to the next verse, possibly switching recordings, or loops/stops at the
+  // end of the (possibly selection-restricted) range.
+  useEffect(() => {
+    if (type !== 'listen' || !listenPlaying || !currentSegment?.recording) return;
+    if (listenPlayerStatus.currentTime < currentSegment.endSec - 0.05 && !listenPlayerStatus.didJustFinish) return;
+    const next = findNextPlayableIndex(currentVerseIndex);
+    if (next !== null) {
+      setCurrentVerseIndex(next);
+    } else if (repeatMode === 'playlist') {
+      setCurrentVerseIndex(firstPlayableIndexInRange());
+    } else {
+      setListenPlaying(false);
+      listenPlayer.pause();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listenPlayerStatus.currentTime, listenPlayerStatus.didJustFinish, listenPlaying, type]);
 
   const restartListen = () => {
     setListenPlaying(false);
-    const actualStart = playSource === 'selection' && selectionStart !== null ? selectionStart : 0;
-    setListenWordIndex(actualStart);
+    setCurrentVerseIndex(firstPlayableIndexInRange());
     setTimeout(() => setListenPlaying(true), 150);
+  };
+
+  const toggleListenPlaying = () => {
+    if (listenPlaying) {
+      listenPlayer.pause();
+      setListenPlaying(false);
+    } else {
+      if (!currentSegment?.recording && hasAnyAudio) {
+        // Sitting on a verse with no audio (e.g. selection starts on a gap)
+        // -- jump to the nearest playable one instead of doing nothing.
+        setCurrentVerseIndex(firstPlayableIndexInRange());
+      }
+      setListenPlaying(true);
+      if (listenPlayerStatus.isLoaded) listenPlayer.play();
+    }
   };
 
   // ==========================================
@@ -509,25 +587,43 @@ function PracticeModalsInner({
     );
   };
 
-  const handleWordClick = (index: number) => {
+  // Tapping a verse in the reading pane either jumps playback straight to it
+  // (normal playlist modes), or -- in Selection mode -- marks the start/end
+  // of the loop range, exactly like the old word-tap mechanic but at verse
+  // granularity.
+  const handleVerseClick = (index: number) => {
     if (playSource !== 'selection') {
-      setListenWordIndex(index);
+      setCurrentVerseIndex(index);
       return;
     }
 
     if (selectionStart === null || (selectionStart !== null && selectionEnd !== null)) {
       setSelectionStart(index);
       setSelectionEnd(null);
-      setListenWordIndex(index);
+      setCurrentVerseIndex(index);
     } else {
       if (index < selectionStart) {
         setSelectionStart(index);
-        setListenWordIndex(index);
+        setCurrentVerseIndex(index);
       } else {
         setSelectionEnd(index);
       }
     }
   };
+
+  // Overall progress across the whole playlist, smoothly advancing using the
+  // real playhead within the current verse's segment (0 when there's no
+  // segment to play at all). Computed here, not inline in the JSX below, so
+  // TypeScript can actually narrow currentSegment.recording -> non-null
+  // startSec/endSec (a ternary buried in a template literal doesn't narrow
+  // the same way).
+  let listenSegmentFraction = 0;
+  if (currentSegment && currentSegment.recording) {
+    const span = Math.max(0.01, currentSegment.endSec - currentSegment.startSec);
+    listenSegmentFraction = Math.max(0, Math.min(1, (listenPlayerStatus.currentTime - currentSegment.startSec) / span));
+  }
+  const overallListenProgressPercent =
+    activePlayVerses.length > 0 ? ((currentVerseIndex + listenSegmentFraction) / activePlayVerses.length) * 100 : 0;
 
   return (
     <View className="absolute inset-0 bg-white z-50 pt-11 pb-4 px-4" id="practice_overlay">
@@ -553,60 +649,57 @@ function PracticeModalsInner({
         {/* ======================================================== */}
         {type === 'listen' && (
           <View className="flex-1 justify-between">
-            {/* Word Highlight Box */}
+            {/* Verse Highlight Box — verse-by-verse, not word-by-word: the
+                only real timing data this app has is per verse. */}
             <View className="bg-neutral-50 border border-neutral-200 rounded-2xl flex-1 mb-3 overflow-hidden">
-              <ScrollView className="flex-1 p-4">
-                <Text className="font-serif text-[15px] leading-relaxed text-neutral-800 pb-12">
-                  {wordObjects.map((item, index) => {
-                    const isActive = index === listenWordIndex && listenPlaying;
-                    const isRead = index < listenWordIndex;
-                    const isFirstWordOfVerse = index === 0 || wordObjects[index - 1].verseKey !== item.verseKey;
+              <ScrollView className="flex-1 p-4" contentContainerStyle={{ gap: 10, paddingBottom: 12 }}>
+                {activePlayVerses.map((verseObj, index) => {
+                  const segment = playableSegments[index];
+                  const hasAudio = !!segment.recording;
+                  const isActive = index === currentVerseIndex && listenPlaying;
+                  const isRead = index < currentVerseIndex;
+                  const inSelectionRange =
+                    playSource === 'selection' &&
+                    selectionStart !== null &&
+                    (selectionEnd !== null ? index >= selectionStart && index <= selectionEnd : index === selectionStart);
 
-                    const inSelectionRange =
-                      playSource === 'selection' &&
-                      selectionStart !== null &&
-                      (selectionEnd !== null ? index >= selectionStart && index <= selectionEnd : index === selectionStart);
+                  let cardClassName = 'rounded-xl px-3 py-2.5 border ';
+                  if (isActive) {
+                    cardClassName += 'bg-[#1A1A1A] border-[#1A1A1A]';
+                  } else if (playSource === 'selection' && selectionStart !== null) {
+                    cardClassName += inSelectionRange ? 'bg-amber-100 border-amber-200' : 'bg-white border-neutral-200 opacity-40';
+                  } else if (isRead) {
+                    cardClassName += 'bg-neutral-200/40 border-neutral-200';
+                  } else {
+                    cardClassName += 'bg-white border-neutral-200';
+                  }
 
-                    let wordClassName = 'mx-0.5 rounded px-0.5 ';
-                    if (isActive) {
-                      wordClassName += 'bg-[#1A1A1A] text-white font-extrabold px-1';
-                    } else if (playSource === 'selection' && selectionStart !== null) {
-                      if (inSelectionRange) {
-                        wordClassName += 'bg-amber-100 text-amber-900 font-bold';
-                      } else {
-                        wordClassName += 'opacity-35 text-neutral-400';
-                      }
-                    } else {
-                      if (isRead) {
-                        wordClassName += 'text-neutral-900 font-semibold bg-neutral-200/50';
-                      } else {
-                        wordClassName += 'text-neutral-400';
-                      }
-                    }
+                  const refClassName = isActive ? 'text-white/70' : inSelectionRange ? 'text-amber-800' : 'text-neutral-400';
+                  const textClassName = isActive ? 'text-white' : !hasAudio ? 'text-neutral-400' : 'text-neutral-800';
 
-                    return (
-                      <Text key={index}>
-                        {isFirstWordOfVerse && (
-                          <Text className="mt-3 mb-1 font-sans text-[10px] font-extrabold text-[#444] bg-neutral-100 border border-neutral-200 rounded px-2 py-0.5 tracking-wide uppercase">
-                            {'\n'}
-                            {item.verseObj.book} {item.verseObj.chapter}:{item.verseObj.verse}
-                            {'\n'}
+                  return (
+                    <Pressable key={`${verseObj.book}-${verseObj.chapter}-${verseObj.verse}`} onPress={() => handleVerseClick(index)} className={cardClassName}>
+                      <View className="flex-row items-center justify-between mb-0.5">
+                        <Text className={`font-sans text-[9px] font-extrabold uppercase tracking-wide ${refClassName}`}>
+                          {verseObj.book} {verseObj.chapter}:{verseObj.verse}
+                        </Text>
+                        {!hasAudio && (
+                          <Text className={`font-sans text-[8px] font-bold uppercase tracking-wide ${isActive ? 'text-white/50' : 'text-neutral-300'}`}>
+                            No audio
                           </Text>
                         )}
-                        <Text onPress={() => handleWordClick(index)} className={wordClassName}>
-                          {item.word}{' '}
-                        </Text>
-                      </Text>
-                    );
-                  })}
-                </Text>
+                      </View>
+                      <Text className={`font-serif text-[15px] leading-relaxed ${textClassName}`}>{verseObj.text}</Text>
+                    </Pressable>
+                  );
+                })}
               </ScrollView>
 
               {/* Selection Mode Instructions overlay */}
               {playSource === 'selection' && (
                 <View className="absolute top-2 right-2 bg-amber-500/10 px-2 py-1 rounded border border-amber-200 z-10" pointerEvents="none">
                   <Text className="text-[8.5px] font-sans font-bold text-amber-800">
-                    {selectionStart === null ? 'Tap word to set start' : selectionEnd === null ? 'Tap word to set end' : 'Segment active'}
+                    {selectionStart === null ? 'Tap verse to set start' : selectionEnd === null ? 'Tap verse to set end' : 'Segment active'}
                   </Text>
                 </View>
               )}
@@ -619,7 +712,7 @@ function PracticeModalsInner({
                       onPress={() => {
                         setSelectionStart(null);
                         setSelectionEnd(null);
-                        setListenWordIndex(0);
+                        setCurrentVerseIndex(0);
                       }}
                       className="flex-row items-center gap-1.5 bg-white border border-neutral-300 px-2.5 py-1 rounded-lg"
                     >
@@ -628,7 +721,7 @@ function PracticeModalsInner({
                     </Pressable>
                   ) : (
                     <Text className="text-[8.5px] font-sans font-bold text-neutral-400 uppercase tracking-wider">
-                      {playSource === 'selection' ? 'Tap word to select segment' : 'Playlist Auto-playback'}
+                      {playSource === 'selection' ? 'Tap verse to select segment' : 'Playlist Auto-playback'}
                     </Text>
                   )}
                 </View>
@@ -682,81 +775,92 @@ function PracticeModalsInner({
                 </View>
               )}
 
-              {/* Adjusters: Speed (.2 steps) and Repeat mode */}
-              <View className="flex-row gap-2">
-                {/* 1. Playback Speed Selector (.2 increments) */}
-                <View className="flex-1 justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 gap-1">
-                  <View className="flex-row items-center gap-1">
-                    <Sliders size={10} color="#737373" />
-                    <Text className="text-[9px] font-sans font-bold text-neutral-500 uppercase tracking-wider">Speed (±0.2)</Text>
-                  </View>
-                  <View className="flex-row items-center justify-between bg-white px-2 py-1 rounded-lg border border-neutral-200">
-                    <Pressable
-                      onPress={() => setListenSpeed((s) => Math.max(0.4, Number((s - 0.2).toFixed(1))))}
-                      className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
-                    >
-                      <Text className="font-black text-xs text-neutral-800">-</Text>
-                    </Pressable>
-                    <Text className="text-xs font-mono font-bold text-neutral-900">{listenSpeed.toFixed(1)}x</Text>
-                    <Pressable
-                      onPress={() => setListenSpeed((s) => Math.min(2.4, Number((s + 0.2).toFixed(1))))}
-                      className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
-                    >
-                      <Text className="font-black text-xs text-neutral-800">+</Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                {/* 2. Audio Repeat Control */}
-                <View className="flex-1 justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 gap-1">
-                  <View className="flex-row items-center gap-1">
-                    <Repeat size={10} color="#737373" />
-                    <Text className="text-[9px] font-sans font-bold text-neutral-500 uppercase tracking-wider">Repeat Setting</Text>
-                  </View>
-                  <ChipRow
-                    value={repeatMode}
-                    onChange={(id) => setRepeatMode(id)}
-                    options={[
-                      { id: 'off', label: 'Off' },
-                      { id: 'playlist', label: 'Loop' },
-                    ]}
-                  />
-                </View>
-              </View>
-
-              {/* Progress Slider bar */}
-              <View className="gap-0.5">
-                <View className="flex-row justify-between px-1">
-                  <Text className="text-[8px] font-bold text-neutral-400 font-mono">START</Text>
-                  <Text className="text-[8px] font-bold text-neutral-400 font-mono">
-                    {wordObjects.length > 0 ? Math.round((listenWordIndex / wordObjects.length) * 100) : 0}%
+              {!hasAnyAudio ? (
+                <View className="items-center gap-1.5 py-4 bg-neutral-50 rounded-xl border border-dashed border-neutral-300">
+                  <Text className="text-xs font-sans font-bold text-neutral-600">No audio recorded for these verses yet</Text>
+                  <Text className="text-[10px] font-sans text-neutral-400 text-center px-6 leading-relaxed">
+                    Record a recitation from the Record tab, or select a narration for this chapter from its Chapter
+                    Landing page — playback here uses whichever recording is set there.
                   </Text>
-                  <Text className="text-[8px] font-bold text-neutral-400 font-mono">END</Text>
                 </View>
-                <View className="w-full bg-neutral-200 h-1.5 rounded-full overflow-hidden">
-                  <View
-                    className="bg-[#1A1A1A] h-full"
-                    style={{ width: `${wordObjects.length > 0 ? (listenWordIndex / wordObjects.length) * 100 : 0}%` }}
-                  />
-                </View>
-              </View>
+              ) : (
+                <>
+                  {/* Adjusters: Speed (.25 steps) and Repeat mode */}
+                  <View className="flex-row gap-2">
+                    {/* 1. Playback Speed Selector */}
+                    <View className="flex-1 justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 gap-1">
+                      <View className="flex-row items-center gap-1">
+                        <Sliders size={10} color="#737373" />
+                        <Text className="text-[9px] font-sans font-bold text-neutral-500 uppercase tracking-wider">Speed (±0.25)</Text>
+                      </View>
+                      <View className="flex-row items-center justify-between bg-white px-2 py-1 rounded-lg border border-neutral-200">
+                        <Pressable
+                          onPress={() => setListenSpeed((s) => Math.max(0.5, Number((s - 0.25).toFixed(2))))}
+                          className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
+                        >
+                          <Text className="font-black text-xs text-neutral-800">-</Text>
+                        </Pressable>
+                        <Text className="text-xs font-mono font-bold text-neutral-900">{listenSpeed.toFixed(2)}x</Text>
+                        <Pressable
+                          onPress={() => setListenSpeed((s) => Math.min(2.0, Number((s + 0.25).toFixed(2))))}
+                          className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
+                        >
+                          <Text className="font-black text-xs text-neutral-800">+</Text>
+                        </Pressable>
+                      </View>
+                    </View>
 
-              {/* Main player controls row */}
-              <View className="flex-row gap-2.5 pb-1">
-                <Pressable onPress={restartListen} className="flex-1 py-2.5 px-3 border-2 border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5">
-                  <RefreshCw size={12} color="#1A1A1A" />
-                  <Text className="font-sans font-bold text-xs text-[#1A1A1A]">Restart</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setListenPlaying(!listenPlaying)}
-                  className={`flex-[2] py-2.5 px-3 rounded-xl flex-row items-center justify-center gap-1.5 ${
-                    listenPlaying ? 'bg-neutral-900' : 'bg-emerald-600'
-                  }`}
-                >
-                  {listenPlaying ? <Pause size={12} color="#ffffff" /> : <Play size={12} color="#ffffff" />}
-                  <Text className="font-sans font-bold text-xs text-white">{listenPlaying ? 'Pause Audio' : 'Start Looping'}</Text>
-                </Pressable>
-              </View>
+                    {/* 2. Audio Repeat Control */}
+                    <View className="flex-1 justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 gap-1">
+                      <View className="flex-row items-center gap-1">
+                        <Repeat size={10} color="#737373" />
+                        <Text className="text-[9px] font-sans font-bold text-neutral-500 uppercase tracking-wider">Repeat Setting</Text>
+                      </View>
+                      <ChipRow
+                        value={repeatMode}
+                        onChange={(id) => setRepeatMode(id)}
+                        options={[
+                          { id: 'off', label: 'Off' },
+                          { id: 'playlist', label: 'Loop' },
+                        ]}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Progress bar — overall position across the playlist,
+                      smoothly advancing using the real playhead within the
+                      current verse's segment. */}
+                  <View className="gap-0.5">
+                    <View className="flex-row justify-between px-1">
+                      <Text className="text-[8px] font-bold text-neutral-400 font-mono">START</Text>
+                      <Text className="text-[8px] font-bold text-neutral-400 font-mono">
+                        Verse {currentVerseIndex + 1} of {activePlayVerses.length}
+                      </Text>
+                      <Text className="text-[8px] font-bold text-neutral-400 font-mono">END</Text>
+                    </View>
+                    <View className="w-full bg-neutral-200 h-1.5 rounded-full overflow-hidden">
+                      <View className="bg-[#1A1A1A] h-full" style={{ width: `${overallListenProgressPercent}%` }} />
+                    </View>
+                  </View>
+
+                  {/* Main player controls row */}
+                  <View className="flex-row gap-2.5 pb-1">
+                    <Pressable onPress={restartListen} className="flex-1 py-2.5 px-3 border-2 border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5">
+                      <RefreshCw size={12} color="#1A1A1A" />
+                      <Text className="font-sans font-bold text-xs text-[#1A1A1A]">Restart</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={toggleListenPlaying}
+                      className={`flex-[2] py-2.5 px-3 rounded-xl flex-row items-center justify-center gap-1.5 ${
+                        listenPlaying ? 'bg-neutral-900' : 'bg-emerald-600'
+                      }`}
+                    >
+                      {listenPlaying ? <Pause size={12} color="#ffffff" /> : <Play size={12} color="#ffffff" />}
+                      <Text className="font-sans font-bold text-xs text-white">{listenPlaying ? 'Pause Audio' : 'Start Looping'}</Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         )}
