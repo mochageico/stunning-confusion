@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, Text, View, Image } from 'react-native';
+import { Animated, Easing, PanResponder, Pressable, Text, View, Image } from 'react-native';
 
 // ============================================================
 // HelpTooltip — original was a hover-to-show "?" bubble; RN has
@@ -151,6 +151,129 @@ export function StepperRow({
       >
         <Text className={`font-black text-sm ${atMax ? 'text-neutral-300' : 'text-[#1A1A1A]'}`}>+</Text>
       </Pressable>
+    </View>
+  );
+}
+
+// ============================================================
+// DiscreteSlider — a ChipRow's exact same "pick one of a few labeled
+// stops" semantics (so a non-numeric stop like "Off"/"Unlimited"
+// works fine), but as a draggable thumb over a track instead of a
+// row of tap targets. Stops sit evenly spaced along the track
+// regardless of the numeric gaps between their real values -- same
+// reason StepperRow above is plain Views + PanResponder rather than
+// @react-native-community/slider: no native slider dependency.
+// ============================================================
+export interface SliderStop<T extends string | number> {
+  id: T;
+  label: string;
+}
+
+export function DiscreteSlider<T extends string | number>({
+  options,
+  value,
+  onChange,
+}: {
+  options: SliderStop<T>[];
+  value: T;
+  onChange: (id: T) => void;
+}) {
+  const trackWidthRef = useRef(0);
+  const trackRef = useRef<View>(null);
+  const lastIndex = options.length - 1;
+  const activeIndex = Math.max(0, options.findIndex((o) => o.id === value));
+  const percent = lastIndex <= 0 ? 0 : (activeIndex / lastIndex) * 100;
+  // Read inside the drag handler below instead of closed over directly --
+  // the PanResponder instance is created exactly once via useRef, so a
+  // plain closure over activeIndex/lastIndex would go stale after the first
+  // render (same reasoning as RecordingDetailScreen's DraggableMarker).
+  const startFractionRef = useRef(0);
+  const dragStateRef = useRef({ activeIndex, lastIndex });
+  dragStateRef.current = { activeIndex, lastIndex };
+
+  const jumpToFraction = (fraction: number) => {
+    const idx = Math.round(Math.max(0, Math.min(1, fraction)) * lastIndex);
+    const stop = options[idx];
+    if (stop && stop.id !== value) onChange(stop.id);
+  };
+
+  // Deliberately NOT reading width from onLayout: onLayout never fired at
+  // all on this View in testing (not even once, on any platform tested so
+  // far), so anything nested inside it -- including .measure() -- never got
+  // a chance to run. Calling .measure() directly from an effect + a short
+  // rAF retry loop gets the real width regardless of whether onLayout ever
+  // fires, since .measure() reads current layout on demand rather than
+  // waiting on that event.
+  useEffect(() => {
+    let frame: number;
+    let cancelled = false;
+    const attempt = (triesLeft: number) => {
+      if (cancelled) return;
+      trackRef.current?.measure((_x, _y, width) => {
+        if (width > 0) trackWidthRef.current = width;
+        else if (triesLeft > 0) frame = requestAnimationFrame(() => attempt(triesLeft - 1));
+      });
+    };
+    attempt(30);
+    return () => {
+      cancelled = true;
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  // The thumb's drag uses gestureState.dx (relative movement since the
+  // gesture started), not an absolute page coordinate -- avoids needing the
+  // track's page-relative offset entirely.
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        const { activeIndex, lastIndex } = dragStateRef.current;
+        startFractionRef.current = lastIndex <= 0 ? 0 : activeIndex / lastIndex;
+      },
+      onPanResponderMove: (_evt, gestureState) => {
+        const width = trackWidthRef.current;
+        if (width <= 0) return;
+        jumpToFraction(startFractionRef.current + gestureState.dx / width);
+      },
+    })
+  ).current;
+
+  return (
+    <View style={{ gap: 6 }}>
+      <Pressable
+        onPress={(e) => {
+          const width = trackWidthRef.current;
+          if (width <= 0) return;
+          // nativeEvent.locationX is the real, reliable field on native RN --
+          // but on React Native Web it's frequently NaN/undefined (the
+          // Pressable there wraps a plain DOM event), so fall back to the
+          // DOM's own offsetX, which is relative to this same target.
+          const nativeEvt = e.nativeEvent as any;
+          const locationX =
+            typeof nativeEvt.locationX === 'number' && !Number.isNaN(nativeEvt.locationX) ? nativeEvt.locationX : nativeEvt.offsetX;
+          jumpToFraction(locationX / width);
+        }}
+      >
+        <View ref={trackRef} className="w-full justify-center" style={{ height: 28 }}>
+          <View className="w-full bg-neutral-200 h-1.5 rounded-full overflow-hidden">
+            <View className="bg-[#1A1A1A] h-full rounded-full" style={{ width: `${percent}%` }} />
+          </View>
+          <View
+            {...panResponder.panHandlers}
+            className="absolute w-6 h-6 rounded-full bg-white border-2 border-[#1A1A1A] shadow"
+            style={{ left: `${percent}%`, marginLeft: -12 }}
+          />
+        </View>
+      </Pressable>
+      <View className="flex-row justify-between px-0.5">
+        {options.map((opt) => (
+          <Text key={String(opt.id)} className="text-[9px] font-mono font-bold text-neutral-400">
+            {opt.label}
+          </Text>
+        ))}
+      </View>
     </View>
   );
 }

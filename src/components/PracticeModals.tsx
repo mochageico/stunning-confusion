@@ -16,7 +16,7 @@ import {
   SpeechRecognizer,
   WordOutcome,
 } from '../lib/recitation';
-import { BounceView, ChipRow, FadeInView, SpinView, WaveBars } from './ui';
+import { BounceView, ChipRow, DiscreteSlider, FadeInView, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
 
 interface PracticeModalsProps {
@@ -715,8 +715,8 @@ function PracticeModalsInner({
             {referenceText}
           </Text>
         </View>
-        <Pressable onPress={onClose} className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center shrink-0">
-          <X size={14} color="#262626" />
+        <Pressable onPress={onClose} className="w-10 h-10 rounded-full border border-neutral-300 items-center justify-center shrink-0" hitSlop={8}>
+          <X size={18} color="#262626" />
         </Pressable>
       </View>
 
@@ -1148,8 +1148,7 @@ function PracticeModalsInner({
                         {strikeLimit === 'unlimited' ? 'No Reset' : `${strikeLimit} Max Strikes`}
                       </Text>
                     </View>
-                    <ChipRow
-                      columns={4}
+                    <DiscreteSlider
                       value={strikeLimit === 'unlimited' ? 'unlimited' : strikeLimit}
                       onChange={(id) => {
                         const limit = id === 'unlimited' ? 'unlimited' : Number(id);
@@ -1172,11 +1171,9 @@ function PracticeModalsInner({
                         <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">Words Hidden</Text>
                         <Text className="text-[9px] font-mono font-bold text-neutral-500">{assistHideLevel}% hidden</Text>
                       </View>
-                      <ChipRow
-                        columns={3}
+                      <DiscreteSlider
                         value={assistHideLevel}
-                        onChange={(v) => {
-                          const level = Number(v);
+                        onChange={(level) => {
                           setAssistHideLevel(level);
                           resetReciteGame();
                           regenerateHiddenWords(level);
@@ -1354,10 +1351,9 @@ function PracticeModalsInner({
                       <Text className="text-[10px] font-mono font-bold text-neutral-900">{maskLevel}% Hidden</Text>
                     </View>
 
-                    <ChipRow
-                      columns={5}
+                    <DiscreteSlider
                       value={maskLevel}
-                      onChange={(v) => setMaskLevel(Number(v))}
+                      onChange={setMaskLevel}
                       options={[
                         { id: 0, label: 'Visible' },
                         { id: 25, label: '25%' },
