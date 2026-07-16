@@ -57,7 +57,10 @@ export function BookPicker({
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
         <View className="flex-1 bg-black/60 justify-end">
-          <View className="bg-white rounded-t-3xl" style={{ maxHeight: '85%' }}>
+          {/* Fixed height, not maxHeight: a shrink-to-fit sheet slides the
+              header/search bar down toward the keyboard as filtered results
+              narrow, eventually covering the very rows you'd tap. */}
+          <View className="bg-white rounded-t-3xl" style={{ height: '85%' }}>
             {/* Header */}
             <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-neutral-100">
               <Text className="text-base font-serif font-bold text-[#1A1A1A]">{title}</Text>
@@ -86,7 +89,7 @@ export function BookPicker({
               </View>
             </View>
 
-            <ScrollView className="px-5" contentContainerStyle={{ paddingTop: 12, paddingBottom: 24, gap: 16 }}>
+            <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingTop: 12, paddingBottom: 24, gap: 16 }}>
               {showAllRow && (
                 <Pressable
                   onPress={() => select('')}
