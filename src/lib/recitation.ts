@@ -221,6 +221,24 @@ const NUMBER_WORDS = new Set([
  */
 export const isLikelyVerseNumber = (token: string): boolean => /^\d+$/.test(token) || NUMBER_WORDS.has(token);
 
+// Extremely common short function words -- articles, prepositions,
+// conjunctions, "to be", personal pronouns. Speech engines routinely swallow
+// these entirely when spoken quickly ("he condemned sin in the flesh" often
+// transcribes with "in"/"the" just absent, not misheard), which no amount of
+// fuzzy TEXT matching can fix -- there's no wrong word to fuzzy-match
+// against, the token simply never arrives. Grading these strictly produced
+// constant, unfair misses on words the user genuinely said. Deliberately a
+// curated list, not a length rule: short words that carry real doctrinal
+// weight ("God", "sin", "law", "not", "no") are excluded on purpose and
+// still graded normally -- getting THOSE wrong changes meaning.
+const COMMONLY_DROPPED_WORDS = new Set([
+  'a', 'an', 'the', 'of', 'to', 'in', 'on', 'at', 'is', 'it', 'and', 'but', 'or',
+  'as', 'be', 'by', 'he', 'she', 'we', 'i', 'my', 'his', 'her', 'its', 'that',
+  'this', 'for', 'with', 'from', 'are', 'was', 'were', 'am', 'so',
+]);
+
+export const isCommonlyDroppedWord = (token: string): boolean => COMMONLY_DROPPED_WORDS.has(token);
+
 /**
  * Incremental matcher for LIVE recitation: recomputed from scratch on every
  * transcript update (transcripts are the only state, so an engine revising
@@ -273,6 +291,15 @@ export const matchTranscriptLive = (expectedTokens: string[], transcript: string
     // No confident anchor: treat the token as noise and move on — the next
     // spoken word gets a fresh chance against the same position.
   }
+
+  // Forgive commonly-dropped function words the pointer moved past without
+  // ever seeing a matching token -- see COMMONLY_DROPPED_WORDS above. Only
+  // words already behind the final pointer are touched; anything at/after it
+  // hasn't been resolved yet and isn't read by callers regardless.
+  for (let k = 0; k < e; k++) {
+    if (!matched[k] && isCommonlyDroppedWord(expectedTokens[k])) matched[k] = true;
+  }
+
   return { matched, pointer: e };
 };
 
@@ -317,7 +344,12 @@ export const gradeTranscript = (expectedText: string, transcript: string): WordO
       j -= 1;
     }
   }
-  return outcomes;
+
+  // Forgive commonly-dropped function words that landed as a miss (dropped
+  // or substituted) -- same reasoning as matchTranscriptLive above: a
+  // missing "in"/"the" is almost always the engine swallowing it, not a
+  // real recall gap.
+  return outcomes.map((o, idx) => (o === 'missed' && isCommonlyDroppedWord(expected[idx]) ? 'perfect' : o));
 };
 
 // ============================================================================
