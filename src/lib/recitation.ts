@@ -199,6 +199,24 @@ export interface LiveMatchResult {
 // grade re-aligns the whole transcript anyway).
 export const RESYNC_WINDOW = 6;
 
+const NUMBER_WORDS = new Set([
+  'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen',
+  'eighteen', 'nineteen', 'twenty', 'thirty', 'forty', 'fifty', 'sixty',
+  'seventy', 'eighty', 'ninety', 'hundred',
+]);
+
+/**
+ * True for a spoken token that's plausibly a recited verse number ("3",
+ * "twenty", "one hundred") rather than passage text -- either a bare digit
+ * string (some engines transcribe numbers as digits) or a common English
+ * number word. Only ever checked on a token that has ALREADY failed to
+ * match the next expected word (see matchTranscriptLive below), so actually
+ * reciting a number that's really in the verse text ("six days", "two great
+ * lights") still matches normally and is never affected by this.
+ */
+export const isLikelyVerseNumber = (token: string): boolean => /^\d+$/.test(token) || NUMBER_WORDS.has(token);
+
 /**
  * Incremental matcher for LIVE recitation: recomputed from scratch on every
  * transcript update (transcripts are the only state, so an engine revising
@@ -227,6 +245,13 @@ export const matchTranscriptLive = (expectedTokens: string[], transcript: string
       e += 1;
       continue;
     }
+
+    // A spoken verse number ("three", "23") read aloud before/between verses
+    // isn't part of the passage -- discard it outright rather than letting
+    // it search for a resync anchor, so it can never coincidentally
+    // fuzzy-match a real nearby word (e.g. "three" vs. "tree") and wrongly
+    // jump the pointer forward.
+    if (isLikelyVerseNumber(token)) continue;
 
     // Re-anchor: find this token a little further ahead in the passage.
     const windowEnd = Math.min(e + RESYNC_WINDOW, expectedTokens.length - 1);
