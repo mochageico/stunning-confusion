@@ -294,16 +294,11 @@ export const gradeTranscript = (expectedText: string, transcript: string): WordO
 // ============================================================================
 // SPEECH-RECOGNITION ADAPTER
 // ----------------------------------------------------------------------------
-// The drills only ever talk to this interface. Today there is one real
-// implementation (the browser's Web Speech API, live in Chrome/Edge when the
-// app runs on web). On iOS/Android under Expo Go there is no built-in speech
-// engine, so getSpeechRecognizer() returns null and the UI falls back to a
-// typed transcript — the grading pipeline is identical either way.
-//
-// PLUG-IN POINT for native speech: once the app moves to a dev build, install
-// e.g. `expo-speech-recognition`, implement this same interface with it, and
-// return it from getSpeechRecognizer() for Platform.OS !== 'web'. Nothing
-// else in the app needs to change.
+// The drills only ever talk to this interface. Two real implementations:
+// the browser's Web Speech API on web, and `expo-speech-recognition` (native
+// iOS/Android Speech framework, requires a dev-client build -- unavailable in
+// Expo Go, where getSpeechRecognizer() falls back to null and the UI offers a
+// typed transcript instead). The grading pipeline is identical either way.
 // ============================================================================
 
 export interface SpeechRecognizer {
@@ -366,6 +361,115 @@ class WebSpeechRecognizer implements SpeechRecognizer {
   }
 }
 
+// `expo-speech-recognition` ships native code, so it only works in a custom
+// dev client / production build -- NOT in Expo Go, at any SDK version (same
+// reasoning as useGoogleSignIn.ts's lazy require). A plain static `import`
+// executes the native-module lookup the moment the JS bundle loads, which
+// would crash the whole app in Expo Go before a single screen renders --
+// loaded lazily inside a try/catch instead, so Expo Go falls back to null
+// (typed-transcript UI) exactly like before this module existed.
+type SpeechRecognitionModule = typeof import('expo-speech-recognition').ExpoSpeechRecognitionModule;
+
+let cachedSpeechModule: SpeechRecognitionModule | null | undefined;
+
+const loadSpeechRecognitionModule = (): SpeechRecognitionModule | null => {
+  if (cachedSpeechModule !== undefined) return cachedSpeechModule;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    cachedSpeechModule = require('expo-speech-recognition').ExpoSpeechRecognitionModule;
+  } catch {
+    // Native module not present in this binary (Expo Go).
+    cachedSpeechModule = null;
+  }
+  return cachedSpeechModule ?? null;
+};
+
+// Requesting mic/speech permission is async, but this interface's start() is
+// synchronous (fire callbacks, no promise) -- the permission check runs
+// internally and reports through onError if denied. `generation` guards
+// against a stop() landing while that permission prompt is still pending: if
+// the user taps the mic off before the promise resolves, the stale response
+// must not go on to attach listeners and start the native recognizer anyway.
+class NativeSpeechRecognizer implements SpeechRecognizer {
+  private subscriptions: { remove(): void }[] = [];
+  private finalizedText = '';
+  private expectedText = '';
+  private generation = 0;
+
+  constructor(private module: SpeechRecognitionModule) {}
+
+  prime(expectedText: string) {
+    this.expectedText = expectedText;
+  }
+
+  start(callbacks: { onTranscript: (t: string) => void; onEnd: () => void; onError: (m: string) => void }) {
+    this.teardown();
+    this.finalizedText = '';
+    const myGeneration = ++this.generation;
+
+    this.module
+      .requestPermissionsAsync()
+      .then(({ granted }) => {
+        if (myGeneration !== this.generation) return; // stopped/restarted while the prompt was open
+        if (!granted) {
+          callbacks.onError('Microphone or speech recognition permission was denied. Enable it in Settings to use voice recitation.');
+          return;
+        }
+
+        this.subscriptions = [
+          this.module.addListener('result', (event) => {
+            const transcript = event.results[0]?.transcript ?? '';
+            if (event.isFinal) {
+              this.finalizedText = (this.finalizedText + ' ' + transcript).trim();
+              callbacks.onTranscript(this.finalizedText);
+            } else {
+              callbacks.onTranscript((this.finalizedText + ' ' + transcript).trim());
+            }
+          }),
+          this.module.addListener('error', (event) => callbacks.onError(event.message || event.error)),
+          this.module.addListener('end', () => callbacks.onEnd()),
+        ];
+
+        // Contextual vocabulary hint: the exact words this passage contains,
+        // deduplicated -- a real accuracy boost for scripture words a general
+        // language model would otherwise never guess.
+        const contextualStrings = this.expectedText
+          ? Array.from(
+              new Set(
+                this.expectedText
+                  .split(/\s+/)
+                  .map((w) => w.replace(/[^a-zA-Z']/g, ''))
+                  .filter(Boolean)
+              )
+            )
+          : undefined;
+
+        this.module.start({
+          lang: 'en-US',
+          interimResults: true,
+          continuous: true,
+          contextualStrings,
+        });
+      })
+      .catch((err) => callbacks.onError(String(err?.message || err)));
+  }
+
+  stop() {
+    this.generation++;
+    this.teardown();
+    try {
+      this.module.stop();
+    } catch {
+      // already stopped
+    }
+  }
+
+  private teardown() {
+    this.subscriptions.forEach((s) => s.remove());
+    this.subscriptions = [];
+  }
+}
+
 /**
  * Returns a live speech engine when one exists on this platform, else null
  * (callers must offer the typed-transcript fallback).
@@ -375,6 +479,9 @@ export const getSpeechRecognizer = (): SpeechRecognizer | null => {
     const Ctor = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
     return Ctor ? new WebSpeechRecognizer(Ctor) : null;
   }
-  // Native (Expo Go): no built-in engine. See the plug-in note above.
-  return null;
+  // Native dev-client/production build: expo-speech-recognition wraps iOS's
+  // SFSpeech framework / Android's SpeechRecognizer. Still null under Expo
+  // Go, since the native module isn't compiled in there.
+  const nativeModule = loadSpeechRecognitionModule();
+  return nativeModule ? new NativeSpeechRecognizer(nativeModule) : null;
 };

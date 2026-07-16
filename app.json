@@ -37,7 +37,14 @@
       "expo-dev-client",
       "expo-audio",
       "expo-status-bar",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Scripture Memory uses your microphone to grade spoken recitation practice.",
+          "speechRecognitionPermission": "Scripture Memory uses speech recognition to check your spoken recitation against the verse."
+        }
+      ]
     ],
     "extra": {
       "eas": {
