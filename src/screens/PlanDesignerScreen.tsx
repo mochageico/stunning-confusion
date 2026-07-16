@@ -176,7 +176,10 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                 triggerToast('Switched to Custom configuration.');
               }}
               className={`flex-1 rounded-xl p-2.5 justify-between ${
-                preset === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6] shadow-md' : 'border-2 border-[#E5E5E5] bg-white'
+                // No conditional shadow-* classes anywhere in this file: toggling
+                // iOS shadow props on 2+ views in one Fabric commit deadlocks the
+                // JS thread on real devices (bisected on-device, 2026-07-16).
+                preset === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6]' : 'border-2 border-[#E5E5E5] bg-white'
               }`}
               style={{ height: 100 }}
             >
@@ -213,15 +216,22 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               <View className="flex-row justify-between">
                 {DAYS.map((day) => {
                   const isActive = learningDays.includes(day);
+                  const isSabbath = sabbathEnabled && day === sabbathDay;
                   return (
                     <Pressable
                       key={`learn-${day}`}
-                      onPress={() => toggleDay(day, learningDays, setLearningDays)}
+                      onPress={() => {
+                        if (!isActive && isSabbath) {
+                          triggerToast(`${day} is your Sabbath day -- change that first to use it for learning. 🕊️`);
+                          return;
+                        }
+                        toggleDay(day, learningDays, setLearningDays);
+                      }}
                       className={`w-7 h-7 rounded-full border items-center justify-center ${
-                        isActive ? 'bg-[#1A1A1A] border-[#1A1A1A] shadow-sm' : 'bg-white border-neutral-200'
+                        isActive ? 'bg-[#1A1A1A] border-[#1A1A1A]' : isSabbath ? 'bg-neutral-100 border-neutral-200' : 'bg-white border-neutral-200'
                       }`}
                     >
-                      <Text className={`font-sans font-bold text-[10px] ${isActive ? 'text-white' : 'text-neutral-500'}`}>{day}</Text>
+                      <Text className={`font-sans font-bold text-[10px] ${isActive ? 'text-white' : isSabbath ? 'text-neutral-300' : 'text-neutral-500'}`}>{day}</Text>
                     </Pressable>
                   );
                 })}
@@ -270,7 +280,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                           }
                         }}
                         className={`w-7 h-7 rounded-full border items-center justify-center ${
-                          isActive ? 'bg-[#1A1A1A] border-[#1A1A1A] shadow-sm' : 'bg-white border-neutral-200'
+                          isActive ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
                         }`}
                       >
                         <Text className={`font-sans font-bold text-[10px] ${isActive ? 'text-white' : 'text-neutral-500'}`}>
@@ -439,7 +449,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             <Pressable
               onPress={() => setRetentionRigor('custom')}
               className={`flex-1 rounded-xl p-2.5 justify-between ${
-                retentionRigor === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6] shadow-md' : 'border-2 border-[#E5E5E5] bg-white'
+                retentionRigor === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6]' : 'border-2 border-[#E5E5E5] bg-white'
               }`}
               style={{ height: 76 }}
             >
