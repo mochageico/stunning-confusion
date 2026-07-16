@@ -426,6 +426,20 @@ export function resolveChapterAudio(
   return userRecordings.find((r) => r.book.toLowerCase() === book.toLowerCase() && r.chapter === chapter) || null;
 }
 
+// Shared QueueItem -> VerseState mapper for launching a practice session --
+// mirrors the same shape HomeScreen/PracticeModals already build inline, but
+// startReviewSession needs its own copy (below) since it isn't a React
+// component and can't reach a screen-local helper.
+export function mapQueueItemsToVerseStates(items: QueueItem[]): VerseState[] {
+  return items.map((item) => ({
+    book: item.book,
+    chapter: item.chapter,
+    verse: item.verseNumber,
+    text: item.text,
+    status: item.status === 'retained' ? 'memorized' : 'learning',
+  }));
+}
+
 // A recording is left at its original volume unless its peak input level
 // came in hotter than TARGET_PEAK_DB, in which case it's turned down to
 // match -- expo-audio's player volume tops out at 1.0 (the original level),
@@ -505,6 +519,15 @@ export function useAppState() {
   // Practice Overlays
   const [activeModal, setActiveModal] = useState<'listen' | 'learn' | null>(null);
   const [modalVerses, setModalVerses] = useState<VerseState[]>([]);
+
+  // Chained review session ("Review All Due") -- groups still to come after
+  // the one currently showing in the overlay above. A ref (not state) since
+  // it's only ever read/written by the session functions below, never
+  // rendered directly; reviewSessionPosition/Total ARE state because
+  // PracticeModals shows them as a "2 of 5" progress badge.
+  const reviewQueueRef = useRef<QueueItem[][]>([]);
+  const [reviewSessionPosition, setReviewSessionPosition] = useState(0);
+  const [reviewSessionTotal, setReviewSessionTotal] = useState(0);
 
   // Teleprompter / Recording State (fully simulated — no real microphone capture in the web original)
   const [isRecording, setIsRecording] = useState(false);
@@ -3581,6 +3604,55 @@ export function useAppState() {
   };
 
   // ==========================================
+  // CHAINED REVIEW SESSION -- "Review All Due" on Home queues up every
+  // due group (each its own book/chapter cluster) and walks through them
+  // one at a time in the SAME overlay, per explicit user direction ("let
+  // them continuously review... in order, without having to be taken back
+  // to the home screen each time"). Each group is still graded
+  // independently (a separate onUpdateStatus call per group, exactly as if
+  // the user had tapped each group's button one by one) -- only the
+  // navigation between them is automatic.
+  // ==========================================
+  const startReviewSession = (groups: QueueItem[][]) => {
+    const nonEmpty = groups.filter((g) => g.length > 0);
+    if (nonEmpty.length === 0) return;
+    reviewQueueRef.current = nonEmpty.slice(1);
+    setReviewSessionTotal(nonEmpty.length);
+    setReviewSessionPosition(1);
+    setModalVerses(mapQueueItemsToVerseStates(nonEmpty[0]));
+    setActiveModal('learn');
+  };
+
+  // Called after a group is graded/logged (never after an early X-out --
+  // see abortReviewSession) -- moves on to the next queued group in place,
+  // or closes normally if this wasn't a chained session (queue empty) /
+  // it was the last group.
+  const advanceReviewSession = () => {
+    if (reviewQueueRef.current.length === 0) {
+      setActiveModal(null);
+      setModalVerses([]);
+      setReviewSessionPosition(0);
+      setReviewSessionTotal(0);
+      return;
+    }
+    const [next, ...rest] = reviewQueueRef.current;
+    reviewQueueRef.current = rest;
+    setReviewSessionPosition((p) => p + 1);
+    setModalVerses(mapQueueItemsToVerseStates(next));
+  };
+
+  // Explicit exit (the overlay's X button) -- always a full stop, even
+  // mid-session: abandons whatever groups were still queued rather than
+  // skipping to the next one, since tapping X reads as "I'm done for now."
+  const abortReviewSession = () => {
+    reviewQueueRef.current = [];
+    setReviewSessionPosition(0);
+    setReviewSessionTotal(0);
+    setActiveModal(null);
+    setModalVerses([]);
+  };
+
+  // ==========================================
   // COMPUTED METRICS
   // ==========================================
   const totalVersesCount = memoryQueue.length || verses.length || 1;
@@ -4388,6 +4460,11 @@ export function useAppState() {
     triggerMockDueReviews,
     handleUpdateVerseStatus,
     startPractice,
+    startReviewSession,
+    advanceReviewSession,
+    abortReviewSession,
+    reviewSessionPosition,
+    reviewSessionTotal,
 
     // computed metrics
     totalVersesCount,

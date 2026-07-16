@@ -23,13 +23,25 @@ interface PracticeModalsProps {
   type: 'listen' | 'learn';
   verses: VerseState[];
   allVerses?: VerseState[];
+  // Full stop -- the header X button. Always closes the overlay entirely,
+  // abandoning any queued chained-session groups (see onAdvance).
   onClose: () => void;
+  // Fires after a group is graded/logged (the various "Log ..." buttons
+  // below), instead of onClose. In a chained review session this advances
+  // to the next queued group in place; otherwise it's just a normal close.
+  // Falls back to onClose when absent, so callers that don't care about
+  // sessions (e.g. a bare single-group practice launch) still work.
+  onAdvance?: () => void;
   onUpdateStatus: (
     versesToUpdate: VerseState[],
     newStatus: 'memorized' | 'learning',
     customDrillType?: 'speak' | 'type' | 'reveal',
     opts?: { perfect?: boolean }
   ) => void;
+  // Chained-review-session progress ("2 of 5"), shown in the header when
+  // sessionTotal > 1. Both default to 0/undefined for a non-session launch.
+  sessionPosition?: number;
+  sessionTotal?: number;
   memoryQueue?: QueueItem[];
   primingLookahead?: number;
   setPrimingLookahead?: (val: number) => void;
@@ -55,13 +67,17 @@ function PracticeModalsInner({
   verses,
   allVerses,
   onClose,
+  onAdvance,
   onUpdateStatus,
+  sessionPosition,
+  sessionTotal,
   memoryQueue,
   primingLookahead = 30,
   setPrimingLookahead,
   userRecordings = [],
   selectedChapterAudios = {},
 }: PracticeModalsProps) {
+  const handleGroupComplete = onAdvance ?? onClose;
   // ==========================================
   // PLAYLIST / PLAY-SOURCE STATE (Listen mode only)
   // ==========================================
@@ -521,6 +537,18 @@ function PracticeModalsInner({
     setHiddenWordIndices(new Set(shuffled.slice(0, hideCount)));
   };
 
+  // A chained review session (see advanceReviewSession in useAppState.ts)
+  // swaps `verses` in place on the SAME mounted PracticeModals instance --
+  // no unmount/remount happens between groups, since the overlay itself
+  // stays up the whole session. Without this, the next group would inherit
+  // the previous group's recitePointer/outcomes/finished state, which are
+  // meaningless (even out of bounds) against a differently-sized passage.
+  useEffect(() => {
+    resetReciteGame();
+    regenerateHiddenWords(hideLevel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verses]);
+
   const switchLearnTab = (tab: 'recite' | 'reveal') => {
     if (tab === learnTab) return;
     speechEngineRef.current?.stop();
@@ -720,9 +748,18 @@ function PracticeModalsInner({
             {referenceText}
           </Text>
         </View>
-        <Pressable onPress={onClose} className="w-10 h-10 rounded-full border border-neutral-300 items-center justify-center shrink-0" hitSlop={8}>
-          <X size={18} color="#262626" />
-        </Pressable>
+        <View className="flex-row items-center gap-2">
+          {!!sessionTotal && sessionTotal > 1 && (
+            <View className="bg-neutral-900 px-2.5 py-1 rounded-full">
+              <Text className="text-white text-[10px] font-mono font-bold">
+                {sessionPosition} of {sessionTotal}
+              </Text>
+            </View>
+          )}
+          <Pressable onPress={onClose} className="w-10 h-10 rounded-full border border-neutral-300 items-center justify-center shrink-0" hitSlop={8}>
+            <X size={18} color="#262626" />
+          </Pressable>
+        </View>
       </View>
 
       {/* Main Panel */}
@@ -1298,7 +1335,7 @@ function PracticeModalsInner({
                           <Pressable
                             onPress={() => {
                               onUpdateStatus(verses, 'memorized', drill, { perfect: true });
-                              onClose();
+                              handleGroupComplete();
                             }}
                             className="w-full py-2.5 px-3 bg-emerald-600 rounded-xl flex-row items-center justify-center gap-1.5"
                           >
@@ -1310,7 +1347,7 @@ function PracticeModalsInner({
                             <Pressable
                               onPress={() => {
                                 onUpdateStatus(verses, 'memorized', drill, { perfect: false });
-                                onClose();
+                                handleGroupComplete();
                               }}
                               className="w-full py-2.5 px-3 bg-indigo-600 rounded-xl flex-row items-center justify-center gap-1.5"
                             >
@@ -1325,7 +1362,7 @@ function PracticeModalsInner({
                           <Pressable
                             onPress={() => {
                               onUpdateStatus(verses, 'learning', drill);
-                              onClose();
+                              handleGroupComplete();
                             }}
                             className="w-full py-2.5 px-3 bg-[#1A1A1A] rounded-xl items-center"
                           >
@@ -1401,7 +1438,7 @@ function PracticeModalsInner({
                         <Pressable
                           onPress={() => {
                             onUpdateStatus(verses, 'memorized', 'reveal');
-                            onClose();
+                            handleGroupComplete();
                           }}
                           className="flex-1 py-2 px-1 bg-emerald-600 rounded-xl items-center"
                         >
@@ -1420,7 +1457,7 @@ function PracticeModalsInner({
                       <Pressable
                         onPress={() => {
                           onUpdateStatus(verses, 'learning');
-                          onClose();
+                          handleGroupComplete();
                         }}
                         className="w-full py-1.5 border border-dashed border-neutral-300 rounded-xl items-center"
                       >

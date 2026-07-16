@@ -386,10 +386,10 @@ function AppShell() {
           type={state.activeModal}
           verses={state.modalVerses}
           allVerses={state.verses}
-          onClose={() => {
-            state.setActiveModal(null);
-            state.setModalVerses([]);
-          }}
+          onClose={state.abortReviewSession}
+          onAdvance={state.advanceReviewSession}
+          sessionPosition={state.reviewSessionPosition}
+          sessionTotal={state.reviewSessionTotal}
           onUpdateStatus={state.handleUpdateVerseStatus}
           memoryQueue={state.memoryQueue}
           primingLookahead={state.primingLookahead}

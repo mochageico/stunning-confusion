@@ -60,6 +60,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     triggerMockDueReviews,
     masteryTouches,
     startPractice,
+    startReviewSession,
     triggerDailyPull,
   } = state;
 
@@ -105,6 +106,16 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const handleGroupPractice = (mode: 'listen' | 'learn', items: QueueItem[]) => {
     const vStates = mapQueueToVerseStates(items);
     startPractice(mode, vStates);
+  };
+
+  // "Review All Due" -- chains through every due group (daily, then weekly,
+  // then monthly, same order they're already listed in below) in one
+  // continuous session instead of returning to Home between each.
+  const handleReviewAllDue = () => {
+    const groups = [...groupedDailyReviewing, ...groupedWeeklyReviewing, ...groupedMonthlyReviewing].map(
+      (g) => g.items
+    );
+    startReviewSession(groups);
   };
 
   return (
@@ -272,6 +283,15 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
             {dueReviewItems.length > 0 ? (
               <View style={{ gap: 8 }}>
+                <Pressable
+                  onPress={handleReviewAllDue}
+                  className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center justify-center"
+                >
+                  <Text className="text-white font-sans font-bold text-xs">
+                    Review All Due ({dueReviewItems.length} {dueReviewItems.length === 1 ? 'verse' : 'verses'})
+                  </Text>
+                </Pressable>
+
                 {/* Daily Reviews (Green) */}
                 {groupedDailyReviewing.length > 0 && (
                   <View style={{ gap: 6 }}>
@@ -294,7 +314,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                             onPress={() => handleGroupPractice('learn', group.items)}
                             className="bg-emerald-600 px-2 h-5 items-center justify-center rounded"
                           >
-                            <Text className="text-white text-[9px] font-bold">Learn</Text>
+                            <Text className="text-white text-[9px] font-bold">Review</Text>
                           </Pressable>
                         </View>
                       </View>
@@ -324,7 +344,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                             onPress={() => handleGroupPractice('learn', group.items)}
                             className="bg-blue-600 px-2 h-5 items-center justify-center rounded"
                           >
-                            <Text className="text-white text-[9px] font-bold">Learn</Text>
+                            <Text className="text-white text-[9px] font-bold">Review</Text>
                           </Pressable>
                         </View>
                       </View>
@@ -354,7 +374,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                             onPress={() => handleGroupPractice('learn', group.items)}
                             className="bg-amber-600 px-2 h-5 items-center justify-center rounded"
                           >
-                            <Text className="text-white text-[9px] font-bold">Learn</Text>
+                            <Text className="text-white text-[9px] font-bold">Review</Text>
                           </Pressable>
                         </View>
                       </View>
