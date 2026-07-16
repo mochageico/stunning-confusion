@@ -172,14 +172,18 @@ const roughPhoneticKey = (word: string): string =>
  * Fuzzy spoken-word equality. Speech engines constantly bend a word slightly
  * ("god" -> "got", "separated" -> "separate", "waters" -> "water's" — the
  * last is already handled by normalization). Tolerance scales with length:
- * one edit for 3+ letter words, two for 6+, exact only for the tiny words
+ * one edit for 3+ letter words, two for 5+, exact only for the tiny words
  * where one edit changes identity ("a"/"i", "an"/"at"). Homophone-style
- * spellings match through the phonetic key.
+ * spellings match through the phonetic key. (5+ rather than 6+ as of
+ * 2026-07: users correctly speaking a word still saw it graded missed often
+ * enough that the tolerance needed widening — 5-letter words still have
+ * enough length that a 2-edit match is very unlikely to land on a genuinely
+ * different word.)
  */
 export const wordsRoughlyEqual = (a: string, b: string): boolean => {
   if (a === b) return true;
   const minLen = Math.min(a.length, b.length);
-  if (minLen >= 6 && levenshtein(a, b) <= 2) return true;
+  if (minLen >= 5 && levenshtein(a, b) <= 2) return true;
   if (minLen >= 3 && levenshtein(a, b) <= 1) return true;
   if (minLen >= 3 && roughPhoneticKey(a) === roughPhoneticKey(b)) return true;
   return false;

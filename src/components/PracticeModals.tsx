@@ -279,6 +279,13 @@ function PracticeModalsInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listenSpeed, listenPlayerStatus.isLoaded, currentSegment?.recording?.id]);
 
+  // Playback-volume leveling: tame a recording that came in hot relative to
+  // others (see computePlaybackGain in useAppState.ts). Absent on
+  // recordings from before this field, or imports -- those just play at 1.
+  useEffect(() => {
+    listenPlayer.volume = currentSegment?.recording?.playbackGain ?? 1;
+  }, [listenPlayer, currentSegment?.recording?.id, currentSegment?.recording?.playbackGain]);
+
   // Detects reaching the end of the current verse's segment and advances --
   // to the next verse, possibly switching recordings, or loops/stops at the
   // end of the (possibly selection-restricted) range.
@@ -455,6 +462,17 @@ function PracticeModalsInner({
 
       setTimeout(() => setFlashError(false), 200);
     }
+  };
+
+  // Manual override for a word the matcher marked missed -- speech engines
+  // routinely mis-hear a word the user actually said correctly, and there's
+  // no reliable automatic fix for that, so tapping a red word lets the user
+  // grade it themselves. Also patches finalOutcomes when the session has
+  // already finished (the summary/log buttons read from that snapshot, not
+  // reciteOutcomes, once isFinishedRecite is true).
+  const overrideWordAsCorrect = (idx: number) => {
+    setReciteOutcomes((prev) => ({ ...prev, [idx]: 'perfect' }));
+    setFinalOutcomes((prev) => (prev ? prev.map((o, i) => (i === idx ? 'perfect' : o)) : prev));
   };
 
   // Revealing a word is a miss for grading purposes -- the user didn't
@@ -1015,12 +1033,21 @@ function PracticeModalsInner({
                                     const outcome = reciteOutcomes[g];
                                     const gradeClass =
                                       outcome === 'missed'
-                                        ? 'text-red-600'
+                                        ? 'text-red-600 underline decoration-dotted decoration-red-300'
                                         : outcome === 'close'
                                           ? 'text-amber-600'
                                           : 'text-neutral-900';
+                                    // Missed words are tappable -- the speech
+                                    // engine mis-hears plenty of words the
+                                    // user actually said right, and there's
+                                    // no reliable automatic fix, so this is
+                                    // the manual escape valve.
                                     return (
-                                      <Text key={idx} className={`font-serif text-[15px] font-semibold ${gradeClass}`}>
+                                      <Text
+                                        key={idx}
+                                        className={`font-serif text-[15px] font-semibold ${gradeClass}`}
+                                        onPress={outcome === 'missed' ? () => overrideWordAsCorrect(g) : undefined}
+                                      >
                                         {w}{' '}
                                       </Text>
                                     );

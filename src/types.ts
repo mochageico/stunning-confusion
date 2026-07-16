@@ -135,6 +135,14 @@ export interface Recording {
   // Audio flow in RecordScreen) rather than captured live with the mic.
   // Absent/undefined == 'recorded' (every recording before this field existed).
   sourceType?: 'recorded' | 'imported';
+  // Playback-time volume leveling, computed from the peak input level seen
+  // while recording (see computePlaybackGain in useAppState.ts). Only ever
+  // <= 1: it can tame a recording that came in too hot, never boost one that
+  // came in too quiet -- expo-audio's player volume can't exceed the
+  // original level. Absent/undefined == 1 (play at full/original volume),
+  // true for every recording predating this field and for imports (no
+  // metering data was ever captured for those).
+  playbackGain?: number;
 }
 
 export interface GroupedQueueItem {
