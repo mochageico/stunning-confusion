@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { Check, Eye, EyeOff, Info, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Sliders, Sparkles, X } from 'lucide-react-native';
+import { Check, Eye, EyeOff, Info, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Shuffle, Sliders, Sparkles, X } from 'lucide-react-native';
 
 import { VerseState, QueueItem, Recording } from '../types';
 import { resolveChapterAudio } from '../state/useAppState';
@@ -332,12 +332,15 @@ function PracticeModalsInner({
   };
 
   // ==========================================
-  // LEARN MODE — unified Recite (typed + spoken, either channel advances
-  // the same word) and Reveal tabs. Replaces the old separate Type/Speak/
-  // Reveal entry points: every group-practice button in the app now opens
-  // 'learn' and the tab bar below picks the drill.
+  // LEARN MODE — unified Recall (typed + spoken, either channel advances
+  // the same word), Assist (Recall with some words shown as hints, doesn't
+  // count toward mastery), and Reveal tabs. Replaces the old separate
+  // Type/Speak/Reveal entry points: every group-practice button in the app
+  // now opens 'learn' and the tab bar below picks the drill. Internal value
+  // 'recite' is kept for the graded tab (renamed to "Recall" in the UI only)
+  // to avoid touching every reference below.
   // ==========================================
-  const [learnTab, setLearnTab] = useState<'recite' | 'reveal'>('recite');
+  const [learnTab, setLearnTab] = useState<'recite' | 'reveal' | 'assist'>('recite');
 
   // Flat word list across the whole passage -- the single shared "position"
   // both input channels advance, instead of maintaining two separate
@@ -480,10 +483,37 @@ function PracticeModalsInner({
     setSinglePeekedWords({});
   };
 
-  const switchLearnTab = (tab: 'recite' | 'reveal') => {
+  // ==========================================
+  // ASSIST — Recall's identical typed/spoken drill, but future words are
+  // only masked if their flat index landed in this session's random
+  // `hiddenWordIndices` sample (re-rolled every time the passage resets, so
+  // a different subset is hidden each attempt). Never counts toward mastery
+  // or a review -- it's just a lower-stakes warm-up.
+  // ==========================================
+  const [assistHideLevel, setAssistHideLevel] = useState(50);
+  const [hiddenWordIndices, setHiddenWordIndices] = useState<Set<number>>(new Set());
+
+  const regenerateHiddenWords = (level: number) => {
+    const indices = reciteWordObjects.map((_, i) => i);
+    const hideCount = Math.round((level / 100) * indices.length);
+    const shuffled = [...indices].sort(() => Math.random() - 0.5);
+    setHiddenWordIndices(new Set(shuffled.slice(0, hideCount)));
+  };
+
+  const switchLearnTab = (tab: 'recite' | 'reveal' | 'assist') => {
     if (tab === learnTab) return;
     speechEngineRef.current?.stop();
     setIsListeningSpeak(false);
+    // Recall and Assist share the same pointer/outcomes drill state -- moving
+    // into or out of Assist always starts that tab's attempt fresh, so an
+    // assisted run can never be silently completed as a graded Recall run
+    // just by switching tabs afterward.
+    if (tab === 'assist' || learnTab === 'assist') {
+      resetReciteGame();
+    }
+    if (tab === 'assist') {
+      regenerateHiddenWords(assistHideLevel);
+    }
     setLearnTab(tab);
   };
 
@@ -532,7 +562,7 @@ function PracticeModalsInner({
   // backward -- if typing is already ahead of what's been spoken, this is a
   // no-op until speech catches up past that point.
   useEffect(() => {
-    if (learnTab !== 'recite' || isFinishedRecite) return;
+    if ((learnTab !== 'recite' && learnTab !== 'assist') || isFinishedRecite) return;
     if (liveMatch.pointer <= recitePointer) return;
     const from = recitePointer;
     const to = Math.min(liveMatch.pointer, reciteWordObjects.length);
@@ -555,7 +585,7 @@ function PracticeModalsInner({
   // same way it always did; speech now can finish a passage outright too,
   // instead of needing a separate "Finish & Grade" button.
   useEffect(() => {
-    if (learnTab !== 'recite' || isFinishedRecite || reciteWordObjects.length === 0) return;
+    if ((learnTab !== 'recite' && learnTab !== 'assist') || isFinishedRecite || reciteWordObjects.length === 0) return;
     if (recitePointer < reciteWordObjects.length) return;
     const all = reciteWordObjects.map((_, i) => reciteOutcomes[i] || 'missed');
     setFinalOutcomes(all);
@@ -673,7 +703,13 @@ function PracticeModalsInner({
       <View className="flex-row items-center justify-between border-b border-[#1A1A1A] pb-2 mb-3">
         <View>
           <Text className="text-[9px] uppercase tracking-wider text-neutral-500 font-sans font-bold">
-            {type === 'listen' ? 'Audio Player & Looper' : learnTab === 'recite' ? 'Recite Practice' : 'Active Reveal practice'}
+            {type === 'listen'
+              ? 'Audio Player & Looper'
+              : learnTab === 'recite'
+                ? 'Recall Practice'
+                : learnTab === 'assist'
+                  ? 'Assisted Practice'
+                  : 'Active Reveal practice'}
           </Text>
           <Text className="text-base font-serif font-bold text-neutral-900 leading-tight max-w-[280px]" numberOfLines={1}>
             {referenceText}
@@ -908,7 +944,7 @@ function PracticeModalsInner({
         )}
 
         {/* ======================================================== */}
-        {/* LEARN MODE — Recite / Reveal tabs                          */}
+        {/* LEARN MODE — Recall / Assist / Reveal tabs                 */}
         {/* ======================================================== */}
         {type === 'learn' && (
           <View className="flex-1 justify-between relative">
@@ -921,7 +957,7 @@ function PracticeModalsInner({
               </BounceView>
             )}
 
-            {/* Recite / Reveal Tab bar */}
+            {/* Recall / Assist / Reveal Tab bar */}
             <View className="flex-row bg-neutral-100 p-1 rounded-xl mb-3.5 border border-neutral-200 shrink-0">
               <Pressable
                 onPress={() => switchLearnTab('recite')}
@@ -929,7 +965,16 @@ function PracticeModalsInner({
               >
                 <Mic size={12} color={learnTab === 'recite' ? '#ffffff' : '#737373'} />
                 <Text className={`text-[10px] uppercase tracking-wider font-sans font-extrabold ${learnTab === 'recite' ? 'text-white' : 'text-neutral-500'}`}>
-                  Recite
+                  Recall
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => switchLearnTab('assist')}
+                className={`flex-1 py-1.5 rounded-lg flex-row items-center justify-center gap-1.5 ${learnTab === 'assist' ? 'bg-[#1A1A1A]' : ''}`}
+              >
+                <Shuffle size={12} color={learnTab === 'assist' ? '#ffffff' : '#737373'} />
+                <Text className={`text-[10px] uppercase tracking-wider font-sans font-extrabold ${learnTab === 'assist' ? 'text-white' : 'text-neutral-500'}`}>
+                  Assist
                 </Text>
               </Pressable>
               <Pressable
@@ -943,7 +988,7 @@ function PracticeModalsInner({
               </Pressable>
             </View>
 
-            {learnTab === 'recite' ? (
+            {learnTab === 'recite' || learnTab === 'assist' ? (
               !isFinishedRecite ? (
                 <View className="flex-1 justify-between">
                   {/* Passage card frame — typed + spoken progress share one
@@ -970,7 +1015,7 @@ function PracticeModalsInner({
 
                     <ScrollView className="flex-1 mb-2">
                       <Text className="text-[9px] font-sans font-bold text-neutral-400 tracking-wider mb-1">
-                        Recite Practice — {verses.length} {verses.length === 1 ? 'verse' : 'verses'} ({referenceText})
+                        {learnTab === 'assist' ? 'Assisted Practice' : 'Recall Practice'} — {verses.length} {verses.length === 1 ? 'verse' : 'verses'} ({referenceText})
                       </Text>
 
                       <View className="gap-3">
@@ -986,6 +1031,7 @@ function PracticeModalsInner({
                                   const g = isCountedWord ? flatIdx++ : -1;
                                   const isPast = g >= 0 && g < recitePointer;
                                   const isCurrent = g === recitePointer;
+                                  const isGivenHint = learnTab === 'assist' && g >= 0 && !hiddenWordIndices.has(g);
 
                                   if (isPast) {
                                     const outcome = reciteOutcomes[g];
@@ -1008,6 +1054,21 @@ function PracticeModalsInner({
                                     // just render it plainly.
                                     return (
                                       <Text key={idx} className="font-serif text-[15px] text-neutral-800">
+                                        {w}{' '}
+                                      </Text>
+                                    );
+                                  }
+
+                                  if (isGivenHint) {
+                                    // Assist mode: this word wasn't drawn into the
+                                    // hidden sample, so it's shown as a given hint
+                                    // -- still has to be typed/spoken to advance,
+                                    // but isn't a blind guess.
+                                    return (
+                                      <Text
+                                        key={idx}
+                                        className={`font-serif text-[15px] rounded px-1 ${isCurrent ? 'bg-amber-50 text-neutral-600' : 'text-neutral-400'}`}
+                                      >
                                         {w}{' '}
                                       </Text>
                                     );
@@ -1102,9 +1163,38 @@ function PracticeModalsInner({
                     />
                   </View>
 
+                  {/* Assist-only: how many words get hidden this attempt --
+                      changing it or resetting always re-rolls a fresh random
+                      subset, per "different words hidden each time". */}
+                  {learnTab === 'assist' && (
+                    <View className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-1.5">
+                      <View className="flex-row justify-between items-center px-1">
+                        <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">Words Hidden</Text>
+                        <Text className="text-[9px] font-mono font-bold text-neutral-500">{assistHideLevel}% hidden</Text>
+                      </View>
+                      <ChipRow
+                        columns={3}
+                        value={assistHideLevel}
+                        onChange={(v) => {
+                          const level = Number(v);
+                          setAssistHideLevel(level);
+                          resetReciteGame();
+                          regenerateHiddenWords(level);
+                        }}
+                        options={[25, 50, 75].map((level) => ({ id: level, label: `${level}%` }))}
+                      />
+                    </View>
+                  )}
+
                   {/* Options */}
                   <View className="mt-2 flex-row gap-2.5">
-                    <Pressable onPress={resetReciteGame} className="flex-1 py-2 px-3 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5">
+                    <Pressable
+                      onPress={() => {
+                        resetReciteGame();
+                        if (learnTab === 'assist') regenerateHiddenWords(assistHideLevel);
+                      }}
+                      className="flex-1 py-2 px-3 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5"
+                    >
                       <RefreshCw size={12} color="#525252" />
                       <Text className="font-sans font-bold text-xs text-neutral-600">Reset Passage</Text>
                     </Pressable>
@@ -1113,6 +1203,45 @@ function PracticeModalsInner({
                     </Pressable>
                   </View>
                 </View>
+              ) : learnTab === 'assist' ? (
+                /* Assist finish panel -- accuracy feedback only, no mastery/
+                   review logging buttons, since this mode never counts. */
+                (() => {
+                  const summary = summarizeOutcomes(finalOutcomes || []);
+                  const pct = Math.round(summary.accuracy * 100);
+                  return (
+                    <ScrollView className="flex-1" contentContainerClassName="items-center justify-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
+                      <BounceView>
+                        <View className="w-12 h-12 bg-neutral-100 border-2 border-[#1A1A1A] rounded-full items-center justify-center">
+                          <Shuffle size={24} color="#171717" />
+                        </View>
+                      </BounceView>
+                      <View className="items-center">
+                        <Text className="text-lg font-serif font-bold text-neutral-900 leading-tight">Nice practice run!</Text>
+                        <Text className="text-xs text-neutral-500 font-sans mt-0.5 text-center px-6 leading-relaxed">
+                          {pct}% word accuracy with {assistHideLevel}% of words hidden. Assisted practice never counts toward
+                          mastery or a review -- it's just for warming up.
+                        </Text>
+                      </View>
+
+                      <View className="w-full gap-2">
+                        <Pressable
+                          onPress={() => {
+                            resetReciteGame();
+                            regenerateHiddenWords(assistHideLevel);
+                          }}
+                          className="w-full py-2.5 px-3 bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5"
+                        >
+                          <Shuffle size={14} color="#ffffff" />
+                          <Text className="font-sans font-bold text-xs text-white">Practice Again (new words hidden)</Text>
+                        </Pressable>
+                        <Pressable onPress={() => switchLearnTab('recite')} className="w-full py-1 items-center">
+                          <Text className="text-[10.5px] text-neutral-500 font-bold">Try Full Recall Instead</Text>
+                        </Pressable>
+                      </View>
+                    </ScrollView>
+                  );
+                })()
               ) : (
                 /* Graded results panel. The accuracy tier decides which
                    logging actions exist: perfect (no missed words) ->
@@ -1275,7 +1404,7 @@ function PracticeModalsInner({
                           }}
                           className="flex-1 py-2 px-1 bg-indigo-600 rounded-xl items-center"
                         >
-                          <Text className="font-sans font-bold text-[10.5px] text-white">Recite Instead 🎙️</Text>
+                          <Text className="font-sans font-bold text-[10.5px] text-white">Recall Instead 🎙️</Text>
                         </Pressable>
                       </View>
                       <Pressable
