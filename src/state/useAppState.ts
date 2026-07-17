@@ -3499,19 +3499,32 @@ export function useAppState() {
       return;
     }
 
-    const updatedQueue = memoryQueueRef.current.map((item, idx) => {
-      if (idx < 3) {
-        return {
-          ...item,
-          status: 'reviewing' as const,
-          retentionPhase: 'daily' as const,
-          nextReviewDueDate: new Date(Date.now() - 24 * 3600 * 1000).toISOString(), // due yesterday
-          lastReviewDate: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-          currentStreakCount: item.currentStreakCount || 1,
-          totalSuccessfulReviews: item.totalSuccessfulReviews || 1,
-        };
-      }
-      return item;
+    // Marks whatever is ALREADY in spaced review as due right now, preserving
+    // each item's real retentionPhase -- previously this always force-set the
+    // first 3 queue items (by raw array index) to 'daily', which silently
+    // demoted any of those first 3 that were actually weekly/monthly, and
+    // never touched real weekly/monthly items sitting further down the
+    // array at all. On a totally fresh queue with nothing in review yet,
+    // fall back to seeding 3 learning items into Daily so the button still
+    // has something to demonstrate.
+    const reviewingItems = memoryQueueRef.current.filter((item) => item.status === 'reviewing');
+    const usingBootstrap = reviewingItems.length === 0;
+    const targets = usingBootstrap
+      ? memoryQueueRef.current.filter((item) => item.status === 'learning').slice(0, 3)
+      : reviewingItems;
+    const targetIds = new Set(targets.map((item) => item.verseId));
+
+    const updatedQueue = memoryQueueRef.current.map((item) => {
+      if (!targetIds.has(item.verseId)) return item;
+      return {
+        ...item,
+        status: 'reviewing' as const,
+        retentionPhase: usingBootstrap ? ('daily' as const) : item.retentionPhase,
+        nextReviewDueDate: new Date(Date.now() - 24 * 3600 * 1000).toISOString(), // due yesterday
+        lastReviewDate: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
+        currentStreakCount: item.currentStreakCount || 1,
+        totalSuccessfulReviews: item.totalSuccessfulReviews || 1,
+      };
     });
 
     updateMemoryQueue(() => updatedQueue);
@@ -3519,7 +3532,7 @@ export function useAppState() {
     if (auth.currentUser) {
       try {
         const batch = writeBatch(db);
-        updatedQueue.slice(0, 3).forEach((item) => {
+        updatedQueue.filter((item) => targetIds.has(item.verseId)).forEach((item) => {
           const docRef = doc(db, 'users', auth.currentUser!.uid, 'memoryQueue', item.verseId);
           batch.set(docRef, item);
         });
@@ -3528,7 +3541,7 @@ export function useAppState() {
         console.error('Failed to sync mock queue items:', err);
       }
     }
-    triggerToast('🧪 3 verses are now set to DUE for Spaced Repetition reviews!');
+    triggerToast(`🧪 ${targets.length} verse${targets.length === 1 ? '' : 's'} now set to DUE for Spaced Repetition reviews!`);
   };
 
   const handleUpdateVerseStatus = async (
