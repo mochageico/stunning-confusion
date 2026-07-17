@@ -28,6 +28,7 @@ import AudioFeedScreen from './src/screens/AudioFeedScreen';
 import PlanDesignerScreen from './src/screens/PlanDesignerScreen';
 import ActivePlanScreen from './src/screens/ActivePlanScreen';
 import SavedPlansScreen from './src/screens/SavedPlansScreen';
+import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import CommunityGroupDetailScreen from './src/screens/CommunityGroupDetailScreen';
 import CommunityHomeScreen from './src/screens/CommunityHomeScreen';
 import CommunityFindScreen from './src/screens/CommunityFindScreen';
@@ -88,6 +89,8 @@ function Screens({ state }: { state: AppState }) {
         return <ActivePlanScreen state={state} />;
       case 'savedPlans':
         return <SavedPlansScreen state={state} />;
+      case 'memoryCalendar':
+        return <MemoryCalendarScreen state={state} />;
       default:
         return <HomeScreen state={state} />;
     }

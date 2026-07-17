@@ -189,24 +189,6 @@ export interface MemoryPlan {
   updatedAt: string | Date;
 }
 
-// A single deadline-driven memorization target (e.g. "memorize Romans by
-// March 1"), separate from MemoryPlan since it represents *what* and *when*
-// rather than *how* someone studies. v1 supports one active goal at a time.
-// totalVerses/verseIds are cached the moment the range is set/changed, so
-// moving the pace slider or target date afterward is pure arithmetic --
-// no re-fetching scripture text on every interaction.
-export interface MemorizationGoal {
-  book: string;
-  startChapter: number;
-  endChapter: number;
-  startVerse: number; // only restricts range when startChapter === endChapter
-  endVerse: number;
-  targetDate: string; // ISO date string (no time component)
-  totalVerses: number;
-  verseIds: string[]; // ordered verseIds in the range, for front-of-queue enqueueing
-  createdAt: string;
-}
-
 export interface Circle {
   id: string;
   name: string;

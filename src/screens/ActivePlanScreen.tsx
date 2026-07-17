@@ -1,11 +1,11 @@
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, ArrowUp, ArrowDown, Plus, X, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, ArrowUp, ArrowDown, CalendarDays, ChevronRight, Plus, X, Trash2 } from 'lucide-react-native';
 
 import { useState } from 'react';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
-import { FadeInView, ChipRow, useClampedNumberField } from '../components/ui';
+import { FadeInView, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { fetchChapterText, useChapterText } from '../state/useScripture';
 import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
@@ -58,6 +58,7 @@ function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
 export default function ActivePlanScreen({ state }: { state: AppState }) {
   const {
     handleBack,
+    navigateTo,
     learningDays,
     setLearningDays,
     setPreset,
@@ -85,52 +86,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     saveActivePlanRhythm,
     getMemoryLoadForecast,
     cognitiveLoadSensitivity,
-    sabbathEnabled,
-    sabbathDay,
-    memorizationGoal,
-    isCalculatingGoal,
-    setMemorizationGoalRange,
-    clearMemorizationGoal,
-    updateGoalTargetDate,
-    countLearningDaysBetween,
-    dateAfterNLearningDays,
   } = state;
 
   const [isAddingVerses, setIsAddingVerses] = useState(false);
-  const [showGoalForm, setShowGoalForm] = useState(false);
-  const todayForGoal = new Date();
-  const [goalBook, setGoalBook] = useState('Romans');
-  const [goalStartChapter, setGoalStartChapter] = useState(1);
-  const [goalEndChapter, setGoalEndChapter] = useState(1);
-  const [goalStartVerse, setGoalStartVerse] = useState(1);
-  const [goalEndVerse, setGoalEndVerse] = useState(5);
-  const [goalMonth, setGoalMonth] = useState(todayForGoal.getMonth() + 1);
-  const [goalDay, setGoalDay] = useState(todayForGoal.getDate());
-  const [goalYear, setGoalYear] = useState(todayForGoal.getFullYear());
-
-  const startChapterField = useClampedNumberField(
-    goalStartChapter,
-    (n) => {
-      setGoalStartChapter(n);
-      if (n > goalEndChapter) setGoalEndChapter(n);
-    },
-    (n) => Math.max(1, n)
-  );
-  const endChapterField = useClampedNumberField(goalEndChapter, setGoalEndChapter, (n) => Math.max(goalStartChapter, n));
-  const startVerseField = useClampedNumberField(
-    goalStartVerse,
-    (n) => {
-      setGoalStartVerse(n);
-      if (n > goalEndVerse) setGoalEndVerse(n);
-    },
-    (n) => Math.max(1, n)
-  );
-  const endVerseField = useClampedNumberField(goalEndVerse, setGoalEndVerse, (n) => Math.max(goalStartVerse, n));
-  const monthField = useClampedNumberField(goalMonth, setGoalMonth, (n) => Math.min(12, Math.max(1, n)));
-  const dayField = useClampedNumberField(goalDay, setGoalDay, (n) => Math.min(31, Math.max(1, n)));
-  const yearField = useClampedNumberField(goalYear, setGoalYear, (n) =>
-    Math.min(todayForGoal.getFullYear() + 50, Math.max(todayForGoal.getFullYear(), n))
-  );
 
   const addChapterField = useClampedNumberField(selectedAddChapter, setSelectedAddChapter, (n) => Math.max(1, n));
   const addStartVerseField = useClampedNumberField(
@@ -145,14 +103,16 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     Math.max(selectedAddVerse, n)
   );
 
-  // Real verse counts for the "max N" hints next to End Verse fields --
-  // most people don't know offhand how many verses are in a given chapter.
-  const goalChapterId = goalStartChapter === goalEndChapter ? getBookByName(goalBook)?.id || null : null;
-  const { data: goalChapterData } = useChapterText(DEFAULT_TRANSLATION_ID, goalChapterId, goalEndChapter);
+  // Real verse count for the "max N" hint next to End Verse.
   const addChapterId = getBookByName(selectedAddBook)?.id || null;
   const { data: addChapterData } = useChapterText(DEFAULT_TRANSLATION_ID, addChapterId, selectedAddChapter);
 
-  const grouped = groupQueueItems(memoryQueue);
+  // Verses in spaced review (status 'reviewing') are deliberately excluded
+  // here -- the Memory Calendar now shows that half of the picture (which
+  // verses are due which day, Daily/Weekly/Monthly), so listing them again
+  // in a flat queue too was redundant and confusing. Learning/queued/
+  // retained verses -- the ones the calendar doesn't cover -- still show.
+  const grouped = groupQueueItems(memoryQueue.filter((item) => item.status !== 'reviewing'));
 
   const rhythmTargetPlan = savedPlans.find((p) => p.id === editingPlanId) || savedPlans.find((p) => p.isActive) || savedPlans[0];
 
@@ -163,35 +123,6 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
       newVersesPace !== rhythmTargetPlan.newVersesPace ||
       maxReviewCap !== rhythmTargetPlan.maxReviewCap
     : false;
-
-  // Goal progress + live bidirectional pace <-> date recalculation. Both
-  // directions are pure arithmetic off the goal's cached totalVerses, so
-  // moving the pace stepper above or editing the target date below
-  // recomputes instantly with no re-fetching.
-  const goalRemaining = memorizationGoal
-    ? memorizationGoal.verseIds.filter((vid) => {
-        const q = memoryQueue.find((item) => item.verseId === vid);
-        return !q || q.status === 'queued';
-      }).length
-    : 0;
-  const goalRetained = memorizationGoal
-    ? memoryQueue.filter((q) => memorizationGoal.verseIds.includes(q.verseId) && q.status === 'retained').length
-    : 0;
-  const goalDaysNeeded = newVersesPace > 0 ? Math.ceil(goalRemaining / newVersesPace) : 0;
-  const goalProjectedDate = memorizationGoal
-    ? dateAfterNLearningDays(new Date(), goalDaysNeeded, learningDays, sabbathEnabled, sabbathDay)
-    : null;
-  const goalTargetDateObj = memorizationGoal ? new Date(memorizationGoal.targetDate) : null;
-  const goalAvailableDays =
-    memorizationGoal && goalTargetDateObj
-      ? countLearningDaysBetween(new Date(), goalTargetDateObj, learningDays, sabbathEnabled, sabbathDay)
-      : 0;
-  const goalSuggestedPace = memorizationGoal
-    ? goalAvailableDays > 0
-      ? Math.ceil(goalRemaining / goalAvailableDays)
-      : goalRemaining
-    : 0;
-  const formatGoalDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   const moveGroupUp = (idx: number) => {
     if (idx === 0) return;
@@ -406,221 +337,6 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
-        {/* MEMORIZATION GOAL SECTION */}
-        <View style={{ gap: 12 }}>
-          <View className="flex-row justify-between items-center">
-            <View>
-              <Text className="text-sm font-serif font-black text-[#1A1A1A]">Memorization Goal</Text>
-              <Text className="text-[10px] text-neutral-400 mt-0.5">
-                A deadline for a book or chapter range -- a suggestion, not a hard rule.
-              </Text>
-            </View>
-            {!memorizationGoal && (
-              <Pressable
-                onPress={() => setShowGoalForm(!showGoalForm)}
-                className="px-3 py-1.5 bg-[#1A1A1A] rounded-xl flex-row items-center gap-1"
-              >
-                <Plus size={12} color="#ffffff" />
-                <Text className="font-sans font-bold text-xs text-white">Set a Goal</Text>
-              </Pressable>
-            )}
-          </View>
-
-          {memorizationGoal ? (
-            <View className="border-2 border-[#1A1A1A] rounded-2xl p-4 bg-white text-left" style={{ gap: 12 }}>
-              <View className="flex-row justify-between items-start">
-                <View style={{ gap: 2 }}>
-                  <Text className="text-xs font-serif font-black text-[#1A1A1A]">
-                    {memorizationGoal.book}{' '}
-                    {memorizationGoal.startChapter === memorizationGoal.endChapter
-                      ? `${memorizationGoal.startChapter}:${memorizationGoal.startVerse}-${memorizationGoal.endVerse}`
-                      : `${memorizationGoal.startChapter}-${memorizationGoal.endChapter}`}
-                  </Text>
-                  <Text className="text-[9px] text-neutral-400 font-mono">
-                    {goalRetained}/{memorizationGoal.totalVerses} verses fully retained
-                  </Text>
-                </View>
-                <Pressable onPress={clearMemorizationGoal} className="px-2 py-1 border border-neutral-200 rounded-lg">
-                  <Text className="text-[9px] font-sans font-bold text-neutral-500">Clear</Text>
-                </Pressable>
-              </View>
-
-              <View className="bg-neutral-50 rounded-xl p-3" style={{ gap: 4 }}>
-                <Text className="text-[10px] font-sans text-neutral-600 leading-relaxed">
-                  At your current pace (<Text className="font-bold text-[#1A1A1A]">{newVersesPace} verses/day</Text>), you'll
-                  finish around{' '}
-                  <Text className="font-bold text-[#1A1A1A]">
-                    {goalProjectedDate ? formatGoalDate(goalProjectedDate) : '—'}
-                  </Text>
-                  . Adjust "New Verses / Memory Day" above to see this move.
-                </Text>
-                {goalTargetDateObj && (
-                  <Text className="text-[9px] font-sans text-neutral-400">
-                    Your target is {formatGoalDate(goalTargetDateObj)} -- that needs about{' '}
-                    <Text className="font-bold text-neutral-600">{goalSuggestedPace} verses/day</Text> to hit exactly.
-                  </Text>
-                )}
-              </View>
-
-              <View style={{ gap: 4 }}>
-                <Text className="text-[9px] font-bold text-neutral-400 uppercase">Change Target Date</Text>
-                <View className="flex-row gap-2 items-center">
-                  <TextInput
-                    keyboardType="numeric"
-                    {...monthField}
-                    placeholder="MM"
-                    className="w-12 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
-                  />
-                  <Text className="text-neutral-300">/</Text>
-                  <TextInput
-                    keyboardType="numeric"
-                    {...dayField}
-                    placeholder="DD"
-                    className="w-12 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
-                  />
-                  <Text className="text-neutral-300">/</Text>
-                  <TextInput
-                    keyboardType="numeric"
-                    {...yearField}
-                    placeholder="YYYY"
-                    className="w-16 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
-                  />
-                  <Pressable
-                    onPress={() => {
-                      const d = new Date(goalYear, goalMonth - 1, goalDay);
-                      updateGoalTargetDate(d.toISOString());
-                      triggerToast('Goal target date updated.');
-                    }}
-                    className="flex-1 py-2 bg-[#1A1A1A] rounded-xl items-center"
-                  >
-                    <Text className="text-white font-sans font-bold text-[10px]">Update</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          ) : (
-            showGoalForm && (
-              <FadeInView>
-                <View className="border-2 border-[#1A1A1A] rounded-2xl p-4 bg-white text-left" style={{ gap: 16 }}>
-                  <View className="flex-row justify-between items-center pb-2 border-b border-neutral-100">
-                    <Text className="text-xs font-sans font-black text-[#1A1A1A] uppercase tracking-wider">Set a Goal</Text>
-                    <Pressable onPress={() => setShowGoalForm(false)}>
-                      <X size={14} color="#a3a3a3" />
-                    </Pressable>
-                  </View>
-
-                  <View style={{ gap: 4 }}>
-                    <Text className="text-[9px] font-bold text-neutral-400 uppercase">Book</Text>
-                    <BookPicker value={goalBook} onChange={setGoalBook} />
-                  </View>
-
-                  <View className="flex-row gap-2.5">
-                    <View className="flex-1" style={{ gap: 4 }}>
-                      <Text className="text-[9px] font-bold text-neutral-400 uppercase">Start Chapter</Text>
-                      <TextInput
-                        keyboardType="numeric"
-                        {...startChapterField}
-                        className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
-                      />
-                    </View>
-                    <View className="flex-1" style={{ gap: 4 }}>
-                      <Text className="text-[9px] font-bold text-neutral-400 uppercase">End Chapter</Text>
-                      <TextInput
-                        keyboardType="numeric"
-                        {...endChapterField}
-                        className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
-                      />
-                    </View>
-                  </View>
-
-                  {goalStartChapter === goalEndChapter && (
-                    <View className="flex-row gap-2.5">
-                      <View className="flex-1" style={{ gap: 4 }}>
-                        <Text className="text-[9px] font-bold text-neutral-400 uppercase">Start Verse</Text>
-                        <TextInput
-                          keyboardType="numeric"
-                          {...startVerseField}
-                          className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
-                        />
-                      </View>
-                      <View className="flex-1" style={{ gap: 4 }}>
-                        <View className="flex-row items-center justify-between">
-                          <Text className="text-[9px] font-bold text-neutral-400 uppercase">End Verse</Text>
-                          {goalChapterData && (
-                            <Text className="text-[8px] font-mono text-neutral-400">max {goalChapterData.verseCount}</Text>
-                          )}
-                        </View>
-                        <TextInput
-                          keyboardType="numeric"
-                          {...endVerseField}
-                          className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
-                        />
-                      </View>
-                    </View>
-                  )}
-                  <Text className="text-[9px] text-neutral-400 -mt-2">
-                    {goalStartChapter === goalEndChapter
-                      ? 'Pick a small verse range within this one chapter -- a whole chapter (or book!) is unreachable for most people.'
-                      : 'Spanning multiple chapters uses every verse in each one.'}
-                  </Text>
-
-                  <View style={{ gap: 4 }}>
-                    <Text className="text-[9px] font-bold text-neutral-400 uppercase">Target Date</Text>
-                    <View className="flex-row gap-2 items-center">
-                      <TextInput
-                        keyboardType="numeric"
-                        {...monthField}
-                        placeholder="MM"
-                        className="w-14 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
-                      />
-                      <Text className="text-neutral-300">/</Text>
-                      <TextInput
-                        keyboardType="numeric"
-                        {...dayField}
-                        placeholder="DD"
-                        className="w-14 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
-                      />
-                      <Text className="text-neutral-300">/</Text>
-                      <TextInput
-                        keyboardType="numeric"
-                        {...yearField}
-                        placeholder="YYYY"
-                        className="w-20 p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A] text-center"
-                      />
-                    </View>
-                  </View>
-
-                  <View className="flex-row gap-2 justify-end pt-2 border-t border-neutral-100">
-                    <Pressable onPress={() => setShowGoalForm(false)} className="px-4 py-2 border border-neutral-200 rounded-xl">
-                      <Text className="text-neutral-600 font-sans font-bold text-xs">Cancel</Text>
-                    </Pressable>
-                    <Pressable
-                      disabled={isCalculatingGoal}
-                      onPress={async () => {
-                        const d = new Date(goalYear, goalMonth - 1, goalDay);
-                        await setMemorizationGoalRange(
-                          goalBook,
-                          goalStartChapter,
-                          goalEndChapter,
-                          goalStartVerse,
-                          goalEndVerse,
-                          d.toISOString()
-                        );
-                        setShowGoalForm(false);
-                      }}
-                      className={`px-4 py-2 rounded-xl ${isCalculatingGoal ? 'bg-neutral-300' : 'bg-[#1A1A1A]'}`}
-                    >
-                      <Text className="text-white font-sans font-bold text-xs">
-                        {isCalculatingGoal ? 'Calculating…' : 'Calculate & Set Goal'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </FadeInView>
-            )
-          )}
-        </View>
-
         {/* MEMORY QUEUE SECTION */}
         <View style={{ gap: 12 }}>
           <View className="flex-row justify-between items-center">
@@ -772,7 +488,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             </FadeInView>
           )}
 
-          {/* Scrollable Queue List */}
+          {/* Scrollable Queue List -- verses in Spaced Review live in the Memory
+              Calendar now, not here (see the `grouped` filter above). */}
           <ScrollView
             style={{ maxHeight: 360 }}
             className="border border-neutral-100 p-2 rounded-2xl bg-neutral-50/30"
@@ -853,12 +570,16 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                           <Text className="text-[9px] font-sans font-bold text-[#1A1A1A]">Start Learning</Text>
                         </Pressable>
                       )}
+                      {/* Status colors deliberately avoid amber/emerald/black --
+                          those are already used by the Memory Load Forecast
+                          below, and 'reviewing' (which used to live here too)
+                          is gone entirely now that it's shown on the calendar. */}
                       <Text
                         className={`text-[9px] font-sans font-bold px-2 py-0.5 rounded-full border uppercase ${
                           group.status === 'learning'
-                            ? 'bg-amber-50 text-amber-600 border-amber-200'
+                            ? 'bg-violet-50 text-violet-600 border-violet-200'
                             : group.status === 'retained'
-                              ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                              ? 'bg-teal-50 text-teal-600 border-teal-200'
                               : 'bg-neutral-50 text-neutral-400 border-neutral-200'
                         }`}
                       >
@@ -881,6 +602,26 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             )}
           </ScrollView>
         </View>
+
+        {/* MEMORY CALENDAR ENTRY -- its own prominent card, not a small button
+            tucked next to the forecast, since it's the real day-by-day view of
+            everything the forecast below only summarizes in aggregate. */}
+        <Pressable
+          onPress={() => navigateTo('memoryCalendar')}
+          className="rounded-3xl p-5 bg-[#1A1A1A] flex-row items-center"
+          style={{ gap: 14 }}
+        >
+          <View className="w-14 h-14 rounded-2xl bg-violet-500 items-center justify-center shrink-0">
+            <CalendarDays size={26} color="#ffffff" />
+          </View>
+          <View className="flex-1">
+            <Text className="text-white font-serif font-black text-lg">Memory Calendar</Text>
+            <Text className="text-neutral-300 text-[11px] font-sans mt-0.5 leading-relaxed">
+              See every verse coming up, day by day -- Daily, Weekly, and Monthly reviews projected forward.
+            </Text>
+          </View>
+          <ChevronRight size={22} color="#ffffff" />
+        </Pressable>
 
         {/* MEMORY LOAD FORECAST SECTION -- nothing to forecast with an empty queue */}
         {memoryQueue.length > 0 && (

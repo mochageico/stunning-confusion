@@ -52,7 +52,6 @@ import {
   Friend,
   FriendRequest,
   GroupPlan,
-  MemorizationGoal,
   MemoryPlan,
   QueueItem,
   Recording,
@@ -70,6 +69,7 @@ export type ScreenName =
   | 'planDesigner'
   | 'activePlan'
   | 'savedPlans'
+  | 'memoryCalendar'
   | 'memberProfile'
   | 'analyzePlan'
   | 'fullHistory'
@@ -80,7 +80,17 @@ export type ScreenName =
 // Screens() in App.tsx). navigateTo() needs this list so it can switch tabs
 // itself — otherwise navigating to e.g. 'activePlan' from the Profile tab
 // silently no-ops, since the router keeps showing the current tab's screen.
-const HOME_TAB_SCREENS: ScreenName[] = ['home', 'books', 'chapters', 'chapterLanding', 'audioFeed', 'planDesigner', 'activePlan', 'savedPlans'];
+const HOME_TAB_SCREENS: ScreenName[] = [
+  'home',
+  'books',
+  'chapters',
+  'chapterLanding',
+  'audioFeed',
+  'planDesigner',
+  'activePlan',
+  'savedPlans',
+  'memoryCalendar',
+];
 
 export type TabName = 'home' | 'community' | 'record' | 'profile';
 
@@ -346,67 +356,6 @@ const countSabbathDaysInRange = (from: Date, to: Date, sabbathDay: string): numb
   return count;
 };
 
-// Goal planning day-math: shared by both directions of the pace <-> target
-// date recalculation, so "8 verses/day finishes March 1" and "March 1 needs
-// 8 verses/day" are always consistent with each other and with the plan's
-// real learningDays + Sabbath.
-const isRealLearningDay = (date: Date, learningDaysList: string[], sabbathEnabled: boolean, sabbathDay: string): boolean => {
-  const abbrev = DAY_ABBREVS[date.getDay()];
-  if (sabbathEnabled && abbrev === sabbathDay) return false;
-  return learningDaysList.includes(abbrev);
-};
-
-// Counts real learning days from `from` through `to`, inclusive of both ends.
-const countLearningDaysBetween = (
-  from: Date,
-  to: Date,
-  learningDaysList: string[],
-  sabbathEnabled: boolean,
-  sabbathDay: string
-): number => {
-  let count = 0;
-  const cursor = new Date(from);
-  cursor.setHours(0, 0, 0, 0);
-  const end = new Date(to);
-  end.setHours(0, 0, 0, 0);
-  let scanned = 0;
-  while (cursor <= end && scanned < MAX_LEARNING_DAY_SCAN) {
-    if (isRealLearningDay(cursor, learningDaysList, sabbathEnabled, sabbathDay)) count++;
-    cursor.setDate(cursor.getDate() + 1);
-    scanned++;
-  }
-  return count;
-};
-
-// Finds the date of the Nth real learning day starting from (and including)
-// `from`. Returns null (rather than looping forever) if no day of the week
-// is ever a real learning day -- e.g. every learningDay coincides with the
-// Sabbath, or learningDays was toggled down to empty -- since in that case
-// no future date would ever satisfy the search.
-const dateAfterNLearningDays = (
-  from: Date,
-  n: number,
-  learningDaysList: string[],
-  sabbathEnabled: boolean,
-  sabbathDay: string
-): Date | null => {
-  const cursor = new Date(from);
-  cursor.setHours(0, 0, 0, 0);
-  if (n <= 0) return cursor;
-  const hasAnyValidLearningDay = DAY_ABBREVS.some(
-    (abbrev) => !(sabbathEnabled && abbrev === sabbathDay) && learningDaysList.includes(abbrev)
-  );
-  if (!hasAnyValidLearningDay) return null;
-  let count = 0;
-  while (true) {
-    if (isRealLearningDay(cursor, learningDaysList, sabbathEnabled, sabbathDay)) {
-      count++;
-      if (count >= n) return cursor;
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-};
-
 // Resolves which of the user's own recordings represents a given chapter's
 // narration, mirroring the precedence ChapterLandingScreen's "Change"
 // selector already used inline: an explicit user choice always wins;
@@ -611,10 +560,6 @@ export function useAppState() {
   const [sabbathDay, setSabbathDay] = useState<string>('Su');
   const [activeGroupPlan, setActiveGroupPlan] = useState<GroupPlan | null>(null);
   const [viewingGroupDetail, setViewingGroupDetail] = useState<boolean>(false);
-  // Single active deadline-driven goal (e.g. "memorize Romans by March 1").
-  // Loaded/saved alongside the memory plan doc rather than its own collection.
-  const [memorizationGoal, setMemorizationGoal] = useState<MemorizationGoal | null>(null);
-  const [isCalculatingGoal, setIsCalculatingGoal] = useState(false);
 
   // Scripture Circles (real Firestore-backed community groups — see circles/{id}
   // in firestore.rules). myCircles/publicCircles/activeCircle* replace the old
@@ -1648,8 +1593,8 @@ export function useAppState() {
 
       if (auth.currentUser) {
         const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        // merge: true — this doc also holds savedPlans, memorizationGoal and
-        // activeGroupPlanId; a plain setDoc here silently erased all of them.
+        // merge: true — this doc also holds savedPlans and activeGroupPlanId;
+        // a plain setDoc here silently erased both of them.
         await setDoc(
           planRef,
           {
@@ -1774,8 +1719,8 @@ export function useAppState() {
       if (auth.currentUser) {
         try {
           const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-          // merge: true — preserve memorizationGoal/activeGroupPlanId, which
-          // live on this same doc but aren't part of this write.
+          // merge: true — preserve activeGroupPlanId, which lives on this
+          // same doc but isn't part of this write.
           await setDoc(
             planRef,
             {
@@ -1926,8 +1871,8 @@ export function useAppState() {
     if (auth.currentUser) {
       try {
         const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        // merge: true — a plain setDoc here erased memorizationGoal and
-        // activeGroupPlanId every time a plan was saved. The full
+        // merge: true — a plain setDoc here erased activeGroupPlanId every
+        // time a plan was saved. The full
         // planTopLevelFields spread also fixes this write silently dropping
         // the rigor/mastery/sabbath fields.
         await setDoc(
@@ -1988,159 +1933,6 @@ export function useAppState() {
     }
 
     triggerToast(`Memory rhythm saved to "${targetPlan.name}"! 🎯`);
-  };
-
-  // Sets (or replaces) the single active memorization goal: fetches real
-  // verse text for the whole chapter range once (so pace/date recalculation
-  // afterward is pure arithmetic, no re-fetching), then front-of-queues
-  // whichever of those verses aren't already learning/reviewing/retained.
-  // Verses already in progress are left untouched -- a goal doesn't reset
-  // work already underway. setMemoryQueue triggers the existing debounced
-  // auto-sync effect, so no manual queue write is needed here.
-  const setMemorizationGoalRange = async (
-    book: string,
-    startChapter: number,
-    endChapter: number,
-    startVerse: number,
-    endVerse: number,
-    targetDate: string
-  ) => {
-    const bookMeta = getBookByName(book);
-    if (!bookMeta) {
-      triggerToast(`Unrecognized book: ${book}`);
-      return;
-    }
-    if (endChapter < startChapter) {
-      triggerToast('End chapter must be on or after the start chapter.');
-      return;
-    }
-    setIsCalculatingGoal(true);
-    try {
-      const verseIds: string[] = [];
-      const candidateItems: { verseId: string; chapter: number; verseNumber: number; text: string }[] = [];
-      let skippedChapters = 0;
-      // Verse bounds only restrict a single-chapter goal (e.g. "Romans 8:1-10")
-      // -- multi-chapter goals still use every verse in each chapter, since
-      // "verse 5 of every chapter" isn't a meaningful range.
-      const singleChapter = startChapter === endChapter;
-      for (let ch = startChapter; ch <= endChapter; ch++) {
-        const chapterData = await fetchChapterText(DEFAULT_TRANSLATION_ID, bookMeta.id, ch);
-        if (!chapterData) {
-          skippedChapters++;
-          continue;
-        }
-        let verseNumbers = Object.keys(chapterData.verses)
-          .map(Number)
-          .sort((a, b) => a - b);
-        if (singleChapter) {
-          verseNumbers = verseNumbers.filter((v) => v >= startVerse && v <= endVerse);
-        }
-        verseNumbers.forEach((v) => {
-          const verseId = `${bookMeta.id}_${ch}_${v}`;
-          verseIds.push(verseId);
-          candidateItems.push({ verseId, chapter: ch, verseNumber: v, text: chapterData.verses[String(v)] });
-        });
-      }
-
-      if (verseIds.length === 0) {
-        triggerToast(`Couldn't find any verses for ${book} ${startChapter}${singleChapter ? `:${startVerse}-${endVerse}` : `-${endChapter}`} in the scripture library yet.`);
-        return;
-      }
-
-      const goalIdSet = new Set(verseIds);
-      const existingByVerseId = new Map(memoryQueueRef.current.map((q) => [q.verseId, q]));
-      const frontOfQueue: QueueItem[] = verseIds
-        .map((vid) => {
-          const existing = existingByVerseId.get(vid);
-          if (existing) return existing.status === 'queued' ? existing : null;
-          const candidate = candidateItems.find((c) => c.verseId === vid)!;
-          return {
-            verseId: vid,
-            book,
-            chapter: candidate.chapter,
-            verseNumber: candidate.verseNumber,
-            text: candidate.text,
-            orderIndex: 0,
-            status: 'queued' as const,
-            origin: 'individual' as const,
-            retentionPhase: 'none' as const,
-            dateStarted: null,
-            lastReviewDate: null,
-            nextReviewDueDate: null,
-            currentStreakCount: 0,
-            totalSuccessfulReviews: 0,
-            gracePeriodUsedToday: false,
-          };
-        })
-        .filter((q): q is QueueItem => !!q);
-
-      const rest = memoryQueueRef.current.filter((q) => !(goalIdSet.has(q.verseId) && q.status === 'queued'));
-      const reordered = [...frontOfQueue, ...rest].map((q, i) => ({ ...q, orderIndex: i }));
-      updateMemoryQueue(() => reordered);
-
-      const goal: MemorizationGoal = {
-        book,
-        startChapter,
-        endChapter,
-        startVerse: singleChapter ? startVerse : verseIds.length ? candidateItems[0].verseNumber : 1,
-        endVerse: singleChapter ? endVerse : candidateItems[candidateItems.length - 1]?.verseNumber || 1,
-        targetDate,
-        totalVerses: verseIds.length,
-        verseIds,
-        createdAt: new Date().toISOString(),
-      };
-      setMemorizationGoal(goal);
-
-      if (auth.currentUser) {
-        try {
-          const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-          await setDoc(planRef, { memorizationGoal: goal }, { merge: true });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
-        }
-      }
-
-      const skippedNote =
-        skippedChapters > 0
-          ? ` (${skippedChapters} chapter${skippedChapters > 1 ? 's' : ''} not yet available were skipped)`
-          : '';
-      const rangeLabel = singleChapter
-        ? `${startChapter}:${startVerse}-${endVerse}`
-        : `${startChapter}-${endChapter}`;
-      triggerToast(`Goal set: ${book} ${rangeLabel} — ${verseIds.length} verses${skippedNote}. 🎯`);
-    } finally {
-      setIsCalculatingGoal(false);
-    }
-  };
-
-  const clearMemorizationGoal = async () => {
-    setMemorizationGoal(null);
-    if (auth.currentUser) {
-      try {
-        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(planRef, { memorizationGoal: null }, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
-      }
-    }
-    triggerToast('Memorization goal cleared.');
-  };
-
-  // Updates just the target date on the active goal -- unlike
-  // setMemorizationGoalRange, this doesn't re-fetch scripture text or touch
-  // the queue, since the verse range itself hasn't changed.
-  const updateGoalTargetDate = async (newTargetDate: string) => {
-    if (!memorizationGoal) return;
-    const updated = { ...memorizationGoal, targetDate: newTargetDate };
-    setMemorizationGoal(updated);
-    if (auth.currentUser) {
-      try {
-        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(planRef, { memorizationGoal: updated }, { merge: true });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
-      }
-    }
   };
 
   // Adopts an externally-sourced pacing configuration (e.g. copying another
@@ -2465,8 +2257,6 @@ export function useAppState() {
         if (active) {
           syncDesignerFromPlan(active);
         }
-
-        setMemorizationGoal(planData.memorizationGoal || null);
       } else {
         console.log('Creating new memory plan...');
         setSavedPlans(DEFAULT_PLANS);
@@ -4368,9 +4158,6 @@ export function useAppState() {
     sabbathDay, setSabbathDay,
     activeGroupPlan, setActiveGroupPlan,
     viewingGroupDetail, setViewingGroupDetail,
-    memorizationGoal, isCalculatingGoal,
-    setMemorizationGoalRange, clearMemorizationGoal, updateGoalTargetDate,
-    countLearningDaysBetween, dateAfterNLearningDays,
     myCircles, loadingMyCircles,
     publicCircles, loadingPublicCircles,
     activeCircle, activeCircleMembers, activeCircleGroupPlans, loadingActiveCircle,
