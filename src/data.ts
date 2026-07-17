@@ -1,6 +1,14 @@
 import { VerseState, Recording, MemoryPlan } from './types';
 import { BibleBook } from './types';
 
+// Shared by the Save-Recording dialog (App.tsx) and SettingsScreen's default-
+// visibility picker, so both always offer the exact same 3 choices.
+export const RECORDING_VISIBILITY_OPTIONS: Array<{ id: 'private' | 'circle' | 'public'; label: string; desc: string }> = [
+  { id: 'private', label: 'Private', desc: 'Only you' },
+  { id: 'circle', label: 'Circle', desc: 'Your circles + friends' },
+  { id: 'public', label: 'Public', desc: 'Anyone signed in' },
+];
+
 // The 66-book Protestant canon with standard USFM book IDs and chapter counts.
 // This is structural/bibliographic data (names + chapter counts), not the text
 // of any particular translation — the same list applies regardless of which
@@ -252,10 +260,10 @@ export const SUGGESTED_FEED_RECORDINGS: Recording[] = [
 
 export const DEFAULT_PLANS: MemoryPlan[] = [
   {
-    id: 'genesis-foundations',
-    name: 'Genesis — Foundations Track',
+    id: 'example-plan',
+    name: 'Example Plan',
     preset: 'custom',
-    learningDays: ['M', 'T', 'W', 'Th', 'F'],
+    learningDays: ['M', 'W', 'F'],
     newVersesPace: 3,
     maxReviewCap: 15,
     retentionRigor: 'standard',

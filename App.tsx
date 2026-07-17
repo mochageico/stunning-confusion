@@ -15,6 +15,7 @@ import { Check, Home as HomeIcon, Mic, Pause, Sliders, User, Users, X } from 'lu
 import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
 import { FadeInView } from './src/components/ui';
+import { RECORDING_VISIBILITY_OPTIONS } from './src/data';
 
 import RecordingDetailScreen from './src/screens/RecordingDetailScreen';
 import MemberProfileScreen from './src/screens/MemberProfileScreen';
@@ -29,6 +30,8 @@ import ActivePlanScreen from './src/screens/ActivePlanScreen';
 import SavedPlansScreen from './src/screens/SavedPlansScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen';
 import CommunityGroupDetailScreen from './src/screens/CommunityGroupDetailScreen';
 import StudyPlanDetailScreen from './src/screens/StudyPlanDetailScreen';
 import CommunityHomeScreen from './src/screens/CommunityHomeScreen';
@@ -55,6 +58,17 @@ const TABS = [
   { id: 'profile' as const, label: 'Profile', Icon: User },
 ];
 
+// Concrete, actionable copy for whichever Getting-Started step the user is
+// currently "out doing" -- shown in a persistent banner (below) alongside
+// the Back-to-Guide bar replacing the tab row, so a first-time user always
+// has an explanation of exactly what to tap next, not just a destination.
+const ONBOARDING_STEP_INSTRUCTIONS = [
+  'This is your Plan Designer — the pacing, learning days, and retention settings that drive everything else. Tap "Back to Guide" below when you\'re ready to continue.',
+  'Pick a book, then a chapter. Tap verses to select them, then tap "Add to Queue" in the bar that appears at the bottom.',
+  'Tap "Pull New Verses" to bring today\'s verses into Learning phase, then tap "Learn" on a verse group to start practicing.',
+  'Browse public circles below, or enter an invite code, then tap to join one.',
+];
+
 function Screens({ state }: { state: AppState }) {
   if (state.currentScreen === 'recordingDetail' && state.selectedRecording) {
     return <RecordingDetailScreen state={state} />;
@@ -70,6 +84,9 @@ function Screens({ state }: { state: AppState }) {
   }
   if (state.currentScreen === 'dashboard') {
     return <DashboardScreen state={state} />;
+  }
+  if (state.currentScreen === 'settings') {
+    return <SettingsScreen state={state} />;
   }
   if (state.currentScreen === 'findFriends') {
     return <FindFriendsScreen state={state} />;
@@ -110,12 +127,6 @@ function Screens({ state }: { state: AppState }) {
 
   return <ProfileScreen state={state} />;
 }
-
-const RECORDING_VISIBILITY_OPTIONS: Array<{ id: 'private' | 'circle' | 'public'; label: string; desc: string }> = [
-  { id: 'private', label: 'Private', desc: 'Only you' },
-  { id: 'circle', label: 'Circle', desc: 'Your circles + friends' },
-  { id: 'public', label: 'Public', desc: 'Anyone signed in' },
-];
 
 function SaveRecordingDialog({ state }: { state: AppState }) {
   const {
@@ -347,11 +358,27 @@ function NowPlayingBar({ state }: { state: AppState }) {
 
 function AppShell() {
   const state = useAppState();
+  const onboardingStepIndex = state.onboardingStepInProgress;
+  const onboardingStepActive = onboardingStepIndex !== null;
 
   return (
     <View style={{ flex: 1 }} className="bg-white">
       <StatusBar style="dark" />
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+        {/* While a Getting-Started step is active, this banner sits above
+            whatever real screen the user navigated to -- explains exactly
+            what to do there, since the destination screen itself has no
+            idea it's being visited as part of a guided step. */}
+        {onboardingStepActive && (
+          <View className="bg-indigo-50 border-b border-indigo-200 px-4 py-3">
+            <Text className="text-[8px] font-sans font-extrabold uppercase tracking-widest text-indigo-500">
+              Step {onboardingStepIndex! + 1} of 4
+            </Text>
+            <Text className="text-[11px] font-sans text-indigo-900 leading-relaxed mt-0.5">
+              {ONBOARDING_STEP_INSTRUCTIONS[onboardingStepIndex!]}
+            </Text>
+          </View>
+        )}
         <View style={{ flex: 1 }}>
           <Screens state={state} />
         </View>
@@ -359,20 +386,36 @@ function AppShell() {
 
       <SafeAreaView edges={['bottom', 'left', 'right']}>
         <NowPlayingBar state={state} />
-        <View className="h-16 bg-white border-t border-[#E5E5E5] px-6 flex-row items-center justify-between">
-          {TABS.map((tab) => {
-            const isActive = state.currentTab === tab.id;
-            const Icon = tab.Icon;
-            return (
-              <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1.5">
-                <Icon size={18} color={isActive ? '#1A1A1A' : '#888888'} strokeWidth={isActive ? 2.5 : 2} />
-                <Text className={`text-[10px] font-sans font-bold tracking-tight mt-1 ${isActive ? 'text-[#1A1A1A]' : 'text-[#888888]'}`}>
-                  {tab.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {onboardingStepActive ? (
+          // Replaces the whole tab row -- deliberately the ONLY way out of
+          // wherever this step sent the user, so a first-time user can't
+          // tap Community/Record/Profile mid-step and get lost. The step
+          // itself already navigated to the right tab/screen; any further
+          // in-screen navigation the step needs (e.g. Books -> Chapters ->
+          // ChapterLanding) still works normally since that's not gated by
+          // this bar.
+          <Pressable
+            onPress={state.returnToOnboardingGuide}
+            className="h-16 bg-[#1A1A1A] px-6 flex-row items-center justify-center gap-2"
+          >
+            <Text className="text-white font-sans font-bold text-xs uppercase tracking-wider">← Back to Guide</Text>
+          </Pressable>
+        ) : (
+          <View className="h-16 bg-white border-t border-[#E5E5E5] px-6 flex-row items-center justify-between">
+            {TABS.map((tab) => {
+              const isActive = state.currentTab === tab.id;
+              const Icon = tab.Icon;
+              return (
+                <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1.5">
+                  <Icon size={18} color={isActive ? '#1A1A1A' : '#888888'} strokeWidth={isActive ? 2.5 : 2} />
+                  <Text className={`text-[10px] font-sans font-bold tracking-tight mt-1 ${isActive ? 'text-[#1A1A1A]' : 'text-[#888888]'}`}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </SafeAreaView>
 
       {/* Toast Notification Layer */}
@@ -408,6 +451,18 @@ function AppShell() {
 
       {state.saveRecordingDialog && <SaveRecordingDialog state={state} />}
       {state.showProgressModal && <ProgressModal state={state} />}
+
+      {/* First-run "Getting Started" checklist -- same full-screen-overlay
+          convention as the practice modal above, sitting above the tab
+          router rather than going through currentScreen routing, so it
+          shows regardless of whatever screen/tab was active when it fires. */}
+      {state.showOnboarding && (
+        <View className="absolute inset-0 bg-white z-50">
+          <SafeAreaView style={{ flex: 1 }}>
+            <OnboardingScreen state={state} />
+          </SafeAreaView>
+        </View>
+      )}
     </View>
   );
 }

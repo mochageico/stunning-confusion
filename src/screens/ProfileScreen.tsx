@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pause, Play } from 'lucide-react-native';
+import { Pause, Play, Settings as SettingsIcon } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
@@ -97,12 +97,20 @@ export default function ProfileScreen({ state }: { state: AppState }) {
           </View>
 
           {user ? (
-            <Pressable
-              onPress={handleSignOut}
-              className="px-2.5 py-1.5 border border-red-200 bg-red-50/50 rounded-lg"
-            >
-              <Text className="text-red-600 font-sans font-bold text-[9px] uppercase tracking-wide">Sign Out</Text>
-            </Pressable>
+            <View className="flex-row items-center gap-2">
+              <Pressable
+                onPress={() => navigateTo('settings')}
+                className="w-8 h-8 items-center justify-center border border-neutral-200 rounded-lg bg-white"
+              >
+                <SettingsIcon size={14} color="#404040" />
+              </Pressable>
+              <Pressable
+                onPress={handleSignOut}
+                className="px-2.5 py-1.5 border border-red-200 bg-red-50/50 rounded-lg"
+              >
+                <Text className="text-red-600 font-sans font-bold text-[9px] uppercase tracking-wide">Sign Out</Text>
+              </Pressable>
+            </View>
           ) : (
             <Pressable
               onPress={handleSignIn}
