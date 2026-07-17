@@ -3499,49 +3499,49 @@ export function useAppState() {
       return;
     }
 
-    // Marks whatever is ALREADY in spaced review as due right now, preserving
-    // each item's real retentionPhase -- previously this always force-set the
-    // first 3 queue items (by raw array index) to 'daily', which silently
-    // demoted any of those first 3 that were actually weekly/monthly, and
-    // never touched real weekly/monthly items sitting further down the
-    // array at all. On a totally fresh queue with nothing in review yet,
-    // fall back to seeding 3 learning items into Daily so the button still
-    // has something to demonstrate.
-    const reviewingItems = memoryQueueRef.current.filter((item) => item.status === 'reviewing');
-    const usingBootstrap = reviewingItems.length === 0;
-    const targets = usingBootstrap
-      ? memoryQueueRef.current.filter((item) => item.status === 'learning').slice(0, 3)
-      : reviewingItems;
-    const targetIds = new Set(targets.map((item) => item.verseId));
+    // Undoes today's completed reviews -- and ONLY those. A verse qualifies
+    // solely by having lastReviewDate on today's calendar date (i.e. you
+    // actually completed it today); its nextReviewDueDate gets pushed back
+    // to due so it reappears in Due Reviews. Nothing else about the verse
+    // is touched -- not retentionPhase, not streaks, not lastReviewDate
+    // itself, and nothing reviewed on any earlier day is affected at all.
+    // (An earlier version of this button touched every verse currently in
+    // ANY review phase regardless of when it was last reviewed, which on a
+    // real account with a large memorized library meant hundreds of verses
+    // with real, varied schedules all got collapsed to "due right now" in
+    // one click -- their real per-verse due dates aren't recoverable from
+    // here. This version is deliberately narrow to make that impossible.)
+    const todayStr = new Date().toDateString();
+    const reviewedToday = memoryQueueRef.current.filter(
+      (item) => item.status === 'reviewing' && item.lastReviewDate && new Date(item.lastReviewDate).toDateString() === todayStr
+    );
 
-    const updatedQueue = memoryQueueRef.current.map((item) => {
-      if (!targetIds.has(item.verseId)) return item;
-      return {
-        ...item,
-        status: 'reviewing' as const,
-        retentionPhase: usingBootstrap ? ('daily' as const) : item.retentionPhase,
-        nextReviewDueDate: new Date(Date.now() - 24 * 3600 * 1000).toISOString(), // due yesterday
-        lastReviewDate: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-        currentStreakCount: item.currentStreakCount || 1,
-        totalSuccessfulReviews: item.totalSuccessfulReviews || 1,
-      };
-    });
+    if (reviewedToday.length === 0) {
+      triggerToast("Nothing reviewed today yet to reset.");
+      return;
+    }
+
+    const targetIds = new Set(reviewedToday.map((item) => item.verseId));
+    const resetDueDate = new Date(Date.now() - 24 * 3600 * 1000).toISOString(); // due yesterday
+    const updatedQueue = memoryQueueRef.current.map((item) =>
+      targetIds.has(item.verseId) ? { ...item, nextReviewDueDate: resetDueDate } : item
+    );
 
     updateMemoryQueue(() => updatedQueue);
 
     if (auth.currentUser) {
       try {
         const batch = writeBatch(db);
-        updatedQueue.filter((item) => targetIds.has(item.verseId)).forEach((item) => {
+        reviewedToday.forEach((item) => {
           const docRef = doc(db, 'users', auth.currentUser!.uid, 'memoryQueue', item.verseId);
-          batch.set(docRef, item);
+          batch.update(docRef, { nextReviewDueDate: resetDueDate });
         });
         await batch.commit();
       } catch (err) {
         console.error('Failed to sync mock queue items:', err);
       }
     }
-    triggerToast(`🧪 ${targets.length} verse${targets.length === 1 ? '' : 's'} now set to DUE for Spaced Repetition reviews!`);
+    triggerToast(`🧪 ${reviewedToday.length} verse${reviewedToday.length === 1 ? '' : 's'} reviewed today reset back to due.`);
   };
 
   const handleUpdateVerseStatus = async (

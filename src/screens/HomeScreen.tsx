@@ -259,8 +259,8 @@ export default function HomeScreen({ state }: { state: AppState }) {
                   Are you sure you want to reset reviews for today?
                 </Text>
                 <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
-                  This will mark every verse currently in Spaced Repetition review (Daily, Weekly, or Monthly) as due
-                  right now -- or seed 3 new ones into Daily review if nothing's in review yet.
+                  This undoes any reviews you already completed today -- only verses you reviewed today go back to
+                  due. Nothing reviewed on an earlier day, in any phase, is touched.
                 </Text>
                 <View className="flex-row gap-2 justify-end pt-1">
                   <Pressable
