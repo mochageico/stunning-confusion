@@ -88,6 +88,16 @@ export interface QueueItem {
   refresherReturnPhase?: 'weekly' | 'monthly'; // Phase to resume once the refresher is cleared
   refresherReturnProgress?: number;        // currentStreakCount to restore on return
   refresherTargetUnits?: number;           // Successful reviews needed to clear the refresher (days if refreshing via Daily, weeks if refreshing via Weekly)
+
+  // Chapter review-day anchoring ("Snap-to-Grid"): set once, the first time
+  // ANY chunk of this book+chapter graduates out of Daily review, to
+  // whichever weekday that happened to land on. Every other chunk of the
+  // same chapter looks this up and snaps its own Weekly/Monthly due dates
+  // onto it instead of drifting onto its own independent schedule -- so a
+  // chapter learned in scattered daily pieces still converges onto one
+  // shared review day. Never overwritten once set; absent on verses that
+  // haven't graduated out of Daily yet (or predate this feature).
+  chapterReviewAnchorDay?: string; // a DAY_ABBREVS value, e.g. 'M', 'Th'
 }
 
 export interface VerseTimestamp {

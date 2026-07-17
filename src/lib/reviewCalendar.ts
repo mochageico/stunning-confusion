@@ -62,6 +62,35 @@ const addDays = (date: Date, days: number, sabbathEnabled: boolean, sabbathDay: 
   return advancePastSabbath(result, sabbathEnabled, sabbathDay);
 };
 
+// Chapter review-day anchoring ("Snap-to-Grid" -- see QueueItem.
+// chapterReviewAnchorDay in types.ts and the matching helpers in
+// useAppState.ts, duplicated here for the same src/lib-must-not-import-the-
+// state-hook reason as DAY_ABBREVS/advancePastSabbath above). Nth future
+// occurrence of `weekday` on/after `from`; n=1 is the very next one.
+const nextOccurrenceOfWeekday = (from: Date, weekday: string, sabbathEnabled: boolean, sabbathDay: string): Date => {
+  const result = new Date(from);
+  result.setHours(0, 0, 0, 0);
+  let scanned = 0;
+  while (DAY_ABBREVS[result.getDay()] !== weekday && scanned < 7) {
+    result.setDate(result.getDate() + 1);
+    scanned++;
+  }
+  return advancePastSabbath(result, sabbathEnabled, sabbathDay);
+};
+
+const nthOccurrenceOfWeekday = (from: Date, weekday: string, n: number, sabbathEnabled: boolean, sabbathDay: string): Date => {
+  const first = nextOccurrenceOfWeekday(from, weekday, sabbathEnabled, sabbathDay);
+  if (n <= 1) return first;
+  const result = new Date(first);
+  result.setDate(result.getDate() + (n - 1) * 7);
+  return advancePastSabbath(result, sabbathEnabled, sabbathDay);
+};
+
+// Has any OTHER verse of this book+chapter already established a shared
+// review-anchor weekday in the REAL (non-simulated) queue?
+const findChapterReviewAnchor = (book: string, chapter: number, queue: QueueItem[]): string | undefined =>
+  queue.find((q) => q.book === book && q.chapter === chapter && q.chapterReviewAnchorDay)?.chapterReviewAnchorDay;
+
 const startOfDay = (date: Date): Date => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -80,8 +109,24 @@ const MAX_ITERATIONS_PER_ITEM = 500;
 /**
  * Projects every future occurrence of ONE reviewing item within
  * [today, windowEnd], assuming every review succeeds (see module doc).
+ *
+ * Chapter review-day anchoring: resolved in three tiers, cheapest/most
+ * authoritative first --
+ *   1. the item's own `chapterReviewAnchorDay`, if a real graduation already set it;
+ *   2. a real sibling verse of the same book+chapter that's already anchored
+ *      (`fullQueue`, the actual current queue, not this simulation);
+ *   3. if neither exists, this item's OWN simulated Daily->Weekly transition
+ *      self-anchors to whatever weekday that lands on, for the rest of this
+ *      item's own projected occurrences. Not shared with other simulated
+ *      items in the same run -- a real cross-item shared simulation would
+ *      catch that, but this is a preview, not a guarantee (see module doc),
+ *      and that's a much bigger rewrite for a rare edge case (two chunks of
+ *      an unanchored chapter both graduating within the same ~60-day window).
+ * Once resolved (any tier), the anchor is fixed for the rest of this item's
+ * simulated Weekly/Monthly occurrences, mirroring handleReviewCompleted
+ * (useAppState.ts) never overwriting an already-set chapterReviewAnchorDay.
  */
-function projectItemOccurrences(item: QueueItem, plan: CalendarPlanSettings, today: Date, windowEnd: Date): ProjectedOccurrence[] {
+function projectItemOccurrences(item: QueueItem, plan: CalendarPlanSettings, fullQueue: QueueItem[], today: Date, windowEnd: Date): ProjectedOccurrence[] {
   if (item.status !== 'reviewing' || !item.nextReviewDueDate) return [];
 
   const occurrences: ProjectedOccurrence[] = [];
@@ -95,6 +140,17 @@ function projectItemOccurrences(item: QueueItem, plan: CalendarPlanSettings, tod
   const refresherTarget = item.refresherTargetUnits || 1;
   const refresherReturnPhase = item.refresherReturnPhase || 'weekly';
   const refresherReturnProgress = item.refresherReturnProgress || 1;
+
+  let anchor: string | undefined = item.chapterReviewAnchorDay || findChapterReviewAnchor(item.book, item.chapter, fullQueue);
+
+  // Schedules n weeks out (1 for Weekly, 4 for Monthly) from the day after
+  // `from`, locked to `anchor` -- mirrors nthOccurrenceOfWeekday(tomorrow,
+  // anchor, n, ...) in useAppState.ts, "tomorrow" here being the day after
+  // this simulated review rather than real-world today.
+  const anchoredAdvance = (from: Date, n: number): Date => {
+    const dayAfter = addDays(from, 1, false, '');
+    return nthOccurrenceOfWeekday(dayAfter, anchor!, n, plan.sabbathEnabled, plan.sabbathDay);
+  };
 
   // An already-overdue item (real due date in the past) is due TODAY, not on
   // its stale original date -- matches computeDayReviewLoad's own "isToday"
@@ -113,11 +169,13 @@ function projectItemOccurrences(item: QueueItem, plan: CalendarPlanSettings, tod
     if (refresherActive) {
       streak += 1;
       if (streak >= refresherTarget) {
-        // Refresher clears -- resume the original phase at its saved progress.
+        // Refresher clears -- resume the original phase at its saved
+        // progress, re-anchoring the same way a real graduation does.
         phase = refresherReturnPhase;
         streak = refresherReturnProgress;
         refresherActive = false;
-        due = addDays(due, refresherReturnPhase === 'monthly' ? 30 : 7, plan.sabbathEnabled, plan.sabbathDay);
+        if (!anchor) anchor = DAY_ABBREVS[due.getDay()];
+        due = anchoredAdvance(due, refresherReturnPhase === 'monthly' ? 4 : 1);
       } else {
         // Refresher cadence matches the CURRENT phase field, which
         // applyMissToItem already set to 'daily' or 'weekly' for the
@@ -133,7 +191,8 @@ function projectItemOccurrences(item: QueueItem, plan: CalendarPlanSettings, tod
       if (streak >= dailyGraduationDays) {
         phase = 'weekly';
         streak = 1;
-        due = addDays(due, 7, plan.sabbathEnabled, plan.sabbathDay);
+        if (!anchor) anchor = DAY_ABBREVS[due.getDay()]; // tier 3: self-anchor
+        due = anchoredAdvance(due, 1);
       } else {
         due = addDays(due, 1, plan.sabbathEnabled, plan.sabbathDay);
       }
@@ -141,14 +200,17 @@ function projectItemOccurrences(item: QueueItem, plan: CalendarPlanSettings, tod
       if (streak >= weeklyGraduationReviews) {
         phase = 'monthly';
         streak = 1;
-        due = addDays(due, 30, plan.sabbathEnabled, plan.sabbathDay);
+        if (!anchor) anchor = DAY_ABBREVS[due.getDay()];
+        due = anchoredAdvance(due, 4);
+      } else if (anchor) {
+        due = anchoredAdvance(due, 1);
       } else {
         due = addDays(due, 7, plan.sabbathEnabled, plan.sabbathDay);
       }
     } else {
       // monthly
       if (streak >= monthlyGraduationReviews) break; // graduates to 'retained' -- stops recurring, matching the real engine
-      due = addDays(due, 30, plan.sabbathEnabled, plan.sabbathDay);
+      due = anchor ? anchoredAdvance(due, 4) : addDays(due, 30, plan.sabbathEnabled, plan.sabbathDay);
     }
   }
 
@@ -176,7 +238,7 @@ export function getMemoryCalendarProjection(queue: QueueItem[], plan: CalendarPl
   // -- cheaper than re-scanning all items for every single day.
   const occurrencesByDateKey = new Map<string, { item: QueueItem; phase: RetentionPhase }[]>();
   reviewingItems.forEach((item) => {
-    projectItemOccurrences(item, plan, today, windowEnd).forEach(({ date, phase }) => {
+    projectItemOccurrences(item, plan, queue, today, windowEnd).forEach(({ date, phase }) => {
       const key = date.toDateString();
       const bucket = occurrencesByDateKey.get(key) || [];
       bucket.push({ item, phase });

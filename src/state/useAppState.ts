@@ -336,6 +336,36 @@ const nextOccurrenceOfWeekday = (from: Date, weekday: string, sabbathEnabled: bo
   return advancePastSabbath(result, sabbathEnabled, sabbathDay);
 };
 
+// Chapter review-day anchoring ("Snap-to-Grid" -- see QueueItem.
+// chapterReviewAnchorDay in types.ts): the Nth future occurrence of
+// `weekday` on/after `from` (n=1 is the very next one). Weekday is
+// invariant under a +7 shift, so jumping whole weeks from the first
+// occurrence keeps this exactly on the anchor day for any n -- this is what
+// lets Monthly reuse the same weekday as Weekly by just asking for n=4.
+const nthOccurrenceOfWeekday = (from: Date, weekday: string, n: number, sabbathEnabled: boolean, sabbathDay: string): Date => {
+  const first = nextOccurrenceOfWeekday(from, weekday, sabbathEnabled, sabbathDay);
+  if (n <= 1) return first;
+  const result = new Date(first);
+  result.setDate(result.getDate() + (n - 1) * 7);
+  return advancePastSabbath(result, sabbathEnabled, sabbathDay);
+};
+
+// Has any OTHER verse of this book+chapter already established a shared
+// review-anchor weekday? Undefined if no chunk of this chapter has ever
+// graduated out of Daily review.
+const findChapterReviewAnchor = (book: string, chapter: number, queue: QueueItem[]): string | undefined =>
+  queue.find((q) => q.book === book && q.chapter === chapter && q.chapterReviewAnchorDay)?.chapterReviewAnchorDay;
+
+const DAY_FULL_NAMES: Record<string, string> = {
+  Su: 'Sundays',
+  M: 'Mondays',
+  T: 'Tuesdays',
+  W: 'Wednesdays',
+  Th: 'Thursdays',
+  F: 'Fridays',
+  S: 'Saturdays',
+};
+
 // Shared iteration cap for the day-by-day scans below, so a corrupted or
 // mistyped date (e.g. a garbled year from a date picker, or a stale due-date
 // far in the past) can't turn a bounded loop into a multi-million-iteration
@@ -3131,6 +3161,12 @@ export function useAppState() {
           // Required per Day" is set above 1.
           updatedItem.currentStreakCount += 1;
 
+          // Chapter review-day anchoring ("Snap-to-Grid"): tomorrow is the
+          // earliest a freshly-computed Weekly/Monthly due date can land,
+          // matching nextDueDateISO's own "at least one day out" convention.
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+
           if (updatedItem.refresherActive) {
             if (updatedItem.currentStreakCount >= (updatedItem.refresherTargetUnits || 1)) {
               const returnPhase = updatedItem.refresherReturnPhase || 'weekly';
@@ -3142,9 +3178,22 @@ export function useAppState() {
               delete updatedItem.refresherReturnPhase;
               delete updatedItem.refresherReturnProgress;
               delete updatedItem.refresherTargetUnits;
-              updatedItem.nextReviewDueDate = nextDueDateISO(returnPhase === 'monthly' ? 30 : 7);
+              // Clearing a refresher is a transition back to steady-state
+              // review, just like a real graduation -- re-anchor the same way.
+              const returnAnchor =
+                updatedItem.chapterReviewAnchorDay ||
+                findChapterReviewAnchor(updatedItem.book, updatedItem.chapter, memoryQueueRef.current) ||
+                DAY_ABBREVS[new Date().getDay()];
+              updatedItem.chapterReviewAnchorDay = returnAnchor;
+              updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(
+                tomorrow,
+                returnAnchor,
+                returnPhase === 'monthly' ? 4 : 1,
+                sabbathEnabled,
+                sabbathDay
+              ).toISOString();
               triggerToast(
-                `Refresher complete! Back to ${returnPhase === 'monthly' ? 'Monthly' : 'Weekly'} review, resuming right where you left off. 🌟`
+                `Refresher complete! Back to ${returnPhase === 'monthly' ? 'Monthly' : 'Weekly'} review, resuming right where you left off, aligned to ${DAY_FULL_NAMES[returnAnchor]}. 🌟`
               );
             } else {
               updatedItem.nextReviewDueDate = nextDueDateISO(updatedItem.retentionPhase === 'weekly' ? 7 : 1);
@@ -3155,8 +3204,15 @@ export function useAppState() {
               updatedItem.retentionPhase = 'weekly';
               updatedItem.currentStreakCount = 1;
               updatedItem.dailyPhaseExtensionDays = 0;
-              updatedItem.nextReviewDueDate = nextDueDateISO(7);
-              triggerToast('Graduated to Weekly Review phase! 🌟');
+              // First graduation out of Daily for this chunk -- adopt a
+              // sibling chunk's existing anchor if this chapter already has
+              // one, otherwise this chunk sets it for the whole chapter.
+              const anchor =
+                findChapterReviewAnchor(updatedItem.book, updatedItem.chapter, memoryQueueRef.current) ||
+                DAY_ABBREVS[new Date().getDay()];
+              updatedItem.chapterReviewAnchorDay = anchor;
+              updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(tomorrow, anchor, 1, sabbathEnabled, sabbathDay).toISOString();
+              triggerToast(`Graduated to Weekly Review phase, aligned to ${DAY_FULL_NAMES[anchor]} with the rest of ${updatedItem.book} ${updatedItem.chapter}! 🌟`);
             } else {
               updatedItem.nextReviewDueDate = nextDueDateISO(1);
               triggerToast('Daily reviews complete! Spaced date advanced. 📅');
@@ -3165,9 +3221,28 @@ export function useAppState() {
             if (updatedItem.currentStreakCount >= weeklyGraduationReviews) {
               updatedItem.retentionPhase = 'monthly';
               updatedItem.currentStreakCount = 1;
-              updatedItem.nextReviewDueDate = nextDueDateISO(30);
-              triggerToast('Graduated to Monthly Review phase! 🌟');
+              // Should already have an anchor from the Daily->Weekly step --
+              // only a legacy pre-feature weekly item transitioning for the
+              // first time under this code would still be missing one.
+              const anchor =
+                updatedItem.chapterReviewAnchorDay ||
+                findChapterReviewAnchor(updatedItem.book, updatedItem.chapter, memoryQueueRef.current) ||
+                DAY_ABBREVS[new Date().getDay()];
+              updatedItem.chapterReviewAnchorDay = anchor;
+              updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(tomorrow, anchor, 4, sabbathEnabled, sabbathDay).toISOString();
+              triggerToast(`Graduated to Monthly Review phase, still aligned to ${DAY_FULL_NAMES[anchor]}! 🌟`);
+            } else if (updatedItem.chapterReviewAnchorDay) {
+              updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(
+                tomorrow,
+                updatedItem.chapterReviewAnchorDay,
+                1,
+                sabbathEnabled,
+                sabbathDay
+              ).toISOString();
+              triggerToast('Weekly review complete! Spaced date advanced. 📅');
             } else {
+              // Not retroactive -- a legacy weekly item with no anchor yet
+              // keeps the old unanchored math until it actually transitions.
               updatedItem.nextReviewDueDate = nextDueDateISO(7);
               triggerToast('Weekly review complete! Spaced date advanced. 📅');
             }
@@ -3177,7 +3252,17 @@ export function useAppState() {
               updatedItem.retentionPhase = 'none';
               updatedItem.nextReviewDueDate = null;
               triggerToast('Successfully RETAINED forever! 🏆🎉');
+            } else if (updatedItem.chapterReviewAnchorDay) {
+              updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(
+                tomorrow,
+                updatedItem.chapterReviewAnchorDay,
+                4,
+                sabbathEnabled,
+                sabbathDay
+              ).toISOString();
+              triggerToast('Monthly review complete! Spaced date advanced. 📅');
             } else {
+              // Not retroactive -- see the Weekly same-phase branch above.
               updatedItem.nextReviewDueDate = nextDueDateISO(30);
               triggerToast('Monthly review complete! Spaced date advanced. 📅');
             }
