@@ -28,6 +28,7 @@ import PlanDesignerScreen from './src/screens/PlanDesignerScreen';
 import ActivePlanScreen from './src/screens/ActivePlanScreen';
 import SavedPlansScreen from './src/screens/SavedPlansScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
+import DashboardScreen from './src/screens/DashboardScreen';
 import CommunityGroupDetailScreen from './src/screens/CommunityGroupDetailScreen';
 import StudyPlanDetailScreen from './src/screens/StudyPlanDetailScreen';
 import CommunityHomeScreen from './src/screens/CommunityHomeScreen';
@@ -66,6 +67,9 @@ function Screens({ state }: { state: AppState }) {
   }
   if (state.currentScreen === 'fullHistory') {
     return <FullHistoryScreen state={state} />;
+  }
+  if (state.currentScreen === 'dashboard') {
+    return <DashboardScreen state={state} />;
   }
   if (state.currentScreen === 'findFriends') {
     return <FindFriendsScreen state={state} />;

@@ -21,16 +21,31 @@ export function HelpTooltip({ text, position = 'top' }: { text: string; position
     <View className="relative ml-1.5 shrink-0">
       <Pressable
         onPress={() => setShow((s) => !s)}
+        style={{ zIndex: 41 }}
         className="w-4 h-4 rounded-full border border-neutral-300 items-center justify-center bg-white/95"
       >
         <Text className="text-[9px] font-sans font-black text-neutral-400">?</Text>
       </Pressable>
       {show && (
-        <View
-          className={`absolute z-50 w-52 p-2.5 bg-white border border-neutral-300 rounded-xl shadow-lg ${tooltipPositionClasses[position]}`}
-        >
-          <Text className="text-[10px] leading-relaxed font-sans font-normal text-neutral-800 text-left">{text}</Text>
-        </View>
+        <>
+          {/* Invisible, deliberately oversized backdrop so a tap ANYWHERE
+              else on screen dismisses the tooltip -- avoids needing a real
+              Modal/portal or measuring the trigger's actual screen
+              coordinates, since RN's position:absolute is only relative to
+              this small wrapper, not the whole viewport. zIndex sits below
+              the trigger (41) so the "?" button itself still toggles
+              correctly, and below the bubble (z-50) so its text stays
+              readable/on top. */}
+          <Pressable
+            onPress={() => setShow(false)}
+            style={{ position: 'absolute', top: -2000, left: -2000, width: 4000, height: 4000, zIndex: 40 }}
+          />
+          <View
+            className={`absolute z-50 w-52 p-2.5 bg-white border border-neutral-300 rounded-xl shadow-lg ${tooltipPositionClasses[position]}`}
+          >
+            <Text className="text-[10px] leading-relaxed font-sans font-normal text-neutral-800 text-left">{text}</Text>
+          </View>
+        </>
       )}
     </View>
   );

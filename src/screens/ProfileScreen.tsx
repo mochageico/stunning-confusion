@@ -11,7 +11,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
   const {
     user,
     triggerToast,
-    memorizedCount,
+    memoryQueue,
     learningCount,
     activityLast15Days,
     memoryStreak,
@@ -39,6 +39,13 @@ export default function ProfileScreen({ state }: { state: AppState }) {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [displayNameInput, setDisplayNameInput] = useState('');
+
+  // "Memorized" here means verses learned -- graduated out of the initial
+  // Learning phase into spaced review (Daily/Weekly/Monthly) or fully
+  // retained, not just the narrower retained-only memorizedCount.
+  const versesLearnedCount = memoryQueue.filter(
+    (item) => item.status === 'reviewing' || item.status === 'retained'
+  ).length;
 
   const handleSignIn = async () => {
     const result = await signInWithGoogle();
@@ -194,7 +201,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
         {/* Calculated Metrics cards (High Contrast) */}
         <View className="flex-row gap-2.5">
           <View className="flex-1 bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-2.5 items-center gap-0.5">
-            <Text className="text-[14px] font-bold text-[#1A1A1A] font-mono">{memorizedCount}</Text>
+            <Text className="text-[14px] font-bold text-[#1A1A1A] font-mono">{versesLearnedCount}</Text>
             <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-wide">memorized</Text>
           </View>
 
@@ -208,6 +215,13 @@ export default function ProfileScreen({ state }: { state: AppState }) {
             <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-wide">memory streak</Text>
           </View>
         </View>
+
+        <Pressable
+          onPress={() => navigateTo('dashboard')}
+          className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center justify-center"
+        >
+          <Text className="text-white font-sans font-bold text-xs">View Full Dashboard 📊</Text>
+        </Pressable>
 
         {/* GitHub-style visual memory grid representation */}
         <View className="gap-1.5">

@@ -9,6 +9,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   limit,
   orderBy,
   query,
@@ -73,6 +74,7 @@ export type ScreenName =
   | 'memberProfile'
   | 'studyPlanDetail'
   | 'fullHistory'
+  | 'dashboard'
   | 'recordingDetail'
   | 'findFriends';
 
@@ -537,6 +539,11 @@ export function useAppState() {
   const [activeModal, setActiveModal] = useState<'listen' | 'learn' | null>(null);
   const [modalVerses, setModalVerses] = useState<VerseState[]>([]);
 
+  // Real, measured cumulative practice time (Dashboard's "Time Studied"),
+  // in seconds. Tracked via the activeModal effect below, not an estimate.
+  const [totalStudySeconds, setTotalStudySeconds] = useState<number>(0);
+  const studySessionStartRef = useRef<number | null>(null);
+
   // Chained review session ("Review All Due") -- groups still to come after
   // the one currently showing in the overlay above. A ref (not state) since
   // it's only ever read/written by the session functions below, never
@@ -878,7 +885,9 @@ export function useAppState() {
 
     if (
       currentScreen === 'memberProfile' ||
+      currentScreen === 'studyPlanDetail' ||
       currentScreen === 'fullHistory' ||
+      currentScreen === 'dashboard' ||
       currentScreen === 'recordingDetail'
     ) {
       setCurrentScreen('home');
@@ -2210,6 +2219,7 @@ export function useAppState() {
 
       if (profileSnap && profileSnap.exists()) {
         setDefaultRecordingVisibility(profileSnap.data().defaultRecordingVisibility || null);
+        setTotalStudySeconds(profileSnap.data().totalStudySeconds || 0);
       }
 
       if (profileSnap && !profileSnap.exists()) {
@@ -2474,6 +2484,11 @@ export function useAppState() {
       setViewingGroupDetail(false);
       setActiveGroupId('');
       setCommunitySubView('home');
+
+      // Same reasoning -- a new sign-in shouldn't show the previous
+      // account's (or guest session's) cumulative practice time.
+      setTotalStudySeconds(0);
+      studySessionStartRef.current = null;
 
       // Clear verses/memoryQueue synchronously, in the same tick as setUser
       // above (React 18 batches these into one render, before the `await`
@@ -3580,6 +3595,43 @@ export function useAppState() {
     setModalVerses([]);
   };
 
+  // Sanity ceiling on any single recorded session -- guards against a
+  // backgrounded/left-open practice overlay (activeModal stays non-null,
+  // e.g. a phone put to sleep mid-session) producing a nonsense multi-hour
+  // "time studied" entry. Same spirit as MAX_LEARNING_DAY_SCAN elsewhere.
+  const MAX_SESSION_SECONDS = 3600;
+
+  const recordStudySession = (elapsedSeconds: number) => {
+    setTotalStudySeconds((prev) => prev + elapsedSeconds);
+    if (auth.currentUser) {
+      updateDoc(doc(db, 'profiles', auth.currentUser.uid), { totalStudySeconds: increment(elapsedSeconds) }).catch(
+        (err) => console.error('Failed to sync study time:', err)
+      );
+    }
+  };
+
+  // Real, measured practice time: activeModal is null whenever no
+  // practice/listen overlay is open, and stays non-null across a chained
+  // multi-group "Review All Due" session (advancing between groups swaps
+  // modalVerses in place without touching activeModal), returning to null
+  // only on a real close -- so this one effect captures exactly one
+  // continuous practice session, with no changes needed in PracticeModals.
+  useEffect(() => {
+    if (activeModal) {
+      if (studySessionStartRef.current === null) {
+        studySessionStartRef.current = Date.now();
+      }
+    } else if (studySessionStartRef.current !== null) {
+      const elapsedSeconds = Math.min(
+        MAX_SESSION_SECONDS,
+        Math.round((Date.now() - studySessionStartRef.current) / 1000)
+      );
+      studySessionStartRef.current = null;
+      if (elapsedSeconds > 0) recordStudySession(elapsedSeconds);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeModal]);
+
   // ==========================================
   // COMPUTED METRICS
   // ==========================================
@@ -3607,15 +3659,21 @@ export function useAppState() {
     });
   });
 
-  const activityLast15Days = Array.from({ length: 15 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (14 - i));
-    const key = localDayKey(d);
-    return {
-      day: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-      count: activityByDay.get(key) || 0,
-    };
-  });
+  // Shared by the 15-day grid (ProfileScreen) and the Dashboard's bigger
+  // 90-day heatmap -- same window construction, just a different length.
+  const buildActivityWindow = (days: number) =>
+    Array.from({ length: days }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (days - 1 - i));
+      const key = localDayKey(d);
+      return {
+        day: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
+        count: activityByDay.get(key) || 0,
+      };
+    });
+
+  const activityLast15Days = buildActivityWindow(15);
+  const activityLast90Days = buildActivityWindow(90);
 
   // Consecutive days of practice counting back from today; 0 for a new/idle account.
   const memoryStreak = (() => {
@@ -4396,7 +4454,9 @@ export function useAppState() {
     untouchedCount,
     memorizedPercent,
     activityLast15Days,
+    activityLast90Days,
     memoryStreak,
+    totalStudySeconds,
     activeChapterVerses,
     activeChapterTextLoading,
     activeChapterTextError,
