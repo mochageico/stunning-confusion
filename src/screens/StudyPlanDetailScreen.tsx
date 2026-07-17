@@ -5,6 +5,7 @@ import { ArrowLeft, Plus } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView, StepperRow, ChipRow, HelpTooltip, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
+import { ALL_BIBLE_BOOKS } from '../data';
 import { StudyPlanMembership } from '../types';
 
 const PRIORITY_OPTIONS: { id: StudyPlanMembership['priority']; label: string }[] = [
@@ -12,6 +13,35 @@ const PRIORITY_OPTIONS: { id: StudyPlanMembership['priority']; label: string }[]
   { id: 'group', label: 'Plan First' },
   { id: 'additive', label: 'Additive' },
 ];
+
+interface VerseIdGroup {
+  key: string;
+  book: string;
+  chapter: number;
+  verses: number[];
+}
+
+// Groups a StudyPlan's flat verseId list ("ROM_8_1") into consecutive
+// book/chapter runs for display -- same array-adjacency grouping convention
+// as groupQueueItems (ActivePlanScreen/HomeScreen), just working off plain
+// verseId strings instead of full QueueItem objects, since a plan's queue
+// is a manager-curated string list, not the viewer's own queue items.
+function groupVerseIds(verseIds: string[]): VerseIdGroup[] {
+  const groups: VerseIdGroup[] = [];
+  verseIds.forEach((id) => {
+    const [bookId, chapterStr, verseStr] = id.split('_');
+    const book = ALL_BIBLE_BOOKS.find((b) => b.id === bookId)?.name || bookId;
+    const chapter = parseInt(chapterStr, 10);
+    const verse = parseInt(verseStr, 10);
+    const last = groups[groups.length - 1];
+    if (last && last.book === book && last.chapter === chapter && verse === last.verses[last.verses.length - 1] + 1) {
+      last.verses.push(verse);
+    } else {
+      groups.push({ key: id, book, chapter, verses: [verse] });
+    }
+  });
+  return groups;
+}
 
 export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
   const {
@@ -216,6 +246,26 @@ export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
                 </View>
               </View>
             </FadeInView>
+          )}
+
+          {plan.verseIds.length > 0 && (
+            <View style={{ gap: 6 }}>
+              {groupVerseIds(plan.verseIds).map((g) => (
+                <View
+                  key={g.key}
+                  className="flex-row items-center justify-between px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg"
+                >
+                  <Text className="text-xs font-serif font-black text-[#1A1A1A]">
+                    {g.book} {g.chapter}:{g.verses.length > 1 ? `${g.verses[0]}-${g.verses[g.verses.length - 1]}` : g.verses[0]}
+                  </Text>
+                  {g.verses.length > 1 && (
+                    <Text className="text-[8px] px-1.5 py-0.5 rounded-full font-sans font-bold bg-neutral-100 text-neutral-600 border border-neutral-200">
+                      {g.verses.length} verses
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
           )}
         </View>
 

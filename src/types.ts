@@ -231,7 +231,6 @@ export interface Circle {
   ownerId: string;              // creator's uid — the only 'leader' in v1 (no promote/demote yet)
   ownerName: string;
   inviteCode: string;            // uppercase, used for private join-by-code
-  pinnedAnnouncement: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -1317,7 +1317,6 @@ export function useAppState() {
       ownerId: uid,
       ownerName: user?.displayName || 'Anonymous Disciple',
       inviteCode,
-      pinnedAnnouncement: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -1451,17 +1450,6 @@ export function useAppState() {
       triggerToast('Removed member from the scripture circle. 🧹');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/members/${memberUid}`);
-    }
-  };
-
-  const pinCircleAnnouncement = async (circleId: string, text: string) => {
-    const trimmed = text.trim();
-    try {
-      await updateDoc(doc(db, 'circles', circleId), { pinnedAnnouncement: trimmed, updatedAt: new Date().toISOString() });
-      setActiveCircle((prev) => (prev ? { ...prev, pinnedAnnouncement: trimmed } : prev));
-      triggerToast('Sponsor announcement pinned! 📣');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}`);
     }
   };
 
@@ -4354,7 +4342,6 @@ export function useAppState() {
     leaveCircle,
     disbandCircle,
     removeCircleMember,
-    pinCircleAnnouncement,
     updateCircleSettings,
     createStudyPlan,
     updateStudyPlan,

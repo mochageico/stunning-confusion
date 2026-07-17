@@ -6,7 +6,6 @@ import {
   Globe,
   Link as LinkIcon,
   Lock,
-  Megaphone,
   Plus,
   Share2,
   Sliders,
@@ -26,7 +25,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     activeCircleStudyPlans,
     loadingActiveCircle,
     updateCircleSettings,
-    pinCircleAnnouncement,
     createStudyPlan,
     deleteStudyPlan,
     removeCircleMember,
@@ -49,11 +47,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     triggerToast,
   } = state;
 
-  // Local, ephemeral inline-form state for the announcement-pin text input —
-  // an uncontrolled web <form> input in the original with no equivalent
-  // global state field.
-  const [announcementDraft, setAnnouncementDraft] = useState('');
-
   const isLeaderOrAdmin = !!activeCircle && !!user && activeCircle.ownerId === user.uid;
 
   const updateActiveCircle = (fields: Partial<Pick<Circle, 'name' | 'description' | 'isPublic'>>) => {
@@ -67,12 +60,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setViewingGroupDetail(false);
     setIsEditingCircleSettings(false);
     setShowCreatePlanForm(false);
-  };
-
-  const handlePinAnnouncement = () => {
-    if (!activeCircle) return;
-    pinCircleAnnouncement(activeCircle.id, announcementDraft);
-    setAnnouncementDraft('');
   };
 
   const handleCreatePlan = async () => {
@@ -120,15 +107,17 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 20 }}>
-        {/* Header Row */}
-        <View className="flex-row items-center justify-between border-b border-[#E5E5E5] pb-3">
-          <View className="flex-row items-center gap-3">
+        {/* Header Row: back, privacy badge, settings */}
+        <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center gap-2.5">
             <Pressable onPress={closeConsole} className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white">
               <ArrowLeft size={14} color="#262626" />
             </Pressable>
-            <View>
-              <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">CIRCLE CONSOLE</Text>
-              <Text className="text-base font-serif font-bold text-[#1A1A1A]">{activeCircle.name}</Text>
+            <View className="flex-row items-center gap-1 bg-neutral-100 px-2.5 py-1 rounded-full">
+              {activeCircle.isPublic ? <Globe size={10} color="#525252" /> : <Lock size={10} color="#525252" />}
+              <Text className="text-[9px] font-sans font-bold text-neutral-600 uppercase tracking-wide">
+                {activeCircle.isPublic ? 'Public Circle' : 'Private Circle'}
+              </Text>
             </View>
           </View>
 
@@ -146,6 +135,28 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
               </Text>
             </Pressable>
           )}
+        </View>
+
+        {/* Hero: name + description, replaces the old small header title and
+            the separate "About" card below with one bigger, clearer block. */}
+        <View className="border-b border-[#E5E5E5] pb-5" style={{ gap: 8 }}>
+          <Text className="text-[10px] uppercase tracking-widest font-extrabold text-neutral-400 font-sans">
+            Scripture Circle
+          </Text>
+          <Text className="text-[26px] leading-tight font-serif font-black text-[#1A1A1A]">{activeCircle.name}</Text>
+          <Text className="text-sm text-neutral-600 leading-relaxed font-sans">
+            {activeCircle.description || 'No description yet.'}
+          </Text>
+          <View className="flex-row gap-6 pt-2">
+            <View>
+              <Text className="text-[8px] text-neutral-400 uppercase tracking-wider">Owner / Sponsor</Text>
+              <Text className="font-semibold text-neutral-700 text-[11px] font-sans mt-0.5">{activeCircle.ownerName}</Text>
+            </View>
+            <View>
+              <Text className="text-[8px] text-neutral-400 uppercase tracking-wider">Your Circle Access</Text>
+              <Text className="font-bold text-neutral-800 text-[11px] font-sans mt-0.5">{isLeaderOrAdmin ? 'Leader' : 'Member'}</Text>
+            </View>
+          </View>
         </View>
 
         {/* EDIT CIRCLE SETTINGS PANEL */}
@@ -224,58 +235,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             </View>
           </FadeInView>
         )}
-
-        {/* PINNED CIRCLE ANNOUNCEMENTS BILLBOARD — moved to the top of the screen */}
-        <View className="bg-amber-50 border border-amber-200 rounded-xl p-4" style={{ gap: 12 }}>
-          <View className="flex-row justify-between items-center">
-            <View className="flex-row items-center gap-1.5">
-              <Megaphone size={13} color="#d97706" />
-              <Text className="text-xs font-sans font-black text-amber-800 uppercase tracking-wider">Pinned Announcement</Text>
-            </View>
-          </View>
-
-          <Text className="text-xs text-amber-900 font-sans font-medium leading-relaxed">
-            {activeCircle.pinnedAnnouncement || 'No current announcements. Encourage your members with a welcome message or meeting updates!'}
-          </Text>
-
-          {isLeaderOrAdmin && (
-            <View className="pt-2 border-t border-amber-200 flex-row gap-1.5">
-              <TextInput
-                value={announcementDraft}
-                onChangeText={setAnnouncementDraft}
-                placeholder="Pin new leader announcement..."
-                placeholderTextColor="#fcd34d"
-                className="flex-1 bg-white border border-amber-200 rounded-lg px-2 py-1 text-xs font-sans text-amber-900"
-              />
-              <Pressable onPress={handlePinAnnouncement} className="bg-amber-600 px-2.5 py-1 rounded-lg items-center justify-center">
-                <Text className="text-white font-bold text-[9px] uppercase tracking-wider">Pin</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-
-        {/* Public/Private indicator — right below the announcement */}
-        <View className="flex-row items-center gap-1.5 px-1">
-          {activeCircle.isPublic ? <Globe size={11} color="#a3a3a3" /> : <Lock size={11} color="#a3a3a3" />}
-          <Text className="capitalize text-neutral-400 text-[10px] font-sans">{activeCircle.isPublic ? 'Public Circle' : 'Private Circle'}</Text>
-        </View>
-
-        {/* About Pacing Circle Card — no "Focus" badge; scripture range now lives on
-            individual shared plans within the circle instead of the circle itself */}
-        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 12 }}>
-          <Text className="text-xs text-neutral-700 leading-relaxed font-sans">{activeCircle.description}</Text>
-
-          <View className="pt-2.5 border-t border-neutral-100 flex-row flex-wrap gap-2">
-            <View className="w-1/2">
-              <Text className="text-[8px] text-neutral-400 uppercase">Owner / Sponsor</Text>
-              <Text className="font-semibold text-neutral-700 text-[10px] font-sans">{activeCircle.ownerName}</Text>
-            </View>
-            <View className="w-1/2">
-              <Text className="text-[8px] text-neutral-400 uppercase">Your Circle Access</Text>
-              <Text className="font-bold text-neutral-800 text-[10px] font-sans">{isLeaderOrAdmin ? 'Leader' : 'Member'}</Text>
-            </View>
-          </View>
-        </View>
 
         {/* STUDY PLANS PANEL */}
         <View style={{ gap: 12 }}>
