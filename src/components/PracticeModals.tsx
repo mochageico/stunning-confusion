@@ -4,7 +4,7 @@ import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-au
 import { Check, Eye, EyeOff, Info, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Shuffle, Sliders, Sparkles, X } from 'lucide-react-native';
 
 import { VerseState, QueueItem, Recording } from '../types';
-import { resolveChapterAudio } from '../state/useAppState';
+import { resolveChapterAudio, isReviewDue } from '../state/useAppState';
 import {
   classifyFirstLetterAttempt,
   getSpeechRecognizer,
@@ -109,7 +109,7 @@ function PracticeModalsInner({
 
         dbLearning = memoryQueue.filter((item) => item.status === 'learning').map(mapQueueItemToVerse);
         dbReviewing = memoryQueue
-          .filter((item) => item.status === 'reviewing' && (!item.nextReviewDueDate || new Date(item.nextReviewDueDate) <= new Date()))
+          .filter((item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate))
           .map(mapQueueItemToVerse);
         dbPriming = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead).map(mapQueueItemToVerse);
       } else {

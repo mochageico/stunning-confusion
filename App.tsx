@@ -18,7 +18,6 @@ import { FadeInView } from './src/components/ui';
 
 import RecordingDetailScreen from './src/screens/RecordingDetailScreen';
 import MemberProfileScreen from './src/screens/MemberProfileScreen';
-import AnalyzePlanScreen from './src/screens/AnalyzePlanScreen';
 import FullHistoryScreen from './src/screens/FullHistoryScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import BooksScreen from './src/screens/BooksScreen';
@@ -30,6 +29,7 @@ import ActivePlanScreen from './src/screens/ActivePlanScreen';
 import SavedPlansScreen from './src/screens/SavedPlansScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import CommunityGroupDetailScreen from './src/screens/CommunityGroupDetailScreen';
+import StudyPlanDetailScreen from './src/screens/StudyPlanDetailScreen';
 import CommunityHomeScreen from './src/screens/CommunityHomeScreen';
 import CommunityFindScreen from './src/screens/CommunityFindScreen';
 import CommunityCreateScreen from './src/screens/CommunityCreateScreen';
@@ -61,8 +61,8 @@ function Screens({ state }: { state: AppState }) {
   if (state.currentScreen === 'memberProfile' && state.selectedUserProfile) {
     return <MemberProfileScreen state={state} />;
   }
-  if (state.currentScreen === 'analyzePlan' && state.selectedUserProfile) {
-    return <AnalyzePlanScreen state={state} />;
+  if (state.currentScreen === 'studyPlanDetail' && state.viewingStudyPlan) {
+    return <StudyPlanDetailScreen state={state} />;
   }
   if (state.currentScreen === 'fullHistory') {
     return <FullHistoryScreen state={state} />;

@@ -17,7 +17,6 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
     loadingSharedPlans,
     sharedPlans,
     joinSharedPlan,
-    viewMemberProfile,
     viewMemberProfileById,
     activityEvents,
     loadingActivityEvents,
@@ -148,7 +147,7 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
                       <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
                         Shared by{' '}
                         <Text
-                          onPress={() => viewMemberProfile(plan.creatorName)}
+                          onPress={() => viewMemberProfileById(plan.creatorId)}
                           className="font-semibold text-[#1A1A1A]"
                         >
                           {plan.creatorName || 'Anonymous'}

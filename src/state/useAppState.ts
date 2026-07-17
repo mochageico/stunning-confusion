@@ -37,9 +37,7 @@ import {
   BOOKS,
   DEFAULT_PLANS,
   DEFAULT_TRANSLATION_ID,
-  DUMMY_PROFILES,
   getBookByName,
-  getProfileForName,
   INITIAL_RECORDINGS,
   INITIAL_VERSES,
   SUGGESTED_FEED_RECORDINGS,
@@ -51,14 +49,16 @@ import {
   CircleMember,
   Friend,
   FriendRequest,
-  GroupPlan,
   MemoryPlan,
   QueueItem,
   Recording,
+  StudyPlan,
+  StudyPlanMembership,
   TouchLog,
   VerseState,
   VerseTimestamp,
 } from '../types';
+import { computeDailyPull, PersonalPacingSettings } from '../lib/studyPlanScheduler';
 
 export type ScreenName =
   | 'home'
@@ -71,7 +71,7 @@ export type ScreenName =
   | 'savedPlans'
   | 'memoryCalendar'
   | 'memberProfile'
-  | 'analyzePlan'
+  | 'studyPlanDetail'
   | 'fullHistory'
   | 'recordingDetail'
   | 'findFriends';
@@ -386,6 +386,44 @@ const countSabbathDaysInRange = (from: Date, to: Date, sabbathDay: string): numb
   return count;
 };
 
+// Back-compat: normalizes a raw Firestore 'groupPlans' doc into the current
+// StudyPlan shape. Docs created before the Study Plan revamp (the old
+// GroupPlan model) have `scriptureRange`/`pacingPerWeek` instead of
+// `verseIds`/`versesPerWeek`, and no `description`/`createdAt`/`updatedAt` --
+// reading one of those directly as a StudyPlan left `verseIds` undefined,
+// crashing any `plan.verseIds.length` in the UI. Same pattern already used
+// for old MemoryPlan docs missing retention-rigor/mastery-touches fields.
+const normalizeStudyPlan = (planId: string, data: any): StudyPlan => ({
+  planId,
+  circleId: data.circleId,
+  name: data.name || 'Untitled Plan',
+  description: data.description || '',
+  managerId: data.managerId,
+  managerName: data.managerName,
+  versesPerWeek: data.versesPerWeek ?? data.pacingPerWeek ?? 3,
+  verseIds: data.verseIds || data.scriptureRange || [],
+  createdAt: data.createdAt || data.startDate || new Date().toISOString(),
+  updatedAt: data.updatedAt || data.startDate || new Date().toISOString(),
+});
+
+// Due-ness is calendar-day granularity, not exact-clock-time -- a review
+// whose nextReviewDueDate falls anywhere on today's calendar date is due
+// NOW, not only once the clock reaches that same time-of-day. Reviews are
+// never day-gated (see project philosophy); comparing exact timestamps
+// silently reintroduced a day-boundary-like gate (a verse graduated at
+// 9pm wouldn't show as due again until 9pm the next day), which is what
+// caused Home's Due Reviews to disagree with the Memory Calendar (which
+// already compared by date, not exact time). Also treats any date whose
+// day has already fully passed as due, matching the old "overdue" case.
+// Exported (not just hook-internal) so components importing pure helpers
+// directly from this module, like PracticeModals' resolveChapterAudio use,
+// can share it too instead of re-deriving the same date logic.
+export function isReviewDue(dueDateISO: string | null | undefined, referenceDate: Date = new Date()): boolean {
+  if (!dueDateISO) return true;
+  const due = new Date(dueDateISO);
+  return due.toDateString() === referenceDate.toDateString() || due.getTime() < referenceDate.getTime();
+}
+
 // Resolves which of the user's own recordings represents a given chapter's
 // narration, mirroring the precedence ChapterLandingScreen's "Change"
 // selector already used inline: an explicit user choice always wins;
@@ -581,14 +619,20 @@ export function useAppState() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 3-Touch Mastery & Group Plan States
+  // 3-Touch Mastery & Study Plan States
   const [masteryTouches, setMasteryTouches] = useState<number>(3);
   const [reviewsRequired, setReviewsRequired] = useState<number>(1);
   // Sabbath: an optional single weekday, off by default, free from both
   // learning and reviewing -- the engine treats it as not existing at all.
   const [sabbathEnabled, setSabbathEnabled] = useState<boolean>(false);
   const [sabbathDay, setSabbathDay] = useState<string>('Su');
-  const [activeGroupPlan, setActiveGroupPlan] = useState<GroupPlan | null>(null);
+  // Every StudyPlan this member has joined (possibly more than one, each with
+  // its own priority setting -- see src/lib/studyPlanScheduler.ts) plus the
+  // resolved StudyPlan docs themselves (versesPerWeek, verseIds, etc.), kept
+  // in sync so the scheduler always has real, current data to work from.
+  const [joinedStudyPlanMemberships, setJoinedStudyPlanMemberships] = useState<StudyPlanMembership[]>([]);
+  const [joinedStudyPlanDetails, setJoinedStudyPlanDetails] = useState<StudyPlan[]>([]);
+  const [viewingStudyPlan, setViewingStudyPlan] = useState<StudyPlan | null>(null);
   const [viewingGroupDetail, setViewingGroupDetail] = useState<boolean>(false);
 
   // Scripture Circles (real Firestore-backed community groups — see circles/{id}
@@ -601,7 +645,7 @@ export function useAppState() {
 
   const [activeCircle, setActiveCircle] = useState<Circle | null>(null);
   const [activeCircleMembers, setActiveCircleMembers] = useState<CircleMember[]>([]);
-  const [activeCircleGroupPlans, setActiveCircleGroupPlans] = useState<GroupPlan[]>([]);
+  const [activeCircleStudyPlans, setActiveCircleStudyPlans] = useState<StudyPlan[]>([]);
   const [loadingActiveCircle, setLoadingActiveCircle] = useState(false);
 
   // "Friends" = real co-members across every circle the user belongs to
@@ -633,16 +677,14 @@ export function useAppState() {
   const [communitySubView, setCommunitySubView] = useState<'home' | 'find' | 'create'>('home');
   const [activeGroupId, setActiveGroupId] = useState<string>('');
 
-  const [showAppStorePreview, setShowAppStorePreview] = useState<boolean>(false);
-
   const [isEditingCircleSettings, setIsEditingCircleSettings] = useState<boolean>(false);
+  // Study Plan creation only asks for a title + description -- pacing and
+  // the verse queue itself are set/built from the plan's own landing page
+  // (StudyPlanDetailScreen), using local ephemeral form state there instead
+  // of more global fields here.
   const [showCreatePlanForm, setShowCreatePlanForm] = useState<boolean>(false);
   const [newPlanName, setNewPlanName] = useState<string>('');
   const [newPlanDesc, setNewPlanDesc] = useState<string>('');
-  const [newPlanBook, setNewPlanBook] = useState<string>('Romans');
-  const [newPlanPacing, setNewPlanPacing] = useState<number>(3);
-  const [newPlanStartVerse, setNewPlanStartVerse] = useState<string>('');
-  const [newPlanEndVerse, setNewPlanEndVerse] = useState<string>('');
 
   // Community Search, Filters & Creation inputs
   const [findSearchQuery, setFindSearchQuery] = useState<string>('');
@@ -658,7 +700,6 @@ export function useAppState() {
   // Active playing of saved rec
   const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
   const [playingRecProgress, setPlayingRecProgress] = useState(0);
-  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Set by seekRecordingToTime when asked to jump to a segment of a recording
   // that wasn't already playing — consumed once playback actually starts.
   const pendingSeekSecondsRef = useRef<number | null>(null);
@@ -837,7 +878,6 @@ export function useAppState() {
 
     if (
       currentScreen === 'memberProfile' ||
-      currentScreen === 'analyzePlan' ||
       currentScreen === 'fullHistory' ||
       currentScreen === 'recordingDetail'
     ) {
@@ -848,14 +888,6 @@ export function useAppState() {
     if (tab === 'home') {
       setCurrentScreen('home');
       setBackHistory([]);
-    }
-  };
-
-  const viewMemberProfile = (name: string) => {
-    const profile = getProfileForName(name);
-    if (profile) {
-      setSelectedUserProfile(profile);
-      navigateTo('memberProfile');
     }
   };
 
@@ -876,6 +908,21 @@ export function useAppState() {
   // SCRIPTURE CIRCLES (real Firestore community groups)
   // ==========================================
   const generateInviteCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+
+  // generateInviteCode() alone had no collision check -- two circles could
+  // theoretically land on the same code. Retries against a real Firestore
+  // uniqueness query (the same one joinCircleByCode already runs) before
+  // accepting one; if genuinely unlucky enough to collide every attempt,
+  // appends a timestamp fragment rather than ever failing circle creation.
+  const generateUniqueInviteCode = async (): Promise<string> => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = generateInviteCode();
+      const q = query(collection(db, 'circles'), where('inviteCode', '==', code));
+      const snap = await getDocs(q);
+      if (snap.empty) return code;
+    }
+    return `${generateInviteCode()}${Date.now().toString(36).slice(-4).toUpperCase()}`;
+  };
 
   const loadMyCircles = async () => {
     if (!auth.currentUser) {
@@ -1231,7 +1278,7 @@ export function useAppState() {
       ]);
       setActiveCircle(circleSnap.exists() ? ({ id: circleSnap.id, ...circleSnap.data() } as Circle) : null);
       setActiveCircleMembers(membersSnap.docs.map((d) => d.data() as CircleMember));
-      setActiveCircleGroupPlans(plansSnap.docs.map((d) => ({ planId: d.id, ...d.data() }) as GroupPlan));
+      setActiveCircleStudyPlans(plansSnap.docs.map((d) => normalizeStudyPlan(d.id, d.data())));
     } catch (err) {
       console.error('Failed to load circle detail:', err);
     } finally {
@@ -1261,6 +1308,7 @@ export function useAppState() {
     const uid = auth.currentUser.uid;
     const circleRef = doc(collection(db, 'circles'));
     const now = new Date().toISOString();
+    const inviteCode = await generateUniqueInviteCode();
     const newCircle: Circle = {
       id: circleRef.id,
       name: trimmedName,
@@ -1268,7 +1316,7 @@ export function useAppState() {
       isPublic,
       ownerId: uid,
       ownerName: user?.displayName || 'Anonymous Disciple',
-      inviteCode: generateInviteCode(),
+      inviteCode,
       pinnedAnnouncement: null,
       createdAt: now,
       updatedAt: now,
@@ -1427,88 +1475,131 @@ export function useAppState() {
     }
   };
 
-  const deployGroupPlan = async (
-    circleId: string,
-    planInput: { name: string; book: string; pacingPerWeek: number; description: string }
-  ) => {
+  // Creation only asks for a title + description -- no book/chapter/speed
+  // up front. Per explicit user direction: real people rarely memorize
+  // whole books together, so the actual verse queue is built incrementally
+  // from the plan's own landing page (addVersesToStudyPlan below), and its
+  // pace (versesPerWeek) is set/edited there too, not at creation time.
+  const createStudyPlan = async (circleId: string, input: { name: string; description: string }) => {
     if (!auth.currentUser) return;
-    const trimmedName = planInput.name.trim();
+    const trimmedName = input.name.trim();
     if (!trimmedName) {
       triggerToast('Please specify a plan title! 🏷️');
       return;
     }
-    const bookId = getBookByName(planInput.book)?.id;
-    if (!bookId) {
-      triggerToast(`Unrecognized book: ${planInput.book}`);
-      return;
-    }
-
-    // Real scripture range: the book's first chapter, first 10 verses (with
-    // real ESV text) — a simple, always-available starting range for a newly
-    // deployed circle plan.
-    const chapterData = await fetchChapterText(DEFAULT_TRANSLATION_ID, bookId, 1);
-    if (!chapterData) {
-      triggerToast(`Couldn't find ${planInput.book} 1 in the scripture library yet.`);
-      return;
-    }
-    const verseNumbers = Object.keys(chapterData.verses)
-      .map(Number)
-      .sort((a, b) => a - b)
-      .slice(0, 10);
-    const scriptureRange = verseNumbers.map((v) => `${bookId}_1_${v}`);
-
     const planRef = doc(collection(db, 'circles', circleId, 'groupPlans'));
-    const newPlan: GroupPlan = {
+    const now = new Date().toISOString();
+    const newPlan: StudyPlan = {
       planId: planRef.id,
       circleId,
       name: trimmedName,
+      description: input.description.trim(),
       managerId: auth.currentUser.uid,
       managerName: user?.displayName || 'Anonymous Disciple',
-      scriptureRange,
-      startDate: new Date().toISOString(),
-      pacingPerWeek: planInput.pacingPerWeek,
-      learningDays: ['Mon', 'Wed', 'Fri'],
-      currentGroupVerseIndex: 0,
-      description:
-        planInput.description.trim() ||
-        `Memorizing together through ${planInput.book} at a pace of ${planInput.pacingPerWeek} verses per week.`,
+      versesPerWeek: 3,
+      verseIds: [],
+      createdAt: now,
+      updatedAt: now,
     };
 
     try {
       await setDoc(planRef, newPlan);
-      setActiveCircleGroupPlans((prev) => [...prev, newPlan]);
-      triggerToast(`Deployed "${trimmedName}"! All circle members synchronized. 🛡️`);
+      setActiveCircleStudyPlans((prev) => [...prev, newPlan]);
+      triggerToast(`Created "${trimmedName}"! Add verses and set a pace from its page. 🛡️`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planRef.id}`);
     }
   };
 
-  const advanceGroupPlanPointer = async (circleId: string, planId: string, nextIndex: number) => {
+  const updateStudyPlan = async (
+    circleId: string,
+    planId: string,
+    fields: Partial<Pick<StudyPlan, 'name' | 'description' | 'versesPerWeek'>>
+  ) => {
     try {
-      await updateDoc(doc(db, 'circles', circleId, 'groupPlans', planId), { currentGroupVerseIndex: nextIndex });
-      setActiveCircleGroupPlans((prev) =>
-        prev.map((p) => (p.planId === planId ? { ...p, currentGroupVerseIndex: nextIndex } : p))
-      );
-      setActiveGroupPlan((prev) => (prev && prev.planId === planId ? { ...prev, currentGroupVerseIndex: nextIndex } : prev));
+      const updatedAt = new Date().toISOString();
+      await updateDoc(doc(db, 'circles', circleId, 'groupPlans', planId), { ...fields, updatedAt });
+      const apply = (p: StudyPlan) => (p.planId === planId ? { ...p, ...fields, updatedAt } : p);
+      setActiveCircleStudyPlans((prev) => prev.map(apply));
+      setJoinedStudyPlanDetails((prev) => prev.map(apply));
+      setViewingStudyPlan((prev) => (prev && prev.planId === planId ? apply(prev) : prev));
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planId}`);
     }
   };
 
-  const deleteGroupPlan = async (circleId: string, planId: string) => {
+  // Manager builds a plan's verse queue incrementally, a handful of verses
+  // at a time, from real scripture text -- rather than committing a whole
+  // book/chapter up front like the old "Deploy New Circle Plan" form did.
+  const addVersesToStudyPlan = async (
+    circleId: string,
+    planId: string,
+    book: string,
+    chapter: number,
+    startVerse: number,
+    endVerse: number
+  ) => {
+    const bookId = getBookByName(book)?.id;
+    if (!bookId) {
+      triggerToast(`Unrecognized book: ${book}`);
+      return;
+    }
+    const chapterData = await fetchChapterText(DEFAULT_TRANSLATION_ID, bookId, chapter);
+    if (!chapterData) {
+      triggerToast(`Couldn't find ${book} ${chapter} in the scripture library yet.`);
+      return;
+    }
+    const lo = Math.min(startVerse, endVerse);
+    const hi = Math.max(startVerse, endVerse);
+    const newVerseIds: string[] = [];
+    for (let v = lo; v <= hi; v++) {
+      if (chapterData.verses[String(v)]) newVerseIds.push(`${bookId}_${chapter}_${v}`);
+    }
+    if (newVerseIds.length === 0) {
+      triggerToast(`No verses found in ${book} ${chapter}:${lo}-${hi}.`);
+      return;
+    }
+
+    const existingPlan = activeCircleStudyPlans.find((p) => p.planId === planId);
+    const mergedVerseIds = Array.from(new Set([...(existingPlan?.verseIds || []), ...newVerseIds]));
+
+    try {
+      const updatedAt = new Date().toISOString();
+      await updateDoc(doc(db, 'circles', circleId, 'groupPlans', planId), { verseIds: mergedVerseIds, updatedAt });
+      const apply = (p: StudyPlan) => (p.planId === planId ? { ...p, verseIds: mergedVerseIds, updatedAt } : p);
+      setActiveCircleStudyPlans((prev) => prev.map(apply));
+      setJoinedStudyPlanDetails((prev) => prev.map(apply));
+      setViewingStudyPlan((prev) => (prev && prev.planId === planId ? apply(prev) : prev));
+
+      // Self-heal the manager's OWN queue immediately if they're also a
+      // member -- other members' queues pick up the new verses the next
+      // time their own session loads (see loadUserData), since a client
+      // can't write into another user's private memoryQueue.
+      if (joinedStudyPlanMemberships.some((m) => m.planId === planId)) {
+        await addStudyPlanVersesToOwnQueue(planId, newVerseIds);
+      }
+
+      triggerToast(`Added ${newVerseIds.length} verse${newVerseIds.length === 1 ? '' : 's'} to the plan. 📖`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planId}`);
+    }
+  };
+
+  const deleteStudyPlan = async (circleId: string, planId: string) => {
     try {
       await deleteDoc(doc(db, 'circles', circleId, 'groupPlans', planId));
-      setActiveCircleGroupPlans((prev) => prev.filter((p) => p.planId !== planId));
-      setActiveGroupPlan((prev) => (prev && prev.planId === planId ? null : prev));
-      triggerToast('Deleted group plan. 🗑️');
+      setActiveCircleStudyPlans((prev) => prev.filter((p) => p.planId !== planId));
+      setJoinedStudyPlanDetails((prev) => prev.filter((p) => p.planId !== planId));
+      setViewingStudyPlan((prev) => (prev && prev.planId === planId ? null : prev));
+      triggerToast('Deleted study plan. 🗑️');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planId}`);
     }
   };
 
-  // Real-user member profile lookup (by uid), separate from the legacy
-  // viewMemberProfile(name) below which still serves the illustrative
-  // DUMMY_PROFILES-backed content (e.g. the Recent Group Feed placeholders).
+  // Real-user member profile lookup (by uid) -- the only member-profile
+  // lookup in the app; the old name-keyed viewMemberProfile(), which served
+  // fabricated DUMMY_PROFILES content, was removed.
   const viewMemberProfileById = async (uid: string) => {
     try {
       const snap = await getDoc(doc(db, 'profiles', uid));
@@ -1551,45 +1642,9 @@ export function useAppState() {
       });
       setSharedPlans(plans);
     } catch (err) {
-      console.error('Error loading shared plans, falling back to beautiful presets:', err);
-      setSharedPlans([
-        {
-          id: 'mock-1',
-          name: 'The 30-Day Scripture Sprint',
-          preset: 'sprint',
-          learningDays: ['M', 'T', 'W', 'Th', 'F'],
-          newVersesPace: 5,
-          maxReviewCap: 20,
-          creatorName: 'Pastor David',
-          creatorId: 'mock-creator-1',
-          createdAt: new Date(),
-          downloadsCount: 142,
-        },
-        {
-          id: 'mock-2',
-          name: 'Gentle Word Drip',
-          preset: 'drip',
-          learningDays: ['M', 'Th'],
-          newVersesPace: 1,
-          maxReviewCap: 10,
-          creatorName: 'Esther Vance',
-          creatorId: 'mock-creator-2',
-          createdAt: new Date(),
-          downloadsCount: 89,
-        },
-        {
-          id: 'mock-3',
-          name: 'Warrior Pacing Routine',
-          preset: 'warrior',
-          learningDays: ['M', 'W', 'F', 'S'],
-          newVersesPace: 3,
-          maxReviewCap: 15,
-          creatorName: 'Sarah Miller',
-          creatorId: 'mock-creator-3',
-          createdAt: new Date(),
-          downloadsCount: 64,
-        },
-      ]);
+      console.error('Error loading shared plans:', err);
+      setSharedPlans([]);
+      triggerToast("Couldn't load community pacing plans right now.");
     } finally {
       setLoadingSharedPlans(false);
     }
@@ -1659,78 +1714,125 @@ export function useAppState() {
     }
   };
 
-  const joinGroupPlan = async (groupPlan: GroupPlan) => {
-    try {
-      const currentQueueIds = memoryQueueRef.current.map((item) => item.verseId);
-      const missingVerseIds = groupPlan.scriptureRange.filter((id) => !currentQueueIds.includes(id));
+  // Fetches real verse text for whichever of `verseIds` aren't already in
+  // the member's own queue and appends them as 'queued', tagged to this
+  // plan -- shared by joinStudyPlan (the plan's full current range) and
+  // addVersesToStudyPlan's self-heal path (just the newly-added verses).
+  const addStudyPlanVersesToOwnQueue = async (planId: string, verseIds: string[]) => {
+    const currentQueueIds = memoryQueueRef.current.map((item) => item.verseId);
+    const missingVerseIds = verseIds.filter((id) => !currentQueueIds.includes(id));
+    if (missingVerseIds.length === 0) return;
 
-      // Group missing verseIds (e.g. "GEN_1_3") by book+chapter so each real
-      // chapter is only fetched once, regardless of how many of its verses
-      // are in this plan's range.
-      const byChapter = new Map<string, { bookId: string; chapter: number; verseNumbers: number[] }>();
-      missingVerseIds.forEach((vId) => {
-        const [bookId, chapterStr, verseStr] = vId.split('_');
-        const chapter = parseInt(chapterStr, 10);
-        const key = `${bookId}_${chapter}`;
-        if (!byChapter.has(key)) byChapter.set(key, { bookId, chapter, verseNumbers: [] });
-        byChapter.get(key)!.verseNumbers.push(parseInt(verseStr, 10));
-      });
+    // Group missing verseIds (e.g. "GEN_1_3") by book+chapter so each real
+    // chapter is only fetched once, regardless of how many of its verses
+    // are in this plan's range.
+    const byChapter = new Map<string, { bookId: string; chapter: number; verseNumbers: number[] }>();
+    missingVerseIds.forEach((vId) => {
+      const [bookId, chapterStr, verseStr] = vId.split('_');
+      const chapter = parseInt(chapterStr, 10);
+      const key = `${bookId}_${chapter}`;
+      if (!byChapter.has(key)) byChapter.set(key, { bookId, chapter, verseNumbers: [] });
+      byChapter.get(key)!.verseNumbers.push(parseInt(verseStr, 10));
+    });
 
-      const newItems: QueueItem[] = [];
-      for (const { bookId, chapter, verseNumbers } of byChapter.values()) {
-        const bookMeta = ALL_BIBLE_BOOKS.find((b) => b.id === bookId);
-        const chapterData = await fetchChapterText(DEFAULT_TRANSLATION_ID, bookId, chapter);
-        if (!bookMeta || !chapterData) continue;
-        verseNumbers.forEach((verseNumber) => {
-          const text = chapterData.verses[String(verseNumber)];
-          if (!text) return;
-          newItems.push({
-            verseId: `${bookId}_${chapter}_${verseNumber}`,
-            book: bookMeta.name,
-            chapter,
-            verseNumber,
-            text,
-            orderIndex: memoryQueueRef.current.length + newItems.length,
-            status: 'queued',
-            origin: 'group',
-            retentionPhase: 'none',
-            dateStarted: null,
-            lastReviewDate: null,
-            nextReviewDueDate: null,
-            currentStreakCount: 0,
-            totalSuccessfulReviews: 0,
-            gracePeriodUsedToday: false,
-          });
+    const newItems: QueueItem[] = [];
+    for (const { bookId, chapter, verseNumbers } of byChapter.values()) {
+      const bookMeta = ALL_BIBLE_BOOKS.find((b) => b.id === bookId);
+      const chapterData = await fetchChapterText(DEFAULT_TRANSLATION_ID, bookId, chapter);
+      if (!bookMeta || !chapterData) continue;
+      verseNumbers.forEach((verseNumber) => {
+        const text = chapterData.verses[String(verseNumber)];
+        if (!text) return;
+        newItems.push({
+          verseId: `${bookId}_${chapter}_${verseNumber}`,
+          book: bookMeta.name,
+          chapter,
+          verseNumber,
+          text,
+          orderIndex: memoryQueueRef.current.length + newItems.length,
+          status: 'queued',
+          origin: 'group',
+          originPlanId: planId,
+          retentionPhase: 'none',
+          dateStarted: null,
+          lastReviewDate: null,
+          nextReviewDueDate: null,
+          currentStreakCount: 0,
+          totalSuccessfulReviews: 0,
+          gracePeriodUsedToday: false,
         });
-      }
-
-      // No manual Firestore batch write here — the memoryQueue auto-sync
-      // effect (added last session) picks up this queue update and
-      // persists it (including deletion-diffing), debounced.
-      updateMemoryQueue((prev) => [...prev, ...newItems]);
-
-      setActiveGroupPlan(groupPlan);
-
-      if (auth.currentUser) {
-        try {
-          const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-          await setDoc(
-            planRef,
-            {
-              activeGroupPlanId: groupPlan.planId,
-              updatedAt: new Date(),
-            },
-            { merge: true }
-          );
-        } catch (err) {
-          console.error('Failed to update active group plan:', err);
-        }
-      }
-
-      triggerToast(`Successfully joined "${groupPlan.name}"! Group verses appended. 🎯`);
-    } catch (err) {
-      console.error('Error joining group plan:', err);
+      });
     }
+
+    if (newItems.length > 0) {
+      // No manual Firestore batch write here — the memoryQueue auto-sync
+      // effect picks up this queue update and persists it (including
+      // deletion-diffing), debounced.
+      updateMemoryQueue((prev) => [...prev, ...newItems]);
+    }
+  };
+
+  const persistJoinedStudyPlans = async (memberships: StudyPlanMembership[]) => {
+    if (!auth.currentUser) return;
+    try {
+      const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
+      // merge: true — this doc also holds savedPlans and other top-level
+      // plan fields; a plain setDoc here would silently erase them.
+      await setDoc(planRef, { joinedStudyPlans: memberships, updatedAt: new Date() }, { merge: true });
+    } catch (err) {
+      console.error('Failed to persist joined study plans:', err);
+    }
+  };
+
+  const joinStudyPlan = async (plan: StudyPlan, priority: StudyPlanMembership['priority'] = 'individual') => {
+    try {
+      await addStudyPlanVersesToOwnQueue(plan.planId, plan.verseIds);
+
+      const membership: StudyPlanMembership = {
+        planId: plan.planId,
+        circleId: plan.circleId,
+        priority,
+        joinedAt: new Date().toISOString(),
+      };
+      const updatedMemberships = [...joinedStudyPlanMemberships.filter((m) => m.planId !== plan.planId), membership];
+      setJoinedStudyPlanMemberships(updatedMemberships);
+      setJoinedStudyPlanDetails((prev) => [...prev.filter((p) => p.planId !== plan.planId), plan]);
+      await persistJoinedStudyPlans(updatedMemberships);
+
+      triggerToast(`Joined "${plan.name}"! Verses added to your queue. 🎯`);
+    } catch (err) {
+      console.error('Error joining study plan:', err);
+      triggerToast('Failed to join this study plan.');
+    }
+  };
+
+  // Only strips verses that are still 'queued' (never actually started) --
+  // anything already being learned/reviewed/retained is left alone, since
+  // leaving a plan shouldn't erase real progress already made on it.
+  const leaveStudyPlan = async (planId: string) => {
+    const updatedMemberships = joinedStudyPlanMemberships.filter((m) => m.planId !== planId);
+    setJoinedStudyPlanMemberships(updatedMemberships);
+    setJoinedStudyPlanDetails((prev) => prev.filter((p) => p.planId !== planId));
+    updateMemoryQueue((prev) => prev.filter((item) => !(item.originPlanId === planId && item.status === 'queued')));
+    await persistJoinedStudyPlans(updatedMemberships);
+    triggerToast('Left the study plan.');
+  };
+
+  const setStudyPlanPriority = async (planId: string, priority: StudyPlanMembership['priority']) => {
+    const updatedMemberships = joinedStudyPlanMemberships.map((m) => (m.planId === planId ? { ...m, priority } : m));
+    setJoinedStudyPlanMemberships(updatedMemberships);
+    await persistJoinedStudyPlans(updatedMemberships);
+  };
+
+  // Leaving/disbanding an entire circle should also drop membership in
+  // whatever Study Plans belonged to it -- mirrors the old single-plan
+  // code's setActiveGroupPlan(null) on the same actions, just generalized
+  // to however many plans of that circle this member had joined.
+  const clearStudyPlanMembershipsForCircle = (circleId: string) => {
+    const updatedMemberships = joinedStudyPlanMemberships.filter((m) => m.circleId !== circleId);
+    setJoinedStudyPlanMemberships(updatedMemberships);
+    setJoinedStudyPlanDetails((prev) => prev.filter((p) => p.circleId !== circleId));
+    persistJoinedStudyPlans(updatedMemberships);
   };
 
   const handleActivatePlan = async (planId: string) => {
@@ -1963,84 +2065,6 @@ export function useAppState() {
     }
 
     triggerToast(`Memory rhythm saved to "${targetPlan.name}"! 🎯`);
-  };
-
-  // Adopts an externally-sourced pacing configuration (e.g. copying another
-  // member's plan from AnalyzePlanScreen) as a brand-new saved plan, active
-  // immediately. Builds the plan from the passed-in values directly rather
-  // than reading learningDays/newVersesPace/etc. from hook state, since the
-  // setLearningDays()-style setters called alongside this haven't flushed yet
-  // when this runs (React state updates aren't synchronous).
-  const adoptPlanFromProfile = async (profile: {
-    planName?: string;
-    preset?: 'drip' | 'warrior' | 'custom';
-    learningDays?: string[];
-    newVersesPace?: number;
-    maxReviewCap?: number;
-    retentionRigor?: 'light' | 'standard' | 'deep' | 'custom';
-    dailyPhaseWeeks?: number;
-    weeklyPhaseMonths?: number;
-    monthlyPhaseYears?: number;
-    masteryTouches?: number;
-    reviewsRequired?: number;
-    sabbathEnabled?: boolean;
-    sabbathDay?: string;
-    cognitiveLoadSensitivity?: 'low' | 'medium' | 'high';
-  }) => {
-    const newPlan: MemoryPlan = {
-      id: 'plan-' + Date.now(),
-      name: profile.planName || 'Adopted Plan',
-      preset: profile.preset || 'custom',
-      learningDays: profile.learningDays || ['M', 'W', 'F'],
-      newVersesPace: profile.newVersesPace ?? 3,
-      maxReviewCap: profile.maxReviewCap ?? 15,
-      retentionRigor: profile.retentionRigor || 'standard',
-      dailyPhaseWeeks: profile.dailyPhaseWeeks ?? 7,
-      weeklyPhaseMonths: profile.weeklyPhaseMonths ?? 6,
-      monthlyPhaseYears: profile.monthlyPhaseYears ?? 5,
-      masteryTouches: profile.masteryTouches ?? 3,
-      reviewsRequired: profile.reviewsRequired ?? 1,
-      sabbathEnabled: profile.sabbathEnabled ?? false,
-      sabbathDay: profile.sabbathDay || 'Su',
-      cognitiveLoadSensitivity: profile.cognitiveLoadSensitivity || 'medium',
-      isActive: true,
-      updatedAt: new Date().toISOString(),
-    };
-
-    const updatedPlans = [...savedPlans.map((p) => ({ ...p, isActive: false })), newPlan];
-    setSavedPlans(updatedPlans);
-
-    syncDesignerFromPlan(newPlan);
-    setEditingPlanId(newPlan.id);
-
-    if (auth.currentUser) {
-      try {
-        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(
-          planRef,
-          {
-            savedPlans: updatedPlans,
-            ...planTopLevelFields(newPlan),
-            updatedAt: new Date(),
-          },
-          { merge: true }
-        );
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
-      }
-    }
-
-    triggerToast(`Successfully copied and joined the plan: "${newPlan.name}"! 📖`);
-
-    // Navigate directly instead of via navigateTo('activePlan'): that helper
-    // re-syncs learningDays/preset/etc from savedPlans.find(p => p.isActive),
-    // but the setSavedPlans() call above hasn't flushed into this closure yet
-    // (state updates aren't synchronous), so it would read the OLD active
-    // plan and clobber the newPlan fields just set above.
-    setBackHistory((prev) => [...prev, { screen: currentScreen, book: selectedBook, chapter: selectedChapter }]);
-    setCurrentTab('home');
-    setCurrentScreen('activePlan');
-    setSelectedVerseNumbers([]);
   };
 
   const publishSharedPlan = async () => {
@@ -2282,6 +2306,29 @@ export function useAppState() {
 
         setSavedPlans(plansList);
 
+        // Joined Study Plans: resolve membership records into the real
+        // StudyPlan docs they point to. This also fixes a pre-existing bug
+        // where the old singular activeGroupPlan was written to Firestore on
+        // join but never actually read back on load -- it silently reset to
+        // null every reload even though the user was still really a member.
+        const memberships: StudyPlanMembership[] = planData.joinedStudyPlans || [];
+        setJoinedStudyPlanMemberships(memberships);
+        if (memberships.length > 0) {
+          try {
+            const planDocs = await Promise.all(
+              memberships.map((m) => getDoc(doc(db, 'circles', m.circleId, 'groupPlans', m.planId)))
+            );
+            const resolvedPlans = planDocs
+              .filter((snap) => snap.exists())
+              .map((snap) => normalizeStudyPlan(snap.id, snap.data()));
+            setJoinedStudyPlanDetails(resolvedPlans);
+          } catch (e) {
+            console.error('Failed to resolve joined study plans:', e);
+          }
+        } else {
+          setJoinedStudyPlanDetails([]);
+        }
+
         // Find the active plan and sync current state
         const active = plansList.find((p) => p.isActive) || plansList[0];
         if (active) {
@@ -2432,8 +2479,10 @@ export function useAppState() {
       // membership). Reset on every auth transition, not just sign-out.
       setActiveCircle(null);
       setActiveCircleMembers([]);
-      setActiveCircleGroupPlans([]);
-      setActiveGroupPlan(null);
+      setActiveCircleStudyPlans([]);
+      setJoinedStudyPlanMemberships([]);
+      setJoinedStudyPlanDetails([]);
+      setViewingStudyPlan(null);
       setViewingGroupDetail(false);
       setActiveGroupId('');
       setCommunitySubView('home');
@@ -2559,25 +2608,16 @@ export function useAppState() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordingPlayerStatus, playingRecordingId, nowPlayingRecording?.audioUrl]);
 
+  // No fake playback: a recording with no real Storage-backed audioUrl (e.g.
+  // an illustrative guest-preview entry) can't actually play, so say so
+  // honestly instead of running a simulated progress bar to a fake
+  // "completed" toast.
   useEffect(() => {
     if (playingRecordingId && !nowPlayingRecording?.audioUrl) {
-      const totalSec = nowPlayingRecording ? nowPlayingRecording.duration : 20;
-      recTimerRef.current = setInterval(() => {
-        setPlayingRecProgress((prev) => {
-          if (prev >= 100) {
-            setPlayingRecordingId(null);
-            triggerToast('Recording playback completed.');
-            return 0;
-          }
-          return prev + 100 / totalSec;
-        });
-      }, 1000);
-    } else {
-      if (recTimerRef.current) clearInterval(recTimerRef.current);
+      setPlayingRecordingId(null);
+      setPlayingRecProgress(0);
+      triggerToast('No audio available for this recording.');
     }
-    return () => {
-      if (recTimerRef.current) clearInterval(recTimerRef.current);
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playingRecordingId, nowPlayingRecording]);
 
@@ -2689,15 +2729,15 @@ export function useAppState() {
   // Shared by getEstimatedReviewTime (today only) and getMemoryLoadForecast
   // (today + future days), so both always price a "due review" the same
   // way and never quietly disagree. For today, a missing due date or one
-  // in the past both count as due (matches the original today-only
-  // behavior); for a future day, only an exact due-date match counts.
+  // whose calendar day is today-or-earlier counts as due; for a future day,
+  // only an exact due-date match counts.
   const computeDayReviewLoad = (queue: QueueItem[], date: Date, isToday: boolean) => {
     let seconds = 0;
     let count = 0;
     queue.forEach((item) => {
       if (item.status !== 'reviewing') return;
       const due = item.nextReviewDueDate ? new Date(item.nextReviewDueDate) : null;
-      const isDue = isToday ? !due || due <= date : !!due && due.toDateString() === date.toDateString();
+      const isDue = isToday ? isReviewDue(item.nextReviewDueDate, date) : !!due && due.toDateString() === date.toDateString();
       if (!isDue) return;
       count += 1;
       if (item.retentionPhase === 'daily') seconds += 30;
@@ -2760,46 +2800,45 @@ export function useAppState() {
       return;
     }
 
-    const queuedItems = memoryQueue.filter((item) => item.status === 'queued');
-    if (queuedItems.length === 0) {
+    if (!memoryQueue.some((item) => item.status === 'queued')) {
       triggerToast('No more queued verses to pull! 🎉');
       return;
     }
 
-    let actualPace = newVersesPace;
-    let catchUpMessage = '';
+    // Blends the personal queue with however many StudyPlans this member has
+    // joined, at whatever pace/priority each calls for -- see
+    // src/lib/studyPlanScheduler.ts for the full resolution rules (additive
+    // plans first and uncapped, then group-priority > individual >
+    // individual-priority within the personal daily budget).
+    const personal: PersonalPacingSettings = { newVersesPace, learningDays };
+    const { verseIds: pulledVerseIds, fromIndividual, fromPlans } = computeDailyPull(
+      memoryQueue,
+      personal,
+      joinedStudyPlanDetails,
+      joinedStudyPlanMemberships,
+      new Date()
+    );
 
-    if (activeGroupPlan) {
-      // Pacing days checks: use group plan's active learning days mapping if specified, or default to general learningDays
-      // Find how many of the group plan's verses have been started (status !== 'queued')
-      const groupPlanVerses = memoryQueue.filter((item) => activeGroupPlan.scriptureRange.includes(item.verseId));
-      const userPlanIndex = groupPlanVerses.filter((item) => item.status !== 'queued').length;
-
-      const isBehind = userPlanIndex < activeGroupPlan.currentGroupVerseIndex;
-      if (isBehind) {
-        actualPace = newVersesPace * 2;
-        catchUpMessage = ` (Catch-Up Active! Pace doubled from ${newVersesPace} to ${actualPace} to catch up to group verse pointer ${activeGroupPlan.currentGroupVerseIndex}) 🏃‍♂️`;
-      }
+    if (pulledVerseIds.length === 0) {
+      triggerToast('No more queued verses to pull! 🎉');
+      return;
     }
 
-    const toPullCount = Math.min(actualPace, queuedItems.length);
-    const itemsToPull = queuedItems.slice(0, toPullCount);
+    const pulledSet = new Set(pulledVerseIds);
+    const itemsToPull = memoryQueueRef.current.filter((item) => pulledSet.has(item.verseId));
 
     const updatedQueue = memoryQueueRef.current.map((item) => {
-      const isTarget = itemsToPull.some((p) => p.verseId === item.verseId);
-      if (isTarget) {
-        return {
-          ...item,
-          status: 'learning' as const,
-          dateStarted: new Date().toISOString(),
-          lastReviewDate: null,
-          nextReviewDueDate: null,
-          currentStreakCount: 0,
-          totalSuccessfulReviews: 0,
-          gracePeriodUsedToday: false,
-        };
-      }
-      return item;
+      if (!pulledSet.has(item.verseId)) return item;
+      return {
+        ...item,
+        status: 'learning' as const,
+        dateStarted: new Date().toISOString(),
+        lastReviewDate: null,
+        nextReviewDueDate: null,
+        currentStreakCount: 0,
+        totalSuccessfulReviews: 0,
+        gracePeriodUsedToday: false,
+      };
     });
 
     updateMemoryQueue(() => updatedQueue);
@@ -2826,8 +2865,21 @@ export function useAppState() {
       }
     }
 
+    const planBreakdown = Object.entries(fromPlans)
+      .map(([planId, ids]) => {
+        const planName = joinedStudyPlanDetails.find((p) => p.planId === planId)?.name || 'a study plan';
+        return `${ids.length} from "${planName}"`;
+      })
+      .join(', ');
+    const breakdown =
+      fromIndividual.length > 0 && planBreakdown
+        ? ` (${fromIndividual.length} individual, ${planBreakdown})`
+        : planBreakdown
+          ? ` (${planBreakdown})`
+          : '';
+
     triggerToast(
-      `Successfully pulled ${toPullCount} new ${toPullCount === 1 ? 'verse' : 'verses'} into your learning queue!${catchUpMessage} 🚀`
+      `Successfully pulled ${pulledVerseIds.length} new ${pulledVerseIds.length === 1 ? 'verse' : 'verses'} into your learning queue!${breakdown} 🚀`
     );
   };
 
@@ -3118,7 +3170,7 @@ export function useAppState() {
               (q) =>
                 q.verseId !== item.verseId &&
                 q.status === 'reviewing' &&
-                (!q.nextReviewDueDate || new Date(q.nextReviewDueDate) <= new Date())
+                isReviewDue(q.nextReviewDueDate)
             );
             if (dueReviewsPending) {
               triggerToast(`Mastery touches complete (${updatedLogs.length}/${masteryTouches})! Finish today's reviews to lock this verse in. 🔒`);
@@ -3303,7 +3355,7 @@ export function useAppState() {
       let finalQueue = prev.map((q) => (q.verseId === item.verseId ? updatedItem : q));
       if (item.status === 'reviewing') {
         const dueReviewsRemaining = finalQueue.some(
-          (q) => q.status === 'reviewing' && (!q.nextReviewDueDate || new Date(q.nextReviewDueDate) <= new Date())
+          (q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate)
         );
         if (!dueReviewsRemaining) {
           finalQueue = finalQueue.map((q) => {
@@ -3643,7 +3695,7 @@ export function useAppState() {
               dueDate = 'Completed';
             } else if (queueItem.status === 'reviewing') {
               status = 'memorized';
-              const isDue = !queueItem.nextReviewDueDate || new Date(queueItem.nextReviewDueDate) <= new Date();
+              const isDue = isReviewDue(queueItem.nextReviewDueDate);
               if (isDue) dueDate = 'Due: Today';
             } else if (queueItem.status === 'learning') {
               status = 'learning';
@@ -4168,7 +4220,6 @@ export function useAppState() {
   return {
     // static reference data
     BOOKS,
-    DUMMY_PROFILES,
 
     // core state
     verses, setVerses,
@@ -4241,11 +4292,13 @@ export function useAppState() {
     reviewsRequired, setReviewsRequired,
     sabbathEnabled, setSabbathEnabled,
     sabbathDay, setSabbathDay,
-    activeGroupPlan, setActiveGroupPlan,
+    joinedStudyPlanMemberships,
+    joinedStudyPlanDetails,
+    viewingStudyPlan, setViewingStudyPlan,
     viewingGroupDetail, setViewingGroupDetail,
     myCircles, loadingMyCircles,
     publicCircles, loadingPublicCircles,
-    activeCircle, activeCircleMembers, activeCircleGroupPlans, loadingActiveCircle,
+    activeCircle, activeCircleMembers, activeCircleStudyPlans, loadingActiveCircle,
     circleFriends, loadCircleFriends,
     activityEvents, loadingActivityEvents, loadActivityFeed,
     friends, loadingFriends, loadFriends,
@@ -4255,15 +4308,10 @@ export function useAppState() {
     selectedRecording, setSelectedRecording,
     communitySubView, setCommunitySubView,
     activeGroupId,
-    showAppStorePreview, setShowAppStorePreview,
     isEditingCircleSettings, setIsEditingCircleSettings,
     showCreatePlanForm, setShowCreatePlanForm,
     newPlanName, setNewPlanName,
     newPlanDesc, setNewPlanDesc,
-    newPlanBook, setNewPlanBook,
-    newPlanPacing, setNewPlanPacing,
-    newPlanStartVerse, setNewPlanStartVerse,
-    newPlanEndVerse, setNewPlanEndVerse,
     findSearchQuery, setFindSearchQuery,
     inviteCodeInput, setInviteCodeInput,
     createGroupName, setCreateGroupName,
@@ -4287,7 +4335,6 @@ export function useAppState() {
     navigateTo,
     handleBack,
     selectTab,
-    viewMemberProfile,
     viewMemberProfileById,
 
     // auth
@@ -4309,21 +4356,24 @@ export function useAppState() {
     removeCircleMember,
     pinCircleAnnouncement,
     updateCircleSettings,
-    deployGroupPlan,
-    advanceGroupPlanPointer,
-    deleteGroupPlan,
+    createStudyPlan,
+    updateStudyPlan,
+    addVersesToStudyPlan,
+    deleteStudyPlan,
+    joinStudyPlan,
+    leaveStudyPlan,
+    setStudyPlanPriority,
+    clearStudyPlanMembershipsForCircle,
 
-    // shared/group plan handlers
+    // shared plan handlers (personal-settings templates, separate concept from Study Plans)
     loadSharedPlans,
     joinSharedPlan,
-    joinGroupPlan,
     handleActivatePlan,
     handleDeletePlan,
     handleEditPlan,
     handleCreateNewPlan,
     handleSavePlan,
     saveActivePlanRhythm,
-    adoptPlanFromProfile,
     publishSharedPlan,
     loadUserData,
 
@@ -4337,6 +4387,7 @@ export function useAppState() {
     validateTouch,
     getEstimatedReviewTime,
     getMemoryLoadForecast,
+    isReviewDue,
     triggerDailyPull,
     promoteToLearning,
     addVersesToQueue,

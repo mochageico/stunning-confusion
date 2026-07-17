@@ -35,18 +35,41 @@ export interface TouchLog {
   drillType: 'speak' | 'type' | 'reveal';
 }
 
-export interface GroupPlan {
+// A circle-scoped, manager-curated shared memorization plan. Members join it
+// and its verses feed automatically into their own personal queue (see
+// src/lib/studyPlanScheduler.ts) at whatever weekly pace the manager sets --
+// there's no separate "learning days" here, and no manual pointer; deployment
+// timing always comes from each member's own personal learningDays/pace.
+export interface StudyPlan {
   planId: string;
-  circleId?: string;           // Associated scripture circle ID
-  name: string;                // e.g., "Romans 10 Shared Study"
+  circleId: string;
+  name: string;
+  description: string;
   managerId: string;           // User ID of the plan manager
-  scriptureRange: string[];    // Array of verseIds (e.g., ["ROM_10_1", "ROM_10_2", ...])
-  startDate: string;           // ISO start date
-  pacingPerWeek: number;       // e.g., 3 (verses per week)
-  learningDays: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun' | 'Su')[]; // e.g., ['Mon', 'Wed', 'Fri']
-  currentGroupVerseIndex: number; // Pointer to where the group is currently at
-  description?: string;
   managerName?: string;
+  versesPerWeek: number;       // target pace -- reconciled against each member's own capacity by the scheduler
+  verseIds: string[];          // manager-curated queue, built incrementally over time (e.g. ["ROM_10_1", "ROM_10_2", ...])
+  createdAt: string;
+  updatedAt: string;
+}
+
+// A member's relationship to one joined StudyPlan -- in particular, how that
+// plan's verses should compete with the member's own individual queue when
+// there isn't enough daily capacity for both. See computeDailyPull in
+// src/lib/studyPlanScheduler.ts for exactly how each mode is resolved,
+// especially when a member has joined more than one plan at once.
+export interface StudyPlanMembership {
+  planId: string;
+  circleId: string;
+  // 'individual' -- the member's own queued verses are pulled first; this
+  //   plan only gets whatever daily capacity is left over.
+  // 'group' -- this plan's verses are pulled first, ahead of the member's
+  //   own individual queue, but still capped by the member's daily capacity.
+  // 'additive' -- this plan's own weekly pace is pulled in full every
+  //   learning day on top of the member's personal daily cap, deliberately
+  //   allowed to exceed it.
+  priority: 'individual' | 'group' | 'additive';
+  joinedAt: string;
 }
 
 export interface QueueItem {
@@ -58,6 +81,7 @@ export interface QueueItem {
   orderIndex: number;          // Position in the queue
   status: 'queued' | 'learning' | 'reviewing' | 'retained';
   origin?: 'individual' | 'group'; // Origin of the verse (colored orange/red for individual, blue/purple for group)
+  originPlanId?: string;       // Which StudyPlan this verse came from, when origin === 'group' -- lets the scheduler charge it against that plan's own weekly pace budget, and lets leaveStudyPlan clean up only that plan's still-queued verses.
 
   // 7-6-5 Retention System State
   retentionPhase: 'none' | 'daily' | 'weekly' | 'monthly';

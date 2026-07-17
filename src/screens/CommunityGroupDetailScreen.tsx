@@ -3,7 +3,6 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {
   ArrowLeft,
-  Check,
   Globe,
   Link as LinkIcon,
   Lock,
@@ -11,28 +10,25 @@ import {
   Plus,
   Share2,
   Sliders,
-  Sparkles,
   Trash2,
   Users,
 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { Circle } from '../types';
-import { FadeInView, useClampedNumberField } from '../components/ui';
-import { BookPicker } from '../components/BookPicker';
+import { FadeInView } from '../components/ui';
 
 export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
   const {
     user,
     activeCircle,
     activeCircleMembers,
-    activeCircleGroupPlans,
+    activeCircleStudyPlans,
     loadingActiveCircle,
     updateCircleSettings,
     pinCircleAnnouncement,
-    deployGroupPlan,
-    advanceGroupPlanPointer,
-    deleteGroupPlan,
+    createStudyPlan,
+    deleteStudyPlan,
     removeCircleMember,
     leaveCircle,
     disbandCircle,
@@ -42,20 +38,14 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setIsEditingCircleSettings,
     showCreatePlanForm,
     setShowCreatePlanForm,
-    showAppStorePreview,
-    setShowAppStorePreview,
     newPlanName,
     setNewPlanName,
     newPlanDesc,
     setNewPlanDesc,
-    newPlanBook,
-    setNewPlanBook,
-    newPlanPacing,
-    setNewPlanPacing,
-    setActiveGroupPlan,
-    memoryQueue,
-    activeGroupPlan,
-    joinGroupPlan,
+    joinedStudyPlanMemberships,
+    setViewingStudyPlan,
+    navigateTo,
+    clearStudyPlanMembershipsForCircle,
     triggerToast,
   } = state;
 
@@ -63,8 +53,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
   // an uncontrolled web <form> input in the original with no equivalent
   // global state field.
   const [announcementDraft, setAnnouncementDraft] = useState('');
-
-  const newPlanPacingField = useClampedNumberField(newPlanPacing, setNewPlanPacing, (n) => Math.max(1, Math.min(10, n)));
 
   const isLeaderOrAdmin = !!activeCircle && !!user && activeCircle.ownerId === user.uid;
 
@@ -79,7 +67,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setViewingGroupDetail(false);
     setIsEditingCircleSettings(false);
     setShowCreatePlanForm(false);
-    setShowAppStorePreview(false);
   };
 
   const handlePinAnnouncement = () => {
@@ -88,17 +75,17 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setAnnouncementDraft('');
   };
 
-  const handleDeployPlan = async () => {
+  const handleCreatePlan = async () => {
     if (!activeCircle) return;
-    await deployGroupPlan(activeCircle.id, {
-      name: newPlanName,
-      book: newPlanBook,
-      pacingPerWeek: newPlanPacing,
-      description: newPlanDesc,
-    });
+    await createStudyPlan(activeCircle.id, { name: newPlanName, description: newPlanDesc });
     setShowCreatePlanForm(false);
     setNewPlanName('');
     setNewPlanDesc('');
+  };
+
+  const openStudyPlan = (plan: (typeof activeCircleStudyPlans)[number]) => {
+    setViewingStudyPlan(plan);
+    navigateTo('studyPlanDetail');
   };
 
   const [showLeaveDisbandConfirm, setShowLeaveDisbandConfirm] = useState(false);
@@ -109,7 +96,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
       setShowLeaveDisbandConfirm(true);
     } else {
       leaveCircle(activeCircle.id);
-      setActiveGroupPlan(null);
+      clearStudyPlanMembershipsForCircle(activeCircle.id);
     }
   };
 
@@ -117,7 +104,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     if (!activeCircle) return;
     setShowLeaveDisbandConfirm(false);
     await disbandCircle(activeCircle.id);
-    setActiveGroupPlan(null);
+    clearStudyPlanMembershipsForCircle(activeCircle.id);
   };
 
   if (loadingActiveCircle || !activeCircle) {
@@ -290,20 +277,20 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           </View>
         </View>
 
-        {/* ACTIVE PACING PLANS PANEL */}
+        {/* STUDY PLANS PANEL */}
         <View style={{ gap: 12 }}>
           <View className="flex-row justify-between items-center px-1">
             <Text className="text-xs font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
-              Shared Circle Plans ({activeCircleGroupPlans.length})
+              Study Plans ({activeCircleStudyPlans.length})
             </Text>
 
-            {/* Add Group Plan Button (Leaders/Mentors only) */}
+            {/* Add Study Plan Button (Leaders/Mentors only) */}
             {isLeaderOrAdmin && (
               <Pressable
                 onPress={() => {
                   setShowCreatePlanForm(!showCreatePlanForm);
-                  setNewPlanName('New Circle Plan');
-                  setNewPlanBook('Romans');
+                  setNewPlanName('');
+                  setNewPlanDesc('');
                 }}
                 className="bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-lg flex-row items-center gap-1"
               >
@@ -313,12 +300,14 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             )}
           </View>
 
-          {/* CREATE PACING PLAN FORM */}
+          {/* CREATE STUDY PLAN FORM -- title + description only. The actual
+              verse queue and weekly pace are set up afterward from the
+              plan's own landing page (StudyPlanDetailScreen). */}
           {showCreatePlanForm && isLeaderOrAdmin && (
             <FadeInView>
               <View className="bg-[#1A1A1A] border border-neutral-900 rounded-xl p-4" style={{ gap: 12 }}>
                 <View className="flex-row justify-between items-center border-b border-neutral-800 pb-1.5">
-                  <Text className="text-[10px] font-black uppercase tracking-wider text-neutral-300">Deploy New Circle Plan</Text>
+                  <Text className="text-[10px] font-black uppercase tracking-wider text-neutral-300">New Study Plan</Text>
                   <Text className="text-[7px] bg-indigo-600 text-white px-2 py-0.5 rounded uppercase font-black">SPONSOR</Text>
                 </View>
 
@@ -329,29 +318,13 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                       value={newPlanName}
                       onChangeText={setNewPlanName}
                       className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-sans"
-                      placeholder="E.g. Romans 8 Pacing Study"
+                      placeholder="E.g. Wednesday Night Romans Study"
                       placeholderTextColor="#737373"
                     />
                   </View>
 
-                  <View className="flex-row gap-2">
-                    <View className="flex-1">
-                      <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Scripture Book</Text>
-                      <BookPicker value={newPlanBook} onChange={setNewPlanBook} />
-                    </View>
-
-                    <View className="flex-1">
-                      <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Speed (verses/wk)</Text>
-                      <TextInput
-                        {...newPlanPacingField}
-                        keyboardType="numeric"
-                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white"
-                      />
-                    </View>
-                  </View>
-
                   <View>
-                    <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 font-sans">Description / Study Memo</Text>
+                    <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 font-sans">Description</Text>
                     <TextInput
                       value={newPlanDesc}
                       onChangeText={setNewPlanDesc}
@@ -359,7 +332,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                       numberOfLines={2}
                       textAlignVertical="top"
                       className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-sans"
-                      placeholder="Explain pacing goals, recital times, etc."
+                      placeholder="What is this plan for, and who's it for?"
                       placeholderTextColor="#737373"
                     />
                   </View>
@@ -372,8 +345,8 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                     >
                       <Text className="text-neutral-400 text-[9px] font-bold uppercase">Cancel</Text>
                     </Pressable>
-                    <Pressable onPress={handleDeployPlan} className="bg-indigo-600 px-4 py-1.5 rounded-lg">
-                      <Text className="text-white font-bold text-[9px] uppercase tracking-wider">Deploy & Pave Plan</Text>
+                    <Pressable onPress={handleCreatePlan} className="bg-indigo-600 px-4 py-1.5 rounded-lg">
+                      <Text className="text-white font-bold text-[9px] uppercase tracking-wider">Create Plan</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -381,108 +354,65 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             </FadeInView>
           )}
 
-          {/* List of Circle pacing plans */}
+          {/* List of the circle's Study Plans -- each tap opens its own landing page */}
           <View style={{ gap: 12 }}>
-            {activeCircleGroupPlans.length === 0 ? (
+            {activeCircleStudyPlans.length === 0 ? (
               <View className="p-6 border border-dashed border-neutral-200 rounded-2xl items-center">
                 <Text className="text-center text-xs text-neutral-400 font-sans">
-                  No active pacing plans created for this circle yet. {isLeaderOrAdmin && 'Launch a new plan above!'}
+                  No Study Plans created for this circle yet. {isLeaderOrAdmin && 'Create one above!'}
                 </Text>
               </View>
             ) : (
-              activeCircleGroupPlans.map((plan) => {
-                const isJoined = activeGroupPlan?.planId === plan.planId;
-
-                // Compute percent complete
-                const groupPlanVersesInQueue = memoryQueue.filter((item) => plan.scriptureRange.includes(item.verseId));
-                const retainedCount = groupPlanVersesInQueue.filter((item) => item.status === 'retained').length;
-                const percentComplete = plan.scriptureRange.length > 0 ? Math.round((retainedCount / plan.scriptureRange.length) * 100) : 0;
+              activeCircleStudyPlans.map((plan) => {
+                const isJoined = joinedStudyPlanMemberships.some((m) => m.planId === plan.planId);
 
                 return (
-                  <View key={plan.planId} className="border border-[#E5E5E5] rounded-xl p-3.5 bg-white shadow-sm" style={{ gap: 12 }}>
+                  <Pressable
+                    key={plan.planId}
+                    onPress={() => openStudyPlan(plan)}
+                    className="border border-[#E5E5E5] rounded-xl p-3.5 bg-white shadow-sm"
+                    style={{ gap: 10 }}
+                  >
                     <View className="flex-row justify-between items-start">
-                      <View>
+                      <View className="flex-1 pr-2">
                         <Text className="text-xs font-sans font-black text-[#1A1A1A] leading-tight">{plan.name}</Text>
                         <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
                           Managed by <Text className="font-semibold text-[#1A1A1A]">{plan.managerName || 'Leader'}</Text>
                         </Text>
                       </View>
-                      <View className="flex-row gap-1">
-                        <Text className="text-[8px] bg-indigo-50 border border-indigo-200 text-indigo-700 font-sans font-bold px-1.5 py-0.5 rounded uppercase">
-                          Group Plan
-                        </Text>
+                      <View className="flex-row items-center gap-1">
+                        {isJoined && (
+                          <Text className="text-[8px] bg-emerald-50 border border-emerald-200 text-emerald-700 font-sans font-bold px-1.5 py-0.5 rounded uppercase">
+                            Joined
+                          </Text>
+                        )}
                         {isLeaderOrAdmin && (
-                          <Pressable onPress={() => deleteGroupPlan(activeCircle.id, plan.planId)} className="p-0.5">
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              deleteStudyPlan(activeCircle.id, plan.planId);
+                            }}
+                            className="p-0.5"
+                          >
                             <Trash2 size={11} color="#ef4444" />
                           </Pressable>
                         )}
                       </View>
                     </View>
 
-                    {/* Plan details info */}
                     {plan.description && <Text className="text-[10px] text-neutral-500 font-sans leading-normal">{plan.description}</Text>}
 
-                    {/* Pacing Details */}
                     <View className="flex-row py-1.5 border-y border-dashed border-neutral-100 gap-2">
                       <View className="flex-1">
-                        <Text className="text-[8px] text-neutral-400 uppercase">Pacing</Text>
-                        <Text className="font-bold text-neutral-800 text-[10px] font-sans">{plan.pacingPerWeek} verses/wk</Text>
+                        <Text className="text-[8px] text-neutral-400 uppercase">Pace</Text>
+                        <Text className="font-bold text-neutral-800 text-[10px] font-sans">{plan.versesPerWeek} verses/wk</Text>
                       </View>
                       <View className="flex-1">
-                        <Text className="text-[8px] text-neutral-400 uppercase">Pacing Code</Text>
-                        <Text className="font-bold text-neutral-800 uppercase font-mono text-[9px]">{activeCircle.inviteCode}</Text>
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-[8px] text-neutral-400 uppercase">Active Pointer</Text>
-                        <Text className="font-bold text-indigo-600 font-mono text-[9px]">
-                          {plan.scriptureRange[plan.currentGroupVerseIndex] || plan.scriptureRange[0]}
-                        </Text>
+                        <Text className="text-[8px] text-neutral-400 uppercase">Verses in Plan</Text>
+                        <Text className="font-bold text-neutral-800 text-[10px] font-sans">{plan.verseIds.length}</Text>
                       </View>
                     </View>
-
-                    {/* PROGRESS & LEADERSHIP ACTION ROW */}
-                    <View className="flex-row justify-between items-center pt-1.5">
-                      <View className="flex-1" style={{ gap: 4 }}>
-                        <View className="flex-row justify-between" style={{ maxWidth: 120 }}>
-                          <Text className="text-[8px] font-mono font-bold text-neutral-400">Personal Progress</Text>
-                          <Text className="text-[8px] font-mono font-bold text-neutral-400">{percentComplete}%</Text>
-                        </View>
-                        <View className="w-28 h-1 bg-neutral-100 rounded-full overflow-hidden">
-                          <View className="h-full bg-emerald-500" style={{ width: `${percentComplete}%` }} />
-                        </View>
-                      </View>
-
-                      <View className="flex-row items-center gap-1.5">
-                        {/* ADVANCE POINTER (Only visible to Leader/Mentor) */}
-                        {isLeaderOrAdmin && (
-                          <Pressable
-                            onPress={() => {
-                              const nextIdx = plan.currentGroupVerseIndex + 1;
-                              if (nextIdx < plan.scriptureRange.length) {
-                                advanceGroupPlanPointer(activeCircle.id, plan.planId, nextIdx);
-                                triggerToast(`Advanced pacing pointer to ${plan.scriptureRange[nextIdx]}! 🚀`);
-                              } else {
-                                triggerToast('Already reached the end of this pacing range! 🎉');
-                              }
-                            }}
-                            className="bg-[#1A1A1A] px-2.5 py-1.5 rounded flex-row items-center gap-1"
-                          >
-                            <Text className="text-white text-[8px] font-bold uppercase tracking-wider">Advance Pacing 🚀</Text>
-                          </Pressable>
-                        )}
-
-                        {isJoined ? (
-                          <Text className="text-[9px] font-sans font-extrabold uppercase tracking-wide text-emerald-600 bg-emerald-50 px-2 py-1.5 rounded">
-                            Active ✓
-                          </Text>
-                        ) : (
-                          <Pressable onPress={() => joinGroupPlan(plan)} className="bg-[#1A1A1A] px-3 py-1.5 rounded-md">
-                            <Text className="text-white text-[9px] font-bold uppercase tracking-wider">Join Plan</Text>
-                          </Pressable>
-                        )}
-                      </View>
-                    </View>
-                  </View>
+                  </Pressable>
                 );
               })
             )}
@@ -582,104 +512,8 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                 <Share2 size={11} color="#262626" />
                 <Text className="text-neutral-800 font-sans font-bold text-[10px]">Copy Share Link</Text>
               </Pressable>
-
-              <Pressable
-                onPress={() => setShowAppStorePreview(!showAppStorePreview)}
-                className={`flex-1 py-1.5 border rounded-lg flex-row items-center justify-center gap-1.5 ${
-                  showAppStorePreview ? 'bg-indigo-600 border-indigo-600' : 'bg-indigo-50 border-indigo-200'
-                }`}
-              >
-                <Sparkles size={11} color={showAppStorePreview ? '#FFFFFF' : '#4338ca'} />
-                <Text className={`font-sans font-bold text-[10px] ${showAppStorePreview ? 'text-white' : 'text-indigo-700'}`}>
-                  {showAppStorePreview ? 'Hide App Store' : 'App Store Preview'}
-                </Text>
-              </Pressable>
             </View>
           </View>
-
-          {/* SIMULATED APP STORE MOBILE PREVIEW */}
-          {showAppStorePreview && (
-            <FadeInView>
-              <View className="border border-neutral-300 rounded-3xl bg-neutral-900 p-3">
-                {/* Internal Screen */}
-                <View className="bg-neutral-50 rounded-2xl overflow-hidden border border-neutral-800">
-                  {/* App Store Page Header */}
-                  <View className="bg-white border-b border-neutral-100 px-4 py-2.5 flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-2">
-                      <View className="w-10 h-10 bg-indigo-900 items-center justify-center rounded-xl border border-indigo-800">
-                        <Text className="text-white font-serif font-black text-sm">SP</Text>
-                      </View>
-                      <View>
-                        <Text className="text-xs font-black text-[#1A1A1A] leading-tight">Scripture Pacing</Text>
-                        <Text className="text-[8px] text-neutral-400">Memory Circles & Pacing</Text>
-                      </View>
-                    </View>
-                    <View className="bg-indigo-600 px-3 py-1 rounded-full">
-                      <Text className="text-white font-black text-[9px] uppercase tracking-wider">GET</Text>
-                    </View>
-                  </View>
-
-                  {/* Invitation Body inside App Store view */}
-                  <View className="p-4" style={{ gap: 16 }}>
-                    <View className="bg-white border border-neutral-200 rounded-xl p-3 items-center" style={{ gap: 8 }}>
-                      <View className="w-8 h-8 bg-neutral-100 rounded-full items-center justify-center">
-                        <Users size={14} color="#737373" />
-                      </View>
-                      <View className="items-center">
-                        <Text className="text-[7px] uppercase font-bold text-neutral-400 tracking-wider">INVITATION PASS</Text>
-                        <Text className="text-xs font-serif font-bold text-neutral-800 leading-snug text-center">
-                          Join "{activeCircle.name}"
-                        </Text>
-                        <Text className="text-[9px] text-neutral-400 mt-1 font-sans text-center">
-                          Invited by <Text className="text-neutral-700 font-bold">{activeCircle.ownerName}</Text>
-                        </Text>
-                      </View>
-                      <Text className="text-[9.5px] text-neutral-500 leading-normal bg-neutral-50 px-2 py-1.5 rounded-lg font-sans border border-neutral-100 text-center">
-                        "{activeCircle.description}"
-                      </Text>
-                    </View>
-
-                    <View style={{ gap: 6 }}>
-                      <View className="flex-row justify-between">
-                        <Text className="text-[9px] font-sans text-neutral-400">Active Members:</Text>
-                        <Text className="text-[9px] font-sans font-bold text-neutral-800">{activeCircleMembers.length} Members</Text>
-                      </View>
-                      <View className="flex-row justify-between">
-                        <Text className="text-[9px] font-sans text-neutral-400">Invite Code:</Text>
-                        <Text className="text-[9px] font-mono font-bold text-indigo-600 tracking-wider uppercase">{activeCircle.inviteCode}</Text>
-                      </View>
-                    </View>
-
-                    <View className="pt-2 border-t border-dashed border-neutral-200" style={{ gap: 8 }}>
-                      <Text className="text-center text-[8px] font-bold text-neutral-400 uppercase tracking-widest font-sans">
-                        👇 STEP 1: DOWNLOAD APP
-                      </Text>
-
-                      <Pressable
-                        onPress={() => triggerToast('Downloaded Scripture Pacing App! (Simulation) 📥')}
-                        className="w-full bg-[#1A1A1A] py-2 rounded-xl flex-row items-center justify-center gap-1.5"
-                      >
-                        <Check size={10} color="#FFFFFF" />
-                        <Text className="text-white text-[9px] font-bold uppercase tracking-wider">Download on the App Store</Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => triggerToast('Downloaded on Google Play! (Simulation) 📥')}
-                        className="w-full bg-white border border-neutral-300 py-2 rounded-xl flex-row items-center justify-center gap-1.5"
-                      >
-                        <Text className="text-neutral-800 text-[9px] font-bold uppercase tracking-wider">Download on Google Play</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-
-                  {/* Fake Home Indicator Bar */}
-                  <View className="bg-white py-2 items-center justify-center">
-                    <View className="w-20 h-1 bg-neutral-300 rounded-full" />
-                  </View>
-                </View>
-              </View>
-            </FadeInView>
-          )}
         </View>
 
         {/* LEAVE OR DISBAND ACTIONS */}

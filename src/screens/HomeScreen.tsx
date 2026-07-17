@@ -62,6 +62,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     startPractice,
     startReviewSession,
     triggerDailyPull,
+    isReviewDue,
   } = state;
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -73,7 +74,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
   const learningItems = memoryQueue.filter((item) => item.status === 'learning');
   const dueReviewItems = memoryQueue.filter(
-    (item) => item.status === 'reviewing' && (!item.nextReviewDueDate || new Date(item.nextReviewDueDate) <= new Date())
+    (item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate)
   );
   const queuedLookahead = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead);
 
