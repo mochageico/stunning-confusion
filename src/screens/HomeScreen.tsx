@@ -217,10 +217,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                               {touchesCount}/{masteryTouches}
                             </Text>
                             {isBankedAwaitingReview && (
-                              <HelpTooltip
-                                text="Fully touched, but retention comes first: this verse will lock in and move to spaced review automatically as soon as today's due reviews are finished."
-                                position="top"
-                              />
+                              <HelpTooltip text="Fully touched, but retention comes first: this verse will lock in and move to spaced review automatically as soon as today's due reviews are finished." />
                             )}
                           </View>
                         );

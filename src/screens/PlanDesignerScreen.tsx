@@ -132,6 +132,20 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           </Pressable>
         </View>
 
+        {/* Plan Name -- not gated behind Advanced. An unnamed plan is
+            indistinguishable from any other in Saved Plans/Community, so
+            this is essential regardless of how much other tuning a user
+            wants to see. */}
+        <View style={{ gap: 6 }}>
+          <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Plan Name</Text>
+          <TextInput
+            placeholder="My Custom Scripture Plan"
+            value={customPlanName}
+            onChangeText={setCustomPlanName}
+            className="w-full px-3 py-2.5 text-xs border-2 border-[#1A1A1A] rounded-xl font-sans bg-white text-[#1A1A1A]"
+          />
+        </View>
+
         {/* Quick Presets Section */}
         <View style={{ gap: 8 }}>
           <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Quick Presets</Text>
@@ -555,21 +569,11 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
         </View>
         )}
 
-        {/* Custom naming & community sharing options -- advanced only */}
+        {/* Community sharing options -- advanced only */}
         {isAdvanced && (
         <View className="border border-neutral-200 rounded-xl p-4 bg-white shadow-sm mt-1" style={{ gap: 12 }}>
-          <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Custom Plan & Sharing Options</Text>
-          <View style={{ gap: 6 }}>
-            <Text className="text-[10px] font-sans font-bold text-neutral-600">Custom Memory Plan Name</Text>
-            <TextInput
-              placeholder="My Custom Scripture Plan"
-              value={customPlanName}
-              onChangeText={setCustomPlanName}
-              className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg font-sans bg-white text-[#1A1A1A]"
-            />
-          </View>
-
-          <View className="flex-row items-center justify-between pt-2 border-t border-neutral-100">
+          <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Sharing Options</Text>
+          <View className="flex-row items-center justify-between">
             <View style={{ gap: 2 }} className="flex-1 pr-2">
               <View className="flex-row items-center gap-1.5">
                 <Share2 size={12} color="#737373" />

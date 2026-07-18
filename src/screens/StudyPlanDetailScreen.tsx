@@ -3,15 +3,16 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Plus } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { FadeInView, StepperRow, ChipRow, HelpTooltip, useClampedNumberField } from '../components/ui';
+import { FadeInView, StepperRow, HelpTooltip, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
-import { ALL_BIBLE_BOOKS } from '../data';
+import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
+import { useChapterText } from '../state/useScripture';
 import { StudyPlanMembership } from '../types';
 
-const PRIORITY_OPTIONS: { id: StudyPlanMembership['priority']; label: string }[] = [
-  { id: 'individual', label: 'Individual First' },
-  { id: 'group', label: 'Plan First' },
-  { id: 'additive', label: 'Additive' },
+const PRIORITY_OPTIONS: { id: StudyPlanMembership['priority']; label: string; description: string }[] = [
+  { id: 'individual', label: 'Individual First', description: 'Your own queue is pulled before this plan’s verses.' },
+  { id: 'group', label: 'Plan First', description: "This plan's verses are pulled before your own queue, but still within your daily capacity." },
+  { id: 'additive', label: 'Additive', description: "This plan's full weekly pace is added on top of your daily capacity, on purpose exceeding it." },
 ];
 
 interface VerseIdGroup {
@@ -74,6 +75,15 @@ export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
     plan.versesPerWeek,
     (n) => updateStudyPlan(plan.circleId, plan.planId, { versesPerWeek: n }),
     (n) => Math.max(1, Math.min(20, n))
+  );
+
+  // Real verse count for the "max N" hint next to End Verse.
+  const addChapterId = getBookByName(addBook)?.id || null;
+  const addChapterNum = parseInt(addChapter, 10);
+  const { data: addChapterData } = useChapterText(
+    DEFAULT_TRANSLATION_ID,
+    addChapterId,
+    Number.isNaN(addChapterNum) ? null : addChapterNum
   );
 
   const handleAddVerses = async () => {
@@ -232,7 +242,12 @@ export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
                     />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">End Verse</Text>
+                    <View className="flex-row items-center justify-between mb-0.5">
+                      <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest">End Verse</Text>
+                      {addChapterData && (
+                        <Text className="text-[8px] font-mono text-neutral-400">max {addChapterData.verseCount}</Text>
+                      )}
+                    </View>
                     <TextInput
                       value={addEndVerse}
                       onChangeText={setAddEndVerse}
@@ -273,11 +288,25 @@ export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
           {membership ? (
             <>
-              <View className="flex-row justify-between items-center">
-                <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Your Priority</Text>
-                <HelpTooltip text="Individual First: your own queue is pulled before this plan's verses. Plan First: this plan's verses are pulled before your own queue, but still within your daily capacity. Additive: this plan's full weekly pace is added on top of your daily capacity, on purpose exceeding it." />
+              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Verse Priority</Text>
+              <View style={{ gap: 6 }}>
+                {PRIORITY_OPTIONS.map((opt) => {
+                  const active = opt.id === membership.priority;
+                  return (
+                    <Pressable
+                      key={opt.id}
+                      onPress={() => setStudyPlanPriority(plan.planId, opt.id)}
+                      className={`px-3 py-2.5 rounded-xl border-2 ${active ? 'border-[#1A1A1A] bg-[#FBF9F6]' : 'border-neutral-200 bg-white'}`}
+                      style={{ gap: 2 }}
+                    >
+                      <Text className={`text-[11px] font-sans font-bold ${active ? 'text-[#1A1A1A]' : 'text-neutral-700'}`}>
+                        {opt.label}
+                      </Text>
+                      <Text className="text-[9px] text-neutral-500 font-sans leading-tight">{opt.description}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-              <ChipRow options={PRIORITY_OPTIONS} value={membership.priority} onChange={(p) => setStudyPlanPriority(plan.planId, p)} />
               <Pressable
                 onPress={() => leaveStudyPlan(plan.planId)}
                 className="w-full py-2 mt-1 bg-red-50 border border-red-200 rounded-xl items-center"

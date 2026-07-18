@@ -1,53 +1,54 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, PanResponder, Pressable, Text, View, Image } from 'react-native';
+import { Animated, Easing, Modal, PanResponder, Pressable, Text, View, Image } from 'react-native';
 
 // ============================================================
 // HelpTooltip — original was a hover-to-show "?" bubble; RN has
 // no hover, so this is tap-to-toggle (the web original already
 // supported tap-to-toggle as a fallback via its onClick handler).
+//
+// Renders through a real Modal (a true portal, escaping wherever the "?"
+// trigger sits in the layout) instead of a View positioned relative to the
+// trigger -- the previous version anchored the bubble directly above the
+// trigger with no viewport-boundary awareness, so a "?" near a screen edge
+// (extremely common; tooltips mostly sit next to section headers) could
+// render the bubble partially or fully off-screen with no way to see it.
+// A centered modal is always fully on-screen regardless of where the
+// trigger is, at the cost of the bubble no longer visually pointing at its
+// trigger -- an acceptable tradeoff for "the tooltip must actually be
+// readable" over "the tooltip points precisely at the field."
 // ============================================================
-type TooltipPosition = 'top' | 'bottom' | 'left' | 'right';
-
-const tooltipPositionClasses: Record<TooltipPosition, string> = {
-  top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
-  bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
-  left: 'right-full top-1/2 -translate-y-1/2 mr-2',
-  right: 'left-full top-1/2 -translate-y-1/2 ml-2',
-};
-
-export function HelpTooltip({ text, position = 'top' }: { text: string; position?: TooltipPosition }) {
+export function HelpTooltip({ text }: { text: string }) {
   const [show, setShow] = useState(false);
   return (
-    <View className="relative ml-1.5 shrink-0">
+    <>
       <Pressable
-        onPress={() => setShow((s) => !s)}
-        style={{ zIndex: 41 }}
-        className="w-4 h-4 rounded-full border border-neutral-300 items-center justify-center bg-white/95"
+        onPress={() => setShow(true)}
+        className="w-4 h-4 rounded-full border border-neutral-300 items-center justify-center bg-white/95 ml-1.5 shrink-0"
       >
         <Text className="text-[9px] font-sans font-black text-neutral-400">?</Text>
       </Pressable>
-      {show && (
-        <>
-          {/* Invisible, deliberately oversized backdrop so a tap ANYWHERE
-              else on screen dismisses the tooltip -- avoids needing a real
-              Modal/portal or measuring the trigger's actual screen
-              coordinates, since RN's position:absolute is only relative to
-              this small wrapper, not the whole viewport. zIndex sits below
-              the trigger (41) so the "?" button itself still toggles
-              correctly, and below the bubble (z-50) so its text stays
-              readable/on top. */}
-          <Pressable
-            onPress={() => setShow(false)}
-            style={{ position: 'absolute', top: -2000, left: -2000, width: 4000, height: 4000, zIndex: 40 }}
-          />
-          <View
-            className={`absolute z-50 w-52 p-2.5 bg-white border border-neutral-300 rounded-xl shadow-lg ${tooltipPositionClasses[position]}`}
-          >
-            <Text className="text-[10px] leading-relaxed font-sans font-normal text-neutral-800 text-left">{text}</Text>
-          </View>
-        </>
-      )}
-    </View>
+      <Modal visible={show} transparent animationType="none" onRequestClose={() => setShow(false)}>
+        {/* RN-Web's Modal wraps children in a container that defaults to
+            pointerEvents:'none' (so an off-screen/zero-size modal region
+            never blocks the page under it) -- a plain flex-1 child doesn't
+            reliably fill that container on web, so a tap outside the bubble
+            landed on the page behind the modal instead of this backdrop.
+            Pinning all four edges explicitly, with pointerEvents="auto" set
+            directly, guarantees this actually captures the dismiss tap. */}
+        <Pressable
+          onPress={() => setShow(false)}
+          pointerEvents="auto"
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          className="bg-black/40 items-center justify-center p-8"
+        >
+          {/* Swallows the tap so it doesn't also bubble to the backdrop
+              Pressable above and immediately dismiss itself. */}
+          <Pressable onPress={() => {}} className="w-full bg-white border border-neutral-300 rounded-xl p-3.5 shadow-lg" style={{ maxWidth: 320 }}>
+            <Text className="text-xs leading-relaxed font-sans font-normal text-neutral-800 text-left">{text}</Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
