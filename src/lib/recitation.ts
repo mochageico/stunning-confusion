@@ -169,15 +169,24 @@ const roughPhoneticKey = (word: string): string =>
     .replace(/(.)\1+/g, '$1') // collapse doubled letters
     .replace(/e$/, ''); // silent trailing e
 
-// Curated equivalents for short interjections a speech engine transcribes
-// differently than the text spells them ("O Lord" routinely comes back as
-// "oh Lord"). Too short for the general edit-distance tiers below to safely
-// cover -- a single edit on a 1-2 letter word can just as easily land on an
-// unrelated real word ("a"/"i", "no"/"so"), so this is deliberately a tiny,
-// explicit list rather than a loosened length rule.
-const SHORT_WORD_EQUIVALENTS: Record<string, string> = {
+// Curated equivalents the general edit-distance/phonetic tiers below can't
+// safely catch on their own -- two categories:
+//  - Short interjections a speech engine transcribes differently than the
+//    text spells them ("O Lord" routinely comes back as "oh Lord"). Too
+//    short for edit distance to safely cover -- a single edit on a 1-2
+//    letter word can just as easily land on an unrelated real word ("a"/"i",
+//    "no"/"so"), so this can't just be a loosened length rule.
+//  - True homophones whose spellings diverge too much for edit distance or
+//    roughPhoneticKey to bridge ("Pharaoh" sounds identical to "farrow" but
+//    shares only a handful of letters in the same order).
+// Deliberately a small, explicit, hand-verified list rather than an attempt
+// at a comprehensive dictionary -- add entries as real mishearings turn up
+// during actual use, not speculatively.
+const CURATED_WORD_EQUIVALENTS: Record<string, string> = {
   o: 'oh',
   oh: 'o',
+  pharaoh: 'farrow',
+  farrow: 'pharaoh',
 };
 
 /**
@@ -190,16 +199,16 @@ const SHORT_WORD_EQUIVALENTS: Record<string, string> = {
  * the same word; 8+ letters is long enough that a 3-edit match is very
  * unlikely to land on a genuinely different word). Exact only for the tiny
  * words where one edit changes identity ("a"/"i", "an"/"at"), aside from the
- * curated short-interjection list above. Homophone-style spellings match
- * through the phonetic key. (5+ rather than 6+ as of 2026-07: users
- * correctly speaking a word still saw it graded missed often enough that
- * the tolerance needed widening — 5-letter words still have enough length
- * that a 2-edit match is very unlikely to land on a genuinely different
- * word.)
+ * curated equivalents list above. Most homophone-style spellings match
+ * through the phonetic key; the few that don't are in that curated list.
+ * (5+ rather than 6+ as of 2026-07: users correctly speaking a word still
+ * saw it graded missed often enough that the tolerance needed widening —
+ * 5-letter words still have enough length that a 2-edit match is very
+ * unlikely to land on a genuinely different word.)
  */
 export const wordsRoughlyEqual = (a: string, b: string): boolean => {
   if (a === b) return true;
-  if (SHORT_WORD_EQUIVALENTS[a] === b) return true;
+  if (CURATED_WORD_EQUIVALENTS[a] === b) return true;
   const minLen = Math.min(a.length, b.length);
   if (minLen >= 8 && levenshtein(a, b) <= 3) return true;
   if (minLen >= 5 && levenshtein(a, b) <= 2) return true;
@@ -208,12 +217,28 @@ export const wordsRoughlyEqual = (a: string, b: string): boolean => {
   return false;
 };
 
-const NUMBER_WORDS = new Set([
-  'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
-  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen',
-  'eighteen', 'nineteen', 'twenty', 'thirty', 'forty', 'fifty', 'sixty',
-  'seventy', 'eighty', 'ninety', 'hundred',
-]);
+const NUMBER_WORD_PAIRS: [word: string, digit: string][] = [
+  ['one', '1'], ['two', '2'], ['three', '3'], ['four', '4'], ['five', '5'],
+  ['six', '6'], ['seven', '7'], ['eight', '8'], ['nine', '9'], ['ten', '10'],
+  ['eleven', '11'], ['twelve', '12'], ['thirteen', '13'], ['fourteen', '14'],
+  ['fifteen', '15'], ['sixteen', '16'], ['seventeen', '17'], ['eighteen', '18'],
+  ['nineteen', '19'], ['twenty', '20'], ['thirty', '30'], ['forty', '40'],
+  ['fifty', '50'], ['sixty', '60'], ['seventy', '70'], ['eighty', '80'],
+  ['ninety', '90'], ['hundred', '100'],
+];
+
+const NUMBER_WORDS = new Set(NUMBER_WORD_PAIRS.map(([word]) => word));
+
+// Scripture text nearly always spells numbers out ("the twelve tribes,"
+// "forty days"), but speech engines routinely normalize spoken number words
+// into numerals in the transcript -- consumed by pairCost below to compare
+// a digit token against the spelled-out expected word on equal footing.
+// Scoped to single tokens; a compound number like "930" -> "nine hundred
+// thirty" would need aligning one spoken token against several expected
+// ones, out of scope here.
+const DIGIT_TO_NUMBER_WORD: Record<string, string> = Object.fromEntries(
+  NUMBER_WORD_PAIRS.map(([word, digit]) => [digit, word])
+);
 
 /**
  * True for a spoken token that's plausibly a recited verse number ("3",
@@ -273,14 +298,18 @@ export const SKIP_EXPECTED_DROPPABLE_COST = 0.05;
 export const INSERT_SPOKEN_COST = 0.4;
 
 const pairCost = (expectedWord: string, spokenWord: string): number => {
-  if (expectedWord === spokenWord) return MATCH_COST;
+  // Normalized for comparison only -- isLikelyVerseNumber below still checks
+  // the raw token, since a bare digit is exactly what marks a spoken verse
+  // number for suppression regardless of its word form.
+  const normalizedSpoken = DIGIT_TO_NUMBER_WORD[spokenWord] ?? spokenWord;
+  if (expectedWord === normalizedSpoken) return MATCH_COST;
   // A spoken verse number ("three", "23") read aloud between verses isn't
   // part of the passage. Suppress the usual fuzzy-match discount so it can't
   // get cheaply substituted for a similarly-spelled real word (e.g. "three"
   // vs. "tree") -- the DP then naturally prefers writing it off as noise via
   // INSERT_SPOKEN_COST instead, unless it's an exact match (handled above).
   if (isLikelyVerseNumber(spokenWord) && !isLikelyVerseNumber(expectedWord)) return SUBSTITUTION_COST;
-  if (wordsRoughlyEqual(expectedWord, spokenWord)) return CLOSE_MATCH_COST;
+  if (wordsRoughlyEqual(expectedWord, normalizedSpoken)) return CLOSE_MATCH_COST;
   return SUBSTITUTION_COST;
 };
 
@@ -505,10 +534,17 @@ export const reconcileSpeechWindow = (
 export interface SpeechRecognizer {
   /**
    * Begin listening. `onTranscript` fires repeatedly with the FULL transcript
-   * so far (interim results included) — feed it to matchTranscriptLive.
+   * so far (interim results included) — feed it to the live reconciliation.
+   * `finalizedTokenCount` is how many words of that transcript are from
+   * segments the engine has already finalized (won't be retroactively
+   * rewritten) -- interim segments routinely get revised as more audio
+   * context arrives (a word, or even the token COUNT, can change between
+   * calls), so anything that needs a stable position to remember across
+   * calls (see PracticeModals.tsx's strike-limit reset) must anchor to this
+   * count, never to the full transcript's current token count.
    */
   start(callbacks: {
-    onTranscript: (fullTranscript: string) => void;
+    onTranscript: (fullTranscript: string, finalizedTokenCount: number) => void;
     onEnd: () => void;
     onError: (message: string) => void;
   }): void;
@@ -531,7 +567,7 @@ class WebSpeechRecognizer implements SpeechRecognizer {
 
   constructor(private RecognitionCtor: any) {}
 
-  start(callbacks: { onTranscript: (t: string) => void; onEnd: () => void; onError: (m: string) => void }) {
+  start(callbacks: { onTranscript: (t: string, finalizedTokenCount: number) => void; onEnd: () => void; onError: (m: string) => void }) {
     this.finalizedText = '';
     const rec = new this.RecognitionCtor();
     rec.continuous = true;
@@ -544,7 +580,7 @@ class WebSpeechRecognizer implements SpeechRecognizer {
         if (event.results[i].isFinal) this.finalizedText += ' ' + chunk;
         else interim += ' ' + chunk;
       }
-      callbacks.onTranscript((this.finalizedText + ' ' + interim).trim());
+      callbacks.onTranscript((this.finalizedText + ' ' + interim).trim(), tokenizeWords(this.finalizedText).length);
     };
     rec.onerror = (event: any) => callbacks.onError(String(event?.error || 'speech recognition error'));
     rec.onend = () => callbacks.onEnd();
@@ -603,7 +639,7 @@ class NativeSpeechRecognizer implements SpeechRecognizer {
     this.expectedText = expectedText;
   }
 
-  start(callbacks: { onTranscript: (t: string) => void; onEnd: () => void; onError: (m: string) => void }) {
+  start(callbacks: { onTranscript: (t: string, finalizedTokenCount: number) => void; onEnd: () => void; onError: (m: string) => void }) {
     this.teardown();
     this.finalizedText = '';
     const myGeneration = ++this.generation;
@@ -622,9 +658,13 @@ class NativeSpeechRecognizer implements SpeechRecognizer {
             const transcript = event.results[0]?.transcript ?? '';
             if (event.isFinal) {
               this.finalizedText = (this.finalizedText + ' ' + transcript).trim();
-              callbacks.onTranscript(this.finalizedText);
+              callbacks.onTranscript(this.finalizedText, tokenizeWords(this.finalizedText).length);
             } else {
-              callbacks.onTranscript((this.finalizedText + ' ' + transcript).trim());
+              // this.finalizedText is intentionally NOT updated here -- an
+              // interim result hasn't been committed by the engine yet, so
+              // the finalized count reported alongside it must reflect only
+              // what was true before this in-flight segment.
+              callbacks.onTranscript((this.finalizedText + ' ' + transcript).trim(), tokenizeWords(this.finalizedText).length);
             }
           }),
           this.module.addListener('error', (event) => callbacks.onError(event.message || event.error)),

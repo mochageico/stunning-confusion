@@ -414,6 +414,45 @@ scenario('14. Long/hard-word tolerance', () => {
 });
 
 // ============================================================================
+// 15. Number-word/digit normalization -- scripture spells numbers out, but
+//    engines often transcribe them as digits.
+// ============================================================================
+scenario('15. Number-word/digit normalization', () => {
+  const outcomes = gradeTranscript(
+    'and he divided his forces against them by night twelve tribes gathered',
+    'and he divided his forces against them by night 12 tribes gathered'
+  );
+  const twelveIdx = tokenizeWords('and he divided his forces against them by night twelve tribes gathered').indexOf('twelve');
+  check('"twelve" transcribed as "12" does not grade missed', outcomes[twelveIdx] !== 'missed', `got ${outcomes[twelveIdx]}`);
+
+  // A genuinely spoken verse-number annotation (not part of the text) must
+  // still be suppressed rather than cheaply matched via digit normalization.
+  const expectedText = 'there is therefore now no condemnation';
+  const numberSuppressed = gradeTranscript(expectedText, '1 there is therefore now no condemnation');
+  const missedCount = numberSuppressed.filter((o) => o === 'missed').length;
+  check(
+    'a spoken verse-number annotation before the text is still discarded as noise, not misaligned',
+    missedCount === 0,
+    `${missedCount} unexpected misses: ${JSON.stringify(numberSuppressed)}`
+  );
+});
+
+// ============================================================================
+// 16. Curated homophone (Pharaoh/farrow) -- a true homophone whose spelling
+//    diverges too much for edit distance or the phonetic key to bridge.
+// ============================================================================
+scenario('16. Curated homophone (Pharaoh/farrow)', () => {
+  check('"pharaoh" and "farrow" are treated as equivalent', wordsRoughlyEqual('pharaoh', 'farrow'));
+  check('the equivalence is symmetric', wordsRoughlyEqual('farrow', 'pharaoh'));
+
+  const outcomes = gradeTranscript(
+    'so pharaoh dreamed and behold he stood by the river',
+    'so farrow dreamed and behold he stood by the river'
+  );
+  check('"Pharaoh" transcribed as "farrow" does not grade missed', outcomes[1] !== 'missed', `got ${outcomes[1]}`);
+});
+
+// ============================================================================
 console.log(`\n${total - failures}/${total} checks passed.`);
 if (failures > 0) {
   console.error(`${failures} FAILED.`);

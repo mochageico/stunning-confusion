@@ -426,6 +426,14 @@ function PracticeModalsInner({
   // pre-reset speech could walk the pointer right back past the reset.
   const alignAnchorRef = useRef(0);
   const spokenTokenFloorRef = useRef(0);
+  // How many tokens of speakTranscript are from FINALIZED segments as of the
+  // most recent onTranscript call -- the only stable position to snapshot
+  // spokenTokenFloorRef from. Engines routinely rewrite interim segments as
+  // more audio context arrives (even the token COUNT can change between
+  // calls), so basing the floor on the full transcript's raw token count at
+  // an arbitrary moment risks snapshotting a count that's about to become
+  // wrong once that in-flight interim segment finalizes differently.
+  const finalizedTokenCountRef = useRef(0);
 
   // Make sure the engine never keeps listening past the modal's lifetime.
   useEffect(() => {
@@ -497,8 +505,13 @@ function PracticeModalsInner({
         // anchors forward too, the next reconciliation tick would still see
         // the old pre-reset words and could walk the pointer right back past
         // the reset using stale speech, defeating the whole point of it.
+        // Snapshotting from finalizedTokenCountRef (not speakTranscript's raw
+        // token count) matters here specifically: whatever's still interim
+        // right at this instant could still be rewritten by the engine into
+        // a different token count once it finalizes, which would silently
+        // invalidate a floor based on the current full-transcript length.
         alignAnchorRef.current = verseStartPointer;
-        spokenTokenFloorRef.current = tokenizeWords(speakTranscript).length;
+        spokenTokenFloorRef.current = finalizedTokenCountRef.current;
         setTimeout(() => setShowStrikeResetAlert(false), 1500);
       }
 
@@ -540,6 +553,7 @@ function PracticeModalsInner({
     usedSpeechRef.current = false;
     alignAnchorRef.current = 0;
     spokenTokenFloorRef.current = 0;
+    finalizedTokenCountRef.current = 0;
   };
 
   const resetRevealPeeks = () => {
@@ -604,7 +618,10 @@ function PracticeModalsInner({
     // text before listening starts (no-op on the web engine).
     engine.prime?.(fullPassageText);
     engine.start({
-      onTranscript: (fullTranscript) => setSpeakTranscript(fullTranscript),
+      onTranscript: (fullTranscript, finalizedTokenCount) => {
+        setSpeakTranscript(fullTranscript);
+        finalizedTokenCountRef.current = finalizedTokenCount;
+      },
       onEnd: () => setIsListeningSpeak(false),
       onError: (message) => {
         setIsListeningSpeak(false);
