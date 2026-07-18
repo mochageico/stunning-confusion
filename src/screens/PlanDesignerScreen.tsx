@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Check, Share2, TrendingUp } from 'lucide-react-native';
 
@@ -78,17 +79,26 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     setPreset('custom');
   };
 
+  // Defaults to Basic -- a newer/less technical user opening this screen
+  // sees just the essentials (presets, weekly rhythm, sabbath, new-verse
+  // pace) instead of the full set of tuning knobs. Purely a display
+  // toggle, session-local: every underlying setting still has its real
+  // saved value regardless of which mode is showing.
+  const [isAdvanced, setIsAdvanced] = useState(false);
+
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
-          <Pressable
-            onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-[#E5E5E5] items-center justify-center bg-white"
-          >
-            <ArrowLeft size={15} color="#1A1A1A" />
-          </Pressable>
+          {state.onboardingStepInProgress === null && (
+            <Pressable
+              onPress={handleBack}
+              className="w-8 h-8 rounded-full border border-[#E5E5E5] items-center justify-center bg-white"
+            >
+              <ArrowLeft size={15} color="#1A1A1A" />
+            </Pressable>
+          )}
           <View>
             <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Settings</Text>
             <Text className="text-xl font-serif font-bold text-[#1A1A1A]">Memory Plan Designer</Text>
@@ -97,6 +107,30 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
         <Text className="text-xs text-neutral-500 font-sans -mt-1 leading-relaxed">
           Customize your pacing and daily routine.
         </Text>
+
+        {/* Basic / Advanced toggle */}
+        <View className="flex-row gap-2 -mt-1">
+          <Pressable
+            onPress={() => setIsAdvanced(false)}
+            className={`flex-1 py-2 rounded-xl border-2 items-center ${
+              !isAdvanced ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
+            }`}
+          >
+            <Text className={`text-[10px] font-sans font-bold uppercase tracking-wider ${!isAdvanced ? 'text-white' : 'text-neutral-500'}`}>
+              Basic
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setIsAdvanced(true)}
+            className={`flex-1 py-2 rounded-xl border-2 items-center ${
+              isAdvanced ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
+            }`}
+          >
+            <Text className={`text-[10px] font-sans font-bold uppercase tracking-wider ${isAdvanced ? 'text-white' : 'text-neutral-500'}`}>
+              Advanced
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Quick Presets Section */}
         <View style={{ gap: 8 }}>
@@ -321,6 +355,8 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             </View>
           </View>
 
+          {isAdvanced && (
+          <>
           {/* Review Cap Slider */}
           <View style={{ gap: 6 }}>
             <View className="flex-row justify-between items-center">
@@ -409,9 +445,12 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               })}
             </View>
           </View>
+          </>
+          )}
         </View>
 
-        {/* Retention Rigor */}
+        {/* Retention Rigor -- advanced only */}
+        {isAdvanced && (
         <View className="border-2 border-[#1A1A1A] rounded-xl p-3.5 bg-white shadow-sm" style={{ gap: 16 }}>
           <View className="flex-row items-center justify-between border-b border-neutral-100 pb-2">
             <Text className="text-xs font-sans font-extrabold uppercase tracking-widest text-[#1A1A1A]">Retention Rigor</Text>
@@ -514,8 +553,10 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             At this rigor, a verse is fully retained for good after about <Text className="font-bold text-[#1A1A1A]">{totalRigorLabel}</Text>.
           </Text>
         </View>
+        )}
 
-        {/* Custom naming & community sharing options */}
+        {/* Custom naming & community sharing options -- advanced only */}
+        {isAdvanced && (
         <View className="border border-neutral-200 rounded-xl p-4 bg-white shadow-sm mt-1" style={{ gap: 12 }}>
           <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Custom Plan & Sharing Options</Text>
           <View style={{ gap: 6 }}>
@@ -549,6 +590,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             </Pressable>
           </View>
         </View>
+        )}
 
         {/* Workload Forecast Sticky Bottom Card */}
         <View className="bg-[#FBF9F6] border-2 border-[#1A1A1A] rounded-xl p-3.5 shadow-md" style={{ gap: 12 }}>

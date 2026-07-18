@@ -37,12 +37,14 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
         {/* Header with back */}
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <Pressable
-            onPress={() => setCommunitySubView('home')}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          {state.onboardingStepInProgress === null && (
+            <Pressable
+              onPress={() => setCommunitySubView('home')}
+              className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
+            >
+              <ArrowLeft size={14} color="#262626" />
+            </Pressable>
+          )}
           <View>
             <Text className="text-[9px] uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans">
               DISCOVER CIRCLES

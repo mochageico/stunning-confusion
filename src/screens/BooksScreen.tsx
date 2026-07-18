@@ -17,12 +17,14 @@ export default function BooksScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
-          <Pressable
-            onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-[#E5E5E5] items-center justify-center bg-white"
-          >
-            <ArrowLeft size={15} color="#1A1A1A" />
-          </Pressable>
+          {state.onboardingStepInProgress === null && (
+            <Pressable
+              onPress={handleBack}
+              className="w-8 h-8 rounded-full border border-[#E5E5E5] items-center justify-center bg-white"
+            >
+              <ArrowLeft size={15} color="#1A1A1A" />
+            </Pressable>
+          )}
           <View>
             <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">BIBLE DIRECTORY</Text>
             <Text className="text-xl font-serif font-bold text-[#1A1A1A]">Select Book</Text>

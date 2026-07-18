@@ -7,7 +7,7 @@ import { FadeInView } from '../components/ui';
 export default function OnboardingScreen({ state }: { state: AppState }) {
   const {
     navigateTo,
-    setCurrentTab,
+    selectTab,
     setCommunitySubView,
     dismissOnboarding,
     startOnboardingStep,
@@ -33,14 +33,14 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
       description:
         'From Home, tap "Pull New Verses" to bring today\'s verses into Learning phase, then tap "Learn" to start practicing.',
       buttonLabel: 'Go to Home',
-      onPress: () => setCurrentTab('home'),
+      onPress: () => selectTab('home'),
     },
     {
       title: 'Find a Scripture Circle',
       description: 'Join a circle to memorize scripture alongside others, in your own personalized pace.',
       buttonLabel: 'Find a Circle',
       onPress: () => {
-        setCurrentTab('community');
+        selectTab('community');
         setCommunitySubView('find');
       },
     },

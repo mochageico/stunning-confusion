@@ -90,9 +90,21 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const currentAudio = resolveChapterAudio(userRecordings, selectedChapterAudios, selectedBook || '', selectedChapter || 0);
   const isPlayingThis = !!currentAudio && playingRecordingId === currentAudio.id;
 
+  const floatingBarShowing = selectedVerseNumbers.length > 0;
+
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
+      <ScrollView
+        className="flex-1 bg-white"
+        contentContainerClassName="p-5"
+        // Extra bottom padding whenever the floating selection bar is
+        // showing, so the last verses and the ESV copyright notice can
+        // still fully scroll into view above it rather than being hidden
+        // underneath -- the bar itself no longer takes up real space in
+        // the scroll flow (see below), so nothing pushes content up for it
+        // automatically.
+        contentContainerStyle={{ gap: 16, paddingBottom: floatingBarShowing ? 168 : 20 }}
+      >
         {/* Title Header with back */}
         <View className="flex-row items-center justify-between border-b border-[#E5E5E5] pb-2">
           <View className="flex-row items-center gap-2">
@@ -423,126 +435,136 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           </Text>
         )}
 
-        {/* Floating Action Menu (Appears when 1+ verses selected) */}
-        {selectedVerseNumbers.length > 0 && (
-          <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-3" style={{ gap: 8 }}>
-            <View className="flex-row items-center justify-between pl-1">
-              <View>
-                <Text className="text-[9px] font-bold text-neutral-400 uppercase font-sans">SELECTED</Text>
-                <Text className="text-xs font-extrabold font-sans text-[#1A1A1A]">
-                  {selectedVerseNumbers.length} {selectedVerseNumbers.length === 1 ? 'Verse' : 'Verses'}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => {
-                  setSelectedVerseNumbers([]);
-                  setShowStatusOverride(false);
-                }}
-                className="px-2 py-1"
-              >
-                <Text className="text-[10px] font-bold font-sans text-neutral-400">Clear</Text>
-              </Pressable>
-            </View>
-            <View className="flex-row gap-1.5">
-              <Pressable
-                onPress={() => {
-                  addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)));
-                  setSelectedVerseNumbers([]);
-                }}
-                className="flex-1 py-2 items-center bg-emerald-600 rounded-lg"
-              >
-                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide" numberOfLines={1}>
-                  Add to Queue
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
-                className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
-              >
-                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Listen</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => startPractice('learn', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
-                className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
-              >
-                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Learn</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setShowStatusOverride((s) => !s)}
-                className={`flex-1 py-2 items-center rounded-lg flex-row justify-center gap-1 ${
-                  showStatusOverride ? 'bg-indigo-700' : 'bg-indigo-600'
-                }`}
-              >
-                <SlidersHorizontal size={10} color="#FFFFFF" />
-                <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Status</Text>
-              </Pressable>
-            </View>
+      </ScrollView>
 
-            {/* Manual memory-status override -- for verses already memorized
-                outside the app. Sets the selected verses directly to a
-                chosen phase, skipping the normal learn-then-graduate climb. */}
-            {showStatusOverride && (
-              <FadeInView>
-                <View className="bg-indigo-50/60 border border-indigo-200 rounded-xl p-3 mt-1" style={{ gap: 10 }}>
-                  <View className="flex-row items-center justify-between">
-                    <Text className="text-[9px] font-bold text-indigo-900 uppercase tracking-wide font-sans">
-                      Set Memory Status
-                    </Text>
-                    <Pressable onPress={() => setShowStatusOverride(false)}>
-                      <X size={13} color="#4338ca" />
-                    </Pressable>
-                  </View>
-                  <Text className="text-[9px] text-indigo-800/80 font-sans leading-relaxed -mt-1">
-                    Already know these from memory? Place them directly in the right phase instead of starting over from
-                    Learning.
+      {/* Floating Action Menu -- hovers above the verse content near the
+          bottom of the viewport (not the end of the scrollable page), so
+          it's reachable the instant verses are selected without scrolling
+          all the way down. Rendered as an absolutely-positioned sibling of
+          the ScrollView rather than inside its content flow; the matching
+          extra paddingBottom on the ScrollView above keeps the last verses
+          and the ESV copyright notice from ever being hidden underneath it. */}
+      {floatingBarShowing && (
+        <View
+          className="absolute left-4 right-4 bg-white border-2 border-[#1A1A1A] rounded-xl p-3 shadow-lg"
+          style={{ bottom: 16, gap: 8 }}
+        >
+          <View className="flex-row items-center justify-between pl-1">
+            <View>
+              <Text className="text-[9px] font-bold text-neutral-400 uppercase font-sans">SELECTED</Text>
+              <Text className="text-xs font-extrabold font-sans text-[#1A1A1A]">
+                {selectedVerseNumbers.length} {selectedVerseNumbers.length === 1 ? 'Verse' : 'Verses'}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                setSelectedVerseNumbers([]);
+                setShowStatusOverride(false);
+              }}
+              className="px-2 py-1"
+            >
+              <Text className="text-[10px] font-bold font-sans text-neutral-400">Clear</Text>
+            </Pressable>
+          </View>
+          <View className="flex-row gap-1.5">
+            <Pressable
+              onPress={() => {
+                addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)));
+                setSelectedVerseNumbers([]);
+              }}
+              className="flex-1 py-2 items-center bg-emerald-600 rounded-lg"
+            >
+              <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide" numberOfLines={1}>
+                Add to Queue
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
+              className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
+            >
+              <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Listen</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => startPractice('learn', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
+              className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
+            >
+              <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Learn</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowStatusOverride((s) => !s)}
+              className={`flex-1 py-2 items-center rounded-lg flex-row justify-center gap-1 ${
+                showStatusOverride ? 'bg-indigo-700' : 'bg-indigo-600'
+              }`}
+            >
+              <SlidersHorizontal size={10} color="#FFFFFF" />
+              <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Status</Text>
+            </Pressable>
+          </View>
+
+          {/* Manual memory-status override -- for verses already memorized
+              outside the app. Sets the selected verses directly to a
+              chosen phase, skipping the normal learn-then-graduate climb. */}
+          {showStatusOverride && (
+            <FadeInView>
+              <View className="bg-indigo-50/60 border border-indigo-200 rounded-xl p-3 mt-1" style={{ gap: 10 }}>
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-[9px] font-bold text-indigo-900 uppercase tracking-wide font-sans">
+                    Set Memory Status
                   </Text>
-
-                  <View style={{ gap: 4 }}>
-                    <ChipRow
-                      wrap
-                      value={overridePhase}
-                      onChange={(id) => {
-                        setOverridePhase(id);
-                        if (id !== 'weekly' && id !== 'monthly') setOverrideWeekday(null);
-                      }}
-                      options={OVERRIDE_PHASE_OPTIONS}
-                    />
-                  </View>
-
-                  {(overridePhase === 'weekly' || overridePhase === 'monthly') && (
-                    <View style={{ gap: 4 }}>
-                      <Text className="text-[8px] font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
-                        Land review cycle on (optional) -- tap again to clear
-                      </Text>
-                      <ChipRow
-                        wrap
-                        value={overrideWeekday ?? ''}
-                        onChange={(id) => setOverrideWeekday((prev) => (prev === id ? null : (id as string)))}
-                        options={OVERRIDE_WEEKDAY_OPTIONS}
-                      />
-                    </View>
-                  )}
-
-                  <Pressable
-                    onPress={() => {
-                      overrideVerseMemoryStatus(
-                        activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)),
-                        overridePhase,
-                        overrideWeekday ?? undefined
-                      );
-                      setSelectedVerseNumbers([]);
-                      setShowStatusOverride(false);
-                    }}
-                    className="w-full py-2 items-center bg-indigo-700 rounded-lg"
-                  >
-                    <Text className="text-white text-[10px] font-bold uppercase tracking-wide">Apply Override</Text>
+                  <Pressable onPress={() => setShowStatusOverride(false)}>
+                    <X size={13} color="#4338ca" />
                   </Pressable>
                 </View>
-              </FadeInView>
-            )}
-          </View>
-        )}
-      </ScrollView>
+                <Text className="text-[9px] text-indigo-800/80 font-sans leading-relaxed -mt-1">
+                  Already know these from memory? Place them directly in the right phase instead of starting over from
+                  Learning.
+                </Text>
+
+                <View style={{ gap: 4 }}>
+                  <ChipRow
+                    wrap
+                    value={overridePhase}
+                    onChange={(id) => {
+                      setOverridePhase(id);
+                      if (id !== 'weekly' && id !== 'monthly') setOverrideWeekday(null);
+                    }}
+                    options={OVERRIDE_PHASE_OPTIONS}
+                  />
+                </View>
+
+                {(overridePhase === 'weekly' || overridePhase === 'monthly') && (
+                  <View style={{ gap: 4 }}>
+                    <Text className="text-[8px] font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
+                      Land review cycle on (optional) -- tap again to clear
+                    </Text>
+                    <ChipRow
+                      wrap
+                      value={overrideWeekday ?? ''}
+                      onChange={(id) => setOverrideWeekday((prev) => (prev === id ? null : (id as string)))}
+                      options={OVERRIDE_WEEKDAY_OPTIONS}
+                    />
+                  </View>
+                )}
+
+                <Pressable
+                  onPress={() => {
+                    overrideVerseMemoryStatus(
+                      activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)),
+                      overridePhase,
+                      overrideWeekday ?? undefined
+                    );
+                    setSelectedVerseNumbers([]);
+                    setShowStatusOverride(false);
+                  }}
+                  className="w-full py-2 items-center bg-indigo-700 rounded-lg"
+                >
+                  <Text className="text-white text-[10px] font-bold uppercase tracking-wide">Apply Override</Text>
+                </Pressable>
+              </View>
+            </FadeInView>
+          )}
+        </View>
+      )}
     </FadeInView>
   );
 }
