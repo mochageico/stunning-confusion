@@ -107,12 +107,16 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const addChapterId = getBookByName(selectedAddBook)?.id || null;
   const { data: addChapterData } = useChapterText(DEFAULT_TRANSLATION_ID, addChapterId, selectedAddChapter);
 
-  // Verses in spaced review (status 'reviewing') are deliberately excluded
-  // here -- the Memory Calendar now shows that half of the picture (which
-  // verses are due which day, Daily/Weekly/Monthly), so listing them again
-  // in a flat queue too was redundant and confusing. Learning/queued/
-  // retained verses -- the ones the calendar doesn't cover -- still show.
-  const grouped = groupQueueItems(memoryQueue.filter((item) => item.status !== 'reviewing'));
+  // Verses in spaced review ('reviewing') are deliberately excluded here --
+  // the Memory Calendar shows that half of the picture (which verses are
+  // due which day, Daily/Weekly/Monthly), so listing them again in a flat
+  // queue too was redundant and confusing. Fully-memorized verses
+  // ('retained') are excluded for the same reason -- they're done, there's
+  // nothing to start/reorder/manage about them here, and they're already
+  // browsable in Full History ("Fully memorized — reached long-term
+  // retention"). Only queued/learning verses -- the ones actually being
+  // actively managed -- show.
+  const grouped = groupQueueItems(memoryQueue.filter((item) => item.status === 'queued' || item.status === 'learning'));
 
   const rhythmTargetPlan = savedPlans.find((p) => p.id === editingPlanId) || savedPlans.find((p) => p.isActive) || savedPlans[0];
 
@@ -570,17 +574,16 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                           <Text className="text-[9px] font-sans font-bold text-[#1A1A1A]">Start Learning</Text>
                         </Pressable>
                       )}
-                      {/* Status colors deliberately avoid amber/emerald/black --
-                          those are already used by the Memory Load Forecast
-                          below, and 'reviewing' (which used to live here too)
-                          is gone entirely now that it's shown on the calendar. */}
+                      {/* Only 'queued'/'learning' groups ever reach this list --
+                          'reviewing' is on the Memory Calendar and 'retained'
+                          is done, nothing to manage. Status colors deliberately
+                          avoid amber/emerald/black, already used by the Memory
+                          Load Forecast below. */}
                       <Text
                         className={`text-[9px] font-sans font-bold px-2 py-0.5 rounded-full border uppercase ${
                           group.status === 'learning'
                             ? 'bg-violet-50 text-violet-600 border-violet-200'
-                            : group.status === 'retained'
-                              ? 'bg-teal-50 text-teal-600 border-teal-200'
-                              : 'bg-neutral-50 text-neutral-400 border-neutral-200'
+                            : 'bg-neutral-50 text-neutral-400 border-neutral-200'
                         }`}
                       >
                         {group.status}
