@@ -128,13 +128,14 @@ export const classifyFirstLetterAttempt = (typedChar: string, word: string): Let
 };
 
 // ============================================================================
-// SPOKEN RECITATION — TRANSCRIPT GRADING
+// SPOKEN RECITATION — SEQUENCE ALIGNMENT
 // ----------------------------------------------------------------------------
-// Both graders below compare a speech transcript (from any source: Web Speech
-// API, a native engine, or a manually typed fallback) against the expected
-// verse text. Speech engines mis-hear small words constantly, so two words
-// also match "fuzzily" when they're within one letter-edit of each other
-// (4+ letter words only — "gods"/"god's", "labour"/"labor").
+// One alignment core (buildAlignmentTable + backtraceOutcomes) powers both
+// the live incremental matcher and the final one-shot grade below, differing
+// only in how each decides where the passage "ends" (see the two exported
+// functions). Costs are tunable weights, not a plain 0/1 edit distance, so
+// the alignment is biased toward how speech recognition actually fails
+// rather than a strict textual difference.
 // ============================================================================
 
 const levenshtein = (a: string, b: string): number => {
@@ -168,40 +169,44 @@ const roughPhoneticKey = (word: string): string =>
     .replace(/(.)\1+/g, '$1') // collapse doubled letters
     .replace(/e$/, ''); // silent trailing e
 
+// Curated equivalents for short interjections a speech engine transcribes
+// differently than the text spells them ("O Lord" routinely comes back as
+// "oh Lord"). Too short for the general edit-distance tiers below to safely
+// cover -- a single edit on a 1-2 letter word can just as easily land on an
+// unrelated real word ("a"/"i", "no"/"so"), so this is deliberately a tiny,
+// explicit list rather than a loosened length rule.
+const SHORT_WORD_EQUIVALENTS: Record<string, string> = {
+  o: 'oh',
+  oh: 'o',
+};
+
 /**
  * Fuzzy spoken-word equality. Speech engines constantly bend a word slightly
  * ("god" -> "got", "separated" -> "separate", "waters" -> "water's" — the
  * last is already handled by normalization). Tolerance scales with length:
- * one edit for 3+ letter words, two for 5+, exact only for the tiny words
- * where one edit changes identity ("a"/"i", "an"/"at"). Homophone-style
- * spellings match through the phonetic key. (5+ rather than 6+ as of
- * 2026-07: users correctly speaking a word still saw it graded missed often
- * enough that the tolerance needed widening — 5-letter words still have
- * enough length that a 2-edit match is very unlikely to land on a genuinely
- * different word.)
+ * one edit for 3+ letter words, two for 5+, three for 8+ (long theological
+ * vocabulary -- "propitiation", "righteousness" -- a general speech model
+ * can mangle across more than two syllables while it's still recognizably
+ * the same word; 8+ letters is long enough that a 3-edit match is very
+ * unlikely to land on a genuinely different word). Exact only for the tiny
+ * words where one edit changes identity ("a"/"i", "an"/"at"), aside from the
+ * curated short-interjection list above. Homophone-style spellings match
+ * through the phonetic key. (5+ rather than 6+ as of 2026-07: users
+ * correctly speaking a word still saw it graded missed often enough that
+ * the tolerance needed widening — 5-letter words still have enough length
+ * that a 2-edit match is very unlikely to land on a genuinely different
+ * word.)
  */
 export const wordsRoughlyEqual = (a: string, b: string): boolean => {
   if (a === b) return true;
+  if (SHORT_WORD_EQUIVALENTS[a] === b) return true;
   const minLen = Math.min(a.length, b.length);
+  if (minLen >= 8 && levenshtein(a, b) <= 3) return true;
   if (minLen >= 5 && levenshtein(a, b) <= 2) return true;
   if (minLen >= 3 && levenshtein(a, b) <= 1) return true;
   if (minLen >= 3 && roughPhoneticKey(a) === roughPhoneticKey(b)) return true;
   return false;
 };
-
-export interface LiveMatchResult {
-  /** One flag per expected word: has it been spoken (or fuzzily heard)? */
-  matched: boolean[];
-  /** Index of the next expected word — everything before it is resolved. */
-  pointer: number;
-}
-
-// How far ahead of the current position the live matcher will search to
-// re-synchronize after a mis-heard word. Wide enough to absorb a bad word
-// plus a couple of engine hiccups; narrow enough that a common word
-// repeating later in the passage rarely causes a false jump (and the final
-// grade re-aligns the whole transcript anyway).
-export const RESYNC_WINDOW = 6;
 
 const NUMBER_WORDS = new Set([
   'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
@@ -214,10 +219,10 @@ const NUMBER_WORDS = new Set([
  * True for a spoken token that's plausibly a recited verse number ("3",
  * "twenty", "one hundred") rather than passage text -- either a bare digit
  * string (some engines transcribe numbers as digits) or a common English
- * number word. Only ever checked on a token that has ALREADY failed to
- * match the next expected word (see matchTranscriptLive below), so actually
- * reciting a number that's really in the verse text ("six days", "two great
- * lights") still matches normally and is never affected by this.
+ * number word. Consumed by pairCost below, not as a blanket pre-filter --
+ * "six" spoken where the verse text genuinely says "six days" must still
+ * match normally, so the number-ness of a token only matters relative to
+ * what it's being compared against.
  */
 export const isLikelyVerseNumber = (token: string): boolean => /^\d+$/.test(token) || NUMBER_WORDS.has(token);
 
@@ -239,117 +244,252 @@ const COMMONLY_DROPPED_WORDS = new Set([
 
 export const isCommonlyDroppedWord = (token: string): boolean => COMMONLY_DROPPED_WORDS.has(token);
 
-/**
- * Incremental matcher for LIVE recitation: recomputed from scratch on every
- * transcript update (transcripts are the only state, so an engine revising
- * its interim results heals earlier mistakes automatically).
- *
- * The cardinal rule is NEVER STALL. The classic failure in recitation apps:
- * the engine mis-hears one word, the matcher keeps comparing everything you
- * say next against that stuck position, and the session hangs while you keep
- * talking. Here, a token that doesn't match the next expected word searches
- * up to RESYNC_WINDOW words ahead and re-anchors there, marking whatever it
- * jumped over as (provisionally) missed. To keep tiny common words ("the",
- * "and") from causing false jumps, a re-anchor needs confidence: either the
- * matching word is 4+ letters, or the NEXT spoken token also matches the
- * word right after the anchor (a two-word agreement).
- */
-export const matchTranscriptLive = (expectedTokens: string[], transcript: string): LiveMatchResult => {
-  const spoken = tokenizeWords(transcript);
-  const matched = new Array(expectedTokens.length).fill(false);
-  let e = 0;
-  for (let s = 0; s < spoken.length; s++) {
-    if (e >= expectedTokens.length) break;
-    const token = spoken[s];
+// ----------------------------------------------------------------------------
+// Cost weights for the alignment DP. Tuned for how speech recognition
+// actually fails, not a plain edit distance:
+//  - Skipping a real expected word (SKIP_EXPECTED_COST) costs MORE than
+//    treating a mis-heard word as a substitution (SUBSTITUTION_COST). This
+//    is the direct fix for repetitive passages (e.g. "flesh"/"Spirit"/"law"
+//    recurring across Romans 8): the aligner is biased to explain a
+//    mis-heard word as "they said something close to this" rather than
+//    "they skipped ahead to the next occurrence," so it only jumps past
+//    real words when the words in between genuinely don't align to
+//    anything, not just because a nearby word happens to match.
+//  - A fuzzy/phonetic match (CLOSE_MATCH_COST) is nearly free relative to a
+//    real substitution, so a real fuzzy match always beats forcing a
+//    resync, while exact matches still win ties (cost 0 < 0.15).
+//  - Dropping a COMMONLY_DROPPED_WORDS word is almost free -- baked directly
+//    into the alignment via skipExpectedCost instead of forgiven in a
+//    post-hoc pass, so it can no longer distort which alignment path gets
+//    chosen in the first place.
+//  - A stray spoken word matching nothing (false start, "um", a
+//    self-correction) is cheaper to write off as noise (INSERT_SPOKEN_COST)
+//    than to force into a wrong slot.
+export const MATCH_COST = 0;
+export const CLOSE_MATCH_COST = 0.15;
+export const SUBSTITUTION_COST = 1;
+export const SKIP_EXPECTED_COST = 1.2;
+export const SKIP_EXPECTED_DROPPABLE_COST = 0.05;
+export const INSERT_SPOKEN_COST = 0.4;
 
-    if (wordsRoughlyEqual(token, expectedTokens[e])) {
-      matched[e] = true;
-      e += 1;
-      continue;
-    }
-
-    // A spoken verse number ("three", "23") read aloud before/between verses
-    // isn't part of the passage -- discard it outright rather than letting
-    // it search for a resync anchor, so it can never coincidentally
-    // fuzzy-match a real nearby word (e.g. "three" vs. "tree") and wrongly
-    // jump the pointer forward.
-    if (isLikelyVerseNumber(token)) continue;
-
-    // Re-anchor: find this token a little further ahead in the passage.
-    const windowEnd = Math.min(e + RESYNC_WINDOW, expectedTokens.length - 1);
-    for (let j = e + 1; j <= windowEnd; j++) {
-      if (!wordsRoughlyEqual(token, expectedTokens[j])) continue;
-      const confident =
-        token.length >= 4 ||
-        (s + 1 < spoken.length && j + 1 < expectedTokens.length && wordsRoughlyEqual(spoken[s + 1], expectedTokens[j + 1]));
-      if (confident) {
-        matched[j] = true;
-        e = j + 1;
-        break;
-      }
-    }
-    // No confident anchor: treat the token as noise and move on — the next
-    // spoken word gets a fresh chance against the same position.
-  }
-
-  // Forgive commonly-dropped function words the pointer moved past without
-  // ever seeing a matching token -- see COMMONLY_DROPPED_WORDS above. Only
-  // words already behind the final pointer are touched; anything at/after it
-  // hasn't been resolved yet and isn't read by callers regardless.
-  for (let k = 0; k < e; k++) {
-    if (!matched[k] && isCommonlyDroppedWord(expectedTokens[k])) matched[k] = true;
-  }
-
-  return { matched, pointer: e };
+const pairCost = (expectedWord: string, spokenWord: string): number => {
+  if (expectedWord === spokenWord) return MATCH_COST;
+  // A spoken verse number ("three", "23") read aloud between verses isn't
+  // part of the passage. Suppress the usual fuzzy-match discount so it can't
+  // get cheaply substituted for a similarly-spelled real word (e.g. "three"
+  // vs. "tree") -- the DP then naturally prefers writing it off as noise via
+  // INSERT_SPOKEN_COST instead, unless it's an exact match (handled above).
+  if (isLikelyVerseNumber(spokenWord) && !isLikelyVerseNumber(expectedWord)) return SUBSTITUTION_COST;
+  if (wordsRoughlyEqual(expectedWord, spokenWord)) return CLOSE_MATCH_COST;
+  return SUBSTITUTION_COST;
 };
 
-/**
- * Grades a COMPLETE transcript against the expected text via edit-distance
- * alignment, returning one outcome per expected word. Used when a recitation
- * arrives all at once (a finished speech-engine result, or the typed
- * "no microphone" fallback).
- */
-export const gradeTranscript = (expectedText: string, transcript: string): WordOutcome[] => {
-  const expected = tokenizeWords(expectedText);
-  const spoken = tokenizeWords(transcript);
+const skipExpectedCost = (expectedWord: string): number =>
+  isCommonlyDroppedWord(expectedWord) ? SKIP_EXPECTED_DROPPABLE_COST : SKIP_EXPECTED_COST;
+
+// dp[i][j] = min cost aligning expected[0..i) with spoken[0..j). Standard
+// three-move recurrence (match/substitute diagonally, skip an expected word,
+// insert a spoken word) with the tuned costs above instead of plain 0/1.
+const buildAlignmentTable = (expected: string[], spoken: string[]): number[][] => {
   const m = expected.length;
   const n = spoken.length;
-
-  // Standard alignment DP: dp[i][j] = min cost aligning expected[0..i) with
-  // spoken[0..j); matches cost 0, everything else costs 1.
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) dp[i][0] = dp[i - 1][0] + skipExpectedCost(expected[i - 1]);
+  for (let j = 1; j <= n; j++) dp[0][j] = dp[0][j - 1] + INSERT_SPOKEN_COST;
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
-      const matchCost = wordsRoughlyEqual(expected[i - 1], spoken[j - 1]) ? 0 : 1;
-      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + matchCost);
+      dp[i][j] = Math.min(
+        dp[i - 1][j - 1] + pairCost(expected[i - 1], spoken[j - 1]),
+        dp[i - 1][j] + skipExpectedCost(expected[i - 1]),
+        dp[i][j - 1] + INSERT_SPOKEN_COST
+      );
     }
   }
+  return dp;
+};
 
-  // Backtrace: an expected word aligned to an equal spoken word is 'perfect';
-  // anything else (substituted, dropped) is 'missed'.
-  const outcomes: WordOutcome[] = new Array(m).fill('missed');
-  let i = m;
-  let j = n;
+// Walks the DP table backward from (startI, startJ) to (0, 0), classifying
+// each expected word the path passes through. Shared by both endpoint rules
+// below -- only the starting cell differs. Recomputing each candidate
+// expression here is deliberate: it's the exact same deterministic
+// arithmetic the forward pass already did to fill dp[i][j], so the `===`
+// comparisons below always land on a real candidate, no floating-point
+// drift despite the fractional costs.
+const backtraceOutcomes = (
+  expected: string[],
+  spoken: string[],
+  dp: number[][],
+  startI: number,
+  startJ: number
+): (WordOutcome | null)[] => {
+  const outcomes: (WordOutcome | null)[] = new Array(expected.length).fill(null);
+  let i = startI;
+  let j = startJ;
   while (i > 0 && j > 0) {
-    const matchCost = wordsRoughlyEqual(expected[i - 1], spoken[j - 1]) ? 0 : 1;
-    if (dp[i][j] === dp[i - 1][j - 1] + matchCost) {
-      if (matchCost === 0) outcomes[i - 1] = expected[i - 1] === spoken[j - 1] ? 'perfect' : 'close';
+    const cost = pairCost(expected[i - 1], spoken[j - 1]);
+    if (dp[i][j] === dp[i - 1][j - 1] + cost) {
+      outcomes[i - 1] = cost === MATCH_COST ? 'perfect' : cost === CLOSE_MATCH_COST ? 'close' : 'missed';
       i -= 1;
       j -= 1;
-    } else if (dp[i][j] === dp[i - 1][j] + 1) {
+    } else if (dp[i][j] === dp[i - 1][j] + skipExpectedCost(expected[i - 1])) {
+      // A skipped COMMONLY_DROPPED_WORDS word is forgiven outright -- the
+      // cheap cost only decides which alignment PATH wins; without this the
+      // word would still grade 'missed' despite never having a real chance
+      // to be heard (see COMMONLY_DROPPED_WORDS above).
+      outcomes[i - 1] = isCommonlyDroppedWord(expected[i - 1]) ? 'perfect' : 'missed';
       i -= 1;
     } else {
       j -= 1;
     }
   }
+  while (i > 0) {
+    outcomes[i - 1] = isCommonlyDroppedWord(expected[i - 1]) ? 'perfect' : 'missed';
+    i -= 1;
+  }
+  return outcomes;
+};
 
-  // Forgive commonly-dropped function words that landed as a miss (dropped
-  // or substituted) -- same reasoning as matchTranscriptLive above: a
-  // missing "in"/"the" is almost always the engine swallowing it, not a
-  // real recall gap.
-  return outcomes.map((o, idx) => (o === 'missed' && isCommonlyDroppedWord(expected[idx]) ? 'perfect' : o));
+/**
+ * Grades a COMPLETE transcript against the expected text via cost-based
+ * alignment, returning one outcome per expected word. Used when a recitation
+ * arrives all at once (a finished speech-engine result, or the typed
+ * "no microphone" fallback). Endpoint is forced to fully consume both
+ * sequences (start the backtrace at (m, n)) -- unlike alignRecitationWindow
+ * below, a finished recitation with un-recited words at the end should still
+ * count them missed, not silently ignored.
+ */
+export const gradeTranscript = (expectedText: string, transcript: string): WordOutcome[] => {
+  const expected = tokenizeWords(expectedText);
+  const spoken = tokenizeWords(transcript);
+  const dp = buildAlignmentTable(expected, spoken);
+  const outcomes = backtraceOutcomes(expected, spoken, dp, expected.length, spoken.length);
+  return outcomes.map((o) => o ?? 'missed');
+};
+
+export interface LiveAlignResult {
+  /** One outcome per expected word in the window; null = not yet reached. */
+  outcomes: (WordOutcome | null)[];
+  /** How many words into the window are now confirmed (exclusive end). */
+  pointer: number;
+}
+
+/**
+ * Aligns a WINDOW of expected words against a WINDOW of recently-spoken
+ * words for the live/incremental case. Unlike gradeTranscript, the endpoint
+ * is a free tail on the expected side: dp[i][n] already represents "align
+ * ALL of the spoken window against just the first i expected words, and
+ * never even look at the rest" (the remaining words simply never enter the
+ * recurrence, at zero extra cost) -- exactly the semantics of a transcript
+ * that's a genuine PREFIX of what's eventually going to be said. Forcing the
+ * full-consumption endpoint gradeTranscript uses would be wrong here: it
+ * would charge for "not having said the rest of the passage yet," which
+ * mid-recitation isn't a real mistake.
+ *
+ * The caller (PracticeModals) owns the actual window position/size and is
+ * expected to re-run this on every transcript update. There is no ratchet
+ * here -- the result can legitimately revise a previous call's decision
+ * (e.g. resolve a repetition-driven ambiguity) once more words arrive; the
+ * caller decides how much of that revision it's willing to accept.
+ */
+export const alignRecitationWindow = (expectedWindow: string[], spokenWindow: string[]): LiveAlignResult => {
+  const dp = buildAlignmentTable(expectedWindow, spokenWindow);
+  const n = spokenWindow.length;
+
+  // argmin over dp[i][n] -- the cheapest way to explain everything heard so
+  // far using a prefix of the expected words. Ties broken toward the
+  // SMALLEST i: never claim more progress than the evidence actually
+  // supports, which is the direct fix for "jumped ahead over a repeated
+  // word" -- a further-ahead i only wins if it's genuinely cheaper, not
+  // merely tied with stopping earlier.
+  let bestI = 0;
+  let bestCost = dp[0][n];
+  for (let i = 1; i <= expectedWindow.length; i++) {
+    if (dp[i][n] < bestCost) {
+      bestCost = dp[i][n];
+      bestI = i;
+    }
+  }
+
+  const outcomes = backtraceOutcomes(expectedWindow, spokenWindow, dp, bestI, n);
+  return { outcomes, pointer: bestI };
+};
+
+// ----------------------------------------------------------------------------
+// Live reconciliation step. Bounds alignRecitationWindow to a window instead
+// of realigning the whole passage on every transcript update -- both cheap
+// (bounded DP cost regardless of passage length) and predictable (bounds how
+// far any single revision can jump). ALIGN_WINDOW_EXPECTED/ALIGN_WINDOW_SPOKEN
+// are generous relative to how tightly a passage like Romans 8 clusters its
+// repeats (several repeat-cycles comfortably fit in one window) while keeping
+// every call to a few thousand DP cells.
+// ----------------------------------------------------------------------------
+export const ALIGN_WINDOW_EXPECTED = 40;
+export const ALIGN_WINDOW_SPOKEN = 60;
+export const ALIGN_REVISION_BUFFER = 10;
+
+export interface ReconcileResult {
+  /** Sparse patch: only the global indices whose grade changed this call. */
+  outcomes: Record<number, WordOutcome>;
+  /** New global pointer (never below the highest protected index + 1). */
+  pointer: number;
+  /** Where the next call's expected-word window should start. */
+  nextAlignAnchor: number;
+}
+
+/**
+ * Pure reconciliation step for live speech: given the full expected
+ * passage, the full accumulated spoken transcript so far, the caller's
+ * current window position, and which global indices are 'protected' (typed,
+ * revealed via a hint, or manually tap-corrected -- must never be silently
+ * revised), returns a patch to merge into the caller's outcomes/pointer plus
+ * the anchor to use next call.
+ *
+ * Unlike the old greedy live matcher this replaced, there is no ratchet --
+ * calling this again with more of the transcript can legitimately change a
+ * previous call's answer for a still-in-window word (e.g. resolve a
+ * repetition-driven ambiguity once more context arrives). Protected indices
+ * are the only permanent exception. Safe to call on every transcript update,
+ * including a no-op when nothing new has been confirmed yet.
+ */
+export const reconcileSpeechWindow = (
+  expectedTokens: string[],
+  spokenTokens: string[],
+  alignAnchor: number,
+  spokenFloor: number,
+  protectedIndices: ReadonlySet<number>,
+  currentPointer: number
+): ReconcileResult => {
+  const noop = { outcomes: {}, pointer: currentPointer, nextAlignAnchor: alignAnchor };
+
+  const spokenWindow = spokenTokens.slice(Math.max(spokenFloor, spokenTokens.length - ALIGN_WINDOW_SPOKEN));
+  if (spokenWindow.length === 0) return noop;
+
+  const expectedWindow = expectedTokens.slice(alignAnchor, alignAnchor + ALIGN_WINDOW_EXPECTED);
+  if (expectedWindow.length === 0) return noop;
+
+  const result = alignRecitationWindow(expectedWindow, spokenWindow);
+  if (result.pointer === 0) return noop;
+
+  const globalTo = Math.min(alignAnchor + result.pointer, expectedTokens.length);
+
+  let protectedFloor = 0;
+  for (const idx of protectedIndices) protectedFloor = Math.max(protectedFloor, idx + 1);
+
+  const outcomes: Record<number, WordOutcome> = {};
+  for (let i = alignAnchor; i < globalTo; i++) {
+    if (protectedIndices.has(i)) continue;
+    const local = result.outcomes[i - alignAnchor];
+    if (local != null) outcomes[i] = local;
+  }
+
+  const pointer = Math.max(globalTo, protectedFloor);
+  // Advance the window forward, holding back a trailing buffer so the most
+  // recently confirmed words stay open to revision next call -- this is
+  // what lets a bad call self-correct instead of freezing permanently.
+  const advanceTo = Math.max(protectedFloor, globalTo - ALIGN_REVISION_BUFFER);
+  const nextAlignAnchor = Math.max(alignAnchor, advanceTo);
+
+  return { outcomes, pointer, nextAlignAnchor };
 };
 
 // ============================================================================

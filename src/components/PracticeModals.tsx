@@ -8,8 +8,8 @@ import { resolveChapterAudio, isReviewDue } from '../state/useAppState';
 import {
   classifyFirstLetterAttempt,
   getSpeechRecognizer,
-  matchTranscriptLive,
   normalizeToken,
+  reconcileSpeechWindow,
   summarizeOutcomes,
   tokenizeWords,
   REVIEW_PASS_ACCURACY,
@@ -295,13 +295,6 @@ function PracticeModalsInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listenSpeed, listenPlayerStatus.isLoaded, currentSegment?.recording?.id]);
 
-  // Playback-volume leveling: tame a recording that came in hot relative to
-  // others (see computePlaybackGain in useAppState.ts). Absent on
-  // recordings from before this field, or imports -- those just play at 1.
-  useEffect(() => {
-    listenPlayer.volume = currentSegment?.recording?.playbackGain ?? 1;
-  }, [listenPlayer, currentSegment?.recording?.id, currentSegment?.recording?.playbackGain]);
-
   // Detects reaching the end of the current verse's segment and advances --
   // to the next verse, possibly switching recordings, or loops/stops at the
   // end of the (possibly selection-restricted) range.
@@ -386,6 +379,14 @@ function PracticeModalsInner({
   // within the same modal instance since the recording is the same passage.
   const [recitePointer, setRecitePointer] = useState(0);
   const [reciteOutcomes, setReciteOutcomes] = useState<Record<number, WordOutcome>>({});
+  // Who committed each graded word -- 'protected' entries (typed, revealed
+  // hints, manual tap-to-fix) can never be silently overwritten by a later
+  // speech reconciliation pass; 'speech' entries can be revised freely as
+  // more of the transcript arrives. Speech and typing share the same
+  // recitePointer/reciteOutcomes (either input works at any moment), so this
+  // is what stops a speech revision from clobbering a more-authoritative
+  // signal.
+  const [reciteSource, setReciteSource] = useState<Record<number, 'protected' | 'speech'>>({});
   const [verseStrikes, setVerseStrikes] = useState(0);
   const [strikeLimit, setStrikeLimit] = useState<number | 'unlimited'>(5);
   const [showStrikeResetAlert, setShowStrikeResetAlert] = useState(false);
@@ -412,6 +413,20 @@ function PracticeModalsInner({
   // for "both"; matches TouchLog's existing two-value shape).
   const usedSpeechRef = useRef(false);
 
+  // Bounds the live speech reconciliation to a window instead of realigning
+  // the whole passage on every transcript update -- both cheap (bounded DP
+  // cost regardless of passage length) and predictable (bounds how far any
+  // single revision can jump). alignAnchorRef is where the expected-word
+  // window starts; it only ever advances, holding back a trailing buffer of
+  // recently-committed words that stay open to revision as more speech
+  // arrives (see the reconciliation effect below). spokenTokenFloorRef marks
+  // the first spoken token that's still relevant -- the transcript keeps
+  // accumulating for the whole listening session, so after a strike-limit
+  // reset (or a full game reset) this must jump forward too, or stale
+  // pre-reset speech could walk the pointer right back past the reset.
+  const alignAnchorRef = useRef(0);
+  const spokenTokenFloorRef = useRef(0);
+
   // Make sure the engine never keeps listening past the modal's lifetime.
   useEffect(() => {
     return () => speechEngineRef.current?.stop();
@@ -427,8 +442,12 @@ function PracticeModalsInner({
   // Records one word's grade and advances the shared pointer -- used by
   // both the typed-letter path and the hint/reveal path. Resets the
   // per-verse strike count when the advance crosses into a new verse.
+  // Tagged 'protected' -- a deliberate typed answer or an explicitly
+  // revealed hint must never be silently reverted by a later speech
+  // reconciliation pass.
   const commitReciteOutcome = (idx: number, outcome: WordOutcome, nextPointer: number) => {
     setReciteOutcomes((prev) => ({ ...prev, [idx]: outcome }));
+    setReciteSource((prev) => ({ ...prev, [idx]: 'protected' }));
     if (reciteWordObjects[nextPointer] && reciteWordObjects[nextPointer].verseIdx !== reciteWordObjects[idx].verseIdx) {
       setVerseStrikes(0);
     }
@@ -473,6 +492,13 @@ function PracticeModalsInner({
         const verseStartPointer = reciteWordObjects.findIndex((w) => w.verseIdx === verseIdx);
         setRecitePointer(verseStartPointer);
         setVerseStrikes(0);
+        // The spoken transcript isn't cleared by this reset -- the engine
+        // keeps listening and accumulating regardless. Without moving these
+        // anchors forward too, the next reconciliation tick would still see
+        // the old pre-reset words and could walk the pointer right back past
+        // the reset using stale speech, defeating the whole point of it.
+        alignAnchorRef.current = verseStartPointer;
+        spokenTokenFloorRef.current = tokenizeWords(speakTranscript).length;
         setTimeout(() => setShowStrikeResetAlert(false), 1500);
       }
 
@@ -488,6 +514,7 @@ function PracticeModalsInner({
   // reciteOutcomes, once isFinishedRecite is true).
   const overrideWordAsCorrect = (idx: number) => {
     setReciteOutcomes((prev) => ({ ...prev, [idx]: 'perfect' }));
+    setReciteSource((prev) => ({ ...prev, [idx]: 'protected' }));
     setFinalOutcomes((prev) => (prev ? prev.map((o, i) => (i === idx ? 'perfect' : o)) : prev));
   };
 
@@ -501,6 +528,7 @@ function PracticeModalsInner({
   const resetReciteGame = () => {
     setRecitePointer(0);
     setReciteOutcomes({});
+    setReciteSource({});
     setVerseStrikes(0);
     setTypedInput('');
     setShowStrikeResetAlert(false);
@@ -510,6 +538,8 @@ function PracticeModalsInner({
     setIsListeningSpeak(false);
     setSpeakTranscript('');
     usedSpeechRef.current = false;
+    alignAnchorRef.current = 0;
+    spokenTokenFloorRef.current = 0;
   };
 
   const resetRevealPeeks = () => {
@@ -558,15 +588,11 @@ function PracticeModalsInner({
 
   // ==========================================
   // RECITE — live speech channel. Feeds the exact same recitePointer/
-  // reciteOutcomes the typed channel does, via the shared recitation
-  // matcher, so either input method advances the same passage together.
+  // reciteOutcomes the typed channel does, so either input method advances
+  // the same passage together.
   // ==========================================
   const speakExpectedTokens = useMemo(() => verses.flatMap((v) => tokenizeWords(v.text)), [verses]);
   const fullPassageText = useMemo(() => verses.map((v) => v.text).join(' '), [verses]);
-  const liveMatch = useMemo(
-    () => matchTranscriptLive(speakExpectedTokens, speakTranscript),
-    [speakExpectedTokens, speakTranscript]
-  );
 
   const startListening = () => {
     const engine = speechEngineRef.current;
@@ -593,31 +619,48 @@ function PracticeModalsInner({
     setIsListeningSpeak(false);
   };
 
-  // Speech drives the SAME pointer typing does: whenever the live matcher
-  // has confirmed further into the passage than we've gotten via typing,
-  // fill in the words it passed over (heard -> 'perfect', skipped ->
-  // 'missed', matching the old standalone speak view's heard/skipped
-  // coloring) and jump the shared pointer forward to meet it. Never runs
-  // backward -- if typing is already ahead of what's been spoken, this is a
-  // no-op until speech catches up past that point.
+  // Speech drives the SAME pointer typing does: on every transcript update,
+  // reconcileSpeechWindow (recitation.ts) realigns a bounded window of
+  // upcoming expected words against a bounded window of recently-spoken
+  // words and returns a patch to merge into reciteOutcomes/recitePointer.
+  // Unlike the old matcher, this is NOT forward-only -- a 'speech'-sourced
+  // entry can be revised as more of the transcript arrives (the actual fix
+  // for a bad resync locking in permanently instead of self-correcting),
+  // but a 'protected' entry (typed, revealed, manually overridden) is never
+  // touched, and the pointer can never fall below one.
   useEffect(() => {
     if (learnTab !== 'recite' || isFinishedRecite) return;
-    if (liveMatch.pointer <= recitePointer) return;
-    const from = recitePointer;
-    const to = Math.min(liveMatch.pointer, reciteWordObjects.length);
-    setReciteOutcomes((prev) => {
+
+    const protectedIndices = new Set<number>();
+    for (const key of Object.keys(reciteSource)) {
+      if (reciteSource[Number(key)] === 'protected') protectedIndices.add(Number(key));
+    }
+
+    const patch = reconcileSpeechWindow(
+      speakExpectedTokens,
+      tokenizeWords(speakTranscript),
+      alignAnchorRef.current,
+      spokenTokenFloorRef.current,
+      protectedIndices,
+      recitePointer
+    );
+    alignAnchorRef.current = patch.nextAlignAnchor;
+    if (Object.keys(patch.outcomes).length === 0 && patch.pointer === recitePointer) return;
+
+    setReciteOutcomes((prev) => ({ ...prev, ...patch.outcomes }));
+    setReciteSource((prev) => {
       const next = { ...prev };
-      for (let i = from; i < to; i++) {
-        next[i] = liveMatch.matched[i] ? 'perfect' : 'missed';
-      }
+      for (const key of Object.keys(patch.outcomes)) next[Number(key)] = 'speech';
       return next;
     });
-    if (reciteWordObjects[to]?.verseIdx !== reciteWordObjects[from]?.verseIdx) {
-      setVerseStrikes(0);
+    if (patch.pointer !== recitePointer) {
+      if (reciteWordObjects[patch.pointer]?.verseIdx !== reciteWordObjects[recitePointer]?.verseIdx) {
+        setVerseStrikes(0);
+      }
+      setRecitePointer(patch.pointer);
     }
-    setRecitePointer(to);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveMatch.pointer, learnTab]);
+  }, [speakTranscript, learnTab, isFinishedRecite]);
 
   // Fires once the shared pointer reaches the end of the passage, by
   // whichever channel got it there -- typing simply runs out of words the

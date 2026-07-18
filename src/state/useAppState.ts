@@ -35,7 +35,6 @@ import {
   useAudioPlayer,
   useAudioPlayerStatus,
   useAudioRecorder,
-  useAudioRecorderState,
 } from 'expo-audio';
 import * as DocumentPicker from 'expo-document-picker';
 
@@ -467,22 +466,6 @@ export function mapQueueItemsToVerseStates(items: QueueItem[]): VerseState[] {
   }));
 }
 
-// A recording is left at its original volume unless its peak input level
-// came in hotter than TARGET_PEAK_DB, in which case it's turned down to
-// match -- expo-audio's player volume tops out at 1.0 (the original level),
-// so a recording that came in quiet can't be boosted this way; that
-// direction needs real gain applied to the audio data (deferred to the
-// planned FFmpeg-based enhancement pass). GAIN_FLOOR keeps a wildly hot
-// recording from being turned down so far it's inaudible.
-const TARGET_PEAK_DB = -3;
-const GAIN_FLOOR = 0.15;
-
-export function computePlaybackGain(peakDb: number): number {
-  if (!Number.isFinite(peakDb) || peakDb <= TARGET_PEAK_DB) return 1;
-  const gain = Math.pow(10, (TARGET_PEAK_DB - peakDb) / 20);
-  return Math.max(GAIN_FLOOR, Math.min(1, gain));
-}
-
 /**
  * Centralizes every piece of state and business-logic handler from the original
  * web app's single-file App component. Screens receive the return value of this
@@ -739,26 +722,13 @@ export function useAppState() {
   // that wasn't already playing — consumed once playback actually starts.
   const pendingSeekSecondsRef = useRef<number | null>(null);
 
-  // Real audio recorder (mic capture) for the Record tab. Metering is on so
-  // we can level out playback volume afterward (see peakMeteringDbRef below).
-  const audioRecorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
+  // Real audio recorder (mic capture) for the Record tab.
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   // Captured the instant recording stops — audioRecorder.currentTime resets
   // once stop() resolves, and recordingSeconds gets zeroed by the recording
   // timer effect (below) well before the user taps "Confirm & Save" in the
   // dialog, so neither is safe to read directly inside saveRecordedAudio.
   const capturedDurationRef = useRef(0);
-
-  // Peak input level (dBFS, 0 = max, more negative = quieter) seen during
-  // the in-progress recording -- reset when recording starts, read once at
-  // save time to compute a playback-leveling gain. A ref (not state)
-  // because it just needs to be read once later, not drive re-renders.
-  const recorderState = useAudioRecorderState(audioRecorder);
-  const peakMeteringDbRef = useRef(-160);
-  useEffect(() => {
-    if (typeof recorderState.metering === 'number') {
-      peakMeteringDbRef.current = Math.max(peakMeteringDbRef.current, recorderState.metering);
-    }
-  }, [recorderState.metering]);
 
   // Real audio player for saved recordings that have a Storage-backed audioUrl.
   // Recordings without one (e.g. the illustrative community feed placeholders)
@@ -2778,7 +2748,6 @@ export function useAppState() {
     // back to a playback-friendly mode every time before actually playing,
     // regardless of whether handleStopRecording already did so.
     setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).finally(() => {
-      recordingPlayer.volume = nowPlayingRecording.playbackGain ?? 1;
       recordingPlayer.play();
       if (pendingSeekSecondsRef.current != null) {
         recordingPlayer.seekTo(pendingSeekSecondsRef.current);
@@ -4023,7 +3992,6 @@ export function useAppState() {
       // session is explicitly switched into recording mode.
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
-      peakMeteringDbRef.current = -160;
       audioRecorder.record();
       setIsRecording(true);
       setIsRecordingPaused(false);
@@ -4217,9 +4185,6 @@ export function useAppState() {
     verseTimestamps: VerseTimestamp[];
     titleSuffix: string;
     sourceType: 'recorded' | 'imported';
-    // Only ever set for the live-record flow -- imports have no metering
-    // data (see saveImportedRecording), so they play back untouched.
-    playbackGain?: number;
   }) => {
     const uid = auth.currentUser?.uid;
     if (!uid) {
@@ -4287,10 +4252,6 @@ export function useAppState() {
         verseTimestamps: params.verseTimestamps,
         sharedVisibility: pickedRecordingVisibility,
         sourceType: params.sourceType,
-        // Firestore's setDoc rejects an explicit `undefined` value outright
-        // (no ignoreUndefinedProperties configured), so the key is only
-        // added at all when there's an actual gain to store.
-        ...(params.playbackGain !== undefined ? { playbackGain: params.playbackGain } : {}),
       };
 
       await setDoc(doc(db, 'users', uid, 'recordings', id), { ...newRec, createdAt: serverTimestamp() });
@@ -4348,7 +4309,6 @@ export function useAppState() {
       ),
       titleSuffix: 'Full Chapter Recitation',
       sourceType: 'recorded',
-      playbackGain: computePlaybackGain(peakMeteringDbRef.current),
     });
   };
 
