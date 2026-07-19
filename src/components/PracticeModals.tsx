@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { Check, Eye, EyeOff, Info, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Shuffle, Sliders, Sparkles, X } from 'lucide-react-native';
+import { Check, ChevronUp, Eye, EyeOff, Info, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Shuffle, Sliders, Sparkles, X } from 'lucide-react-native';
 
 import { VerseState, QueueItem, Recording } from '../types';
 import { resolveChapterAudio, isReviewDue } from '../state/useAppState';
@@ -50,6 +51,12 @@ interface PracticeModalsProps {
   // way ChapterLandingScreen's audio card already does.
   userRecordings?: Recording[];
   selectedChapterAudios?: Record<string, Recording | null>;
+  // App-wide "now playing saved recording" state (Profile/RecordingDetail/
+  // etc's own mini-bar), threaded through so Listen mode and that system
+  // can enforce "one audio source at a time" -- starting one cancels
+  // (pauses) the other, rather than letting two playbacks run at once.
+  playingRecordingId?: string | null;
+  setPlayingRecordingId?: (id: string | null) => void;
 }
 
 // Guard wrapper: the early "nothing to practice" return must happen OUTSIDE
@@ -76,6 +83,8 @@ function PracticeModalsInner({
   setPrimingLookahead,
   userRecordings = [],
   selectedChapterAudios = {},
+  playingRecordingId = null,
+  setPlayingRecordingId,
 }: PracticeModalsProps) {
   const handleGroupComplete = onAdvance ?? onClose;
   // ==========================================
@@ -126,7 +135,13 @@ function PracticeModalsInner({
       } else if (playSource === 'priming') {
         setActivePlayVerses(dbPriming.length > 0 ? dbPriming : verses);
       } else if (playSource === 'all') {
-        setActivePlayVerses(allVerses && allVerses.length > 0 ? allVerses : verses);
+        // "Today's Verses" -- everything actually relevant today (still
+        // being learned, due for review, or coming up in the priming
+        // lookahead), NOT the entire cached Bible text. A QueueItem only
+        // ever has one status at a time, so these three lists are already
+        // mutually exclusive -- no dedup needed.
+        const dbToday = [...dbLearning, ...dbReviewing, ...dbPriming];
+        setActivePlayVerses(dbToday.length > 0 ? dbToday : verses);
       }
     }
     // Reset playback position back to the first verse
@@ -164,6 +179,16 @@ function PracticeModalsInner({
   const [listenSpeed, setListenSpeed] = useState(1.0);
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
   const [repeatMode, setRepeatMode] = useState<'off' | 'playlist'>('playlist'); // default to loop playlist
+  // Minimizing (Listen mode's X button) keeps this whole component mounted
+  // -- and with it, the real listenPlayer instance and the auto-advance
+  // effect below -- so audio genuinely keeps playing/looping while the user
+  // navigates the rest of the app, instead of onClose tearing the player
+  // down. Only a real full-stop (the mini-bar's own X) calls the real
+  // onClose. True OS-level background/lock-screen playback is a separate,
+  // later piece of work -- this only keeps it going while the app itself is
+  // foregrounded.
+  const [listenMinimized, setListenMinimized] = useState(false);
+  const insets = useSafeAreaInsets();
 
   // For every verse in the active playlist, resolve which real recording (if
   // any) covers it and that recording's tagged {startSec, endSec} for this
@@ -214,6 +239,33 @@ function PracticeModalsInner({
       setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
     }
   }, [listenPlaying]);
+
+  // One audio source at a time -- Listen mode and the app-wide saved-
+  // recording "now playing" system (Profile/RecordingDetail/etc's mini-bar)
+  // are otherwise fully independent, so without this a user could end up
+  // with two playbacks running simultaneously. Starting either one cancels
+  // (pauses) the other, in both directions:
+  useEffect(() => {
+    // Listen just started playing -- stop whatever saved recording was
+    // already playing elsewhere. A no-op if nothing was playing.
+    if (listenPlaying) setPlayingRecordingId?.(null);
+  }, [listenPlaying, setPlayingRecordingId]);
+
+  useEffect(() => {
+    // A saved recording just started playing elsewhere while Listen mode
+    // was actively playing -- pause Listen's playback (not a full close;
+    // the overlay/mini-bar stays exactly as it was, just paused, so it can
+    // be resumed manually).
+    if (playingRecordingId && listenPlaying) {
+      try {
+        listenPlayer.pause();
+      } catch {
+        // already released
+      }
+      setListenPlaying(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playingRecordingId]);
 
   // Finds the next playable index after `from`, restricted to the active
   // selection range when one is set. Returns null if there's nowhere to go
@@ -796,6 +848,60 @@ function PracticeModalsInner({
   const overallListenProgressPercent =
     activePlayVerses.length > 0 ? ((currentVerseIndex + listenSegmentFraction) / activePlayVerses.length) * 100 : 0;
 
+  // Minimized Listen mode: a small persistent bar instead of the full
+  // overlay, positioned above the tab bar (its height, 64px, is hardcoded
+  // to match AppShell's own h-16 tab/Back-to-Guide row -- this component
+  // renders as its own absolutely-positioned sibling, not inside that row's
+  // normal flex flow, so it can't inherit the offset automatically).
+  // pointerEvents="box-none" on the full-screen wrapper means only the bar
+  // itself (given pointerEvents="auto") captures touches -- everything else
+  // on screen stays reachable, so the user can genuinely navigate the rest
+  // of the app while this keeps playing.
+  if (type === 'listen' && listenMinimized) {
+    const miniVerse = currentSegment?.verseObj ?? activePlayVerses[currentVerseIndex] ?? null;
+    return (
+      <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 }}>
+        <Pressable
+          onPress={() => setListenMinimized(false)}
+          pointerEvents="auto"
+          style={{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 76 }}
+          className="bg-[#1A1A1A] rounded-2xl px-3 py-2.5 flex-row items-center shadow-lg"
+        >
+          <View className="w-8 h-8 rounded-lg bg-white/15 items-center justify-center shrink-0 mr-3">
+            <WaveBars active={listenPlaying} count={4} />
+          </View>
+          <View className="flex-1 mr-2" style={{ gap: 1 }}>
+            <View className="flex-row items-center gap-1">
+              <ChevronUp size={9} color="rgba(255,255,255,0.5)" />
+              <Text className="text-white/60 text-[8px] font-sans font-extrabold uppercase tracking-wider">Now Playing</Text>
+            </View>
+            <Text numberOfLines={1} className="text-white font-sans font-bold text-xs">
+              {miniVerse ? `${miniVerse.book} ${miniVerse.chapter}:${miniVerse.verse}` : referenceText}
+            </Text>
+          </View>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              toggleListenPlaying();
+            }}
+            className="w-9 h-9 rounded-full bg-white/15 items-center justify-center shrink-0 mr-1.5"
+          >
+            {listenPlaying ? <Pause size={15} color="#ffffff" /> : <Play size={15} color="#ffffff" />}
+          </Pressable>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="w-9 h-9 rounded-full bg-white/15 items-center justify-center shrink-0"
+          >
+            <X size={15} color="#ffffff" />
+          </Pressable>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View className="absolute inset-0 bg-white z-50 pt-11 pb-4 px-4" id="practice_overlay">
       {/* Header Bar */}
@@ -816,7 +922,11 @@ function PracticeModalsInner({
               </Text>
             </View>
           )}
-          <Pressable onPress={onClose} className="w-10 h-10 rounded-full border border-neutral-300 items-center justify-center shrink-0" hitSlop={8}>
+          <Pressable
+            onPress={type === 'listen' ? () => setListenMinimized(true) : onClose}
+            className="w-10 h-10 rounded-full border border-neutral-300 items-center justify-center shrink-0"
+            hitSlop={8}
+          >
             <X size={18} color="#262626" />
           </Pressable>
         </View>
@@ -914,27 +1024,46 @@ function PracticeModalsInner({
 
             {/* Custom Control and Audio Looping Panel */}
             <View className="gap-3.5 bg-white pt-2">
-              {/* playlist / source options */}
-              {allVerses && allVerses.length > 0 && (
-                <View className="gap-1 bg-neutral-50 p-2 rounded-xl border border-neutral-200">
+              {/* playlist / source options -- shown whenever there's a real
+                  alternative source to switch to (memoryQueue for today's
+                  verses, or allVerses as the empty-queue fallback below). */}
+              {((memoryQueue && memoryQueue.length > 0) || (allVerses && allVerses.length > 0)) && (
+                <View className="gap-2 bg-neutral-50 p-2 rounded-xl border border-neutral-200">
                   <View className="flex-row justify-between items-center px-1">
                     <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">Loop Target / Playlist</Text>
                     <Text className="text-[9px] font-mono font-bold text-neutral-500 bg-neutral-200 px-1.5 rounded-full">
                       {activePlayVerses.length} verses
                     </Text>
                   </View>
-                  <ChipRow
-                    columns={5}
-                    value={playSource}
-                    onChange={(id) => setPlaySource(id)}
-                    options={[
-                      { id: 'all', label: 'All verses' },
-                      { id: 'memorization', label: 'Learning' },
-                      { id: 'reviewing', label: 'Review' },
-                      { id: 'priming', label: 'Priming' },
-                      { id: 'selection', label: 'Selected' },
-                    ]}
-                  />
+                  {/* Not ChipRow here -- its columns-mode spacing (2px per
+                      chip) reads as cramped with 5 options this size; a
+                      dedicated row gives real breathing room between them
+                      without touching ChipRow's shared columns-mode styling
+                      used elsewhere in the app. */}
+                  <View className="flex-row flex-wrap" style={{ gap: 6 }}>
+                    {(
+                      [
+                        { id: 'all', label: "Today's Verses" },
+                        { id: 'memorization', label: 'Learning' },
+                        { id: 'reviewing', label: 'Review' },
+                        { id: 'priming', label: 'Priming' },
+                        { id: 'selection', label: 'Selected' },
+                      ] as const
+                    ).map((opt) => {
+                      const active = playSource === opt.id;
+                      return (
+                        <Pressable
+                          key={opt.id}
+                          onPress={() => setPlaySource(opt.id)}
+                          className={`px-2.5 py-1.5 rounded-lg border ${active ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'}`}
+                        >
+                          <Text className={`text-[9.5px] font-bold text-center ${active ? 'text-white' : 'text-neutral-600'}`}>
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
 
                   {playSource === 'priming' && setPrimingLookahead && (
                     <View className="flex-row items-center justify-between bg-amber-50 border border-amber-100 rounded-lg p-2 mt-2">

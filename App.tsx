@@ -446,6 +446,8 @@ function AppShell() {
           setPrimingLookahead={state.setPrimingLookahead}
           userRecordings={state.userRecordings}
           selectedChapterAudios={state.selectedChapterAudios}
+          playingRecordingId={state.playingRecordingId}
+          setPlayingRecordingId={state.setPlayingRecordingId}
         />
       )}
 
