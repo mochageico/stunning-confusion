@@ -2900,6 +2900,15 @@ export function useAppState() {
     return now - lastTime >= ONE_HOUR;
   };
 
+  // A quick spaced-repetition review (you already know the verse, you're
+  // just confirming recall) is fast -- flat per-verse, not tiered by phase.
+  // A fresh Learning-phase touch is real, unhurried practice, so it costs
+  // much more per verse. (2026-07: the old 30/45/60s daily/weekly/monthly
+  // tiering plus 120s/learning verse was making the estimate feel wildly
+  // inflated in practice -- simplified to these two flat numbers.)
+  const REVIEW_SECONDS_PER_VERSE = 25;
+  const LEARNING_SECONDS_PER_VERSE = 180;
+
   // Shared by getEstimatedReviewTime (today only) and getMemoryLoadForecast
   // (today + future days), so both always price a "due review" the same
   // way and never quietly disagree. For today, a missing due date or one
@@ -2914,15 +2923,13 @@ export function useAppState() {
       const isDue = isToday ? isReviewDue(item.nextReviewDueDate, date) : !!due && due.toDateString() === date.toDateString();
       if (!isDue) return;
       count += 1;
-      if (item.retentionPhase === 'daily') seconds += 30;
-      else if (item.retentionPhase === 'weekly') seconds += 45;
-      else if (item.retentionPhase === 'monthly') seconds += 60;
+      seconds += REVIEW_SECONDS_PER_VERSE;
     });
     return { seconds, count };
   };
 
   const getEstimatedReviewTime = (queue: QueueItem[], sensitivity: 'low' | 'medium' | 'high') => {
-    const learningSeconds = queue.filter((item) => item.status === 'learning').length * 120;
+    const learningSeconds = queue.filter((item) => item.status === 'learning').length * LEARNING_SECONDS_PER_VERSE;
     const { seconds: reviewSeconds } = computeDayReviewLoad(queue, new Date(), true);
     const multiplier = sensitivity === 'low' ? 0.75 : sensitivity === 'high' ? 1.5 : 1.0;
     return Math.ceil(((learningSeconds + reviewSeconds) * multiplier) / 60);
@@ -2956,20 +2963,28 @@ export function useAppState() {
 
       const { seconds: reviewSeconds, count: dueReviewCount } = computeDayReviewLoad(queue, date, i === 0);
       const learningCount = baseLearningCount + cumulativeNewVerses;
-      const loadMins = Math.ceil(((reviewSeconds + learningCount * 120) * multiplier) / 60);
+      const loadMins = Math.ceil(((reviewSeconds + learningCount * LEARNING_SECONDS_PER_VERSE) * multiplier) / 60);
 
       return { date, isLearnDay, loadMins, versesCount: learningCount + dueReviewCount };
     });
   };
 
-  const triggerDailyPull = async () => {
+  // `bypassShield`: the caller (HomeScreen) already showed an "are you
+  // sure?" confirm card explaining the shield is active and re-invokes with
+  // this set once the user confirms they want to pull anyway -- see the
+  // Pull New Verses button. Every other guard (non-learning-day, nothing
+  // left queued) still applies unconditionally; only the review-time shield
+  // itself is bypassable, since that's the one guarding a real but
+  // reversible choice ("I know reviews are already full today, pull more
+  // anyway"), not a hard constraint.
+  const triggerDailyPull = async (opts?: { bypassShield?: boolean }) => {
     if (!isTodayLearningDay()) {
       triggerToast(`Today (${getTodayAbbreviation()}) is a non-learning day. Focus on reviews! 📅`);
       return;
     }
 
     const estTime = getEstimatedReviewTime(memoryQueue, cognitiveLoadSensitivity);
-    if (estTime >= maxReviewCap) {
+    if (estTime >= maxReviewCap && !opts?.bypassShield) {
       triggerToast(`Review Shield is Active! Review time (${estTime}m) >= limit (${maxReviewCap}m). No new verses pulled today. 🛡️`);
       return;
     }

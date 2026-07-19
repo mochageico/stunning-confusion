@@ -66,6 +66,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
   } = state;
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showPullShieldConfirm, setShowPullShieldConfirm] = useState(false);
 
   // Guest/signed-out preview falls back to the same "Kenneth Carter" demo
   // persona used elsewhere (ProfileScreen, INITIAL_VERSES) — but a real
@@ -119,6 +120,19 @@ export default function HomeScreen({ state }: { state: AppState }) {
     startReviewSession(groups);
   };
 
+  // The Review Shield blocks pulling new verses once today's review time
+  // already meets/exceeds the daily cap ("retention > learning new things").
+  // Rather than a silent block, surface an explicit "are you sure?" so the
+  // user can still choose to pull anyway -- triggerDailyPull itself no
+  // longer shows its own blocking toast when bypassShield is set.
+  const handlePullNewVerses = () => {
+    if (shieldActive) {
+      setShowPullShieldConfirm(true);
+      return;
+    }
+    triggerDailyPull();
+  };
+
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 20 }}>
@@ -151,7 +165,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 />
                 {memoryQueue.some((item) => item.status === 'queued') && (
                   <Pressable
-                    onPress={triggerDailyPull}
+                    onPress={handlePullNewVerses}
                     className="ml-2 bg-neutral-900 px-1.5 py-0.5 rounded flex-row items-center gap-0.5"
                   >
                     <Text className="text-[8px] text-white font-sans font-extrabold">Pull New Verses</Text>
@@ -162,6 +176,36 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 {learningItems.length} verses today
               </Text>
             </View>
+
+            {showPullShieldConfirm && (
+              <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-3" style={{ gap: 8 }}>
+                <Text className="text-[11px] font-sans font-bold text-indigo-900">
+                  🛡️ Review Shield is active -- pull new verses anyway?
+                </Text>
+                <Text className="text-[9px] font-sans text-indigo-800/80 leading-relaxed">
+                  Today's review time ({estMinutes}m) already meets or exceeds your {maxReviewCap}m daily limit.
+                  Pulling more now adds on top of that, on purpose.
+                </Text>
+                <View className="flex-row gap-2 justify-end pt-1">
+                  <Pressable
+                    onPress={() => setShowPullShieldConfirm(false)}
+                    className="px-3 py-1.5 border border-neutral-300 rounded-lg"
+                  >
+                    <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      triggerDailyPull({ bypassShield: true });
+                      setShowPullShieldConfirm(false);
+                    }}
+                    className="px-3 py-1.5 bg-indigo-600 rounded-lg"
+                  >
+                    <Text className="text-white font-sans font-bold text-[10px]">Yes, Pull Anyway</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+
             {groupedLearning.length > 0 ? (
               <View style={{ gap: 8 }}>
                 {groupedLearning.map((group) => (
