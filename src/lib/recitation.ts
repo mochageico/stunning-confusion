@@ -62,6 +62,32 @@ export const tokenizeWords = (text: string): string[] =>
     .map(normalizeToken)
     .filter((t) => t.length > 0);
 
+/**
+ * Collapses a word to its first letter, keeping any leading punctuation
+ * (opening quote/paren) and trailing punctuation (comma, period, closing
+ * quote) attached -- e.g. "beginning," -> "b,", `"Let` -> `"L`. Used by the
+ * Scripture Memory Fellowship-style Memory Grid, which shows every word's
+ * first letter permanently (unlike Recall's First Letter hint mode, which
+ * only reveals a random hidden subset).
+ */
+export const firstLetterOnly = (word: string): string => {
+  const firstIdx = word.search(/[a-zA-Z0-9]/);
+  if (firstIdx === -1) return word;
+  const before = word.slice(0, firstIdx);
+  const first = word[firstIdx];
+  const trailingMatch = word.slice(firstIdx + 1).match(/[^a-zA-Z0-9]*$/);
+  const trailing = trailingMatch ? trailingMatch[0] : '';
+  return `${before}${first}${trailing}`;
+};
+
+/** "In the beginning, God..." -> "I t b, G...", one letter-group per word. */
+export const firstLetterLine = (text: string): string =>
+  text
+    .split(/\s+/)
+    .filter((w) => w.length > 0)
+    .map(firstLetterOnly)
+    .join(' ');
+
 // ============================================================================
 // FIRST-LETTER TYPING — NEAR-MISS KEYBOARD FORGIVENESS
 // ----------------------------------------------------------------------------

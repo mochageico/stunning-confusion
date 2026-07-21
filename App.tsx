@@ -418,18 +418,6 @@ function AppShell() {
         )}
       </SafeAreaView>
 
-      {/* Toast Notification Layer */}
-      {state.toastMessage && (
-        <View pointerEvents="none" style={{ position: 'absolute', top: 56, left: 0, right: 0, alignItems: 'center', zIndex: 50 }}>
-          <FadeInView>
-            <View className="flex-row items-center gap-2 bg-neutral-900 border border-neutral-800 py-2.5 px-4 rounded-full">
-              <Check size={12} color="#34d399" />
-              <Text className="text-white text-xs font-bold font-sans">{state.toastMessage}</Text>
-            </View>
-          </FadeInView>
-        </View>
-      )}
-
       {/* Interactive Full Practice Screen Overlay */}
       {state.activeModal && (
         <PracticeModals
@@ -463,6 +451,22 @@ function AppShell() {
           <SafeAreaView style={{ flex: 1 }}>
             <OnboardingScreen state={state} />
           </SafeAreaView>
+        </View>
+      )}
+
+      {/* Toast Notification Layer -- rendered last (highest paint order) so it
+          always shows above any full-screen modal/overlay above (practice
+          session, save-recording dialog, progress modal, onboarding), which
+          all share zIndex 50 and previously painted over toasts fired while
+          they were open. */}
+      {state.toastMessage && (
+        <View pointerEvents="none" style={{ position: 'absolute', top: 56, left: 0, right: 0, alignItems: 'center', zIndex: 100 }}>
+          <FadeInView>
+            <View className="flex-row items-center gap-2 bg-neutral-900 border border-neutral-800 py-2.5 px-4 rounded-full">
+              <Check size={12} color="#34d399" />
+              <Text className="text-white text-xs font-bold font-sans">{state.toastMessage}</Text>
+            </View>
+          </FadeInView>
         </View>
       )}
     </View>

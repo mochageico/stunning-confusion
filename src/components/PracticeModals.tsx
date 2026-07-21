@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Check, ChevronUp, Eye, EyeOff, Info, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Shuffle, Sliders, Sparkles, X } from 'lucide-react-native';
@@ -399,6 +400,18 @@ function PracticeModalsInner({
     return word.replace(/[a-zA-Z0-9]/g, '•');
   };
 
+  // First Letter mode's mask -- keeps the word's real first letter/digit
+  // visible (and any leading punctuation, e.g. an opening quote) and masks
+  // the rest, instead of blanking the whole word.
+  const maskExceptFirstLetter = (word: string) => {
+    const firstAlnumIdx = word.search(/[a-zA-Z0-9]/);
+    if (firstAlnumIdx === -1) return maskLetters(word);
+    const before = word.slice(0, firstAlnumIdx);
+    const first = word[firstAlnumIdx];
+    const rest = word.slice(firstAlnumIdx + 1).replace(/[a-zA-Z0-9]/g, '•');
+    return `${before}${first}${rest}`;
+  };
+
   // ==========================================
   // LEARN MODE — unified Recall (typed + spoken, either channel advances
   // the same word) and Reveal tabs. Replaces the old separate Type/Speak/
@@ -622,6 +635,27 @@ function PracticeModalsInner({
   // grades exactly like the drill always has.
   // ==========================================
   const [hideLevel, setHideLevel] = useState(100);
+  // First Letter is an alternate hint mode to plain %-hidden: hidden words
+  // show their real first letter instead of a full dot-mask. It has its own
+  // independent level (0/25/50/75/100) rather than sharing hideLevel, so
+  // switching modes doesn't clobber whichever level you last used in the
+  // other one. Unlike plain %-hidden (which only grades at 100%), a First
+  // Letter run counts as a real review at ANY level -- the hint means it
+  // can never bank a mastery touch, but it's not a no-credit warm-up either.
+  const [hintMode, setHintMode] = useState<'percent' | 'firstLetter'>('percent');
+  const [firstLetterLevel, setFirstLetterLevel] = useState(100);
+  const activeLevel = hintMode === 'firstLetter' ? firstLetterLevel : hideLevel;
+  const setActiveLevel = (level: number) => {
+    if (hintMode === 'firstLetter') setFirstLetterLevel(level);
+    else setHideLevel(level);
+  };
+  const switchHintMode = (mode: 'percent' | 'firstLetter') => {
+    if (mode === hintMode) return;
+    setHintMode(mode);
+    resetReciteGame();
+    regenerateHiddenWords(mode === 'firstLetter' ? firstLetterLevel : hideLevel);
+  };
+
   const [hiddenWordIndices, setHiddenWordIndices] = useState<Set<number>>(
     () => new Set(reciteWordObjects.map((_, i) => i))
   );
@@ -633,6 +667,33 @@ function PracticeModalsInner({
     setHiddenWordIndices(new Set(shuffled.slice(0, hideCount)));
   };
 
+  // Words Hidden / First Letter / Strike Limit prefs persist across sessions
+  // (AsyncStorage, same mechanism useScripture.ts uses for its verse cache)
+  // -- previously these were plain useState with no persistence at all and
+  // silently reset to defaults on every remount.
+  const HINT_PREFS_KEY = 'practice:hintPrefs:v1';
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(HINT_PREFS_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (typeof saved.hideLevel === 'number') setHideLevel(saved.hideLevel);
+        if (typeof saved.firstLetterLevel === 'number') setFirstLetterLevel(saved.firstLetterLevel);
+        if (saved.hintMode === 'percent' || saved.hintMode === 'firstLetter') setHintMode(saved.hintMode);
+        if (saved.strikeLimit === 'unlimited' || typeof saved.strikeLimit === 'number') setStrikeLimit(saved.strikeLimit);
+        const loadedLevel = saved.hintMode === 'firstLetter' ? saved.firstLetterLevel : saved.hideLevel;
+        if (typeof loadedLevel === 'number') regenerateHiddenWords(loadedLevel);
+      } catch {
+        // Corrupt/missing prefs -- just keep the defaults.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    AsyncStorage.setItem(HINT_PREFS_KEY, JSON.stringify({ hideLevel, firstLetterLevel, hintMode, strikeLimit })).catch(() => {});
+  }, [hideLevel, firstLetterLevel, hintMode, strikeLimit]);
+
   // A chained review session (see advanceReviewSession in useAppState.ts)
   // swaps `verses` in place on the SAME mounted PracticeModals instance --
   // no unmount/remount happens between groups, since the overlay itself
@@ -641,7 +702,7 @@ function PracticeModalsInner({
   // meaningless (even out of bounds) against a differently-sized passage.
   useEffect(() => {
     resetReciteGame();
-    regenerateHiddenWords(hideLevel);
+    regenerateHiddenWords(activeLevel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verses]);
 
@@ -1305,6 +1366,24 @@ function PracticeModalsInner({
                                     );
                                   }
 
+                                  if (hintMode === 'firstLetter') {
+                                    // Assisted hint -- kept visually distinct
+                                    // (sky, not amber/neutral) from both a
+                                    // given-hint word and a true blind mask,
+                                    // since this run can only ever count as
+                                    // a review, never mastery.
+                                    return (
+                                      <Text
+                                        key={idx}
+                                        className={`font-serif text-[15px] rounded px-1 font-mono font-bold ${
+                                          isCurrent ? 'bg-sky-100 text-sky-700' : 'bg-sky-50 text-sky-400'
+                                        }`}
+                                      >
+                                        {maskExceptFirstLetter(w)}{' '}
+                                      </Text>
+                                    );
+                                  }
+
                                   return (
                                     <Text
                                       key={idx}
@@ -1394,20 +1473,43 @@ function PracticeModalsInner({
                   </View>
 
                   {/* How many words get hidden this attempt -- changing it or
-                      resetting always re-rolls a fresh random subset. At 100%
-                      this is a real blind attempt and grades normally (below,
-                      it's an ungraded warm-up -- see the finish panel split). */}
+                      resetting always re-rolls a fresh random subset.
+                      % Hidden only grades at 100% (Blind); First Letter
+                      grades as a review at any level, but never mastery --
+                      see the finish panel split below. */}
                   <View className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-1.5">
                     <View className="flex-row justify-between items-center px-1">
-                      <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">Words Hidden</Text>
-                      <Text className="text-[9px] font-mono font-bold text-neutral-500">
-                        {hideLevel}% hidden{hideLevel < 100 ? ' -- practice only' : ''}
+                      <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
+                        {hintMode === 'firstLetter' ? 'First Letter Hints' : 'Words Hidden'}
+                      </Text>
+                      <Text className={`text-[9px] font-mono font-bold ${hintMode === 'firstLetter' ? 'text-sky-600' : 'text-neutral-500'}`}>
+                        {activeLevel}% hidden
+                        {hintMode === 'percent' && activeLevel < 100 ? ' -- practice only' : ''}
+                        {hintMode === 'firstLetter' ? ' -- review, not mastery' : ''}
                       </Text>
                     </View>
+                    <View className="flex-row bg-neutral-200/70 p-0.5 rounded-lg">
+                      <Pressable
+                        onPress={() => switchHintMode('percent')}
+                        className={`flex-1 py-1 rounded-md items-center ${hintMode === 'percent' ? 'bg-white' : ''}`}
+                      >
+                        <Text className={`text-[9px] font-sans font-extrabold ${hintMode === 'percent' ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                          % Hidden
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => switchHintMode('firstLetter')}
+                        className={`flex-1 py-1 rounded-md items-center ${hintMode === 'firstLetter' ? 'bg-sky-600' : ''}`}
+                      >
+                        <Text className={`text-[9px] font-sans font-extrabold ${hintMode === 'firstLetter' ? 'text-white' : 'text-neutral-500'}`}>
+                          First Letter
+                        </Text>
+                      </Pressable>
+                    </View>
                     <DiscreteSlider
-                      value={hideLevel}
+                      value={activeLevel}
                       onChange={(level) => {
-                        setHideLevel(level);
+                        setActiveLevel(level);
                         resetReciteGame();
                         regenerateHiddenWords(level);
                       }}
@@ -1420,7 +1522,7 @@ function PracticeModalsInner({
                     <Pressable
                       onPress={() => {
                         resetReciteGame();
-                        regenerateHiddenWords(hideLevel);
+                        regenerateHiddenWords(activeLevel);
                       }}
                       className="flex-1 py-2 px-3 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5"
                     >
@@ -1432,7 +1534,7 @@ function PracticeModalsInner({
                     </Pressable>
                   </View>
                 </View>
-              ) : hideLevel < 100 ? (
+              ) : hintMode === 'percent' && hideLevel < 100 ? (
                 /* Partially-hidden finish panel -- accuracy feedback only, no
                    mastery/review logging buttons, since anything short of a
                    fully blind attempt never counts. */
@@ -1481,25 +1583,33 @@ function PracticeModalsInner({
                 })()
               ) : (
                 /* Graded results panel. The accuracy tier decides which
-                   logging actions exist: perfect (no missed words) ->
-                   counts as a mastery touch AND a review; >=
-                   REVIEW_PASS_ACCURACY -> counts as a review only; below
-                   that -> the run logs as a failed attempt. */
+                   logging actions exist: perfect (no missed words) with
+                   First Letter mode OFF -> counts as a mastery touch AND a
+                   review; perfect WITH First Letter assist, or >=
+                   REVIEW_PASS_ACCURACY otherwise -> counts as a review only;
+                   below that -> the run logs as a failed attempt. */
                 (() => {
                   const summary = summarizeOutcomes(finalOutcomes || []);
                   const drill: 'speak' | 'type' = usedSpeechRef.current ? 'speak' : 'type';
                   const pct = Math.round(summary.accuracy * 100);
                   const passPct = Math.round(REVIEW_PASS_ACCURACY * 100);
+                  const assisted = hintMode === 'firstLetter';
+                  const isMasteryEligible = summary.isPerfect && !assisted;
                   return (
                     <ScrollView className="flex-1" contentContainerClassName="items-center justify-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
                       <BounceView>
-                        <View className="w-12 h-12 bg-neutral-100 border-2 border-[#1A1A1A] rounded-full items-center justify-center">
-                          <Sparkles size={24} color="#171717" />
+                        <View className={`w-12 h-12 border-2 rounded-full items-center justify-center ${assisted ? 'bg-sky-50 border-sky-600' : 'bg-neutral-100 border-[#1A1A1A]'}`}>
+                          <Sparkles size={24} color={assisted ? '#0284c7' : '#171717'} />
                         </View>
                       </BounceView>
                       <View className="items-center">
+                        {assisted && (
+                          <View className="bg-sky-100 rounded-full px-2 py-0.5 mb-1">
+                            <Text className="text-[9px] font-sans font-extrabold text-sky-700 uppercase tracking-wider">First-Letter Assisted</Text>
+                          </View>
+                        )}
                         <Text className="text-lg font-serif font-bold text-neutral-900 leading-tight">
-                          {summary.isPerfect ? 'Perfect Recall!' : summary.passesReview ? 'Close Enough!' : 'Keep Practicing!'}
+                          {isMasteryEligible ? 'Perfect Recall!' : summary.passesReview ? (assisted && summary.isPerfect ? 'Nicely Recalled!' : 'Close Enough!') : 'Keep Practicing!'}
                         </Text>
                         <Text className="text-xs text-neutral-500 font-sans mt-0.5">
                           {pct}% word accuracy — {summary.perfectWords} exact
@@ -1520,7 +1630,7 @@ function PracticeModalsInner({
                       </View>
 
                       <View className="w-full gap-2">
-                        {summary.isPerfect ? (
+                        {isMasteryEligible ? (
                           <Pressable
                             onPress={() => {
                               onUpdateStatus(verses, 'memorized', drill, { perfect: true });
@@ -1538,13 +1648,17 @@ function PracticeModalsInner({
                                 onUpdateStatus(verses, 'memorized', drill, { perfect: false });
                                 handleGroupComplete();
                               }}
-                              className="w-full py-2.5 px-3 bg-indigo-600 rounded-xl flex-row items-center justify-center gap-1.5"
+                              className={`w-full py-2.5 px-3 rounded-xl flex-row items-center justify-center gap-1.5 ${assisted ? 'bg-sky-600' : 'bg-indigo-600'}`}
                             >
                               <Check size={14} color="#ffffff" />
-                              <Text className="font-sans font-bold text-xs text-white">Count as Review ({pct}% ≥ {passPct}%)</Text>
+                              <Text className="font-sans font-bold text-xs text-white">
+                                {assisted ? `Count as Review (First-Letter Assist)` : `Count as Review (${pct}% ≥ ${passPct}%)`}
+                              </Text>
                             </Pressable>
                             <Text className="text-center text-[9px] text-neutral-400 font-sans font-bold px-4">
-                              Counts for verses in spaced review. Learning verses only bank a mastery touch on a perfect run.
+                              {assisted
+                                ? 'First-Letter hints mean this counts for spaced review, but never a mastery touch -- switch to % Hidden → Blind for that.'
+                                : 'Counts for verses in spaced review. Learning verses only bank a mastery touch on a perfect run.'}
                             </Text>
                           </>
                         ) : (

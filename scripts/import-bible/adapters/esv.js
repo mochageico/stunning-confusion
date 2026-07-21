@@ -32,6 +32,14 @@ async function fetchRawChapterText(bookName, chapterNumber) {
     'include-footnotes': 'false',
     'include-footnote-body': 'false',
     'include-selahs': 'false',
+    // Both default to true on the ESV API and were never being disabled --
+    // include-short-copyright appends a literal "(ESV)" after the last verse
+    // of every fetched chapter, which parseVersesFromBlob then attributes to
+    // that verse's text (so it got graded/spoken as if it were part of the
+    // passage in Recall/Reveal). include-copyright would append the full
+    // attribution paragraph the same way.
+    'include-short-copyright': 'false',
+    'include-copyright': 'false',
     'include-passage-horizontal-lines': 'false',
     'include-heading-horizontal-lines': 'false',
     'indent-paragraphs': '0',

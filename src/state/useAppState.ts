@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   addDoc,
   arrayRemove,
@@ -505,7 +506,34 @@ export function useAppState() {
 
   // Selection state for Chapter Landing
   const [selectedVerseNumbers, setSelectedVerseNumbers] = useState<number[]>([]);
-  const [chapterViewMode, setChapterViewMode] = useState<'list' | 'grid'>('list');
+  const [chapterViewMode, setChapterViewMode] = useState<'list' | 'grid' | 'memoryGrid'>('list');
+
+  // Memory Grid highlights -- user-chosen "meaningful anchor" verses (starts
+  // blank, no auto-coloring pattern). Device-local for now (AsyncStorage, not
+  // synced to Firestore) -- same scope as the Recall practice preferences.
+  // Keyed by verseAnnotationKey (book_chapter_verse) so the Chapter page,
+  // Listen mode, and Recall all read/write the same set.
+  const [highlightedVerses, setHighlightedVerses] = useState<Set<string>>(new Set());
+  const HIGHLIGHTED_VERSES_KEY = 'memoryGrid:highlightedVerses:v1';
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(HIGHLIGHTED_VERSES_KEY);
+        if (raw) setHighlightedVerses(new Set(JSON.parse(raw)));
+      } catch {
+        // Corrupt/missing -- just start blank.
+      }
+    })();
+  }, []);
+  const toggleVerseHighlight = (key: string) => {
+    setHighlightedVerses((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      AsyncStorage.setItem(HIGHLIGHTED_VERSES_KEY, JSON.stringify([...next])).catch(() => {});
+      return next;
+    });
+  };
 
   // Whether RecordingDetailScreen's verse-sync timeline is in edit mode.
   // The draft marker positions themselves live as local component state in
@@ -2871,6 +2899,16 @@ export function useAppState() {
     return new Date().toLocaleDateString('en-US', options);
   };
 
+  // Time-of-day greeting -- was hardcoded "Good morning" regardless of actual time.
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 5) return 'Good night';
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    if (hour < 21) return 'Good evening';
+    return 'Good night';
+  };
+
   // ==========================================
   // 7-6-5 DETERMINISTIC RETENTION ENGINE & HELPERS
   // ==========================================
@@ -4464,6 +4502,7 @@ export function useAppState() {
     backHistory, setBackHistory,
     selectedVerseNumbers, setSelectedVerseNumbers,
     chapterViewMode, setChapterViewMode,
+    highlightedVerses, toggleVerseHighlight,
     isEditingSync, setIsEditingSync,
     preset, setPreset,
     learningDays, setLearningDays,
@@ -4613,6 +4652,7 @@ export function useAppState() {
     // formatting helpers
     formatTime,
     getTodayDateString,
+    getGreeting,
 
     // 7-6-5 retention engine
     getTodayAbbreviation,

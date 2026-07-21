@@ -1,20 +1,10 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import {
-  ArrowLeft,
-  Check,
-  ChevronDown,
-  Grid as GridIcon,
-  List as ListIcon,
-  Pause,
-  Play,
-  Search,
-  SlidersHorizontal,
-  X,
-} from 'lucide-react-native';
+import { ArrowLeft, Check, ChevronDown, Pause, Play, Search, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { ChipRow, FadeInView } from '../components/ui';
+import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { Recording } from '../types';
 import { ESV_COPYRIGHT_NOTICE } from '../data';
 
@@ -53,6 +43,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     overrideVerseMemoryStatus,
     chapterViewMode,
     setChapterViewMode,
+    highlightedVerses,
+    toggleVerseHighlight,
     selectedChapterAudios,
     setSelectedChapterAudios,
     showAudioSelector,
@@ -301,33 +293,18 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           )}
         </View>
 
-        {/* Grid / List view Toggle */}
-        <View className="flex-row items-center justify-between bg-[#F3F2F1] p-1.5 border border-[#E5E5E5] rounded-xl">
+        {/* Grid / List / Memory Grid view Toggle */}
+        <View className="bg-[#F3F2F1] p-1.5 border border-[#E5E5E5] rounded-xl gap-1.5">
           <Text className="text-xs font-sans font-bold text-neutral-600 pl-1">Verse Layout</Text>
-          <View className="flex-row bg-white border border-[#E5E5E5] rounded-lg p-0.5">
-            <Pressable
-              onPress={() => setChapterViewMode('list')}
-              className={`p-1.5 rounded-md flex-row items-center gap-1 ${
-                chapterViewMode === 'list' ? 'bg-[#1A1A1A]' : ''
-              }`}
-            >
-              <ListIcon size={13} color={chapterViewMode === 'list' ? '#FFFFFF' : '#737373'} />
-              <Text className={`text-xs font-bold ${chapterViewMode === 'list' ? 'text-white' : 'text-neutral-500'}`}>
-                List View
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setChapterViewMode('grid')}
-              className={`p-1.5 rounded-md flex-row items-center gap-1 ${
-                chapterViewMode === 'grid' ? 'bg-[#1A1A1A]' : ''
-              }`}
-            >
-              <GridIcon size={13} color={chapterViewMode === 'grid' ? '#FFFFFF' : '#737373'} />
-              <Text className={`text-xs font-bold ${chapterViewMode === 'grid' ? 'text-white' : 'text-neutral-500'}`}>
-                Grid View
-              </Text>
-            </Pressable>
-          </View>
+          <ChipRow
+            value={chapterViewMode}
+            onChange={setChapterViewMode}
+            options={[
+              { id: 'list', label: 'List' },
+              { id: 'grid', label: 'Grid' },
+              { id: 'memoryGrid', label: 'Memory Grid' },
+            ]}
+          />
         </View>
 
         {/* Dynamic verses area */}
@@ -381,7 +358,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 );
               })}
             </View>
-          ) : (
+          ) : chapterViewMode === 'grid' ? (
             /* GRID VIEW - Compact & informative with word snippets */
             <View className="flex-row flex-wrap gap-2 pt-1">
               {activeChapterVerses.map((v) => {
@@ -425,6 +402,29 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 );
               })}
             </View>
+          ) : (
+            /* MEMORY GRID VIEW - Scripture Memory Fellowship style: every
+               word's first letter, tap to select (same as List/Grid), pin
+               icon to mark a personal memory anchor. */
+            <MemoryGrid
+              verses={activeChapterVerses.map((v) => ({
+                book: selectedBook || '',
+                chapter: selectedChapter || 0,
+                verse: v.verse,
+                text: v.text,
+              }))}
+              columns={4}
+              highlightedKeys={highlightedVerses}
+              onToggleHighlight={toggleVerseHighlight}
+              selectedKeys={
+                new Set(
+                  activeChapterVerses
+                    .filter((v) => isVerseSelected(v.verse))
+                    .map((v) => verseAnnotationKey(selectedBook || '', selectedChapter || 0, v.verse))
+                )
+              }
+              onTapVerse={(v) => toggleVerseSelection(v.verse)}
+            />
           )}
         </View>
 

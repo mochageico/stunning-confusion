@@ -18,18 +18,18 @@ import { auth } from '../firebase';
  * the Google button simply reports that a dev build is needed; a dev-client/production
  * build picks up the real native flow with no further code changes.
  *
- * `require()` also fails on a REAL dev-client build right now, on purpose: package.json's
- * `expo.autolinking.ios.exclude` deliberately keeps this package's native iOS pod out of
- * the Podfile. Without that, `expo prebuild`/EAS Build pulls in GoogleSignIn-iOS's
- * transitive pods (AppCheckCore/GoogleUtilities/RecaptchaInterop), none of which define
- * Swift modules — CocoaPods refuses to link them as static libraries and the build fails
- * ("The following Swift pods cannot yet be integrated as static libraries"). This
- * package's own Expo config plugin (see app.json's dropped plugin entry, same reasoning)
- * would normally patch the Podfile to fix this, but it hard-requires a real
- * `iosUrlScheme` we haven't provisioned yet. Once Google Sign-In is actually configured
- * (real OAuth client IDs, iOS URL scheme, GoogleService-Info.plist), both the plugin and
- * the autolinking exclusion should come out together — not one without the other, or the
- * Podfile error comes back.
+ * Previously `require()` also failed on a real dev-client build, on purpose: this
+ * package's own Expo config plugin patches the Podfile to avoid a CocoaPods failure
+ * (AppCheckCore/GoogleUtilities/RecaptchaInterop pulled in transitively don't define Swift
+ * modules, so CocoaPods refuses to link them as static libraries), but the plugin
+ * hard-requires a real `iosUrlScheme` — so until that was provisioned, package.json instead
+ * carried an `expo.autolinking.ios.exclude` entry to keep the native iOS pod out of the
+ * Podfile entirely. Both are now resolved together (2026-07-21): the plugin is back in
+ * app.json's `plugins` with the real `iosUrlScheme` (from GoogleService-Info.plist's
+ * REVERSED_CLIENT_ID), `ios.googleServicesFile` points at that plist, and the autolinking
+ * exclude has been removed. A fresh EAS dev-client build is required to pick this up — a
+ * JS-only reload won't. If the Podfile error above ever resurfaces, check whether these two
+ * pieces have drifted out of sync again.
  *
  * Requires EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (the Firebase project's "Web client" OAuth
  * client ID from the Google Cloud Console credentials page — Firebase Auth needs the WEB

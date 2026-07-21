@@ -10,6 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.micahgoeke.scripturememory.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -43,6 +44,20 @@
         {
           "microphonePermission": "Scripture Memory uses your microphone to grade spoken recitation practice.",
           "speechRecognitionPermission": "Scripture Memory uses speech recognition to check your spoken recitation against the verse."
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.280157168827-1b1uhb645h0g3kevfc551v9426ftprpd"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useModularHeaders": true
+          }
         }
       ]
     ],

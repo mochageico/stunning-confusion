@@ -55,6 +55,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     getEstimatedReviewTime,
     isTodayLearningDay,
     getTodayDateString,
+    getGreeting,
     navigateTo,
     triggerToast,
     triggerMockDueReviews,
@@ -141,7 +142,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
           <Text className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#888]">
             {getTodayDateString()}
           </Text>
-          <Text className="text-xl font-serif font-black mt-0.5 text-[#1A1A1A]">Good morning, {firstName}.</Text>
+          <Text className="text-xl font-serif font-black mt-0.5 text-[#1A1A1A]">{getGreeting()}, {firstName}.</Text>
         </View>
 
         {/* TODAY'S CORE DASHBOARD CARD */}
