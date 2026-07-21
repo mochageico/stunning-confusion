@@ -52,20 +52,13 @@
           "iosUrlScheme": "com.googleusercontent.apps.280157168827-1b1uhb645h0g3kevfc551v9426ftprpd"
         }
       ],
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "useModularHeaders": true
-          }
-        }
-      ]
+      "./plugins/withPodfileModularHeaders.js"
     ],
     "extra": {
       "eas": {
         "projectId": "e386c8cc-1d69-41c6-9af3-8de3e85d862d"
       }
     },
-    "owner": "mochageico"
+    "owner": "lev-scripture-memory"
   }
 }
