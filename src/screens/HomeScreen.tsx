@@ -74,7 +74,13 @@ export default function HomeScreen({ state }: { state: AppState }) {
   // signed-in user's actual name should always take priority.
   const firstName = (user?.displayName || 'Kenneth Carter').split(' ')[0];
 
-  const learningItems = memoryQueue.filter((item) => item.status === 'learning');
+  // Excludes verses that already banked every mastery touch -- they're done
+  // learning and just waiting on their reviews to clear before promotion out
+  // of 'learning' status, so bundling them into a fresh "Learn" group with
+  // newly-pulled verses would mean re-practicing something already finished.
+  const learningItems = memoryQueue.filter(
+    (item) => item.status === 'learning' && (item.touchLogs?.length || 0) < masteryTouches
+  );
   const dueReviewItems = memoryQueue.filter(
     (item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate)
   );

@@ -60,6 +60,10 @@ interface MemoryGridProps {
    * hide the doodle entry point entirely (e.g. a read-only context). */
   doodles?: Record<string, string[]>;
   onSaveDoodle?: (key: string, verse: MemoryGridVerse, strokes: string[]) => void;
+  /** 'firstLetter' (default) shows every word's first letter, same as
+   * always. 'blank' hides words entirely -- just the verse number, no text
+   * at all -- for reciting from pure recall with only box order as a cue. */
+  hideMode?: 'firstLetter' | 'blank';
 }
 
 export default function MemoryGrid({
@@ -73,8 +77,13 @@ export default function MemoryGrid({
   wordStates,
   doodles,
   onSaveDoodle,
+  hideMode = 'firstLetter',
 }: MemoryGridProps) {
-  const widthPct = columns === 2 ? '48.5%' : '23.5%';
+  // Percentages leave extra margin beyond the naive (100/columns)% split --
+  // RN adds each box's border on top of its stated width rather than
+  // absorbing it (no true border-box sizing), so a tighter percentage plus
+  // the flex-wrap gap was overflowing 4-per-row down to 3.
+  const widthPct = columns === 2 ? '47%' : '22%';
   const [doodleOpenKey, setDoodleOpenKey] = useState<string | null>(null);
   const doodleOpenVerse = verses.find((v) => verseAnnotationKey(v.book, v.chapter, v.verse) === doodleOpenKey) || null;
 
@@ -121,26 +130,45 @@ export default function MemoryGrid({
               </View>
             </View>
             <Pressable onPress={() => onTapVerse?.(v, index)} className="px-2 pb-2 pt-0.5">
-              <Text className={`font-mono text-[11px] leading-tight flex-row flex-wrap ${isActive ? 'text-white' : 'text-neutral-800'}`}>
-                {words.map((w, wi) => {
-                  const grade = grades?.[wi];
-                  const gradeColor =
-                    grade === 'correct'
-                      ? '#10b981'
-                      : grade === 'close'
-                        ? '#d97706'
-                        : grade === 'incorrect'
-                          ? '#dc2626'
-                          : isActive
-                            ? '#ffffff'
-                            : undefined;
-                  return (
-                    <Text key={wi} style={gradeColor ? { color: gradeColor } : undefined}>
-                      {firstLetterOnly(w)}{' '}
-                    </Text>
-                  );
-                })}
-              </Text>
+              {hideMode === 'blank' ? (
+                <View className="flex-row flex-wrap items-center" style={{ gap: 3 }}>
+                  {words.map((w, wi) => {
+                    const grade = grades?.[wi];
+                    const dotColor =
+                      grade === 'correct'
+                        ? '#10b981'
+                        : grade === 'close'
+                          ? '#d97706'
+                          : grade === 'incorrect'
+                            ? '#dc2626'
+                            : isActive
+                              ? 'rgba(255,255,255,0.4)'
+                              : '#d4d4d4';
+                    return <View key={wi} style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: dotColor }} />;
+                  })}
+                </View>
+              ) : (
+                <Text className={`font-mono text-[11px] leading-tight flex-row flex-wrap ${isActive ? 'text-white' : 'text-neutral-800'}`}>
+                  {words.map((w, wi) => {
+                    const grade = grades?.[wi];
+                    const gradeColor =
+                      grade === 'correct'
+                        ? '#10b981'
+                        : grade === 'close'
+                          ? '#d97706'
+                          : grade === 'incorrect'
+                            ? '#dc2626'
+                            : isActive
+                              ? '#ffffff'
+                              : undefined;
+                    return (
+                      <Text key={wi} style={gradeColor ? { color: gradeColor } : undefined}>
+                        {firstLetterOnly(w)}{' '}
+                      </Text>
+                    );
+                  })}
+                </Text>
+              )}
             </Pressable>
           </View>
         );

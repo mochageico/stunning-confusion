@@ -22,6 +22,7 @@ export function Dropdown<T extends string | number>({
   placeholder = 'Select...',
   title = 'Select an option',
   searchable,
+  staticLabel,
 }: {
   value: T;
   options: DropdownOption<T>[];
@@ -30,6 +31,12 @@ export function Dropdown<T extends string | number>({
   title?: string;
   /** Adds a search box above the list. Defaults to on for longer lists. */
   searchable?: boolean;
+  /** Trigger always shows `placeholder` (e.g. "View") instead of the current
+   * selection -- for a compact action-menu feel where discovering the
+   * current value is a secondary concern to keeping the trigger label
+   * stable and short. Off by default (trigger shows the selected option, a
+   * real value-picker) to match every other use of this component. */
+  staticLabel?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -55,8 +62,8 @@ export function Dropdown<T extends string | number>({
         onPress={() => setOpen(true)}
         className="flex-row items-center justify-between bg-white border border-neutral-300 rounded-xl px-3 py-2.5"
       >
-        <Text className={`text-xs font-sans font-bold ${selected ? 'text-[#1A1A1A]' : 'text-neutral-400'}`} numberOfLines={1}>
-          {selected ? selected.label : placeholder}
+        <Text className={`text-xs font-sans font-bold ${selected || staticLabel ? 'text-[#1A1A1A]' : 'text-neutral-400'}`} numberOfLines={1}>
+          {staticLabel ? placeholder : selected ? selected.label : placeholder}
         </Text>
         <ChevronDown size={14} color="#737373" />
       </Pressable>

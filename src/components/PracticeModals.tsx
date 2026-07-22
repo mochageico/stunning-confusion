@@ -682,6 +682,12 @@ function PracticeModalsInner({
   // explicit product direction, reciting via the grid is itself a hint --
   // same "counts as review, never mastery" rule as First Letter mode.
   const [recallDisplayMode, setRecallDisplayMode] = useState<'passage' | 'memoryGrid'>('passage');
+  // Memory Grid's own hide setting -- separate from hintMode/hideLevel above
+  // (which only apply to Passage mode and are hidden while Grid mode is
+  // active, since %-hidden has no meaning for a grid that's always
+  // first-letter). 'firstLetter' is the existing permanent-hint look;
+  // 'blank' hides words entirely for reciting from pure recall.
+  const [gridHideMode, setGridHideMode] = useState<'firstLetter' | 'blank'>('firstLetter');
 
   // Debug aid for tuning speech recognition -- shows the exact raw transcript
   // the speech engine produced (not just the graded/matched result), so it
@@ -742,6 +748,7 @@ function PracticeModalsInner({
         if (saved.hintMode === 'percent' || saved.hintMode === 'firstLetter') setHintMode(saved.hintMode);
         if (saved.strikeLimit === 'unlimited' || typeof saved.strikeLimit === 'number') setStrikeLimit(saved.strikeLimit);
         if (saved.recallDisplayMode === 'passage' || saved.recallDisplayMode === 'memoryGrid') setRecallDisplayMode(saved.recallDisplayMode);
+        if (saved.gridHideMode === 'firstLetter' || saved.gridHideMode === 'blank') setGridHideMode(saved.gridHideMode);
         if (typeof saved.showRawTranscript === 'boolean') setShowRawTranscript(saved.showRawTranscript);
         const loadedLevel = saved.hintMode === 'firstLetter' ? saved.firstLetterLevel : saved.hideLevel;
         if (typeof loadedLevel === 'number') regenerateHiddenWords(loadedLevel);
@@ -754,9 +761,9 @@ function PracticeModalsInner({
   useEffect(() => {
     AsyncStorage.setItem(
       HINT_PREFS_KEY,
-      JSON.stringify({ hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode, showRawTranscript })
+      JSON.stringify({ hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode, gridHideMode, showRawTranscript })
     ).catch(() => {});
-  }, [hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode, showRawTranscript]);
+  }, [hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode, gridHideMode, showRawTranscript]);
 
   // A chained review session (see advanceReviewSession in useAppState.ts)
   // swaps `verses` in place on the SAME mounted PracticeModals instance --
@@ -1064,26 +1071,62 @@ function PracticeModalsInner({
         {/* ======================================================== */}
         {type === 'listen' && (
           <View className="flex-1 justify-between">
-            {/* Verse by Verse / Memory Grid tab -- purely a display choice,
-                both tap through to the same handleVerseClick. */}
-            <View className="flex-row bg-neutral-100 p-1 rounded-xl mb-2.5 border border-neutral-200 shrink-0">
-              <Pressable
-                onPress={() => setListenViewMode('verses')}
-                className={`flex-1 py-1.5 rounded-lg items-center ${listenViewMode === 'verses' ? 'bg-[#1A1A1A]' : ''}`}
-              >
-                <Text className={`text-[10px] uppercase tracking-wider font-sans font-extrabold ${listenViewMode === 'verses' ? 'text-white' : 'text-neutral-500'}`}>
-                  Verse by Verse
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setListenViewMode('memoryGrid')}
-                className={`flex-1 py-1.5 rounded-lg items-center ${listenViewMode === 'memoryGrid' ? 'bg-[#1A1A1A]' : ''}`}
-              >
-                <Text className={`text-[10px] uppercase tracking-wider font-sans font-extrabold ${listenViewMode === 'memoryGrid' ? 'text-white' : 'text-neutral-500'}`}>
-                  Memory Grid
-                </Text>
-              </Pressable>
+            {/* View + Verse Selection -- dropdowns instead of always-visible
+                buttons/chips, to cut down on-screen clutter. Both tap
+                through to the same handleVerseClick regardless of which
+                display mode is picked. */}
+            <View className="flex-row gap-2 mb-2.5 shrink-0">
+              <View className="flex-1">
+                <Dropdown
+                  value={listenViewMode}
+                  onChange={setListenViewMode}
+                  options={[
+                    { id: 'verses', label: 'Verse List' },
+                    { id: 'memoryGrid', label: 'Memory Grid' },
+                  ]}
+                  title="Display"
+                  placeholder="View"
+                  staticLabel
+                  searchable={false}
+                />
+              </View>
+              {((memoryQueue && memoryQueue.length > 0) || (allVerses && allVerses.length > 0)) && (
+                <View className="flex-1">
+                  <Dropdown
+                    value={playSource}
+                    onChange={setPlaySource}
+                    options={[
+                      { id: 'all', label: "Today's Verses" },
+                      { id: 'memorization', label: 'Learning' },
+                      { id: 'reviewing', label: 'Review' },
+                      { id: 'priming', label: 'Priming' },
+                      { id: 'selection', label: 'Selected' },
+                    ]}
+                    title="Verse Selection"
+                    placeholder="Verses"
+                    staticLabel
+                    searchable={false}
+                  />
+                </View>
+              )}
             </View>
+
+            {playSource === 'priming' && setPrimingLookahead && (
+              <View className="flex-row items-center justify-between bg-amber-50 border border-amber-100 rounded-lg p-2 mb-2.5">
+                <View>
+                  <Text className="text-[9px] font-sans font-bold text-amber-800 uppercase tracking-wider">⚡ Priming Window Size</Text>
+                  <Text className="text-[8.5px] font-sans text-amber-700 leading-none">Set lookahead priming size</Text>
+                </View>
+                <View style={{ width: 90 }}>
+                  <Dropdown
+                    value={primingLookahead}
+                    onChange={(v) => setPrimingLookahead(Number(v))}
+                    options={[10, 20, 30, 40, 50].map((n) => ({ id: n, label: `${n}` }))}
+                    title="Priming Window Size"
+                  />
+                </View>
+              </View>
+            )}
 
             {/* Verse Highlight Box — verse-by-verse, not word-by-word: the
                 only real timing data this app has is per verse. */}
@@ -1185,66 +1228,6 @@ function PracticeModalsInner({
 
             {/* Custom Control and Audio Looping Panel */}
             <View className="gap-3.5 bg-white pt-2">
-              {/* playlist / source options -- shown whenever there's a real
-                  alternative source to switch to (memoryQueue for today's
-                  verses, or allVerses as the empty-queue fallback below). */}
-              {((memoryQueue && memoryQueue.length > 0) || (allVerses && allVerses.length > 0)) && (
-                <View className="gap-2 bg-neutral-50 p-2 rounded-xl border border-neutral-200">
-                  <View className="flex-row justify-between items-center px-1">
-                    <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">Loop Target / Playlist</Text>
-                    <Text className="text-[9px] font-mono font-bold text-neutral-500 bg-neutral-200 px-1.5 rounded-full">
-                      {activePlayVerses.length} verses
-                    </Text>
-                  </View>
-                  {/* Not ChipRow here -- its columns-mode spacing (2px per
-                      chip) reads as cramped with 5 options this size; a
-                      dedicated row gives real breathing room between them
-                      without touching ChipRow's shared columns-mode styling
-                      used elsewhere in the app. */}
-                  <View className="flex-row flex-wrap" style={{ gap: 6 }}>
-                    {(
-                      [
-                        { id: 'all', label: "Today's Verses" },
-                        { id: 'memorization', label: 'Learning' },
-                        { id: 'reviewing', label: 'Review' },
-                        { id: 'priming', label: 'Priming' },
-                        { id: 'selection', label: 'Selected' },
-                      ] as const
-                    ).map((opt) => {
-                      const active = playSource === opt.id;
-                      return (
-                        <Pressable
-                          key={opt.id}
-                          onPress={() => setPlaySource(opt.id)}
-                          className={`px-2.5 py-1.5 rounded-lg border ${active ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'}`}
-                        >
-                          <Text className={`text-[9.5px] font-bold text-center ${active ? 'text-white' : 'text-neutral-600'}`}>
-                            {opt.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-
-                  {playSource === 'priming' && setPrimingLookahead && (
-                    <View className="flex-row items-center justify-between bg-amber-50 border border-amber-100 rounded-lg p-2 mt-2">
-                      <View>
-                        <Text className="text-[9px] font-sans font-bold text-amber-800 uppercase tracking-wider">⚡ Priming Window Size</Text>
-                        <Text className="text-[8.5px] font-sans text-amber-700 leading-none">Set lookahead priming size</Text>
-                      </View>
-                      <View style={{ width: 90 }}>
-                        <Dropdown
-                          value={primingLookahead}
-                          onChange={(v) => setPrimingLookahead(Number(v))}
-                          options={[10, 20, 30, 40, 50].map((n) => ({ id: n, label: `${n}` }))}
-                          title="Priming Window Size"
-                        />
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-
               {!hasAnyAudio ? (
                 <View className="items-center gap-1.5 py-4 bg-neutral-50 rounded-xl border border-dashed border-neutral-300">
                   <Text className="text-xs font-sans font-bold text-neutral-600">No audio recorded for these verses yet</Text>
@@ -1425,6 +1408,7 @@ function PracticeModalsInner({
                           doodles={verseDoodles}
                           onSaveDoodle={onSaveVerseDoodle ? (key, _v, strokes) => onSaveVerseDoodle(key, strokes) : undefined}
                           wordStates={gridWordStates}
+                          hideMode={gridHideMode}
                         />
                       </ScrollView>
                     ) : (
@@ -1619,46 +1603,79 @@ function PracticeModalsInner({
                       resetting always re-rolls a fresh random subset.
                       % Hidden only grades at 100% (Blind); First Letter
                       grades as a review at any level, but never mastery --
-                      see the finish panel split below. */}
-                  <View className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-1.5">
-                    <View className="flex-row justify-between items-center px-1">
-                      <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
-                        {hintMode === 'firstLetter' ? 'First Letter Hints' : 'Words Hidden'}
-                      </Text>
-                      <Text className={`text-[9px] font-mono font-bold ${hintMode === 'firstLetter' ? 'text-sky-600' : 'text-neutral-500'}`}>
-                        {activeLevel}% hidden
-                        {hintMode === 'percent' && activeLevel < 100 ? ' -- practice only' : ''}
-                        {hintMode === 'firstLetter' ? ' -- review, not mastery' : ''}
-                      </Text>
-                    </View>
-                    <View className="flex-row bg-neutral-200/70 p-0.5 rounded-lg">
-                      <Pressable
-                        onPress={() => switchHintMode('percent')}
-                        className={`flex-1 py-1 rounded-md items-center ${hintMode === 'percent' ? 'bg-white' : ''}`}
-                      >
-                        <Text className={`text-[9px] font-sans font-extrabold ${hintMode === 'percent' ? 'text-neutral-900' : 'text-neutral-500'}`}>
-                          % Hidden
+                      see the finish panel split below. Passage-mode only --
+                      %-hidden has no meaning against the grid, which is
+                      always first-letter (or now, always blank). */}
+                  {recallDisplayMode === 'passage' && (
+                    <View className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-1.5">
+                      <View className="flex-row justify-between items-center px-1">
+                        <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
+                          {hintMode === 'firstLetter' ? 'First Letter Hints' : 'Words Hidden'}
                         </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => switchHintMode('firstLetter')}
-                        className={`flex-1 py-1 rounded-md items-center ${hintMode === 'firstLetter' ? 'bg-sky-600' : ''}`}
-                      >
-                        <Text className={`text-[9px] font-sans font-extrabold ${hintMode === 'firstLetter' ? 'text-white' : 'text-neutral-500'}`}>
-                          First Letter
+                        <Text className={`text-[9px] font-mono font-bold ${hintMode === 'firstLetter' ? 'text-sky-600' : 'text-neutral-500'}`}>
+                          {activeLevel}% hidden
+                          {hintMode === 'percent' && activeLevel < 100 ? ' -- practice only' : ''}
+                          {hintMode === 'firstLetter' ? ' -- review, not mastery' : ''}
                         </Text>
-                      </Pressable>
+                      </View>
+                      <View className="flex-row bg-neutral-200/70 p-0.5 rounded-lg">
+                        <Pressable
+                          onPress={() => switchHintMode('percent')}
+                          className={`flex-1 py-1 rounded-md items-center ${hintMode === 'percent' ? 'bg-white' : ''}`}
+                        >
+                          <Text className={`text-[9px] font-sans font-extrabold ${hintMode === 'percent' ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                            % Hidden
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => switchHintMode('firstLetter')}
+                          className={`flex-1 py-1 rounded-md items-center ${hintMode === 'firstLetter' ? 'bg-sky-600' : ''}`}
+                        >
+                          <Text className={`text-[9px] font-sans font-extrabold ${hintMode === 'firstLetter' ? 'text-white' : 'text-neutral-500'}`}>
+                            First Letter
+                          </Text>
+                        </Pressable>
+                      </View>
+                      <DiscreteSlider
+                        value={activeLevel}
+                        onChange={(level) => {
+                          setActiveLevel(level);
+                          resetReciteGame();
+                          regenerateHiddenWords(level);
+                        }}
+                        options={[0, 25, 50, 75, 100].map((level) => ({ id: level, label: level === 100 ? 'Blind' : `${level}%` }))}
+                      />
                     </View>
-                    <DiscreteSlider
-                      value={activeLevel}
-                      onChange={(level) => {
-                        setActiveLevel(level);
-                        resetReciteGame();
-                        regenerateHiddenWords(level);
-                      }}
-                      options={[0, 25, 50, 75, 100].map((level) => ({ id: level, label: level === 100 ? 'Blind' : `${level}%` }))}
-                    />
-                  </View>
+                  )}
+
+                  {/* Memory Grid's own hide setting -- no slider, since the
+                      grid is either showing first letters or not; there's no
+                      in-between percentage to speak of. */}
+                  {recallDisplayMode === 'memoryGrid' && (
+                    <View className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-1.5">
+                      <Text className="text-[9px] font-sans font-extrabold text-neutral-400 tracking-wider uppercase px-1">
+                        Memory Grid Display
+                      </Text>
+                      <View className="flex-row bg-neutral-200/70 p-0.5 rounded-lg">
+                        <Pressable
+                          onPress={() => setGridHideMode('firstLetter')}
+                          className={`flex-1 py-1 rounded-md items-center ${gridHideMode === 'firstLetter' ? 'bg-white' : ''}`}
+                        >
+                          <Text className={`text-[9px] font-sans font-extrabold ${gridHideMode === 'firstLetter' ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                            First Letter
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setGridHideMode('blank')}
+                          className={`flex-1 py-1 rounded-md items-center ${gridHideMode === 'blank' ? 'bg-sky-600' : ''}`}
+                        >
+                          <Text className={`text-[9px] font-sans font-extrabold ${gridHideMode === 'blank' ? 'text-white' : 'text-neutral-500'}`}>
+                            Fully Hidden
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
 
                   {/* Options */}
                   <View className="mt-2 flex-row gap-2.5">
