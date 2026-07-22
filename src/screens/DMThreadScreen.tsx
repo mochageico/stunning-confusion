@@ -38,8 +38,16 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
   };
 
   return (
-    <FadeInView style={{ flex: 1 }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+    // KeyboardAvoidingView must be the outermost wrapper, not nested inside
+    // FadeInView -- FadeInView is an Animated.View with a transform, and a
+    // transformed ancestor throws off KeyboardAvoidingView's window-position
+    // measurement on iOS, which silently breaks the padding calculation
+    // (composer ends up hidden behind the keyboard instead of pushed above it).
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+    >
+      <FadeInView style={{ flex: 1 }}>
         <View className="flex-row items-center gap-3 border-b border-neutral-100 p-4">
           <Pressable
             onPress={goBack}
@@ -126,7 +134,7 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
             </Pressable>
           </View>
         )}
-      </KeyboardAvoidingView>
-    </FadeInView>
+      </FadeInView>
+    </KeyboardAvoidingView>
   );
 }

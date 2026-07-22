@@ -33,8 +33,13 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
   };
 
   return (
-    <FadeInView style={{ flex: 1 }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+    // KeyboardAvoidingView must be the outermost wrapper, not nested inside
+    // FadeInView -- see the same comment in DMThreadScreen.tsx.
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+    >
+      <FadeInView style={{ flex: 1 }}>
         <View className="flex-row items-center gap-3 border-b border-neutral-100 p-4">
           <Pressable
             onPress={goBack}
@@ -94,7 +99,7 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
             <Send size={14} color="#FFFFFF" />
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
-    </FadeInView>
+      </FadeInView>
+    </KeyboardAvoidingView>
   );
 }
