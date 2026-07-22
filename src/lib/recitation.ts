@@ -473,13 +473,28 @@ export const alignRecitationWindow = (expectedWindow: string[], spokenWindow: st
 // Live reconciliation step. Bounds alignRecitationWindow to a window instead
 // of realigning the whole passage on every transcript update -- both cheap
 // (bounded DP cost regardless of passage length) and predictable (bounds how
-// far any single revision can jump). ALIGN_WINDOW_EXPECTED/ALIGN_WINDOW_SPOKEN
-// are generous relative to how tightly a passage like Romans 8 clusters its
-// repeats (several repeat-cycles comfortably fit in one window) while keeping
-// every call to a few thousand DP cells.
+// far any single revision can jump).
+//
+// ALIGN_WINDOW_SPOKEN was 60 until a real on-device transcript (Romans 8,
+// captured via the "Raw Transcript" debug view in Recall) showed it was too
+// generous, not too tight: verse 6's "to set the mind on the X" phrase
+// repeats twice, right after verse 5's own doubled "set their minds on the
+// things of the X" -- four near-identical fragments close together. Because
+// spokenWindow is just "the last N spoken tokens" with no relation to
+// alignAnchor, a 60-token tail dragged verse 4/5's ALREADY-CONFIRMED spoken
+// words back into the window alongside verse 6's new ones, and the DP's
+// cost-minimizing alignment sometimes paired verse 6's real "set"/"mind"
+// against one of those leftover verse-5 tokens instead -- grading correctly-
+// spoken verse-6 words 'missed' even though the transcript contained them
+// almost verbatim. Shrinking the spoken side to 30 (still comfortably wider
+// than any single repeat-cycle) fixed it with zero regressions across every
+// other scenario in recitation.alignment.check.ts, including the synthetic
+// repetition-ambiguity tests this constant was originally sized for -- see
+// scenario 17 there for the exact real-world repro this was tuned against.
+// ALIGN_WINDOW_EXPECTED needed no change; only the spoken side was implicated.
 // ----------------------------------------------------------------------------
 export const ALIGN_WINDOW_EXPECTED = 40;
-export const ALIGN_WINDOW_SPOKEN = 60;
+export const ALIGN_WINDOW_SPOKEN = 30;
 export const ALIGN_REVISION_BUFFER = 10;
 
 export interface ReconcileResult {

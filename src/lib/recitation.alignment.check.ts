@@ -453,6 +453,92 @@ scenario('16. Curated homophone (Pharaoh/farrow)', () => {
 });
 
 // ============================================================================
+// 17. Real-world repro -- an actual on-device transcript of Romans 8:1-14
+//    (captured via the new raw-transcript debug view), fed word-by-word
+//    through the real windowed reconciliation exactly like the app does.
+//    The user recited every word correctly; this checks whether verse 6
+//    (whose "set the mind on the X" phrase repeats twice, right after verse
+//    5's own "set their minds on the things of the X" repeats twice) gets
+//    wrongly mass-graded missed despite the transcript containing it almost
+//    verbatim (only "and" heard as "in").
+// ============================================================================
+scenario('17. Real-world repro: Romans 8:1-14 dense repetition', () => {
+  const expectedText =
+    'There is therefore now no condemnation for those who are in Christ Jesus. ' +
+    'For the law of the Spirit of life has set you free in Christ Jesus from the law of sin and death. ' +
+    'For God has done what the law, weakened by the flesh, could not do. By sending his own Son in the likeness of sinful flesh and for sin, he condemned sin in the flesh, ' +
+    'in order that the righteous requirement of the law might be fulfilled in us, who walk not according to the flesh but according to the Spirit. ' +
+    'For those who live according to the flesh set their minds on the things of the flesh, but those who live according to the Spirit set their minds on the things of the Spirit. ' +
+    'For to set the mind on the flesh is death, but to set the mind on the Spirit is life and peace. ' +
+    "For the mind that is set on the flesh is hostile to God, for it does not submit to God's law; indeed, it cannot. " +
+    'Those who are in the flesh cannot please God. ' +
+    'You, however, are not in the flesh but in the Spirit, if in fact the Spirit of God dwells in you. Anyone who does not have the Spirit of Christ does not belong to him. ' +
+    'But if Christ is in you, although the body is dead because of sin, the Spirit is life because of righteousness. ' +
+    'If the Spirit of him who raised Jesus from the dead dwells in you, he who raised Christ Jesus from the dead will also give life to your mortal bodies through his Spirit who dwells in you. ' +
+    'So then, brothers, we are debtors, not to the flesh, to live according to the flesh. ' +
+    'For if you live according to the flesh you will die, but if by the Spirit you put to death the deeds of the body, you will live. ' +
+    'For all who are led by the Spirit of God are sons of God.';
+
+  // Real raw transcript from expo-speech-recognition on a real device
+  // (screenshot-captured via the new "Raw Transcript" debug view) -- the
+  // ACTUAL engine output, mishearings and all. Not synthetic.
+  const realTranscript =
+    'There is therefore now no condemnation for those who are in Christ Jesus for the law of the spirit of ' +
+    'life is that you free in Christ Jesus from the laws and death God is done with the law we can buy the ' +
+    'flesh could not do by sending his own son in the likeness of sinful flesh and for sin he condemned sin ' +
+    'in the flesh in order that the righteous requirement of the lot live be fulfilled in us the walk not ' +
+    'according to to the flesh but according to the the Spirit for Those who live according to the flesh ' +
+    'said their minds on the things of the flesh but Those who live according to the Spirit said their ' +
+    'minds on the things of the Spirit for to set the mind on the flesh is death but to set the mind on ' +
+    'the spirit is life in peace for the mind that is set on the flesh is hostile to God for a does not ' +
+    "submit to God's law indeed it cannot those who are in in the flesh cannot please God however are not " +
+    'in the flesh but in the spirit if in fact the spirit of God dwells in you anyone who does not have ' +
+    'the spirit of Christ does not belong to him but if Christ is in you although the body is dead because ' +
+    'of sin the spirit is life because of righteousness if the Spirit of him who raised Jesus from the ' +
+    'dead dwells in you he raised Christ Jesus from the dead wall to give life to your immortal bodies ' +
+    'through his spiritual dwells in you so then brothers we debtors not to the flesh to live according to ' +
+    'the flesh for a few live recording to the flesh she will die but if by the Spirit you put to death de ' +
+    'deeds of the body you will live for all who are led by the spirit of God own';
+
+  const expected = tokenizeWords(expectedText);
+  const allSpokenTokens = tokenizeWords(realTranscript);
+
+  let session = newSession();
+  const CHUNK = 3; // simulate the engine revealing a few words at a time
+  for (let end = CHUNK; end <= allSpokenTokens.length; end += CHUNK) {
+    session = feedTranscript(session, expected, allSpokenTokens.slice(0, end).join(' '));
+  }
+  session = feedTranscript(session, expected, allSpokenTokens.join(' ')); // final flush
+
+  // Locate verse 6 by its distinctive opening words, robust to re-wording elsewhere.
+  const v6Start = (() => {
+    for (let i = 0; i < expected.length - 3; i++) {
+      if (expected[i] === 'to' && expected[i + 1] === 'set' && expected[i + 2] === 'the' && expected[i + 3] === 'mind') return i;
+    }
+    return -1;
+  })();
+  check('fixture sanity: verse 6 located in the expected token stream', v6Start >= 0);
+  const v6Words = expected.slice(v6Start, v6Start + 17); // "to set the mind on the flesh is death but to set the mind on the spirit is life and peace" (17 tokens)
+  console.log(`  info  verse 6 tokens (${v6Start}..${v6Start + 16}): ${v6Words.join(' ')}`);
+  console.log(`  info  verse 6 grades: ${v6Words.map((w, k) => `${w}=${session.outcomes[v6Start + k] ?? 'UNGRADED'}`).join(', ')}`);
+
+  const v6Missed = v6Words.filter((_, k) => session.outcomes[v6Start + k] === 'missed').length;
+  // The real "and"->"in" mishearing in this transcript falls just after this
+  // 17-token slice (verse 6 ends "...life and peace", transcribed "life in
+  // peace" -- "and" isn't in v6Words above), so a correct aligner grades
+  // all 17 of these tokens non-missed.
+  check(
+    'verse 6 (whose "set the mind on the X" phrase repeats twice, right after verse 5\'s own doubled "set their minds") has zero wrongly-missed words',
+    v6Missed === 0,
+    `${v6Missed} of ${v6Words.length} words in verse 6 graded missed`
+  );
+
+  const totalMissed = Object.values(session.outcomes).filter((o) => o === 'missed').length;
+  const totalGraded = Object.keys(session.outcomes).length;
+  console.log(`  info  overall: ${totalMissed} missed out of ${totalGraded} graded words (pointer=${session.pointer}/${expected.length})`);
+});
+
+// ============================================================================
 console.log(`\n${total - failures}/${total} checks passed.`);
 if (failures > 0) {
   console.error(`${failures} FAILED.`);

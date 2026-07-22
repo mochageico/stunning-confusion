@@ -4315,15 +4315,19 @@ export function useAppState() {
       // 'ArrayBuffer' and 'ArrayBufferView' are not supported" on a real
       // device no matter what we hand the public API (confirmed: the
       // previous fix here switched to uploadString + base64 and it crashed
-      // in exactly the same place, just later). uploadBytesResumable() uses
-      // a completely different wire protocol -- metadata goes in its own
-      // request, and each binary chunk is sent as a raw request body
-      // (FbsBlob.uploadData(), no Blob concatenation at all) -- so it never
-      // hits this restriction, on any platform. Confirmed via reading
-      // @firebase/storage's own source (node_modules/@firebase/storage/dist/
-      // index.cjs.js): multipartUpload() -> FbsBlob.getBlob() -> new Blob(...)
-      // vs. continueResumableUpload() -> blob.slice(...).uploadData() -> the
-      // raw bytes, untouched.
+      // in exactly the same place, just later).
+      //
+      // uploadBytesResumable()'s chunked wire protocol avoids that Blob
+      // concat entirely -- BUT only when it actually chunks. A previous
+      // version of this comment claimed it "never hits this restriction, on
+      // any platform" -- that was wrong: @firebase/storage's UploadTask
+      // silently falls back to the exact same one-shot multipart path (and
+      // the exact same crash) for any upload <= 256KB, which a short single-
+      // verse recording/import very plausibly is. See the patch in
+      // firebase.ts (right after `export const storage = getStorage(app)`)
+      // for the actual fix -- it forces every upload through the chunked
+      // path regardless of size, rather than relying on file size to happen
+      // to clear that threshold.
       const response = await fetch(params.uri);
       const arrayBuffer = await response.arrayBuffer();
       const uploadTask = uploadBytesResumable(fileRef, arrayBuffer, { contentType });

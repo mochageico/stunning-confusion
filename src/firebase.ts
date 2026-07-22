@@ -6,6 +6,9 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+// @ts-ignore — `_UploadTask` is a real but underscore-prefixed (private,
+// not-covered-by-semver) export; see the patch below for why it's needed.
+import { _UploadTask } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -32,6 +35,44 @@ export const db = initializeFirestore(
 );
 
 export const storage = getStorage(app);
+
+// Firebase Storage's uploadBytesResumable() silently falls back to a
+// one-shot multipart upload for any blob <= 256KB (confirmed by reading
+// node_modules/@firebase/storage/dist/index.cjs.js directly: UploadTask's
+// constructor sets `this._resumable = this._shouldDoResumable(this._blob)`,
+// and `_shouldDoResumable` is just `blob.size() > 256 * 1024` -- this check
+// runs regardless of calling uploadBytes() vs uploadBytesResumable()). That
+// one-shot path (`_oneShotUpload` -> `multipartUpload` -> `FbsBlob.getBlob`)
+// builds its request body via `new Blob([metadataString, ourBytes,
+// boundaryString])`, and RN's Blob constructor (0.74+) rejects any
+// ArrayBuffer/ArrayBufferView part -- "Creating blobs from 'ArrayBuffer' and
+// 'ArrayBufferView' are not supported". The resumable/chunked path (used for
+// anything over 256KB) never hits this -- it only ever slices/sends raw
+// Uint8Array chunks, no Blob construction at all.
+//
+// This means the "switch to uploadBytesResumable" fix in persistRecording
+// (useAppState.ts) only actually worked for recordings/imports long enough
+// to clear 256KB -- a single short verse recording is very plausibly under
+// that, and crashes on save exactly the same way uploadBytes() always did.
+// Forcing every upload through the resumable path sidesteps the crash
+// regardless of file size, using the SDK's own already-working chunked
+// upload code rather than reimplementing the Storage REST API by hand.
+//
+// `_UploadTask` is a real export but underscore-prefixed (private, not
+// covered by semver) -- guarded so a future @firebase/storage version that
+// renames/removes `_shouldDoResumable` fails loudly here instead of
+// silently reintroducing this crash.
+if (Platform.OS !== 'web') {
+  const uploadTaskProto = (_UploadTask as unknown as { prototype?: Record<string, unknown> })?.prototype;
+  if (uploadTaskProto && typeof uploadTaskProto._shouldDoResumable === 'function') {
+    uploadTaskProto._shouldDoResumable = () => true;
+  } else {
+    console.error(
+      'firebase.ts: @firebase/storage UploadTask.prototype._shouldDoResumable not found as expected -- ' +
+        'the small-file upload crash workaround did not apply (check for an @firebase/storage version change).'
+    );
+  }
+}
 
 export enum OperationType {
   CREATE = 'create',

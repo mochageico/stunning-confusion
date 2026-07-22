@@ -683,6 +683,13 @@ function PracticeModalsInner({
   // same "counts as review, never mastery" rule as First Letter mode.
   const [recallDisplayMode, setRecallDisplayMode] = useState<'passage' | 'memoryGrid'>('passage');
 
+  // Debug aid for tuning speech recognition -- shows the exact raw transcript
+  // the speech engine produced (not just the graded/matched result), so it
+  // can be screenshotted alongside the grading colors. Off by default (a
+  // practice screen for daily use has no reason to show this); persists once
+  // turned on since a tuning session usually runs several takes in a row.
+  const [showRawTranscript, setShowRawTranscript] = useState(false);
+
   const [hiddenWordIndices, setHiddenWordIndices] = useState<Set<number>>(
     () => new Set(reciteWordObjects.map((_, i) => i))
   );
@@ -735,6 +742,7 @@ function PracticeModalsInner({
         if (saved.hintMode === 'percent' || saved.hintMode === 'firstLetter') setHintMode(saved.hintMode);
         if (saved.strikeLimit === 'unlimited' || typeof saved.strikeLimit === 'number') setStrikeLimit(saved.strikeLimit);
         if (saved.recallDisplayMode === 'passage' || saved.recallDisplayMode === 'memoryGrid') setRecallDisplayMode(saved.recallDisplayMode);
+        if (typeof saved.showRawTranscript === 'boolean') setShowRawTranscript(saved.showRawTranscript);
         const loadedLevel = saved.hintMode === 'firstLetter' ? saved.firstLetterLevel : saved.hideLevel;
         if (typeof loadedLevel === 'number') regenerateHiddenWords(loadedLevel);
       } catch {
@@ -746,9 +754,9 @@ function PracticeModalsInner({
   useEffect(() => {
     AsyncStorage.setItem(
       HINT_PREFS_KEY,
-      JSON.stringify({ hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode })
+      JSON.stringify({ hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode, showRawTranscript })
     ).catch(() => {});
-  }, [hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode]);
+  }, [hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode, showRawTranscript]);
 
   // A chained review session (see advanceReviewSession in useAppState.ts)
   // swaps `verses` in place on the SAME mounted PracticeModals instance --
@@ -1539,7 +1547,14 @@ function PracticeModalsInner({
                             <Text className="text-[10px] text-red-500 font-medium">Verse errors: {verseStrikes}/{strikeLimit}</Text>
                           )}
                         </View>
-                        <Text className="text-[10px] text-neutral-400 font-bold">{recitePointer} of {reciteWordObjects.length} words</Text>
+                        <View className="flex-row items-center gap-2">
+                          <Text className="text-[10px] text-neutral-400 font-bold">{recitePointer} of {reciteWordObjects.length} words</Text>
+                          {speechAvailable && (
+                            <Pressable hitSlop={8} onPress={() => setShowRawTranscript((v) => !v)}>
+                              {showRawTranscript ? <Eye size={12} color="#6366f1" /> : <EyeOff size={12} color="#c7c7c7" />}
+                            </Pressable>
+                          )}
+                        </View>
                       </View>
 
                       <View className="flex-row items-center gap-2">
@@ -1563,6 +1578,16 @@ function PracticeModalsInner({
                       {isListeningSpeak && (
                         <View className="h-6 items-center justify-center bg-neutral-50 rounded-lg border border-neutral-200">
                           <WaveBars active count={16} />
+                        </View>
+                      )}
+                      {/* Raw transcript debug view -- exactly what the speech
+                          engine produced, before any grading/matching. Stays
+                          visible after stopping (doesn't clear until a new
+                          attempt) so a finished take can be screenshotted. */}
+                      {showRawTranscript && speakTranscript !== '' && (
+                        <View className="bg-indigo-50 border border-indigo-100 rounded-lg p-2 gap-0.5">
+                          <Text className="text-[8px] font-sans font-extrabold text-indigo-400 uppercase tracking-wider">Raw Transcript</Text>
+                          <Text className="text-[11px] font-mono text-indigo-900 leading-snug">{speakTranscript}</Text>
                         </View>
                       )}
                     </View>
