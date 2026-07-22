@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { auth } from '../firebase';
-import { FadeInView } from '../components/ui';
+import { ChipRow, FadeInView } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS } from '../data';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 
@@ -20,6 +20,8 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     setShowOnboarding,
     signOut,
     deleteAccount,
+    accountabilityDailyCap,
+    updateAccountabilityDailyCap,
   } = state;
 
   const { signInWithGoogle } = useGoogleSignIn();
@@ -151,6 +153,29 @@ export default function SettingsScreen({ state }: { state: AppState }) {
               );
             })}
           </View>
+        </View>
+
+        {/* NOTIFICATIONS */}
+        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
+          <View>
+            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">
+              Accountability Notifications
+            </Text>
+            <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">
+              Max accountability nudges you'll receive per day, combined across all friends. A sender is told clearly if
+              you've already hit this for today.
+            </Text>
+          </View>
+          <ChipRow
+            value={accountabilityDailyCap}
+            onChange={updateAccountabilityDailyCap}
+            options={[
+              { id: 3, label: '3' },
+              { id: 5, label: '5' },
+              { id: 10, label: '10' },
+              { id: 999, label: 'Unlimited' },
+            ]}
+          />
         </View>
 
         {/* GETTING STARTED */}

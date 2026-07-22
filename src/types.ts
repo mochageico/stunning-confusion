@@ -207,6 +207,11 @@ export interface MemoryPlan {
   // detecting silently-missed review cycles).
   sabbathEnabled: boolean;
   sabbathDay: string;
+  // What hour (0/1/2) a new calendar day logically starts at, for both
+  // review-scheduling rollover and the accountability-notification daily
+  // limits -- lets a night owl's "today" not flip over at real midnight.
+  // 0 (the default) is exactly today's existing midnight-based behavior.
+  dayStartHour: number;
   // Multiplier applied to the daily time estimate (0.75/1.0/1.5 for
   // low/medium/high) -- previously a live useState with no UI control and
   // no persistence, so it silently reset to 'medium' every reload.
@@ -255,6 +260,24 @@ export interface Friend {
   friendsSince: string;
 }
 
+// A friend-to-friend "accountability" nudge -- a custom-message notification,
+// deliberately separate from any messaging/DM system. Immutable once sent
+// (like activityEvents/friendRequests) except for the recipient marking it
+// read. See profiles/{uid}/accountabilitySentLog/{friendUid} (sender's own
+// private per-friend "did I already nudge them today" bookkeeping, not part
+// of this doc) and profiles/{uid}/accountabilityMeta/counter (recipient's
+// today-so-far received count, checked against UserProfile.accountabilityDailyCap).
+export interface AccountabilityNudge {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  fromAvatarUrl: string;
+  toUid: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+}
+
 // Real user profile, stored at profiles/{uid}. memorizedCount/learningCount are
 // denormalized snapshots the owning client patches in opportunistically, so
 // other users can see meaningful stats without exposing private
@@ -268,4 +291,9 @@ export interface UserProfile {
   memorizedCount?: number;
   learningCount?: number;
   circleIds?: string[];
+  // How many accountability nudges (from any friend, combined) this user is
+  // willing to receive per logical day before senders are told they've hit
+  // the cap. Undefined/missing defaults to ACCOUNTABILITY_DEFAULT_DAILY_CAP
+  // in useAppState.ts.
+  accountabilityDailyCap?: number;
 }

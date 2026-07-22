@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Pause, Play, Settings as SettingsIcon } from 'lucide-react-native';
+import { Bell, Pause, Play, Settings as SettingsIcon, X } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { useEmailAuth } from '../state/useEmailAuth';
 import { AppState } from '../state/useAppState';
+import { Friend } from '../types';
 
 export default function ProfileScreen({ state }: { state: AppState }) {
   const {
@@ -29,6 +30,11 @@ export default function ProfileScreen({ state }: { state: AppState }) {
     setSelectedRecording,
     navigateTo,
     signOut,
+    canSendAccountabilityNudge,
+    sendAccountabilityNudge,
+    receivedAccountabilityNudges,
+    markAccountabilityNudgeRead,
+    dismissAccountabilityNudge,
   } = state;
 
   const { signInWithGoogle } = useGoogleSignIn();
@@ -38,6 +44,11 @@ export default function ProfileScreen({ state }: { state: AppState }) {
   const [authMode, setAuthMode] = useState<'signIn' | 'signUp'>('signIn');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+
+  // Accountability nudge compose -- purely local/ephemeral UI state, same as
+  // the rest of this screen's dialog-open flags.
+  const [nudgeTarget, setNudgeTarget] = useState<Friend | null>(null);
+  const [nudgeMessage, setNudgeMessage] = useState('');
   const [displayNameInput, setDisplayNameInput] = useState('');
 
   // "Memorized" here means verses learned -- graduated out of the initial
@@ -269,6 +280,42 @@ export default function ProfileScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
+        {/* NOTIFICATIONS — accountability nudges received from friends.
+            Minimal v1: a flat recent list, tap to mark read, X to dismiss.
+            No routing/categories yet -- accountability is the only
+            notification type that exists so far. */}
+        {receivedAccountabilityNudges.length > 0 && (
+          <View className="gap-1.5">
+            <View className="flex-row items-center px-1">
+              <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+                Notifications ({receivedAccountabilityNudges.filter((n) => !n.read).length} new)
+              </Text>
+            </View>
+            <View className="gap-1.5">
+              {receivedAccountabilityNudges.map((n) => (
+                <Pressable
+                  key={n.id}
+                  onPress={() => !n.read && markAccountabilityNudgeRead(n.id)}
+                  className={`flex-row items-center gap-2 border rounded-xl p-2.5 ${
+                    n.read ? 'border-neutral-200 bg-white' : 'border-amber-300 bg-amber-50'
+                  }`}
+                >
+                  <View className="w-7 h-7 rounded-full bg-amber-100 items-center justify-center shrink-0">
+                    <Bell size={12} color="#b45309" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text className="text-[10px] font-bold text-neutral-800">{n.fromName}</Text>
+                    <Text className="text-[10px] text-neutral-600 font-sans mt-0.5">{n.message}</Text>
+                  </View>
+                  <Pressable onPress={() => dismissAccountabilityNudge(n.id)} hitSlop={8}>
+                    <X size={14} color="#a3a3a3" />
+                  </Pressable>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* MY FRIENDS SECTION — real, mutual, persistent connections
             (independent of circle membership, unlike the old circleFriends) */}
         <View className="gap-1.5">
@@ -297,21 +344,36 @@ export default function ProfileScreen({ state }: { state: AppState }) {
             </Text>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 6 }}>
-              {friends.map((f) => (
-                <Pressable
-                  key={f.uid}
-                  onPress={() => viewMemberProfileById(f.uid)}
-                  className="flex-row items-center gap-2 border border-neutral-200 rounded-xl p-2 bg-white shrink-0"
-                >
-                  <View className="w-7 h-7 rounded-full border border-neutral-300 bg-indigo-50 items-center justify-center">
-                    <Text className="font-serif font-black text-[10px]">{f.displayName.charAt(0).toUpperCase()}</Text>
+              {friends.map((f) => {
+                const canNudge = canSendAccountabilityNudge(f.uid);
+                return (
+                  <View key={f.uid} className="flex-row items-center gap-1.5 border border-neutral-200 rounded-xl p-2 bg-white shrink-0">
+                    <Pressable onPress={() => viewMemberProfileById(f.uid)} className="flex-row items-center gap-2">
+                      <View className="w-7 h-7 rounded-full border border-neutral-300 bg-indigo-50 items-center justify-center">
+                        <Text className="font-serif font-black text-[10px]">{f.displayName.charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View>
+                        <Text className="text-[10px] font-bold text-neutral-800 leading-none">{f.displayName}</Text>
+                        <Text className="text-[8px] font-sans text-neutral-400 leading-none mt-0.5">View Profile</Text>
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => {
+                        if (!canNudge) {
+                          triggerToast('Accountability notification already sent for today -- you can send another tomorrow!');
+                          return;
+                        }
+                        setNudgeMessage('');
+                        setNudgeTarget(f);
+                      }}
+                      className={`w-6 h-6 rounded-full items-center justify-center ${canNudge ? 'bg-amber-100' : 'bg-neutral-100'}`}
+                    >
+                      <Bell size={11} color={canNudge ? '#b45309' : '#c7c7c7'} />
+                    </Pressable>
                   </View>
-                  <View>
-                    <Text className="text-[10px] font-bold text-neutral-800 leading-none">{f.displayName}</Text>
-                    <Text className="text-[8px] font-sans text-neutral-400 leading-none mt-0.5">View Profile</Text>
-                  </View>
-                </Pressable>
-              ))}
+                );
+              })}
             </ScrollView>
           )}
         </View>
@@ -430,6 +492,52 @@ export default function ProfileScreen({ state }: { state: AppState }) {
           </View>
         </View>
       </ScrollView>
+
+      {/* Accountability nudge compose -- a custom-message notification to a
+          friend, deliberately separate from any messaging system. The nudge
+          button itself already checked canSendAccountabilityNudge before
+          opening this, so reaching here means sending is allowed sender-side
+          (the receiver's own daily cap is still checked server-side-ish at
+          send time, in sendAccountabilityNudge). */}
+      {nudgeTarget && (
+        <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
+          <FadeInView style={{ width: '100%', maxWidth: 320 }}>
+            <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4">
+              <View className="flex-row items-start justify-between">
+                <View style={{ flex: 1 }}>
+                  <Text className="text-base font-serif font-bold text-[#1A1A1A]">Nudge {nudgeTarget.displayName}</Text>
+                  <Text className="text-xs text-neutral-500 font-sans mt-1">
+                    Send a quick accountability message. You can nudge each friend once per day.
+                  </Text>
+                </View>
+                <Pressable onPress={() => setNudgeTarget(null)} hitSlop={8}>
+                  <X size={18} color="#a3a3a3" />
+                </Pressable>
+              </View>
+              <TextInput
+                value={nudgeMessage}
+                onChangeText={setNudgeMessage}
+                placeholder="Hey! Have you reviewed your verses today?"
+                placeholderTextColor="#a3a3a3"
+                multiline
+                autoFocus
+                className="border border-neutral-300 rounded-xl p-3 text-sm font-sans text-neutral-900 min-h-[80px]"
+                style={{ textAlignVertical: 'top' }}
+              />
+              <Pressable
+                onPress={async () => {
+                  const target = nudgeTarget;
+                  setNudgeTarget(null);
+                  if (target) await sendAccountabilityNudge(target, nudgeMessage);
+                }}
+                className="bg-amber-600 rounded-xl py-2.5 items-center"
+              >
+                <Text className="text-white font-sans font-bold text-xs">Send Nudge</Text>
+              </Pressable>
+            </View>
+          </FadeInView>
+        </View>
+      )}
     </FadeInView>
   );
 }

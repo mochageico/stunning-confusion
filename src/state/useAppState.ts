@@ -52,6 +52,7 @@ import {
 } from '../data';
 import { fetchChapterText, useChapterText } from './useScripture';
 import {
+  AccountabilityNudge,
   ActivityEvent,
   Circle,
   CircleMember,
@@ -318,6 +319,32 @@ const describeMissOutcome = (
 // scheduling purposes -- due dates never land on it, and time spent on it
 // doesn't count as elapsed when detecting silently-missed review cycles.
 const DAY_ABBREVS = ['Su', 'M', 'T', 'W', 'Th', 'F', 'S']; // index matches Date.getDay()
+
+// "What day is it, logically, right now" -- lets a user whose day-start-hour
+// is 1am/2am (MemoryPlan.dayStartHour) have their "today" not flip over at
+// real midnight. Every place that asks "what day/weekday is it" for
+// scheduling or notification-limit purposes should use this instead of a
+// bare `new Date()` -- genuine event TIMESTAMPS (createdAt/updatedAt/etc.)
+// must keep using real `new Date()`, never this. At dayStartHour=0 (the
+// default) this returns exactly `new Date()`, so existing behavior is
+// unchanged unless a user opts into a later day-start hour.
+const getLogicalDate = (dayStartHour: number, base: Date = new Date()): Date => {
+  if (!dayStartHour) return base;
+  return new Date(base.getTime() - dayStartHour * 60 * 60 * 1000);
+};
+
+// Days are keyed in LOCAL time, not UTC (toISOString): for anyone west of
+// Greenwich, an evening practice session's UTC date is already "tomorrow",
+// which would shift the activity grid and break streaks at the day
+// boundary. Pure/pair with getLogicalDate -- pass a logical date in, get a
+// stable per-logical-day string key out.
+const localDayKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// Default cap on accountability nudges a user will receive per logical day
+// (from any friend, combined) before senders are told they've hit it —
+// applies unless the recipient has set UserProfile.accountabilityDailyCap.
+const ACCOUNTABILITY_DEFAULT_DAILY_CAP = 5;
 
 const advancePastSabbath = (date: Date, sabbathEnabled: boolean, sabbathDay: string): Date => {
   if (!sabbathEnabled) return date;
@@ -714,6 +741,8 @@ export function useAppState() {
   // learning and reviewing -- the engine treats it as not existing at all.
   const [sabbathEnabled, setSabbathEnabled] = useState<boolean>(false);
   const [sabbathDay, setSabbathDay] = useState<string>('Su');
+  // See MemoryPlan.dayStartHour in types.ts -- 0/1/2, defaults to real midnight.
+  const [dayStartHour, setDayStartHour] = useState<number>(0);
   // Every StudyPlan this member has joined (possibly more than one, each with
   // its own priority setting -- see src/lib/studyPlanScheduler.ts) plus the
   // resolved StudyPlan docs themselves (versesPerWeek, verseIds, etc.), kept
@@ -757,6 +786,15 @@ export function useAppState() {
   >([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const userSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Accountability nudges -- see AccountabilityNudge in types.ts. Own daily
+  // received cap defaults to ACCOUNTABILITY_DEFAULT_DAILY_CAP until loaded
+  // from profiles/{uid}.accountabilityDailyCap in loadUserData.
+  const [accountabilityDailyCap, setAccountabilityDailyCapState] = useState<number>(ACCOUNTABILITY_DEFAULT_DAILY_CAP);
+  // My own private "when did I last nudge this friend" log -- keyed by friendUid.
+  const [accountabilitySentLog, setAccountabilitySentLog] = useState<Record<string, string>>({});
+  const [receivedAccountabilityNudges, setReceivedAccountabilityNudges] = useState<AccountabilityNudge[]>([]);
+  const [loadingAccountabilityNudges, setLoadingAccountabilityNudges] = useState(false);
 
   // Selected Recording for Chapter Recording Landing Page
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
@@ -881,6 +919,7 @@ export function useAppState() {
     setReviewsRequired(plan.reviewsRequired ?? 1);
     setSabbathEnabled(plan.sabbathEnabled ?? false);
     setSabbathDay(plan.sabbathDay || 'Su');
+    setDayStartHour(plan.dayStartHour ?? 0);
     setCognitiveLoadSensitivity(plan.cognitiveLoadSensitivity || 'medium');
     setCustomPlanName(plan.name);
   };
@@ -898,6 +937,7 @@ export function useAppState() {
     reviewsRequired: plan.reviewsRequired,
     sabbathEnabled: plan.sabbathEnabled,
     sabbathDay: plan.sabbathDay,
+    dayStartHour: plan.dayStartHour,
     cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity,
     name: plan.name,
   });
@@ -1333,6 +1373,153 @@ export function useAppState() {
     }
   };
 
+  // ==========================================
+  // ACCOUNTABILITY NUDGES -- friend-only, custom-message notification,
+  // deliberately separate from any messaging/DM system. Two independent
+  // daily limits, both keyed to the current user's dayStartHour setting:
+  //   - Sender: at most 1 nudge to a given friend per logical day (hard,
+  //     not configurable) -- enforced via canSendAccountabilityNudge below,
+  //     which the UI uses to grey out the button before a tap is even
+  //     attempted.
+  //   - Receiver: a configurable daily cap (any sender combined), checked
+  //     at send time against profiles/{toUid}.accountabilityDailyCap and
+  //     profiles/{toUid}/accountabilityMeta/counter.
+  // No Cloud Functions in this project (see firestore.rules comment on the
+  // counter doc) -- this is read-then-write from the sender's client, same
+  // "reasonable trust, not airtight" posture as the rest of the app. The
+  // counter's day-rollover uses the SENDER's own logical day as a stand-in
+  // for the receiver's, a deliberate simplification (the two would only
+  // disagree for a few hours around midnight if their dayStartHour settings
+  // differ), rather than plumbing the receiver's private setting to the
+  // sender's client just for this.
+  // ==========================================
+  const loadAccountabilitySentLog = async () => {
+    if (!auth.currentUser) {
+      setAccountabilitySentLog({});
+      return;
+    }
+    try {
+      const snap = await getDocs(collection(db, 'profiles', auth.currentUser.uid, 'accountabilitySentLog'));
+      const log: Record<string, string> = {};
+      snap.docs.forEach((d) => {
+        log[d.id] = (d.data().lastSentAt as string) || '';
+      });
+      setAccountabilitySentLog(log);
+    } catch (err) {
+      console.error('Failed to load accountability sent log:', err);
+    }
+  };
+
+  const loadReceivedAccountabilityNudges = async () => {
+    if (!auth.currentUser) {
+      setReceivedAccountabilityNudges([]);
+      return;
+    }
+    setLoadingAccountabilityNudges(true);
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'accountabilityNudges'), where('toUid', '==', auth.currentUser.uid), orderBy('createdAt', 'desc'), limit(50))
+      );
+      setReceivedAccountabilityNudges(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AccountabilityNudge));
+    } catch (err) {
+      console.error('Failed to load accountability nudges:', err);
+    } finally {
+      setLoadingAccountabilityNudges(false);
+    }
+  };
+
+  // Pure/cheap -- the UI calls this to decide whether a friend's nudge
+  // button is greyed out, without any Firestore round-trip.
+  const canSendAccountabilityNudge = (friendUid: string): boolean => {
+    const lastSentAt = accountabilitySentLog[friendUid];
+    if (!lastSentAt) return true;
+    return localDayKey(getLogicalDate(dayStartHour, new Date(lastSentAt))) !== localDayKey(getLogicalDate(dayStartHour));
+  };
+
+  const sendAccountabilityNudge = async (friend: Friend, message: string) => {
+    if (!auth.currentUser) return;
+    const myUid = auth.currentUser.uid;
+    if (!friends.some((f) => f.uid === friend.uid)) {
+      triggerToast('You can only send accountability nudges to friends.');
+      return;
+    }
+    if (!canSendAccountabilityNudge(friend.uid)) {
+      triggerToast(`Accountability notification already sent for today -- you can send another tomorrow!`);
+      return;
+    }
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage) {
+      triggerToast('Write a quick message before sending.');
+      return;
+    }
+    try {
+      const todayKey = localDayKey(getLogicalDate(dayStartHour));
+      const counterRef = doc(db, 'profiles', friend.uid, 'accountabilityMeta', 'counter');
+      const [counterSnap, friendProfileSnap] = await Promise.all([getDoc(counterRef), getDoc(doc(db, 'profiles', friend.uid))]);
+      const cap = (friendProfileSnap.data()?.accountabilityDailyCap as number) ?? ACCOUNTABILITY_DEFAULT_DAILY_CAP;
+      const counterData = counterSnap.data() as { dateKey?: string; count?: number } | undefined;
+      const isSameDay = counterData?.dateKey === todayKey;
+      const countSoFar = isSameDay ? counterData?.count || 0 : 0;
+
+      if (isSameDay && countSoFar >= cap) {
+        triggerToast(`${friend.displayName} has reached their daily accountability-notification limit -- try again tomorrow.`);
+        return;
+      }
+
+      if (isSameDay) {
+        await updateDoc(counterRef, { count: increment(1), dateKey: todayKey });
+      } else {
+        await setDoc(counterRef, { count: 1, dateKey: todayKey });
+      }
+
+      const nowISO = new Date().toISOString();
+      await addDoc(collection(db, 'accountabilityNudges'), {
+        fromUid: myUid,
+        fromName: auth.currentUser.displayName || 'Anonymous Disciple',
+        fromAvatarUrl: '',
+        toUid: friend.uid,
+        message: trimmedMessage,
+        createdAt: nowISO,
+        read: false,
+      });
+      await setDoc(doc(db, 'profiles', myUid, 'accountabilitySentLog', friend.uid), { lastSentAt: nowISO });
+
+      setAccountabilitySentLog((prev) => ({ ...prev, [friend.uid]: nowISO }));
+      triggerToast(`Accountability nudge sent to ${friend.displayName}! 📣`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'accountabilityNudges');
+      triggerToast('Could not send that nudge -- please try again.');
+    }
+  };
+
+  const markAccountabilityNudgeRead = async (nudgeId: string) => {
+    setReceivedAccountabilityNudges((prev) => prev.map((n) => (n.id === nudgeId ? { ...n, read: true } : n)));
+    try {
+      await updateDoc(doc(db, 'accountabilityNudges', nudgeId), { read: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `accountabilityNudges/${nudgeId}`);
+    }
+  };
+
+  const dismissAccountabilityNudge = async (nudgeId: string) => {
+    setReceivedAccountabilityNudges((prev) => prev.filter((n) => n.id !== nudgeId));
+    try {
+      await deleteDoc(doc(db, 'accountabilityNudges', nudgeId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `accountabilityNudges/${nudgeId}`);
+    }
+  };
+
+  const updateAccountabilityDailyCap = async (cap: number) => {
+    setAccountabilityDailyCapState(cap);
+    if (!auth.currentUser) return;
+    try {
+      await setDoc(doc(db, 'profiles', auth.currentUser.uid), { accountabilityDailyCap: cap }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `profiles/${auth.currentUser.uid}`);
+    }
+  };
+
   const loadPublicCircles = async () => {
     setLoadingPublicCircles(true);
     try {
@@ -1736,6 +1923,7 @@ export function useAppState() {
         reviewsRequired: plan.reviewsRequired ?? 1,
         sabbathEnabled: plan.sabbathEnabled ?? false,
         sabbathDay: plan.sabbathDay || 'Su',
+        dayStartHour: plan.dayStartHour ?? 0,
         cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity || 'medium',
         isActive: true,
         updatedAt: new Date().toISOString(),
@@ -2024,6 +2212,7 @@ export function useAppState() {
             reviewsRequired,
             sabbathEnabled,
             sabbathDay,
+            dayStartHour,
             cognitiveLoadSensitivity,
             updatedAt: new Date().toISOString(),
           };
@@ -2048,6 +2237,7 @@ export function useAppState() {
         reviewsRequired,
         sabbathEnabled,
         sabbathDay,
+        dayStartHour,
         cognitiveLoadSensitivity,
         isActive: true,
         updatedAt: new Date().toISOString(),
@@ -2153,6 +2343,7 @@ export function useAppState() {
         reviewsRequired,
         sabbathEnabled,
         sabbathDay,
+        dayStartHour,
         cognitiveLoadSensitivity,
         creatorName: user?.displayName || 'Anonymous Disciple',
         creatorId: user?.uid || 'anonymous',
@@ -2184,6 +2375,7 @@ export function useAppState() {
                 reviewsRequired,
                 sabbathEnabled,
                 sabbathDay,
+                dayStartHour,
                 cognitiveLoadSensitivity,
                 updatedAt: new Date().toISOString(),
               };
@@ -2207,6 +2399,7 @@ export function useAppState() {
             reviewsRequired,
             sabbathEnabled,
             sabbathDay,
+            dayStartHour,
             cognitiveLoadSensitivity,
             isActive: true,
             updatedAt: new Date().toISOString(),
@@ -2269,6 +2462,8 @@ export function useAppState() {
   useEffect(() => {
     loadFriends();
     loadFriendRequests();
+    loadAccountabilitySentLog();
+    loadReceivedAccountabilityNudges();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -2289,6 +2484,7 @@ export function useAppState() {
       if (profileSnap && profileSnap.exists()) {
         setDefaultRecordingVisibility(profileSnap.data().defaultRecordingVisibility || null);
         setTotalStudySeconds(profileSnap.data().totalStudySeconds || 0);
+        setAccountabilityDailyCapState(profileSnap.data().accountabilityDailyCap ?? ACCOUNTABILITY_DEFAULT_DAILY_CAP);
         // Covers both a brand-new profile (never set, so !== true) and
         // anyone who dismissed the app mid-onboarding without finishing it.
         setShowOnboarding(profileSnap.data().onboardingCompleted !== true);
@@ -2351,6 +2547,7 @@ export function useAppState() {
             reviewsRequired: planData.reviewsRequired ?? 1,
             sabbathEnabled: planData.sabbathEnabled ?? false,
             sabbathDay: planData.sabbathDay || 'Su',
+            dayStartHour: planData.dayStartHour ?? 0,
             cognitiveLoadSensitivity: planData.cognitiveLoadSensitivity || 'medium',
             isActive: true,
             updatedAt: new Date().toISOString(),
@@ -2372,6 +2569,7 @@ export function useAppState() {
           reviewsRequired: p.reviewsRequired ?? 1,
           sabbathEnabled: p.sabbathEnabled ?? false,
           sabbathDay: p.sabbathDay || 'Su',
+          dayStartHour: p.dayStartHour ?? 0,
           cognitiveLoadSensitivity: p.cognitiveLoadSensitivity || 'medium',
         }));
 
@@ -2601,6 +2799,9 @@ export function useAppState() {
         setMyCircles([]);
         setCircleFriends([]);
         setDefaultRecordingVisibility(null);
+        setAccountabilityDailyCapState(ACCOUNTABILITY_DEFAULT_DAILY_CAP);
+        setAccountabilitySentLog({});
+        setReceivedAccountabilityNudges([]);
         // Signed-out/guest preview only — matches the same "try before you
         // sign up" pattern as INITIAL_VERSES.
         setUserRecordings(INITIAL_RECORDINGS);
@@ -2954,7 +3155,7 @@ export function useAppState() {
   // ==========================================
   // 7-6-5 DETERMINISTIC RETENTION ENGINE & HELPERS
   // ==========================================
-  const getTodayAbbreviation = () => DAY_ABBREVS[new Date().getDay()];
+  const getTodayAbbreviation = () => DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()];
 
   const isTodayLearningDay = () => {
     const todayAbbr = getTodayAbbreviation();
@@ -2966,7 +3167,7 @@ export function useAppState() {
   // handleReviewCompleted schedules a next-due date, so a sabbath day never
   // ends up as a scheduled due date.
   const nextDueDateISO = (days: number) => {
-    const d = new Date();
+    const d = getLogicalDate(dayStartHour);
     d.setDate(d.getDate() + days);
     return advancePastSabbath(d, sabbathEnabled, sabbathDay).toISOString();
   };
@@ -3010,7 +3211,7 @@ export function useAppState() {
 
   const getEstimatedReviewTime = (queue: QueueItem[], sensitivity: 'low' | 'medium' | 'high') => {
     const learningSeconds = queue.filter((item) => item.status === 'learning').length * LEARNING_SECONDS_PER_VERSE;
-    const { seconds: reviewSeconds } = computeDayReviewLoad(queue, new Date(), true);
+    const { seconds: reviewSeconds } = computeDayReviewLoad(queue, getLogicalDate(dayStartHour), true);
     const multiplier = sensitivity === 'low' ? 0.75 : sensitivity === 'high' ? 1.5 : 1.0;
     return Math.ceil(((learningSeconds + reviewSeconds) * multiplier) / 60);
   };
@@ -3034,7 +3235,7 @@ export function useAppState() {
     let cumulativeNewVerses = 0;
 
     return Array.from({ length: days }, (_, i) => {
-      const date = new Date();
+      const date = getLogicalDate(dayStartHour);
       date.setDate(date.getDate() + i);
       const isLearnDay = learningDaysList.includes(DAY_ABBREVS[date.getDay()]);
       // Today's own pull, if any, is already reflected in the real queue
@@ -3265,7 +3466,7 @@ export function useAppState() {
       targetPhase === 'learning' || targetPhase === 'retained'
         ? null
         : targetWeekday && (targetPhase === 'weekly' || targetPhase === 'monthly')
-          ? nextOccurrenceOfWeekday(new Date(), targetWeekday, sabbathEnabled, sabbathDay).toISOString()
+          ? nextOccurrenceOfWeekday(getLogicalDate(dayStartHour), targetWeekday, sabbathEnabled, sabbathDay).toISOString()
           : nextDueDateISO(cycleDays);
 
     const nextQueue = [...memoryQueueRef.current];
@@ -3384,7 +3585,7 @@ export function useAppState() {
     if (item.status === 'reviewing' && updatedItem.nextReviewDueDate) {
       const cycleLengthDays = updatedItem.retentionPhase === 'weekly' ? 7 : updatedItem.retentionPhase === 'monthly' ? 30 : 1;
       const dueDate = new Date(updatedItem.nextReviewDueDate);
-      const now = new Date();
+      const now = getLogicalDate(dayStartHour);
       const rawElapsedDays = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 3600 * 1000));
       const sabbathDaysElapsed = sabbathEnabled ? countSabbathDaysInRange(dueDate, now, sabbathDay) : 0;
       const adjustedElapsedDays = Math.max(0, rawElapsedDays - sabbathDaysElapsed);
@@ -3439,7 +3640,7 @@ export function useAppState() {
               (q) =>
                 q.verseId !== item.verseId &&
                 q.status === 'reviewing' &&
-                isReviewDue(q.nextReviewDueDate)
+                isReviewDue(q.nextReviewDueDate, getLogicalDate(dayStartHour))
             );
             if (dueReviewsPending) {
               triggerToast(`Mastery touches complete (${updatedLogs.length}/${masteryTouches})! Finish today's reviews to lock this verse in. 🔒`);
@@ -3461,7 +3662,9 @@ export function useAppState() {
       } else if (item.status === 'reviewing') {
         // Check reviewsRequired per day constraint
         const lastReviewDateStr = item.lastReviewDate;
-        const isSameDay = lastReviewDateStr && new Date(lastReviewDateStr).toDateString() === new Date().toDateString();
+        const isSameDay =
+          lastReviewDateStr &&
+          getLogicalDate(dayStartHour, new Date(lastReviewDateStr)).toDateString() === getLogicalDate(dayStartHour).toDateString();
         const currentReviewsToday = isSameDay ? (item.reviewsToday || 0) + 1 : 1;
         updatedItem.reviewsToday = currentReviewsToday;
         updatedItem.totalSuccessfulReviews += 1;
@@ -3485,7 +3688,7 @@ export function useAppState() {
           // Chapter review-day anchoring ("Snap-to-Grid"): tomorrow is the
           // earliest a freshly-computed Weekly/Monthly due date can land,
           // matching nextDueDateISO's own "at least one day out" convention.
-          const tomorrow = new Date();
+          const tomorrow = getLogicalDate(dayStartHour);
           tomorrow.setDate(tomorrow.getDate() + 1);
 
           if (updatedItem.refresherActive) {
@@ -3504,7 +3707,7 @@ export function useAppState() {
               const returnAnchor =
                 updatedItem.chapterReviewAnchorDay ||
                 findChapterReviewAnchor(updatedItem.book, updatedItem.chapter, memoryQueueRef.current) ||
-                DAY_ABBREVS[new Date().getDay()];
+                DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()];
               updatedItem.chapterReviewAnchorDay = returnAnchor;
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(
                 tomorrow,
@@ -3530,7 +3733,7 @@ export function useAppState() {
               // one, otherwise this chunk sets it for the whole chapter.
               const anchor =
                 findChapterReviewAnchor(updatedItem.book, updatedItem.chapter, memoryQueueRef.current) ||
-                DAY_ABBREVS[new Date().getDay()];
+                DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()];
               updatedItem.chapterReviewAnchorDay = anchor;
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(tomorrow, anchor, 1, sabbathEnabled, sabbathDay).toISOString();
               triggerToast(`Graduated to Weekly Review phase, aligned to ${DAY_FULL_NAMES[anchor]} with the rest of ${updatedItem.book} ${updatedItem.chapter}! 🌟`);
@@ -3548,7 +3751,7 @@ export function useAppState() {
               const anchor =
                 updatedItem.chapterReviewAnchorDay ||
                 findChapterReviewAnchor(updatedItem.book, updatedItem.chapter, memoryQueueRef.current) ||
-                DAY_ABBREVS[new Date().getDay()];
+                DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()];
               updatedItem.chapterReviewAnchorDay = anchor;
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(tomorrow, anchor, 4, sabbathEnabled, sabbathDay).toISOString();
               triggerToast(`Graduated to Monthly Review phase, still aligned to ${DAY_FULL_NAMES[anchor]}! 🌟`);
@@ -3624,7 +3827,7 @@ export function useAppState() {
       let finalQueue = prev.map((q) => (q.verseId === item.verseId ? updatedItem : q));
       if (item.status === 'reviewing') {
         const dueReviewsRemaining = finalQueue.some(
-          (q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate)
+          (q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate, getLogicalDate(dayStartHour))
         );
         if (!dueReviewsRemaining) {
           finalQueue = finalQueue.map((q) => {
@@ -3707,9 +3910,12 @@ export function useAppState() {
     // with real, varied schedules all got collapsed to "due right now" in
     // one click -- their real per-verse due dates aren't recoverable from
     // here. This version is deliberately narrow to make that impossible.)
-    const todayStr = new Date().toDateString();
+    const todayStr = getLogicalDate(dayStartHour).toDateString();
     const reviewedToday = memoryQueueRef.current.filter(
-      (item) => item.status === 'reviewing' && item.lastReviewDate && new Date(item.lastReviewDate).toDateString() === todayStr
+      (item) =>
+        item.status === 'reviewing' &&
+        item.lastReviewDate &&
+        getLogicalDate(dayStartHour, new Date(item.lastReviewDate)).toDateString() === todayStr
     );
 
     if (reviewedToday.length === 0) {
@@ -3914,13 +4120,11 @@ export function useAppState() {
   // Days are keyed in LOCAL time, not UTC (toISOString): for anyone west of
   // Greenwich, an evening practice session's UTC date is already "tomorrow",
   // which shifted the activity grid and broke streaks at the day boundary.
-  const localDayKey = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
   const activityByDay = new Map<string, number>();
   memoryQueue.forEach((item) => {
     (item.touchLogs || []).forEach((log) => {
-      const day = localDayKey(new Date(log.timestamp));
+      const day = localDayKey(getLogicalDate(dayStartHour, new Date(log.timestamp)));
       activityByDay.set(day, (activityByDay.get(day) || 0) + 1);
     });
   });
@@ -3929,7 +4133,7 @@ export function useAppState() {
   // 90-day heatmap -- same window construction, just a different length.
   const buildActivityWindow = (days: number) =>
     Array.from({ length: days }, (_, i) => {
-      const d = new Date();
+      const d = getLogicalDate(dayStartHour);
       d.setDate(d.getDate() - (days - 1 - i));
       const key = localDayKey(d);
       return {
@@ -3944,7 +4148,7 @@ export function useAppState() {
   // Consecutive days of practice counting back from today; 0 for a new/idle account.
   const memoryStreak = (() => {
     let streak = 0;
-    const d = new Date();
+    const d = getLogicalDate(dayStartHour);
     // eslint-disable-next-line no-constant-condition
     while (true) {
       const key = localDayKey(d);
@@ -4007,7 +4211,7 @@ export function useAppState() {
               dueDate = 'Completed';
             } else if (queueItem.status === 'reviewing') {
               status = 'memorized';
-              const isDue = isReviewDue(queueItem.nextReviewDueDate);
+              const isDue = isReviewDue(queueItem.nextReviewDueDate, getLogicalDate(dayStartHour));
               if (isDue) dueDate = 'Due: Today';
             } else if (queueItem.status === 'learning') {
               status = 'learning';
@@ -4603,6 +4807,7 @@ export function useAppState() {
     reviewsRequired, setReviewsRequired,
     sabbathEnabled, setSabbathEnabled,
     sabbathDay, setSabbathDay,
+    dayStartHour, setDayStartHour,
     joinedStudyPlanMemberships,
     joinedStudyPlanDetails,
     viewingStudyPlan, setViewingStudyPlan,
@@ -4616,6 +4821,9 @@ export function useAppState() {
     incomingFriendRequests, outgoingFriendRequests, loadFriendRequests,
     userSearchQuery, setUserSearchQuery, userSearchResults, searchingUsers, searchUsers,
     sendFriendRequest, acceptFriendRequest, declineFriendRequest, cancelFriendRequest, removeFriend,
+    accountabilityDailyCap, updateAccountabilityDailyCap,
+    receivedAccountabilityNudges, loadingAccountabilityNudges, loadReceivedAccountabilityNudges,
+    canSendAccountabilityNudge, sendAccountabilityNudge, markAccountabilityNudgeRead, dismissAccountabilityNudge,
     selectedRecording, setSelectedRecording,
     communitySubView, setCommunitySubView,
     activeGroupId,

@@ -274,6 +274,7 @@ export const DEFAULT_PLANS: MemoryPlan[] = [
     reviewsRequired: 1,
     sabbathEnabled: false,
     sabbathDay: 'Su',
+    dayStartHour: 0,
     cognitiveLoadSensitivity: 'medium',
     isActive: true,
     updatedAt: new Date().toISOString()
@@ -293,6 +294,7 @@ export const DEFAULT_PLANS: MemoryPlan[] = [
     reviewsRequired: 1,
     sabbathEnabled: false,
     sabbathDay: 'Su',
+    dayStartHour: 0,
     cognitiveLoadSensitivity: 'medium',
     isActive: false,
     updatedAt: new Date().toISOString()
@@ -312,6 +314,7 @@ export const DEFAULT_PLANS: MemoryPlan[] = [
     reviewsRequired: 1,
     sabbathEnabled: false,
     sabbathDay: 'Su',
+    dayStartHour: 0,
     cognitiveLoadSensitivity: 'medium',
     isActive: false,
     updatedAt: new Date().toISOString()

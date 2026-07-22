@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Check, Share2, TrendingUp } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { FadeInView, HelpTooltip, PulseView, StepperRow } from '../components/ui';
+import { ChipRow, FadeInView, HelpTooltip, PulseView, StepperRow } from '../components/ui';
 
 const DAYS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
 
@@ -39,6 +39,8 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     setSabbathEnabled,
     sabbathDay,
     setSabbathDay,
+    dayStartHour,
+    setDayStartHour,
     cognitiveLoadSensitivity,
     setCognitiveLoadSensitivity,
     retentionRigor,
@@ -339,6 +341,29 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                   })}
                 </View>
               )}
+            </View>
+
+            {/* Day Start Time -- when "today" logically begins, for both
+                review scheduling and the accountability-notification daily
+                limits. Defaults to real midnight; a night owl can push it to
+                1am/2am so a late night doesn't flip over into "tomorrow"
+                before they've actually gone to bed. */}
+            <View style={{ gap: 6 }} className="pt-2 border-t border-[#F3F2F1]">
+              <View style={{ gap: 2 }}>
+                <Text className="text-xs font-serif font-bold text-[#1A1A1A]">Day Start Time</Text>
+                <Text className="text-[9px] text-neutral-400 font-sans leading-tight">
+                  When your "today" begins -- push this later if you're often still up past midnight.
+                </Text>
+              </View>
+              <ChipRow
+                value={dayStartHour}
+                onChange={setDayStartHour}
+                options={[
+                  { id: 0, label: '12 AM' },
+                  { id: 1, label: '1 AM' },
+                  { id: 2, label: '2 AM' },
+                ]}
+              />
             </View>
 
           </View>

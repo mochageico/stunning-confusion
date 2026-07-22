@@ -102,6 +102,40 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
     }
 
+    // Accountability nudges (friend-only, sender-composed custom message,
+    // deliberately separate from any messaging system). Immutable log except
+    // the recipient may mark their own copy read, or delete it from their inbox.
+    match /accountabilityNudges/{nudgeId} {
+      allow read: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.toUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isSignedIn() && resource.data.toUid == request.auth.uid;
+    }
+
+    // Sender's own private bookkeeping of "when did I last nudge this
+    // friend" -- purely mine, nobody else ever reads or writes it, so this
+    // is the simple owner-only shape (no cross-user complexity needed at all).
+    match /profiles/{userId}/accountabilitySentLog/{friendUid} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Recipient's today-so-far received-nudge counter -- the one doc in this
+    // feature that a NON-owner (any friend about to send a nudge) needs to
+    // read (to show/enforce the cap before sending) and increment. Deliberately
+    // narrow: only `count`/`dateKey` may change, and count may only go up by
+    // exactly 1 per write (or reset to 1 on a new dateKey) -- no Cloud
+    // Functions in this project, so this is the same "reasonable client trust,
+    // not paranoid" posture as the rest of this file, not airtight server
+    // enforcement.
+    match /profiles/{userId}/accountabilityMeta/counter {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.count == 1;
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count', 'dateKey'])
+        && (request.resource.data.count == 1 || request.resource.data.count == resource.data.count + 1);
+    }
+
     // Real memorization-milestone activity feed (Community). Read is open to
     // any signed-in user (matches profiles' posture — nothing in this app is
     // friend-scoped at the rule level, just at the client query level).
