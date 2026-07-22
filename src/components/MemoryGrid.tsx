@@ -1,8 +1,9 @@
-import React from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { Highlighter } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { Modal, Pressable, Text, View } from 'react-native';
+import { Highlighter, Pencil, X } from 'lucide-react-native';
 
-import { firstLetterOnly } from '../lib/recitation';
+import { firstLetterLine, firstLetterOnly } from '../lib/recitation';
+import DoodleCanvas from './DoodleCanvas';
 
 // ============================================================================
 // MEMORY GRID
@@ -50,8 +51,15 @@ interface MemoryGridProps {
   onTapVerse?: (verse: MemoryGridVerse, index: number) => void;
   /** Index currently playing/active (Listen mode), shown with a solid fill. */
   activeIndex?: number;
-  /** Per-word correctness for a live Recall session -- index-aligned with each verse's split words. Not wired up yet. */
-  wordStates?: Record<string, ('correct' | 'incorrect' | undefined)[]>;
+  /** Per-word correctness for a live Recall session -- index-aligned with
+   * each verse's `text.split(/\s+/).filter(w => w.length > 0)` (the exact
+   * same split+filter this component renders words from). */
+  wordStates?: Record<string, ('correct' | 'close' | 'incorrect' | undefined)[]>;
+  /** Per-verse doodle strokes (SVG path "d" strings) -- backbone feature, a
+   * single-pen freehand layer per verse. Omit both this and onSaveDoodle to
+   * hide the doodle entry point entirely (e.g. a read-only context). */
+  doodles?: Record<string, string[]>;
+  onSaveDoodle?: (key: string, verse: MemoryGridVerse, strokes: string[]) => void;
 }
 
 export default function MemoryGrid({
@@ -63,8 +71,12 @@ export default function MemoryGrid({
   onTapVerse,
   activeIndex,
   wordStates,
+  doodles,
+  onSaveDoodle,
 }: MemoryGridProps) {
   const widthPct = columns === 2 ? '48.5%' : '23.5%';
+  const [doodleOpenKey, setDoodleOpenKey] = useState<string | null>(null);
+  const doodleOpenVerse = verses.find((v) => verseAnnotationKey(v.book, v.chapter, v.verse) === doodleOpenKey) || null;
 
   return (
     <View className="flex-row flex-wrap gap-2">
@@ -95,18 +107,33 @@ export default function MemoryGrid({
               <View className={`px-1 rounded ${isActive ? 'bg-white/20' : 'bg-neutral-100'}`}>
                 <Text className={`text-[8px] font-mono font-extrabold ${isActive ? 'text-white' : 'text-neutral-500'}`}>{v.verse}</Text>
               </View>
-              {onToggleHighlight && (
-                <Pressable hitSlop={8} onPress={() => onToggleHighlight(key, v)}>
-                  <Highlighter size={11} color={isActive ? '#ffffff' : isHighlighted ? '#d97706' : '#c7c7c7'} />
-                </Pressable>
-              )}
+              <View className="flex-row items-center gap-2">
+                {onToggleHighlight && (
+                  <Pressable hitSlop={8} onPress={() => onToggleHighlight(key, v)}>
+                    <Highlighter size={11} color={isActive ? '#ffffff' : isHighlighted ? '#d97706' : '#c7c7c7'} />
+                  </Pressable>
+                )}
+                {onSaveDoodle && (
+                  <Pressable hitSlop={8} onPress={() => setDoodleOpenKey(key)}>
+                    <Pencil size={11} color={isActive ? '#ffffff' : (doodles?.[key]?.length ?? 0) > 0 ? '#0284c7' : '#c7c7c7'} />
+                  </Pressable>
+                )}
+              </View>
             </View>
             <Pressable onPress={() => onTapVerse?.(v, index)} className="px-2 pb-2 pt-0.5">
               <Text className={`font-mono text-[11px] leading-tight flex-row flex-wrap ${isActive ? 'text-white' : 'text-neutral-800'}`}>
                 {words.map((w, wi) => {
                   const grade = grades?.[wi];
                   const gradeColor =
-                    grade === 'correct' ? '#10b981' : grade === 'incorrect' ? '#dc2626' : isActive ? '#ffffff' : undefined;
+                    grade === 'correct'
+                      ? '#10b981'
+                      : grade === 'close'
+                        ? '#d97706'
+                        : grade === 'incorrect'
+                          ? '#dc2626'
+                          : isActive
+                            ? '#ffffff'
+                            : undefined;
                   return (
                     <Text key={wi} style={gradeColor ? { color: gradeColor } : undefined}>
                       {firstLetterOnly(w)}{' '}
@@ -118,6 +145,33 @@ export default function MemoryGrid({
           </View>
         );
       })}
+
+      {doodleOpenVerse && onSaveDoodle && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setDoodleOpenKey(null)}>
+          <View className="flex-1 bg-black/60 items-center justify-center p-6">
+            <View className="bg-white rounded-2xl p-4 gap-3 w-full max-w-[320px]">
+              <View className="flex-row items-center justify-between">
+                <Text className="font-serif font-bold text-neutral-900">
+                  {doodleOpenVerse.book} {doodleOpenVerse.chapter}:{doodleOpenVerse.verse}
+                </Text>
+                <Pressable hitSlop={8} onPress={() => setDoodleOpenKey(null)}>
+                  <X size={18} color="#262626" />
+                </Pressable>
+              </View>
+              <Text className="text-[11px] font-mono text-neutral-400" numberOfLines={2}>
+                {firstLetterLine(doodleOpenVerse.text)}
+              </Text>
+              <DoodleCanvas
+                strokes={doodles?.[doodleOpenKey!] || []}
+                onChange={(strokes) => onSaveDoodle(doodleOpenKey!, doodleOpenVerse, strokes)}
+              />
+              <Pressable onPress={() => setDoodleOpenKey(null)} className="py-2.5 bg-[#1A1A1A] rounded-xl items-center">
+                <Text className="text-white text-xs font-sans font-bold">Done</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }

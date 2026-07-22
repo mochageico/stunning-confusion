@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, Check, ChevronDown, Pause, Play, Search, SlidersHorizontal, X } from 'lucide-react-native';
+import { ArrowLeft, Check, ChevronDown, Pause, Play, Printer, Search, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { ChipRow, FadeInView } from '../components/ui';
 import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
+import { printMemoryGrid } from '../lib/printMemoryGrid';
 import { Recording } from '../types';
 import { ESV_COPYRIGHT_NOTICE } from '../data';
 
@@ -45,6 +46,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     setChapterViewMode,
     highlightedVerses,
     toggleVerseHighlight,
+    verseDoodles,
+    saveVerseDoodle,
+    memoryGridColumns,
+    setMemoryGridColumns,
     selectedChapterAudios,
     setSelectedChapterAudios,
     showAudioSelector,
@@ -406,25 +411,66 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             /* MEMORY GRID VIEW - Scripture Memory Fellowship style: every
                word's first letter, tap to select (same as List/Grid), pin
                icon to mark a personal memory anchor. */
-            <MemoryGrid
-              verses={activeChapterVerses.map((v) => ({
-                book: selectedBook || '',
-                chapter: selectedChapter || 0,
-                verse: v.verse,
-                text: v.text,
-              }))}
-              columns={4}
-              highlightedKeys={highlightedVerses}
-              onToggleHighlight={toggleVerseHighlight}
-              selectedKeys={
-                new Set(
-                  activeChapterVerses
-                    .filter((v) => isVerseSelected(v.verse))
-                    .map((v) => verseAnnotationKey(selectedBook || '', selectedChapter || 0, v.verse))
-                )
-              }
-              onTapVerse={(v) => toggleVerseSelection(v.verse)}
-            />
+            <View className="gap-2.5">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row bg-neutral-100 p-0.5 rounded-lg">
+                  <Pressable
+                    onPress={() => setMemoryGridColumns(2)}
+                    className={`px-3 py-1 rounded-md ${memoryGridColumns === 2 ? 'bg-white' : ''}`}
+                  >
+                    <Text className={`text-[10px] font-sans font-extrabold ${memoryGridColumns === 2 ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                      2 Columns
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setMemoryGridColumns(4)}
+                    className={`px-3 py-1 rounded-md ${memoryGridColumns === 4 ? 'bg-white' : ''}`}
+                  >
+                    <Text className={`text-[10px] font-sans font-extrabold ${memoryGridColumns === 4 ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                      4 Columns
+                    </Text>
+                  </Pressable>
+                </View>
+                <Pressable
+                  onPress={() =>
+                    printMemoryGrid(
+                      activeChapterVerses.map((v) => ({
+                        book: selectedBook || '',
+                        chapter: selectedChapter || 0,
+                        verse: v.verse,
+                        text: v.text,
+                      })),
+                      `${selectedBook} ${selectedChapter}`
+                    )
+                  }
+                  className="flex-row items-center gap-1.5 bg-[#1A1A1A] px-3 py-1.5 rounded-lg"
+                >
+                  <Printer size={12} color="#ffffff" />
+                  <Text className="text-[10px] font-sans font-extrabold text-white">Printable PDF</Text>
+                </Pressable>
+              </View>
+              <MemoryGrid
+                verses={activeChapterVerses.map((v) => ({
+                  book: selectedBook || '',
+                  chapter: selectedChapter || 0,
+                  verse: v.verse,
+                  text: v.text,
+                }))}
+                columns={memoryGridColumns}
+                highlightedKeys={highlightedVerses}
+                onToggleHighlight={toggleVerseHighlight}
+                doodles={verseDoodles}
+                onSaveDoodle={(key, _v, strokes) => saveVerseDoodle(key, strokes)}
+                selectedKeys={
+                  new Set(
+                    activeChapterVerses
+                      .filter((v) => isVerseSelected(v.verse))
+                      .map((v) => verseAnnotationKey(selectedBook || '', selectedChapter || 0, v.verse))
+                  )
+                }
+                onTapVerse={(v) => toggleVerseSelection(v.verse)}
+              />
+            </View>
           )}
         </View>
 

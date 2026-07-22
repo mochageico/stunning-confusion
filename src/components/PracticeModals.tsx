@@ -20,6 +20,7 @@ import {
 } from '../lib/recitation';
 import { BounceView, ChipRow, DiscreteSlider, FadeInView, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
+import MemoryGrid, { verseAnnotationKey } from './MemoryGrid';
 
 interface PracticeModalsProps {
   type: 'listen' | 'learn';
@@ -58,6 +59,14 @@ interface PracticeModalsProps {
   // (pauses) the other, rather than letting two playbacks run at once.
   playingRecordingId?: string | null;
   setPlayingRecordingId?: (id: string | null) => void;
+  // Memory Grid highlights -- user-marked "meaningful anchor" verses, shared
+  // across Chapter page / Listen / Recall so a highlight set anywhere shows
+  // up everywhere (see verseAnnotationKey in MemoryGrid.tsx).
+  highlightedVerses?: Set<string>;
+  onToggleVerseHighlight?: (key: string) => void;
+  verseDoodles?: Record<string, string[]>;
+  onSaveVerseDoodle?: (key: string, strokes: string[]) => void;
+  memoryGridColumns?: 2 | 4;
 }
 
 // Guard wrapper: the early "nothing to practice" return must happen OUTSIDE
@@ -85,6 +94,11 @@ function PracticeModalsInner({
   userRecordings = [],
   selectedChapterAudios = {},
   playingRecordingId = null,
+  highlightedVerses,
+  onToggleVerseHighlight,
+  verseDoodles,
+  onSaveVerseDoodle,
+  memoryGridColumns = 4,
   setPlayingRecordingId,
 }: PracticeModalsProps) {
   const handleGroupComplete = onAdvance ?? onClose;
@@ -93,6 +107,10 @@ function PracticeModalsInner({
   // ==========================================
   const [playSource, setPlaySource] = useState<'selection' | 'memorization' | 'reviewing' | 'priming' | 'all'>('selection');
   const [activePlayVerses, setActivePlayVerses] = useState<VerseState[]>(verses);
+  // "Verse by Verse" (existing card list) vs "Memory Grid" -- purely a
+  // display choice, doesn't affect playback state at all. Tapping a grid
+  // box calls the exact same handleVerseClick used by the card list.
+  const [listenViewMode, setListenViewMode] = useState<'verses' | 'memoryGrid'>('verses');
 
   // Segment selection states — indices into activePlayVerses (verse
   // granularity; word-level selection was removed, see Listen mode below).
@@ -656,6 +674,15 @@ function PracticeModalsInner({
     regenerateHiddenWords(mode === 'firstLetter' ? firstLetterLevel : hideLevel);
   };
 
+  // Passage (existing inline masked paragraph) vs Memory Grid -- a display
+  // choice for the reading area only, independent of hintMode/hideLevel.
+  // Memory Grid always shows every word's first letter (it doesn't respect
+  // the hidden-word sample at all -- that's the whole nature of the SMF-
+  // style grid, a permanent aid rather than a hide/reveal quiz), and per
+  // explicit product direction, reciting via the grid is itself a hint --
+  // same "counts as review, never mastery" rule as First Letter mode.
+  const [recallDisplayMode, setRecallDisplayMode] = useState<'passage' | 'memoryGrid'>('passage');
+
   const [hiddenWordIndices, setHiddenWordIndices] = useState<Set<number>>(
     () => new Set(reciteWordObjects.map((_, i) => i))
   );
@@ -666,6 +693,31 @@ function PracticeModalsInner({
     const shuffled = [...indices].sort(() => Math.random() - 0.5);
     setHiddenWordIndices(new Set(shuffled.slice(0, hideCount)));
   };
+
+  // Per-word grade colors for the Memory Grid view during an active Recall
+  // session -- mirrors the paragraph view's own isCountedWord/flatIdx logic
+  // exactly (words.split then normalizeToken-filter to find the "counted"
+  // ones) so indices line up 1:1 with reciteOutcomes/recitePointer. Ungraded
+  // (not reached yet) words are left undefined -- MemoryGrid just shows
+  // their plain first letter.
+  const gridWordStates = useMemo(() => {
+    const map: Record<string, ('correct' | 'close' | 'incorrect' | undefined)[]> = {};
+    let flatIdx = 0;
+    verses.forEach((v) => {
+      // Same split + filter MemoryGrid itself renders from (text.split(/\s+/)
+      // then drop empty strings) -- must match exactly or indices drift.
+      const words = v.text.split(/\s+/).filter((w) => w.length > 0);
+      const key = verseAnnotationKey(v.book, v.chapter, v.verse);
+      map[key] = words.map((w) => {
+        if (normalizeToken(w).length === 0) return undefined;
+        const g = flatIdx++;
+        if (g >= recitePointer) return undefined;
+        const outcome = reciteOutcomes[g];
+        return outcome === 'missed' ? 'incorrect' : outcome === 'close' ? 'close' : 'correct';
+      });
+    });
+    return map;
+  }, [verses, recitePointer, reciteOutcomes]);
 
   // Words Hidden / First Letter / Strike Limit prefs persist across sessions
   // (AsyncStorage, same mechanism useScripture.ts uses for its verse cache)
@@ -682,6 +734,7 @@ function PracticeModalsInner({
         if (typeof saved.firstLetterLevel === 'number') setFirstLetterLevel(saved.firstLetterLevel);
         if (saved.hintMode === 'percent' || saved.hintMode === 'firstLetter') setHintMode(saved.hintMode);
         if (saved.strikeLimit === 'unlimited' || typeof saved.strikeLimit === 'number') setStrikeLimit(saved.strikeLimit);
+        if (saved.recallDisplayMode === 'passage' || saved.recallDisplayMode === 'memoryGrid') setRecallDisplayMode(saved.recallDisplayMode);
         const loadedLevel = saved.hintMode === 'firstLetter' ? saved.firstLetterLevel : saved.hideLevel;
         if (typeof loadedLevel === 'number') regenerateHiddenWords(loadedLevel);
       } catch {
@@ -691,8 +744,11 @@ function PracticeModalsInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    AsyncStorage.setItem(HINT_PREFS_KEY, JSON.stringify({ hideLevel, firstLetterLevel, hintMode, strikeLimit })).catch(() => {});
-  }, [hideLevel, firstLetterLevel, hintMode, strikeLimit]);
+    AsyncStorage.setItem(
+      HINT_PREFS_KEY,
+      JSON.stringify({ hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode })
+    ).catch(() => {});
+  }, [hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode]);
 
   // A chained review session (see advanceReviewSession in useAppState.ts)
   // swaps `verses` in place on the SAME mounted PracticeModals instance --
@@ -1000,9 +1056,44 @@ function PracticeModalsInner({
         {/* ======================================================== */}
         {type === 'listen' && (
           <View className="flex-1 justify-between">
+            {/* Verse by Verse / Memory Grid tab -- purely a display choice,
+                both tap through to the same handleVerseClick. */}
+            <View className="flex-row bg-neutral-100 p-1 rounded-xl mb-2.5 border border-neutral-200 shrink-0">
+              <Pressable
+                onPress={() => setListenViewMode('verses')}
+                className={`flex-1 py-1.5 rounded-lg items-center ${listenViewMode === 'verses' ? 'bg-[#1A1A1A]' : ''}`}
+              >
+                <Text className={`text-[10px] uppercase tracking-wider font-sans font-extrabold ${listenViewMode === 'verses' ? 'text-white' : 'text-neutral-500'}`}>
+                  Verse by Verse
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setListenViewMode('memoryGrid')}
+                className={`flex-1 py-1.5 rounded-lg items-center ${listenViewMode === 'memoryGrid' ? 'bg-[#1A1A1A]' : ''}`}
+              >
+                <Text className={`text-[10px] uppercase tracking-wider font-sans font-extrabold ${listenViewMode === 'memoryGrid' ? 'text-white' : 'text-neutral-500'}`}>
+                  Memory Grid
+                </Text>
+              </Pressable>
+            </View>
+
             {/* Verse Highlight Box — verse-by-verse, not word-by-word: the
                 only real timing data this app has is per verse. */}
             <View className="bg-neutral-50 border border-neutral-200 rounded-2xl flex-1 mb-3 overflow-hidden">
+              {listenViewMode === 'memoryGrid' ? (
+                <ScrollView className="flex-1 p-3" contentContainerStyle={{ paddingBottom: 12 }}>
+                  <MemoryGrid
+                    verses={activePlayVerses.map((v) => ({ book: v.book, chapter: v.chapter, verse: v.verse, text: v.text }))}
+                    columns={memoryGridColumns}
+                    activeIndex={listenPlaying ? currentVerseIndex : undefined}
+                    highlightedKeys={highlightedVerses}
+                    onToggleHighlight={onToggleVerseHighlight ? (key) => onToggleVerseHighlight(key) : undefined}
+                    doodles={verseDoodles}
+                    onSaveDoodle={onSaveVerseDoodle ? (key, _v, strokes) => onSaveVerseDoodle(key, strokes) : undefined}
+                    onTapVerse={(_v, index) => handleVerseClick(index)}
+                  />
+                </ScrollView>
+              ) : (
               <ScrollView className="flex-1 p-4" contentContainerStyle={{ gap: 10, paddingBottom: 12 }}>
                 {activePlayVerses.map((verseObj, index) => {
                   const segment = playableSegments[index];
@@ -1045,6 +1136,7 @@ function PracticeModalsInner({
                   );
                 })}
               </ScrollView>
+              )}
 
               {/* Selection Mode Instructions overlay */}
               {playSource === 'selection' && (
@@ -1296,6 +1388,38 @@ function PracticeModalsInner({
                       </FadeInView>
                     )}
 
+                    <View className="flex-row bg-neutral-100 p-0.5 rounded-lg mb-2 shrink-0">
+                      <Pressable
+                        onPress={() => setRecallDisplayMode('passage')}
+                        className={`flex-1 py-1 rounded-md items-center ${recallDisplayMode === 'passage' ? 'bg-white' : ''}`}
+                      >
+                        <Text className={`text-[9px] font-sans font-extrabold uppercase tracking-wider ${recallDisplayMode === 'passage' ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                          Passage
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setRecallDisplayMode('memoryGrid')}
+                        className={`flex-1 py-1 rounded-md items-center ${recallDisplayMode === 'memoryGrid' ? 'bg-sky-600' : ''}`}
+                      >
+                        <Text className={`text-[9px] font-sans font-extrabold uppercase tracking-wider ${recallDisplayMode === 'memoryGrid' ? 'text-white' : 'text-neutral-500'}`}>
+                          Memory Grid
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {recallDisplayMode === 'memoryGrid' ? (
+                      <ScrollView className="flex-1 mb-2">
+                        <MemoryGrid
+                          verses={verses.map((v) => ({ book: v.book, chapter: v.chapter, verse: v.verse, text: v.text }))}
+                          columns={memoryGridColumns}
+                          highlightedKeys={highlightedVerses}
+                          onToggleHighlight={onToggleVerseHighlight ? (key) => onToggleVerseHighlight(key) : undefined}
+                          doodles={verseDoodles}
+                          onSaveDoodle={onSaveVerseDoodle ? (key, _v, strokes) => onSaveVerseDoodle(key, strokes) : undefined}
+                          wordStates={gridWordStates}
+                        />
+                      </ScrollView>
+                    ) : (
                     <ScrollView className="flex-1 mb-2">
                       <Text className="text-[9px] font-sans font-bold text-neutral-400 tracking-wider mb-1">
                         Recall Practice — {verses.length} {verses.length === 1 ? 'verse' : 'verses'} ({referenceText})
@@ -1401,34 +1525,13 @@ function PracticeModalsInner({
                         })()}
                       </View>
                     </ScrollView>
+                    )}
 
-                    {/* Voice channel — optional, works alongside typing */}
-                    <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-2 mt-2">
-                      <View className="flex-row items-center justify-between">
-                        <Text className="text-[9px] text-neutral-400 font-bold font-sans uppercase tracking-wider">
-                          {speechAvailable
-                            ? isListeningSpeak
-                              ? 'Listening... speak or type, either counts'
-                              : 'Tap mic to also recite aloud (optional)'
-                            : 'Speech-to-text arrives with the dev build'}
-                        </Text>
-                        {speechAvailable && (
-                          <Pressable
-                            onPress={() => (isListeningSpeak ? stopListening() : startListening())}
-                            className={`w-8 h-8 rounded-full items-center justify-center ${isListeningSpeak ? 'bg-red-500' : 'bg-indigo-600'}`}
-                          >
-                            {isListeningSpeak ? <MicOff size={14} color="#ffffff" /> : <Mic size={14} color="#ffffff" />}
-                          </Pressable>
-                        )}
-                      </View>
-                      {isListeningSpeak && (
-                        <View className="h-7 items-center justify-center bg-white rounded-lg border border-neutral-200">
-                          <WaveBars active count={16} />
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Input row */}
+                    {/* Input row -- mic lives inline at the right edge of the
+                        typed-input box (was a whole separate labeled row
+                        above; tapping a mic icon to talk is self-evident, and
+                        this saves the vertical/horizontal room for the words
+                        themselves instead). */}
                     <View className="gap-2.5 pt-2">
                       <View className="flex-row justify-between items-center px-1">
                         <View className="flex-row items-center gap-2">
@@ -1439,14 +1542,29 @@ function PracticeModalsInner({
                         <Text className="text-[10px] text-neutral-400 font-bold">{recitePointer} of {reciteWordObjects.length} words</Text>
                       </View>
 
-                      <TextInput
-                        value={typedInput}
-                        onChangeText={handleReciteTypeChar}
-                        placeholder={showStrikeResetAlert ? 'Resetting...' : 'Type first letter of each word (nearby keys count)...'}
-                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl py-2 px-3 text-center font-sans font-semibold text-xs text-neutral-900"
-                        autoFocus
-                        editable={!showStrikeResetAlert}
-                      />
+                      <View className="flex-row items-center gap-2">
+                        <TextInput
+                          value={typedInput}
+                          onChangeText={handleReciteTypeChar}
+                          placeholder={showStrikeResetAlert ? 'Resetting...' : 'Type first letter of each word (nearby keys count)...'}
+                          className="flex-1 bg-neutral-50 border border-neutral-300 rounded-xl py-2 px-3 text-center font-sans font-semibold text-xs text-neutral-900"
+                          autoFocus
+                          editable={!showStrikeResetAlert}
+                        />
+                        {speechAvailable && (
+                          <Pressable
+                            onPress={() => (isListeningSpeak ? stopListening() : startListening())}
+                            className={`w-9 h-9 rounded-full items-center justify-center shrink-0 ${isListeningSpeak ? 'bg-red-500' : 'bg-indigo-600'}`}
+                          >
+                            {isListeningSpeak ? <MicOff size={15} color="#ffffff" /> : <Mic size={15} color="#ffffff" />}
+                          </Pressable>
+                        )}
+                      </View>
+                      {isListeningSpeak && (
+                        <View className="h-6 items-center justify-center bg-neutral-50 rounded-lg border border-neutral-200">
+                          <WaveBars active count={16} />
+                        </View>
+                      )}
                     </View>
                   </View>
 
@@ -1593,7 +1711,7 @@ function PracticeModalsInner({
                   const drill: 'speak' | 'type' = usedSpeechRef.current ? 'speak' : 'type';
                   const pct = Math.round(summary.accuracy * 100);
                   const passPct = Math.round(REVIEW_PASS_ACCURACY * 100);
-                  const assisted = hintMode === 'firstLetter';
+                  const assisted = hintMode === 'firstLetter' || recallDisplayMode === 'memoryGrid';
                   const isMasteryEligible = summary.isPerfect && !assisted;
                   return (
                     <ScrollView className="flex-1" contentContainerClassName="items-center justify-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>

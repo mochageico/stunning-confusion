@@ -535,6 +535,48 @@ export function useAppState() {
     });
   };
 
+  // Memory Grid doodles -- backbone feature (single-pen freehand strokes per
+  // verse box), same device-local storage scope as highlights above. Each
+  // value is an array of SVG path "d" strings for that verse.
+  const [verseDoodles, setVerseDoodles] = useState<Record<string, string[]>>({});
+  const VERSE_DOODLES_KEY = 'memoryGrid:doodles:v1';
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(VERSE_DOODLES_KEY);
+        if (raw) setVerseDoodles(JSON.parse(raw));
+      } catch {
+        // Corrupt/missing -- just start blank.
+      }
+    })();
+  }, []);
+  const saveVerseDoodle = (key: string, strokes: string[]) => {
+    setVerseDoodles((prev) => {
+      const next = { ...prev, [key]: strokes };
+      AsyncStorage.setItem(VERSE_DOODLES_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+
+  // Memory Grid column count -- 2 or 4 (never odd, so boxes tile evenly on a
+  // phone width), one shared preference across Chapter page / Listen / Recall.
+  const [memoryGridColumns, setMemoryGridColumnsState] = useState<2 | 4>(4);
+  const MEMORY_GRID_COLUMNS_KEY = 'memoryGrid:columns:v1';
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(MEMORY_GRID_COLUMNS_KEY);
+        if (raw === '2' || raw === '4') setMemoryGridColumnsState(Number(raw) as 2 | 4);
+      } catch {
+        // Corrupt/missing -- just start at the default.
+      }
+    })();
+  }, []);
+  const setMemoryGridColumns = (columns: 2 | 4) => {
+    setMemoryGridColumnsState(columns);
+    AsyncStorage.setItem(MEMORY_GRID_COLUMNS_KEY, String(columns)).catch(() => {});
+  };
+
   // Whether RecordingDetailScreen's verse-sync timeline is in edit mode.
   // The draft marker positions themselves live as local component state in
   // that screen (derived fresh from selectedRecording.verseTimestamps each
@@ -4503,6 +4545,8 @@ export function useAppState() {
     selectedVerseNumbers, setSelectedVerseNumbers,
     chapterViewMode, setChapterViewMode,
     highlightedVerses, toggleVerseHighlight,
+    verseDoodles, saveVerseDoodle,
+    memoryGridColumns, setMemoryGridColumns,
     isEditingSync, setIsEditingSync,
     preset, setPreset,
     learningDays, setLearningDays,

@@ -436,6 +436,11 @@ function AppShell() {
           selectedChapterAudios={state.selectedChapterAudios}
           playingRecordingId={state.playingRecordingId}
           setPlayingRecordingId={state.setPlayingRecordingId}
+          highlightedVerses={state.highlightedVerses}
+          onToggleVerseHighlight={state.toggleVerseHighlight}
+          verseDoodles={state.verseDoodles}
+          onSaveVerseDoodle={state.saveVerseDoodle}
+          memoryGridColumns={state.memoryGridColumns}
         />
       )}
 
