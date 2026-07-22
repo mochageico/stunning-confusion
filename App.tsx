@@ -372,6 +372,12 @@ function AppShell() {
   const state = useAppState();
   const onboardingStepIndex = state.onboardingStepInProgress;
   const onboardingStepActive = onboardingStepIndex !== null;
+  // Chat screens go full-screen (no tab bar / now-playing bar below them) --
+  // partly for a standard chat-app feel, but mainly so KeyboardAvoidingView's
+  // bottom edge is the true physical screen bottom instead of sitting above
+  // a sibling bar it doesn't know about, which was undershooting how far the
+  // composer needs to rise above the keyboard.
+  const chatScreenActive = state.currentScreen === 'dmThread' || state.currentScreen === 'circleChat';
 
   return (
     <View style={{ flex: 1 }} className="bg-white">
@@ -396,6 +402,7 @@ function AppShell() {
         </View>
       </SafeAreaView>
 
+      {!chatScreenActive && (
       <SafeAreaView edges={['bottom', 'left', 'right']}>
         <NowPlayingBar state={state} />
         {onboardingStepActive ? (
@@ -429,6 +436,7 @@ function AppShell() {
           </View>
         )}
       </SafeAreaView>
+      )}
 
       {/* Interactive Full Practice Screen Overlay */}
       {state.activeModal && (
