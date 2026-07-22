@@ -155,12 +155,14 @@ service cloud.firestore {
     }
 
     match /dmThreads/{threadId} {
-      // resource is null for a not-yet-created thread -- the client
-      // getDoc()s a thread by its deterministic id to check whether it
-      // already exists before creating it, so this rule must handle that
-      // case explicitly instead of erroring (which Firestore treats as
-      // denied) on resource.data of a null resource.
-      allow read: if isSignedIn() && resource != null && request.auth.uid in resource.data.participantUids;
+      // The client getDoc()s a thread by its deterministic id to check
+      // whether it already exists before creating it. A get() request
+      // Firestore denies always comes back to the client as
+      // permission-denied, never a graceful "not found" -- there's no way
+      // to distinguish "doc doesn't exist" from "denied" otherwise -- so a
+      // nonexistent thread (resource == null) must be explicitly readable.
+      // A thread that DOES exist stays participant-only.
+      allow read: if isSignedIn() && (resource == null || request.auth.uid in resource.data.participantUids);
       allow create: if isSignedIn()
         && request.resource.data.participantUids.size() == 2
         && request.auth.uid in request.resource.data.participantUids
