@@ -1,5 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Modal, PanResponder, Pressable, Text, View, Image } from 'react-native';
+import { Animated, Easing, Keyboard, Modal, PanResponder, Platform, Pressable, Text, View, Image } from 'react-native';
+
+// ============================================================
+// useKeyboardHeight — manual native keyboard-height tracking, used instead
+// of KeyboardAvoidingView's automatic "measure my own frame" approach.
+// That approach turned out unreliable for the chat screens (still
+// undershot even once they were full-screen with no sibling bars below) --
+// listening directly to the native show/hide events and applying the
+// reported height as padding is the deterministic alternative.
+// ============================================================
+export function useKeyboardHeight(): number {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (e) => setHeight(e.endCoordinates.height));
+    const hideSub = Keyboard.addListener(hideEvent, () => setHeight(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+  return height;
+}
 
 // ============================================================
 // HelpTooltip — original was a hover-to-show "?" bubble; RN has

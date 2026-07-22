@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Send } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { AvatarCircle, FadeInView } from '../components/ui';
+import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
 
 export default function CircleChatScreen({ state }: { state: AppState }) {
   const {
@@ -18,6 +19,8 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
 
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<ScrollView>(null);
+  const keyboardHeight = useKeyboardHeight();
+  const insets = useSafeAreaInsets();
 
   if (!activeCircle) return null;
 
@@ -32,14 +35,12 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
     setDraft('');
   };
 
+  // See useKeyboardHeight's comment -- replaces KeyboardAvoidingView, which
+  // kept undershooting on iOS even on a full-screen chat layout.
+  const bottomPad = keyboardHeight > 0 ? keyboardHeight : insets.bottom;
+
   return (
-    // KeyboardAvoidingView must be the outermost wrapper, not nested inside
-    // FadeInView -- see the same comment in DMThreadScreen.tsx.
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1 }}
-    >
-      <FadeInView style={{ flex: 1 }}>
+    <FadeInView style={{ flex: 1 }}>
         <View className="flex-row items-center gap-3 border-b border-neutral-100 p-4">
           <Pressable
             onPress={goBack}
@@ -82,7 +83,10 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
           )}
         </ScrollView>
 
-        <View className="flex-row items-center gap-2 p-3 border-t border-neutral-100 bg-white">
+        <View
+          className="flex-row items-center gap-2 px-3 pt-3 border-t border-neutral-100 bg-white"
+          style={{ paddingBottom: Math.max(bottomPad, 12) }}
+        >
           <TextInput
             value={draft}
             onChangeText={setDraft}
@@ -100,6 +104,5 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
           </Pressable>
         </View>
       </FadeInView>
-    </KeyboardAvoidingView>
   );
 }

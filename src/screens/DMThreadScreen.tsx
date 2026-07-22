@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Lock, Send, UserPlus } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { AvatarCircle, FadeInView } from '../components/ui';
+import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
 
 export default function DMThreadScreen({ state }: { state: AppState }) {
   const {
@@ -21,6 +22,8 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
 
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<ScrollView>(null);
+  const keyboardHeight = useKeyboardHeight();
+  const insets = useSafeAreaInsets();
 
   if (!activeDMThread) return null;
 
@@ -37,17 +40,14 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
     setDraft('');
   };
 
+  // Bottom padding on the composer/banner itself: the exact reported
+  // keyboard height while it's up, or the safe-area inset (home indicator)
+  // while it's down -- see useKeyboardHeight's comment for why this
+  // replaced KeyboardAvoidingView.
+  const bottomPad = keyboardHeight > 0 ? keyboardHeight : insets.bottom;
+
   return (
-    // KeyboardAvoidingView must be the outermost wrapper, not nested inside
-    // FadeInView -- FadeInView is an Animated.View with a transform, and a
-    // transformed ancestor throws off KeyboardAvoidingView's window-position
-    // measurement on iOS, which silently breaks the padding calculation
-    // (composer ends up hidden behind the keyboard instead of pushed above it).
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1 }}
-    >
-      <FadeInView style={{ flex: 1 }}>
+    <FadeInView style={{ flex: 1 }}>
         <View className="flex-row items-center gap-3 border-b border-neutral-100 p-4">
           <Pressable
             onPress={goBack}
@@ -91,7 +91,10 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
         </ScrollView>
 
         {activeDMThreadActive ? (
-          <View className="flex-row items-center gap-2 p-3 border-t border-neutral-100 bg-white">
+          <View
+            className="flex-row items-center gap-2 px-3 pt-3 border-t border-neutral-100 bg-white"
+            style={{ paddingBottom: Math.max(bottomPad, 12) }}
+          >
             <TextInput
               value={draft}
               onChangeText={setDraft}
@@ -109,7 +112,10 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
             </Pressable>
           </View>
         ) : (
-          <View className="p-4 border-t border-amber-200 bg-amber-50" style={{ gap: 8 }}>
+          <View
+            className="px-4 pt-4 border-t border-amber-200 bg-amber-50"
+            style={{ gap: 8, paddingBottom: Math.max(bottomPad, 16) }}
+          >
             <View className="flex-row items-center gap-1.5">
               <Lock size={12} color="#b45309" />
               <Text className="text-[10px] font-sans font-bold text-amber-800 uppercase tracking-wide">
@@ -135,6 +141,5 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
           </View>
         )}
       </FadeInView>
-    </KeyboardAvoidingView>
   );
 }
