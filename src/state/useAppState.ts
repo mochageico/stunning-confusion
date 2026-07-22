@@ -12,6 +12,7 @@ import {
   getDocs,
   increment,
   limit,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -54,8 +55,10 @@ import { fetchChapterText, useChapterText } from './useScripture';
 import {
   AccountabilityNudge,
   ActivityEvent,
+  ChatMessage,
   Circle,
   CircleMember,
+  DMThread,
   Friend,
   FriendRequest,
   MemoryPlan,
@@ -85,7 +88,10 @@ export type ScreenName =
   | 'dashboard'
   | 'settings'
   | 'recordingDetail'
-  | 'findFriends';
+  | 'findFriends'
+  | 'messages'
+  | 'dmThread'
+  | 'circleChat';
 
 // Screens App.tsx's router only renders while currentTab === 'home' (see
 // Screens() in App.tsx). navigateTo() needs this list so it can switch tabs
@@ -796,6 +802,19 @@ export function useAppState() {
   const [receivedAccountabilityNudges, setReceivedAccountabilityNudges] = useState<AccountabilityNudge[]>([]);
   const [loadingAccountabilityNudges, setLoadingAccountabilityNudges] = useState(false);
 
+  // Messaging: DM inbox (dmThreads) + whichever thread/circle chat is
+  // currently open. Both message lists are live (onSnapshot), unlike the
+  // rest of this app's one-shot getDocs loads -- chat is the one place a
+  // stale view actually matters.
+  const [dmThreads, setDmThreads] = useState<DMThread[]>([]);
+  const [loadingDmThreads, setLoadingDmThreads] = useState(false);
+  const [activeDMThread, setActiveDMThread] = useState<DMThread | null>(null);
+  const [activeDMMessages, setActiveDMMessages] = useState<ChatMessage[]>([]);
+  const [loadingActiveDMMessages, setLoadingActiveDMMessages] = useState(false);
+  const [activeCircleChatId, setActiveCircleChatId] = useState<string | null>(null);
+  const [activeCircleMessages, setActiveCircleMessages] = useState<ChatMessage[]>([]);
+  const [loadingActiveCircleMessages, setLoadingActiveCircleMessages] = useState(false);
+
   // Selected Recording for Chapter Recording Landing Page
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
 
@@ -997,7 +1016,10 @@ export function useAppState() {
       currentScreen === 'fullHistory' ||
       currentScreen === 'dashboard' ||
       currentScreen === 'settings' ||
-      currentScreen === 'recordingDetail'
+      currentScreen === 'recordingDetail' ||
+      currentScreen === 'messages' ||
+      currentScreen === 'dmThread' ||
+      currentScreen === 'circleChat'
     ) {
       setCurrentScreen('home');
       setBackHistory([]);
@@ -1519,6 +1541,217 @@ export function useAppState() {
       handleFirestoreError(err, OperationType.UPDATE, `profiles/${auth.currentUser.uid}`);
     }
   };
+
+  // ==========================================
+  // MESSAGING -- DM threads (friend OR shared-circle gated, re-checked
+  // server-side on every send) and per-circle group chat. Both message lists
+  // are live (onSnapshot) rather than this app's usual one-shot getDocs --
+  // chat is the one place a stale view actually matters, and there's no
+  // Cloud Functions/push infra to notify otherwise.
+  // ==========================================
+
+  // Whichever friend/circle relationship justified opening the DM is
+  // re-verified every render against live friends/myCircles + the other
+  // person's circleIds snapshotted at open time -- purely a UI hint for the
+  // read-only banner; the real enforcement is the Firestore rule re-checking
+  // dmGated() on every message create, so this can never be used to bypass
+  // anything even if it drifts stale.
+  const [activeDMOtherCircleIds, setActiveDMOtherCircleIds] = useState<string[]>([]);
+  const activeDMThreadActive =
+    !!activeDMThread &&
+    (friends.some((f) => f.uid === activeDMThread.otherUid) ||
+      myCircles.some((c) => activeDMOtherCircleIds.includes(c.id)));
+
+  const openDMThread = async (otherUid: string, otherName: string, otherAvatarUrl: string) => {
+    if (!auth.currentUser || otherUid === auth.currentUser.uid) return;
+    const myUid = auth.currentUser.uid;
+    const threadId = [myUid, otherUid].sort().join('_');
+    const threadRef = doc(db, 'dmThreads', threadId);
+    try {
+      const [threadSnap, theirProfileSnap] = await Promise.all([getDoc(threadRef), getDoc(doc(db, 'profiles', otherUid))]);
+      const theirCircleIds: string[] = theirProfileSnap.data()?.circleIds || [];
+      const isFriend = friends.some((f) => f.uid === otherUid);
+      const sharesCircle = myCircles.some((c) => theirCircleIds.includes(c.id));
+
+      let data = threadSnap.data();
+      if (!data) {
+        if (!isFriend && !sharesCircle) {
+          triggerToast('You can only message friends or people who share a community with you.');
+          return;
+        }
+        const nowISO = new Date().toISOString();
+        const myName = auth.currentUser.displayName || 'Anonymous Disciple';
+        data = {
+          participantUids: [myUid, otherUid].sort(),
+          participantNames: { [myUid]: myName, [otherUid]: otherName },
+          participantAvatars: { [myUid]: '', [otherUid]: otherAvatarUrl },
+          lastMessage: '',
+          lastMessageAt: nowISO,
+          createdAt: nowISO,
+        };
+        await setDoc(threadRef, data);
+      }
+
+      setActiveDMOtherCircleIds(theirCircleIds);
+      setActiveDMThread({
+        id: threadId,
+        participantUids: data.participantUids,
+        otherUid,
+        otherName: data.participantNames?.[otherUid] || otherName,
+        otherAvatarUrl: data.participantAvatars?.[otherUid] || otherAvatarUrl,
+        lastMessage: data.lastMessage || '',
+        lastMessageAt: data.lastMessageAt,
+        createdAt: data.createdAt,
+      });
+      navigateTo('dmThread');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `dmThreads/${threadId}`);
+      triggerToast("Couldn't open that conversation -- please try again.");
+    }
+  };
+
+  const closeDMThread = () => {
+    setActiveDMThread(null);
+    setActiveDMMessages([]);
+    setActiveDMOtherCircleIds([]);
+  };
+
+  const sendDMMessage = async (text: string) => {
+    if (!auth.currentUser || !activeDMThread) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const nowISO = new Date().toISOString();
+    try {
+      await addDoc(collection(db, 'dmThreads', activeDMThread.id, 'messages'), {
+        fromUid: auth.currentUser.uid,
+        fromName: auth.currentUser.displayName || 'Anonymous Disciple',
+        fromAvatarUrl: '',
+        text: trimmed,
+        createdAt: nowISO,
+      });
+      await updateDoc(doc(db, 'dmThreads', activeDMThread.id), { lastMessage: trimmed, lastMessageAt: nowISO });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `dmThreads/${activeDMThread.id}/messages`);
+      triggerToast("You're no longer connected, so this can't be sent -- send a friend request to keep the conversation going.");
+    }
+  };
+
+  const openCircleChat = (circleId: string) => {
+    setActiveCircleChatId(circleId);
+    navigateTo('circleChat');
+  };
+
+  const closeCircleChat = () => {
+    setActiveCircleChatId(null);
+    setActiveCircleMessages([]);
+  };
+
+  const sendCircleMessage = async (text: string) => {
+    if (!auth.currentUser || !activeCircleChatId) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    try {
+      await addDoc(collection(db, 'circles', activeCircleChatId, 'messages'), {
+        fromUid: auth.currentUser.uid,
+        fromName: auth.currentUser.displayName || 'Anonymous Disciple',
+        fromAvatarUrl: '',
+        text: trimmed,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `circles/${activeCircleChatId}/messages`);
+      triggerToast("Couldn't send that message -- please try again.");
+    }
+  };
+
+  // Live DM inbox -- reloads automatically on sign-in/out.
+  useEffect(() => {
+    if (!user) {
+      setDmThreads([]);
+      return;
+    }
+    setLoadingDmThreads(true);
+    const q = query(
+      collection(db, 'dmThreads'),
+      where('participantUids', 'array-contains', user.uid),
+      orderBy('lastMessageAt', 'desc'),
+      limit(50)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setDmThreads(
+          snap.docs.map((d) => {
+            const data = d.data();
+            const otherUid = ((data.participantUids as string[]) || []).find((uid) => uid !== user.uid) || '';
+            return {
+              id: d.id,
+              participantUids: data.participantUids,
+              otherUid,
+              otherName: data.participantNames?.[otherUid] || 'Someone',
+              otherAvatarUrl: data.participantAvatars?.[otherUid] || '',
+              lastMessage: data.lastMessage || '',
+              lastMessageAt: data.lastMessageAt,
+              createdAt: data.createdAt,
+            } as DMThread;
+          })
+        );
+        setLoadingDmThreads(false);
+      },
+      (err) => {
+        console.error('Failed to load DM threads:', err);
+        setLoadingDmThreads(false);
+      }
+    );
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // Live messages for whichever DM thread is currently open.
+  useEffect(() => {
+    if (!activeDMThread) {
+      setActiveDMMessages([]);
+      return;
+    }
+    setLoadingActiveDMMessages(true);
+    const q = query(collection(db, 'dmThreads', activeDMThread.id, 'messages'), orderBy('createdAt', 'asc'), limit(200));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setActiveDMMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ChatMessage));
+        setLoadingActiveDMMessages(false);
+      },
+      (err) => {
+        console.error('Failed to load DM messages:', err);
+        setLoadingActiveDMMessages(false);
+      }
+    );
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDMThread?.id]);
+
+  // Live messages for whichever circle's group chat is currently open.
+  useEffect(() => {
+    if (!activeCircleChatId) {
+      setActiveCircleMessages([]);
+      return;
+    }
+    setLoadingActiveCircleMessages(true);
+    const q = query(collection(db, 'circles', activeCircleChatId, 'messages'), orderBy('createdAt', 'asc'), limit(200));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setActiveCircleMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ChatMessage));
+        setLoadingActiveCircleMessages(false);
+      },
+      (err) => {
+        console.error('Failed to load circle chat messages:', err);
+        setLoadingActiveCircleMessages(false);
+      }
+    );
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCircleChatId]);
 
   const loadPublicCircles = async () => {
     setLoadingPublicCircles(true);
@@ -2802,6 +3035,11 @@ export function useAppState() {
         setAccountabilityDailyCapState(ACCOUNTABILITY_DEFAULT_DAILY_CAP);
         setAccountabilitySentLog({});
         setReceivedAccountabilityNudges([]);
+        setActiveDMThread(null);
+        setActiveDMMessages([]);
+        setActiveDMOtherCircleIds([]);
+        setActiveCircleChatId(null);
+        setActiveCircleMessages([]);
         // Signed-out/guest preview only — matches the same "try before you
         // sign up" pattern as INITIAL_VERSES.
         setUserRecordings(INITIAL_RECORDINGS);
@@ -4824,6 +5062,10 @@ export function useAppState() {
     accountabilityDailyCap, updateAccountabilityDailyCap,
     receivedAccountabilityNudges, loadingAccountabilityNudges, loadReceivedAccountabilityNudges,
     canSendAccountabilityNudge, sendAccountabilityNudge, markAccountabilityNudgeRead, dismissAccountabilityNudge,
+    dmThreads, loadingDmThreads, activeDMThread, activeDMMessages, loadingActiveDMMessages, activeDMThreadActive,
+    openDMThread, closeDMThread, sendDMMessage,
+    activeCircleChatId, activeCircleMessages, loadingActiveCircleMessages,
+    openCircleChat, closeCircleChat, sendCircleMessage,
     selectedRecording, setSelectedRecording,
     communitySubView, setCommunitySubView,
     activeGroupId,

@@ -1,13 +1,15 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, MessageCircle } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 
 export default function MemberProfileScreen({ state }: { state: AppState }) {
-  const { selectedUserProfile, handleBack } = state;
+  const { selectedUserProfile, handleBack, openDMThread, user } = state;
 
   if (!selectedUserProfile) return null;
+
+  const isSelf = selectedUserProfile.uid === user?.uid;
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -41,6 +43,16 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
             </Text>
           </View>
         </View>
+
+        {!isSelf && (
+          <Pressable
+            onPress={() => openDMThread(selectedUserProfile.uid, selectedUserProfile.name, '')}
+            className="flex-row items-center justify-center gap-1.5 py-2 bg-[#1A1A1A] rounded-xl"
+          >
+            <MessageCircle size={12} color="#FFFFFF" />
+            <Text className="text-white font-sans font-bold text-[10px] uppercase tracking-wide">Message</Text>
+          </Pressable>
+        )}
 
         {/* Calculated Metrics cards */}
         <View className="flex-row gap-2">

@@ -40,6 +40,9 @@ import CommunityCreateScreen from './src/screens/CommunityCreateScreen';
 import RecordScreen from './src/screens/RecordScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import FindFriendsScreen from './src/screens/FindFriendsScreen';
+import MessagesScreen from './src/screens/MessagesScreen';
+import DMThreadScreen from './src/screens/DMThreadScreen';
+import CircleChatScreen from './src/screens/CircleChatScreen';
 
 // The original web app has no router — it's a hand-rolled state machine on
 // `currentTab` / `currentScreen`. This mirrors that structure 1:1 instead of
@@ -90,6 +93,15 @@ function Screens({ state }: { state: AppState }) {
   }
   if (state.currentScreen === 'findFriends') {
     return <FindFriendsScreen state={state} />;
+  }
+  if (state.currentScreen === 'messages') {
+    return <MessagesScreen state={state} />;
+  }
+  if (state.currentScreen === 'dmThread' && state.activeDMThread) {
+    return <DMThreadScreen state={state} />;
+  }
+  if (state.currentScreen === 'circleChat' && state.activeCircleChatId) {
+    return <CircleChatScreen state={state} />;
   }
 
   if (state.currentTab === 'home') {

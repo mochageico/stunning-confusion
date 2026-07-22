@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, Pause, Play, Settings as SettingsIcon, X } from 'lucide-react-native';
+import { Bell, MessageCircle, Pause, Play, Settings as SettingsIcon, X } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
@@ -35,6 +35,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
     receivedAccountabilityNudges,
     markAccountabilityNudgeRead,
     dismissAccountabilityNudge,
+    openDMThread,
   } = state;
 
   const { signInWithGoogle } = useGoogleSignIn();
@@ -109,6 +110,12 @@ export default function ProfileScreen({ state }: { state: AppState }) {
 
           {user ? (
             <View className="flex-row items-center gap-2">
+              <Pressable
+                onPress={() => navigateTo('messages')}
+                className="w-8 h-8 items-center justify-center border border-neutral-200 rounded-lg bg-white"
+              >
+                <MessageCircle size={14} color="#404040" />
+              </Pressable>
               <Pressable
                 onPress={() => navigateTo('settings')}
                 className="w-8 h-8 items-center justify-center border border-neutral-200 rounded-lg bg-white"
@@ -356,6 +363,13 @@ export default function ProfileScreen({ state }: { state: AppState }) {
                         <Text className="text-[10px] font-bold text-neutral-800 leading-none">{f.displayName}</Text>
                         <Text className="text-[8px] font-sans text-neutral-400 leading-none mt-0.5">View Profile</Text>
                       </View>
+                    </Pressable>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => openDMThread(f.uid, f.displayName, f.avatarUrl)}
+                      className="w-6 h-6 rounded-full items-center justify-center bg-indigo-50"
+                    >
+                      <MessageCircle size={11} color="#4338ca" />
                     </Pressable>
                     <Pressable
                       hitSlop={8}

@@ -278,6 +278,36 @@ export interface AccountabilityNudge {
   read: boolean;
 }
 
+// A 1:1 DM thread, stored at dmThreads/{threadId} where threadId is the two
+// participant uids sorted and joined with '_' (so either side computes the
+// same id without a lookup). Gated by friendship OR shared circle
+// membership -- enforced server-side in firestore.rules (re-checked on every
+// message send, not just thread creation), not just this snapshot. `active`
+// is a client-computed, non-authoritative hint for inbox styling only.
+export interface DMThread {
+  id: string;
+  participantUids: [string, string];
+  otherUid: string;
+  otherName: string;
+  otherAvatarUrl: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  createdAt: string;
+}
+
+// A single message in either a DMThread or a circle's group chat.
+// fromName/fromAvatarUrl are denormalized at send time (same trade-off as
+// AccountabilityNudge) so rendering a thread never needs an extra profile
+// fetch per message.
+export interface ChatMessage {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  fromAvatarUrl: string;
+  text: string;
+  createdAt: string;
+}
+
 // Real user profile, stored at profiles/{uid}. memorizedCount/learningCount are
 // denormalized snapshots the owning client patches in opportunistically, so
 // other users can see meaningful stats without exposing private

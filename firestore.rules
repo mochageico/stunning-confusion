@@ -136,6 +136,55 @@ service cloud.firestore {
         && (request.resource.data.count == 1 || request.resource.data.count == resource.data.count + 1);
     }
 
+    // Messaging: 1:1 DM threads gated by "friend OR shared circle membership",
+    // re-checked server-side on every message (not just thread creation) --
+    // this is what makes a thread go read-only the moment that gating
+    // relationship disappears, with no separate "active" flag to trust.
+    // threadId is the two participant uids sorted + joined with '_'.
+    function isFriendOf(a, b) {
+      return exists(/databases/$(database)/documents/profiles/$(a)/friends/$(b));
+    }
+
+    function sharesCircleWith(a, b) {
+      return get(/databases/$(database)/documents/profiles/$(a)).data.get('circleIds', [])
+        .hasAny(get(/databases/$(database)/documents/profiles/$(b)).data.get('circleIds', []));
+    }
+
+    function dmGated(a, b) {
+      return isFriendOf(a, b) || sharesCircleWith(a, b);
+    }
+
+    match /dmThreads/{threadId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.participantUids;
+      allow create: if isSignedIn()
+        && request.resource.data.participantUids.size() == 2
+        && request.auth.uid in request.resource.data.participantUids
+        && dmGated(request.resource.data.participantUids[0], request.resource.data.participantUids[1]);
+      // Only the thread preview fields change after creation -- participants
+      // never change on an existing thread.
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participantUids
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt']);
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids;
+        allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid
+          && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids
+          && dmGated(get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[0],
+                     get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[1]);
+        allow update, delete: if false;
+      }
+    }
+
+    // Group chat auto-tied to a Circle -- members only, immutable messages.
+    match /circles/{circleId}/messages/{messageId} {
+      allow read: if isSignedIn()
+        && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
+      allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid
+        && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
+      allow update, delete: if false;
+    }
+
     // Real memorization-milestone activity feed (Community). Read is open to
     // any signed-in user (matches profiles' posture — nothing in this app is
     // friend-scoped at the rule level, just at the client query level).

@@ -6,6 +6,7 @@ import {
   Globe,
   Link as LinkIcon,
   Lock,
+  MessageCircle,
   Plus,
   Share2,
   Sliders,
@@ -45,6 +46,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     navigateTo,
     clearStudyPlanMembershipsForCircle,
     triggerToast,
+    openCircleChat,
   } = state;
 
   const isLeaderOrAdmin = !!activeCircle && !!user && activeCircle.ownerId === user.uid;
@@ -121,8 +123,17 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             </View>
           </View>
 
-          {/* Settings Button for Leader/Admin */}
-          {isLeaderOrAdmin && (
+          <View className="flex-row items-center gap-2">
+            <Pressable
+              onPress={() => openCircleChat(activeCircle.id)}
+              className="px-2.5 py-1.5 rounded-lg border border-neutral-300 bg-white flex-row items-center gap-1.5"
+            >
+              <MessageCircle size={12} color="#404040" />
+              <Text className="text-[10px] font-sans font-bold text-neutral-700">Group Chat</Text>
+            </Pressable>
+
+            {/* Settings Button for Leader/Admin */}
+            {isLeaderOrAdmin && (
             <Pressable
               onPress={() => setIsEditingCircleSettings(!isEditingCircleSettings)}
               className={`px-2.5 py-1.5 rounded-lg border flex-row items-center gap-1.5 ${
@@ -134,7 +145,8 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                 {isEditingCircleSettings ? 'Close Settings' : 'Circle Settings'}
               </Text>
             </Pressable>
-          )}
+            )}
+          </View>
         </View>
 
         {/* Hero: name + description, replaces the old small header title and
