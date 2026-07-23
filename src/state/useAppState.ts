@@ -4309,6 +4309,15 @@ export function useAppState() {
     return streak;
   })();
 
+  // Public "memorized" figure synced below -- graduated out of Learning into
+  // spaced review (Daily/Weekly/Monthly) or fully retained, same definition
+  // ProfileScreen's own card uses for itself (versesLearnedCount). The plain
+  // `memorizedCount` above is deliberately narrower (retained-only, for
+  // Dashboard's per-phase retention breakdown) and would understate this.
+  const publicMemorizedCount = memoryQueue.filter(
+    (item) => item.status === 'reviewing' || item.status === 'retained'
+  ).length;
+
   // Patch memorizedCount/learningCount/streakDays into this user's own
   // profiles/{uid} doc (debounced) so other users viewing their real member
   // profile (e.g. in a shared circle) see meaningful stats without needing
@@ -4320,16 +4329,18 @@ export function useAppState() {
     profileStatsSyncTimerRef.current = setTimeout(() => {
       const uid = auth.currentUser?.uid;
       if (!uid) return;
-      updateDoc(doc(db, 'profiles', uid), { memorizedCount, learningCount, streakDays: memoryStreak }).catch((err) =>
-        console.error('Failed to sync profile stats:', err)
-      );
+      updateDoc(doc(db, 'profiles', uid), {
+        memorizedCount: publicMemorizedCount,
+        learningCount,
+        streakDays: memoryStreak,
+      }).catch((err) => console.error('Failed to sync profile stats:', err));
     }, 800);
 
     return () => {
       if (profileStatsSyncTimerRef.current) clearTimeout(profileStatsSyncTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memorizedCount, learningCount, memoryStreak, user]);
+  }, [publicMemorizedCount, learningCount, memoryStreak, user]);
 
   // Real chapter text for whichever book/chapter the user is currently browsing,
   // fetched from Firestore's scripture library (falls back to empty until loaded).

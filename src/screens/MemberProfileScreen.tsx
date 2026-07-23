@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, Bell, MessageCircle, X } from 'lucide-react-native';
+import { ArrowLeft, Bell, MessageCircle, UserMinus, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
@@ -14,11 +14,13 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
     friends,
     canSendAccountabilityNudge,
     sendAccountabilityNudge,
+    removeFriend,
     triggerToast,
   } = state;
 
   const [showNudgeCompose, setShowNudgeCompose] = useState(false);
   const [nudgeMessage, setNudgeMessage] = useState('');
+  const [showRemoveFriendConfirm, setShowRemoveFriendConfirm] = useState(false);
 
   if (!selectedUserProfile) return null;
 
@@ -87,6 +89,16 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
               </Pressable>
             )}
           </View>
+        )}
+
+        {!isSelf && isFriend && (
+          <Pressable
+            onPress={() => setShowRemoveFriendConfirm(true)}
+            className="flex-row items-center justify-center gap-1.5 py-2"
+          >
+            <UserMinus size={12} color="#dc2626" />
+            <Text className="text-red-600 font-sans font-bold text-[10px] uppercase tracking-wide">Remove Friend</Text>
+          </Pressable>
         )}
 
         {/* Calculated Metrics cards */}
@@ -166,6 +178,44 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
               >
                 <Text className="text-white font-sans font-bold text-xs">Send Nudge</Text>
               </Pressable>
+            </View>
+          </FadeInView>
+        </View>
+      )}
+
+      {showRemoveFriendConfirm && (
+        <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
+          <FadeInView style={{ width: '100%', maxWidth: 320 }}>
+            <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4">
+              <View>
+                <Text className="text-base font-serif font-bold text-[#1A1A1A]">Remove {selectedUserProfile.name}?</Text>
+                <Text className="text-xs text-neutral-500 font-sans mt-1">
+                  You'll stop seeing each other's activity and won't be able to nudge each other. They can send a new
+                  friend request later if you change your mind.
+                </Text>
+              </View>
+              <View className="flex-row gap-2.5">
+                <Pressable
+                  onPress={() => setShowRemoveFriendConfirm(false)}
+                  className="flex-1 py-2.5 border border-neutral-300 rounded-xl items-center"
+                >
+                  <Text className="text-neutral-600 font-sans font-bold text-xs">Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    setShowRemoveFriendConfirm(false);
+                    await removeFriend({
+                      uid: selectedUserProfile.uid,
+                      displayName: selectedUserProfile.name,
+                      avatarUrl: '',
+                      friendsSince: '',
+                    });
+                  }}
+                  className="flex-1 py-2.5 bg-red-600 rounded-xl items-center"
+                >
+                  <Text className="text-white font-sans font-bold text-xs">Remove</Text>
+                </Pressable>
+              </View>
             </View>
           </FadeInView>
         </View>

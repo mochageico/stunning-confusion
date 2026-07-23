@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { BookOpen } from 'lucide-react-native';
 
-import { FadeInView } from '../components/ui';
+import { FadeInView, useKeyboardHeight } from '../components/ui';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { useEmailAuth } from '../state/useEmailAuth';
 import { AppState } from '../state/useAppState';
@@ -24,6 +24,7 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
   const [passwordInput, setPasswordInput] = useState('');
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const keyboardHeight = useKeyboardHeight();
 
   const handleGoogleSignIn = async () => {
     setSubmitting(true);
@@ -57,7 +58,12 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
       <ScrollView
         className="flex-1 bg-white"
         contentContainerClassName="p-6"
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', gap: 24 }}
+        // Manual keyboard-height push, replacing KeyboardAvoidingView (see
+        // useKeyboardHeight's comment) -- extra bottom padding while the
+        // keyboard is up shifts this centered content upward instead of
+        // letting the keyboard cover the password field.
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', gap: 24, paddingBottom: 24 + keyboardHeight }}
+        keyboardShouldPersistTaps="handled"
       >
         <View className="items-center" style={{ gap: 8 }}>
           <View className="w-14 h-14 rounded-2xl bg-[#1A1A1A] items-center justify-center">
