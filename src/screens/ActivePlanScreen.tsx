@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowUp, ArrowDown, CalendarDays, ChevronRight, Plus, X, Tra
 
 import { useState } from 'react';
 
-import { AppState } from '../state/useAppState';
+import { AppState, buildVerseId } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
 import { FadeInView, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
@@ -33,7 +33,8 @@ function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
       curr.chapter === prev.chapter &&
       curr.verseNumber === prev.verseNumber + 1 &&
       curr.status === prev.status &&
-      curr.origin === prev.origin;
+      curr.origin === prev.origin &&
+      curr.translationId === prev.translationId;
 
     if (isConsecutive) {
       currentGroup.verses.push(curr.verseNumber);
@@ -428,7 +429,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                       const targetVerseNumbers = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
                       const alreadyQueued = targetVerseNumbers.filter((vNum) =>
-                        memoryQueue.some((item) => item.verseId === `${bookId}_${selectedAddChapter}_${vNum}`)
+                        memoryQueue.some(
+                          (item) => item.verseId === buildVerseId(DEFAULT_TRANSLATION_ID, bookId, selectedAddChapter, vNum)
+                        )
                       );
                       const toAdd = targetVerseNumbers.filter((vNum) => !alreadyQueued.includes(vNum));
 
@@ -455,7 +458,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                       }
 
                       const newItems: QueueItem[] = foundVerseNumbers.map((vNum, i) => ({
-                        verseId: `${bookId}_${selectedAddChapter}_${vNum}`,
+                        verseId: buildVerseId(DEFAULT_TRANSLATION_ID, bookId, selectedAddChapter, vNum),
+                        translationId: DEFAULT_TRANSLATION_ID,
                         book: selectedAddBook,
                         chapter: selectedAddChapter,
                         verseNumber: vNum,

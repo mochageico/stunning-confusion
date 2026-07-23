@@ -73,7 +73,8 @@ export interface StudyPlanMembership {
 }
 
 export interface QueueItem {
-  verseId: string;             // Unique identifier (e.g., "ROM_8_1", "PHP_4_6")
+  verseId: string;             // Unique identifier, now translation-prefixed (e.g., "ESV_ROM_8_1", "KJV_PHP_4_6") -- see buildVerseId in useAppState.ts. Pre-existing items from before translations existed keep their old translation-less id ("ROM_8_1"); translationId (below) is what's authoritative for display/matching, not the id's shape.
+  translationId: string;       // e.g. "ESV" -- which translation's text this item's `text` field holds. Ephesians 2:5 in ESV and in KJV are two independent QueueItems with independent progress, not the same item.
   book: string;                // e.g., "Romans"
   chapter: number;             // e.g., 8
   verseNumber: number;         // e.g., 1

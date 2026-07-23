@@ -4,10 +4,11 @@ import { ArrowLeft, Check, ChevronDown, Pause, Play, Printer, Search, SlidersHor
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { ChipRow, FadeInView } from '../components/ui';
+import { Dropdown } from '../components/Dropdown';
 import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { printMemoryGrid } from '../lib/printMemoryGrid';
 import { Recording } from '../types';
-import { ESV_COPYRIGHT_NOTICE } from '../data';
+import { BIBLE_TRANSLATIONS } from '../data';
 
 const OVERRIDE_PHASE_OPTIONS: { id: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; label: string }[] = [
   { id: 'learning', label: 'Learning' },
@@ -37,6 +38,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     activeChapterVerses,
     activeChapterTextLoading,
     activeChapterTextError,
+    selectedTranslationId,
+    setSelectedTranslationId,
     isVerseSelected,
     toggleVerseSelection,
     setSelectedVerseNumbers,
@@ -88,6 +91,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const isPlayingThis = !!currentAudio && playingRecordingId === currentAudio.id;
 
   const floatingBarShowing = selectedVerseNumbers.length > 0;
+  const activeTranslation = BIBLE_TRANSLATIONS.find((t) => t.id === selectedTranslationId) ?? BIBLE_TRANSLATIONS[0];
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -116,15 +120,31 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             </Text>
           </View>
 
-          {/* Simple Select/Deselect All Verse trigger */}
-          <Pressable
-            onPress={toggleSelectAll}
-            className="border border-[#1A1A1A] px-2 py-0.5 rounded"
-          >
-            <Text className="text-[10px] font-bold font-sans uppercase text-[#1A1A1A]">
-              {selectedVerseNumbers.length === activeChapterVerses.length ? 'Deselect All' : 'Select All'}
-            </Text>
-          </Pressable>
+          <View className="flex-row items-center gap-2">
+            {/* Translation picker -- determines which translation's text
+                loads for this chapter, and which translation gets set on
+                any verses added to the queue from here. Progress on the
+                same verse in two different translations is tracked
+                independently (see buildVerseId in useAppState.ts). */}
+            <View style={{ width: 84 }}>
+              <Dropdown
+                value={selectedTranslationId}
+                onChange={setSelectedTranslationId}
+                options={BIBLE_TRANSLATIONS.map((t) => ({ id: t.id, label: t.id }))}
+                title="Translation"
+                searchable={false}
+              />
+            </View>
+            {/* Simple Select/Deselect All Verse trigger */}
+            <Pressable
+              onPress={toggleSelectAll}
+              className="border border-[#1A1A1A] px-2 py-0.5 rounded"
+            >
+              <Text className="text-[10px] font-bold font-sans uppercase text-[#1A1A1A]">
+                {selectedVerseNumbers.length === activeChapterVerses.length ? 'Deselect All' : 'Select All'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Segmented Progress Bar */}
@@ -474,10 +494,11 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           )}
         </View>
 
-        {/* ESV copyright/attribution notice — required by Crossway whenever ESV text is displayed */}
-        {activeChapterVerses.length > 0 && (
+        {/* Copyright/attribution notice -- only shown for translations that
+            require one (public-domain translations like KJV/WEB have none). */}
+        {activeChapterVerses.length > 0 && activeTranslation.copyright && (
           <Text className="text-[8px] font-sans text-neutral-400 leading-tight text-center px-2">
-            {ESV_COPYRIGHT_NOTICE}
+            {activeTranslation.copyright}
           </Text>
         )}
 
@@ -515,7 +536,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           <View className="flex-row gap-1.5">
             <Pressable
               onPress={() => {
-                addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)));
+                addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), selectedTranslationId);
                 setSelectedVerseNumbers([]);
               }}
               className="flex-1 py-2 items-center bg-emerald-600 rounded-lg"
@@ -597,6 +618,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     overrideVerseMemoryStatus(
                       activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)),
                       overridePhase,
+                      selectedTranslationId,
                       overrideWeekday ?? undefined
                     );
                     setSelectedVerseNumbers([]);

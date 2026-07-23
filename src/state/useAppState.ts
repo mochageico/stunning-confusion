@@ -111,6 +111,19 @@ const HOME_TAB_SCREENS: ScreenName[] = [
 
 export type TabName = 'home' | 'community' | 'record' | 'profile';
 
+// Canonical QueueItem.verseId shape, translation-prefixed so the same
+// book/chapter/verse in two different translations are two independent
+// queue items with independent progress (e.g. "ESV_EPH_2_5" vs
+// "KJV_EPH_2_5"). Every site that constructs a QueueItem's verseId should
+// go through this instead of an ad-hoc template literal, since it must stay
+// consistent across every call site or two code paths adding "the same"
+// verse could silently create duplicate, non-deduplicating queue items.
+// Pre-existing items from before translations existed keep their old
+// translation-less id ("EPH_2_5") rather than being migrated -- see
+// loadUserData's translationId default-to-'ESV' fallback.
+export const buildVerseId = (translationId: string, bookId: string, chapter: number, verse: number): string =>
+  `${translationId}_${bookId}_${chapter}_${verse}`;
+
 const generateInitialQueue = (verses: VerseState[]): QueueItem[] => {
   return verses.map((v, index) => {
     const verseId = `${v.book.substring(0, 3).toUpperCase()}_${v.chapter}_${v.verse}`;
@@ -120,6 +133,7 @@ const generateInitialQueue = (verses: VerseState[]): QueueItem[] => {
     if (v.book === 'John' && v.chapter === 15 && v.verse === 1) {
       return {
         verseId,
+        translationId: 'ESV',
         book: v.book,
         chapter: v.chapter,
         verseNumber: v.verse,
@@ -139,6 +153,7 @@ const generateInitialQueue = (verses: VerseState[]): QueueItem[] => {
     if (v.book === 'John' && v.chapter === 15 && v.verse === 2) {
       return {
         verseId,
+        translationId: 'ESV',
         book: v.book,
         chapter: v.chapter,
         verseNumber: v.verse,
@@ -158,6 +173,7 @@ const generateInitialQueue = (verses: VerseState[]): QueueItem[] => {
     if (v.book === 'Genesis' && v.chapter === 1 && v.verse === 1) {
       return {
         verseId,
+        translationId: 'ESV',
         book: v.book,
         chapter: v.chapter,
         verseNumber: v.verse,
@@ -177,6 +193,7 @@ const generateInitialQueue = (verses: VerseState[]): QueueItem[] => {
     if (v.book === 'Genesis' && v.chapter === 1 && v.verse === 2) {
       return {
         verseId,
+        translationId: 'ESV',
         book: v.book,
         chapter: v.chapter,
         verseNumber: v.verse,
@@ -200,6 +217,7 @@ const generateInitialQueue = (verses: VerseState[]): QueueItem[] => {
     ) {
       return {
         verseId,
+        translationId: 'ESV',
         book: v.book,
         chapter: v.chapter,
         verseNumber: v.verse,
@@ -219,6 +237,7 @@ const generateInitialQueue = (verses: VerseState[]): QueueItem[] => {
 
     return {
       verseId,
+      translationId: 'ESV',
       book: v.book,
       chapter: v.chapter,
       verseNumber: v.verse,
@@ -533,6 +552,11 @@ export function useAppState() {
   // Navigation stack helpers
   const [selectedBook, setSelectedBook] = useState<string | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
+  // Which translation's text ChapterLandingScreen's verse picker shows and
+  // adds to the queue -- a session-level browsing choice (persists across
+  // book/chapter navigation, resets on app restart), not a per-verse or
+  // per-plan setting.
+  const [selectedTranslationId, setSelectedTranslationId] = useState<string>(DEFAULT_TRANSLATION_ID);
   const [backHistory, setBackHistory] = useState<
     Array<{ screen: ScreenName; book: string | null; chapter: number | null }>
   >([]);
@@ -2206,20 +2230,27 @@ export function useAppState() {
   // plan -- shared by joinStudyPlan (the plan's full current range) and
   // addVersesToStudyPlan's self-heal path (just the newly-added verses).
   const addStudyPlanVersesToOwnQueue = async (planId: string, verseIds: string[]) => {
-    const currentQueueIds = memoryQueueRef.current.map((item) => item.verseId);
-    const missingVerseIds = verseIds.filter((id) => !currentQueueIds.includes(id));
-    if (missingVerseIds.length === 0) return;
+    // StudyPlan.verseIds are translation-less ("GEN_1_3") -- group plans
+    // don't have per-member translation choice yet, always resolved as
+    // DEFAULT_TRANSLATION_ID, so "already in my queue" means the
+    // DEFAULT_TRANSLATION_ID-prefixed form of this reference already exists
+    // (QueueItem.verseId is translation-prefixed -- see buildVerseId).
+    const currentQueueIds = new Set(memoryQueueRef.current.map((item) => item.verseId));
+    const missingRefs = verseIds
+      .map((vId) => {
+        const [bookId, chapterStr, verseStr] = vId.split('_');
+        return { bookId, chapter: parseInt(chapterStr, 10), verseNumber: parseInt(verseStr, 10) };
+      })
+      .filter((ref) => !currentQueueIds.has(buildVerseId(DEFAULT_TRANSLATION_ID, ref.bookId, ref.chapter, ref.verseNumber)));
+    if (missingRefs.length === 0) return;
 
-    // Group missing verseIds (e.g. "GEN_1_3") by book+chapter so each real
-    // chapter is only fetched once, regardless of how many of its verses
-    // are in this plan's range.
+    // Group by book+chapter so each real chapter is only fetched once,
+    // regardless of how many of its verses are in this plan's range.
     const byChapter = new Map<string, { bookId: string; chapter: number; verseNumbers: number[] }>();
-    missingVerseIds.forEach((vId) => {
-      const [bookId, chapterStr, verseStr] = vId.split('_');
-      const chapter = parseInt(chapterStr, 10);
+    missingRefs.forEach(({ bookId, chapter, verseNumber }) => {
       const key = `${bookId}_${chapter}`;
       if (!byChapter.has(key)) byChapter.set(key, { bookId, chapter, verseNumbers: [] });
-      byChapter.get(key)!.verseNumbers.push(parseInt(verseStr, 10));
+      byChapter.get(key)!.verseNumbers.push(verseNumber);
     });
 
     const newItems: QueueItem[] = [];
@@ -2231,7 +2262,8 @@ export function useAppState() {
         const text = chapterData.verses[String(verseNumber)];
         if (!text) return;
         newItems.push({
-          verseId: `${bookId}_${chapter}_${verseNumber}`,
+          verseId: buildVerseId(DEFAULT_TRANSLATION_ID, bookId, chapter, verseNumber),
+          translationId: DEFAULT_TRANSLATION_ID,
           book: bookMeta.name,
           chapter,
           verseNumber,
@@ -2911,6 +2943,11 @@ export function useAppState() {
           const data = docSnap.data();
           loadedQueue.push({
             verseId: data.verseId,
+            // Pre-existing docs from before translations existed have no
+            // stored translationId -- they were always ESV (the only
+            // translation that ever existed), so default to that rather
+            // than leaving it undefined.
+            translationId: data.translationId || 'ESV',
             book: data.book,
             chapter: data.chapter,
             verseNumber: data.verseNumber !== undefined ? data.verseNumber : data.verse || 1,
@@ -3630,7 +3667,7 @@ export function useAppState() {
   // of new and already-queued/learning/reviewing verses just adds the new
   // ones. Persistence is handled by the existing debounced auto-sync
   // effect, same as every other queue mutation.
-  const addVersesToQueue = (versesToAdd: VerseState[]) => {
+  const addVersesToQueue = (versesToAdd: VerseState[], translationId: string) => {
     const existingIds = new Set(memoryQueueRef.current.map((q) => q.verseId));
     const newItems: QueueItem[] = [];
     let skipped = 0;
@@ -3640,7 +3677,7 @@ export function useAppState() {
         skipped++;
         return;
       }
-      const verseId = `${bookMeta.id}_${v.chapter}_${v.verse}`;
+      const verseId = buildVerseId(translationId, bookMeta.id, v.chapter, v.verse);
       if (existingIds.has(verseId)) {
         skipped++;
         return;
@@ -3648,6 +3685,7 @@ export function useAppState() {
       existingIds.add(verseId); // guards against duplicate verses within versesToAdd itself
       newItems.push({
         verseId,
+        translationId,
         book: v.book,
         chapter: v.chapter,
         verseNumber: v.verse,
@@ -3694,6 +3732,7 @@ export function useAppState() {
   const overrideVerseMemoryStatus = (
     versesToOverride: VerseState[],
     targetPhase: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained',
+    translationId: string,
     targetWeekday?: string
   ) => {
     const nowISO = new Date().toISOString();
@@ -3714,13 +3753,14 @@ export function useAppState() {
     versesToOverride.forEach((v) => {
       const bookMeta = getBookByName(v.book);
       if (!bookMeta) return;
-      const verseId = `${bookMeta.id}_${v.chapter}_${v.verse}`;
+      const verseId = buildVerseId(translationId, bookMeta.id, v.chapter, v.verse);
       const existing = existingByVerseId.get(verseId);
 
       const base: QueueItem = existing
         ? { ...existing }
         : {
             verseId,
+            translationId,
             book: v.book,
             chapter: v.chapter,
             verseNumber: v.verse,
@@ -4429,7 +4469,7 @@ export function useAppState() {
     data: activeChapterTextData,
     loading: activeChapterTextLoading,
     error: activeChapterTextError,
-  } = useChapterText(DEFAULT_TRANSLATION_ID, activeBookId, selectedChapter);
+  } = useChapterText(selectedTranslationId, activeBookId, selectedChapter);
 
   // Merge real verse text with this user's personal progress (tracked in memoryQueue)
   // to build the VerseState list the Chapter Landing screen renders.
@@ -4438,8 +4478,16 @@ export function useAppState() {
         .map(Number)
         .sort((a, b) => a - b)
         .map((verseNum) => {
+          // Matched by translation too, not just book/chapter/verse -- ESV
+          // Ephesians 2:5 being in-progress must not show as "already
+          // learning" while browsing the same reference in KJV, since
+          // they're independent QueueItems (see buildVerseId).
           const queueItem = memoryQueue.find(
-            (q) => q.book === selectedBook && q.chapter === selectedChapter && q.verseNumber === verseNum
+            (q) =>
+              q.book === selectedBook &&
+              q.chapter === selectedChapter &&
+              q.verseNumber === verseNum &&
+              (q.translationId || 'ESV') === selectedTranslationId
           );
           let status: VerseState['status'] = 'untouched';
           let dueDate: string | undefined;
@@ -5186,6 +5234,7 @@ export function useAppState() {
     activeChapterVerses,
     activeChapterTextLoading,
     activeChapterTextError,
+    selectedTranslationId, setSelectedTranslationId,
     isVerseSelected,
     toggleVerseSelection,
     toggleSelectAll,

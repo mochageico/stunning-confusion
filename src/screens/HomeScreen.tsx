@@ -19,26 +19,33 @@ interface GroupedItem {
   label: string;
   book: string;
   chapter: number;
+  translationId: string;
   items: QueueItem[];
 }
 
 function groupQueueItems(items: QueueItem[]): GroupedItem[] {
   const groups: { [key: string]: QueueItem[] } = {};
   items.forEach((item) => {
-    const key = `${item.book} ${item.chapter}`;
+    // Translation is part of the group key too -- ESV Ephesians 2 and KJV
+    // Ephesians 2 are independent progress (see buildVerseId), so they must
+    // render as separate cards, not merged into one mixed-translation group.
+    const key = `${item.book} ${item.chapter} ${item.translationId}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(item);
   });
-  return Object.entries(groups).map(([key, list]) => {
+  return Object.entries(groups).map(([, list]) => {
     const book = list[0].book;
     const chapter = list[0].chapter;
+    const translationId = list[0].translationId;
     list.sort((a, b) => a.verseNumber - b.verseNumber);
     const versesStr =
       list.length === 1 ? `${list[0].verseNumber}` : `${list[0].verseNumber}-${list[list.length - 1].verseNumber}`;
+    const translationSuffix = translationId && translationId !== 'ESV' ? ` (${translationId})` : '';
     return {
-      label: `${key}:${versesStr}`,
+      label: `${book} ${chapter}:${versesStr}${translationSuffix}`,
       book,
       chapter,
+      translationId,
       items: list,
     };
   });

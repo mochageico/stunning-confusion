@@ -1,0 +1,7 @@
+# Downloaded Bible source datasets -- large (multi-MB), and the whole point
+# of this adapter's design is "bring your own local file, don't commit it"
+# (see README.md). Ignore common names/extensions used for these downloads.
+kjv.json
+web.xml
+*.usfx.xml
+*serviceAccountKey*.json
