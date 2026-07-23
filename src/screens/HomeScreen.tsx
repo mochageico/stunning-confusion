@@ -235,9 +235,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
                       <View className="flex-row gap-1">
                         <Pressable
                           onPress={() => handleGroupPractice('listen', group.items)}
-                          className="bg-white border border-neutral-300 w-6 h-5 items-center justify-center rounded"
+                          className="bg-white border border-neutral-300 px-2 h-5 items-center justify-center rounded"
                         >
-                          <Text className="text-neutral-700 text-[10px] font-bold">L</Text>
+                          <Text className="text-neutral-700 text-[9px] font-bold">Listen</Text>
                         </Pressable>
                         <Pressable
                           onPress={() => handleGroupPractice('learn', group.items)}
@@ -363,9 +363,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
                         <View className="flex-row gap-1">
                           <Pressable
                             onPress={() => handleGroupPractice('listen', group.items)}
-                            className="bg-white border border-emerald-200 w-6 h-5 items-center justify-center rounded"
+                            className="bg-white border border-emerald-200 px-2 h-5 items-center justify-center rounded"
                           >
-                            <Text className="text-emerald-700 text-[10px] font-bold">L</Text>
+                            <Text className="text-emerald-700 text-[9px] font-bold">Listen</Text>
                           </Pressable>
                           <Pressable
                             onPress={() => handleGroupPractice('learn', group.items)}
@@ -393,9 +393,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
                         <View className="flex-row gap-1">
                           <Pressable
                             onPress={() => handleGroupPractice('listen', group.items)}
-                            className="bg-white border border-blue-200 w-6 h-5 items-center justify-center rounded"
+                            className="bg-white border border-blue-200 px-2 h-5 items-center justify-center rounded"
                           >
-                            <Text className="text-blue-700 text-[10px] font-bold">L</Text>
+                            <Text className="text-blue-700 text-[9px] font-bold">Listen</Text>
                           </Pressable>
                           <Pressable
                             onPress={() => handleGroupPractice('learn', group.items)}
@@ -423,9 +423,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
                         <View className="flex-row gap-1">
                           <Pressable
                             onPress={() => handleGroupPractice('listen', group.items)}
-                            className="bg-white border border-amber-200 w-6 h-5 items-center justify-center rounded"
+                            className="bg-white border border-amber-200 px-2 h-5 items-center justify-center rounded"
                           >
-                            <Text className="text-amber-700 text-[10px] font-bold">L</Text>
+                            <Text className="text-amber-700 text-[9px] font-bold">Listen</Text>
                           </Pressable>
                           <Pressable
                             onPress={() => handleGroupPractice('learn', group.items)}

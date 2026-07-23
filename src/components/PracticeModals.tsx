@@ -1039,9 +1039,6 @@ function PracticeModalsInner({
       {/* Header Bar */}
       <View className="flex-row items-center justify-between border-b border-[#1A1A1A] pb-2 mb-3">
         <View>
-          <Text className="text-[9px] uppercase tracking-wider text-neutral-500 font-sans font-bold">
-            {type === 'listen' ? 'Audio Player & Looper' : learnTab === 'recite' ? 'Recall Practice' : 'Active Reveal practice'}
-          </Text>
           <Text className="text-base font-serif font-bold text-neutral-900 leading-tight max-w-[280px]" numberOfLines={1}>
             {referenceText}
           </Text>
@@ -1547,7 +1544,6 @@ function PracticeModalsInner({
                           onChangeText={handleReciteTypeChar}
                           placeholder={showStrikeResetAlert ? 'Resetting...' : 'Type first letter of each word (nearby keys count)...'}
                           className="flex-1 bg-neutral-50 border border-neutral-300 rounded-xl py-2 px-3 text-center font-sans font-semibold text-xs text-neutral-900"
-                          autoFocus
                           editable={!showStrikeResetAlert}
                         />
                         {speechAvailable && (
@@ -1636,15 +1632,17 @@ function PracticeModalsInner({
                           </Text>
                         </Pressable>
                       </View>
-                      <DiscreteSlider
-                        value={activeLevel}
-                        onChange={(level) => {
-                          setActiveLevel(level);
-                          resetReciteGame();
-                          regenerateHiddenWords(level);
-                        }}
-                        options={[0, 25, 50, 75, 100].map((level) => ({ id: level, label: level === 100 ? 'Blind' : `${level}%` }))}
-                      />
+                      {hintMode === 'percent' && (
+                        <DiscreteSlider
+                          value={activeLevel}
+                          onChange={(level) => {
+                            setActiveLevel(level);
+                            resetReciteGame();
+                            regenerateHiddenWords(level);
+                          }}
+                          options={[0, 25, 50, 75, 100].map((level) => ({ id: level, label: level === 100 ? 'Blind' : `${level}%` }))}
+                        />
+                      )}
                     </View>
                   )}
 
