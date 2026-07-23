@@ -339,7 +339,7 @@ export function AvatarCircle({
       />
     );
   }
-  const initial = (name || 'K').trim().charAt(0).toUpperCase() || 'K';
+  const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
   return (
     <View
       style={{ width: size, height: size, borderRadius: size / 2 }}

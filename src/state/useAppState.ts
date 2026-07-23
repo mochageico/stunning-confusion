@@ -41,14 +41,13 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
+import { pendingSignUpDisplayName } from './useEmailAuth';
 import {
   ALL_BIBLE_BOOKS,
   BOOKS,
   DEFAULT_PLANS,
   DEFAULT_TRANSLATION_ID,
   getBookByName,
-  INITIAL_RECORDINGS,
-  INITIAL_VERSES,
   SUGGESTED_FEED_RECORDINGS,
 } from '../data';
 import { fetchChapterText, useChapterText } from './useScripture';
@@ -123,138 +122,6 @@ export type TabName = 'home' | 'community' | 'record' | 'profile';
 // loadUserData's translationId default-to-'ESV' fallback.
 export const buildVerseId = (translationId: string, bookId: string, chapter: number, verse: number): string =>
   `${translationId}_${bookId}_${chapter}_${verse}`;
-
-const generateInitialQueue = (verses: VerseState[]): QueueItem[] => {
-  return verses.map((v, index) => {
-    const verseId = `${v.book.substring(0, 3).toUpperCase()}_${v.chapter}_${v.verse}`;
-    const origin = v.book === 'John' ? 'group' : 'individual';
-
-    // Seed some specific verses into interesting states to match the dynamic requirements
-    if (v.book === 'John' && v.chapter === 15 && v.verse === 1) {
-      return {
-        verseId,
-        translationId: 'ESV',
-        book: v.book,
-        chapter: v.chapter,
-        verseNumber: v.verse,
-        text: v.text,
-        orderIndex: index,
-        status: 'reviewing',
-        origin: 'group',
-        retentionPhase: 'weekly',
-        dateStarted: new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString(),
-        lastReviewDate: new Date(Date.now() - 6 * 24 * 3600 * 1000).toISOString(),
-        nextReviewDueDate: new Date().toISOString(), // Due today
-        currentStreakCount: 8,
-        totalSuccessfulReviews: 8,
-        gracePeriodUsedToday: false,
-      };
-    }
-    if (v.book === 'John' && v.chapter === 15 && v.verse === 2) {
-      return {
-        verseId,
-        translationId: 'ESV',
-        book: v.book,
-        chapter: v.chapter,
-        verseNumber: v.verse,
-        text: v.text,
-        orderIndex: index,
-        status: 'reviewing',
-        origin: 'individual',
-        retentionPhase: 'weekly',
-        dateStarted: new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString(),
-        lastReviewDate: new Date(Date.now() - 6 * 24 * 3600 * 1000).toISOString(),
-        nextReviewDueDate: new Date().toISOString(), // Due today
-        currentStreakCount: 8,
-        totalSuccessfulReviews: 8,
-        gracePeriodUsedToday: false,
-      };
-    }
-    if (v.book === 'Genesis' && v.chapter === 1 && v.verse === 1) {
-      return {
-        verseId,
-        translationId: 'ESV',
-        book: v.book,
-        chapter: v.chapter,
-        verseNumber: v.verse,
-        text: v.text,
-        orderIndex: index,
-        status: 'retained',
-        origin: 'individual',
-        retentionPhase: 'none',
-        dateStarted: new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString(),
-        lastReviewDate: new Date(Date.now() - 40 * 24 * 3600 * 1000).toISOString(),
-        nextReviewDueDate: null,
-        currentStreakCount: 0,
-        totalSuccessfulReviews: 24,
-        gracePeriodUsedToday: false,
-      };
-    }
-    if (v.book === 'Genesis' && v.chapter === 1 && v.verse === 2) {
-      return {
-        verseId,
-        translationId: 'ESV',
-        book: v.book,
-        chapter: v.chapter,
-        verseNumber: v.verse,
-        text: v.text,
-        orderIndex: index,
-        status: 'retained',
-        origin: 'individual',
-        retentionPhase: 'none',
-        dateStarted: new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString(),
-        lastReviewDate: new Date(Date.now() - 40 * 24 * 3600 * 1000).toISOString(),
-        nextReviewDueDate: null,
-        currentStreakCount: 0,
-        totalSuccessfulReviews: 24,
-        gracePeriodUsedToday: false,
-      };
-    }
-    if (
-      v.book === 'Genesis' &&
-      v.chapter === 1 &&
-      (v.verse === 3 || v.verse === 4 || v.verse === 5 || v.verse === 6)
-    ) {
-      return {
-        verseId,
-        translationId: 'ESV',
-        book: v.book,
-        chapter: v.chapter,
-        verseNumber: v.verse,
-        text: v.text,
-        orderIndex: index,
-        status: 'learning',
-        origin,
-        retentionPhase: 'none',
-        dateStarted: new Date().toISOString(),
-        lastReviewDate: null,
-        nextReviewDueDate: null,
-        currentStreakCount: 0,
-        totalSuccessfulReviews: 0,
-        gracePeriodUsedToday: false,
-      };
-    }
-
-    return {
-      verseId,
-      translationId: 'ESV',
-      book: v.book,
-      chapter: v.chapter,
-      verseNumber: v.verse,
-      text: v.text,
-      orderIndex: index,
-      status: 'queued',
-      origin,
-      retentionPhase: 'none',
-      dateStarted: null,
-      lastReviewDate: null,
-      nextReviewDueDate: null,
-      currentStreakCount: 0,
-      totalSuccessfulReviews: 0,
-      gracePeriodUsedToday: false,
-    };
-  }) as QueueItem[];
-};
 
 // Demotion softening: base length of a temporary "refresher" stint. A miss
 // out of Weekly drops to Daily for this many days; a miss out of Monthly
@@ -530,8 +397,8 @@ export function useAppState() {
   // ==========================================
   // CORE APP STATES
   // ==========================================
-  const [verses, setVerses] = useState<VerseState[]>(INITIAL_VERSES);
-  const [memoryQueue, setMemoryQueue] = useState<QueueItem[]>(() => generateInitialQueue(INITIAL_VERSES));
+  const [verses, setVerses] = useState<VerseState[]>([]);
+  const [memoryQueue, setMemoryQueue] = useState<QueueItem[]>([]);
   const [primingLookahead, setPrimingLookahead] = useState<number>(30);
   const [cognitiveLoadSensitivity, setCognitiveLoadSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
 
@@ -689,7 +556,7 @@ export function useAppState() {
   const [recordingBook, setRecordingBook] = useState('Romans');
   const [recordingChapter, setRecordingChapter] = useState(8);
   const [recordingTranslation, setRecordingTranslation] = useState('ESV');
-  const [userRecordings, setUserRecordings] = useState<Recording[]>(INITIAL_RECORDINGS);
+  const [userRecordings, setUserRecordings] = useState<Recording[]>([]);
 
   // Import-audio tagging: the reverse of live recording. Instead of tapping
   // each verse while the mic records, the user picks an existing audio file
@@ -742,9 +609,8 @@ export function useAppState() {
   // per step per session.
   const onboardingNudgedStepsRef = useRef<Set<number>>(new Set());
 
-  // Real shared-recordings feed (guest/signed-out preview still falls back
-  // to the illustrative SUGGESTED_FEED_RECORDINGS, same "try before sign up"
-  // pattern as INITIAL_VERSES/INITIAL_RECORDINGS).
+  // Real shared-recordings feed, seeded with illustrative sample entries
+  // (other people's recordings, e.g. "Sarah Miller") until the real feed loads.
   const [feedRecordings, setFeedRecordings] = useState<Recording[]>(SUGGESTED_FEED_RECORDINGS);
   const [loadingFeedRecordings, setLoadingFeedRecordings] = useState(false);
   const [audioSearchQuery, setAudioSearchQuery] = useState('');
@@ -2756,13 +2622,20 @@ export function useAppState() {
       }
 
       if (profileSnap && !profileSnap.exists()) {
+        // Email sign-up requires a display name (enforced in AuthGateScreen),
+        // but this listener can win the race against that flow's own
+        // updateProfile() call and see it not landed yet on `currentUser` --
+        // pendingSignUpDisplayName closes that gap (see useEmailAuth.ts).
+        // Google sign-in always has a name by this point. Either way, a
+        // fake "Anonymous" default is never actually needed here.
+        const resolvedDisplayName = pendingSignUpDisplayName.current || currentUser.displayName || '';
         const newProfile = {
-          displayName: currentUser.displayName || 'Anonymous',
+          displayName: resolvedDisplayName,
           // Lowercased once at creation for prefix-match user search (Find
           // Friends) — this app has no backend/search service, so this is
           // the standard Firestore-only trick (range query on a normalized
           // field). updateDisplayName keeps this in sync on rename.
-          displayNameLower: (currentUser.displayName || 'anonymous').toLowerCase(),
+          displayNameLower: resolvedDisplayName.toLowerCase(),
           email: currentUser.email || '',
           avatarUrl: currentUser.photoURL || '',
           createdAt: new Date(),
@@ -2902,11 +2775,7 @@ export function useAppState() {
       console.log('User data fetched. Verses:', vSnap?.size, 'Queue:', qSnap?.size);
 
       // A brand-new account starts with a genuinely empty verse list — no
-      // pre-seeded demo progress. (Previously this wrote INITIAL_VERSES,
-      // several already marked 'memorized'/'learning', into every new
-      // user's real data, making new accounts look like they'd already been
-      // used.) The signed-out/guest local state still uses INITIAL_VERSES as
-      // a try-before-you-sign-up preview — that's unaffected by this.
+      // pre-seeded demo progress.
       if (vSnap && vSnap.empty) {
         setVerses([]);
       } else if (vSnap) {
@@ -3058,9 +2927,11 @@ export function useAppState() {
         queueHydratedRef.current = true;
         await loadMyCircles();
       } else {
-        // Reset state to initial local data
-        setVerses(INITIAL_VERSES);
-        updateMemoryQueue(() => generateInitialQueue(INITIAL_VERSES));
+        // Signed out: clear everything back to a blank slate. The app is
+        // gated behind sign-in (see AuthGateScreen in App.tsx), so this only
+        // runs transiently between sign-out and the auth gate re-appearing.
+        setVerses([]);
+        updateMemoryQueue(() => []);
         queueHydratedRef.current = true;
         setPreset('custom');
         setLearningDays(['M', 'W', 'F']);
@@ -3077,9 +2948,7 @@ export function useAppState() {
         setActiveDMOtherCircleIds([]);
         setActiveCircleChatId(null);
         setActiveCircleMessages([]);
-        // Signed-out/guest preview only — matches the same "try before you
-        // sign up" pattern as INITIAL_VERSES.
-        setUserRecordings(INITIAL_RECORDINGS);
+        setUserRecordings([]);
       }
     });
     return unsubscribe;

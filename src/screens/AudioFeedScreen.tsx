@@ -22,8 +22,6 @@ const getAvatarStyle = (user: string = '') => {
       return { bg: '#eef2ff', text: '#4338ca', border: '#c7d2fe' }; // indigo
     case 'Grace Thompson':
       return { bg: '#fff1f2', text: '#be123c', border: '#fecdd3' }; // rose
-    case 'Kenneth Carter':
-      return { bg: '#ecfdf5', text: '#047857', border: '#a7f3d0' }; // emerald
     default:
       return { bg: '#f5f5f5', text: '#1A1A1A', border: '#E5E5E5' };
   }
@@ -251,7 +249,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                       <View>
                         <View className="flex-row items-center gap-1.5">
                           <Text className="text-xs font-bold text-[#1A1A1A]">{rec.user || 'Anonymous'}</Text>
-                          {rec.user === 'Kenneth Carter' ? (
+                          {isOwnRecording ? (
                             <View className="bg-emerald-100 px-1.5 py-0.5 rounded">
                               <Text className="text-[8px] font-sans font-bold uppercase tracking-wide text-emerald-700">Me</Text>
                             </View>

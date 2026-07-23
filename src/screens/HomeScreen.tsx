@@ -76,10 +76,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showPullShieldConfirm, setShowPullShieldConfirm] = useState(false);
 
-  // Guest/signed-out preview falls back to the same "Kenneth Carter" demo
-  // persona used elsewhere (ProfileScreen, INITIAL_VERSES) — but a real
-  // signed-in user's actual name should always take priority.
-  const firstName = (user?.displayName || 'Kenneth Carter').split(' ')[0];
+  const firstName = (user?.displayName || 'Friend').split(' ')[0];
 
   // Excludes verses that already banked every mastery touch -- they're done
   // learning and just waiting on their reviews to clear before promotion out

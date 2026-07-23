@@ -32,6 +32,7 @@ import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
+import AuthGateScreen from './src/screens/AuthGateScreen';
 import CommunityGroupDetailScreen from './src/screens/CommunityGroupDetailScreen';
 import StudyPlanDetailScreen from './src/screens/StudyPlanDetailScreen';
 import CommunityHomeScreen from './src/screens/CommunityHomeScreen';
@@ -379,6 +380,26 @@ function AppShell() {
   // composer needs to rise above the keyboard.
   const chatScreenActive = state.currentScreen === 'dmThread' || state.currentScreen === 'circleChat';
 
+  // While Firebase resolves whether a session already exists, render nothing
+  // rather than flashing the sign-in gate first. Once resolved, no user means
+  // no demo/guest content -- show the auth gate instead of the tabbed app;
+  // a brand-new account's showOnboarding overlay (below) then takes over
+  // automatically once loadUserData creates their profile.
+  if (state.loadingAuth) {
+    return <View style={{ flex: 1 }} className="bg-white" />;
+  }
+  if (!state.user) {
+    return (
+      <View style={{ flex: 1 }} className="bg-white">
+        <StatusBar style="dark" />
+        <SafeAreaView style={{ flex: 1 }}>
+          <AuthGateScreen state={state} />
+        </SafeAreaView>
+        <ToastLayer state={state} />
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1 }} className="bg-white">
       <StatusBar style="dark" />
@@ -479,21 +500,25 @@ function AppShell() {
         </View>
       )}
 
-      {/* Toast Notification Layer -- rendered last (highest paint order) so it
-          always shows above any full-screen modal/overlay above (practice
-          session, save-recording dialog, progress modal, onboarding), which
-          all share zIndex 50 and previously painted over toasts fired while
-          they were open. */}
-      {state.toastMessage && (
-        <View pointerEvents="none" style={{ position: 'absolute', top: 56, left: 0, right: 0, alignItems: 'center', zIndex: 100 }}>
-          <FadeInView>
-            <View className="flex-row items-center gap-2 bg-neutral-900 border border-neutral-800 py-2.5 px-4 rounded-full">
-              <Check size={12} color="#34d399" />
-              <Text className="text-white text-xs font-bold font-sans">{state.toastMessage}</Text>
-            </View>
-          </FadeInView>
+      <ToastLayer state={state} />
+    </View>
+  );
+}
+
+// Rendered last (highest paint order) so it always shows above any
+// full-screen modal/overlay (practice session, save-recording dialog,
+// progress modal, onboarding, the auth gate), which all share zIndex 50 and
+// previously painted over toasts fired while they were open.
+function ToastLayer({ state }: { state: AppState }) {
+  if (!state.toastMessage) return null;
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', top: 56, left: 0, right: 0, alignItems: 'center', zIndex: 100 }}>
+      <FadeInView>
+        <View className="flex-row items-center gap-2 bg-neutral-900 border border-neutral-800 py-2.5 px-4 rounded-full">
+          <Check size={12} color="#34d399" />
+          <Text className="text-white text-xs font-bold font-sans">{state.toastMessage}</Text>
         </View>
-      )}
+      </FadeInView>
     </View>
   );
 }

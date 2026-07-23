@@ -1,10 +1,7 @@
-import { useState } from 'react';
 import { Bell, MessageCircle, Pause, Play, Settings as SettingsIcon, X } from 'lucide-react-native';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
-import { useGoogleSignIn } from '../state/useGoogleSignIn';
-import { useEmailAuth } from '../state/useEmailAuth';
 import { AppState } from '../state/useAppState';
 
 export default function ProfileScreen({ state }: { state: AppState }) {
@@ -34,45 +31,12 @@ export default function ProfileScreen({ state }: { state: AppState }) {
     dismissAccountabilityNudge,
   } = state;
 
-  const { signInWithGoogle } = useGoogleSignIn();
-  const { signUp, signIn } = useEmailAuth();
-
-  const [showEmailAuth, setShowEmailAuth] = useState(false);
-  const [authMode, setAuthMode] = useState<'signIn' | 'signUp'>('signIn');
-  const [emailInput, setEmailInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
-
-  const [displayNameInput, setDisplayNameInput] = useState('');
-
   // "Memorized" here means verses learned -- graduated out of the initial
   // Learning phase into spaced review (Daily/Weekly/Monthly) or fully
   // retained, not just the narrower retained-only memorizedCount.
   const versesLearnedCount = memoryQueue.filter(
     (item) => item.status === 'reviewing' || item.status === 'retained'
   ).length;
-
-  const handleSignIn = async () => {
-    const result = await signInWithGoogle();
-    if (result.ok) {
-      triggerToast('Cloud sync active! ☁️');
-    } else {
-      triggerToast(result.message);
-    }
-  };
-
-  const handleEmailAuthSubmit = async () => {
-    const result =
-      authMode === 'signUp' ? await signUp(emailInput, passwordInput, displayNameInput) : await signIn(emailInput, passwordInput);
-    if (result.ok) {
-      triggerToast('Cloud sync active! ☁️');
-      setShowEmailAuth(false);
-      setEmailInput('');
-      setPasswordInput('');
-      setDisplayNameInput('');
-    } else {
-      triggerToast(result.message);
-    }
-  };
 
   const handleSignOut = async () => {
     try {
@@ -89,132 +53,36 @@ export default function ProfileScreen({ state }: { state: AppState }) {
         {/* Header row */}
         <View className="flex-row items-center justify-between pb-3 border-b border-[#E5E5E5]">
           <View className="flex-row items-center gap-3">
-            <AvatarCircle photoUri={user?.photoURL} name={user?.displayName || 'K'} size={48} />
+            <AvatarCircle photoUri={user?.photoURL} name={user?.displayName || 'Friend'} size={48} />
             <View>
               <Text className="text-lg font-serif font-bold text-[#1A1A1A] leading-tight">
-                {user ? user.displayName : 'Kenneth Carter'}
+                {user?.displayName || 'Friend'}
               </Text>
-              <Text className="text-xs font-sans text-neutral-400 mt-0.5">
-                {user ? 'Memory Level: Cloud Sync Active' : 'Memory Level: Dedicated Devotee'}
-              </Text>
+              <Text className="text-xs font-sans text-neutral-400 mt-0.5">Memory Level: Cloud Sync Active</Text>
             </View>
           </View>
 
-          {user ? (
-            <View className="flex-row items-center gap-2">
-              <Pressable
-                onPress={() => navigateTo('messages')}
-                className="w-8 h-8 items-center justify-center border border-neutral-200 rounded-lg bg-white"
-              >
-                <MessageCircle size={14} color="#404040" />
-              </Pressable>
-              <Pressable
-                onPress={() => navigateTo('settings')}
-                className="w-8 h-8 items-center justify-center border border-neutral-200 rounded-lg bg-white"
-              >
-                <SettingsIcon size={14} color="#404040" />
-              </Pressable>
-              <Pressable
-                onPress={handleSignOut}
-                className="px-2.5 py-1.5 border border-red-200 bg-red-50/50 rounded-lg"
-              >
-                <Text className="text-red-600 font-sans font-bold text-[9px] uppercase tracking-wide">Sign Out</Text>
-              </Pressable>
-            </View>
-          ) : (
+          <View className="flex-row items-center gap-2">
             <Pressable
-              onPress={handleSignIn}
-              className="px-2.5 py-1.5 border-2 border-[#1A1A1A] rounded-lg"
+              onPress={() => navigateTo('messages')}
+              className="w-8 h-8 items-center justify-center border border-neutral-200 rounded-lg bg-white"
             >
-              <Text className="text-[#1A1A1A] font-sans font-bold text-[9px] uppercase tracking-wider">Connect Cloud</Text>
+              <MessageCircle size={14} color="#404040" />
             </Pressable>
-          )}
-        </View>
-
-        {/* Cloud Sync Call to Action Banner if not logged in */}
-        {!user && (
-          <View className="border border-dashed border-[#1A1A1A] bg-[#FBF9F6] rounded-xl p-3" style={{ gap: 10 }}>
-            <View className="flex-row items-center justify-between gap-3">
-              <View className="gap-0.5 flex-1">
-                <Text className="text-[10px] font-sans font-black text-[#1A1A1A] uppercase tracking-wider">Backup to Cloud</Text>
-                <Text className="text-[9px] text-neutral-500 leading-normal font-sans">
-                  Connect your Google Account to back up scripture, pacing settings, and user stats.
-                </Text>
-              </View>
-              <Pressable
-                onPress={handleSignIn}
-                className="shrink-0 px-3 py-1.5 bg-[#1A1A1A] rounded-lg"
-              >
-                <Text className="text-white font-sans font-bold text-[9px] uppercase tracking-wider">Sign In</Text>
-              </Pressable>
-            </View>
-
-            <Pressable onPress={() => setShowEmailAuth(!showEmailAuth)}>
-              <Text className="text-[9px] font-sans font-bold underline text-neutral-500 text-center">
-                {showEmailAuth ? 'Hide email sign-in' : 'Or use email instead'}
-              </Text>
+            <Pressable
+              onPress={() => navigateTo('settings')}
+              className="w-8 h-8 items-center justify-center border border-neutral-200 rounded-lg bg-white"
+            >
+              <SettingsIcon size={14} color="#404040" />
             </Pressable>
-
-            {showEmailAuth && (
-              <FadeInView>
-                <View className="border-t border-neutral-200 pt-2.5" style={{ gap: 8 }}>
-                  <View className="flex-row gap-2">
-                    <Pressable
-                      onPress={() => setAuthMode('signIn')}
-                      className={`flex-1 py-1.5 rounded-lg border items-center ${
-                        authMode === 'signIn' ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                      }`}
-                    >
-                      <Text className={`text-[9px] font-sans font-bold uppercase ${authMode === 'signIn' ? 'text-white' : 'text-neutral-500'}`}>
-                        Sign In
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setAuthMode('signUp')}
-                      className={`flex-1 py-1.5 rounded-lg border items-center ${
-                        authMode === 'signUp' ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                      }`}
-                    >
-                      <Text className={`text-[9px] font-sans font-bold uppercase ${authMode === 'signUp' ? 'text-white' : 'text-neutral-500'}`}>
-                        Sign Up
-                      </Text>
-                    </Pressable>
-                  </View>
-
-                  {authMode === 'signUp' && (
-                    <TextInput
-                      value={displayNameInput}
-                      onChangeText={setDisplayNameInput}
-                      placeholder="Display name"
-                      className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-xs"
-                    />
-                  )}
-                  <TextInput
-                    value={emailInput}
-                    onChangeText={setEmailInput}
-                    placeholder="Email"
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-xs"
-                  />
-                  <TextInput
-                    value={passwordInput}
-                    onChangeText={setPasswordInput}
-                    placeholder="Password"
-                    secureTextEntry
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-xs"
-                  />
-
-                  <Pressable onPress={handleEmailAuthSubmit} className="w-full py-2 bg-[#1A1A1A] rounded-xl items-center">
-                    <Text className="text-white font-sans font-bold text-[10px] uppercase tracking-wider">
-                      {authMode === 'signUp' ? 'Create Account' : 'Sign In'}
-                    </Text>
-                  </Pressable>
-                </View>
-              </FadeInView>
-            )}
+            <Pressable
+              onPress={handleSignOut}
+              className="px-2.5 py-1.5 border border-red-200 bg-red-50/50 rounded-lg"
+            >
+              <Text className="text-red-600 font-sans font-bold text-[9px] uppercase tracking-wide">Sign Out</Text>
+            </Pressable>
           </View>
-        )}
+        </View>
 
         {/* Calculated Metrics cards (High Contrast) */}
         <View className="flex-row gap-2.5">
