@@ -1,5 +1,5 @@
 import { VerseState, Recording, MemoryPlan } from './types';
-import { BibleBook } from './types';
+import { BibleBook, BibleTranslation } from './types';
 
 // Shared by the Save-Recording dialog (App.tsx) and SettingsScreen's default-
 // visibility picker, so both always offer the exact same 3 choices.
@@ -97,6 +97,19 @@ export const DEFAULT_TRANSLATION_ID = 'ESV';
 // (see scripts/import-bible/adapters/esv.js and https://api.esv.org/docs/).
 export const ESV_COPYRIGHT_NOTICE =
   'Scripture quotations are from the ESV® Bible (The Holy Bible, English Standard Version®), copyright © 2001 by Crossway, a publishing ministry of Good News Publishers. Used by permission. All rights reserved.';
+
+// Single source of truth for which translations actually have real text
+// imported (see scripts/import-bible/) -- both RecordScreen and
+// RecordingDetailScreen used to keep their own separate hardcoded lists,
+// which had already drifted (one included a stray 'NASB' code the other
+// didn't, and both listed NIV/NKJV/NLT despite zero data ever being
+// imported for them). KJV and WEB are public domain in the US -- no
+// permission needed, unlike ESV.
+export const BIBLE_TRANSLATIONS: BibleTranslation[] = [
+  { id: 'ESV', name: 'English Standard Version', copyright: ESV_COPYRIGHT_NOTICE, isPublicDomain: false },
+  { id: 'KJV', name: 'King James Version', isPublicDomain: true },
+  { id: 'WEB', name: 'World English Bible', isPublicDomain: true },
+];
 
 // Flat list in canonical (Genesis → Revelation) order, handy for pickers/lookups.
 export const ALL_BIBLE_BOOKS: BibleBook[] = [...OT_BOOKS, ...NT_BOOKS];

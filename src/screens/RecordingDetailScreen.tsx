@@ -5,13 +5,15 @@ import { ArrowLeft, Pause, Play } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { VerseTimestamp } from '../types';
 import { FadeInView, HelpTooltip, PulseView } from '../components/ui';
+import { BIBLE_TRANSLATIONS } from '../data';
 
-const TRANSLATION_FULL_NAMES: Record<string, string> = {
-  ESV: 'English Standard Version',
-  NIV: 'New International Version',
-  NKJV: 'New King James Version',
-  NLT: 'New Living Translation',
-};
+// Derived from the single source of truth (data.ts) instead of its own
+// separately-hardcoded lookup -- previously listed NIV/NKJV/NLT despite zero
+// real text ever being imported for them, and had already drifted from
+// RecordScreen's own copy of the same list (see scripts/import-bible/).
+const TRANSLATION_FULL_NAMES: Record<string, string> = Object.fromEntries(
+  BIBLE_TRANSLATIONS.map((t) => [t.id, t.name])
+);
 
 const WAVEFORM_HEIGHTS = [
   8, 16, 24, 12, 20, 28, 32, 16, 24, 20, 12, 24, 32, 28, 20, 16, 12, 20, 28, 24, 32, 20, 16, 24, 28,

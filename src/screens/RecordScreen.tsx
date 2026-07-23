@@ -6,14 +6,12 @@ import { AppState } from '../state/useAppState';
 import { FadeInView, PulseView, WaveBars } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
-import { getBookByName } from '../data';
+import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
 
-const TRANSLATION_OPTIONS = [
-  { id: 'ESV', label: 'ESV' },
-  { id: 'NIV', label: 'NIV' },
-  { id: 'NKJV', label: 'NKJV' },
-  { id: 'NLT', label: 'NLT' },
-];
+// Derived from the single source of truth (data.ts) instead of its own
+// hardcoded list -- previously listed NIV/NKJV/NLT despite zero real text
+// ever being imported for them (see scripts/import-bible/).
+const TRANSLATION_OPTIONS = BIBLE_TRANSLATIONS.map((t) => ({ id: t.id, label: t.id }));
 
 export default function RecordScreen({ state }: { state: AppState }) {
   const {
@@ -213,7 +211,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
 
               {recordingChapterVerses.length === 0 ? (
                 <Text className="text-xs text-neutral-400 italic">
-                  No scripture loaded for {recordingTranslation} — try ESV, the only translation currently imported.
+                  No scripture loaded for {recordingTranslation} — try ESV, KJV, or WEB, the currently imported translations.
                 </Text>
               ) : (
                 recordingChapterVerses.map((v) => {
@@ -387,8 +385,8 @@ export default function RecordScreen({ state }: { state: AppState }) {
 
                   {recordingChapterVerses.length === 0 ? (
                     <Text className="text-xs text-neutral-400 italic">
-                      No scripture loaded for {recordingTranslation} — try ESV, the only translation currently
-                      imported.
+                      No scripture loaded for {recordingTranslation} — try ESV, KJV, or WEB, the currently
+                      imported translations.
                     </Text>
                   ) : (
                     recordingChapterVerses.map((v) => {

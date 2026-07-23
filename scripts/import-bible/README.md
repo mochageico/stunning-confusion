@@ -39,23 +39,36 @@ $env:GOOGLE_APPLICATION_CREDENTIALS = "C:\path\to\serviceAccountKey.json"  # Pow
    quick to inspect). The verse-splitting logic in `adapters/esv.js` hasn't been verified
    against a live response — check the output looks right before running the full import.
 
-### `localFile` — public-domain translations (WEB, KJV, ASV, etc.)
+### `localFile` — public-domain translations (KJV, WEB)
 `bible-api.com`'s own terms say not to bulk-download an entire Bible through its live API,
-so this adapter reads from a local dataset file instead. Download a complete public-domain
-translation as JSON from an open-source repository (e.g. the source data behind
-bible-api.com itself: https://github.com/seven1m/bible_api, or
-https://github.com/scrollmapper/bible_databases), then:
+so this adapter reads from a local dataset file instead — two real formats supported,
+auto-detected by file extension, **both verified against real downloaded data** (Genesis 1 =
+31 verses, Psalms 119 = 176 verses, spot-checked verse text) before being relied on:
 
+**KJV** — scrollmapper's JSON (`.json`, book names use "I/II/III <Book>" and "Revelation of
+John", normalized automatically):
 ```bash
-export LOCAL_BIBLE_JSON_PATH=/path/to/downloaded-web-bible.json
+curl -sL -o kjv.json https://raw.githubusercontent.com/scrollmapper/bible_databases/master/formats/json/KJV.json
+export LOCAL_BIBLE_JSON_PATH=/path/to/kjv.json
+export LOCAL_BIBLE_TRANSLATION_ID=KJV
+export LOCAL_BIBLE_TRANSLATION_NAME="King James Version"
+node run.js --adapter localFile
+```
+(scrollmapper does NOT have the actual World English Bible — its "Webster"/"RWebster" entries
+are Noah Webster's 1833 revision, a different public-domain translation. Don't confuse them.)
+
+**WEB** — USFX XML (`.xml`) from the WEB's own publisher's distribution network:
+```bash
+curl -sL -o web.xml https://raw.githubusercontent.com/seven1m/open-bibles/master/eng-web.usfx.xml
+export LOCAL_BIBLE_JSON_PATH=/path/to/web.xml
 export LOCAL_BIBLE_TRANSLATION_ID=WEB
 export LOCAL_BIBLE_TRANSLATION_NAME="World English Bible"
 node run.js --adapter localFile
 ```
 
-You'll likely need to adjust `extractVerses`-equivalent logic in `adapters/localFile.js` to
-match whatever row/field shape your chosen dataset actually uses — formats vary between
-sources.
+If a future dataset doesn't match either format, `LOCAL_BIBLE_FORMAT` (`usfx-xml` or
+`scrollmapper-json`) forces detection, and `adapters/localFile.js`'s `parseUsfxXml`/
+`parseScrollmapperJson` functions are the place to add a third format.
 
 ## Running
 
