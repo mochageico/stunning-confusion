@@ -123,33 +123,51 @@ export type TabName = 'home' | 'community' | 'record' | 'profile';
 export const buildVerseId = (translationId: string, bookId: string, chapter: number, verse: number): string =>
   `${translationId}_${bookId}_${chapter}_${verse}`;
 
-// Demotion softening: base length of a temporary "refresher" stint. A miss
-// out of Weekly drops to Daily for this many days; a miss out of Monthly
-// drops to Weekly for this many weeks. Each additional consecutive
-// non-grace miss adds one more base unit (7, then 14, then 21 days, etc.),
-// matching how Daily's own graduation target grows by a day per miss.
+// Demotion softening: default length of a temporary "refresher" stint,
+// matching the "Standard" miss-policy preset (see MemoryPlan.missPolicy in
+// types.ts). A miss out of Weekly drops to Daily for this many days; a miss
+// out of Monthly drops to Weekly for this many weeks. Each additional
+// consecutive non-grace miss adds one more base unit (7, then 14, then 21
+// days, etc.), matching how Daily's own graduation target grows by a day
+// per miss. Plans carry their own graceCount/refresherDailyDays/
+// refresherWeeklyWeeks now (see MissPolicyConfig) -- these remain only as
+// the DEFAULT_PLANS/back-compat fallback values.
 const REFRESHER_BASE_DAILY_DAYS = 7;
 const REFRESHER_BASE_WEEKLY_WEEKS = 4;
+
+type MissTag = 'grace' | 'daily-extended' | 'refresher-start' | 'refresher-extended' | 'frozen' | 'streak-reset' | 'none';
+
+interface MissPolicyConfig {
+  graceCount: number;
+  refresherDailyDays: number;
+  refresherWeeklyWeeks: number;
+}
 
 // Applies exactly one "miss" to a draft QueueItem (mutated in place) and
 // returns a tag describing what happened, so callers can build a toast.
 // Called once per real failed review, and once per calendar cycle silently
 // skipped while the app wasn't opened (see the catch-up loop in
 // handleReviewCompleted) -- both are the same kind of "miss" to this engine.
-const applyMissToItem = (draft: QueueItem): 'grace' | 'daily-extended' | 'refresher-start' | 'refresher-extended' | 'none' => {
-  if (!draft.gracePeriodUsedToday) {
+// `policy` comes from the active plan's missPolicy settings (Plan Designer
+// Advanced tab); a plan on the 'graceDiscretion' preset never reaches this
+// function at all for catch-up misses -- see resolveMissedCycles below,
+// which freezes the whole gap before looping ever starts.
+const applyMissToItem = (draft: QueueItem, policy: MissPolicyConfig): MissTag => {
+  const graceUsed = draft.graceMissesUsed || 0;
+  if (graceUsed < policy.graceCount) {
+    draft.graceMissesUsed = graceUsed + 1;
     draft.gracePeriodUsedToday = true;
     return 'grace';
   }
 
   const priorStreak = draft.currentStreakCount;
   draft.currentStreakCount = 0;
-  // gracePeriodUsedToday stays true here -- grace only refills on an actual
+  // graceMissesUsed stays at its cap here -- grace only refills on an actual
   // success (handled in handleReviewCompleted's success branch). Otherwise
-  // consecutive misses would each get a fresh grace instead of escalating.
+  // consecutive misses would each get fresh grace instead of escalating.
 
   if (draft.refresherActive) {
-    const extension = draft.refresherReturnPhase === 'monthly' ? REFRESHER_BASE_WEEKLY_WEEKS : REFRESHER_BASE_DAILY_DAYS;
+    const extension = draft.refresherReturnPhase === 'monthly' ? policy.refresherWeeklyWeeks : policy.refresherDailyDays;
     draft.refresherTargetUnits = (draft.refresherTargetUnits || 0) + extension;
     return 'refresher-extended';
   }
@@ -163,7 +181,7 @@ const applyMissToItem = (draft: QueueItem): 'grace' | 'daily-extended' | 'refres
     draft.refresherActive = true;
     draft.refresherReturnPhase = 'weekly';
     draft.refresherReturnProgress = priorStreak;
-    draft.refresherTargetUnits = REFRESHER_BASE_DAILY_DAYS;
+    draft.refresherTargetUnits = policy.refresherDailyDays;
     draft.retentionPhase = 'daily';
     return 'refresher-start';
   }
@@ -172,7 +190,7 @@ const applyMissToItem = (draft: QueueItem): 'grace' | 'daily-extended' | 'refres
     draft.refresherActive = true;
     draft.refresherReturnPhase = 'monthly';
     draft.refresherReturnProgress = priorStreak;
-    draft.refresherTargetUnits = REFRESHER_BASE_WEEKLY_WEEKS;
+    draft.refresherTargetUnits = policy.refresherWeeklyWeeks;
     draft.retentionPhase = 'weekly';
     return 'refresher-start';
   }
@@ -183,11 +201,7 @@ const applyMissToItem = (draft: QueueItem): 'grace' | 'daily-extended' | 'refres
 // Builds the toast copy for a single miss tag (see applyMissToItem). Shared
 // between the "silently missed cycles while away" catch-up and today's own
 // failed attempt, so both describe the same outcomes the same way.
-const describeMissOutcome = (
-  tag: 'grace' | 'daily-extended' | 'refresher-start' | 'refresher-extended' | 'none',
-  draft: QueueItem,
-  dailyGraduationDaysTotal: number
-): string | null => {
+const describeMissOutcome = (tag: MissTag, draft: QueueItem, dailyGraduationDaysTotal: number): string | null => {
   const returnLabel = draft.refresherReturnPhase === 'monthly' ? 'Monthly' : 'Weekly';
   const unitLabel = draft.refresherReturnPhase === 'monthly' ? 'weeks' : 'days';
   switch (tag) {
@@ -201,9 +215,52 @@ const describeMissOutcome = (
       } refresher, then back to ${returnLabel} review right where you left off. 🔄`;
     case 'refresher-extended':
       return `Missed again during the refresher -- it's now ${draft.refresherTargetUnits} ${unitLabel} before you return to ${returnLabel} review. 🔄`;
+    case 'frozen':
+      return "No penalty -- streak and progress are untouched, right where you left off. 🕊️";
+    case 'streak-reset':
+      return 'Streak reset, but no refresher detour -- staying right where you are. 🔄';
     default:
       return null;
   }
+};
+
+// Resolves a full catch-up event (missedCycles worth of silently-skipped
+// cycles) for one item in a single call, so both the reactive per-item
+// catch-up in handleReviewCompleted and the proactive missed-review popup
+// (shown on app open) can share the exact same outcomes instead of two
+// hand-written copies drifting apart.
+//
+// `forcedOutcome` is the user's explicit popup choice for this item, if any:
+//   - 'grace'    -- freeze the whole gap, as if it never happened.
+//   - 'escalate' -- run the normal per-cycle miss loop (today's default).
+//   - 'reset'    -- lose streak progress only, no phase/refresher change.
+// With no forcedOutcome (the reactive fallback path, or auto-apply when
+// missPolicyAskEveryTime is off), a plan on the 'graceDiscretion' preset
+// always resolves to 'grace'; every other preset resolves to 'escalate'.
+const resolveMissedCycles = (
+  item: QueueItem,
+  missedCycles: number,
+  missPolicy: MemoryPlan['missPolicy'],
+  policy: MissPolicyConfig,
+  forcedOutcome?: 'grace' | 'escalate' | 'reset'
+): { updatedItem: QueueItem; tag: MissTag } => {
+  const outcome = forcedOutcome || (missPolicy === 'graceDiscretion' ? 'grace' : 'escalate');
+  const updatedItem = { ...item };
+
+  if (outcome === 'grace') {
+    return { updatedItem, tag: 'frozen' };
+  }
+
+  if (outcome === 'reset') {
+    updatedItem.currentStreakCount = 0;
+    return { updatedItem, tag: 'streak-reset' };
+  }
+
+  let lastTag: MissTag = 'none';
+  for (let i = 0; i < missedCycles; i++) {
+    lastTag = applyMissToItem(updatedItem, policy);
+  }
+  return { updatedItem, tag: lastTag };
 };
 
 // Sabbath support: a plan can designate one weekday as a full day off from
@@ -313,6 +370,46 @@ const countSabbathDaysInRange = (from: Date, to: Date, sabbathDay: string): numb
     scanned++;
   }
   return count;
+};
+
+// Pause support: like Sabbath, but a date range instead of a single weekday
+// (see MemoryPlan.pausedAt/pausedUntil in types.ts). Counts the overlap
+// between [from, to] and the paused window [pausedAt, pausedUntil] -- an
+// open-ended pause (pausedUntil === null) treats every day from pausedAt
+// through `to` as paused, so an indefinite pause excludes all elapsed time
+// for as long as it's active.
+const countPausedDaysInRange = (from: Date, to: Date, pausedAt: string | null, pausedUntil: string | null): number => {
+  if (!pausedAt) return 0;
+  const pauseStart = new Date(pausedAt);
+  const pauseEnd = pausedUntil ? new Date(pausedUntil) : to;
+  const rangeStart = pauseStart > from ? pauseStart : from;
+  const rangeEnd = pauseEnd < to ? pauseEnd : to;
+  if (rangeStart >= rangeEnd) return 0;
+  return Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / (24 * 3600 * 1000));
+};
+
+// How many full review cycles have been silently missed for this item, net
+// of Sabbath and Pause days (neither counts as elapsed time). Shared by the
+// reactive per-item catch-up in handleReviewCompleted and the proactive
+// missed-review popup scan in loadUserData, so both agree on what counts as
+// "missed" -- see resolveMissedCycles for what happens once this is > 0.
+const computeMissedCycles = (
+  item: QueueItem,
+  dayStartHour: number,
+  sabbathEnabled: boolean,
+  sabbathDay: string,
+  pausedAt: string | null,
+  pausedUntil: string | null
+): number => {
+  if (item.status !== 'reviewing' || !item.nextReviewDueDate) return 0;
+  const cycleLengthDays = item.retentionPhase === 'weekly' ? 7 : item.retentionPhase === 'monthly' ? 30 : 1;
+  const dueDate = new Date(item.nextReviewDueDate);
+  const now = getLogicalDate(dayStartHour);
+  const rawElapsedDays = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 3600 * 1000));
+  const sabbathDaysElapsed = sabbathEnabled ? countSabbathDaysInRange(dueDate, now, sabbathDay) : 0;
+  const pausedDaysElapsed = countPausedDaysInRange(dueDate, now, pausedAt, pausedUntil);
+  const adjustedElapsedDays = Math.max(0, rawElapsedDays - sabbathDaysElapsed - pausedDaysElapsed);
+  return Math.max(0, Math.floor(adjustedElapsedDays / cycleLengthDays));
 };
 
 // Back-compat: normalizes a raw Firestore 'groupPlans' doc into the current
@@ -639,6 +736,22 @@ export function useAppState() {
   const [sabbathDay, setSabbathDay] = useState<string>('Su');
   // See MemoryPlan.dayStartHour in types.ts -- 0/1/2, defaults to real midnight.
   const [dayStartHour, setDayStartHour] = useState<number>(0);
+  // Missed-review handling -- see MemoryPlan.missPolicy in types.ts.
+  const [missPolicy, setMissPolicy] = useState<'lenient' | 'standard' | 'graceDiscretion' | 'custom'>('standard');
+  const [missPolicyAskEveryTime, setMissPolicyAskEveryTime] = useState<boolean>(false);
+  const [graceCount, setGraceCount] = useState<number>(1);
+  const [refresherDailyDays, setRefresherDailyDays] = useState<number>(7);
+  const [refresherWeeklyWeeks, setRefresherWeeklyWeeks] = useState<number>(4);
+  // Pause -- see MemoryPlan.pausedAt/pausedUntil in types.ts.
+  const [pausedAt, setPausedAt] = useState<string | null>(null);
+  const [pausedUntil, setPausedUntil] = useState<string | null>(null);
+  // Missed-review popup: items found overdue on this app-open, awaiting the
+  // user's choice (see resolveMissedReviewChoice). Populated once, in
+  // loadUserData, when the active plan's missPolicyAskEveryTime is on --
+  // never re-scanned mid-session, so it can't re-open itself as normal
+  // review activity changes items' due dates.
+  const [missedReviewQueue, setMissedReviewQueue] = useState<{ item: QueueItem; missedCycles: number }[]>([]);
+  const [showMissedReviewPrompt, setShowMissedReviewPrompt] = useState(false);
   // Every StudyPlan this member has joined (possibly more than one, each with
   // its own priority setting -- see src/lib/studyPlanScheduler.ts) plus the
   // resolved StudyPlan docs themselves (versesPerWeek, verseIds, etc.), kept
@@ -830,6 +943,13 @@ export function useAppState() {
     setSabbathDay(plan.sabbathDay || 'Su');
     setDayStartHour(plan.dayStartHour ?? 0);
     setCognitiveLoadSensitivity(plan.cognitiveLoadSensitivity || 'medium');
+    setMissPolicy(plan.missPolicy || 'standard');
+    setMissPolicyAskEveryTime(plan.missPolicyAskEveryTime ?? false);
+    setGraceCount(plan.graceCount ?? 1);
+    setRefresherDailyDays(plan.refresherDailyDays ?? 7);
+    setRefresherWeeklyWeeks(plan.refresherWeeklyWeeks ?? 4);
+    setPausedAt(plan.pausedAt ?? null);
+    setPausedUntil(plan.pausedUntil ?? null);
     setCustomPlanName(plan.name);
   };
 
@@ -848,6 +968,13 @@ export function useAppState() {
     sabbathDay: plan.sabbathDay,
     dayStartHour: plan.dayStartHour,
     cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity,
+    missPolicy: plan.missPolicy,
+    missPolicyAskEveryTime: plan.missPolicyAskEveryTime,
+    graceCount: plan.graceCount,
+    refresherDailyDays: plan.refresherDailyDays,
+    refresherWeeklyWeeks: plan.refresherWeeklyWeeks,
+    pausedAt: plan.pausedAt,
+    pausedUntil: plan.pausedUntil,
     name: plan.name,
   });
 
@@ -1108,8 +1235,28 @@ export function useAppState() {
     }
     setLoadingFriends(true);
     try {
-      const snap = await getDocs(collection(db, 'profiles', auth.currentUser.uid, 'friends'));
-      setFriends(snap.docs.map((d) => d.data() as Friend));
+      const uid = auth.currentUser.uid;
+      const snap = await getDocs(collection(db, 'profiles', uid, 'friends'));
+      const rawFriends = snap.docs.map((d) => d.data() as Friend);
+
+      // The other side of a friendship doesn't get cleaned up when an
+      // account is deleted (deleteAccount only removes the deleted user's
+      // own docs) -- same "orphaned reference, self-heals on next load"
+      // tolerance used for circle ownerId elsewhere. Verify each friend's
+      // profile still exists here and prune any that don't.
+      const stillExists = await Promise.all(
+        rawFriends.map((f) => getDoc(doc(db, 'profiles', f.uid)).then((s) => s.exists()))
+      );
+      const liveFriends = rawFriends.filter((_, i) => stillExists[i]);
+      const staleFriends = rawFriends.filter((_, i) => !stillExists[i]);
+
+      setFriends(liveFriends);
+
+      if (staleFriends.length > 0) {
+        const cleanupBatch = writeBatch(db);
+        staleFriends.forEach((f) => cleanupBatch.delete(doc(db, 'profiles', uid, 'friends', f.uid)));
+        cleanupBatch.commit().catch((err) => console.error('Failed to prune stale friend entries:', err));
+      }
     } catch (err) {
       console.error('Failed to load friends:', err);
     } finally {
@@ -1368,6 +1515,12 @@ export function useAppState() {
       const todayKey = localDayKey(getLogicalDate(dayStartHour));
       const counterRef = doc(db, 'profiles', friend.uid, 'accountabilityMeta', 'counter');
       const [counterSnap, friendProfileSnap] = await Promise.all([getDoc(counterRef), getDoc(doc(db, 'profiles', friend.uid))]);
+
+      if (friendProfileSnap.data()?.isPaused) {
+        triggerToast(`${friend.displayName} is on a break right now -- accountability nudges are paused until they're back.`);
+        return;
+      }
+
       const cap = (friendProfileSnap.data()?.accountabilityDailyCap as number) ?? ACCOUNTABILITY_DEFAULT_DAILY_CAP;
       const counterData = counterSnap.data() as { dateKey?: string; count?: number } | undefined;
       const isSameDay = counterData?.dateKey === todayKey;
@@ -2048,6 +2201,13 @@ export function useAppState() {
         sabbathDay: plan.sabbathDay || 'Su',
         dayStartHour: plan.dayStartHour ?? 0,
         cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity || 'medium',
+        missPolicy: plan.missPolicy || 'standard',
+        missPolicyAskEveryTime: plan.missPolicyAskEveryTime ?? false,
+        graceCount: plan.graceCount ?? 1,
+        refresherDailyDays: plan.refresherDailyDays ?? 7,
+        refresherWeeklyWeeks: plan.refresherWeeklyWeeks ?? 4,
+        pausedAt: plan.pausedAt ?? null,
+        pausedUntil: plan.pausedUntil ?? null,
         isActive: true,
         updatedAt: new Date().toISOString(),
       };
@@ -2345,6 +2505,13 @@ export function useAppState() {
             sabbathDay,
             dayStartHour,
             cognitiveLoadSensitivity,
+            missPolicy,
+            missPolicyAskEveryTime,
+            graceCount,
+            refresherDailyDays,
+            refresherWeeklyWeeks,
+            pausedAt,
+            pausedUntil,
             updatedAt: new Date().toISOString(),
           };
         }
@@ -2370,6 +2537,13 @@ export function useAppState() {
         sabbathDay,
         dayStartHour,
         cognitiveLoadSensitivity,
+        missPolicy,
+        missPolicyAskEveryTime,
+        graceCount,
+        refresherDailyDays,
+        refresherWeeklyWeeks,
+        pausedAt,
+        pausedUntil,
         isActive: true,
         updatedAt: new Date().toISOString(),
       };
@@ -2409,6 +2583,52 @@ export function useAppState() {
     }
 
     navigateTo('savedPlans');
+  };
+
+  // Persists pausedAt/pausedUntil to whichever plan is currently active, and
+  // mirrors a plain isPaused flag onto the public profile doc so a friend's
+  // accountability-nudge flow (sendAccountabilityNudge below) can check
+  // pause status without needing read access to this private plan doc.
+  // Immediate, not gated behind Plan Designer's Save button -- pausing is a
+  // "I'm leaving right now" action, same urgency as the rest of Settings.
+  const setPauseState = async (newPausedAt: string | null, newPausedUntil: string | null) => {
+    const targetId = editingPlanId || savedPlans.find((p) => p.isActive)?.id || savedPlans[0]?.id;
+    setPausedAt(newPausedAt);
+    setPausedUntil(newPausedUntil);
+    if (!targetId) return;
+
+    const updatedPlans = savedPlans.map((p) =>
+      p.id === targetId ? { ...p, pausedAt: newPausedAt, pausedUntil: newPausedUntil, updatedAt: new Date().toISOString() } : p
+    );
+    setSavedPlans(updatedPlans);
+
+    if (auth.currentUser) {
+      try {
+        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
+        await setDoc(
+          planRef,
+          { savedPlans: updatedPlans, pausedAt: newPausedAt, pausedUntil: newPausedUntil, updatedAt: new Date() },
+          { merge: true }
+        );
+        await setDoc(doc(db, 'profiles', auth.currentUser.uid), { isPaused: !!newPausedAt }, { merge: true });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
+      }
+    }
+  };
+
+  const pauseReviews = (untilISO: string | null) => {
+    setPauseState(new Date().toISOString(), untilISO);
+    triggerToast(
+      untilISO
+        ? `Paused until ${new Date(untilISO).toLocaleDateString()} -- nothing will be due while you're away. 🌴`
+        : "Paused -- nothing will be due until you resume. 🌴"
+    );
+  };
+
+  const resumeReviews = () => {
+    setPauseState(null, null);
+    triggerToast('Welcome back! Reviews have resumed. 🎯');
   };
 
   // Persists just the Memory Rhythm fields (learning days, pace, and review
@@ -2476,6 +2696,11 @@ export function useAppState() {
         sabbathDay,
         dayStartHour,
         cognitiveLoadSensitivity,
+        missPolicy,
+        missPolicyAskEveryTime,
+        graceCount,
+        refresherDailyDays,
+        refresherWeeklyWeeks,
         creatorName: user?.displayName || 'Anonymous Disciple',
         creatorId: user?.uid || 'anonymous',
         createdAt: new Date().toISOString(),
@@ -2508,6 +2733,13 @@ export function useAppState() {
                 sabbathDay,
                 dayStartHour,
                 cognitiveLoadSensitivity,
+                missPolicy,
+                missPolicyAskEveryTime,
+                graceCount,
+                refresherDailyDays,
+                refresherWeeklyWeeks,
+                pausedAt,
+                pausedUntil,
                 updatedAt: new Date().toISOString(),
               };
             }
@@ -2532,6 +2764,13 @@ export function useAppState() {
             sabbathDay,
             dayStartHour,
             cognitiveLoadSensitivity,
+            missPolicy,
+            missPolicyAskEveryTime,
+            graceCount,
+            refresherDailyDays,
+            refresherWeeklyWeeks,
+            pausedAt,
+            pausedUntil,
             isActive: true,
             updatedAt: new Date().toISOString(),
           };
@@ -2653,6 +2892,13 @@ export function useAppState() {
         setShowOnboarding(true);
       }
 
+      // Tracks whichever plan ends up active, whether from an existing doc
+      // or the freshly-created DEFAULT_PLANS[0] -- used after step 3 below
+      // to run the missed-review popup scan against the real settings that
+      // were just loaded, instead of racing React state that may not have
+      // flushed yet.
+      let resolvedActivePlan: MemoryPlan = DEFAULT_PLANS[0];
+
       // 2. Memory Plan
       console.log('Step 2: Fetching memory plan...');
       const planRef = doc(db, 'memoryPlans', currentUser.uid);
@@ -2687,6 +2933,13 @@ export function useAppState() {
             sabbathDay: planData.sabbathDay || 'Su',
             dayStartHour: planData.dayStartHour ?? 0,
             cognitiveLoadSensitivity: planData.cognitiveLoadSensitivity || 'medium',
+            missPolicy: planData.missPolicy || 'standard',
+            missPolicyAskEveryTime: planData.missPolicyAskEveryTime ?? false,
+            graceCount: planData.graceCount ?? 1,
+            refresherDailyDays: planData.refresherDailyDays ?? 7,
+            refresherWeeklyWeeks: planData.refresherWeeklyWeeks ?? 4,
+            pausedAt: planData.pausedAt ?? null,
+            pausedUntil: planData.pausedUntil ?? null,
             isActive: true,
             updatedAt: new Date().toISOString(),
           };
@@ -2694,9 +2947,9 @@ export function useAppState() {
         }
 
         // Back-compat: plans saved before retention-rigor/mastery-touches/
-        // sabbath/cognitiveLoadSensitivity existed won't have these fields
-        // in Firestore — default them to prior hardcoded behavior so
-        // existing plans don't change silently.
+        // sabbath/cognitiveLoadSensitivity/missPolicy/pause existed won't
+        // have these fields in Firestore — default them to prior hardcoded
+        // behavior so existing plans don't change silently.
         plansList = plansList.map((p) => ({
           ...p,
           retentionRigor: p.retentionRigor || 'standard',
@@ -2709,6 +2962,13 @@ export function useAppState() {
           sabbathDay: p.sabbathDay || 'Su',
           dayStartHour: p.dayStartHour ?? 0,
           cognitiveLoadSensitivity: p.cognitiveLoadSensitivity || 'medium',
+          missPolicy: p.missPolicy || 'standard',
+          missPolicyAskEveryTime: p.missPolicyAskEveryTime ?? false,
+          graceCount: p.graceCount ?? 1,
+          refresherDailyDays: p.refresherDailyDays ?? 7,
+          refresherWeeklyWeeks: p.refresherWeeklyWeeks ?? 4,
+          pausedAt: p.pausedAt ?? null,
+          pausedUntil: p.pausedUntil ?? null,
         }));
 
         setSavedPlans(plansList);
@@ -2740,6 +3000,7 @@ export function useAppState() {
         const active = plansList.find((p) => p.isActive) || plansList[0];
         if (active) {
           syncDesignerFromPlan(active);
+          resolvedActivePlan = active;
         }
       } else {
         console.log('Creating new memory plan...');
@@ -2830,6 +3091,7 @@ export function useAppState() {
             currentStreakCount: data.currentStreakCount || 0,
             totalSuccessfulReviews: data.totalSuccessfulReviews || 0,
             gracePeriodUsedToday: data.gracePeriodUsedToday || false,
+            graceMissesUsed: data.graceMissesUsed || 0,
             dailyPhaseExtensionDays: data.dailyPhaseExtensionDays || 0,
             refresherActive: data.refresherActive || false,
             // These were previously dropped on load, which silently reset
@@ -2854,6 +3116,31 @@ export function useAppState() {
         // Baseline for the auto-sync's deletion diffing: what's in Firestore
         // right now is by definition already synced.
         prevSyncedQueueIdsRef.current = new Set(loadedQueue.map((i) => i.verseId));
+
+        // Missed-review popup scan: uses resolvedActivePlan directly (not
+        // React state, which may not have flushed from syncDesignerFromPlan
+        // yet) so this can't race the plan settings it depends on. Only
+        // runs once, right here at load -- not on every later memoryQueue
+        // change from normal review activity.
+        if (resolvedActivePlan.missPolicyAskEveryTime) {
+          const overdue = loadedQueue
+            .map((qItem) => ({
+              item: qItem,
+              missedCycles: computeMissedCycles(
+                qItem,
+                resolvedActivePlan.dayStartHour,
+                resolvedActivePlan.sabbathEnabled,
+                resolvedActivePlan.sabbathDay,
+                resolvedActivePlan.pausedAt,
+                resolvedActivePlan.pausedUntil
+              ),
+            }))
+            .filter((entry) => entry.missedCycles > 0);
+          if (overdue.length > 0) {
+            setMissedReviewQueue(overdue);
+            setShowMissedReviewPrompt(true);
+          }
+        }
       }
 
       // 4. Saved voice recordings (private to this user)
@@ -3316,6 +3603,57 @@ export function useAppState() {
     return advancePastSabbath(d, sabbathEnabled, sabbathDay).toISOString();
   };
 
+  // Recomputes a "starting fresh from now" due date for an item whose
+  // catch-up has just been resolved (any of the three missed-review popup
+  // outcomes needs this -- even 'grace'/frozen leaves the old due date in
+  // the past, so it must still move forward). Mirrors the anchor-day logic
+  // used when a Weekly/Monthly item's own cycle completes normally.
+  const computeNextDueDateForItem = (item: QueueItem): string => {
+    const tomorrow = getLogicalDate(dayStartHour);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (item.retentionPhase === 'weekly' && item.chapterReviewAnchorDay) {
+      return nthOccurrenceOfWeekday(tomorrow, item.chapterReviewAnchorDay, 1, sabbathEnabled, sabbathDay).toISOString();
+    }
+    if (item.retentionPhase === 'monthly' && item.chapterReviewAnchorDay) {
+      return nthOccurrenceOfWeekday(tomorrow, item.chapterReviewAnchorDay, 4, sabbathEnabled, sabbathDay).toISOString();
+    }
+    const cycleLengthDays = item.retentionPhase === 'weekly' ? 7 : item.retentionPhase === 'monthly' ? 30 : 1;
+    return nextDueDateISO(cycleLengthDays);
+  };
+
+  // Applies the user's missed-review popup choice. `choice` is the bulk
+  // default; `overrides` (verseId -> choice) lets "Customize per verse"
+  // pick something different for specific items. Every affected item's due
+  // date moves to "starting fresh from now" regardless of choice -- even
+  // 'grace' leaves the old (past) due date behind otherwise.
+  const resolveMissedReviewChoice = (
+    choice: 'grace' | 'escalate' | 'reset',
+    overrides?: Record<string, 'grace' | 'escalate' | 'reset'>
+  ) => {
+    const outcomeFor = (verseId: string) => overrides?.[verseId] || choice;
+    const resolvedById = new Map(
+      missedReviewQueue.map(({ item, missedCycles }) => {
+        const { updatedItem, tag } = resolveMissedCycles(item, missedCycles, missPolicy, {
+          graceCount,
+          refresherDailyDays,
+          refresherWeeklyWeeks,
+        }, outcomeFor(item.verseId));
+        if (tag !== 'grace' && tag !== 'frozen' && tag !== 'none') {
+          updatedItem.reviewsToday = 0;
+        }
+        updatedItem.nextReviewDueDate = computeNextDueDateForItem(updatedItem);
+        return [item.verseId, updatedItem];
+      })
+    );
+
+    updateMemoryQueue((prev) => prev.map((q) => resolvedById.get(q.verseId) || q));
+    setShowMissedReviewPrompt(false);
+    setMissedReviewQueue([]);
+    triggerToast(
+      `Caught up on ${resolvedById.size} verse${resolvedById.size === 1 ? '' : 's'} with missed reviews. 🎯`
+    );
+  };
+
   const validateTouch = (item: QueueItem, _type: 'speak' | 'type' | 'reveal'): boolean => {
     if (!item.touchLogs || item.touchLogs.length === 0) return true;
     const lastTouch = item.touchLogs[item.touchLogs.length - 1];
@@ -3403,6 +3741,10 @@ export function useAppState() {
   // reversible choice ("I know reviews are already full today, pull more
   // anyway"), not a hard constraint.
   const triggerDailyPull = async (opts?: { bypassShield?: boolean }) => {
+    if (pausedAt && (!pausedUntil || new Date(pausedUntil) > new Date())) {
+      triggerToast('Reviews are paused -- resume from Settings to pull new verses. 🌴');
+      return;
+    }
     if (!isTodayLearningDay()) {
       triggerToast(`Today (${getTodayAbbreviation()}) is a non-learning day. Focus on reviews! 📅`);
       return;
@@ -3727,26 +4069,27 @@ export function useAppState() {
     // failed attempt, just detected from elapsed time instead of a tap.
     // Being less than one full cycle late isn't a miss at all, which is
     // also what gives due dates their day-or-two of natural flexibility.
-    // Any sabbath days in the elapsed span don't count as elapsed time --
-    // the engine treats them as though they didn't happen at all.
+    // Any sabbath days or paused days in the elapsed span don't count as
+    // elapsed time -- the engine treats them as though they didn't happen.
+    // This is the reactive fallback path: it always auto-resolves per the
+    // plan's missPolicy (no forcedOutcome), same as before the missed-review
+    // popup existed. Items the popup already resolved on this app-open won't
+    // still be overdue by the time they're reviewed, since resolving there
+    // moves nextReviewDueDate forward too -- see resolveMissedReviewChoice.
     if (item.status === 'reviewing' && updatedItem.nextReviewDueDate) {
-      const cycleLengthDays = updatedItem.retentionPhase === 'weekly' ? 7 : updatedItem.retentionPhase === 'monthly' ? 30 : 1;
-      const dueDate = new Date(updatedItem.nextReviewDueDate);
-      const now = getLogicalDate(dayStartHour);
-      const rawElapsedDays = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 3600 * 1000));
-      const sabbathDaysElapsed = sabbathEnabled ? countSabbathDaysInRange(dueDate, now, sabbathDay) : 0;
-      const adjustedElapsedDays = Math.max(0, rawElapsedDays - sabbathDaysElapsed);
-      const missedCycles = Math.max(0, Math.floor(adjustedElapsedDays / cycleLengthDays));
-      let lastMissTag: ReturnType<typeof applyMissToItem> = 'none';
-      for (let i = 0; i < missedCycles; i++) {
-        lastMissTag = applyMissToItem(updatedItem);
-      }
+      const missedCycles = computeMissedCycles(updatedItem, dayStartHour, sabbathEnabled, sabbathDay, pausedAt, pausedUntil);
       if (missedCycles > 0) {
-        if (lastMissTag !== 'grace' && lastMissTag !== 'none') {
+        const { updatedItem: resolvedItem, tag } = resolveMissedCycles(updatedItem, missedCycles, missPolicy, {
+          graceCount,
+          refresherDailyDays,
+          refresherWeeklyWeeks,
+        });
+        updatedItem = resolvedItem;
+        if (tag !== 'grace' && tag !== 'frozen' && tag !== 'none') {
           updatedItem.reviewsToday = 0;
         }
         const dailyGraduationDaysTotal = dailyPhaseWeeks * 7 + (updatedItem.dailyPhaseExtensionDays || 0);
-        const message = describeMissOutcome(lastMissTag, updatedItem, dailyGraduationDaysTotal);
+        const message = describeMissOutcome(tag, updatedItem, dailyGraduationDaysTotal);
         if (message) {
           triggerToast(`${missedCycles} review cycle${missedCycles > 1 ? 's' : ''} passed unattempted. ${message}`);
         }
@@ -3816,6 +4159,7 @@ export function useAppState() {
         updatedItem.reviewsToday = currentReviewsToday;
         updatedItem.totalSuccessfulReviews += 1;
         updatedItem.gracePeriodUsedToday = false;
+        updatedItem.graceMissesUsed = 0;
 
         // Graduation thresholds derived from the plan's retention rigor
         // (weeks/months/years -> review-count thresholds the engine checks).
@@ -3946,7 +4290,7 @@ export function useAppState() {
     } else {
       // FAILED REVIEW (today's actual attempt, on top of any catch-up above)
       if (item.status === 'reviewing') {
-        const tag = applyMissToItem(updatedItem);
+        const tag = applyMissToItem(updatedItem, { graceCount, refresherDailyDays, refresherWeeklyWeeks });
         if (tag !== 'grace' && tag !== 'none') {
           updatedItem.reviewsToday = 0;
         }
@@ -4974,6 +5318,17 @@ export function useAppState() {
     sabbathEnabled, setSabbathEnabled,
     sabbathDay, setSabbathDay,
     dayStartHour, setDayStartHour,
+    missPolicy, setMissPolicy,
+    missPolicyAskEveryTime, setMissPolicyAskEveryTime,
+    graceCount, setGraceCount,
+    refresherDailyDays, setRefresherDailyDays,
+    refresherWeeklyWeeks, setRefresherWeeklyWeeks,
+    pausedAt, setPausedAt,
+    pausedUntil, setPausedUntil,
+    pauseReviews, resumeReviews,
+    missedReviewQueue,
+    showMissedReviewPrompt, setShowMissedReviewPrompt,
+    resolveMissedReviewChoice,
     joinedStudyPlanMemberships,
     joinedStudyPlanDetails,
     viewingStudyPlan, setViewingStudyPlan,

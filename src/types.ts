@@ -96,6 +96,7 @@ export interface QueueItem {
 
   // Grace Period state
   gracePeriodUsedToday: boolean; // Flag to prevent multiple grace uses in one day
+  graceMissesUsed?: number; // Consecutive grace-covered misses used since the last successful review, checked against the plan's graceCount (default 0/undefined for plans still on the single-grace default)
 
   // 3-Touch Mastery State
   touchLogs?: TouchLog[];      // Tracks valid, hour-separated touches
@@ -217,6 +218,23 @@ export interface MemoryPlan {
   // low/medium/high) -- previously a live useState with no UI control and
   // no persistence, so it silently reset to 'medium' every reload.
   cognitiveLoadSensitivity: 'low' | 'medium' | 'high';
+  // Missed-review handling: how many free misses before escalating, how
+  // long the weekly->daily and monthly->weekly refreshers run, and whether
+  // to just apply the preset automatically or ask via a popup each time
+  // there's something to catch up on. 'graceDiscretion' is a distinct mode,
+  // not just longer numbers -- see applyMissToItem's freeze branch.
+  missPolicy: 'lenient' | 'standard' | 'graceDiscretion' | 'custom';
+  missPolicyAskEveryTime: boolean;
+  graceCount: number;
+  refresherDailyDays: number;
+  refresherWeeklyWeeks: number;
+  // Pause: a proactive "nothing is due, nothing counts as missed" window
+  // (vacations, etc), distinct from the reactive miss-policy above. Treated
+  // like Sabbath but for a date range instead of a single weekday. Null
+  // pausedUntil with a set pausedAt means paused indefinitely until resumed
+  // manually.
+  pausedAt: string | null;
+  pausedUntil: string | null;
   isActive: boolean;
   updatedAt: string | Date;
 }

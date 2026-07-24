@@ -1,6 +1,6 @@
 import './global.css';
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
@@ -324,6 +324,130 @@ function ProgressModal({ state }: { state: AppState }) {
   );
 }
 
+// Fires on app open when the active plan's "ask me every time" miss-policy
+// setting is on and at least one verse has silently missed review cycles
+// (see the scan in loadUserData and resolveMissedCycles in useAppState.ts).
+// Offers the same 3 outcomes as the reactive per-item catch-up -- this is
+// just the proactive, bulk version of the exact same choice.
+const MISS_CHOICES: { id: 'grace' | 'escalate' | 'reset'; label: string; desc: string }[] = [
+  {
+    id: 'grace',
+    label: 'Pick up where I left off',
+    desc: 'No penalty -- streak and phase stay exactly as they were.',
+  },
+  {
+    id: 'escalate',
+    label: 'Standard escalation',
+    desc: 'Weekly verses get a short daily refresher, Monthly verses a short weekly refresher, before returning.',
+  },
+  {
+    id: 'reset',
+    label: 'Reset streak only',
+    desc: "Lose progress toward the next graduation, but stay in today's phase -- no refresher detour.",
+  },
+];
+
+function MissedReviewPromptModal({ state }: { state: AppState }) {
+  const { missedReviewQueue, setShowMissedReviewPrompt, resolveMissedReviewChoice, missPolicy } = state;
+  const defaultChoice: 'grace' | 'escalate' | 'reset' = missPolicy === 'graceDiscretion' ? 'grace' : 'escalate';
+  const [bulkChoice, setBulkChoice] = React.useState<'grace' | 'escalate' | 'reset'>(defaultChoice);
+  const [customizing, setCustomizing] = React.useState(false);
+  const [overrides, setOverrides] = React.useState<Record<string, 'grace' | 'escalate' | 'reset'>>({});
+
+  const verseCount = missedReviewQueue.length;
+
+  return (
+    <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
+      <FadeInView style={{ width: '100%', maxWidth: 360 }}>
+        <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4" style={{ maxHeight: '85%' }}>
+          <View className="flex-row items-center justify-between border-b border-neutral-200 pb-2">
+            <View className="flex-1 pr-2">
+              <Text className="text-base font-serif font-bold text-[#1A1A1A]">Missed Reviews</Text>
+              <Text className="text-[11px] text-neutral-500 font-sans mt-0.5">
+                You missed reviews on {verseCount} verse{verseCount === 1 ? '' : 's'}. What should happen?
+              </Text>
+            </View>
+            <Pressable onPress={() => setShowMissedReviewPrompt(false)}>
+              <X size={16} color="#a3a3a3" />
+            </Pressable>
+          </View>
+
+          <View className="gap-2">
+            {MISS_CHOICES.map((choice) => {
+              const isSelected = bulkChoice === choice.id;
+              return (
+                <Pressable
+                  key={choice.id}
+                  onPress={() => setBulkChoice(choice.id)}
+                  className={`border-2 rounded-xl p-3 ${isSelected ? 'border-[#1A1A1A] bg-[#FBF9F6]' : 'border-[#E5E5E5] bg-white'}`}
+                >
+                  <View className="flex-row items-center gap-2">
+                    <View
+                      className={`w-3.5 h-3.5 rounded-full border-2 items-center justify-center ${
+                        isSelected ? 'border-[#1A1A1A]' : 'border-neutral-300'
+                      }`}
+                    >
+                      {isSelected && <View className="w-1.5 h-1.5 bg-[#1A1A1A] rounded-full" />}
+                    </View>
+                    <Text className="text-xs font-sans font-bold text-[#1A1A1A]">{choice.label}</Text>
+                  </View>
+                  <Text className="text-[10px] text-neutral-500 font-sans mt-1 leading-relaxed pl-5.5">{choice.desc}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Pressable onPress={() => setCustomizing((v) => !v)}>
+            <Text className="text-[10px] font-sans font-bold text-indigo-600 uppercase tracking-wider">
+              {customizing ? 'Hide per-verse customization' : 'Customize per verse ->'}
+            </Text>
+          </Pressable>
+
+          {customizing && (
+            <ScrollView style={{ maxHeight: 180 }} className="border border-neutral-200 rounded-xl">
+              {missedReviewQueue.map(({ item, missedCycles }) => {
+                const current = overrides[item.verseId] || bulkChoice;
+                return (
+                  <View key={item.verseId} className="p-2.5 border-b border-neutral-100 last:border-b-0">
+                    <Text className="text-[11px] font-sans font-bold text-[#1A1A1A]">
+                      {item.book} {item.chapter}:{item.verseNumber}
+                    </Text>
+                    <Text className="text-[9px] text-neutral-400 font-sans mb-1.5">
+                      {missedCycles} cycle{missedCycles === 1 ? '' : 's'} missed -- {item.retentionPhase}
+                    </Text>
+                    <View className="flex-row gap-1.5">
+                      {MISS_CHOICES.map((choice) => (
+                        <Pressable
+                          key={choice.id}
+                          onPress={() => setOverrides((prev) => ({ ...prev, [item.verseId]: choice.id }))}
+                          className={`px-2 py-1 rounded-lg border ${
+                            current === choice.id ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-[#E5E5E5]'
+                          }`}
+                        >
+                          <Text className={`text-[9px] font-bold ${current === choice.id ? 'text-white' : 'text-neutral-500'}`}>
+                            {choice.id === 'grace' ? 'Grace' : choice.id === 'escalate' ? 'Standard' : 'Reset'}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          <Pressable
+            onPress={() => resolveMissedReviewChoice(bulkChoice, customizing ? overrides : undefined)}
+            className="w-full py-2.5 px-4 bg-[#1A1A1A] rounded-xl items-center"
+          >
+            <Text className="text-white font-bold font-sans text-xs">Apply</Text>
+          </Pressable>
+        </View>
+      </FadeInView>
+    </View>
+  );
+}
+
 // Persistent mini-player, shown above the tab bar whenever a recording is
 // playing, so playback keeps going (and stays controllable) while navigating
 // to a different tab — previously play/pause controls only existed on the
@@ -487,6 +611,7 @@ function AppShell() {
 
       {state.saveRecordingDialog && <SaveRecordingDialog state={state} />}
       {state.showProgressModal && <ProgressModal state={state} />}
+      {state.showMissedReviewPrompt && <MissedReviewPromptModal state={state} />}
 
       {/* First-run "Getting Started" checklist -- same full-screen-overlay
           convention as the practice modal above, sitting above the tab

@@ -9,6 +9,13 @@ import { ChipRow, FadeInView } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS } from '../data';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 
+const PAUSE_DURATIONS: { id: '1w' | '2w' | '1m' | 'indefinite'; label: string; days: number | null }[] = [
+  { id: '1w', label: '1 Week', days: 7 },
+  { id: '2w', label: '2 Weeks', days: 14 },
+  { id: '1m', label: '1 Month', days: 30 },
+  { id: 'indefinite', label: "Until I'm Back", days: null },
+];
+
 export default function SettingsScreen({ state }: { state: AppState }) {
   const {
     user,
@@ -22,9 +29,15 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     deleteAccount,
     accountabilityDailyCap,
     updateAccountabilityDailyCap,
+    pausedAt,
+    pausedUntil,
+    pauseReviews,
+    resumeReviews,
   } = state;
 
   const { signInWithGoogle } = useGoogleSignIn();
+
+  const [pauseDuration, setPauseDuration] = useState<'1w' | '2w' | '1m' | 'indefinite'>('1w');
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -176,6 +189,58 @@ export default function SettingsScreen({ state }: { state: AppState }) {
               { id: 999, label: 'Unlimited' },
             ]}
           />
+        </View>
+
+        {/* PAUSE REVIEWS */}
+        <View className={`border rounded-xl p-4 ${pausedAt ? 'bg-amber-50 border-amber-200' : 'bg-white border-[#E5E5E5]'}`} style={{ gap: 10 }}>
+          <Text className={`text-[9px] font-extrabold uppercase tracking-wider ${pausedAt ? 'text-amber-700' : 'text-neutral-400'}`}>
+            Pause Reviews
+          </Text>
+
+          {pausedAt ? (
+            <>
+              <Text className="text-[11px] text-amber-900 font-sans leading-relaxed">
+                Paused since {new Date(pausedAt).toLocaleDateString()}
+                {pausedUntil ? ` -- planned return ${new Date(pausedUntil).toLocaleDateString()}` : ' -- resume manually whenever you\'re ready'}.
+                Nothing is due, nothing counts as missed, and friends won't see accountability nudges reach you while
+                you're away.
+              </Text>
+              <Pressable
+                onPress={resumeReviews}
+                className="w-full py-2.5 bg-amber-600 rounded-xl items-center"
+              >
+                <Text className="text-white font-sans font-bold text-xs">Resume Now</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text className="text-[10px] text-neutral-400 font-sans leading-relaxed">
+                Going on a trip, or know you won't have your phone for a while? Pausing freezes your whole queue --
+                nothing becomes due, and no reviews count as missed, until you resume.
+              </Text>
+              <ChipRow
+                value={pauseDuration}
+                onChange={setPauseDuration}
+                options={PAUSE_DURATIONS.map((d) => ({ id: d.id, label: d.label }))}
+              />
+              <Pressable
+                onPress={() => {
+                  const cfg = PAUSE_DURATIONS.find((d) => d.id === pauseDuration)!;
+                  const untilISO = cfg.days
+                    ? (() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + cfg.days!);
+                        return d.toISOString();
+                      })()
+                    : null;
+                  pauseReviews(untilISO);
+                }}
+                className="w-full py-2.5 bg-neutral-800 rounded-xl items-center"
+              >
+                <Text className="text-white font-sans font-bold text-xs">Pause Reviews</Text>
+              </Pressable>
+            </>
+          )}
         </View>
 
         {/* GETTING STARTED */}

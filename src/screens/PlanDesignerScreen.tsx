@@ -13,6 +13,40 @@ const RIGOR_TIERS: { key: 'light' | 'standard' | 'deep'; label: string; weeks: n
   { key: 'deep', label: 'Deep', weeks: 9, months: 8, years: 7 },
 ];
 
+const MISS_POLICY_TIERS: {
+  key: 'lenient' | 'standard' | 'graceDiscretion';
+  label: string;
+  grace: number;
+  dailyRefresher: number;
+  weeklyRefresher: number;
+  desc: string;
+}[] = [
+  {
+    key: 'lenient',
+    label: 'Lenient',
+    grace: 2,
+    dailyRefresher: 4,
+    weeklyRefresher: 2,
+    desc: 'More free misses before anything changes, and shorter refreshers when it does.',
+  },
+  {
+    key: 'standard',
+    label: 'Standard',
+    grace: 1,
+    dailyRefresher: 7,
+    weeklyRefresher: 4,
+    desc: "Today's default: 1 free miss, then a refresher stint before returning.",
+  },
+  {
+    key: 'graceDiscretion',
+    label: 'Grace at Your Discretion',
+    grace: 1,
+    dailyRefresher: 7,
+    weeklyRefresher: 4,
+    desc: "Never auto-escalates -- missed time just doesn't count, and you pick up exactly where you left off.",
+  },
+];
+
 const COGNITIVE_LOAD_TIERS: { key: 'low' | 'medium' | 'high'; label: string }[] = [
   { key: 'low', label: 'Relaxed' },
   { key: 'medium', label: 'Balanced' },
@@ -51,6 +85,16 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     setWeeklyPhaseMonths,
     monthlyPhaseYears,
     setMonthlyPhaseYears,
+    missPolicy,
+    setMissPolicy,
+    missPolicyAskEveryTime,
+    setMissPolicyAskEveryTime,
+    graceCount,
+    setGraceCount,
+    refresherDailyDays,
+    setRefresherDailyDays,
+    refresherWeeklyWeeks,
+    setRefresherWeeklyWeeks,
     customPlanName,
     setCustomPlanName,
     shareWithCommunity,
@@ -66,6 +110,15 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     setWeeklyPhaseMonths(cfg.months);
     setMonthlyPhaseYears(cfg.years);
     triggerToast(`Retention rigor set to ${cfg.label} (${cfg.weeks}-${cfg.months}-${cfg.years})! 🎯`);
+  };
+
+  const applyMissPolicyPreset = (tier: 'lenient' | 'standard' | 'graceDiscretion') => {
+    const cfg = MISS_POLICY_TIERS.find((t) => t.key === tier)!;
+    setMissPolicy(tier);
+    setGraceCount(cfg.grace);
+    setRefresherDailyDays(cfg.dailyRefresher);
+    setRefresherWeeklyWeeks(cfg.weeklyRefresher);
+    triggerToast(`Missed-review handling set to ${cfg.label}! 🎯`);
   };
 
   const totalRigorDays = dailyPhaseWeeks * 7 + weeklyPhaseMonths * 30 + monthlyPhaseYears * 365;
@@ -591,6 +644,124 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           <Text className="text-[10px] text-neutral-500 font-sans pt-2 border-t border-[#F3F2F1] leading-relaxed">
             At this rigor, a verse is fully retained for good after about <Text className="font-bold text-[#1A1A1A]">{totalRigorLabel}</Text>.
           </Text>
+        </View>
+        )}
+
+        {/* Missed Review Handling -- advanced only */}
+        {isAdvanced && (
+        <View className="border-2 border-[#1A1A1A] rounded-xl p-3.5 bg-white shadow-sm" style={{ gap: 16 }}>
+          <View className="flex-row items-center justify-between border-b border-neutral-100 pb-2">
+            <Text className="text-xs font-sans font-extrabold uppercase tracking-widest text-[#1A1A1A]">Missed Review Handling</Text>
+          </View>
+
+          <Text className="text-[10px] text-neutral-500 font-sans -mt-2 leading-relaxed">
+            What happens when you miss review cycles while away -- vacations, busy weeks, etc.
+          </Text>
+
+          <View className="flex-row gap-2">
+            {MISS_POLICY_TIERS.map((tier) => {
+              const isActive = missPolicy === tier.key;
+              return (
+                <Pressable
+                  key={tier.key}
+                  onPress={() => applyMissPolicyPreset(tier.key)}
+                  className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
+                    isActive ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
+                  }`}
+                  style={{ height: 92 }}
+                >
+                  <Text className={`text-[11px] font-serif font-black leading-tight ${isActive ? 'text-white' : 'text-[#1A1A1A]'}`}>
+                    {tier.label}
+                  </Text>
+                  <Text className={`text-[8px] font-sans leading-tight ${isActive ? 'text-neutral-200' : 'text-neutral-500'}`}>
+                    {tier.desc}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => setMissPolicy('custom')}
+              className={`flex-1 rounded-xl p-2.5 justify-between ${
+                missPolicy === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6]' : 'border-2 border-[#E5E5E5] bg-white'
+              }`}
+              style={{ height: 92 }}
+            >
+              <View className="flex-row justify-between items-center">
+                <Text className="text-[11px] font-serif font-black leading-tight text-[#1A1A1A]">Custom</Text>
+                {missPolicy === 'custom' && <View className="w-1.5 h-1.5 bg-amber-500 rounded-full" />}
+              </View>
+              <Text className="text-[8px] font-mono leading-tight text-neutral-500">Fine-tune</Text>
+            </Pressable>
+          </View>
+
+          {missPolicy === 'custom' && (
+            <View style={{ gap: 16 }} className="pt-2 border-t border-[#F3F2F1]">
+              {/* Free misses before escalating */}
+              <View style={{ gap: 6 }}>
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Free Misses Before Escalating</Text>
+                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
+                    {graceCount}
+                  </Text>
+                </View>
+                <StepperRow min={0} max={5} value={graceCount} onChange={setGraceCount} />
+                <View className="flex-row justify-between">
+                  <Text className="text-[8px] text-neutral-400 font-mono">0 (none)</Text>
+                  <Text className="text-[8px] text-neutral-400 font-mono">5</Text>
+                </View>
+              </View>
+
+              {/* Weekly -> Daily refresher length */}
+              <View style={{ gap: 6 }}>
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Weekly -&gt; Daily Refresher</Text>
+                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
+                    {refresherDailyDays} days
+                  </Text>
+                </View>
+                <StepperRow min={2} max={21} value={refresherDailyDays} onChange={setRefresherDailyDays} />
+                <View className="flex-row justify-between">
+                  <Text className="text-[8px] text-neutral-400 font-mono">2 days</Text>
+                  <Text className="text-[8px] text-neutral-400 font-mono">21 days</Text>
+                </View>
+              </View>
+
+              {/* Monthly -> Weekly refresher length */}
+              <View style={{ gap: 6 }}>
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Monthly -&gt; Weekly Refresher</Text>
+                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
+                    {refresherWeeklyWeeks} weeks
+                  </Text>
+                </View>
+                <StepperRow min={1} max={8} value={refresherWeeklyWeeks} onChange={setRefresherWeeklyWeeks} />
+                <View className="flex-row justify-between">
+                  <Text className="text-[8px] text-neutral-400 font-mono">1 week</Text>
+                  <Text className="text-[8px] text-neutral-400 font-mono">8 weeks</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          <View className="flex-row items-center justify-between pt-2 border-t border-[#F3F2F1]">
+            <View style={{ gap: 2 }} className="flex-1 pr-2">
+              <Text className="text-[10px] font-sans font-bold text-neutral-800">When I miss reviews</Text>
+              <Text className="text-[9px] text-neutral-400 font-sans leading-tight">
+                {missPolicyAskEveryTime
+                  ? 'Ask me each time, with a chance to customize per verse.'
+                  : 'Apply the setting above automatically, no prompt.'}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setMissPolicyAskEveryTime(!missPolicyAskEveryTime)}
+              className={`w-10 h-6 rounded-full justify-center px-0.5 ${missPolicyAskEveryTime ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
+            >
+              <View
+                className="w-5 h-5 rounded-full bg-white shadow"
+                style={{ transform: [{ translateX: missPolicyAskEveryTime ? 16 : 0 }] }}
+              />
+            </Pressable>
+          </View>
         </View>
         )}
 

@@ -71,7 +71,15 @@ export default function HomeScreen({ state }: { state: AppState }) {
     startReviewSession,
     triggerDailyPull,
     isReviewDue,
+    pausedAt,
+    pausedUntil,
   } = state;
+
+  // While paused (Settings -> Pause Reviews), nothing should read as "due" --
+  // that's the whole promise of pausing. An indefinite pause (pausedUntil
+  // null) stays active until resumed manually; a dated pause clears itself
+  // here once its date passes even before the user taps Resume.
+  const isPausedNow = !!pausedAt && (!pausedUntil || new Date(pausedUntil) > new Date());
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showPullShieldConfirm, setShowPullShieldConfirm] = useState(false);
@@ -85,9 +93,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const learningItems = memoryQueue.filter(
     (item) => item.status === 'learning' && (item.touchLogs?.length || 0) < masteryTouches
   );
-  const dueReviewItems = memoryQueue.filter(
-    (item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate)
-  );
+  const dueReviewItems = isPausedNow
+    ? []
+    : memoryQueue.filter((item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate));
   const queuedLookahead = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead);
 
   const estMinutes = getEstimatedReviewTime(memoryQueue, cognitiveLoadSensitivity);
