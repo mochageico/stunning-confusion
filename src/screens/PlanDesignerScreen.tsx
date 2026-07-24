@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, Check, Share2, TrendingUp } from 'lucide-react-native';
+import { ArrowLeft, Check, TrendingUp } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { ChipRow, FadeInView, HelpTooltip, PulseView, StepperRow } from '../components/ui';
@@ -97,10 +97,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     setRefresherWeeklyWeeks,
     customPlanName,
     setCustomPlanName,
-    shareWithCommunity,
-    setShareWithCommunity,
     handleSavePlan,
-    publishSharedPlan,
   } = state;
 
   const applyRigorPreset = (tier: 'light' | 'standard' | 'deep') => {
@@ -765,33 +762,6 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
         </View>
         )}
 
-        {/* Community sharing options -- advanced only */}
-        {isAdvanced && (
-        <View className="border border-neutral-200 rounded-xl p-4 bg-white shadow-sm mt-1" style={{ gap: 12 }}>
-          <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Sharing Options</Text>
-          <View className="flex-row items-center justify-between">
-            <View style={{ gap: 2 }} className="flex-1 pr-2">
-              <View className="flex-row items-center gap-1.5">
-                <Share2 size={12} color="#737373" />
-                <Text className="text-[10px] font-sans font-bold text-neutral-800">Publish to Community Circles</Text>
-              </View>
-              <Text className="text-[9px] text-neutral-400 font-sans leading-tight">
-                Make this pacing pattern joinable for others.
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => setShareWithCommunity(!shareWithCommunity)}
-              className={`w-10 h-6 rounded-full justify-center px-0.5 ${shareWithCommunity ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
-            >
-              <View
-                className="w-5 h-5 rounded-full bg-white shadow"
-                style={{ transform: [{ translateX: shareWithCommunity ? 16 : 0 }] }}
-              />
-            </Pressable>
-          </View>
-        </View>
-        )}
-
         {/* Workload Forecast Sticky Bottom Card */}
         <View className="bg-[#FBF9F6] border-2 border-[#1A1A1A] rounded-xl p-3.5 shadow-md" style={{ gap: 12 }}>
           <View className="flex-row items-center justify-between pb-1.5 border-b border-neutral-200">
@@ -815,19 +785,11 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
 
           <PulseView>
             <Pressable
-              onPress={async () => {
-                if (shareWithCommunity) {
-                  await publishSharedPlan();
-                } else {
-                  await handleSavePlan();
-                }
-              }}
+              onPress={() => handleSavePlan()}
               className="w-full py-3 bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5 shadow-sm mt-1"
             >
               <Check size={14} color="#FFFFFF" />
-              <Text className="text-white font-sans font-bold text-xs uppercase tracking-widest">
-                {shareWithCommunity ? 'Save & Share with Community' : 'Save Plan'}
-              </Text>
+              <Text className="text-white font-sans font-bold text-xs uppercase tracking-widest">Save Plan</Text>
             </Pressable>
           </PulseView>
         </View>

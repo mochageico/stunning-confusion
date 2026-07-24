@@ -15,6 +15,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
     canSendAccountabilityNudge,
     sendAccountabilityNudge,
     removeFriend,
+    saveFriendMemoryPlan,
     triggerToast,
   } = state;
 
@@ -27,6 +28,40 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
   const isSelf = selectedUserProfile.uid === user?.uid;
   const isFriend = friends.some((f) => f.uid === selectedUserProfile.uid);
   const canNudge = canSendAccountabilityNudge(selectedUserProfile.uid);
+
+  // Friend-visible sharing: a memory plan and/or memory queue this member chose
+  // to show friends (Settings → Profile Sharing). Only surfaced when the viewer
+  // is actually a friend AND the owner opted in, so the snapshots are present.
+  const sharedPlan =
+    isFriend && selectedUserProfile.memoryPlanVisibility === 'friends' ? selectedUserProfile.sharedMemoryPlan : null;
+  const queueVisible =
+    isFriend &&
+    selectedUserProfile.memoryQueueVisibility === 'friends' &&
+    Array.isArray(selectedUserProfile.sharedMemoryQueue);
+
+  // Group the shared queue snapshot by book+chapter for a compact reference
+  // list, preserving the owner's queue order.
+  const groupedQueue = queueVisible
+    ? (() => {
+        const items = [...selectedUserProfile.sharedMemoryQueue].sort(
+          (a: any, b: any) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0)
+        );
+        const groups: { key: string; book: string; chapter: number; count: number; statuses: Set<string> }[] = [];
+        const byKey = new Map<string, (typeof groups)[number]>();
+        items.forEach((it: any) => {
+          const key = `${it.book} ${it.chapter}`;
+          let g = byKey.get(key);
+          if (!g) {
+            g = { key, book: it.book, chapter: it.chapter, count: 0, statuses: new Set() };
+            byKey.set(key, g);
+            groups.push(g);
+          }
+          g.count += 1;
+          if (it.status) g.statuses.add(it.status);
+        });
+        return groups;
+      })()
+    : [];
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -124,6 +159,101 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
             <Text className="text-[7.5px] font-bold text-neutral-400 uppercase tracking-wide">STREAK</Text>
           </View>
         </View>
+
+        {/* Shared Memory Plan (friends only) */}
+        {sharedPlan && (
+          <View style={{ gap: 6 }}>
+            <Text className="text-[9px] font-bold text-neutral-400 tracking-wider font-sans uppercase">MEMORY PLAN</Text>
+            <View className="border border-[#E5E5E5] rounded-xl p-3.5 bg-white gap-3 shadow-sm">
+              <View className="flex-row justify-between items-start">
+                <View className="flex-1 pr-2">
+                  <Text className="text-xs font-sans font-black text-[#1A1A1A] leading-tight">
+                    {sharedPlan.name || 'Memory Plan'}
+                  </Text>
+                  <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
+                    {selectedUserProfile.name}'s pacing
+                  </Text>
+                </View>
+                {sharedPlan.preset && (
+                  <View className="bg-neutral-100 border border-neutral-200 px-1.5 py-0.5 rounded">
+                    <Text className="text-[8px] font-sans font-bold uppercase">{sharedPlan.preset}</Text>
+                  </View>
+                )}
+              </View>
+
+              <View className="flex-row gap-2 py-1.5 border-y border-dashed border-neutral-100">
+                <View className="flex-1">
+                  <Text className="text-[8px] text-neutral-400 uppercase">Pace</Text>
+                  <Text className="text-[10px] font-sans font-bold text-neutral-800">
+                    {sharedPlan.newVersesPace ?? '—'} verses/day
+                  </Text>
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[8px] text-neutral-400 uppercase">Daily Cap</Text>
+                  <Text className="text-[10px] font-sans font-bold text-neutral-800">{sharedPlan.maxReviewCap ?? '—'} mins</Text>
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[8px] text-neutral-400 uppercase">Learn Days</Text>
+                  <Text className="text-[10px] font-sans font-bold text-neutral-800">
+                    {sharedPlan.learningDays?.length ?? 0}/wk
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                onPress={() => saveFriendMemoryPlan(sharedPlan, selectedUserProfile.name)}
+                className="bg-[#1A1A1A] rounded-md py-2 items-center"
+              >
+                <Text className="text-white text-[10px] font-bold uppercase tracking-wider">Save Memory Plan</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Shared Memory Queue (friends only) */}
+        {queueVisible && (
+          <View style={{ gap: 6 }}>
+            <Text className="text-[9px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+              MEMORY QUEUE ({groupedQueue.length})
+            </Text>
+            {groupedQueue.length === 0 ? (
+              <View className="border border-dashed border-neutral-200 rounded-xl p-4 items-center">
+                <Text className="text-[10px] text-neutral-400 font-sans text-center">
+                  {selectedUserProfile.name} hasn't added any verses yet.
+                </Text>
+              </View>
+            ) : (
+              <View style={{ gap: 6 }}>
+                {groupedQueue.map((g) => {
+                  const retained = g.statuses.has('retained') && g.statuses.size === 1;
+                  const learning = g.statuses.has('learning');
+                  const badgeColor = retained
+                    ? 'text-emerald-600'
+                    : learning
+                    ? 'text-amber-600'
+                    : 'text-neutral-500';
+                  const badgeLabel = retained ? 'Memorized' : learning ? 'Learning' : 'In Progress';
+                  return (
+                    <View
+                      key={g.key}
+                      className="border border-neutral-200 rounded-xl p-2.5 bg-neutral-50/40 flex-row justify-between items-center"
+                    >
+                      <View>
+                        <Text className="text-xs font-sans font-bold text-neutral-800 leading-tight">
+                          {g.book} {g.chapter}
+                        </Text>
+                        <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
+                          {g.count} verse{g.count === 1 ? '' : 's'}
+                        </Text>
+                      </View>
+                      <Text className={`text-[8px] font-bold uppercase tracking-wide ${badgeColor}`}>{badgeLabel}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Communities Spot */}
         <View style={{ gap: 6 }}>

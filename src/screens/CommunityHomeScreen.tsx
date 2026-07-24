@@ -4,8 +4,6 @@ import { RefreshCw, Users } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView, HelpTooltip } from '../components/ui';
 
-const LEARNING_DAY_ABBREVIATIONS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
-
 export default function CommunityHomeScreen({ state }: { state: AppState }) {
   const {
     user,
@@ -13,10 +11,6 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
     myCircles,
     activeGroupId,
     openCircle,
-    loadSharedPlans,
-    loadingSharedPlans,
-    sharedPlans,
-    joinSharedPlan,
     viewMemberProfileById,
     activityEvents,
     loadingActivityEvents,
@@ -113,106 +107,6 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
               );
             })}
           </View>
-        </View>
-
-        {/* Joinable Community Memory Plans */}
-        <View className="gap-2.5">
-          <View className="flex-row justify-between items-center">
-            <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
-              COMMUNITY PACING PLANS
-            </Text>
-            <Pressable onPress={loadSharedPlans} className="flex-row items-center gap-1">
-              <RefreshCw size={8} color="#1A1A1A" />
-              <Text className="text-[9px] font-sans font-bold uppercase text-[#1A1A1A]">Refresh</Text>
-            </Pressable>
-          </View>
-
-          {loadingSharedPlans ? (
-            <View className="py-4 items-center">
-              <Text className="text-xs text-neutral-400 font-sans">Loading shared plans...</Text>
-            </View>
-          ) : sharedPlans.length === 0 ? (
-            <View className="border border-dashed border-neutral-200 rounded-xl p-4 items-center">
-              <Text className="text-xs text-neutral-400 font-sans text-center">
-                No community memory plans published yet. Be the first to publish a custom plan!
-              </Text>
-            </View>
-          ) : (
-            <View className="gap-3">
-              {sharedPlans.map((plan) => (
-                <View key={plan.id} className="border border-[#E5E5E5] rounded-xl p-3.5 bg-white gap-3 shadow-sm">
-                  <View className="flex-row justify-between items-start">
-                    <View>
-                      <Text className="text-xs font-sans font-black text-[#1A1A1A] leading-tight">{plan.name}</Text>
-                      <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
-                        Shared by{' '}
-                        <Text
-                          onPress={() => viewMemberProfileById(plan.creatorId)}
-                          className="font-semibold text-[#1A1A1A]"
-                        >
-                          {plan.creatorName || 'Anonymous'}
-                        </Text>
-                      </Text>
-                    </View>
-                    <View className="bg-neutral-100 border border-neutral-200 px-1.5 py-0.5 rounded">
-                      <Text className="text-[8px] font-sans font-bold uppercase">{plan.preset}</Text>
-                    </View>
-                  </View>
-
-                  {/* Plan Metrics bar */}
-                  <View className="flex-row gap-2 py-1.5 border-y border-dashed border-neutral-100">
-                    <View className="flex-1">
-                      <Text className="text-[8px] text-neutral-400 uppercase">Pace</Text>
-                      <Text className="text-[10px] font-sans font-bold text-neutral-800">
-                        {plan.newVersesPace} lines/day
-                      </Text>
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-[8px] text-neutral-400 uppercase">Cap</Text>
-                      <Text className="text-[10px] font-sans font-bold text-neutral-800">{plan.maxReviewCap} mins</Text>
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-[8px] text-neutral-400 uppercase">Members</Text>
-                      <Text className="text-[10px] font-sans font-bold text-neutral-800">
-                        {plan.downloadsCount || 0} joined
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Learning days overview */}
-                  <View className="flex-row justify-between items-center pt-1">
-                    <View className="flex-row gap-1">
-                      {LEARNING_DAY_ABBREVIATIONS.map((d) => {
-                        const active = plan.learningDays?.includes(d);
-                        return (
-                          <View
-                            key={d}
-                            className={`w-4 h-4 items-center justify-center rounded-full ${
-                              active ? 'bg-emerald-500' : 'bg-neutral-50'
-                            }`}
-                          >
-                            <Text
-                              className={`text-[8px] font-sans ${
-                                active ? 'text-white font-black' : 'text-neutral-300 font-bold'
-                              }`}
-                            >
-                              {d[0]}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                    <Pressable
-                      onPress={() => joinSharedPlan(plan)}
-                      className="bg-[#1A1A1A] px-2.5 py-1 rounded-md"
-                    >
-                      <Text className="text-white text-[9px] font-bold uppercase tracking-wider">Join Plan</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
         </View>
 
         {/* Community Activity Feed */}

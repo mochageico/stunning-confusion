@@ -696,6 +696,16 @@ export function useAppState() {
   );
   const [typedRecordingName, setTypedRecordingName] = useState('');
 
+  // Profile-sharing visibility: whether this user's active memory plan and
+  // their memory queue are shown to friends on their member profile. Both
+  // default to 'private' (only you). When set to 'friends', a denormalized
+  // snapshot (sharedMemoryPlan / sharedMemoryQueue) is written onto the
+  // profiles/{uid} doc so friends can read it without access to this user's
+  // private memoryPlans/memoryQueue — kept fresh by the debounced profile
+  // sync effect below, and cleared back to null when flipped to 'private'.
+  const [memoryPlanVisibility, setMemoryPlanVisibility] = useState<'private' | 'friends'>('private');
+  const [memoryQueueVisibility, setMemoryQueueVisibility] = useState<'private' | 'friends'>('private');
+
   // First-run "Getting Started" checklist overlay -- shown automatically
   // whenever the loaded/created profile's onboardingCompleted field isn't
   // true (loadUserData sets this), and re-openable anytime from Settings.
@@ -2159,6 +2169,13 @@ export function useAppState() {
           streak: data.streakDays || 0,
         },
         communities: sharedCircleNames,
+        // Friend-visible sharing (surfaced in MemberProfileScreen only when the
+        // viewer is actually a friend). Snapshots are null unless the owner set
+        // the matching visibility to 'friends' in Settings.
+        memoryPlanVisibility: data.memoryPlanVisibility === 'friends' ? 'friends' : 'private',
+        memoryQueueVisibility: data.memoryQueueVisibility === 'friends' ? 'friends' : 'private',
+        sharedMemoryPlan: data.sharedMemoryPlan || null,
+        sharedMemoryQueue: data.sharedMemoryQueue || null,
       });
       navigateTo('memberProfile');
     } catch (err) {
@@ -2258,6 +2275,70 @@ export function useAppState() {
     } catch (err) {
       console.error('Error joining shared plan:', err);
       triggerToast('Failed to join this memory plan.');
+    }
+  };
+
+  // Adopt a friend's shared memory plan (from their member profile) as one of
+  // your own saved plans and make it active. Same adoption shape as
+  // joinSharedPlan, but sourced from a profile's sharedMemoryPlan snapshot --
+  // no community sharedPlans collection involved, so nothing to increment or
+  // reload here.
+  const saveFriendMemoryPlan = async (plan: any, fromName?: string) => {
+    if (!plan) {
+      triggerToast('This plan is no longer available.');
+      return;
+    }
+    try {
+      const adopted: MemoryPlan = {
+        id: 'friend-' + Date.now(),
+        name: plan.name || `${fromName ? fromName + "'s" : 'Saved'} Plan`,
+        preset: plan.preset || 'custom',
+        learningDays: plan.learningDays || ['M', 'W', 'F'],
+        newVersesPace: plan.newVersesPace ?? 3,
+        maxReviewCap: plan.maxReviewCap ?? 15,
+        retentionRigor: plan.retentionRigor || 'standard',
+        dailyPhaseWeeks: plan.dailyPhaseWeeks ?? 7,
+        weeklyPhaseMonths: plan.weeklyPhaseMonths ?? 6,
+        monthlyPhaseYears: plan.monthlyPhaseYears ?? 5,
+        masteryTouches: plan.masteryTouches ?? 3,
+        reviewsRequired: plan.reviewsRequired ?? 1,
+        sabbathEnabled: plan.sabbathEnabled ?? false,
+        sabbathDay: plan.sabbathDay || 'Su',
+        dayStartHour: plan.dayStartHour ?? 0,
+        cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity || 'medium',
+        missPolicy: plan.missPolicy || 'standard',
+        missPolicyAskEveryTime: plan.missPolicyAskEveryTime ?? false,
+        graceCount: plan.graceCount ?? 1,
+        refresherDailyDays: plan.refresherDailyDays ?? 7,
+        refresherWeeklyWeeks: plan.refresherWeeklyWeeks ?? 4,
+        pausedAt: plan.pausedAt ?? null,
+        pausedUntil: plan.pausedUntil ?? null,
+        isActive: true,
+        updatedAt: new Date().toISOString(),
+      };
+      syncDesignerFromPlan(adopted);
+
+      // Add to savedPlans (deactivating the others), mirroring publishSharedPlan.
+      const updatedPlans = [...savedPlans.map((p) => ({ ...p, isActive: false })), adopted];
+      setSavedPlans(updatedPlans);
+
+      if (auth.currentUser) {
+        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
+        await setDoc(
+          planRef,
+          {
+            savedPlans: updatedPlans,
+            ...planTopLevelFields(adopted),
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+      }
+
+      triggerToast(`Saved "${adopted.name}" to your plans! 🎯`);
+    } catch (err) {
+      console.error('Error saving friend memory plan:', err);
+      triggerToast('Failed to save this memory plan.');
     }
   };
 
@@ -2816,12 +2897,6 @@ export function useAppState() {
     }
   };
 
-  // Fetch shared plans once on mount
-  useEffect(() => {
-    loadSharedPlans();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Reload the activity feed whenever the signed-in user or their real
   // circleFriends/friends lists change (sign-in/out, joining a new circle,
   // accepting a friend, etc.) — reactive rather than sequenced after
@@ -2863,6 +2938,8 @@ export function useAppState() {
 
       if (profileSnap && profileSnap.exists()) {
         setDefaultRecordingVisibility(profileSnap.data().defaultRecordingVisibility || null);
+        setMemoryPlanVisibility(profileSnap.data().memoryPlanVisibility === 'friends' ? 'friends' : 'private');
+        setMemoryQueueVisibility(profileSnap.data().memoryQueueVisibility === 'friends' ? 'friends' : 'private');
         setTotalStudySeconds(profileSnap.data().totalStudySeconds || 0);
         setAccountabilityDailyCapState(profileSnap.data().accountabilityDailyCap ?? ACCOUNTABILITY_DEFAULT_DAILY_CAP);
         // Covers both a brand-new profile (never set, so !== true) and
@@ -3237,6 +3314,8 @@ export function useAppState() {
         setMyCircles([]);
         setCircleFriends([]);
         setDefaultRecordingVisibility(null);
+        setMemoryPlanVisibility('private');
+        setMemoryQueueVisibility('private');
         setAccountabilityDailyCapState(ACCOUNTABILITY_DEFAULT_DAILY_CAP);
         setAccountabilitySentLog({});
         setReceivedAccountabilityNudges([]);
@@ -3292,6 +3371,71 @@ export function useAppState() {
     } catch (err) {
       console.error('Failed to update default recording visibility:', err);
       triggerToast('Failed to update default recording visibility.');
+    }
+  };
+
+  // Compact, friend-readable snapshot of the currently active memory plan --
+  // just the shareable pacing fields (reuses planTopLevelFields, the same set
+  // joinSharedPlan/saveFriendMemoryPlan adopt from). Returns null when there's
+  // no active plan yet.
+  const buildSharedPlanSnapshot = () => {
+    const activePlan = savedPlans.find((p) => p.isActive) || savedPlans[0];
+    return activePlan ? planTopLevelFields(activePlan) : null;
+  };
+
+  // Compact, friend-readable snapshot of the memory queue -- just enough for a
+  // friend's profile to show what references someone is working on and their
+  // status, without exposing full verse text or private scheduling state.
+  const buildSharedQueueSnapshot = () =>
+    memoryQueueRef.current.map((item) => ({
+      book: item.book,
+      chapter: item.chapter,
+      verseNumber: item.verseNumber,
+      status: item.status,
+      orderIndex: item.orderIndex,
+    }));
+
+  // Settings toggle: show/hide this user's active memory plan on their member
+  // profile for friends. Writes the visibility flag + (when 'friends') a fresh
+  // snapshot; clears the snapshot back to null when set to 'private'. The
+  // debounced profile-sync effect keeps the snapshot current afterward.
+  const updateMemoryPlanVisibility = async (vis: 'private' | 'friends') => {
+    setMemoryPlanVisibility(vis);
+    if (!auth.currentUser) return;
+    try {
+      await setDoc(
+        doc(db, 'profiles', auth.currentUser.uid),
+        {
+          memoryPlanVisibility: vis,
+          sharedMemoryPlan: vis === 'friends' ? buildSharedPlanSnapshot() : null,
+        },
+        { merge: true }
+      );
+      triggerToast(vis === 'friends' ? 'Memory plan is now visible to friends. 👀' : 'Memory plan is now private. 🔒');
+    } catch (err) {
+      console.error('Failed to update memory plan visibility:', err);
+      triggerToast('Failed to update memory plan visibility.');
+    }
+  };
+
+  // Settings toggle: show/hide this user's memory queue on their member profile
+  // for friends. Same write/clear shape as updateMemoryPlanVisibility.
+  const updateMemoryQueueVisibility = async (vis: 'private' | 'friends') => {
+    setMemoryQueueVisibility(vis);
+    if (!auth.currentUser) return;
+    try {
+      await setDoc(
+        doc(db, 'profiles', auth.currentUser.uid),
+        {
+          memoryQueueVisibility: vis,
+          sharedMemoryQueue: vis === 'friends' ? buildSharedQueueSnapshot() : null,
+        },
+        { merge: true }
+      );
+      triggerToast(vis === 'friends' ? 'Memory queue is now visible to friends. 👀' : 'Memory queue is now private. 🔒');
+    } catch (err) {
+      console.error('Failed to update memory queue visibility:', err);
+      triggerToast('Failed to update memory queue visibility.');
     }
   };
 
@@ -4683,18 +4827,27 @@ export function useAppState() {
     profileStatsSyncTimerRef.current = setTimeout(() => {
       const uid = auth.currentUser?.uid;
       if (!uid) return;
-      updateDoc(doc(db, 'profiles', uid), {
+      // Keep the friend-visible snapshots fresh alongside the public stats.
+      // Only written while the matching visibility is 'friends' -- flipping to
+      // 'private' clears them in updateMemory*Visibility, and this effect
+      // leaves them null rather than re-adding them.
+      const payload: Record<string, any> = {
         memorizedCount: publicMemorizedCount,
         learningCount,
         streakDays: memoryStreak,
-      }).catch((err) => console.error('Failed to sync profile stats:', err));
+      };
+      if (memoryQueueVisibility === 'friends') payload.sharedMemoryQueue = buildSharedQueueSnapshot();
+      if (memoryPlanVisibility === 'friends') payload.sharedMemoryPlan = buildSharedPlanSnapshot();
+      updateDoc(doc(db, 'profiles', uid), payload).catch((err) =>
+        console.error('Failed to sync profile stats:', err)
+      );
     }, 800);
 
     return () => {
       if (profileStatsSyncTimerRef.current) clearTimeout(profileStatsSyncTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [publicMemorizedCount, learningCount, memoryStreak, user]);
+  }, [publicMemorizedCount, learningCount, memoryStreak, user, memoryQueue, savedPlans, memoryQueueVisibility, memoryPlanVisibility]);
 
   // Real chapter text for whichever book/chapter the user is currently browsing,
   // fetched from Firestore's scripture library (falls back to empty until loaded).
@@ -5390,6 +5543,11 @@ export function useAppState() {
     pendingRecordingSource,
     defaultRecordingVisibility,
     updateDefaultRecordingVisibility,
+    memoryPlanVisibility,
+    memoryQueueVisibility,
+    updateMemoryPlanVisibility,
+    updateMemoryQueueVisibility,
+    saveFriendMemoryPlan,
     pickedRecordingVisibility, setPickedRecordingVisibility,
     typedRecordingName, setTypedRecordingName,
     // import-audio tagging flow

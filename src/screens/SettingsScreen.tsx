@@ -9,6 +9,14 @@ import { ChipRow, FadeInView } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS } from '../data';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 
+// Profile-sharing visibility choices, shared by the Memory Plan and Memory
+// Queue pickers below. 'friends' surfaces a snapshot on your member profile
+// for friends only; 'private' keeps it to yourself.
+const VISIBILITY_OPTIONS: Array<{ id: 'private' | 'friends'; label: string; desc: string }> = [
+  { id: 'private', label: 'Private', desc: 'Only you' },
+  { id: 'friends', label: 'Friends', desc: 'Your friends' },
+];
+
 const PAUSE_DURATIONS: { id: '1w' | '2w' | '1m' | 'indefinite'; label: string; days: number | null }[] = [
   { id: '1w', label: '1 Week', days: 7 },
   { id: '2w', label: '2 Weeks', days: 14 },
@@ -24,6 +32,10 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     updateDisplayName,
     defaultRecordingVisibility,
     updateDefaultRecordingVisibility,
+    memoryPlanVisibility,
+    memoryQueueVisibility,
+    updateMemoryPlanVisibility,
+    updateMemoryQueueVisibility,
     setShowOnboarding,
     signOut,
     deleteAccount,
@@ -165,6 +177,68 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                 </Pressable>
               );
             })}
+          </View>
+        </View>
+
+        {/* PROFILE SHARING */}
+        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 14 }}>
+          <View>
+            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Profile Sharing</Text>
+            <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">
+              Choose what friends can see when they open your profile. Private means only you can see it.
+            </Text>
+          </View>
+
+          {/* Memory Plan visibility */}
+          <View style={{ gap: 6 }}>
+            <Text className="text-[10px] font-sans font-bold text-neutral-700">Memory Plan</Text>
+            <View className="flex-row gap-2">
+              {VISIBILITY_OPTIONS.map((opt) => {
+                const isSelected = memoryPlanVisibility === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    onPress={() => updateMemoryPlanVisibility(opt.id)}
+                    className={`flex-1 py-2 rounded-lg items-center border ${
+                      isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
+                    }`}
+                  >
+                    <Text className={`text-[10px] font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
+                      {opt.label}
+                    </Text>
+                    <Text className={`text-[8px] font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
+                      {opt.desc}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Memory Queue visibility */}
+          <View style={{ gap: 6 }}>
+            <Text className="text-[10px] font-sans font-bold text-neutral-700">Memory Queue</Text>
+            <View className="flex-row gap-2">
+              {VISIBILITY_OPTIONS.map((opt) => {
+                const isSelected = memoryQueueVisibility === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    onPress={() => updateMemoryQueueVisibility(opt.id)}
+                    className={`flex-1 py-2 rounded-lg items-center border ${
+                      isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
+                    }`}
+                  >
+                    <Text className={`text-[10px] font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
+                      {opt.label}
+                    </Text>
+                    <Text className={`text-[8px] font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
+                      {opt.desc}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         </View>
 
