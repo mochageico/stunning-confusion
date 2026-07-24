@@ -6,6 +6,7 @@ import { AppState } from '../state/useAppState';
 import { VerseTimestamp } from '../types';
 import { FadeInView, HelpTooltip, PulseView } from '../components/ui';
 import { BIBLE_TRANSLATIONS } from '../data';
+import { recordingLabel } from '../lib/recordingLabel';
 
 // Derived from the single source of truth (data.ts) instead of its own
 // separately-hardcoded lookup -- previously listed NIV/NKJV/NLT despite zero
@@ -273,7 +274,7 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
                 {selectedRecording.sourceType === 'imported' ? 'IMPORTED AUDIO' : 'CHAPTER RECITATION'}
               </Text>
               <Text className="text-base font-serif font-black text-neutral-900 leading-none mt-1">
-                {selectedRecording.book} {selectedRecording.chapter}
+                {recordingLabel(selectedRecording)}
               </Text>
             </View>
           </View>

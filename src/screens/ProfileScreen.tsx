@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
 import { AppState } from '../state/useAppState';
+import { recordingLabel } from '../lib/recordingLabel';
 
 export default function ProfileScreen({ state }: { state: AppState }) {
   const {
@@ -299,7 +300,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
                         <View className="flex-1 pr-2">
                           <View className="flex-row items-center gap-1.5">
                             <Text className="text-xs font-black text-[#1A1A1A] leading-tight">
-                              {rec.book} {rec.chapter}
+                              {recordingLabel(rec)}
                             </Text>
                             <Text className="text-[8px] bg-neutral-100 text-neutral-600 font-sans border border-neutral-200 px-1.5 py-0.5 rounded font-normal uppercase">
                               View Sync

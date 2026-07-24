@@ -6,6 +6,7 @@ import { FadeInView, ProgressBar } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
 import { getBookByName } from '../data';
+import { recordingLabel } from '../lib/recordingLabel';
 
 // Helper to assign background/text colors to known users (mirrors original web app).
 const getAvatarStyle = (user: string = '') => {
@@ -282,7 +283,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                     <View className="flex-row items-center gap-1.5">
                       <BookOpen size={11} color="#737373" />
                       <Text className="text-[10px] font-sans font-bold uppercase tracking-wide text-neutral-700">
-                        {rec.book} {rec.chapter} • Full Chapter
+                        {recordingLabel(rec)}
                       </Text>
                     </View>
                   </View>

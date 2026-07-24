@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Check, FileAudio, Folder, Mic, Pause, Play, RotateCcw, Upload } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
@@ -7,6 +7,7 @@ import { FadeInView, PulseView, WaveBars } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
 import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
+import { recordingLabel } from '../lib/recordingLabel';
 
 // Derived from the single source of truth (data.ts) instead of its own
 // hardcoded list -- previously listed NIV/NKJV/NLT despite zero real text
@@ -77,7 +78,6 @@ export default function RecordScreen({ state }: { state: AppState }) {
   // recorded/tagged. Options bounded by the chapter's actual verse count.
   const rangeStartValue = recordingRangeStart ?? 1;
   const rangeEndValue = recordingRangeEnd ?? recordingChapterVerses.length;
-  const verseOptions = recordingChapterVerses.map((v) => ({ id: v.verse, label: String(v.verse) }));
 
   const taggedVerseCount = Object.keys(verseTapTimestamps).length;
   const importTaggedCount = Object.keys(importTapTimestamps).length;
@@ -144,14 +144,16 @@ export default function RecordScreen({ state }: { state: AppState }) {
           </Pressable>
         </View>
 
-        {/* What are you recording/tagging? — book + chapter dropdowns (all 66
-            books, even though most don't have loaded verse content yet) */}
+        {/* What are you recording/tagging? — book + chapter + translation,
+            all in one row now: book box sized to its content instead of
+            flex-1, chapter # right beside it, translation taking the rest
+            of the row (previously its own full-width row below). */}
         <View style={{ gap: 8 }}>
           <Text className="text-[8px] font-extrabold uppercase text-neutral-400 font-sans tracking-wider">
             {subMode === 'record' ? 'WHAT ARE YOU RECORDING?' : 'WHAT IS THIS AUDIO?'}
           </Text>
           <View className="flex-row gap-2" style={{ opacity: isRecording ? 0.5 : 1 }}>
-            <View className="flex-1">
+            <View style={{ width: 130 }}>
               <BookPicker
                 value={recordingBook}
                 onChange={(book) => {
@@ -161,7 +163,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
                 }}
               />
             </View>
-            <View style={{ width: 100 }}>
+            <View style={{ width: 64 }}>
               <Dropdown
                 value={recordingChapter}
                 options={chapterOptions}
@@ -172,29 +174,22 @@ export default function RecordScreen({ state }: { state: AppState }) {
                 }}
               />
             </View>
+            <View className="flex-1">
+              <Dropdown
+                value={recordingTranslation}
+                options={TRANSLATION_OPTIONS}
+                title="Select a Translation"
+                onChange={(val) => {
+                  if (isRecording) return;
+                  setRecordingTranslation(val);
+                }}
+              />
+            </View>
           </View>
         </View>
 
-        <View className="gap-1">
-          <Text className="text-[8px] font-extrabold uppercase text-neutral-400 font-sans tracking-wider">
-            TRANSLATION SELECT
-          </Text>
-          <View style={{ opacity: isRecording ? 0.5 : 1 }}>
-            <Dropdown
-              value={recordingTranslation}
-              options={TRANSLATION_OPTIONS}
-              title="Select a Translation"
-              onChange={(val) => {
-                if (isRecording) return;
-                setRecordingTranslation(val);
-              }}
-            />
-          </View>
-        </View>
-
-        {/* Verse range picker — defaults to the whole chapter; narrowing it
-            here filters the teleprompter, the tap-timestamp denominator, and
-            the saved recording's title/versesStr to just this range. */}
+        {/* Verse range — plain typed numbers, like the "Add Verses" box on
+            the Study Plan screen, instead of scrolling two long dropdowns. */}
         <View className="gap-1">
           <View className="flex-row items-center justify-between">
             <Text className="text-[8px] font-extrabold uppercase text-neutral-400 font-sans tracking-wider">
@@ -213,31 +208,42 @@ export default function RecordScreen({ state }: { state: AppState }) {
               </Pressable>
             )}
           </View>
-          <View className="flex-row gap-2" style={{ opacity: isRecording ? 0.5 : 1 }}>
+          <View className="flex-row gap-2 items-center" style={{ opacity: isRecording ? 0.5 : 1 }}>
             <View className="flex-1">
-              <Dropdown
-                value={rangeStartValue}
-                options={verseOptions}
-                title="Start Verse"
-                onChange={(val) => {
-                  if (isRecording) return;
-                  const num = Number(val);
-                  setRecordingRangeStart(num);
-                  if (num > rangeEndValue) setRecordingRangeEnd(num);
+              <TextInput
+                value={String(rangeStartValue)}
+                editable={!isRecording}
+                keyboardType="numeric"
+                onChangeText={(text) => {
+                  const num = parseInt(text, 10);
+                  if (Number.isNaN(num)) return;
+                  const clamped = Math.max(1, Math.min(num, recordingChapterVerses.length || num));
+                  setRecordingRangeStart(clamped);
+                  if (clamped > rangeEndValue) setRecordingRangeEnd(clamped);
                 }}
+                className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-2 py-2.5 text-xs text-center font-bold"
               />
             </View>
+            <Text className="text-xs font-bold text-neutral-400">to</Text>
             <View className="flex-1">
-              <Dropdown
-                value={rangeEndValue}
-                options={verseOptions.filter((o) => o.id >= rangeStartValue)}
-                title="End Verse"
-                onChange={(val) => {
-                  if (isRecording) return;
-                  setRecordingRangeEnd(Number(val));
+              <TextInput
+                value={String(rangeEndValue)}
+                editable={!isRecording}
+                keyboardType="numeric"
+                onChangeText={(text) => {
+                  const num = parseInt(text, 10);
+                  if (Number.isNaN(num)) return;
+                  const clamped = Math.max(rangeStartValue, Math.min(num, recordingChapterVerses.length || num));
+                  setRecordingRangeEnd(clamped);
                 }}
+                className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-2 py-2.5 text-xs text-center font-bold"
               />
             </View>
+            {recordingChapterVerses.length > 0 && (
+              <Text className="text-[9px] font-mono text-neutral-400 shrink-0">
+                max {recordingChapterVerses.length}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -578,7 +584,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
                       <View className="flex-1 pr-2">
                         <View className="flex-row items-center gap-1.5">
                           <Text className="text-xs font-black text-[#1A1A1A] leading-tight">
-                            {rec.book} {rec.chapter}
+                            {recordingLabel(rec)}
                           </Text>
                           {rec.sourceType === 'imported' && (
                             <Text className="text-[8px] bg-indigo-50 text-indigo-600 font-sans border border-indigo-200 px-1.5 py-0.5 rounded font-bold uppercase">
