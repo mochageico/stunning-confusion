@@ -466,7 +466,12 @@ export function resolveChapterAudio(
   const key = `${book}_${chapter}`;
   const assigned = selectedChapterAudios[key];
   if (assigned) return assigned;
-  return userRecordings.find((r) => r.book.toLowerCase() === book.toLowerCase() && r.chapter === chapter) || null;
+  const matches = userRecordings.filter((r) => r.book.toLowerCase() === book.toLowerCase() && r.chapter === chapter);
+  if (matches.length === 0) return null;
+  // Lowest priority number wins (top of the drag-reorderable list on
+  // ChapterLandingScreen); legacy recordings without a priority sort last.
+  const sorted = [...matches].sort((a, b) => (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER));
+  return sorted[0];
 }
 
 // Shared QueueItem -> VerseState mapper for launching a practice session --
@@ -653,6 +658,11 @@ export function useAppState() {
   const [recordingBook, setRecordingBook] = useState('Romans');
   const [recordingChapter, setRecordingChapter] = useState(8);
   const [recordingTranslation, setRecordingTranslation] = useState('ESV');
+  // Verse-range picker for partial-chapter recording/tagging — null means
+  // "not yet initialized for this chapter" and is treated as the full
+  // chapter's bounds everywhere it's read (see recordingSelectedVerses below).
+  const [recordingRangeStart, setRecordingRangeStart] = useState<number | null>(null);
+  const [recordingRangeEnd, setRecordingRangeEnd] = useState<number | null>(null);
   const [userRecordings, setUserRecordings] = useState<Recording[]>([]);
 
   // Import-audio tagging: the reverse of live recording. Instead of tapping
@@ -4753,6 +4763,24 @@ export function useAppState() {
         .map((verseNum) => ({ verse: verseNum, text: recordingChapterTextData.verses[String(verseNum)] }))
     : [];
 
+  // Picked verse range for partial-chapter recording — null bounds fall back
+  // to the full chapter. Reset whenever the book/chapter changes so a range
+  // picked on a previous chapter (e.g. 3-9) can't silently carry over onto a
+  // shorter one.
+  useEffect(() => {
+    setRecordingRangeStart(null);
+    setRecordingRangeEnd(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingBook, recordingChapter]);
+
+  const recordingRangeStartClamped = recordingRangeStart ?? 1;
+  const recordingRangeEndClamped = recordingRangeEnd ?? recordingChapterVerses.length;
+  const recordingSelectedVerses = recordingChapterVerses.filter(
+    (v) => v.verse >= recordingRangeStartClamped && v.verse <= recordingRangeEndClamped
+  );
+  const isRecordingFullChapterRange =
+    recordingRangeStartClamped === 1 && recordingRangeEndClamped === recordingChapterVerses.length;
+
   // Real chapter text for whichever recording is open in RecordingDetailScreen
   // — drives the Verse Audio-Sync Matrix's preview text (previously a fixed,
   // Romans-8-specific SYNC_VERSE_PREVIEWS array shown for every recording).
@@ -4805,9 +4833,11 @@ export function useAppState() {
       setIsRecording(true);
       setIsRecordingPaused(false);
       setRecordingSeconds(0);
-      // Seed the chapter's first verse at t=0 — recording always starts on
-      // verse 1, so the user only needs to tap starting from the next verse.
-      const firstVerse = recordingChapterVerses[0]?.verse;
+      // Seed the selected range's first verse at t=0 — recording always
+      // starts on the first verse of the picked range (which may not be
+      // verse 1 of the chapter), so the user only needs to tap from the
+      // next verse in the range onward.
+      const firstVerse = recordingSelectedVerses[0]?.verse;
       setVerseTapTimestamps(firstVerse !== undefined ? { [firstVerse]: 0 } : {});
       triggerToast('Recording started — tap each verse number as you reach it.');
     } catch (err) {
@@ -4992,7 +5022,6 @@ export function useAppState() {
     uri: string;
     durationSec: number;
     verseTimestamps: VerseTimestamp[];
-    titleSuffix: string;
     sourceType: 'recorded' | 'imported';
   }) => {
     const uid = auth.currentUser?.uid;
@@ -5048,9 +5077,28 @@ export function useAppState() {
       await uploadTask;
       const audioUrl = await getDownloadURL(fileRef);
 
+      // Range label reflects whatever was actually recorded/tagged (the
+      // verse-range picker on the Record tab), not always "Full Chapter" —
+      // used for both the display title and versesStr.
+      const rangeLabel = isRecordingFullChapterRange
+        ? 'Full Chapter'
+        : recordingRangeStartClamped === recordingRangeEndClamped
+          ? `Verse ${recordingRangeStartClamped}`
+          : `Verses ${recordingRangeStartClamped}-${recordingRangeEndClamped}`;
+      const titleSuffix =
+        params.sourceType === 'imported' ? `${rangeLabel} Imported Recitation` : `${rangeLabel} Recitation`;
+
+      // New recordings default to the BOTTOM of this chapter's priority order
+      // (whatever the user already had as their top pick for this chapter
+      // stays the default) — the user can drag it up from ChapterLandingScreen.
+      const samechapterPriorities = userRecordings
+        .filter((r) => r.book.toLowerCase() === recordingBook.toLowerCase() && r.chapter === recordingChapter)
+        .map((r) => r.priority ?? 0);
+      const nextPriority = samechapterPriorities.length > 0 ? Math.max(...samechapterPriorities) + 1 : 0;
+
       const newRec: Recording = {
         id,
-        title: `${recordingBook} ${recordingChapter} ${params.titleSuffix}`,
+        title: `${recordingBook} ${recordingChapter} ${titleSuffix}`,
         book: recordingBook,
         chapter: recordingChapter,
         translation: recordingTranslation,
@@ -5061,7 +5109,10 @@ export function useAppState() {
         avatar: (auth.currentUser?.displayName || 'M').charAt(0).toUpperCase(),
         audioUrl,
         audioPath,
-        versesStr: 'Full Chapter',
+        versesStr: rangeLabel,
+        startVerse: isRecordingFullChapterRange ? undefined : recordingRangeStartClamped,
+        endVerse: isRecordingFullChapterRange ? undefined : recordingRangeEndClamped,
+        priority: nextPriority,
         verseTimestamps: params.verseTimestamps,
         sharedVisibility: pickedRecordingVisibility,
         sourceType: params.sourceType,
@@ -5100,7 +5151,7 @@ export function useAppState() {
       }
 
       setUserRecordings((prev) => [newRec, ...prev]);
-      triggerToast(`${params.titleSuffix} saved! 🎙️`);
+      triggerToast(`${titleSuffix} saved! 🎙️`);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${uid}/recordings/${id}`);
     }
@@ -5116,11 +5167,10 @@ export function useAppState() {
       uri,
       durationSec: capturedDurationRef.current,
       verseTimestamps: buildVerseTimestamps(
-        recordingChapterVerses.map((v) => v.verse),
+        recordingSelectedVerses.map((v) => v.verse),
         verseTapTimestamps,
         capturedDurationRef.current
       ),
-      titleSuffix: 'Full Chapter Recitation',
       sourceType: 'recorded',
     });
   };
@@ -5134,8 +5184,7 @@ export function useAppState() {
     await persistRecording({
       uri: importedAudioUri,
       durationSec,
-      verseTimestamps: buildVerseTimestamps(recordingChapterVerses.map((v) => v.verse), importTapTimestamps, durationSec),
-      titleSuffix: 'Imported Recitation',
+      verseTimestamps: buildVerseTimestamps(recordingSelectedVerses.map((v) => v.verse), importTapTimestamps, durationSec),
       sourceType: 'imported',
     });
     clearImportedAudio();
@@ -5204,6 +5253,52 @@ export function useAppState() {
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/recordings/${selectedRecording.id}`);
     }
+  };
+
+  // Lets the recording owner rename the "Speaker" shown everywhere this
+  // recording surfaces (RecordingDetailScreen, ChapterLandingScreen's audio
+  // card/selector, the community feed) — same single-field update-and-sync
+  // shape as saveVerseSyncOffsets above.
+  const updateRecordingSpeaker = async (recording: Recording, newSpeaker: string) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const trimmed = newSpeaker.trim() || 'Me';
+    try {
+      await updateDoc(doc(db, 'users', uid, 'recordings', recording.id), { user: trimmed });
+      const updated = { ...recording, user: trimmed };
+      if (selectedRecording?.id === recording.id) setSelectedRecording(updated);
+      setUserRecordings((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      triggerToast('Speaker updated!');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/recordings/${recording.id}`);
+    }
+  };
+
+  // Persists a new drag-to-reorder priority order for one chapter's
+  // recordings (the "Change" list on ChapterLandingScreen) — lower priority
+  // number sorts first, see resolveChapterAudio. Optimistic local update
+  // first for a snappy drag, then only the rows whose priority actually
+  // changed get written to Firestore.
+  const reorderChapterRecordings = async (orderedIds: string[]) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const updates = orderedIds
+      .map((id, idx) => ({ id, priority: idx }))
+      .filter(({ id, priority }) => userRecordings.find((r) => r.id === id)?.priority !== priority);
+    if (updates.length === 0) return;
+    setUserRecordings((prev) =>
+      prev.map((r) => {
+        const u = updates.find((x) => x.id === r.id);
+        return u ? { ...r, priority: u.priority } : r;
+      })
+    );
+    await Promise.all(
+      updates.map(({ id, priority }) =>
+        updateDoc(doc(db, 'users', uid, 'recordings', id), { priority }).catch((err) =>
+          handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/recordings/${id}`)
+        )
+      )
+    );
   };
 
   // Real "Save to My Library": creates a lightweight reference doc in the
@@ -5285,6 +5380,10 @@ export function useAppState() {
     recordingChapter, setRecordingChapter,
     recordingTranslation, setRecordingTranslation,
     recordingChapterVerses,
+    recordingRangeStart, setRecordingRangeStart,
+    recordingRangeEnd, setRecordingRangeEnd,
+    recordingSelectedVerses,
+    isRecordingFullChapterRange,
     selectedRecordingChapterTextData,
     userRecordings, setUserRecordings,
     saveRecordingDialog, setSaveRecordingDialog,
@@ -5484,6 +5583,8 @@ export function useAppState() {
     saveRecordedAudio,
     deleteRecording,
     saveVerseSyncOffsets,
+    updateRecordingSpeaker,
+    reorderChapterRecordings,
     buildVerseTimestamps,
   };
 }

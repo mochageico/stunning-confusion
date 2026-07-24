@@ -163,6 +163,10 @@ export interface Recording {
   avatar?: string;
   category?: 'global' | 'group' | 'friends';
   versesStr?: string;
+  startVerse?: number; // undefined + endVerse undefined == full chapter (back-compat default)
+  endVerse?: number;
+  priority?: number; // ascending sort key among recordings sharing the same book+chapter;
+  // undefined == legacy recording, sorts after any assigned priority (see resolveChapterAudio)
   verseTimestamps?: VerseTimestamp[]; // populated once auto-alignment (phase 2) runs; empty until then
   sharedVisibility?: 'private' | 'circle' | 'public'; // absent/undefined == 'private' (recordings predating this field)
   savedFromUid?: string; // set only on a reference copy saved via "Save to Library" — the original owner's uid

@@ -22,6 +22,12 @@ export default function RecordScreen({ state }: { state: AppState }) {
     recordingChapter,
     recordingTranslation,
     recordingChapterVerses,
+    recordingRangeStart,
+    setRecordingRangeStart,
+    recordingRangeEnd,
+    setRecordingRangeEnd,
+    recordingSelectedVerses,
+    isRecordingFullChapterRange,
     verseTapTimestamps,
     setRecordingBook,
     setRecordingChapter,
@@ -66,6 +72,12 @@ export default function RecordScreen({ state }: { state: AppState }) {
   const chapterOptions = recordingBookMeta
     ? Array.from({ length: recordingBookMeta.chapters }, (_, i) => ({ id: i + 1, label: String(i + 1) }))
     : [];
+
+  // Verse-range picker: which portion of the chapter is about to be
+  // recorded/tagged. Options bounded by the chapter's actual verse count.
+  const rangeStartValue = recordingRangeStart ?? 1;
+  const rangeEndValue = recordingRangeEnd ?? recordingChapterVerses.length;
+  const verseOptions = recordingChapterVerses.map((v) => ({ id: v.verse, label: String(v.verse) }));
 
   const taggedVerseCount = Object.keys(verseTapTimestamps).length;
   const importTaggedCount = Object.keys(importTapTimestamps).length;
@@ -180,6 +192,55 @@ export default function RecordScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
+        {/* Verse range picker — defaults to the whole chapter; narrowing it
+            here filters the teleprompter, the tap-timestamp denominator, and
+            the saved recording's title/versesStr to just this range. */}
+        <View className="gap-1">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-[8px] font-extrabold uppercase text-neutral-400 font-sans tracking-wider">
+              VERSE RANGE
+            </Text>
+            {!isRecordingFullChapterRange && (
+              <Pressable
+                onPress={() => {
+                  if (isRecording) return;
+                  setRecordingRangeStart(null);
+                  setRecordingRangeEnd(null);
+                }}
+                disabled={isRecording}
+              >
+                <Text className="text-[9px] font-bold font-sans underline text-indigo-600">Select All</Text>
+              </Pressable>
+            )}
+          </View>
+          <View className="flex-row gap-2" style={{ opacity: isRecording ? 0.5 : 1 }}>
+            <View className="flex-1">
+              <Dropdown
+                value={rangeStartValue}
+                options={verseOptions}
+                title="Start Verse"
+                onChange={(val) => {
+                  if (isRecording) return;
+                  const num = Number(val);
+                  setRecordingRangeStart(num);
+                  if (num > rangeEndValue) setRecordingRangeEnd(num);
+                }}
+              />
+            </View>
+            <View className="flex-1">
+              <Dropdown
+                value={rangeEndValue}
+                options={verseOptions.filter((o) => o.id >= rangeStartValue)}
+                title="End Verse"
+                onChange={(val) => {
+                  if (isRecording) return;
+                  setRecordingRangeEnd(Number(val));
+                }}
+              />
+            </View>
+          </View>
+        </View>
+
         {subMode === 'record' ? (
           <>
             {/* Tap-to-mark instructions — only relevant, and only shown, while
@@ -191,10 +252,11 @@ export default function RecordScreen({ state }: { state: AppState }) {
                   💡 Tap each verse number the instant you begin reciting it
                 </Text>
                 <Text className="text-[10px] font-sans text-indigo-700">
-                  This times your recitation automatically. Verse 1 is already marked —{' '}
-                  {recordingChapterVerses.length > 1 ? 'start tapping from verse 2.' : ''}
+                  This times your recitation automatically. Verse {recordingSelectedVerses[0]?.verse ?? 1} is already
+                  marked —{' '}
+                  {recordingSelectedVerses.length > 1 ? 'start tapping from the next verse.' : ''}
                   {'  '}
-                  {taggedVerseCount}/{recordingChapterVerses.length} verses marked.
+                  {taggedVerseCount}/{recordingSelectedVerses.length} verses marked.
                 </Text>
               </View>
             )}
@@ -209,12 +271,12 @@ export default function RecordScreen({ state }: { state: AppState }) {
                 TELEPROMPTER SCRIPT
               </Text>
 
-              {recordingChapterVerses.length === 0 ? (
+              {recordingSelectedVerses.length === 0 ? (
                 <Text className="text-xs text-neutral-400 italic">
                   No scripture loaded for {recordingTranslation} — try ESV, KJV, or WEB, the currently imported translations.
                 </Text>
               ) : (
-                recordingChapterVerses.map((v) => {
+                recordingSelectedVerses.map((v) => {
                   const isTapped = verseTapTimestamps[v.verse] !== undefined;
                   return (
                     <Pressable
@@ -368,8 +430,8 @@ export default function RecordScreen({ state }: { state: AppState }) {
                     💡 Play the audio, tap each verse number the instant it begins
                   </Text>
                   <Text className="text-[10px] font-sans text-indigo-700">
-                    Unlike live recording, verse 1 isn't pre-marked — tap it too, whenever it actually starts.{'  '}
-                    {importTaggedCount}/{recordingChapterVerses.length} verses tagged.
+                    Unlike live recording, no verse is pre-marked — tap each one, whenever it actually starts.{'  '}
+                    {importTaggedCount}/{recordingSelectedVerses.length} verses tagged.
                   </Text>
                 </View>
 
@@ -383,13 +445,13 @@ export default function RecordScreen({ state }: { state: AppState }) {
                     TELEPROMPTER SCRIPT
                   </Text>
 
-                  {recordingChapterVerses.length === 0 ? (
+                  {recordingSelectedVerses.length === 0 ? (
                     <Text className="text-xs text-neutral-400 italic">
                       No scripture loaded for {recordingTranslation} — try ESV, KJV, or WEB, the currently
                       imported translations.
                     </Text>
                   ) : (
-                    recordingChapterVerses.map((v) => {
+                    recordingSelectedVerses.map((v) => {
                       const isTapped = importTapTimestamps[v.verse] !== undefined;
                       return (
                         <Pressable

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { PanResponder, Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, Pause, Play } from 'lucide-react-native';
+import { PanResponder, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ArrowLeft, Check, Pause, Pencil, Play, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { VerseTimestamp } from '../types';
@@ -101,11 +101,17 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
     isEditingSync,
     setIsEditingSync,
     saveVerseSyncOffsets,
+    updateRecordingSpeaker,
     buildVerseTimestamps,
     selectedRecordingChapterTextData,
   } = state;
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Local edit-in-place state for the Speaker metadata cell — not seeded
+  // until the user actually taps in to edit, so navigating between
+  // recordings never carries a stale draft into a fresh one.
+  const [isEditingSpeaker, setIsEditingSpeaker] = useState(false);
+  const [speakerDraft, setSpeakerDraft] = useState('');
   // Draft marker positions (verse -> start seconds) for the editing session.
   // Local to this screen -- there's no reason this scratch state needs to
   // survive navigating away and back, unlike the recording data itself.
@@ -329,7 +335,42 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
             </View>
             <View style={{ width: '45%' }}>
               <Text className="text-[8px] uppercase tracking-wider text-neutral-400 font-bold font-sans">Speaker</Text>
-              <Text className="font-extrabold text-neutral-800 text-xs font-sans">{selectedRecording.user || 'Me'}</Text>
+              {isEditingSpeaker ? (
+                <View className="flex-row items-center gap-1.5 mt-0.5">
+                  <TextInput
+                    value={speakerDraft}
+                    onChangeText={setSpeakerDraft}
+                    autoFocus
+                    className="flex-1 font-extrabold text-neutral-800 text-xs font-sans border-b border-neutral-300 py-0.5"
+                  />
+                  <Pressable
+                    onPress={() => {
+                      setIsEditingSpeaker(false);
+                      updateRecordingSpeaker(selectedRecording, speakerDraft);
+                    }}
+                    className="w-5 h-5 rounded-full bg-emerald-600 items-center justify-center"
+                  >
+                    <Check size={10} color="#FFFFFF" />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setIsEditingSpeaker(false)}
+                    className="w-5 h-5 rounded-full border border-neutral-300 items-center justify-center"
+                  >
+                    <X size={10} color="#737373" />
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => {
+                    setSpeakerDraft(selectedRecording.user || 'Me');
+                    setIsEditingSpeaker(true);
+                  }}
+                  className="flex-row items-center gap-1"
+                >
+                  <Text className="font-extrabold text-neutral-800 text-xs font-sans">{selectedRecording.user || 'Me'}</Text>
+                  <Pencil size={9} color="#a3a3a3" />
+                </Pressable>
+              )}
             </View>
           </View>
         </View>

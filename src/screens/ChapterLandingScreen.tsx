@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, Check, ChevronDown, Pause, Play, Printer, Search, SlidersHorizontal, X } from 'lucide-react-native';
+import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
+import { ArrowLeft, Check, ChevronDown, GripVertical, Pause, Play, Printer, Search, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { ChipRow, FadeInView } from '../components/ui';
@@ -58,6 +59,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     showAudioSelector,
     setShowAudioSelector,
     userRecordings,
+    reorderChapterRecordings,
     playingRecordingId,
     setPlayingRecordingId,
     playingRecProgress,
@@ -86,7 +88,12 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const availableNarrations = userRecordings.filter(
     (r) => r.book.toLowerCase() === (selectedBook || '').toLowerCase() && r.chapter === selectedChapter
   );
-  const optionsList = availableNarrations;
+  // Priority-ordered top to bottom -- the top item is this chapter's default
+  // playback source (see resolveChapterAudio); dragging in the panel below
+  // reorders this list and persists the new priority.
+  const optionsList = [...availableNarrations].sort(
+    (a, b) => (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER)
+  );
   const currentAudio = resolveChapterAudio(userRecordings, selectedChapterAudios, selectedBook || '', selectedChapter || 0);
   const isPlayingThis = !!currentAudio && playingRecordingId === currentAudio.id;
 
@@ -258,16 +265,27 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               </View>
             )}
 
-            {/* Dropdown Selector */}
+            {/* Dropdown Selector — priority-ordered, drag-to-reorder list.
+                The top row is this chapter's default (see resolveChapterAudio);
+                tapping a row still just switches the active playback source,
+                same as before. scrollEnabled is off since this always nests
+                inside the page's own ScrollView -- lists here are short
+                (a handful of recordings per chapter at most). */}
             {showAudioSelector && (
               <View className="bg-[#F3F2F1] rounded-lg p-2.5 border border-[#E5E5E5] gap-2">
-                <Text className="text-[9px] font-bold uppercase text-neutral-400 tracking-wider">Select Audio Source</Text>
-                <ScrollView style={{ maxHeight: 120 }} contentContainerStyle={{ gap: 6 }}>
-                  {optionsList.map((opt) => {
+                <Text className="text-[9px] font-bold uppercase text-neutral-400 tracking-wider">
+                  Recordings — drag to reorder priority
+                </Text>
+                <DraggableFlatList
+                  data={optionsList}
+                  scrollEnabled={false}
+                  keyExtractor={(opt) => opt.id}
+                  contentContainerStyle={{ gap: 6 }}
+                  onDragEnd={({ data }) => reorderChapterRecordings(data.map((r) => r.id))}
+                  renderItem={({ item: opt, drag, isActive }: RenderItemParams<Recording>) => {
                     const isSelected = currentAudio.id === opt.id;
                     return (
                       <Pressable
-                        key={opt.id}
                         onPress={() => {
                           setSelectedChapterAudios((prev) => ({
                             ...prev,
@@ -277,11 +295,14 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                           setPlayingRecordingId(null);
                           triggerToast(`Audio changed to ${opt.user}'s recitation`);
                         }}
-                        className={`w-full p-2 rounded-md border flex-row items-center justify-between ${
+                        className={`w-full p-2 rounded-md border flex-row items-center gap-2 ${
                           isSelected ? 'bg-white border-[#1A1A1A]' : 'bg-white/60 border-[#E5E5E5]/50'
-                        }`}
+                        } ${isActive ? 'border-indigo-400' : ''}`}
                       >
-                        <View style={{ maxWidth: 190 }}>
+                        <Pressable onLongPress={drag} hitSlop={8} className="pr-0.5">
+                          <GripVertical size={13} color="#a3a3a3" />
+                        </Pressable>
+                        <View className="flex-1" style={{ maxWidth: 175 }}>
                           <Text className="font-bold text-[10px] text-[#1A1A1A]" numberOfLines={1}>
                             {opt.title}
                           </Text>
@@ -292,8 +313,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                         {isSelected && <Check size={11} color="#1A1A1A" />}
                       </Pressable>
                     );
-                  })}
-                </ScrollView>
+                  }}
+                />
 
                 <View className="border-t border-[#E5E5E5]/60 pt-2">
                   <Pressable

@@ -2,6 +2,7 @@ import './global.css';
 import React from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import {
@@ -156,9 +157,16 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
     setPickedRecordingVisibility,
     pendingRecordingSource,
     importPlayerStatus,
+    recordingSelectedVerses,
+    isRecordingFullChapterRange,
   } = state;
   const isImport = pendingRecordingSource === 'import';
   const durationSec = isImport ? Math.round(importPlayerStatus.duration || 0) : lastRecordingDuration;
+  const rangeLabel = isRecordingFullChapterRange
+    ? 'Full Chapter'
+    : recordingSelectedVerses.length === 1
+      ? `Verse ${recordingSelectedVerses[0]?.verse}`
+      : `Verses ${recordingSelectedVerses[0]?.verse}-${recordingSelectedVerses[recordingSelectedVerses.length - 1]?.verse}`;
   return (
     <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
       <FadeInView style={{ width: '100%', maxWidth: 320 }}>
@@ -190,7 +198,7 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
             <View className="flex-row justify-between">
               <Text className="text-neutral-400 font-bold uppercase text-[9px] font-sans">Scope:</Text>
               <Text className="text-emerald-700 font-bold font-sans text-xs">
-                {isImport ? 'Imported Audio Recitation' : 'Full Chapter Recitation'}
+                {rangeLabel} {isImport ? 'Imported Recitation' : 'Recitation'}
               </Text>
             </View>
           </View>
@@ -665,8 +673,10 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AppShell />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppShell />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
