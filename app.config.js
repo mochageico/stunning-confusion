@@ -42,6 +42,8 @@ module.exports = {
       googleServicesFile: './GoogleService-Info.plist',
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
+        NSPhotoLibraryUsageDescription:
+          'Scripture Memory does not access your photo library. This permission is requested by a library dependency but is unused.',
       },
     },
     android: {
