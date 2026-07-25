@@ -3,7 +3,29 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { Check, ChevronUp, Eye, EyeOff, Info, Mic, MicOff, Pause, Play, RefreshCw, Repeat, Shuffle, Sliders, Sparkles, X } from 'lucide-react-native';
+import {
+  Check,
+  ChevronUp,
+  ClipboardCheck,
+  Eye,
+  EyeOff,
+  Info,
+  ListOrdered,
+  Mic,
+  MicOff,
+  Pause,
+  Play,
+  Puzzle,
+  RefreshCw,
+  Repeat,
+  SearchCheck,
+  Shuffle,
+  Sliders,
+  Sparkles,
+  Trophy,
+  Undo2,
+  X,
+} from 'lucide-react-native';
 
 import { VerseState, QueueItem, Recording } from '../types';
 import { resolveChapterAudio, isReviewDue } from '../state/useAppState';
@@ -18,6 +40,18 @@ import {
   SpeechRecognizer,
   WordOutcome,
 } from '../lib/recitation';
+import {
+  buildJigsawTiles,
+  buildScrambleRounds,
+  buildSwapVerses,
+  scoreSwapAttempt,
+  shuffleOrder,
+  DEFAULT_SWAPS_PER_VERSE,
+  MIN_JIGSAW_VERSES,
+  JigsawTile,
+  ScrambleRound,
+  SwapVerse,
+} from '../lib/drills';
 import { BounceView, ChipRow, DiscreteSlider, FadeInView, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
 import MemoryGrid, { verseAnnotationKey } from './MemoryGrid';
@@ -431,14 +465,28 @@ function PracticeModalsInner({
   };
 
   // ==========================================
-  // LEARN MODE — unified Recall (typed + spoken, either channel advances
-  // the same word) and Reveal tabs. Replaces the old separate Type/Speak/
-  // Reveal entry points: every group-practice button in the app now opens
-  // 'learn' and the tab bar below picks the drill. Internal value 'recite'
-  // is kept for the graded tab (renamed to "Recall" in the UI only) to
-  // avoid touching every reference below.
+  // LEARN MODE — Recall (typed + spoken, either channel advances the same
+  // word) plus a set of supplementary drills. Every group-practice button in
+  // the app opens 'learn' and the mode picker below chooses the drill.
+  // Internal value 'recite' is kept for the graded mode (labeled "Recall" in
+  // the UI) to avoid touching every reference below.
+  //
+  // Recall is the ONLY mode here that can advance a review or bank a mastery
+  // touch. The three supplementary drills are deliberately ungraded — they
+  // exercise different memory skills (sequence, phrasing, error-spotting)
+  // that word-accuracy grading doesn't model, and letting them feed the
+  // graduation engine would blur what "graduated" means. The manual-log
+  // button in the header is the honest escape valve for "I reviewed this
+  // for real, off-app".
+  //
+  // The old "Reveal" tab was removed here: its masking slider duplicated
+  // Recall's own hide-level slider while grading nothing (you could peek the
+  // whole passage), so the only part anyone actually used was its
+  // self-assessed logging buttons — which is exactly what the manual-log
+  // action now does, without pretending to be a drill.
   // ==========================================
-  const [learnTab, setLearnTab] = useState<'recite' | 'reveal'>('recite');
+  type LearnMode = 'recite' | 'jigsaw' | 'scramble' | 'spotSwap';
+  const [learnTab, setLearnTab] = useState<LearnMode>('recite');
 
   // Flat word list across the whole passage -- the single shared "position"
   // both input channels advance, instead of maintaining two separate
@@ -639,10 +687,6 @@ function PracticeModalsInner({
     finalizedTokenCountRef.current = 0;
   };
 
-  const resetRevealPeeks = () => {
-    setSinglePeekedWords({});
-  };
-
   // ==========================================
   // HIDE LEVEL — future words are only masked if their flat index landed in
   // this session's random `hiddenWordIndices` sample (re-rolled every time
@@ -774,15 +818,37 @@ function PracticeModalsInner({
   useEffect(() => {
     resetReciteGame();
     regenerateHiddenWords(activeLevel);
+    // The supplementary drills hold per-passage puzzle state too (tile
+    // placements, decoy positions, round index) -- all of it is meaningless
+    // and potentially out of bounds against a different passage, exactly
+    // like recitePointer/reciteOutcomes above.
+    resetJigsaw();
+    resetScramble();
+    resetSwap();
+    // If the incoming group is too short for the jigsaw, don't leave the
+    // user parked on a mode that no longer exists.
+    if (verses.length < MIN_JIGSAW_VERSES && learnTab === 'jigsaw') setLearnTab('recite');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verses]);
 
-  const switchLearnTab = (tab: 'recite' | 'reveal') => {
+  const switchLearnTab = (tab: LearnMode) => {
     if (tab === learnTab) return;
     speechEngineRef.current?.stop();
     setIsListeningSpeak(false);
     setLearnTab(tab);
   };
+
+  // Jigsaw is only meaningful with enough tiles to genuinely scramble.
+  const learnModes = useMemo(
+    () =>
+      [
+        { id: 'recite' as const, label: 'Recall', Icon: Mic },
+        ...(verses.length >= MIN_JIGSAW_VERSES ? [{ id: 'jigsaw' as const, label: 'Order', Icon: ListOrdered }] : []),
+        { id: 'scramble' as const, label: 'Scramble', Icon: Puzzle },
+        { id: 'spotSwap' as const, label: 'Spot', Icon: SearchCheck },
+      ] as { id: LearnMode; label: string; Icon: typeof Mic }[],
+    [verses.length]
+  );
 
   // ==========================================
   // RECITE — live speech channel. Feeds the exact same recitePointer/
@@ -878,68 +944,96 @@ function PracticeModalsInner({
   }, [recitePointer, learnTab, reciteWordObjects.length]);
 
   // ==========================================
-  // REVEAL MODE STATE & LOGIC (unchanged)
+  // SUPPLEMENTARY DRILL STATE (jigsaw / scramble / spot-the-swap)
+  // All three are ungraded — none of them ever call onUpdateStatus. Their
+  // puzzle data is built once per passage by src/lib/drills.ts and re-rolled
+  // on demand (and whenever `verses` changes, see the reset effect below).
   // ==========================================
-  const [maskLevel, setMaskLevel] = useState(50); // 0, 25, 50, 75, 100
-  const [peekActive, setPeekActive] = useState(false);
-  const [singlePeekedWords, setSinglePeekedWords] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    setSinglePeekedWords({});
-  }, [maskLevel, verses]);
+  // --- Verse-order jigsaw ---
+  const jigsawTiles = useMemo<JigsawTile[]>(() => buildJigsawTiles(verses), [verses]);
+  // Bank order (indices into jigsawTiles) and the slot assignments. A slot
+  // holds a tile index, or null while empty.
+  const [jigsawBankOrder, setJigsawBankOrder] = useState<number[]>(() => shuffleOrder(verses.length));
+  const [jigsawSlots, setJigsawSlots] = useState<(number | null)[]>(() => verses.map(() => null));
+  const [jigsawChecked, setJigsawChecked] = useState(false);
 
-  const shouldHideWord = (word: string, index: number) => {
-    if (maskLevel === 0) return false;
-    if (maskLevel === 100) return true;
-    const hash = (index * 19 + word.length * 3) % 100;
-    return hash < maskLevel;
+  const resetJigsaw = () => {
+    setJigsawBankOrder(shuffleOrder(jigsawTiles.length));
+    setJigsawSlots(jigsawTiles.map(() => null));
+    setJigsawChecked(false);
   };
 
-  // Renders one verse's masked text. NOTE: the web original used an
-  // invisible-sizer + absolute-overlay trick to keep word width perfectly
-  // stable when toggling between masked dots and the real word (which use
-  // different fonts). RN's text layout model doesn't support that overlay
-  // compositing the same way, and `maskLetters` already produces a
-  // same-length string, so we render one or the other directly as nested
-  // <Text> — width may shift very slightly on peek, which is an acceptable
-  // simplification.
-  const renderMaskedText = (v: VerseState) => {
-    const words = v.text.split(/\s+/);
-    return (
-      <Text className="font-serif text-[15px] leading-relaxed text-neutral-800 mb-3">
-        <Text className="font-sans text-[10px] font-bold text-neutral-400">{v.verse} </Text>
-        {words.map((w, idx) => {
-          const isHidden = shouldHideWord(w, idx);
-          const wordKey = `${v.book}-${v.chapter}-${v.verse}-${idx}`;
-          const isWordPeeked = peekActive || singlePeekedWords[wordKey];
+  // --- Phrase scramble ---
+  const [scrambleRounds, setScrambleRounds] = useState<ScrambleRound[]>(() => buildScrambleRounds(verses));
+  const [scrambleIndex, setScrambleIndex] = useState(0);
+  const [scrambleSlots, setScrambleSlots] = useState<(number | null)[]>([]);
+  const [scrambleChecked, setScrambleChecked] = useState(false);
+  const [scrambleSolved, setScrambleSolved] = useState<Set<number>>(new Set());
 
-          if (isHidden) {
-            return (
-              <Text
-                key={idx}
-                onPress={() =>
-                  setSinglePeekedWords((prev) => ({
-                    ...prev,
-                    [wordKey]: !prev[wordKey],
-                  }))
-                }
-                className={`font-serif text-[15px] rounded px-1 ${
-                  isWordPeeked ? 'bg-amber-100 text-neutral-900 font-medium' : 'bg-neutral-100 text-neutral-400 font-mono font-bold'
-                }`}
-              >
-                {isWordPeeked ? w : maskLetters(w)}{' '}
-              </Text>
-            );
-          }
+  const currentScrambleRound = scrambleRounds[scrambleIndex] ?? null;
 
-          return (
-            <Text key={idx} className="font-serif text-[15px] text-neutral-800">
-              {w}{' '}
-            </Text>
-          );
-        })}
-      </Text>
-    );
+  // Slots are sized to whichever verse is on screen, so they have to be
+  // rebuilt on every round change (not just on a full reset).
+  useEffect(() => {
+    setScrambleSlots(currentScrambleRound ? currentScrambleRound.phrases.map(() => null) : []);
+    setScrambleChecked(false);
+  }, [scrambleIndex, currentScrambleRound]);
+
+  // A round confirms itself as soon as the tiles are in the right order, so
+  // the completion mark can't hang off the Check button (which the user
+  // never has to press on a correct run).
+  useEffect(() => {
+    if (!currentScrambleRound) return;
+    const complete = scrambleSlots.length > 0 && scrambleSlots.every((p, i) => p === i);
+    if (complete) setScrambleSolved((prev) => (prev.has(scrambleIndex) ? prev : new Set(prev).add(scrambleIndex)));
+  }, [scrambleSlots, scrambleIndex, currentScrambleRound]);
+
+  const resetScramble = () => {
+    setScrambleRounds(buildScrambleRounds(verses));
+    setScrambleIndex(0);
+    setScrambleChecked(false);
+    setScrambleSolved(new Set());
+  };
+
+  // --- Spot-the-swap ---
+  const [swapsPerVerse, setSwapsPerVerse] = useState(DEFAULT_SWAPS_PER_VERSE);
+  const [swapVerses, setSwapVerses] = useState<SwapVerse[]>(() => buildSwapVerses(verses, DEFAULT_SWAPS_PER_VERSE));
+  const [swapSelected, setSwapSelected] = useState<Set<number>>(new Set());
+  const [swapSubmitted, setSwapSubmitted] = useState(false);
+
+  const resetSwap = (perVerse: number = swapsPerVerse) => {
+    setSwapVerses(buildSwapVerses(verses, perVerse));
+    setSwapSelected(new Set());
+    setSwapSubmitted(false);
+  };
+
+  // ==========================================
+  // MANUAL LOG — the honest replacement for the old Reveal tab's
+  // self-assessment buttons. Available from every mode (and mirrored on
+  // Home's due-review rows) for reviews genuinely done off-app: in the car,
+  // from a paper card, out loud on a walk. It records the same outcomes the
+  // Reveal tab did, just without dressing itself up as a drill.
+  //
+  // drillType 'reveal' is reused as the TouchLog marker for "self-reported,
+  // not machine-graded" -- that's what it has always actually meant, and
+  // keeping it avoids a schema change to every historical touch log.
+  // ==========================================
+  const [showManualLog, setShowManualLog] = useState(false);
+
+  // `perfect` maps onto handleReviewCompleted's contract in useAppState.ts:
+  // undefined = "the drill couldn't measure accuracy, treat as a claimed
+  // perfect run" (banks a mastery touch), false = counts as a review only.
+  const submitManualLog = (outcome: 'perfect' | 'passed' | 'practice') => {
+    setShowManualLog(false);
+    if (outcome === 'practice') {
+      onUpdateStatus(verses, 'learning', 'reveal');
+    } else if (outcome === 'passed') {
+      onUpdateStatus(verses, 'memorized', 'reveal', { perfect: false });
+    } else {
+      onUpdateStatus(verses, 'memorized', 'reveal');
+    }
+    handleGroupComplete();
   };
 
   // Tapping a verse in the reading pane either jumps playback straight to it
@@ -1051,6 +1145,18 @@ function PracticeModalsInner({
               </Text>
             </View>
           )}
+          {/* Manual log -- replaces the old Reveal tab's self-assessment
+              buttons. Available from every learn mode, since "I already did
+              this off-app" isn't tied to any particular drill. */}
+          {type === 'learn' && (
+            <Pressable
+              onPress={() => setShowManualLog(true)}
+              className="w-10 h-10 rounded-full border border-neutral-300 items-center justify-center shrink-0"
+              hitSlop={8}
+            >
+              <ClipboardCheck size={17} color="#262626" />
+            </Pressable>
+          )}
           <Pressable
             onPress={type === 'listen' ? () => setListenMinimized(true) : onClose}
             className="w-10 h-10 rounded-full border border-neutral-300 items-center justify-center shrink-0"
@@ -1060,6 +1166,42 @@ function PracticeModalsInner({
           </Pressable>
         </View>
       </View>
+
+      {/* ======================================================== */}
+      {/* MANUAL LOG SHEET                                          */}
+      {/* ======================================================== */}
+      {showManualLog && (
+        <View className="absolute inset-0 bg-black/40 z-[60] justify-end" id="manual_log_sheet">
+          <Pressable className="flex-1" onPress={() => setShowManualLog(false)} />
+          <View className="bg-white rounded-t-3xl p-5 gap-3" style={{ paddingBottom: insets.bottom + 20 }}>
+            <View className="items-center gap-1 mb-1">
+              <ClipboardCheck size={22} color="#171717" />
+              <Text className="font-serif font-bold text-base text-neutral-900">Log this review manually</Text>
+              <Text className="text-[11px] text-neutral-500 font-sans text-center px-2">
+                For reviews you actually did — out loud in the car, from a card, anywhere but here. {referenceText}
+              </Text>
+            </View>
+
+            <Pressable onPress={() => submitManualLog('perfect')} className="w-full py-2.5 bg-emerald-600 rounded-xl items-center">
+              <Text className="font-sans font-bold text-xs text-white">Perfect — no mistakes</Text>
+              <Text className="text-[9px] text-emerald-100 font-sans mt-0.5">Counts as a review and toward mastery</Text>
+            </Pressable>
+
+            <Pressable onPress={() => submitManualLog('passed')} className="w-full py-2.5 bg-indigo-600 rounded-xl items-center">
+              <Text className="font-sans font-bold text-xs text-white">Got it, with a stumble</Text>
+              <Text className="text-[9px] text-indigo-100 font-sans mt-0.5">Counts as a review only, no mastery touch</Text>
+            </Pressable>
+
+            <Pressable onPress={() => submitManualLog('practice')} className="w-full py-2 border border-dashed border-neutral-300 rounded-xl items-center">
+              <Text className="font-sans font-bold text-[11px] text-neutral-500">Needs more practice</Text>
+            </Pressable>
+
+            <Pressable onPress={() => setShowManualLog(false)} className="w-full py-1.5 items-center">
+              <Text className="font-sans font-bold text-[11px] text-neutral-400">Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       {/* Main Panel */}
       <View className="flex-1 justify-between py-1">
@@ -1329,26 +1471,27 @@ function PracticeModalsInner({
               </BounceView>
             )}
 
-            {/* Recall / Reveal Tab bar */}
+            {/* Mode picker. Recall is the only graded mode; the rest are
+                supplementary drills (see the LearnMode comment above). */}
             <View className="flex-row bg-neutral-100 p-1 rounded-xl mb-3.5 border border-neutral-200 shrink-0">
-              <Pressable
-                onPress={() => switchLearnTab('recite')}
-                className={`flex-1 py-1.5 rounded-lg flex-row items-center justify-center gap-1.5 ${learnTab === 'recite' ? 'bg-[#1A1A1A]' : ''}`}
-              >
-                <Mic size={12} color={learnTab === 'recite' ? '#ffffff' : '#737373'} />
-                <Text className={`text-[10px] uppercase tracking-wider font-sans font-extrabold ${learnTab === 'recite' ? 'text-white' : 'text-neutral-500'}`}>
-                  Recall
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => switchLearnTab('reveal')}
-                className={`flex-1 py-1.5 rounded-lg flex-row items-center justify-center gap-1.5 ${learnTab === 'reveal' ? 'bg-[#1A1A1A]' : ''}`}
-              >
-                <Eye size={12} color={learnTab === 'reveal' ? '#ffffff' : '#737373'} />
-                <Text className={`text-[10px] uppercase tracking-wider font-sans font-extrabold ${learnTab === 'reveal' ? 'text-white' : 'text-neutral-500'}`}>
-                  Reveal
-                </Text>
-              </Pressable>
+              {learnModes.map(({ id, label, Icon }) => {
+                const active = learnTab === id;
+                return (
+                  <Pressable
+                    key={id}
+                    onPress={() => switchLearnTab(id)}
+                    className={`flex-1 py-1.5 rounded-lg flex-row items-center justify-center gap-1 ${active ? 'bg-[#1A1A1A]' : ''}`}
+                  >
+                    <Icon size={12} color={active ? '#ffffff' : '#737373'} />
+                    <Text
+                      className={`text-[9px] uppercase tracking-wider font-sans font-extrabold ${active ? 'text-white' : 'text-neutral-500'}`}
+                      numberOfLines={1}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             {learnTab === 'recite' ? (
@@ -1838,96 +1981,393 @@ function PracticeModalsInner({
                   );
                 })()
               )
-            ) : (
+            ) : learnTab === 'jigsaw' ? (
               /* ======================================================== */
-              /* REVEAL TAB VIEW                                           */
+              /* VERSE-ORDER JIGSAW — reassemble the passage's verses in    */
+              /* order. Ungraded: tests sequence memory, which word-        */
+              /* accuracy grading doesn't model at all.                     */
               /* ======================================================== */
-              <View className="flex-1 justify-between">
-                {/* Reading Box */}
-                <ScrollView className="bg-neutral-50 border border-neutral-200 rounded-2xl flex-1 mb-3" contentContainerClassName="p-4 gap-3 pb-8">
-                  {verses.map((v) => (
-                    <View key={v.verse}>{renderMaskedText(v)}</View>
-                  ))}
-                  <View className="flex-row items-center gap-1 bg-white/90 p-1 rounded border border-neutral-100 self-start">
-                    <Info size={10} color="#a3a3a3" />
-                    <Text className="text-[9px] text-neutral-400 font-bold font-sans">Tap dots to peek, or set masking below</Text>
-                  </View>
-                </ScrollView>
+              (() => {
+                const placed = jigsawSlots.filter((s) => s !== null).length;
+                const allPlaced = placed === jigsawTiles.length;
+                const correctCount = jigsawSlots.filter((tileIdx, slotIdx) => tileIdx !== null && jigsawTiles[tileIdx].correctIndex === slotIdx).length;
+                const solved = allPlaced && correctCount === jigsawTiles.length;
+                const bankRemaining = jigsawBankOrder.filter((t) => !jigsawSlots.includes(t));
 
-                {/* Bottom masking control & Feedback buttons */}
-                <View className="gap-3 shrink-0">
-                  {/* Masking Strength Control */}
-                  <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-3 gap-2">
-                    <View className="flex-row justify-between items-center">
-                      <Text className="text-[10px] font-sans font-bold text-neutral-600">Masking Strength</Text>
-                      <Text className="text-[10px] font-mono font-bold text-neutral-900">{maskLevel}% Hidden</Text>
+                return (
+                  <View className="flex-1 justify-between">
+                    <ScrollView className="flex-1 mb-2" contentContainerClassName="gap-2 pb-2">
+                      <View className="flex-row items-center gap-1 mb-0.5">
+                        <Info size={10} color="#a3a3a3" />
+                        <Text className="text-[9px] text-neutral-400 font-bold font-sans">
+                          Tap a verse to place it, tap a placed verse to take it back
+                        </Text>
+                      </View>
+
+                      {/* Ordered slots */}
+                      {jigsawSlots.map((tileIdx, slotIdx) => {
+                        const tile = tileIdx === null ? null : jigsawTiles[tileIdx];
+                        const isRight = tile !== null && tile.correctIndex === slotIdx;
+                        const showResult = jigsawChecked && tile !== null;
+                        return (
+                          <Pressable
+                            key={`slot-${slotIdx}`}
+                            onPress={() => {
+                              if (tileIdx === null) return;
+                              setJigsawSlots((prev) => prev.map((s, i) => (i === slotIdx ? null : s)));
+                              setJigsawChecked(false);
+                            }}
+                            className={`border-2 rounded-xl p-2.5 min-h-[52px] justify-center ${
+                              tile === null
+                                ? 'border-dashed border-neutral-300 bg-neutral-50'
+                                : showResult
+                                  ? isRight
+                                    ? 'border-emerald-500 bg-emerald-50'
+                                    : 'border-red-400 bg-red-50'
+                                  : 'border-[#1A1A1A] bg-white'
+                            }`}
+                          >
+                            {tile === null ? (
+                              <Text className="text-[10px] font-sans font-bold text-neutral-400">Slot {slotIdx + 1}</Text>
+                            ) : (
+                              <View className="flex-row items-start gap-2">
+                                <View className={`px-1.5 py-0.5 rounded ${showResult ? (isRight ? 'bg-emerald-600' : 'bg-red-500') : 'bg-neutral-900'}`}>
+                                  <Text className="text-[9px] font-mono font-bold text-white">{slotIdx + 1}</Text>
+                                </View>
+                                <Text className="font-serif text-[13px] leading-snug text-neutral-800 flex-1">{tile.text}</Text>
+                              </View>
+                            )}
+                          </Pressable>
+                        );
+                      })}
+
+                      {/* Tile bank */}
+                      {bankRemaining.length > 0 && (
+                        <View className="mt-1 gap-2">
+                          <Text className="text-[9px] font-sans font-bold text-neutral-400 uppercase tracking-wider">Verses to place</Text>
+                          {bankRemaining.map((tileIdx) => (
+                            <Pressable
+                              key={`bank-${jigsawTiles[tileIdx].id}`}
+                              onPress={() => {
+                                const firstEmpty = jigsawSlots.findIndex((s) => s === null);
+                                if (firstEmpty === -1) return;
+                                setJigsawSlots((prev) => prev.map((s, i) => (i === firstEmpty ? tileIdx : s)));
+                                setJigsawChecked(false);
+                              }}
+                              className="border border-neutral-300 bg-neutral-50 rounded-xl p-2.5"
+                            >
+                              <Text className="font-serif text-[13px] leading-snug text-neutral-700">{jigsawTiles[tileIdx].text}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+                    </ScrollView>
+
+                    <View className="shrink-0 gap-2">
+                      {solved ? (
+                        <View className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex-row items-center justify-center gap-2">
+                          <Trophy size={14} color="#059669" />
+                          <Text className="font-sans font-bold text-[11px] text-emerald-800">Correct order! Practice only — nothing logged.</Text>
+                        </View>
+                      ) : jigsawChecked ? (
+                        <View className="bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                          <Text className="font-sans font-bold text-[11px] text-amber-800 text-center">
+                            {correctCount} of {jigsawTiles.length} in the right place — tap a wrong one to move it.
+                          </Text>
+                        </View>
+                      ) : null}
+                      <View className="flex-row gap-2">
+                        <Pressable onPress={resetJigsaw} className="flex-1 py-2 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5">
+                          <Undo2 size={13} color="#404040" />
+                          <Text className="font-sans font-bold text-[11px] text-neutral-700">Reshuffle</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setJigsawChecked(true)}
+                          disabled={!allPlaced}
+                          className={`flex-1 py-2 rounded-xl flex-row items-center justify-center gap-1.5 ${allPlaced ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
+                        >
+                          <Check size={13} color={allPlaced ? '#ffffff' : '#a3a3a3'} />
+                          <Text className={`font-sans font-bold text-[11px] ${allPlaced ? 'text-white' : 'text-neutral-400'}`}>Check Order</Text>
+                        </Pressable>
+                      </View>
                     </View>
-
-                    <DiscreteSlider
-                      value={maskLevel}
-                      onChange={setMaskLevel}
-                      options={[
-                        { id: 0, label: 'Visible' },
-                        { id: 25, label: '25%' },
-                        { id: 50, label: '50%' },
-                        { id: 75, label: '75%' },
-                        { id: 100, label: 'Blank' },
-                      ]}
-                    />
-
-                    <Pressable
-                      onPressIn={() => setPeekActive(true)}
-                      onPressOut={() => setPeekActive(false)}
-                      className={`w-full py-1.5 border rounded-lg flex-row items-center justify-center gap-1.5 ${
-                        peekActive ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-300'
-                      }`}
-                    >
-                      {peekActive ? <EyeOff size={12} color="#ffffff" /> : <Eye size={12} color="#262626" />}
-                      <Text className={`font-sans font-bold text-[11px] ${peekActive ? 'text-white' : 'text-neutral-800'}`}>
-                        {peekActive ? 'Peeking (release to hide)' : 'Hold to Peek All'}
-                      </Text>
-                    </Pressable>
                   </View>
+                );
+              })()
+            ) : learnTab === 'scramble' ? (
+              /* ======================================================== */
+              /* PHRASE SCRAMBLE — rebuild one verse from 3-4 word thought  */
+              /* units. Ungraded.                                           */
+              /* ======================================================== */
+              (() => {
+                if (!currentScrambleRound) {
+                  return (
+                    <View className="flex-1 items-center justify-center px-6 gap-2">
+                      <Puzzle size={28} color="#a3a3a3" />
+                      <Text className="font-sans font-bold text-sm text-neutral-600 text-center">Nothing to scramble</Text>
+                      <Text className="text-[11px] text-neutral-400 font-sans text-center">
+                        These verses are too short to split into phrase tiles. Try Recall instead.
+                      </Text>
+                    </View>
+                  );
+                }
 
-                  {/* Assessment Panel */}
-                  <View>
-                    <Text className="text-center text-[9px] font-sans font-bold text-neutral-400 tracking-wider mb-1.5 uppercase">
-                      How well did you recall this passage?
-                    </Text>
-                    <View className="gap-2">
+                const round = currentScrambleRound;
+                const bankRemaining = round.bankOrder.filter((p) => !scrambleSlots.includes(p));
+                const allPlaced = scrambleSlots.length > 0 && scrambleSlots.every((s) => s !== null);
+                const solved = allPlaced && scrambleSlots.every((p, i) => p === i);
+                const isLastRound = scrambleIndex >= scrambleRounds.length - 1;
+
+                return (
+                  <View className="flex-1 justify-between">
+                    <ScrollView className="flex-1 mb-2" contentContainerClassName="gap-2 pb-2">
+                      <View className="flex-row items-center justify-between">
+                        <Text className="text-[9px] font-sans font-bold text-neutral-400 uppercase tracking-wider">
+                          {round.label} — verse {scrambleIndex + 1} of {scrambleRounds.length}
+                        </Text>
+                        {scrambleSolved.has(scrambleIndex) && <Check size={12} color="#059669" />}
+                      </View>
+
+                      {/* Construct box. A correct arrangement confirms itself
+                          the moment it's complete (no Check press needed) --
+                          the last tile landing IS the answer. Only a wrong
+                          arrangement waits for an explicit Check, so the
+                          drill never pre-emptively tells you you're wrong
+                          while you're still placing tiles. */}
+                      <View
+                        className={`border-2 rounded-2xl p-3 min-h-[110px] ${
+                          solved
+                            ? 'border-emerald-500 bg-emerald-50'
+                            : scrambleChecked
+                              ? 'border-red-400 bg-red-50'
+                              : 'border-[#1A1A1A] bg-white'
+                        }`}
+                      >
+                        {scrambleSlots.every((s) => s === null) ? (
+                          <Text className="text-[11px] text-neutral-400 font-sans font-bold">Tap phrases below to build the verse…</Text>
+                        ) : (
+                          <View className="flex-row flex-wrap gap-1.5">
+                            {scrambleSlots.map((phraseIdx, slotIdx) =>
+                              phraseIdx === null ? null : (
+                                <Pressable
+                                  key={`s-${slotIdx}`}
+                                  onPress={() => {
+                                    // Remove this tile and close the gap, so
+                                    // the next placement always lands at the
+                                    // end rather than in a hole mid-sentence.
+                                    setScrambleSlots((prev) => {
+                                      const kept = prev.filter((p, i) => i !== slotIdx && p !== null) as number[];
+                                      return prev.map((_, i) => (i < kept.length ? kept[i] : null));
+                                    });
+                                    setScrambleChecked(false);
+                                  }}
+                                  className={`px-2 py-1 rounded-lg border ${
+                                    scrambleChecked && phraseIdx !== slotIdx ? 'bg-red-100 border-red-300' : 'bg-neutral-900 border-neutral-900'
+                                  }`}
+                                >
+                                  <Text className={`font-serif text-[12.5px] ${scrambleChecked && phraseIdx !== slotIdx ? 'text-red-800' : 'text-white'}`}>
+                                    {round.phrases[phraseIdx]}
+                                  </Text>
+                                </Pressable>
+                              )
+                            )}
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Tile bank */}
+                      {bankRemaining.length > 0 && (
+                        <View className="flex-row flex-wrap gap-1.5 mt-1">
+                          {bankRemaining.map((phraseIdx) => (
+                            <Pressable
+                              key={`b-${phraseIdx}`}
+                              onPress={() => {
+                                const firstEmpty = scrambleSlots.findIndex((s) => s === null);
+                                if (firstEmpty === -1) return;
+                                setScrambleSlots((prev) => prev.map((s, i) => (i === firstEmpty ? phraseIdx : s)));
+                                setScrambleChecked(false);
+                              }}
+                              className="px-2 py-1 rounded-lg border border-neutral-300 bg-neutral-50"
+                            >
+                              <Text className="font-serif text-[12.5px] text-neutral-700">{round.phrases[phraseIdx]}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+                    </ScrollView>
+
+                    <View className="shrink-0 gap-2">
+                      {(solved || scrambleChecked) && (
+                        <View className={`rounded-xl p-2.5 ${solved ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
+                          <Text className={`font-sans font-bold text-[11px] text-center ${solved ? 'text-emerald-800' : 'text-amber-800'}`}>
+                            {solved
+                              ? isLastRound
+                                ? 'That’s the whole passage! Practice only — nothing logged.'
+                                : 'That’s the verse! Practice only — nothing logged.'
+                              : 'Not quite — tap a red tile to send it back.'}
+                          </Text>
+                        </View>
+                      )}
                       <View className="flex-row gap-2">
                         <Pressable
                           onPress={() => {
-                            onUpdateStatus(verses, 'memorized', 'reveal');
-                            handleGroupComplete();
+                            setScrambleSlots(round.phrases.map(() => null));
+                            setScrambleChecked(false);
                           }}
-                          className="flex-1 py-2 px-1 bg-emerald-600 rounded-xl items-center"
+                          className="flex-1 py-2 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5"
                         >
-                          <Text className="font-sans font-bold text-[10.5px] text-white">I Got It! (Log Reveal) 🌟</Text>
+                          <Undo2 size={13} color="#404040" />
+                          <Text className="font-sans font-bold text-[11px] text-neutral-700">Clear</Text>
                         </Pressable>
-                        <Pressable
-                          onPress={() => {
-                            resetRevealPeeks();
-                            switchLearnTab('recite');
-                          }}
-                          className="flex-1 py-2 px-1 bg-indigo-600 rounded-xl items-center"
-                        >
-                          <Text className="font-sans font-bold text-[10.5px] text-white">Recall Instead 🎙️</Text>
-                        </Pressable>
+                        {solved && !isLastRound ? (
+                          <Pressable
+                            onPress={() => setScrambleIndex((i) => i + 1)}
+                            className="flex-1 py-2 rounded-xl bg-emerald-600 flex-row items-center justify-center gap-1.5"
+                          >
+                            <Text className="font-sans font-bold text-[11px] text-white">Next Verse</Text>
+                          </Pressable>
+                        ) : (
+                          <Pressable
+                            onPress={() => setScrambleChecked(true)}
+                            disabled={!allPlaced}
+                            className={`flex-1 py-2 rounded-xl flex-row items-center justify-center gap-1.5 ${allPlaced ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
+                          >
+                            <Check size={13} color={allPlaced ? '#ffffff' : '#a3a3a3'} />
+                            <Text className={`font-sans font-bold text-[11px] ${allPlaced ? 'text-white' : 'text-neutral-400'}`}>Check</Text>
+                          </Pressable>
+                        )}
                       </View>
-                      <Pressable
-                        onPress={() => {
-                          onUpdateStatus(verses, 'learning');
-                          handleGroupComplete();
-                        }}
-                        className="w-full py-1.5 border border-dashed border-neutral-300 rounded-xl items-center"
-                      >
-                        <Text className="font-sans font-bold text-[10.5px] text-neutral-500">Need Practice 🔄</Text>
-                      </Pressable>
                     </View>
                   </View>
-                </View>
-              </View>
+                );
+              })()
+            ) : (
+              /* ======================================================== */
+              /* SPOT-THE-SWAP — a few words per verse are replaced with    */
+              /* real words from elsewhere in the passage; tap the          */
+              /* imposters. Ungraded.                                       */
+              /* ======================================================== */
+              (() => {
+                const score = scoreSwapAttempt(swapVerses, swapSelected);
+                const noDecoys = score.totalDecoys === 0;
+
+                return (
+                  <View className="flex-1 justify-between">
+                    <ScrollView className="flex-1 mb-2" contentContainerClassName="gap-3 pb-2">
+                      <View className="flex-row items-center gap-1">
+                        <Info size={10} color="#a3a3a3" />
+                        <Text className="text-[9px] text-neutral-400 font-bold font-sans">
+                          {swapSubmitted ? 'Green = caught, red = missed, amber = wrongly flagged' : 'Tap every word that does not belong'}
+                        </Text>
+                      </View>
+
+                      {noDecoys ? (
+                        <Text className="text-[11px] text-neutral-400 font-sans">
+                          This passage is too short to hide imposters in. Try a longer selection.
+                        </Text>
+                      ) : (
+                        swapVerses.map((sv) => (
+                          <Text key={sv.id} className="font-serif text-[15px] leading-relaxed text-neutral-800">
+                            <Text className="font-sans text-[10px] font-bold text-neutral-400">{sv.label} </Text>
+                            {sv.tokens.map((tok) => {
+                              const isSelected = swapSelected.has(tok.index);
+                              let cls = 'text-neutral-800';
+                              if (swapSubmitted) {
+                                if (tok.isDecoy && isSelected) cls = 'text-emerald-700 font-bold';
+                                else if (tok.isDecoy && !isSelected) cls = 'text-red-600 font-bold underline';
+                                else if (!tok.isDecoy && isSelected) cls = 'text-amber-600 line-through';
+                              } else if (isSelected) {
+                                cls = 'text-indigo-700 font-bold underline';
+                              }
+                              return (
+                                <Text
+                                  key={tok.index}
+                                  onPress={
+                                    swapSubmitted
+                                      ? undefined
+                                      : () =>
+                                          setSwapSelected((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(tok.index)) next.delete(tok.index);
+                                            else next.add(tok.index);
+                                            return next;
+                                          })
+                                  }
+                                  className={`font-serif text-[15px] ${cls}`}
+                                >
+                                  {tok.display}{' '}
+                                </Text>
+                              );
+                            })}
+                          </Text>
+                        ))
+                      )}
+
+                      {/* After submitting, show what the swapped words really were */}
+                      {swapSubmitted && score.totalDecoys > 0 && (
+                        <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-1">
+                          <Text className="text-[9px] font-sans font-bold text-neutral-400 uppercase tracking-wider">The real words</Text>
+                          {swapVerses.flatMap((sv) =>
+                            sv.tokens
+                              .filter((t) => t.isDecoy)
+                              .map((t) => (
+                                <Text key={t.index} className="font-serif text-[12px] text-neutral-600">
+                                  <Text className="text-red-600 line-through">{t.display}</Text> → <Text className="text-emerald-700 font-bold">{t.original}</Text>
+                                </Text>
+                              ))
+                          )}
+                        </View>
+                      )}
+                    </ScrollView>
+
+                    <View className="shrink-0 gap-2">
+                      {swapSubmitted ? (
+                        <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-2.5">
+                          <Text className="font-sans font-bold text-[11px] text-neutral-800 text-center">
+                            Caught {score.caught} of {score.totalDecoys}
+                            {score.falseAlarms > 0 ? ` · ${score.falseAlarms} wrongly flagged` : ''} — practice only, nothing logged.
+                          </Text>
+                        </View>
+                      ) : (
+                        <View className="flex-row items-center justify-between bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
+                          <Text className="text-[10px] font-sans font-bold text-neutral-600">Swaps per verse</Text>
+                          <ChipRow
+                            options={[
+                              { id: 1, label: '1' },
+                              { id: 2, label: '2' },
+                              { id: 3, label: '3' },
+                            ]}
+                            value={swapsPerVerse}
+                            onChange={(n) => {
+                              setSwapsPerVerse(n);
+                              resetSwap(n);
+                            }}
+                          />
+                        </View>
+                      )}
+                      <View className="flex-row gap-2">
+                        <Pressable
+                          onPress={() => resetSwap()}
+                          className="flex-1 py-2 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5"
+                        >
+                          <Shuffle size={13} color="#404040" />
+                          <Text className="font-sans font-bold text-[11px] text-neutral-700">New Swaps</Text>
+                        </Pressable>
+                        {!swapSubmitted && (
+                          <Pressable
+                            onPress={() => setSwapSubmitted(true)}
+                            disabled={noDecoys}
+                            className={`flex-1 py-2 rounded-xl flex-row items-center justify-center gap-1.5 ${noDecoys ? 'bg-neutral-200' : 'bg-[#1A1A1A]'}`}
+                          >
+                            <Check size={13} color={noDecoys ? '#a3a3a3' : '#ffffff'} />
+                            <Text className={`font-sans font-bold text-[11px] ${noDecoys ? 'text-neutral-400' : 'text-white'}`}>Check</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })()
             )}
           </View>
         )}

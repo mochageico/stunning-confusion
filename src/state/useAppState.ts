@@ -81,6 +81,7 @@ export type ScreenName =
   | 'activePlan'
   | 'savedPlans'
   | 'memoryCalendar'
+  | 'referenceDrill'
   | 'memberProfile'
   | 'studyPlanDetail'
   | 'fullHistory'
@@ -106,6 +107,7 @@ const HOME_TAB_SCREENS: ScreenName[] = [
   'activePlan',
   'savedPlans',
   'memoryCalendar',
+  'referenceDrill',
 ];
 
 export type TabName = 'home' | 'community' | 'record' | 'profile';
@@ -4207,8 +4209,9 @@ export function useAppState() {
   // "close enough" (>= 90% word accuracy): it still counts as a completed
   // spaced-repetition review, but does NOT bank a mastery touch for a
   // learning verse — touches require a perfect run. Omitted (undefined)
-  // means the drill couldn't measure accuracy (e.g. reveal mode's
-  // self-assessment) and is treated as the user claiming a perfect run.
+  // means nothing measured the accuracy (the manual-log action's "Perfect"
+  // option, where the user reviewed off-app) and is treated as the user
+  // claiming a perfect run.
   const handleReviewCompleted = async (
     item: QueueItem,
     success: boolean,
@@ -4258,9 +4261,9 @@ export function useAppState() {
           triggerToast('Good recall! A run must be perfect (no missed words) to bank a mastery touch. 🔒');
           return;
         }
-        // 3-Touch Mastery Gate checks. PracticeModals' Learn/Reveal tabs
-        // always pass an explicit drillType now; 'speak' only remains as a
-        // fallback for any caller that doesn't.
+        // 3-Touch Mastery Gate checks. PracticeModals' Recall mode and the
+        // manual-log action always pass an explicit drillType now; 'speak'
+        // only remains as a fallback for any caller that doesn't.
         const inferredType = drillType || 'speak';
         const isValid = validateTouch(item, inferredType);
 
@@ -4635,8 +4638,8 @@ export function useAppState() {
 
     // Route completion results to our 7-6-5 Deterministic Retention Engine!
     const success = newStatus === 'memorized';
-    // PracticeModals' Learn/Reveal tabs always pass an explicit
-    // customDrillType now; 'speak' only remains as a fallback.
+    // PracticeModals' Recall mode and the manual-log action always pass an
+    // explicit customDrillType now; 'speak' only remains as a fallback.
     const drillType = customDrillType || 'speak';
     for (const v of versesToUpdate) {
       // Read through the ref, not the render-time snapshot — each loop

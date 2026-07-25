@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { Volume2, BookMarked, FolderOpen } from 'lucide-react-native';
+import { Volume2, BookMarked, ClipboardCheck, FolderOpen, Target } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, VerseState } from '../types';
@@ -51,6 +51,60 @@ function groupQueueItems(items: QueueItem[]): GroupedItem[] {
   });
 }
 
+// One due-review group row. Daily/weekly/monthly rows are identical apart
+// from their accent color, so they share this component rather than being
+// hand-copied three times -- the same duplication that previously let the
+// plan-designer sync blocks drift out of step with each other.
+const REVIEW_ROW_THEMES = {
+  emerald: { border: 'border-l-emerald-500', label: 'text-emerald-900', outline: 'border-emerald-200', outlineText: 'text-emerald-700', solid: 'bg-emerald-600' },
+  blue: { border: 'border-l-blue-500', label: 'text-blue-900', outline: 'border-blue-200', outlineText: 'text-blue-700', solid: 'bg-blue-600' },
+  amber: { border: 'border-l-amber-500', label: 'text-amber-900', outline: 'border-amber-200', outlineText: 'text-amber-700', solid: 'bg-amber-600' },
+} as const;
+
+function DueReviewRow({
+  group,
+  theme,
+  onOpenChapter,
+  onListen,
+  onReview,
+  onManualLog,
+}: {
+  group: GroupedItem;
+  theme: keyof typeof REVIEW_ROW_THEMES;
+  onOpenChapter: () => void;
+  onListen: () => void;
+  onReview: () => void;
+  onManualLog: () => void;
+}) {
+  const t = REVIEW_ROW_THEMES[theme];
+  return (
+    <View className={`flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border-l-4 ${t.border} border border-neutral-200 shadow-3xs`}>
+      <Pressable onPress={onOpenChapter} className="flex-1 mr-2">
+        <Text className={`text-xs font-serif font-black ${t.label}`} numberOfLines={1}>
+          {group.label}
+        </Text>
+      </Pressable>
+      <View className="flex-row gap-1">
+        {/* Manual log -- for a review genuinely done off-app, without having
+            to open the practice overlay just to record it. */}
+        <Pressable
+          onPress={onManualLog}
+          className="bg-white border border-neutral-200 px-1.5 h-5 items-center justify-center rounded"
+          hitSlop={4}
+        >
+          <ClipboardCheck size={11} color="#525252" />
+        </Pressable>
+        <Pressable onPress={onListen} className={`bg-white border ${t.outline} px-2 h-5 items-center justify-center rounded`}>
+          <Text className={`${t.outlineText} text-[9px] font-bold`}>Listen</Text>
+        </Pressable>
+        <Pressable onPress={onReview} className={`${t.solid} px-2 h-5 items-center justify-center rounded`}>
+          <Text className="text-white text-[9px] font-bold">Review</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 export default function HomeScreen({ state }: { state: AppState }) {
   const {
     user,
@@ -69,6 +123,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     masteryTouches,
     startPractice,
     startReviewSession,
+    handleUpdateVerseStatus,
     triggerDailyPull,
     isReviewDue,
     pausedAt,
@@ -83,6 +138,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showPullShieldConfirm, setShowPullShieldConfirm] = useState(false);
+  // Which due group (if any) has its manual-log sheet open. Holds the group
+  // itself rather than a boolean so the sheet knows what it's logging.
+  const [manualLogGroup, setManualLogGroup] = useState<GroupedItem | null>(null);
 
   const firstName = (user?.displayName || 'Friend').split(' ')[0];
 
@@ -127,6 +185,26 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const handleGroupPractice = (mode: 'listen' | 'learn', items: QueueItem[]) => {
     const vStates = mapQueueToVerseStates(items);
     startPractice(mode, vStates);
+  };
+
+  // Manual log for a review actually done off-app. Mirrors the sheet inside
+  // PracticeModals exactly (same three outcomes, same handleUpdateVerseStatus
+  // contract) -- 'reveal' marks the touch as self-reported rather than
+  // machine-graded, and an omitted `perfect` is treated as a claimed perfect
+  // run (banks a mastery touch), while `perfect: false` counts the review
+  // without one.
+  const submitManualLog = (outcome: 'perfect' | 'passed' | 'practice') => {
+    const group = manualLogGroup;
+    setManualLogGroup(null);
+    if (!group) return;
+    const vStates = mapQueueToVerseStates(group.items);
+    if (outcome === 'practice') {
+      handleUpdateVerseStatus(vStates, 'learning', 'reveal');
+    } else if (outcome === 'passed') {
+      handleUpdateVerseStatus(vStates, 'memorized', 'reveal', { perfect: false });
+    } else {
+      handleUpdateVerseStatus(vStates, 'memorized', 'reveal');
+    }
   };
 
   // "Review All Due" -- chains through every due group (daily, then weekly,
@@ -343,6 +421,38 @@ export default function HomeScreen({ state }: { state: AppState }) {
               </View>
             )}
 
+            {/* Manual log for a group reviewed off-app. Inline card rather
+                than a modal, matching this screen's other confirm patterns. */}
+            {manualLogGroup && (
+              <View className="bg-neutral-50 border border-neutral-300 rounded-xl p-3" style={{ gap: 8 }}>
+                <View>
+                  <Text className="text-[11px] font-sans font-bold text-neutral-800">Log {manualLogGroup.label} manually</Text>
+                  <Text className="text-[9px] font-sans text-neutral-500 leading-relaxed">
+                    For a review you actually did somewhere else — out loud in the car, from a card, anywhere but here.
+                  </Text>
+                </View>
+                <View style={{ gap: 6 }}>
+                  <Pressable onPress={() => submitManualLog('perfect')} className="w-full py-2 bg-emerald-600 rounded-lg items-center">
+                    <Text className="text-white font-sans font-bold text-[10px]">Perfect — no mistakes</Text>
+                  </Pressable>
+                  <Pressable onPress={() => submitManualLog('passed')} className="w-full py-2 bg-indigo-600 rounded-lg items-center">
+                    <Text className="text-white font-sans font-bold text-[10px]">Got it, with a stumble</Text>
+                  </Pressable>
+                  <View className="flex-row gap-2">
+                    <Pressable
+                      onPress={() => submitManualLog('practice')}
+                      className="flex-1 py-1.5 border border-dashed border-neutral-300 rounded-lg items-center"
+                    >
+                      <Text className="text-neutral-500 font-sans font-bold text-[10px]">Needs practice</Text>
+                    </Pressable>
+                    <Pressable onPress={() => setManualLogGroup(null)} className="flex-1 py-1.5 border border-neutral-300 rounded-lg items-center">
+                      <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            )}
+
             {dueReviewItems.length > 0 ? (
               <View style={{ gap: 8 }}>
                 <Pressable
@@ -354,94 +464,30 @@ export default function HomeScreen({ state }: { state: AppState }) {
                   </Text>
                 </Pressable>
 
-                {/* Daily Reviews (Green) */}
-                {groupedDailyReviewing.length > 0 && (
-                  <View style={{ gap: 6 }}>
-                    {groupedDailyReviewing.map((group) => (
-                      <View
-                        key={group.label}
-                        className="flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border-l-4 border-l-emerald-500 border border-neutral-200 shadow-3xs"
-                      >
-                        <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
-                          <Text className="text-xs font-serif font-black text-emerald-900">{group.label}</Text>
-                        </Pressable>
-                        <View className="flex-row gap-1">
-                          <Pressable
-                            onPress={() => handleGroupPractice('listen', group.items)}
-                            className="bg-white border border-emerald-200 px-2 h-5 items-center justify-center rounded"
-                          >
-                            <Text className="text-emerald-700 text-[9px] font-bold">Listen</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleGroupPractice('learn', group.items)}
-                            className="bg-emerald-600 px-2 h-5 items-center justify-center rounded"
-                          >
-                            <Text className="text-white text-[9px] font-bold">Review</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Weekly Reviews (Blue) */}
-                {groupedWeeklyReviewing.length > 0 && (
-                  <View style={{ gap: 6 }}>
-                    {groupedWeeklyReviewing.map((group) => (
-                      <View
-                        key={group.label}
-                        className="flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border-l-4 border-l-blue-500 border border-neutral-200 shadow-3xs"
-                      >
-                        <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
-                          <Text className="text-xs font-serif font-black text-blue-900">{group.label}</Text>
-                        </Pressable>
-                        <View className="flex-row gap-1">
-                          <Pressable
-                            onPress={() => handleGroupPractice('listen', group.items)}
-                            className="bg-white border border-blue-200 px-2 h-5 items-center justify-center rounded"
-                          >
-                            <Text className="text-blue-700 text-[9px] font-bold">Listen</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleGroupPractice('learn', group.items)}
-                            className="bg-blue-600 px-2 h-5 items-center justify-center rounded"
-                          >
-                            <Text className="text-white text-[9px] font-bold">Review</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Monthly Reviews (Orange) */}
-                {groupedMonthlyReviewing.length > 0 && (
-                  <View style={{ gap: 6 }}>
-                    {groupedMonthlyReviewing.map((group) => (
-                      <View
-                        key={group.label}
-                        className="flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border-l-4 border-l-amber-500 border border-neutral-200 shadow-3xs"
-                      >
-                        <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
-                          <Text className="text-xs font-serif font-black text-amber-900">{group.label}</Text>
-                        </Pressable>
-                        <View className="flex-row gap-1">
-                          <Pressable
-                            onPress={() => handleGroupPractice('listen', group.items)}
-                            className="bg-white border border-amber-200 px-2 h-5 items-center justify-center rounded"
-                          >
-                            <Text className="text-amber-700 text-[9px] font-bold">Listen</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleGroupPractice('learn', group.items)}
-                            className="bg-amber-600 px-2 h-5 items-center justify-center rounded"
-                          >
-                            <Text className="text-white text-[9px] font-bold">Review</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
+                {/* Daily / Weekly / Monthly review groups, in that order --
+                    same order handleReviewAllDue chains them in. */}
+                {(
+                  [
+                    { groups: groupedDailyReviewing, theme: 'emerald' as const },
+                    { groups: groupedWeeklyReviewing, theme: 'blue' as const },
+                    { groups: groupedMonthlyReviewing, theme: 'amber' as const },
+                  ] as const
+                ).map(({ groups, theme }) =>
+                  groups.length === 0 ? null : (
+                    <View key={theme} style={{ gap: 6 }}>
+                      {groups.map((group) => (
+                        <DueReviewRow
+                          key={group.label}
+                          group={group}
+                          theme={theme}
+                          onOpenChapter={() => navigateTo('chapterLanding', group.book, group.chapter)}
+                          onListen={() => handleGroupPractice('listen', group.items)}
+                          onReview={() => handleGroupPractice('learn', group.items)}
+                          onManualLog={() => setManualLogGroup(group)}
+                        />
+                      ))}
+                    </View>
+                  )
                 )}
               </View>
             ) : (
@@ -548,6 +594,21 @@ export default function HomeScreen({ state }: { state: AppState }) {
               <BookMarked size={18} color="#1A1A1A" />
               <Text className="text-[10px] font-extrabold font-sans text-[#1A1A1A] leading-tight text-center">
                 Verse Search / Bible
+              </Text>
+            </Pressable>
+          </View>
+
+          <View className="flex-row gap-3">
+            {/* Feature 4: Reference Drill -- practice only, never touches the
+                review schedule (see ReferenceDrillScreen). */}
+            <Pressable
+              onPress={() => navigateTo('referenceDrill')}
+              className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white flex-row items-center justify-center shadow-sm h-14"
+              style={{ gap: 8 }}
+            >
+              <Target size={18} color="#1A1A1A" />
+              <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
+                Reference Drill (practice)
               </Text>
             </Pressable>
           </View>

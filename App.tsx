@@ -30,6 +30,7 @@ import PlanDesignerScreen from './src/screens/PlanDesignerScreen';
 import ActivePlanScreen from './src/screens/ActivePlanScreen';
 import SavedPlansScreen from './src/screens/SavedPlansScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
+import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -126,6 +127,8 @@ function Screens({ state }: { state: AppState }) {
         return <SavedPlansScreen state={state} />;
       case 'memoryCalendar':
         return <MemoryCalendarScreen state={state} />;
+      case 'referenceDrill':
+        return <ReferenceDrillScreen state={state} />;
       default:
         return <HomeScreen state={state} />;
     }

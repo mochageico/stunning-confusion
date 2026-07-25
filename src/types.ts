@@ -32,6 +32,12 @@ export interface ChapterText {
 
 export interface TouchLog {
   timestamp: string;           // ISO timestamp of successful recall
+  // 'speak'/'type' are machine-graded recall runs. 'reveal' means
+  // self-reported: the user logged the review manually rather than reciting
+  // it in the app (the manual-log action in PracticeModals' header, and on
+  // Home's due-review rows). The name predates that action -- it was the old
+  // Reveal tab's self-assessment buttons, which is what it always really
+  // recorded -- and is kept so historical touch logs stay readable.
   drillType: 'speak' | 'type' | 'reveal';
 }
 
