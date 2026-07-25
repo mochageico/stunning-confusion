@@ -92,5 +92,5 @@ We may update our Privacy Policy from time to time. Any changes will be posted i
 
 If you have any questions or concerns about this Privacy Policy or our data practices, please contact us at:
 
-- **Email:** [your-support-email@example.com]
-- **Developer/Organization:** Scripture Memory App Team
+- **Email:** [lev.scripture@gmail.com]
+- **Developer/Organization:** Lev Scripture Memory Team
