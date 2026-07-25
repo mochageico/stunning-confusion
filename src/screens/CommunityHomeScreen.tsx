@@ -1,8 +1,8 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { RefreshCw, Users } from 'lucide-react-native';
+import { RefreshCw, UserPlus, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { FadeInView, HelpTooltip } from '../components/ui';
+import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
 
 export default function CommunityHomeScreen({ state }: { state: AppState }) {
   const {
@@ -15,6 +15,9 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
     activityEvents,
     loadingActivityEvents,
     loadActivityFeed,
+    friends,
+    incomingFriendRequests,
+    navigateTo,
   } = state;
 
   const formatEventAge = (createdAtMs: number) => {
@@ -107,6 +110,48 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
               );
             })}
           </View>
+        </View>
+
+        {/* Friends -- real, mutual connections independent of circle
+            membership. Same pattern as ProfileScreen's Friends section,
+            surfaced here too since Community is where people look for
+            other people. */}
+        <View className="gap-1.5">
+          <View className="flex-row items-center justify-between px-1">
+            <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+              FRIENDS ({friends.length})
+            </Text>
+            <Pressable onPress={() => navigateTo('findFriends')} className="bg-[#1A1A1A] px-2.5 py-1.5 rounded-lg relative flex-row items-center gap-1">
+              <UserPlus size={11} color="#FFFFFF" />
+              <Text className="text-[9px] text-white font-sans font-bold uppercase tracking-wider">Find Friends</Text>
+              {incomingFriendRequests.length > 0 && (
+                <View className="absolute -top-1.5 -right-1.5 bg-red-600 w-4 h-4 rounded-full items-center justify-center border border-white">
+                  <Text className="text-white text-[8px] font-black">{incomingFriendRequests.length}</Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
+          {friends.length === 0 ? (
+            <Text className="text-[10px] text-neutral-400 font-sans italic px-1">
+              No friends yet — tap Find Friends to search for people.
+            </Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 2 }}>
+              {friends.map((f) => (
+                <Pressable
+                  key={f.uid}
+                  onPress={() => viewMemberProfileById(f.uid)}
+                  className="flex-row items-center gap-2 border border-neutral-200 rounded-xl p-2 bg-white shrink-0"
+                >
+                  <AvatarCircle name={f.displayName} photoUri={f.avatarUrl} size={28} />
+                  <View>
+                    <Text className="text-[10px] font-bold text-neutral-800 leading-none">{f.displayName}</Text>
+                    <Text className="text-[8px] font-sans text-neutral-400 leading-none mt-0.5">View Profile</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         {/* Community Activity Feed */}

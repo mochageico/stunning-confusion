@@ -40,6 +40,7 @@ import StudyPlanDetailScreen from './src/screens/StudyPlanDetailScreen';
 import CommunityHomeScreen from './src/screens/CommunityHomeScreen';
 import CommunityFindScreen from './src/screens/CommunityFindScreen';
 import CommunityCreateScreen from './src/screens/CommunityCreateScreen';
+import CommunityPreviewScreen from './src/screens/CommunityPreviewScreen';
 import RecordScreen from './src/screens/RecordScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import FindFriendsScreen from './src/screens/FindFriendsScreen';
@@ -52,6 +53,7 @@ import CircleChatScreen from './src/screens/CircleChatScreen';
 // introducing React Navigation, to keep the port low-risk.
 function CommunityScreen({ state }: { state: AppState }) {
   if (state.viewingGroupDetail) return <CommunityGroupDetailScreen state={state} />;
+  if (state.communitySubView === 'preview' && state.previewCircle) return <CommunityPreviewScreen state={state} />;
   if (state.communitySubView === 'find') return <CommunityFindScreen state={state} />;
   if (state.communitySubView === 'create') return <CommunityCreateScreen state={state} />;
   return <CommunityHomeScreen state={state} />;

@@ -844,8 +844,21 @@ export function useAppState() {
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
 
   // Community Sub-views and Custom Search/Join state
-  const [communitySubView, setCommunitySubView] = useState<'home' | 'find' | 'create'>('home');
+  const [communitySubView, setCommunitySubView] = useState<'home' | 'find' | 'create' | 'preview'>('home');
   const [activeGroupId, setActiveGroupId] = useState<string>('');
+
+  // Read-only public preview of a circle (name/description/owner only) --
+  // reachable by tapping a card on the Find Circles screen without joining
+  // or loading the full members/study-plans dashboard.
+  const [previewCircle, setPreviewCircle] = useState<Circle | null>(null);
+  const openCirclePreview = (circle: Circle) => {
+    setPreviewCircle(circle);
+    setCommunitySubView('preview');
+  };
+  const closeCirclePreview = () => {
+    setPreviewCircle(null);
+    setCommunitySubView('find');
+  };
 
   const [isEditingCircleSettings, setIsEditingCircleSettings] = useState<boolean>(false);
   // Study Plan creation only asks for a title + description -- pacing and
@@ -5612,6 +5625,7 @@ export function useAppState() {
     selectedRecording, setSelectedRecording,
     communitySubView, setCommunitySubView,
     activeGroupId,
+    previewCircle, openCirclePreview, closeCirclePreview,
     isEditingCircleSettings, setIsEditingCircleSettings,
     showCreatePlanForm, setShowCreatePlanForm,
     newPlanName, setNewPlanName,

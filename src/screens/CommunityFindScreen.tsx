@@ -19,6 +19,7 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
     joinCircle,
     joinCircleByCode,
     openCircle,
+    openCirclePreview,
   } = state;
 
   useEffect(() => {
@@ -114,7 +115,11 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
               filteredCircles.map((c) => {
                 const isAlreadyJoined = myCircles.some((mc) => mc.id === c.id);
                 return (
-                  <View key={c.id} className="border border-neutral-200 rounded-2xl p-4 bg-white gap-3">
+                  <Pressable
+                    key={c.id}
+                    onPress={() => openCirclePreview(c)}
+                    className="border border-neutral-200 rounded-2xl p-4 bg-white gap-3 active:bg-neutral-50"
+                  >
                     <View className="flex-row justify-between items-start">
                       <View className="flex-1 pr-2">
                         <View className="flex-row items-center gap-1.5">
@@ -127,17 +132,20 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
                       </View>
                     </View>
 
-                    <View className="flex-row justify-end items-center pt-2 border-t border-neutral-100">
+                    <View className="flex-row justify-end items-center pt-2.5 border-t border-neutral-100">
                       <Pressable
-                        onPress={() => (isAlreadyJoined ? openCircle(c.id) : joinCircle(c.id, c.name))}
-                        className={`px-3 py-1.5 rounded-lg ${isAlreadyJoined ? 'bg-neutral-100 border border-neutral-300' : 'bg-[#1A1A1A]'}`}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          isAlreadyJoined ? openCircle(c.id) : joinCircle(c.id, c.name);
+                        }}
+                        className={`px-4 py-2.5 rounded-xl shadow-sm ${isAlreadyJoined ? 'bg-neutral-100 border border-neutral-300' : 'bg-[#1A1A1A]'}`}
                       >
-                        <Text className={`text-[9px] font-bold uppercase tracking-wider ${isAlreadyJoined ? 'text-neutral-600' : 'text-white'}`}>
+                        <Text className={`text-[10px] font-bold uppercase tracking-wider ${isAlreadyJoined ? 'text-neutral-700' : 'text-white'}`}>
                           {isAlreadyJoined ? 'View Dashboard' : 'Join Circle'}
                         </Text>
                       </Pressable>
                     </View>
-                  </View>
+                  </Pressable>
                 );
               })
             )}

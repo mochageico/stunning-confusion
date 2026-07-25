@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {
   ArrowLeft,
@@ -11,12 +11,12 @@ import {
   Share2,
   Sliders,
   Trash2,
-  Users,
+  X,
 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { Circle } from '../types';
-import { FadeInView } from '../components/ui';
+import { AvatarCircle, FadeInView } from '../components/ui';
 
 export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
   const {
@@ -78,6 +78,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
   };
 
   const [showLeaveDisbandConfirm, setShowLeaveDisbandConfirm] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
 
   const handleLeaveOrDisband = () => {
     if (!activeCircle) return;
@@ -123,25 +124,25 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             </View>
           </View>
 
-          <View className="flex-row items-center gap-2">
+          <View className="flex-row items-center gap-2.5">
             <Pressable
               onPress={() => openCircleChat(activeCircle.id)}
-              className="px-2.5 py-1.5 rounded-lg border border-neutral-300 bg-white flex-row items-center gap-1.5"
+              className="px-3.5 py-2.5 rounded-xl border border-neutral-300 bg-white flex-row items-center gap-2 shadow-sm"
             >
-              <MessageCircle size={12} color="#404040" />
-              <Text className="text-[10px] font-sans font-bold text-neutral-700">Group Chat</Text>
+              <MessageCircle size={14} color="#404040" />
+              <Text className="text-[11px] font-sans font-bold text-neutral-700">Group Chat</Text>
             </Pressable>
 
             {/* Settings Button for Leader/Admin */}
             {isLeaderOrAdmin && (
             <Pressable
               onPress={() => setIsEditingCircleSettings(!isEditingCircleSettings)}
-              className={`px-2.5 py-1.5 rounded-lg border flex-row items-center gap-1.5 ${
+              className={`px-3.5 py-2.5 rounded-xl border flex-row items-center gap-2 shadow-sm ${
                 isEditingCircleSettings ? 'bg-neutral-900 border-neutral-900' : 'bg-white border-neutral-300'
               }`}
             >
-              <Sliders size={12} color={isEditingCircleSettings ? '#FFFFFF' : '#404040'} />
-              <Text className={`text-[10px] font-sans font-bold ${isEditingCircleSettings ? 'text-white' : 'text-neutral-700'}`}>
+              <Sliders size={14} color={isEditingCircleSettings ? '#FFFFFF' : '#404040'} />
+              <Text className={`text-[11px] font-sans font-bold ${isEditingCircleSettings ? 'text-white' : 'text-neutral-700'}`}>
                 {isEditingCircleSettings ? 'Close Settings' : 'Circle Settings'}
               </Text>
             </Pressable>
@@ -159,7 +160,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           <Text className="text-sm text-neutral-600 leading-relaxed font-sans">
             {activeCircle.description || 'No description yet.'}
           </Text>
-          <View className="flex-row gap-6 pt-2">
+          <View className="flex-row gap-6 pt-2 items-end">
             <View>
               <Text className="text-[8px] text-neutral-400 uppercase tracking-wider">Owner / Sponsor</Text>
               <Text className="font-semibold text-neutral-700 text-[11px] font-sans mt-0.5">{activeCircle.ownerName}</Text>
@@ -168,6 +169,21 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
               <Text className="text-[8px] text-neutral-400 uppercase tracking-wider">Your Circle Access</Text>
               <Text className="font-bold text-neutral-800 text-[11px] font-sans mt-0.5">{isLeaderOrAdmin ? 'Leader' : 'Member'}</Text>
             </View>
+            <Pressable onPress={() => setShowMembersModal(true)}>
+              <Text className="text-[8px] text-neutral-400 uppercase tracking-wider">
+                Members ({activeCircleMembers.length})
+              </Text>
+              <View className="flex-row items-center mt-1.5">
+                {activeCircleMembers.slice(0, 4).map((member, idx) => (
+                  <View key={member.uid} style={{ marginLeft: idx === 0 ? 0 : -10, zIndex: 4 - idx }}>
+                    <AvatarCircle name={member.displayName} photoUri={member.avatarUrl} size={24} />
+                  </View>
+                ))}
+                {activeCircleMembers.length === 0 && (
+                  <Text className="text-[10px] text-neutral-400 font-sans">No members yet</Text>
+                )}
+              </View>
+            </Pressable>
           </View>
         </View>
 
@@ -390,57 +406,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           </View>
         </View>
 
-        {/* MEMBERS LIST CARD (WITH REMOVE OPTION FOR ADMINS) */}
-        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4 shadow-sm" style={{ gap: 12 }}>
-          <View className="flex-row justify-between items-center border-b border-neutral-100 pb-1.5">
-            <Text className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Members ({activeCircleMembers.length})</Text>
-            <Text className="text-[8px] text-neutral-400 font-sans">Tap a member to view their profile</Text>
-          </View>
-
-          {/* Member grid */}
-          <ScrollView style={{ maxHeight: 144 }}>
-            <View className="flex-row flex-wrap gap-2">
-              {activeCircleMembers.map((member) => {
-                const isSelf = member.uid === user?.uid;
-                return (
-                  <Pressable
-                    key={member.uid}
-                    onPress={() => viewMemberProfileById(member.uid)}
-                    className="w-[48.5%] flex-row items-center justify-between bg-neutral-50 px-2.5 py-1.5 rounded-lg border border-neutral-100"
-                  >
-                    <View className="flex-row items-center gap-2 flex-1">
-                      <View className={`w-5 h-5 rounded-full items-center justify-center ${isSelf ? 'bg-indigo-600' : 'bg-[#1A1A1A]'}`}>
-                        <Text className="text-white text-[9px] font-sans font-bold">{member.displayName.substring(0, 2).toUpperCase()}</Text>
-                      </View>
-                      <Text
-                        className={`text-[11px] font-sans font-bold flex-1 ${isSelf ? 'text-indigo-800 font-extrabold' : 'text-neutral-700'}`}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                      >
-                        {isSelf ? `${member.displayName} (Me)` : member.displayName}
-                        {member.role === 'leader' ? ' 👑' : ''}
-                      </Text>
-                    </View>
-
-                    {/* Kick/Remove Option for Leaders */}
-                    {isLeaderOrAdmin && !isSelf && (
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          removeCircleMember(activeCircle.id, member.uid);
-                        }}
-                        className="w-4 h-4 items-center justify-center rounded-full border border-transparent"
-                      >
-                        <Text className="text-red-500 font-bold text-[10px]">×</Text>
-                      </Pressable>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </ScrollView>
-        </View>
-
         {/* PORTABLE SHARE & JOIN GATEWAY — the only real way to add members;
             you can't unilaterally enroll another real account by typing their
             name, they have to join themselves via this code/link. */}
@@ -514,6 +479,66 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           </Pressable>
         )}
       </ScrollView>
+
+      {/* Members popup — scrollable list, tap a member to view their profile */}
+      <Modal visible={showMembersModal} animationType="slide" transparent onRequestClose={() => setShowMembersModal(false)}>
+        <View className="flex-1 bg-black/60 justify-end">
+          <View className="bg-white rounded-t-3xl" style={{ height: '70%' }}>
+            <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-neutral-100">
+              <Text className="text-base font-serif font-bold text-[#1A1A1A]">
+                Members ({activeCircleMembers.length})
+              </Text>
+              <Pressable
+                onPress={() => setShowMembersModal(false)}
+                className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center"
+              >
+                <X size={14} color="#262626" />
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 20, gap: 8 }}>
+              {activeCircleMembers.map((member) => {
+                const isSelf = member.uid === user?.uid;
+                return (
+                  <Pressable
+                    key={member.uid}
+                    onPress={() => {
+                      setShowMembersModal(false);
+                      viewMemberProfileById(member.uid);
+                    }}
+                    className="flex-row items-center justify-between bg-neutral-50 px-3 py-2.5 rounded-xl border border-neutral-100 mb-2"
+                  >
+                    <View className="flex-row items-center gap-2.5 flex-1 pr-2">
+                      <AvatarCircle name={member.displayName} photoUri={member.avatarUrl} size={32} />
+                      <Text
+                        className={`text-xs font-sans font-bold flex-1 ${isSelf ? 'text-indigo-800 font-extrabold' : 'text-neutral-700'}`}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {isSelf ? `${member.displayName} (Me)` : member.displayName}
+                        {member.role === 'leader' ? ' 👑' : ''}
+                      </Text>
+                    </View>
+
+                    {/* Kick/Remove Option for Leaders */}
+                    {isLeaderOrAdmin && !isSelf && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          removeCircleMember(activeCircle.id, member.uid);
+                        }}
+                        className="w-6 h-6 items-center justify-center rounded-full"
+                      >
+                        <Text className="text-red-500 font-bold text-xs">×</Text>
+                      </Pressable>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </FadeInView>
   );
 }
