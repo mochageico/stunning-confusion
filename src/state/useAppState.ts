@@ -918,6 +918,13 @@ export function useAppState() {
   // including deletions — into the NEW account before loadUserData finishes.
   const queueHydratedRef = useRef(false);
 
+  // Tracks the uid the auth listener last processed a full transition for.
+  // updateProfile() (e.g. display name edits) re-fires onAuthStateChanged
+  // for the SAME signed-in user -- without this guard, that re-fire is
+  // indistinguishable from a real sign-in/account-switch and wipes/reloads
+  // verses, memoryQueue, recordings, etc. for no reason.
+  const prevAuthUidRef = useRef<string | null | undefined>(undefined);
+
   // Profile public-stats auto-sync debounce timer (memorizedCount/learningCount)
   const profileStatsSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -3268,6 +3275,16 @@ export function useAppState() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setLoadingAuth(false);
+
+      // updateProfile() (display name, photo) mutates auth.currentUser and
+      // re-fires this listener for the SAME uid -- not a sign-in or account
+      // switch. Skip the whole reset/reload path in that case; setUser above
+      // already refreshes anything UI-visible (e.g. the shown display name).
+      const newUid = currentUser?.uid ?? null;
+      if (newUid === prevAuthUidRef.current) {
+        return;
+      }
+      prevAuthUidRef.current = newUid;
 
       // Whatever circle/plan was being viewed belonged to whichever user (or
       // signed-out guest) was active before this auth transition — showing
