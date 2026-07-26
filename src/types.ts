@@ -164,6 +164,14 @@ export interface Recording {
   date: string;
   audioUrl?: string;
   audioPath?: string; // Firebase Storage path, e.g. recordings/{uid}/{id}.m4a — needed to delete the blob
+  // Studio mode: a de-essed / denoised / loudness-normalized render produced
+  // by the processStudioAudio Cloud Function (see functions/src/index.ts).
+  // The raw upload above is always kept and stays the fallback, so playback
+  // never depends on processing having succeeded. Absent on every recording
+  // predating studio mode, which is treated exactly like 'failed'.
+  studioAudioUrl?: string;
+  studioAudioPath?: string; // recordings/{uid}/{id}_studio.m4a — needed to delete the blob
+  studioStatus?: 'pending' | 'ready' | 'failed';
   userId?: string;
   user?: string;
   avatar?: string;

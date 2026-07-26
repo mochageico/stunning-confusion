@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
 import {
   Check,
   ChevronUp,
@@ -87,6 +88,10 @@ interface PracticeModalsProps {
   // way ChapterLandingScreen's audio card already does.
   userRecordings?: Recording[];
   selectedChapterAudios?: Record<string, Recording | null>;
+  // Studio mode: play the processed render rather than the raw take when one
+  // is ready. Threaded through so Listen mode honours the same setting as
+  // every other playback surface.
+  studioPlaybackEnabled?: boolean;
   // App-wide "now playing saved recording" state (Profile/RecordingDetail/
   // etc's own mini-bar), threaded through so Listen mode and that system
   // can enforce "one audio source at a time" -- starting one cancels
@@ -127,6 +132,7 @@ function PracticeModalsInner({
   setPrimingLookahead,
   userRecordings = [],
   selectedChapterAudios = {},
+  studioPlaybackEnabled = true,
   playingRecordingId = null,
   highlightedVerses,
   onToggleVerseHighlight,
@@ -252,7 +258,10 @@ function PracticeModalsInner({
   const playableSegments = useMemo(() => {
     return activePlayVerses.map((verseObj) => {
       const recording = resolveChapterAudio(userRecordings, selectedChapterAudios, verseObj.book, verseObj.chapter);
-      const vt = recording?.audioUrl ? recording.verseTimestamps?.find((t) => t.verse === verseObj.verse) : undefined;
+      // hasPlayableAudio rather than a raw audioUrl check — verse timestamps
+      // are equally valid against the studio render, since processing is
+      // duration-preserving (enforced by the guard in processStudioAudio).
+      const vt = hasPlayableAudio(recording) ? recording!.verseTimestamps?.find((t) => t.verse === verseObj.verse) : undefined;
       return vt ? { verseObj, recording: recording!, startSec: vt.startSec, endSec: vt.endSec } : { verseObj, recording: null, startSec: null, endSec: null };
     });
   }, [activePlayVerses, userRecordings, selectedChapterAudios]);
@@ -273,7 +282,7 @@ function PracticeModalsInner({
   // own player rather than reusing the app-wide "now playing" system: Listen
   // mode auto-advances across verses (and can switch recordings on its own),
   // which shouldn't hijack whatever the floating mini-bar is doing elsewhere.
-  const listenPlayer = useAudioPlayer(currentSegment?.recording?.audioUrl ?? undefined);
+  const listenPlayer = useAudioPlayer(resolvePlaybackUrl(currentSegment?.recording, studioPlaybackEnabled));
   const listenPlayerStatus = useAudioPlayerStatus(listenPlayer);
 
   useEffect(() => {

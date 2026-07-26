@@ -17,6 +17,14 @@ const VISIBILITY_OPTIONS: Array<{ id: 'private' | 'friends'; label: string; desc
   { id: 'friends', label: 'Friends', desc: 'Your friends' },
 ];
 
+// Studio mode is a playback preference, not a processing one — recordings are
+// always processed server-side; this only decides which version plays back.
+// Turning it off is therefore instant and non-destructive.
+const STUDIO_MODE_OPTIONS: Array<{ id: string; enabled: boolean; label: string; desc: string }> = [
+  { id: 'on', enabled: true, label: 'Studio', desc: 'Cleaned up' },
+  { id: 'off', enabled: false, label: 'Original', desc: 'As recorded' },
+];
+
 const PAUSE_DURATIONS: { id: '1w' | '2w' | '1m' | 'indefinite'; label: string; days: number | null }[] = [
   { id: '1w', label: '1 Week', days: 7 },
   { id: '2w', label: '2 Weeks', days: 14 },
@@ -32,6 +40,8 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     updateDisplayName,
     defaultRecordingVisibility,
     updateDefaultRecordingVisibility,
+    studioPlaybackEnabled,
+    setStudioPlaybackEnabled,
     memoryPlanVisibility,
     memoryQueueVisibility,
     updateMemoryPlanVisibility,
@@ -164,6 +174,39 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                 <Pressable
                   key={opt.id}
                   onPress={() => updateDefaultRecordingVisibility(opt.id)}
+                  className={`flex-1 py-2 rounded-lg items-center border ${
+                    isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
+                  }`}
+                >
+                  <Text className={`text-[10px] font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
+                    {opt.label}
+                  </Text>
+                  <Text className={`text-[8px] font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
+                    {opt.desc}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* STUDIO MODE */}
+        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
+          <View>
+            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Studio Mode</Text>
+            <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">
+              Automatically cleans up new recitations — softens harsh "s" sounds, reduces background noise, and
+              evens out the volume so every recording plays back at the same level. Your original recording is
+              always kept.
+            </Text>
+          </View>
+          <View className="flex-row gap-2">
+            {STUDIO_MODE_OPTIONS.map((opt) => {
+              const isSelected = studioPlaybackEnabled === opt.enabled;
+              return (
+                <Pressable
+                  key={opt.id}
+                  onPress={() => setStudioPlaybackEnabled(opt.enabled)}
                   className={`flex-1 py-2 rounded-lg items-center border ${
                     isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
                   }`}

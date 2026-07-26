@@ -612,6 +612,7 @@ function AppShell() {
           setPrimingLookahead={state.setPrimingLookahead}
           userRecordings={state.userRecordings}
           selectedChapterAudios={state.selectedChapterAudios}
+          studioPlaybackEnabled={state.studioPlaybackEnabled}
           playingRecordingId={state.playingRecordingId}
           setPlayingRecordingId={state.setPlayingRecordingId}
           highlightedVerses={state.highlightedVerses}

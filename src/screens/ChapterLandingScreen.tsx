@@ -4,7 +4,7 @@ import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flat
 import { ArrowLeft, Check, ChevronDown, GripVertical, Pause, Play, Printer, Search, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
-import { ChipRow, FadeInView } from '../components/ui';
+import { ChipRow, DiscreteSlider, FadeInView } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
 import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { printMemoryGrid } from '../lib/printMemoryGrid';
@@ -69,6 +69,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     setFeedChapterFilter,
     triggerToast,
     startPractice,
+    dailyPhaseWeeks,
+    weeklyPhaseMonths,
+    monthlyPhaseYears,
   } = state;
 
   // Manual memory-status override panel — for verses already memorized
@@ -78,6 +81,37 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const [showStatusOverride, setShowStatusOverride] = useState(false);
   const [overridePhase, setOverridePhase] = useState<'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'>('weekly');
   const [overrideWeekday, setOverrideWeekday] = useState<string | null>(null);
+  // How far into the phase's graduation cycle these verses should start,
+  // as a percent of the way to graduating -- mirrors the same threshold
+  // handleReviewCompleted graduates a real review streak on (see
+  // dailyGraduationDays/weeklyGraduationReviews/monthlyGraduationReviews in
+  // useAppState.ts). 0% = just began (streak 1, same as the old hardcoded
+  // behavior); 100% = graduates on the very next successful review, same as
+  // if it had organically climbed there. Percent stops (not a raw 1..N
+  // count) because the graduation target can be 50+ reviews for
+  // Weekly/Monthly -- a labeled stop per review would be unreadable.
+  const [overrideProgressPercent, setOverrideProgressPercent] = useState(0);
+  const overrideProgressMax =
+    overridePhase === 'daily'
+      ? dailyPhaseWeeks * 7
+      : overridePhase === 'weekly'
+        ? Math.round(weeklyPhaseMonths * (52 / 12))
+        : overridePhase === 'monthly'
+          ? monthlyPhaseYears * 12
+          : 1;
+  const overrideProgressCount = Math.max(1, Math.round((overrideProgressPercent / 100) * overrideProgressMax));
+  // A raw review count ("37 of 49") doesn't tell you where that lands on a
+  // calendar -- surface the enclosing week/month/year too, using the same
+  // cadence each phase graduates on (1 review/day for Daily, ~1/week for
+  // Weekly, 1/month for Monthly).
+  const overrideProgressUnit =
+    overridePhase === 'daily'
+      ? `Week ${Math.max(1, Math.ceil(overrideProgressCount / 7))} of ${dailyPhaseWeeks}`
+      : overridePhase === 'weekly'
+        ? `Month ${Math.max(1, Math.ceil(overrideProgressCount / (52 / 12)))} of ${weeklyPhaseMonths}`
+        : overridePhase === 'monthly'
+          ? `Year ${Math.max(1, Math.ceil(overrideProgressCount / 12))} of ${monthlyPhaseYears}`
+          : '';
 
   const activeChapterKey = `${selectedBook}_${selectedChapter}`;
 
@@ -615,6 +649,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     onChange={(id) => {
                       setOverridePhase(id);
                       if (id !== 'weekly' && id !== 'monthly') setOverrideWeekday(null);
+                      setOverrideProgressPercent(0);
                     }}
                     options={OVERRIDE_PHASE_OPTIONS}
                   />
@@ -634,13 +669,38 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   </View>
                 )}
 
+                {(overridePhase === 'daily' || overridePhase === 'weekly' || overridePhase === 'monthly') && (
+                  <View style={{ gap: 4 }}>
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-[8px] font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
+                        How far into this phase?
+                      </Text>
+                      <Text className="text-[9px] font-mono font-bold text-indigo-900">
+                        {overrideProgressPercent >= 100 ? 'Graduates next review' : `${overrideProgressUnit} (${overrideProgressCount}/${overrideProgressMax})`}
+                      </Text>
+                    </View>
+                    <DiscreteSlider
+                      value={overrideProgressPercent}
+                      onChange={setOverrideProgressPercent}
+                      options={Array.from({ length: 21 }, (_, i) => i * 5).map((p) => ({
+                        id: p,
+                        // Labeling every 5% stop would overlap into an
+                        // unreadable smear -- only the quarter-marks get text,
+                        // the rest are still real, draggable/tappable stops.
+                        label: p % 25 === 0 ? (p === 0 ? 'Start' : `${p}%`) : '',
+                      }))}
+                    />
+                  </View>
+                )}
+
                 <Pressable
                   onPress={() => {
                     overrideVerseMemoryStatus(
                       activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)),
                       overridePhase,
                       selectedTranslationId,
-                      overrideWeekday ?? undefined
+                      overrideWeekday ?? undefined,
+                      overrideProgressCount
                     );
                     setSelectedVerseNumbers([]);
                     setShowStatusOverride(false);

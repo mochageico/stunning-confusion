@@ -7,6 +7,7 @@ import { VerseTimestamp } from '../types';
 import { FadeInView, HelpTooltip, PulseView } from '../components/ui';
 import { BIBLE_TRANSLATIONS } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
+import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/studioAudio';
 
 // Derived from the single source of truth (data.ts) instead of its own
 // separately-hardcoded lookup -- previously listed NIV/NKJV/NLT despite zero
@@ -15,6 +16,13 @@ import { recordingLabel } from '../lib/recordingLabel';
 const TRANSLATION_FULL_NAMES: Record<string, string> = Object.fromEntries(
   BIBLE_TRANSLATIONS.map((t) => [t.id, t.name])
 );
+
+// A/B switch for comparing the processed render against the raw take. Both
+// files are kept permanently, so this is a pure playback-source swap.
+const STUDIO_AB_CHOICES: Array<{ studio: boolean; label: string }> = [
+  { studio: true, label: 'Studio' },
+  { studio: false, label: 'Original' },
+];
 
 const WAVEFORM_HEIGHTS = [
   8, 16, 24, 12, 20, 28, 32, 16, 24, 20, 12, 24, 32, 28, 20, 16, 12, 20, 28, 24, 32, 20, 16, 24, 28,
@@ -105,6 +113,9 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
     updateRecordingSpeaker,
     buildVerseTimestamps,
     selectedRecordingChapterTextData,
+    studioPlaybackEnabled,
+    studioAbOverride,
+    setStudioAbOverride,
   } = state;
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -154,10 +165,22 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditingSync, selectedRecording?.id]);
 
+  // The A/B override belongs to this screen's comparison session only. Without
+  // this, choosing "Original" here would silently keep overriding the global
+  // Studio Mode setting everywhere else in the app until the next relaunch.
+  useEffect(() => {
+    return () => setStudioAbOverride(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (!selectedRecording) return null;
 
   const isPlayingThis = playingRecordingId === selectedRecording.id;
-  const hasRealAudio = !!selectedRecording.audioUrl;
+  const hasRealAudio = hasPlayableAudio(selectedRecording);
+  // null override == follow the global Studio Mode setting, so the switch
+  // opens showing whichever version is actually about to play.
+  const studioAbActive = studioAbOverride ?? studioPlaybackEnabled;
+  const studioLabel = studioStatusLabel(selectedRecording);
   const durationSec = selectedRecording.duration;
   const currentPlaybackSec = isPlayingThis ? Math.floor((playingRecProgress / 100) * durationSec) : 0;
 
@@ -458,6 +481,38 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
               <Text className="text-[10px] font-black font-sans text-neutral-600">+5s</Text>
             </Pressable>
           </View>
+
+          {/* Studio A/B — only meaningful once a processed render exists.
+              While it's still being made, show the status instead so the
+              absence of the switch doesn't read as a missing feature. */}
+          {studioLabel && (
+            <View className="items-center" style={{ gap: 6 }}>
+              {hasStudioAudio(selectedRecording) ? (
+                <View className="flex-row bg-neutral-100 rounded-lg p-0.5">
+                  {STUDIO_AB_CHOICES.map((choice) => {
+                    const isSelected = studioAbActive === choice.studio;
+                    return (
+                      <Pressable
+                        key={choice.label}
+                        onPress={() => setStudioAbOverride(choice.studio)}
+                        className={`px-3 py-1 rounded-md ${isSelected ? 'bg-white border border-neutral-200' : ''}`}
+                      >
+                        <Text
+                          className={`text-[9px] font-sans font-bold uppercase tracking-wider ${
+                            isSelected ? 'text-neutral-800' : 'text-neutral-400'
+                          }`}
+                        >
+                          {choice.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : (
+                <Text className="text-[9px] font-sans text-neutral-400 uppercase tracking-wider">{studioLabel}</Text>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Verse Sync Timeline — scrub the real playback position and drop/

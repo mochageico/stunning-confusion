@@ -1,0 +1,26 @@
+{
+  "name": "scripture-memory-functions",
+  "description": "Cloud Functions for the Scripture Memory app — studio-mode audio post-processing.",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "deploy": "npm run build && firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0",
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.3.0"
+  },
+  "devDependencies": {
+    "@types/ffprobe-static": "^2.0.3",
+    "typescript": "^5.7.3"
+  }
+}

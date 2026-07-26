@@ -22,6 +22,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
+import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
 import {
   deleteUser,
   EmailAuthProvider,
@@ -491,6 +492,25 @@ export function mapQueueItemsToVerseStates(items: QueueItem[]): VerseState[] {
 }
 
 /**
+ * Drops keys whose value is `undefined` before a Firestore write.
+ *
+ * Firestore rejects an explicit `undefined` field value outright — "Unsupported
+ * field value: undefined (found in field X)" — and this app's
+ * initializeFirestore() call doesn't enable `ignoreUndefinedProperties`, so a
+ * single optional field left unset fails the ENTIRE save. That already cost a
+ * real recording once (full-chapter takes wrote `startVerse: undefined`).
+ *
+ * Optional fields on Recording are all "absent means default" by design, so
+ * omitting them is the correct semantics, not a workaround. Applied at the
+ * write sites rather than globally via ignoreUndefinedProperties, so a stray
+ * undefined elsewhere in the app still surfaces loudly instead of being
+ * silently dropped.
+ */
+function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
+}
+
+/**
  * Centralizes every piece of state and business-logic handler from the original
  * web app's single-file App component. Screens receive the return value of this
  * hook as a single `state` prop and destructure whatever they need from it, mirroring
@@ -604,6 +624,35 @@ export function useAppState() {
     setMemoryGridColumnsState(columns);
     AsyncStorage.setItem(MEMORY_GRID_COLUMNS_KEY, String(columns)).catch(() => {});
   };
+
+  // Studio mode: play the processed render (de-essed, denoised, loudness
+  // normalized) instead of the raw take when one exists. On by default —
+  // it's strictly better audio, and every lookup falls back to the original.
+  // Device-local rather than on the profile doc: it's a listening preference,
+  // not something that should follow the account across devices.
+  const [studioPlaybackEnabled, setStudioPlaybackEnabledState] = useState(true);
+  const STUDIO_PLAYBACK_KEY = 'studio:playbackEnabled:v1';
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STUDIO_PLAYBACK_KEY);
+        if (raw === 'off') setStudioPlaybackEnabledState(false);
+      } catch {
+        // Corrupt/missing -- just start at the default (on).
+      }
+    })();
+  }, []);
+  const setStudioPlaybackEnabled = (enabled: boolean) => {
+    setStudioPlaybackEnabledState(enabled);
+    AsyncStorage.setItem(STUDIO_PLAYBACK_KEY, enabled ? 'on' : 'off').catch(() => {});
+  };
+
+  // Transient A/B override for the Studio/Original switch on the recording
+  // detail screen. null == follow the setting above. Deliberately NOT
+  // persisted: it exists to compare two versions back to back, and leaking
+  // that choice into the next session would be surprising.
+  const [studioAbOverride, setStudioAbOverride] = useState<boolean | null>(null);
+  const studioPlaybackActive = studioAbOverride ?? studioPlaybackEnabled;
 
   // Whether RecordingDetailScreen's verse-sync timeline is in edit mode.
   // The draft marker positions themselves live as local component state in
@@ -898,8 +947,17 @@ export function useAppState() {
   // Real audio player for saved recordings that have a Storage-backed audioUrl.
   // Recordings without one (e.g. the illustrative community feed placeholders)
   // fall back to the simulated progress timer below.
+  //
+  // resolvePlaybackUrl picks the studio render when one is ready and studio
+  // mode is on, and the raw upload otherwise — so playback works unchanged
+  // for legacy recordings, recordings still being processed, and recordings
+  // whose render was rejected.
   const nowPlayingRecording = [...userRecordings, ...feedRecordings].find((r) => r.id === playingRecordingId) || null;
-  const recordingPlayer = useAudioPlayer(nowPlayingRecording?.audioUrl ?? undefined);
+  // Hoisted rather than inlined because the playback effects below key off it:
+  // flipping the Studio/Original switch changes this string, which is what
+  // makes the player reload with the other version mid-listen.
+  const nowPlayingUrl = resolvePlaybackUrl(nowPlayingRecording, studioPlaybackActive);
+  const recordingPlayer = useAudioPlayer(nowPlayingUrl);
   const recordingPlayerStatus = useAudioPlayerStatus(recordingPlayer);
 
   // Separate player for the import-audio tagging flow above — kept distinct
@@ -3576,14 +3634,17 @@ export function useAppState() {
       // Storage deletes can't ride in a Firestore batch -- best-effort, one
       // failed audio file shouldn't block the rest of account deletion.
       await Promise.all(
-        recordingsSnap.docs.map(async (d) => {
-          const audioPath = d.data().audioPath;
-          if (!audioPath) return;
-          try {
-            await deleteObject(storageRef(storage, audioPath));
-          } catch (err) {
-            console.error('Failed to delete a recording audio file during account deletion:', err);
-          }
+        recordingsSnap.docs.flatMap((d) => {
+          // Both the raw upload and its studio render have to go — see
+          // deleteRecording for the same pairing.
+          const paths = [d.data().audioPath, d.data().studioAudioPath].filter(Boolean) as string[];
+          return paths.map(async (path) => {
+            try {
+              await deleteObject(storageRef(storage, path));
+            } catch (err) {
+              console.error('Failed to delete a recording audio file during account deletion:', err);
+            }
+          });
         })
       );
 
@@ -3630,7 +3691,7 @@ export function useAppState() {
   // a Storage-backed audioUrl; falls back to a simulated progress timer for
   // mock entries that don't have one (e.g. the illustrative community feed).
   useEffect(() => {
-    if (!playingRecordingId || !nowPlayingRecording?.audioUrl) return;
+    if (!playingRecordingId || !nowPlayingUrl) return;
     // Recording leaves iOS's audio session configured for recording, which
     // can make playback silent/misrouted or end almost instantly — switch it
     // back to a playback-friendly mode every time before actually playing,
@@ -3655,27 +3716,29 @@ export function useAppState() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playingRecordingId, nowPlayingRecording?.audioUrl]);
+  }, [playingRecordingId, nowPlayingUrl]);
 
   useEffect(() => {
-    if (!playingRecordingId || !nowPlayingRecording?.audioUrl) return;
+    if (!playingRecordingId || !nowPlayingUrl) return;
     if (recordingPlayerStatus.didJustFinish) {
       setPlayingRecordingId(null);
       setPlayingRecProgress(0);
       triggerToast('Recording playback completed.');
       return;
     }
-    const totalSec = recordingPlayerStatus.duration || nowPlayingRecording.duration || 1;
+    const totalSec = recordingPlayerStatus.duration || nowPlayingRecording?.duration || 1;
     setPlayingRecProgress(Math.min(100, (recordingPlayerStatus.currentTime / totalSec) * 100));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recordingPlayerStatus, playingRecordingId, nowPlayingRecording?.audioUrl]);
+  }, [recordingPlayerStatus, playingRecordingId, nowPlayingUrl]);
 
-  // No fake playback: a recording with no real Storage-backed audioUrl (e.g.
+  // No fake playback: a recording with no real Storage-backed audio (e.g.
   // an illustrative guest-preview entry) can't actually play, so say so
   // honestly instead of running a simulated progress bar to a fake
-  // "completed" toast.
+  // "completed" toast. Checks for ANY playable version rather than the
+  // resolved one — a recording is still perfectly playable while its studio
+  // render is pending.
   useEffect(() => {
-    if (playingRecordingId && !nowPlayingRecording?.audioUrl) {
+    if (playingRecordingId && !hasPlayableAudio(nowPlayingRecording)) {
       setPlayingRecordingId(null);
       setPlayingRecProgress(0);
       triggerToast('No audio available for this recording.');
@@ -3686,8 +3749,8 @@ export function useAppState() {
   // Seek the currently-playing real recording by a relative number of seconds
   // (used by RecordingDetailScreen's -5s/+5s buttons).
   const seekRecordingBy = async (deltaSeconds: number) => {
-    if (!playingRecordingId || !nowPlayingRecording?.audioUrl) return;
-    const totalSec = recordingPlayerStatus.duration || nowPlayingRecording.duration || 0;
+    if (!playingRecordingId || !nowPlayingUrl) return;
+    const totalSec = recordingPlayerStatus.duration || nowPlayingRecording?.duration || 0;
     const newTime = Math.max(0, Math.min(totalSec, recordingPlayerStatus.currentTime + deltaSeconds));
     await recordingPlayer.seekTo(newTime);
   };
@@ -4130,7 +4193,15 @@ export function useAppState() {
     versesToOverride: VerseState[],
     targetPhase: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained',
     translationId: string,
-    targetWeekday?: string
+    targetWeekday?: string,
+    // How far into the phase's graduation cycle to start (1 = just began,
+    // same as the old hardcoded behavior). Only meaningful for
+    // daily/weekly/monthly -- ignored for learning/retained, which have no
+    // partial-progress concept. Callers should clamp this to
+    // [1, graduation threshold for targetPhase] themselves (the UI reads
+    // dailyPhaseWeeks/weeklyPhaseMonths/monthlyPhaseYears to compute that
+    // same threshold handleReviewCompleted graduates on).
+    progressCount?: number
   ) => {
     const nowISO = new Date().toISOString();
     const existingByVerseId = new Map(memoryQueueRef.current.map((q) => [q.verseId, q]));
@@ -4201,7 +4272,7 @@ export function useAppState() {
         base.retentionPhase = targetPhase;
         base.dateStarted = base.dateStarted || nowISO;
         base.lastReviewDate = base.lastReviewDate || nowISO;
-        base.currentStreakCount = 1;
+        base.currentStreakCount = Math.max(1, progressCount ?? 1);
         base.nextReviewDueDate = dueDateISO;
       }
 
@@ -5204,6 +5275,82 @@ export function useAppState() {
   // the live-record flow and the import-audio flow below — so visibility
   // defaults, the sharedRecordings ACL snapshot, and the profile
   // default-visibility bookkeeping can't drift between the two.
+  // Studio renders are produced asynchronously by the processStudioAudio
+  // Cloud Function, normally a few seconds after the upload finishes. But
+  // recordings are fetched exactly once per session with getDocs (see
+  // loadUserData), so nothing would notice the render landing until the next
+  // app launch — the user would save a recitation, see "Polishing audio…"
+  // forever, and conclude the feature is broken.
+  //
+  // Rather than converting the whole recordings collection to a live listener
+  // (a much larger change, and a permanent read cost for a one-off event),
+  // this attaches to the ONE doc just saved and detaches the moment the
+  // render resolves. The timeout is the backstop: if the function errors in a
+  // way that never writes studioStatus at all, the listener still goes away
+  // instead of leaking for the rest of the session.
+  const STUDIO_WATCH_TIMEOUT_MS = 3 * 60 * 1000;
+  const studioWatchersRef = useRef<Map<string, () => void>>(new Map());
+
+  const watchStudioRender = (uid: string, recordingId: string) => {
+    // A re-save of the same id would otherwise strand the previous listener.
+    studioWatchersRef.current.get(recordingId)?.();
+    studioWatchersRef.current.delete(recordingId);
+
+    let unsubscribe: (() => void) | null = null;
+    let settled = false;
+
+    const detach = () => {
+      settled = true;
+      clearTimeout(timeoutId);
+      unsubscribe?.();
+      studioWatchersRef.current.delete(recordingId);
+    };
+
+    const timeoutId = setTimeout(detach, STUDIO_WATCH_TIMEOUT_MS);
+
+    unsubscribe = onSnapshot(
+      doc(db, 'users', uid, 'recordings', recordingId),
+      (snap) => {
+        const data = snap.data() as Recording | undefined;
+        // Still processing — keep waiting.
+        if (!data || data.studioStatus === 'pending') return;
+        setUserRecordings((prev) =>
+          prev.map((r) =>
+            r.id === recordingId
+              ? {
+                  ...r,
+                  studioAudioUrl: data.studioAudioUrl,
+                  studioAudioPath: data.studioAudioPath,
+                  studioStatus: data.studioStatus,
+                }
+              : r
+          )
+        );
+        detach();
+      },
+      (err) => {
+        console.error('Studio render watcher failed:', err);
+        detach();
+      }
+    );
+
+    // onSnapshot resolves asynchronously in practice, but if it ever settled
+    // before this assignment the detach() above would have had a null
+    // unsubscribe to call and the listener would survive. Cheap to be sure.
+    if (settled) unsubscribe();
+    else studioWatchersRef.current.set(recordingId, unsubscribe);
+  };
+
+  // Signing out or unmounting mid-render must not leave listeners attached to
+  // the previous user's documents.
+  useEffect(() => {
+    const watchers = studioWatchersRef.current;
+    return () => {
+      watchers.forEach((unsubscribe) => unsubscribe());
+      watchers.clear();
+    };
+  }, []);
+
   const persistRecording = async (params: {
     uri: string;
     durationSec: number;
@@ -5230,10 +5377,80 @@ export function useAppState() {
     const contentType = params.sourceType === 'imported' ? 'audio/*' : Platform.OS === 'web' ? 'audio/webm' : 'audio/m4a';
     const audioPath = `recordings/${uid}/${id}.${ext}`;
 
+    // Range label reflects whatever was actually recorded/tagged (the
+    // verse-range picker on the Record tab), not always "Full Chapter" —
+    // used for both the display title and versesStr.
+    const rangeLabel = isRecordingFullChapterRange
+      ? 'Full Chapter'
+      : recordingRangeStartClamped === recordingRangeEndClamped
+        ? `Verse ${recordingRangeStartClamped}`
+        : `Verses ${recordingRangeStartClamped}-${recordingRangeEndClamped}`;
+    const titleSuffix =
+      params.sourceType === 'imported' ? `${rangeLabel} Imported Recitation` : `${rangeLabel} Recitation`;
+
+    // New recordings default to the BOTTOM of this chapter's priority order
+    // (whatever the user already had as their top pick for this chapter
+    // stays the default) — the user can drag it up from ChapterLandingScreen.
+    const samechapterPriorities = userRecordings
+      .filter((r) => r.book.toLowerCase() === recordingBook.toLowerCase() && r.chapter === recordingChapter)
+      .map((r) => r.priority ?? 0);
+    const nextPriority = samechapterPriorities.length > 0 ? Math.max(...samechapterPriorities) + 1 : 0;
+
+    // audioUrl is deliberately absent here — it doesn't exist until the
+    // upload below finishes, and is patched in afterwards.
+    const newRec: Recording = {
+      id,
+      title: `${recordingBook} ${recordingChapter} ${titleSuffix}`,
+      book: recordingBook,
+      chapter: recordingChapter,
+      translation: recordingTranslation,
+      duration: params.durationSec,
+      date: new Date().toISOString().split('T')[0],
+      userId: uid,
+      user: auth.currentUser?.displayName || 'Me',
+      avatar: (auth.currentUser?.displayName || 'M').charAt(0).toUpperCase(),
+      audioPath,
+      versesStr: rangeLabel,
+      // OMITTED, not set to undefined, for a full chapter. Firestore rejects
+      // an explicit `undefined` field value outright ("Unsupported field
+      // value: undefined (found in field startVerse)") because this app's
+      // initializeFirestore call doesn't enable ignoreUndefinedProperties —
+      // so `startVerse: undefined` threw and the whole save failed. Leaving
+      // the keys off entirely is also exactly what the type documents:
+      // absent start+end == full chapter (see types.ts).
+      ...(isRecordingFullChapterRange
+        ? {}
+        : { startVerse: recordingRangeStartClamped, endVerse: recordingRangeEndClamped }),
+      priority: nextPriority,
+      verseTimestamps: params.verseTimestamps,
+      sharedVisibility: pickedRecordingVisibility,
+      sourceType: params.sourceType,
+      // Claimed up front so the UI can show "Polishing audio…" immediately;
+      // the processStudioAudio Cloud Function flips this to 'ready'/'failed'.
+      studioStatus: 'pending',
+    };
+
+    const recordingDocRef = doc(db, 'users', uid, 'recordings', id);
+
     triggerToast('Uploading recitation...');
     try {
-      const fileRef = storageRef(storage, audioPath);
-      // Firebase Storage's ONE-SHOT upload path (used by both uploadBytes()
+      // WRITE ORDER IS LOAD-BEARING: the Firestore doc goes in BEFORE the
+      // audio upload, because uploading is what fires the processStudioAudio
+      // Storage trigger. With the old order (upload, then setDoc) the
+      // function could finish and write studioAudioUrl into the doc while
+      // this save was still in flight, and the non-merging setDoc below would
+      // silently wipe it — an intermittent "studio mode just doesn't work
+      // sometimes" bug that would only reproduce on fast connections.
+      //
+      // Writing first also means every later write to this doc can be a
+      // merging updateDoc, so the client and the function can never clobber
+      // each other regardless of who lands first.
+      await setDoc(recordingDocRef, stripUndefined({ ...newRec, createdAt: serverTimestamp() }));
+
+      let audioUrl: string;
+      try {
+        const fileRef = storageRef(storage, audioPath);
+        // Firebase Storage's ONE-SHOT upload path (used by both uploadBytes()
       // and uploadString(), regardless of the input form -- a base64 string
       // just gets decoded to a Uint8Array first) always builds the final
       // request body via `new Blob([multipartBoundaryText, ourData,
@@ -5257,54 +5474,26 @@ export function useAppState() {
       // for the actual fix -- it forces every upload through the chunked
       // path regardless of size, rather than relying on file size to happen
       // to clear that threshold.
-      const response = await fetch(params.uri);
-      const arrayBuffer = await response.arrayBuffer();
-      const uploadTask = uploadBytesResumable(fileRef, arrayBuffer, { contentType });
-      await uploadTask;
-      const audioUrl = await getDownloadURL(fileRef);
+        const response = await fetch(params.uri);
+        const arrayBuffer = await response.arrayBuffer();
+        const uploadTask = uploadBytesResumable(fileRef, arrayBuffer, { contentType });
+        await uploadTask;
+        audioUrl = await getDownloadURL(fileRef);
+      } catch (uploadErr) {
+        // The doc was written first (see above), so a failed upload would
+        // otherwise strand a recording row pointing at audio that does not
+        // exist. Roll it back before rethrowing into the outer handler.
+        await deleteDoc(recordingDocRef).catch((rollbackErr) =>
+          console.error('Failed to roll back recording doc after upload error:', rollbackErr)
+        );
+        throw uploadErr;
+      }
 
-      // Range label reflects whatever was actually recorded/tagged (the
-      // verse-range picker on the Record tab), not always "Full Chapter" —
-      // used for both the display title and versesStr.
-      const rangeLabel = isRecordingFullChapterRange
-        ? 'Full Chapter'
-        : recordingRangeStartClamped === recordingRangeEndClamped
-          ? `Verse ${recordingRangeStartClamped}`
-          : `Verses ${recordingRangeStartClamped}-${recordingRangeEndClamped}`;
-      const titleSuffix =
-        params.sourceType === 'imported' ? `${rangeLabel} Imported Recitation` : `${rangeLabel} Recitation`;
+      // updateDoc, NOT setDoc — the studio render may already have landed on
+      // this doc by now, and a whole-document write would erase it.
+      await updateDoc(recordingDocRef, { audioUrl });
 
-      // New recordings default to the BOTTOM of this chapter's priority order
-      // (whatever the user already had as their top pick for this chapter
-      // stays the default) — the user can drag it up from ChapterLandingScreen.
-      const samechapterPriorities = userRecordings
-        .filter((r) => r.book.toLowerCase() === recordingBook.toLowerCase() && r.chapter === recordingChapter)
-        .map((r) => r.priority ?? 0);
-      const nextPriority = samechapterPriorities.length > 0 ? Math.max(...samechapterPriorities) + 1 : 0;
-
-      const newRec: Recording = {
-        id,
-        title: `${recordingBook} ${recordingChapter} ${titleSuffix}`,
-        book: recordingBook,
-        chapter: recordingChapter,
-        translation: recordingTranslation,
-        duration: params.durationSec,
-        date: new Date().toISOString().split('T')[0],
-        userId: uid,
-        user: auth.currentUser?.displayName || 'Me',
-        avatar: (auth.currentUser?.displayName || 'M').charAt(0).toUpperCase(),
-        audioUrl,
-        audioPath,
-        versesStr: rangeLabel,
-        startVerse: isRecordingFullChapterRange ? undefined : recordingRangeStartClamped,
-        endVerse: isRecordingFullChapterRange ? undefined : recordingRangeEndClamped,
-        priority: nextPriority,
-        verseTimestamps: params.verseTimestamps,
-        sharedVisibility: pickedRecordingVisibility,
-        sourceType: params.sourceType,
-      };
-
-      await setDoc(doc(db, 'users', uid, 'recordings', id), { ...newRec, createdAt: serverTimestamp() });
+      const savedRec: Recording = { ...newRec, audioUrl };
 
       if (pickedRecordingVisibility !== 'private') {
         // Snapshot ACL (see firestore.rules comment on sharedRecordings for
@@ -5317,13 +5506,16 @@ export function useAppState() {
           new Set([...circleFriends.map((f) => f.uid), ...friends.map((f) => f.uid)])
         );
         try {
-          await setDoc(doc(db, 'sharedRecordings', id), {
-            ...newRec,
-            ownerId: uid,
-            visibility: pickedRecordingVisibility,
-            sharedWithUids,
-            createdAt: serverTimestamp(),
-          });
+          await setDoc(
+            doc(db, 'sharedRecordings', id),
+            stripUndefined({
+              ...savedRec,
+              ownerId: uid,
+              visibility: pickedRecordingVisibility,
+              sharedWithUids,
+              createdAt: serverTimestamp(),
+            })
+          );
         } catch (err) {
           console.error('Failed to publish shared recording copy:', err);
         }
@@ -5336,7 +5528,10 @@ export function useAppState() {
         );
       }
 
-      setUserRecordings((prev) => [newRec, ...prev]);
+      setUserRecordings((prev) => [savedRec, ...prev]);
+      // Recordings are loaded once via getDocs (see loadUserData), so without
+      // this the studio render wouldn't appear until the next app launch.
+      watchStudioRender(uid, id);
       triggerToast(`${titleSuffix} saved! 🎙️`);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${uid}/recordings/${id}`);
@@ -5414,6 +5609,14 @@ export function useAppState() {
       await deleteDoc(doc(db, 'users', uid, 'recordings', recording.id));
       if (recording.audioPath) {
         await deleteObject(storageRef(storage, recording.audioPath));
+      }
+      // The studio render is a second blob under the same prefix — deleting
+      // only audioPath silently leaks it on every delete. Best-effort: it may
+      // legitimately not exist yet (still processing) or ever ('failed').
+      if (recording.studioAudioPath) {
+        await deleteObject(storageRef(storage, recording.studioAudioPath)).catch((err) =>
+          console.error('Failed to delete studio audio file:', err)
+        );
       }
       setUserRecordings((prev) => prev.filter((r) => r.id !== recording.id));
     } catch (err) {
@@ -5511,7 +5714,10 @@ export function useAppState() {
       sharedVisibility: 'private',
     };
     try {
-      await setDoc(doc(db, 'users', uid, 'recordings', id), { ...savedRec, createdAt: serverTimestamp() });
+      // ...rec can carry undefined optional fields straight off an in-memory
+      // feed object (savedFromUid: rec.userId is the obvious one), which
+      // would fail the write the same way full-chapter recordings did.
+      await setDoc(doc(db, 'users', uid, 'recordings', id), stripUndefined({ ...savedRec, createdAt: serverTimestamp() }));
       setUserRecordings((prev) => [savedRec, ...prev]);
       triggerToast(`Saved to My Library! Added to your ${rec.book} ${rec.chapter} options. 📚`);
     } catch (err) {
@@ -5546,6 +5752,8 @@ export function useAppState() {
     highlightedVerses, toggleVerseHighlight,
     verseDoodles, saveVerseDoodle,
     memoryGridColumns, setMemoryGridColumns,
+    studioPlaybackEnabled, setStudioPlaybackEnabled,
+    studioAbOverride, setStudioAbOverride,
     isEditingSync, setIsEditingSync,
     preset, setPreset,
     learningDays, setLearningDays,

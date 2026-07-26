@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Check, FileAudio, Folder, Mic, Pause, Play, RotateCcw, Upload } from 'lucide-react-native';
 
@@ -78,6 +78,24 @@ export default function RecordScreen({ state }: { state: AppState }) {
   // recorded/tagged. Options bounded by the chapter's actual verse count.
   const rangeStartValue = recordingRangeStart ?? 1;
   const rangeEndValue = recordingRangeEnd ?? recordingChapterVerses.length;
+
+  // Raw text mirrors of the range inputs. Controlled inputs driven straight
+  // off rangeStartValue/rangeEndValue re-render to the clamped number on
+  // every keystroke, so clearing a field to type a new value (e.g. deleting
+  // "1") immediately snaps back to "1" because "" parses to NaN and the
+  // commit is skipped while the displayed value stays put. Keeping the
+  // field's own text separate lets it sit empty/partial mid-edit; only a
+  // successful parse pushes a clamped number into the shared range state.
+  const [startText, setStartText] = useState(String(rangeStartValue));
+  const [endText, setEndText] = useState(String(rangeEndValue));
+
+  // Resync the text fields when the range changes for reasons other than
+  // typing in them -- switching book/chapter or tapping "Select All".
+  useEffect(() => {
+    setStartText(String(rangeStartValue));
+    setEndText(String(rangeEndValue));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingBook, recordingChapter, isRecordingFullChapterRange]);
 
   const taggedVerseCount = Object.keys(verseTapTimestamps).length;
   const importTaggedCount = Object.keys(importTapTimestamps).length;
@@ -211,31 +229,35 @@ export default function RecordScreen({ state }: { state: AppState }) {
           <View className="flex-row gap-2 items-center" style={{ opacity: isRecording ? 0.5 : 1 }}>
             <View className="flex-1">
               <TextInput
-                value={String(rangeStartValue)}
+                value={startText}
                 editable={!isRecording}
                 keyboardType="numeric"
                 onChangeText={(text) => {
+                  setStartText(text);
                   const num = parseInt(text, 10);
                   if (Number.isNaN(num)) return;
                   const clamped = Math.max(1, Math.min(num, recordingChapterVerses.length || num));
                   setRecordingRangeStart(clamped);
                   if (clamped > rangeEndValue) setRecordingRangeEnd(clamped);
                 }}
+                onBlur={() => setStartText(String(rangeStartValue))}
                 className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-2 py-2.5 text-xs text-center font-bold"
               />
             </View>
             <Text className="text-xs font-bold text-neutral-400">to</Text>
             <View className="flex-1">
               <TextInput
-                value={String(rangeEndValue)}
+                value={endText}
                 editable={!isRecording}
                 keyboardType="numeric"
                 onChangeText={(text) => {
+                  setEndText(text);
                   const num = parseInt(text, 10);
                   if (Number.isNaN(num)) return;
                   const clamped = Math.max(rangeStartValue, Math.min(num, recordingChapterVerses.length || num));
                   setRecordingRangeEnd(clamped);
                 }}
+                onBlur={() => setEndText(String(rangeEndValue))}
                 className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-2 py-2.5 text-xs text-center font-bold"
               />
             </View>
