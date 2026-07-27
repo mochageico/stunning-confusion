@@ -92,6 +92,15 @@ interface PracticeModalsProps {
   // is ready. Threaded through so Listen mode honours the same setting as
   // every other playback surface.
   studioPlaybackEnabled?: boolean;
+  // Local audio cache: Storage path -> local file:// URI (see lib/audioCache).
+  // Listen mode is the heaviest repeat-listen surface in the app, so it both
+  // reads the cache and asks for the current recording to be cached.
+  audioCacheMap?: ReadonlyMap<string, string>;
+  onCacheAudio?: (recording: Recording) => void;
+  // Listen runs its own player and clears playingRecordingId when it starts,
+  // so useAppState can't otherwise tell that audio is running -- and it needs
+  // to know, to avoid swapping a player's source mid-recitation.
+  onListenPlayingChange?: (playing: boolean) => void;
   // App-wide "now playing saved recording" state (Profile/RecordingDetail/
   // etc's own mini-bar), threaded through so Listen mode and that system
   // can enforce "one audio source at a time" -- starting one cancels
@@ -133,6 +142,9 @@ function PracticeModalsInner({
   userRecordings = [],
   selectedChapterAudios = {},
   studioPlaybackEnabled = true,
+  audioCacheMap,
+  onCacheAudio,
+  onListenPlayingChange,
   playingRecordingId = null,
   highlightedVerses,
   onToggleVerseHighlight,
@@ -282,8 +294,29 @@ function PracticeModalsInner({
   // own player rather than reusing the app-wide "now playing" system: Listen
   // mode auto-advances across verses (and can switch recordings on its own),
   // which shouldn't hijack whatever the floating mini-bar is doing elsewhere.
-  const listenPlayer = useAudioPlayer(resolvePlaybackUrl(currentSegment?.recording, studioPlaybackEnabled));
+  const listenPlayer = useAudioPlayer(
+    resolvePlaybackUrl(currentSegment?.recording, studioPlaybackEnabled, audioCacheMap)
+  );
   const listenPlayerStatus = useAudioPlayerStatus(listenPlayer);
+
+  // Report playback state up so useAppState knows not to swap any player's
+  // source while Listen is mid-recitation, and ask for whatever recording is
+  // playing to be cached. Both are no-ops after the first time for a given
+  // file; the cache module de-dupes.
+  useEffect(() => {
+    onListenPlayingChange?.(listenPlaying);
+  }, [listenPlaying, onListenPlayingChange]);
+
+  useEffect(() => {
+    return () => onListenPlayingChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!listenPlaying || !currentSegment?.recording) return;
+    onCacheAudio?.(currentSegment.recording);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listenPlaying, currentSegment?.recording]);
 
   useEffect(() => {
     return () => {

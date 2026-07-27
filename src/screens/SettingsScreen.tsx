@@ -8,6 +8,13 @@ import { auth } from '../firebase';
 import { ChipRow, FadeInView } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS } from '../data';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
+import { AUDIO_CACHE_SUPPORTED, CACHE_CAP_CHOICES } from '../lib/audioCache';
+
+const formatMB = (bytes: number) => {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1024) return `${(mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1)} GB`;
+  return `${mb < 10 && mb > 0 ? mb.toFixed(1) : Math.round(mb)} MB`;
+};
 
 // Profile-sharing visibility choices, shared by the Memory Plan and Memory
 // Queue pickers below. 'friends' surfaces a snapshot on your member profile
@@ -42,6 +49,9 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     updateDefaultRecordingVisibility,
     studioPlaybackEnabled,
     setStudioPlaybackEnabled,
+    audioCache,
+    setAudioCacheCap,
+    clearAudioDownloads,
     memoryPlanVisibility,
     memoryQueueVisibility,
     updateMemoryPlanVisibility,
@@ -222,6 +232,68 @@ export default function SettingsScreen({ state }: { state: AppState }) {
             })}
           </View>
         </View>
+
+        {/* OFFLINE AUDIO — native only. On web the browser's own HTTP cache
+            handles this, so there is nothing here for the user to manage. */}
+        {AUDIO_CACHE_SUPPORTED && (
+          <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
+            <View>
+              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Offline Audio</Text>
+              <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">
+                Recitations you play are kept on this device so they don't re-download every time — saving data and
+                working without a signal. Recordings you save offline are never removed automatically.
+              </Text>
+            </View>
+
+            <View className="flex-row justify-between items-center bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
+              <Text className="text-[10px] font-sans text-neutral-600">
+                {audioCache.map.size} recording{audioCache.map.size === 1 ? '' : 's'} on this device
+              </Text>
+              <Text className="text-[10px] font-mono font-bold text-neutral-700">
+                {formatMB(audioCache.totalBytes)} / {formatMB(audioCache.capBytes)}
+              </Text>
+            </View>
+
+            <View>
+              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400 mb-1">
+                Storage Limit
+              </Text>
+              <View className="flex-row gap-2">
+                {CACHE_CAP_CHOICES.map((bytes) => {
+                  const isSelected = audioCache.capBytes === bytes;
+                  return (
+                    <Pressable
+                      key={bytes}
+                      onPress={() => setAudioCacheCap(bytes)}
+                      className={`flex-1 py-2 rounded-lg items-center border ${
+                        isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
+                      }`}
+                    >
+                      <Text
+                        className={`text-[10px] font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}
+                      >
+                        {formatMB(bytes)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Pressable
+              onPress={() => {
+                if (audioCache.map.size === 0) {
+                  triggerToast('Nothing stored on this device yet.');
+                  return;
+                }
+                clearAudioDownloads();
+              }}
+              className="w-full py-2 rounded-lg items-center border border-neutral-200 bg-white"
+            >
+              <Text className="text-[10px] font-sans font-bold text-neutral-600">Clear Downloaded Audio</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* PROFILE SHARING */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 14 }}>

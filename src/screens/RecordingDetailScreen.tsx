@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, Check, Pause, Pencil, Play, X } from 'lucide-react-native';
+import { ArrowLeft, Check, Download, Pause, Pencil, Play, Trash2, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { VerseTimestamp } from '../types';
 import { FadeInView, HelpTooltip, PulseView } from '../components/ui';
 import { BIBLE_TRANSLATIONS } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
+import { cacheableTarget } from '../lib/audioCache';
 import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/studioAudio';
 
 // Derived from the single source of truth (data.ts) instead of its own
@@ -116,6 +117,10 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
     studioPlaybackEnabled,
     studioAbOverride,
     setStudioAbOverride,
+    audioCache,
+    downloadingRecordingIds,
+    saveRecordingOffline,
+    removeRecordingDownload,
   } = state;
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -181,6 +186,14 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
   // opens showing whichever version is actually about to play.
   const studioAbActive = studioAbOverride ?? studioPlaybackEnabled;
   const studioLabel = studioStatusLabel(selectedRecording);
+
+  // Offline download state. Keyed off the PERSISTED studio preference, not the
+  // A/B override, so flipping the switch to compare takes doesn't make the
+  // download button flicker between "saved" and "not saved".
+  const offlineTarget = cacheableTarget(selectedRecording, studioPlaybackEnabled);
+  const isDownloaded = !!offlineTarget && audioCache.pinned.has(offlineTarget.storagePath);
+  const isDownloading = downloadingRecordingIds.has(selectedRecording.id);
+
   const durationSec = selectedRecording.duration;
   const currentPlaybackSec = isPlayingThis ? Math.floor((playingRecProgress / 100) * durationSec) : 0;
 
@@ -512,6 +525,35 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
                 <Text className="text-[9px] font-sans text-neutral-400 uppercase tracking-wider">{studioLabel}</Text>
               )}
             </View>
+          )}
+
+          {/* Offline download. Only offered once there is a settled version to
+              download — while a studio render is still processing, whichever
+              file we saved would be superseded minutes later. */}
+          {offlineTarget && (
+            <Pressable
+              onPress={() =>
+                isDownloaded ? removeRecordingDownload(selectedRecording) : saveRecordingOffline(selectedRecording)
+              }
+              disabled={isDownloading}
+              className={`flex-row items-center px-3 py-1.5 rounded-full border ${
+                isDownloaded ? 'bg-neutral-100 border-neutral-200' : 'bg-white border-neutral-200'
+              } ${isDownloading ? 'opacity-50' : ''}`}
+              style={{ gap: 6 }}
+            >
+              {isDownloaded ? (
+                <Trash2 size={11} color="#737373" strokeWidth={2.5} />
+              ) : (
+                <Download size={11} color="#1A1A1A" strokeWidth={2.5} />
+              )}
+              <Text
+                className={`text-[9px] font-sans font-bold uppercase tracking-wider ${
+                  isDownloaded ? 'text-neutral-500' : 'text-neutral-800'
+                }`}
+              >
+                {isDownloading ? 'Downloading…' : isDownloaded ? 'Remove Download' : 'Save Offline'}
+              </Text>
+            </Pressable>
           )}
         </View>
 

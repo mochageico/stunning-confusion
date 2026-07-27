@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
-import { ArrowLeft, Check, ChevronDown, GripVertical, Pause, Play, Printer, Search, SlidersHorizontal, X } from 'lucide-react-native';
+import { ArrowLeft, Check, ChevronDown, Download, GripVertical, Pause, Play, Printer, Search, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
+import { cacheableTarget } from '../lib/audioCache';
 import { ChipRow, DiscreteSlider, FadeInView } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
 import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
@@ -60,6 +61,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     setShowAudioSelector,
     userRecordings,
     reorderChapterRecordings,
+    audioCache,
+    downloadingRecordingIds,
+    saveChapterOffline,
+    studioPlaybackEnabled,
     playingRecordingId,
     setPlayingRecordingId,
     playingRecProgress,
@@ -130,6 +135,19 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   );
   const currentAudio = resolveChapterAudio(userRecordings, selectedChapterAudios, selectedBook || '', selectedChapter || 0);
   const isPlayingThis = !!currentAudio && playingRecordingId === currentAudio.id;
+
+  // Offline downloads for this chapter's recordings. "Downloadable" excludes
+  // anything still being processed — cacheableTarget returns null while a
+  // studio render is pending, since whichever file we saved would be
+  // superseded minutes later.
+  const downloadableNarrations = availableNarrations.filter((r) => cacheableTarget(r, studioPlaybackEnabled));
+  // `pinned`, not `map`: a file that merely happens to be auto-cached is still
+  // evictable, so it hasn't really been "saved offline" yet.
+  const notYetDownloaded = downloadableNarrations.filter((r) => {
+    const target = cacheableTarget(r, studioPlaybackEnabled)!;
+    return !audioCache.pinned.has(target.storagePath);
+  });
+  const chapterDownloadBusy = downloadableNarrations.some((r) => downloadingRecordingIds.has(r.id));
 
   const floatingBarShowing = selectedVerseNumbers.length > 0;
   const activeTranslation = BIBLE_TRANSLATIONS.find((t) => t.id === selectedTranslationId) ?? BIBLE_TRANSLATIONS[0];
@@ -350,7 +368,33 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   }}
                 />
 
-                <View className="border-t border-[#E5E5E5]/60 pt-2">
+                <View className="border-t border-[#E5E5E5]/60 pt-2 gap-1.5">
+                  {downloadableNarrations.length > 0 && (
+                    <Pressable
+                      onPress={() => saveChapterOffline(downloadableNarrations)}
+                      disabled={chapterDownloadBusy || notYetDownloaded.length === 0}
+                      className={`w-full py-1.5 rounded-md flex-row items-center justify-center gap-1 border ${
+                        notYetDownloaded.length === 0 ? 'bg-white/60 border-[#E5E5E5]' : 'bg-white border-[#1A1A1A]'
+                      } ${chapterDownloadBusy ? 'opacity-50' : ''}`}
+                    >
+                      {notYetDownloaded.length === 0 ? (
+                        <Check size={11} color="#525252" />
+                      ) : (
+                        <Download size={11} color="#1A1A1A" />
+                      )}
+                      <Text
+                        className={`font-sans font-bold text-[10px] uppercase tracking-wider ${
+                          notYetDownloaded.length === 0 ? 'text-neutral-500' : 'text-[#1A1A1A]'
+                        }`}
+                      >
+                        {chapterDownloadBusy
+                          ? 'Downloading…'
+                          : notYetDownloaded.length === 0
+                            ? 'Saved Offline'
+                            : `Save ${notYetDownloaded.length} Offline`}
+                      </Text>
+                    </Pressable>
+                  )}
                   <Pressable
                     onPress={() => {
                       setFeedBookFilter(selectedBook || '');

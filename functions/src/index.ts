@@ -53,20 +53,64 @@ const MAX_DURATION_DRIFT_SEC = 0.5;
 // hear in a car or on a phone speaker without clipping on good headphones.
 const LOUDNORM_TARGET = 'I=-16:TP=-1.5:LRA=11';
 
-// Everything ahead of loudnorm in the chain, in order. Each stage feeds the
-// next, so order is load-bearing:
+// Everything ahead of loudnorm, in order:
 //   highpass    — drops desk rumble/handling noise below speech fundamentals
-//   afftdn      — FFT denoise, pulls out steady-state hiss and room tone
-//   deesser     — tames sibilance (the primary ask)
 //   acompressor — evens out lean-in/lean-back level swings WITHIN a take
-// loudnorm goes last so it normalizes the final processed result rather than
-// the raw input (normalizing first would let the compressor undo it).
-const PRE_FILTERS = [
-  'highpass=f=80',
-  'afftdn=nf=-25:nr=12',
-  'deesser=i=0.35:m=0.5:f=0.5',
-  'acompressor=threshold=-18dB:ratio=3:attack=20:release=250:makeup=2',
-].join(',');
+//
+// NO denoiser here, deliberately. The first version ran afftdn (FFT denoise)
+// and it was the single biggest quality regression: FFT denoisers attenuate
+// low-level content across the whole spectrum, and low-level high-frequency
+// content is exactly what breath, air and presence are made of. Measured, it
+// cost ~2.7dB in the 10–16kHz band — audible as "lost the treble/warmth", and
+// bad enough that the raw take sounded better than the processed one.
+// Background noise was always the lowest-priority goal, so it is simply not
+// worth that trade. If it comes back it should be arnndn (speech-specific,
+// far less destructive), not afftdn.
+const PRE_FILTERS = ['highpass=f=70', 'acompressor=threshold=-20dB:ratio=2.5:attack=20:release=250:makeup=1'].join(
+  ','
+);
+
+// De-esser. Runs AFTER loudnorm (see buildFilterChain) for a specific reason:
+// `threshold` here is an ABSOLUTE level, not relative, so ahead of loudnorm a
+// quiet recording would never trigger it and a hot one would over-trigger.
+// Downstream of loudnorm every take arrives at the same -16 LUFS, which makes
+// the threshold behave consistently across recordings.
+//
+// ffmpeg's dedicated `deesser` filter was tried first and is far too weak —
+// at i=0.35 it moved the 6–9kHz band by 0.6dB, i.e. nothing. adynamicequalizer
+// is a real dynamic EQ: it cuts a narrow band only while that band is loud.
+//
+// Measured response of these exact settings (constant-tone sweep, dB change):
+//   250Hz  0.0 | 1k  0.0 | 2k -0.2 | 4k -1.9 | 5.5k -6.5
+//   6.5k -11.7 | 8k -5.2 | 10k -1.9 | 13k -0.6
+// A deep, narrow notch on sibilance with warmth, intelligibility and air all
+// left alone — which is the whole point, and what the old chain failed at.
+//
+// TUNING: `threshold` is the strength knob. 0.20 gives a ~-7.8dB notch,
+// 0.30 ~-11.7dB. Raise it if esses are still sharp; lower it if speech starts
+// sounding lisped or dull. Everything else can stay put.
+const DEESSER =
+  'adynamicequalizer=dfrequency=6500:dqfactor=2.5:tfrequency=6500:tqfactor=2.5' +
+  ':threshold=0.30:ratio=4:attack=1:release=40:range=12:mode=cut:direction=downward';
+
+// Holds the true-peak ceiling after de-essing nudges levels around. loudnorm
+// already targeted -1.5dBTP; this just guarantees nothing sneaks above it.
+const LIMITER = 'alimiter=limit=0.841:level=disabled';
+
+// KNOWN OFFSET: because de-essing runs after loudnorm, removing sibilant
+// energy drops integrated loudness slightly below target — measured at
+// -17.5 LUFS against a -16 target on a synthetic signal that is 30% sibilance
+// bursts, i.e. far more sibilant than real speech, so the real-world gap
+// should be a few tenths rather than 1.5. Deliberately NOT compensated with a
+// fixed makeup gain: that would be tuned against synthetic material known to
+// be unrepresentative. Consistency between recordings (all get identical
+// processing) matters more here than hitting -16 exactly. Revisit against
+// real recordings if playback feels quiet.
+
+/** Full chain for the apply pass: pre-filters, loudnorm, then de-ess + limit. */
+function buildFilterChain(loudnormArgs: string): string {
+  return `${PRE_FILTERS},${loudnormArgs},${DEESSER},${LIMITER}`;
+}
 
 const ffmpegPath = ffmpegStatic as unknown as string | null;
 const ffprobePath = ffprobeStatic.path;
@@ -199,11 +243,14 @@ async function renderStudioAudio(inputPath: string, outputPath: string): Promise
     '-i',
     inputPath,
     '-af',
-    `${PRE_FILTERS},${loudnormArgs}`,
+    buildFilterChain(loudnormArgs),
     '-c:a',
     'aac',
+    // 128k rather than 96k: at 96k mono, AAC's internal lowpass starts eating
+    // the top octave, which compounded the "lost the treble" problem. The size
+    // difference on a few minutes of speech is trivial.
     '-b:a',
-    '96k',
+    '128k',
     // Voice — mono halves the file with no perceptible loss, and keeps
     // playback cost down for users on cellular.
     '-ac',
@@ -304,6 +351,20 @@ export const processStudioAudio = onObjectFinalized(
       // change and shared playback keeps working for other users.
       const downloadToken = randomUUID();
 
+      // ── ORPHAN GUARD (pre-upload) ─────────────────────────────────────
+      // Rendering takes real time, and the user can delete the recording
+      // while it runs. Client-side deletion removes audioPath and
+      // studioAudioPath from Storage — but it cannot remove a studio blob
+      // that does not exist yet. Uploading against a doc that is already
+      // gone strands the blob permanently: nothing references it, the app
+      // can never surface it, and no lifecycle rule can distinguish it from
+      // a live render. Checking here closes almost the whole window, since
+      // the render is where all the time goes.
+      if (!(await docRef.get()).exists) {
+        logger.info('Recording deleted during render — discarding studio output', { objectPath });
+        return;
+      }
+
       await bucket.upload(outputPath, {
         destination: studioPath,
         metadata: {
@@ -327,13 +388,45 @@ export const processStudioAudio = onObjectFinalized(
         studioStatus: 'ready' as const,
       };
 
-      await docRef.update(studioFields);
+      // ── ORPHAN GUARD (post-upload) ────────────────────────────────────
+      // The authoritative half of the guard above: the doc can still go away
+      // between that check and this write. Any failure here — a lost race or
+      // a transient Firestore error — leaves a blob nothing will ever point
+      // at, and this trigger does not retry (onObjectFinalized defaults to
+      // retry: false), so no later run will recover it. Take the blob back
+      // out rather than leak it.
+      try {
+        await docRef.update(studioFields);
+      } catch (updateErr) {
+        logger.error('Could not attach studio render to its recording — removing orphaned blob', {
+          objectPath,
+          studioPath,
+          updateErr,
+        });
+        await bucket
+          .file(studioPath)
+          .delete({ ignoreNotFound: true })
+          .catch((deleteErr) => logger.error('Failed to remove orphaned studio blob', { studioPath, deleteErr }));
+        // Best-effort — fails too if the doc is what went missing, which is
+        // fine: a deleted recording has no status left to report.
+        await docRef.update({ studioStatus: 'failed' }).catch(() => {});
+        return;
+      }
 
       // Mirror onto the shared copy so circle/public listeners get the
       // processed version too. Absent for private recordings — not an error.
-      const sharedRef = db.doc(`sharedRecordings/${recordingId}`);
-      if ((await sharedRef.get()).exists) {
-        await sharedRef.update(studioFields);
+      //
+      // Deliberately non-fatal: the render is uploaded and the owner's doc
+      // already points at it, so falling into the outer catch here would
+      // stamp studioStatus: 'failed' over a perfectly good 'ready' and send
+      // the owner back to the raw take over a mirroring problem.
+      try {
+        const sharedRef = db.doc(`sharedRecordings/${recordingId}`);
+        if ((await sharedRef.get()).exists) {
+          await sharedRef.update(studioFields);
+        }
+      } catch (mirrorErr) {
+        logger.error('Could not mirror studio fields onto shared recording', { objectPath, mirrorErr });
       }
 
       logger.info('Studio audio ready', {

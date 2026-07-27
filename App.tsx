@@ -613,6 +613,9 @@ function AppShell() {
           userRecordings={state.userRecordings}
           selectedChapterAudios={state.selectedChapterAudios}
           studioPlaybackEnabled={state.studioPlaybackEnabled}
+          audioCacheMap={state.audioCache.map}
+          onCacheAudio={state.cacheRecordingAudio}
+          onListenPlayingChange={state.setListenModePlaying}
           playingRecordingId={state.playingRecordingId}
           setPlayingRecordingId={state.setPlayingRecordingId}
           highlightedVerses={state.highlightedVerses}

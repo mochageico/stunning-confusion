@@ -23,14 +23,32 @@ export function hasStudioAudio(recording: Pick<Recording, 'studioAudioUrl' | 'st
  * The URL playback should actually use. Returns undefined only when there is
  * no audio at all — callers already treat that as "not a real recording"
  * (e.g. the seeded demo entries, which have no Storage-backed audio).
+ *
+ * `cache` maps Storage path -> local `file://` URI (see lib/audioCache) and,
+ * when supplied, wins over the remote URL for whichever version was picked.
+ * Typed as a bare ReadonlyMap rather than importing AudioCacheMap because
+ * audioCache imports from this module — naming the type here would make that
+ * a cycle.
+ *
+ * MUST STAY SYNCHRONOUS AND PURE: this runs during render, and its result is
+ * passed straight into useAudioPlayer at both call sites.
  */
 export function resolvePlaybackUrl(
-  recording: Pick<Recording, 'audioUrl' | 'studioAudioUrl' | 'studioStatus'> | null | undefined,
-  studioEnabled: boolean
+  recording:
+    | Pick<Recording, 'audioUrl' | 'audioPath' | 'studioAudioUrl' | 'studioAudioPath' | 'studioStatus'>
+    | null
+    | undefined,
+  studioEnabled: boolean,
+  cache?: ReadonlyMap<string, string>
 ): string | undefined {
   if (!recording) return undefined;
-  if (studioEnabled && hasStudioAudio(recording)) return recording.studioAudioUrl;
-  return recording.audioUrl;
+  const useStudio = studioEnabled && hasStudioAudio(recording);
+  const storagePath = useStudio ? recording.studioAudioPath : recording.audioPath;
+  if (storagePath) {
+    const localUri = cache?.get(storagePath);
+    if (localUri) return localUri;
+  }
+  return useStudio ? recording.studioAudioUrl : recording.audioUrl;
 }
 
 /**
