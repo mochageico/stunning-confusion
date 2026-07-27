@@ -5,16 +5,20 @@ import { ArrowLeft, Send } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
+import { ReactionBar } from '../components/ReactionBar';
 
 export default function CircleChatScreen({ state }: { state: AppState }) {
   const {
     user,
     activeCircle,
+    activeCircleChatId,
     activeCircleMessages,
     loadingActiveCircleMessages,
     sendCircleMessage,
     closeCircleChat,
     handleBack,
+    reactionsByMessageId,
+    toggleReaction,
   } = state;
 
   const [draft, setDraft] = useState('');
@@ -71,12 +75,20 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
             activeCircleMessages.map((msg) => {
               const isMine = msg.fromUid === user?.uid;
               return (
-                <View key={msg.id} className={`flex-row gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
-                  <AvatarCircle name={msg.fromName} photoUri={msg.fromAvatarUrl || null} size={24} />
-                  <View className={`max-w-[74%] px-3 py-2 rounded-2xl ${isMine ? 'bg-[#1A1A1A] rounded-br-sm' : 'bg-neutral-100 rounded-bl-sm'}`}>
-                    {!isMine && <Text className="text-[8px] font-sans font-bold text-neutral-500 mb-0.5">{msg.fromName}</Text>}
-                    <Text className={`text-xs font-sans ${isMine ? 'text-white' : 'text-neutral-800'}`}>{msg.text}</Text>
+                <View key={msg.id} style={{ gap: 2 }}>
+                  <View className={`flex-row gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
+                    <AvatarCircle name={msg.fromName} photoUri={msg.fromAvatarUrl || null} size={24} />
+                    <View className={`max-w-[74%] px-3 py-2 rounded-2xl ${isMine ? 'bg-[#1A1A1A] rounded-br-sm' : 'bg-neutral-100 rounded-bl-sm'}`}>
+                      {!isMine && <Text className="text-[8px] font-sans font-bold text-neutral-500 mb-0.5">{msg.fromName}</Text>}
+                      <Text className={`text-xs font-sans ${isMine ? 'text-white' : 'text-neutral-800'}`}>{msg.text}</Text>
+                    </View>
                   </View>
+                  <ReactionBar
+                    reactions={reactionsByMessageId[msg.id] || []}
+                    myUid={user?.uid}
+                    align={isMine ? 'right' : 'left'}
+                    onToggle={(emoji) => activeCircleChatId && toggleReaction('circle', activeCircleChatId, msg.id, emoji)}
+                  />
                 </View>
               );
             })

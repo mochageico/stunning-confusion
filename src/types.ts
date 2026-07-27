@@ -345,6 +345,99 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+// One emoji reaction from one user on one message -- doc id is always
+// `${messageId}_${uid}` (both in dmThreads/{threadId}/reactions and
+// circles/{circleId}/reactions), which caps each user to a single reaction
+// per message (re-reacting overwrites the emoji; tapping the same emoji
+// again deletes the doc) and lets firestore.rules verify the id against the
+// fields without a second read.
+export interface MessageReaction {
+  id: string;
+  messageId: string;
+  uid: string;
+  name: string;
+  emoji: string;
+  createdAt: string;
+}
+
+// A 1:1 "race this passage" challenge between two friends, modeled directly
+// on FriendRequest's pending/accept/decline shape. Stored at
+// challenges/{id}. Verses are added to each side's own Memory Queue
+// (front-of-queue, like a MemorizationGoal range) the moment that side is
+// present for it -- the sender at creation, the recipient at acceptance --
+// so progress is always driven by real queue state, not a separate tracker.
+export interface Challenge {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  fromAvatarUrl: string;
+  toUid: string;
+  toName: string;
+  toAvatarUrl: string;
+  participantUids: [string, string]; // sorted, for array-contains queries
+  dmThreadId: string; // which DM thread renders this challenge's card
+  book: string;
+  startChapter: number;
+  endChapter: number;
+  startVerse?: number; // only meaningful when startChapter === endChapter
+  endVerse?: number;
+  totalVerses: number;
+  status: 'pending' | 'active' | 'declined' | 'completed' | 'cancelled';
+  createdAt: string;
+  respondedAt?: string;
+  fromProgress: number; // verses out of 'queued' status, 0..totalVerses -- same completion definition as MemorizationGoal
+  toProgress: number;
+}
+
+// Open-enrollment group challenge hosted inside a Circle -- any member can
+// join (unlike StudyPlan, which is leader-curated). Stored at
+// circles/{circleId}/challenges/{id}. Participants are their own self-owned
+// subcollection docs (see GroupChallengeParticipant below), not a map field
+// on this doc, so firestore.rules can restrict each participant to writing
+// only their own entry.
+export interface GroupChallenge {
+  id: string;
+  circleId: string;
+  createdByUid: string;
+  createdByName: string;
+  title: string;
+  book: string;
+  startChapter: number;
+  endChapter: number;
+  startVerse?: number;
+  endVerse?: number;
+  totalVerses: number;
+  status: 'active' | 'completed' | 'cancelled';
+  createdAt: string;
+}
+
+// circles/{circleId}/challenges/{challengeId}/participants/{uid} -- self-owned,
+// same shape/trust model as profiles/{uid}/friends/{friendUid}.
+export interface GroupChallengeParticipant {
+  uid: string;
+  name: string;
+  avatarUrl: string;
+  progress: number; // verses out of 'queued' status, 0..the parent challenge's totalVerses
+  joinedAt: string;
+}
+
+// My own record of a GroupChallenge I've joined -- denormalized onto
+// memoryPlans/{uid}.joinedGroupChallenges, same "membership record" pattern
+// StudyPlanMembership already uses for joinedStudyPlans. Self-contained
+// (carries its own range/totalVerses) so progress-sync after a review never
+// needs to re-fetch the parent GroupChallenge doc just to know what to count.
+export interface GroupChallengeMembership {
+  circleId: string;
+  challengeId: string;
+  book: string;
+  startChapter: number;
+  endChapter: number;
+  startVerse?: number;
+  endVerse?: number;
+  totalVerses: number;
+  joinedAt: string;
+}
+
 // Real user profile, stored at profiles/{uid}. memorizedCount/learningCount are
 // denormalized snapshots the owning client patches in opportunistically, so
 // other users can see meaningful stats without exposing private

@@ -16,7 +16,7 @@ function timeAgo(iso: string): string {
 }
 
 export default function MessagesScreen({ state }: { state: AppState }) {
-  const { dmThreads, loadingDmThreads, openDMThread, handleBack, user, friends } = state;
+  const { dmThreads, loadingDmThreads, openDMThread, handleBack, user, friends, myChallengeBadges } = state;
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -49,6 +49,7 @@ export default function MessagesScreen({ state }: { state: AppState }) {
           <View style={{ gap: 8 }}>
             {dmThreads.map((thread) => {
               const isFriend = friends.some((f) => f.uid === thread.otherUid);
+              const hasChallenge = myChallengeBadges.some((c) => c.dmThreadId === thread.id);
               return (
                 <Pressable
                   key={thread.id}
@@ -58,7 +59,10 @@ export default function MessagesScreen({ state }: { state: AppState }) {
                   <AvatarCircle name={thread.otherName} photoUri={thread.otherAvatarUrl || null} size={36} />
                   <View className="flex-1">
                     <View className="flex-row items-center justify-between">
-                      <Text className="text-xs font-sans font-bold text-neutral-800">{thread.otherName}</Text>
+                      <View className="flex-row items-center gap-1">
+                        <Text className="text-xs font-sans font-bold text-neutral-800">{thread.otherName}</Text>
+                        {hasChallenge && <Text className="text-[10px]">🏆</Text>}
+                      </View>
                       <Text className="text-[9px] text-neutral-400 font-sans">{timeAgo(thread.lastMessageAt)}</Text>
                     </View>
                     <Text className="text-[10px] text-neutral-500 font-sans mt-0.5" numberOfLines={1} ellipsizeMode="tail">

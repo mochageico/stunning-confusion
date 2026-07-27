@@ -9,6 +9,11 @@ export const RECORDING_VISIBILITY_OPTIONS: Array<{ id: 'private' | 'circle' | 'p
   { id: 'public', label: 'Public', desc: 'Anyone signed in' },
 ];
 
+// Fixed reaction set for DM + Circle chat messages (ReactionBar). Kept small
+// and fixed rather than a full emoji picker -- one reaction per user per
+// message, see MessageReaction in types.ts.
+export const REACTION_EMOJIS = ['👍', '👎', '❤️', '😂', '🔥'] as const;
+
 // The 66-book Protestant canon with standard USFM book IDs and chapter counts.
 // This is structural/bibliographic data (names + chapter counts), not the text
 // of any particular translation — the same list applies regardless of which

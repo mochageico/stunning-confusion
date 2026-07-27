@@ -102,6 +102,36 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
     }
 
+    // 1:1 "race this passage" challenges -- modeled on friendRequests just
+    // above: created by the sender (fromUid), only the recipient (toUid) can
+    // accept/decline, either side can read/cancel. Once active, each side may
+    // only ever patch their OWN progress counter (fromProgress for fromUid,
+    // toProgress for toUid) -- same narrow-diff posture as the
+    // accountabilityMeta counter below -- plus status, since a progress
+    // update is also what flips status to 'completed' once both sides are
+    // known (client-side) to have hit totalVerses.
+    match /challenges/{challengeId} {
+      allow read: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if isSignedIn()
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid)
+        && (
+          // Recipient accepting/declining.
+          (resource.data.toUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt']))
+          // Either side patching only their own progress field (+ status, for the completed flip).
+          || (request.auth.uid == resource.data.fromUid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fromProgress', 'status']))
+          || (request.auth.uid == resource.data.toUid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['toProgress', 'status']))
+        );
+      allow delete: if isSignedIn()
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid)
+        && resource.data.status == 'pending';
+    }
+
     // Accountability nudges (friend-only, sender-composed custom message,
     // deliberately separate from any messaging system). Immutable log except
     // the recipient may mark their own copy read, or delete it from their inbox.
@@ -181,6 +211,25 @@ service cloud.firestore {
                      get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[1]);
         allow update, delete: if false;
       }
+
+      // Emoji reactions -- a flat sibling of messages/ (not nested per-
+      // message) so opening a thread only ever needs one extra listener.
+      // Doc id is always `${messageId}_${uid}`, checked below so it can't be
+      // spoofed to attribute a reaction to someone else; one reaction per
+      // user per message (the client deletes-then-creates to change emoji,
+      // which is why update is disallowed -- keeps this rule simple).
+      match /reactions/{reactionId} {
+        allow read: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids;
+        allow create: if isSignedIn()
+          && request.resource.data.uid == request.auth.uid
+          && reactionId == request.resource.data.messageId + '_' + request.auth.uid
+          && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids
+          && dmGated(get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[0],
+                     get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[1]);
+        allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+        allow update: if false;
+      }
     }
 
     // Group chat auto-tied to a Circle -- members only, immutable messages.
@@ -190,6 +239,18 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid
         && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
       allow update, delete: if false;
+    }
+
+    // Same reaction shape as dmThreads' above, flat sibling of circles/{id}/messages.
+    match /circles/{circleId}/reactions/{reactionId} {
+      allow read: if isSignedIn()
+        && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && reactionId == request.resource.data.messageId + '_' + request.auth.uid
+        && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow update: if false;
     }
 
     // Real memorization-milestone activity feed (Community). Read is open to
@@ -225,6 +286,30 @@ service cloud.firestore {
       match /groupPlans/{planId} {
         allow read: if isSignedIn();
         allow write: if isSignedIn() && get(/databases/$(database)/documents/circles/$(circleId)).data.ownerId == request.auth.uid;
+      }
+
+      // Open-enrollment group challenges -- unlike groupPlans/studyPlans
+      // above, any member may create one (peer competition, not
+      // leader-curated content), but only the creator can end/cancel it.
+      match /challenges/{challengeId} {
+        allow read: if isSignedIn() && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
+        allow create: if isSignedIn()
+          && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid))
+          && request.resource.data.createdByUid == request.auth.uid;
+        allow update: if isSignedIn()
+          && resource.data.createdByUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+        allow delete: if isSignedIn() && resource.data.createdByUid == request.auth.uid;
+
+        // Self-owned participant doc, same shape/trust model as
+        // profiles/{uid}/friends/{friendUid} -- each member can only ever
+        // join/update/leave their OWN entry, never another's.
+        match /participants/{uid} {
+          allow read: if isSignedIn() && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
+          allow create: if isOwner(uid) && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
+          allow update: if isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['progress']);
+          allow delete: if isOwner(uid);
+        }
       }
     }
 

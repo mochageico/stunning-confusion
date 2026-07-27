@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Lock, Send, UserPlus } from 'lucide-react-native';
+import { ArrowLeft, Lock, Send, Trophy, UserPlus } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
+import { ReactionBar } from '../components/ReactionBar';
+import { ChallengeCard, ChallengeCreateSheet } from '../components/ChallengeCard';
 
 export default function DMThreadScreen({ state }: { state: AppState }) {
   const {
@@ -18,9 +20,17 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
     handleBack,
     sendFriendRequest,
     outgoingFriendRequests,
+    reactionsByMessageId,
+    toggleReaction,
+    activeChallenges,
+    sendChallenge,
+    acceptChallenge,
+    declineChallenge,
+    cancelChallenge,
   } = state;
 
   const [draft, setDraft] = useState('');
+  const [showChallengeSheet, setShowChallengeSheet] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const keyboardHeight = useKeyboardHeight();
   const insets = useSafeAreaInsets();
@@ -59,6 +69,23 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
           <Text className="text-sm font-serif font-bold text-neutral-900">{activeDMThread.otherName}</Text>
         </View>
 
+        {activeChallenges.length > 0 && (
+          <View className="px-3 pt-3">
+            {activeChallenges
+              .filter((c) => c.status === 'pending' || c.status === 'active' || c.status === 'completed')
+              .map((challenge) => (
+                <ChallengeCard
+                  key={challenge.id}
+                  challenge={challenge}
+                  myUid={user?.uid}
+                  onAccept={() => acceptChallenge(challenge)}
+                  onDecline={() => declineChallenge(challenge)}
+                  onCancel={() => cancelChallenge(challenge)}
+                />
+              ))}
+          </View>
+        )}
+
         <ScrollView
           ref={scrollRef}
           className="flex-1 bg-white"
@@ -76,14 +103,22 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
             activeDMMessages.map((msg) => {
               const isMine = msg.fromUid === user?.uid;
               return (
-                <View key={msg.id} className={`flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
-                  <View
-                    className={`max-w-[78%] px-3 py-2 rounded-2xl ${
-                      isMine ? 'bg-[#1A1A1A] rounded-br-sm' : 'bg-neutral-100 rounded-bl-sm'
-                    }`}
-                  >
-                    <Text className={`text-xs font-sans ${isMine ? 'text-white' : 'text-neutral-800'}`}>{msg.text}</Text>
+                <View key={msg.id}>
+                  <View className={`flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
+                    <View
+                      className={`max-w-[78%] px-3 py-2 rounded-2xl ${
+                        isMine ? 'bg-[#1A1A1A] rounded-br-sm' : 'bg-neutral-100 rounded-bl-sm'
+                      }`}
+                    >
+                      <Text className={`text-xs font-sans ${isMine ? 'text-white' : 'text-neutral-800'}`}>{msg.text}</Text>
+                    </View>
                   </View>
+                  <ReactionBar
+                    reactions={reactionsByMessageId[msg.id] || []}
+                    myUid={user?.uid}
+                    align={isMine ? 'right' : 'left'}
+                    onToggle={(emoji) => activeDMThread && toggleReaction('dm', activeDMThread.id, msg.id, emoji)}
+                  />
                 </View>
               );
             })
@@ -103,6 +138,12 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
               multiline
               className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 text-xs text-neutral-800 font-sans max-h-24"
             />
+            <Pressable
+              onPress={() => setShowChallengeSheet(true)}
+              className="w-9 h-9 rounded-full items-center justify-center border border-amber-200 bg-amber-50"
+            >
+              <Trophy size={14} color="#b45309" />
+            </Pressable>
             <Pressable
               onPress={handleSend}
               disabled={!draft.trim()}
@@ -140,6 +181,16 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
             </Pressable>
           </View>
         )}
+
+        <ChallengeCreateSheet
+          visible={showChallengeSheet}
+          title={`Challenge ${activeDMThread.otherName}`}
+          onClose={() => setShowChallengeSheet(false)}
+          onSubmit={(range) => {
+            sendChallenge(activeDMThread.otherUid, activeDMThread.otherName, activeDMThread.otherAvatarUrl, range);
+            setShowChallengeSheet(false);
+          }}
+        />
       </FadeInView>
   );
 }

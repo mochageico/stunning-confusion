@@ -11,12 +11,14 @@ import {
   Share2,
   Sliders,
   Trash2,
+  Trophy,
   X,
 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { Circle } from '../types';
-import { AvatarCircle, FadeInView } from '../components/ui';
+import { AvatarCircle, FadeInView, ProgressBar } from '../components/ui';
+import { ChallengeCreateSheet } from '../components/ChallengeCard';
 
 export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
   const {
@@ -47,7 +49,22 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     clearStudyPlanMembershipsForCircle,
     triggerToast,
     openCircleChat,
+    activeCircleChallenges,
+    joinedGroupChallenges,
+    createGroupChallenge,
+    joinGroupChallenge,
+    endGroupChallenge,
+    openChallengeLeaderboardId,
+    openChallengeLeaderboard,
+    loadingChallengeLeaderboard,
+    openChallengeLeaderboardModal,
+    closeChallengeLeaderboard,
+    clearGroupChallengeMembershipsForCircle,
+    memoryQueue,
+    countRangeProgress,
   } = state;
+
+  const [showChallengeSheet, setShowChallengeSheet] = useState(false);
 
   const isLeaderOrAdmin = !!activeCircle && !!user && activeCircle.ownerId === user.uid;
 
@@ -87,6 +104,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     } else {
       leaveCircle(activeCircle.id);
       clearStudyPlanMembershipsForCircle(activeCircle.id);
+      clearGroupChallengeMembershipsForCircle(activeCircle.id);
     }
   };
 
@@ -95,6 +113,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setShowLeaveDisbandConfirm(false);
     await disbandCircle(activeCircle.id);
     clearStudyPlanMembershipsForCircle(activeCircle.id);
+    clearGroupChallengeMembershipsForCircle(activeCircle.id);
   };
 
   if (loadingActiveCircle || !activeCircle) {
@@ -406,6 +425,105 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           </View>
         </View>
 
+        {/* GROUP CHALLENGES PANEL -- open to any member, not leader-gated
+            (peer competition, not curated content). The whole range
+            front-loads into a joiner's queue immediately (see
+            joinGroupChallenge), unlike Study Plans above which trickle
+            verses in weekly. */}
+        <View style={{ gap: 12 }}>
+          <View className="flex-row justify-between items-center px-1">
+            <Text className="text-xs font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
+              Challenges ({activeCircleChallenges.length})
+            </Text>
+            <Pressable
+              onPress={() => setShowChallengeSheet(true)}
+              className="bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg flex-row items-center gap-1"
+            >
+              <Trophy size={10} color="#b45309" />
+              <Text className="text-[9px] font-bold text-amber-700">New Challenge</Text>
+            </Pressable>
+          </View>
+
+          <View style={{ gap: 12 }}>
+            {activeCircleChallenges.length === 0 ? (
+              <View className="p-6 border border-dashed border-neutral-200 rounded-2xl items-center">
+                <Text className="text-center text-xs text-neutral-400 font-sans">
+                  No challenges yet. Start one -- any member can!
+                </Text>
+              </View>
+            ) : (
+              activeCircleChallenges.map((challenge) => {
+                const membership = joinedGroupChallenges.find((m) => m.challengeId === challenge.id);
+                const myProgress = membership ? countRangeProgress(memoryQueue, membership) : 0;
+                const isCreator = !!user && challenge.createdByUid === user.uid;
+                const reference =
+                  challenge.startVerse != null || challenge.endVerse != null
+                    ? `${challenge.book} ${challenge.startChapter}:${challenge.startVerse ?? 1}-${challenge.endVerse ?? ''}`
+                    : `${challenge.book} ${challenge.startChapter}`;
+
+                return (
+                  <Pressable
+                    key={challenge.id}
+                    onPress={() => openChallengeLeaderboardModal(challenge)}
+                    className="border border-[#E5E5E5] rounded-xl p-3.5 bg-white shadow-sm"
+                    style={{ gap: 8 }}
+                  >
+                    <View className="flex-row justify-between items-start">
+                      <View className="flex-1 pr-2">
+                        <Text className="text-xs font-sans font-black text-[#1A1A1A] leading-tight">{challenge.title}</Text>
+                        <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
+                          {reference} • by {challenge.createdByName}
+                        </Text>
+                      </View>
+                      {challenge.status === 'completed' && (
+                        <Text className="text-[8px] bg-neutral-100 border border-neutral-200 text-neutral-500 font-sans font-bold px-1.5 py-0.5 rounded uppercase">
+                          Ended
+                        </Text>
+                      )}
+                    </View>
+
+                    {membership ? (
+                      <View style={{ gap: 3 }}>
+                        <View className="flex-row justify-between">
+                          <Text className="text-[9px] font-sans font-bold text-neutral-700">Your progress</Text>
+                          <Text className="text-[9px] font-mono text-neutral-500">
+                            {myProgress}/{challenge.totalVerses}
+                          </Text>
+                        </View>
+                        <ProgressBar percent={(myProgress / Math.max(1, challenge.totalVerses)) * 100} />
+                      </View>
+                    ) : (
+                      challenge.status === 'active' && (
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            joinGroupChallenge(challenge);
+                          }}
+                          className="bg-[#1A1A1A] py-2 rounded-lg items-center"
+                        >
+                          <Text className="text-white text-[9px] font-bold uppercase tracking-wide">Join Challenge</Text>
+                        </Pressable>
+                      )
+                    )}
+
+                    {isCreator && challenge.status === 'active' && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          endGroupChallenge(challenge, 'completed');
+                        }}
+                        className="self-start"
+                      >
+                        <Text className="text-[9px] font-sans font-bold text-neutral-400 uppercase tracking-wide">End Challenge</Text>
+                      </Pressable>
+                    )}
+                  </Pressable>
+                );
+              })
+            )}
+          </View>
+        </View>
+
         {/* PORTABLE SHARE & JOIN GATEWAY — the only real way to add members;
             you can't unilaterally enroll another real account by typing their
             name, they have to join themselves via this code/link. */}
@@ -539,6 +657,69 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           </View>
         </View>
       </Modal>
+
+      {/* Challenge leaderboard -- mirrors the Members popup above, sorted by
+          progress desc (highest first). */}
+      <Modal visible={!!openChallengeLeaderboardId} animationType="slide" transparent onRequestClose={closeChallengeLeaderboard}>
+        <View className="flex-1 bg-black/60 justify-end">
+          <View className="bg-white rounded-t-3xl" style={{ height: '70%' }}>
+            <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-neutral-100">
+              <Text className="text-base font-serif font-bold text-[#1A1A1A]">🏆 Leaderboard</Text>
+              <Pressable
+                onPress={closeChallengeLeaderboard}
+                className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center"
+              >
+                <X size={14} color="#262626" />
+              </Pressable>
+            </View>
+
+            {loadingChallengeLeaderboard ? (
+              <Text className="text-xs text-neutral-400 font-sans text-center mt-6">Loading…</Text>
+            ) : openChallengeLeaderboard.length === 0 ? (
+              <Text className="text-xs text-neutral-400 font-sans text-center mt-6">No one has joined yet.</Text>
+            ) : (
+              <ScrollView contentContainerStyle={{ padding: 20, gap: 8 }}>
+                {openChallengeLeaderboard.map((participant, idx) => {
+                  const challenge = activeCircleChallenges.find((c) => c.id === openChallengeLeaderboardId);
+                  const total = challenge?.totalVerses || 1;
+                  const isSelf = participant.uid === user?.uid;
+                  return (
+                    <View
+                      key={participant.uid}
+                      className="flex-row items-center gap-2.5 bg-neutral-50 px-3 py-2.5 rounded-xl border border-neutral-100 mb-2"
+                    >
+                      <Text className="text-[10px] font-mono font-bold text-neutral-400 w-4">{idx + 1}</Text>
+                      <AvatarCircle name={participant.name} photoUri={participant.avatarUrl} size={28} />
+                      <View className="flex-1" style={{ gap: 3 }}>
+                        <Text className={`text-xs font-sans font-bold ${isSelf ? 'text-indigo-800' : 'text-neutral-700'}`}>
+                          {isSelf ? `${participant.name} (Me)` : participant.name}
+                          {participant.progress >= total ? ' 🏁' : ''}
+                        </Text>
+                        <ProgressBar percent={(participant.progress / total) * 100} />
+                      </View>
+                      <Text className="text-[9px] font-mono text-neutral-500">
+                        {participant.progress}/{total}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {activeCircle && (
+        <ChallengeCreateSheet
+          visible={showChallengeSheet}
+          title="New Challenge"
+          onClose={() => setShowChallengeSheet(false)}
+          onSubmit={(range) => {
+            createGroupChallenge(activeCircle.id, `${range.book} ${range.startChapter}`, range);
+            setShowChallengeSheet(false);
+          }}
+        />
+      )}
     </FadeInView>
   );
 }

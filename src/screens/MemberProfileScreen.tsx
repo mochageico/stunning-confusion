@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, Bell, MessageCircle, UserMinus, X } from 'lucide-react-native';
+import { ArrowLeft, Bell, MessageCircle, Trophy, UserMinus, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
+import { ChallengeCreateSheet } from '../components/ChallengeCard';
 
 export default function MemberProfileScreen({ state }: { state: AppState }) {
   const {
@@ -17,11 +18,13 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
     removeFriend,
     saveFriendMemoryPlan,
     triggerToast,
+    sendChallenge,
   } = state;
 
   const [showNudgeCompose, setShowNudgeCompose] = useState(false);
   const [nudgeMessage, setNudgeMessage] = useState('');
   const [showRemoveFriendConfirm, setShowRemoveFriendConfirm] = useState(false);
+  const [showChallengeSheet, setShowChallengeSheet] = useState(false);
 
   if (!selectedUserProfile) return null;
 
@@ -123,7 +126,28 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                 </Text>
               </Pressable>
             )}
+            {isFriend && (
+              <Pressable
+                onPress={() => setShowChallengeSheet(true)}
+                className="flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-xl bg-amber-50 border border-amber-200"
+              >
+                <Trophy size={12} color="#b45309" />
+                <Text className="font-sans font-bold text-[10px] uppercase tracking-wide text-amber-800">Challenge</Text>
+              </Pressable>
+            )}
           </View>
+        )}
+
+        {!isSelf && isFriend && (
+          <ChallengeCreateSheet
+            visible={showChallengeSheet}
+            title={`Challenge ${selectedUserProfile.name}`}
+            onClose={() => setShowChallengeSheet(false)}
+            onSubmit={(range) => {
+              sendChallenge(selectedUserProfile.uid, selectedUserProfile.name, '', range);
+              setShowChallengeSheet(false);
+            }}
+          />
         )}
 
         {!isSelf && isFriend && (

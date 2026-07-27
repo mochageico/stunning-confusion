@@ -23,6 +23,18 @@ import {
 } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
 import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
+import type { AudioCacheSnapshot } from '../lib/audioCache';
+import {
+  cacheAudioFile,
+  cacheableTarget,
+  clearAudioCache,
+  emptyAudioCacheSnapshot,
+  initAudioCache,
+  noteAudioPlayed,
+  releaseAudioCache,
+  removeCachedAudio,
+  setCacheCapBytes,
+} from '../lib/audioCache';
 import {
   deleteUser,
   EmailAuthProvider,
@@ -56,12 +68,17 @@ import {
   AccountabilityNudge,
   ActivityEvent,
   ChatMessage,
+  Challenge,
   Circle,
   CircleMember,
   DMThread,
   Friend,
   FriendRequest,
+  GroupChallenge,
+  GroupChallengeMembership,
+  GroupChallengeParticipant,
   MemoryPlan,
+  MessageReaction,
   QueueItem,
   Recording,
   StudyPlan,
@@ -654,6 +671,34 @@ export function useAppState() {
   const [studioAbOverride, setStudioAbOverride] = useState<boolean | null>(null);
   const studioPlaybackActive = studioAbOverride ?? studioPlaybackEnabled;
 
+  // Local audio cache (see lib/audioCache). Kept in React state purely so
+  // resolvePlaybackUrl can do a synchronous lookup during render — the
+  // manifest, the files and the eviction policy all live in that module.
+  // Empty on web, where the browser's HTTP cache already honours the immutable
+  // header the Cloud Function sets.
+  const [audioCache, setAudioCache] = useState<AudioCacheSnapshot>(emptyAudioCacheSnapshot);
+
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) {
+      // Signed out: drop the in-memory view. The files stay put — the next
+      // sign-in either re-adopts them (same account) or sweeps them during
+      // reconcile (different account).
+      releaseAudioCache();
+      setAudioCache(emptyAudioCacheSnapshot());
+      return;
+    }
+    let cancelled = false;
+    initAudioCache(uid)
+      .then((snapshot) => {
+        if (!cancelled) setAudioCache(snapshot);
+      })
+      .catch((err) => console.error('Failed to load audio cache:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
+
   // Whether RecordingDetailScreen's verse-sync timeline is in edit mode.
   // The draft marker positions themselves live as local component state in
   // that screen (derived fresh from selectedRecording.verseTimestamps each
@@ -889,6 +934,39 @@ export function useAppState() {
   const [activeCircleMessages, setActiveCircleMessages] = useState<ChatMessage[]>([]);
   const [loadingActiveCircleMessages, setLoadingActiveCircleMessages] = useState(false);
 
+  // 1:1 "race this passage" challenges -- see Challenge in types.ts.
+  // activeChallenges is scoped to whichever DM thread is currently open
+  // (live, like activeDMMessages); myChallengeBadges is a lighter
+  // always-on listener (pending/active challenges across ALL my threads)
+  // purely so MessagesScreen's inbox rows can show a 🏆 badge without
+  // opening each thread.
+  const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
+  const [loadingActiveChallenges, setLoadingActiveChallenges] = useState(false);
+  const [myChallengeBadges, setMyChallengeBadges] = useState<Challenge[]>([]);
+
+  // Group challenges hosted inside whichever Circle detail page is open --
+  // see GroupChallenge/GroupChallengeParticipant in types.ts. Participants
+  // for whichever single challenge card is expanded (leaderboard modal open)
+  // are loaded separately, keyed by challenge id, so opening the circle
+  // detail page itself doesn't fan out one listener per challenge.
+  const [activeCircleChallenges, setActiveCircleChallenges] = useState<GroupChallenge[]>([]);
+  const [loadingActiveCircleChallenges, setLoadingActiveCircleChallenges] = useState(false);
+  const [openChallengeLeaderboardId, setOpenChallengeLeaderboardId] = useState<string | null>(null);
+  const [openChallengeLeaderboard, setOpenChallengeLeaderboard] = useState<GroupChallengeParticipant[]>([]);
+  const [loadingChallengeLeaderboard, setLoadingChallengeLeaderboard] = useState(false);
+  // My own membership records across ALL group challenges I've joined
+  // (not just whichever circle is currently open) -- denormalized onto
+  // memoryPlans/{uid}.joinedGroupChallenges, same pattern as
+  // joinedStudyPlanMemberships, needed so progress-sync after a review can
+  // find "am I in a challenge for this verse" without opening every circle.
+  const [joinedGroupChallenges, setJoinedGroupChallenges] = useState<GroupChallengeMembership[]>([]);
+
+  // Reactions -- one live listener per open chat surface (DM thread OR
+  // circle chat), keyed by the same id the messages listener uses, so a
+  // chat screen never needs more than its one existing messages listener
+  // plus this one. See MessageReaction in types.ts.
+  const [reactionsByMessageId, setReactionsByMessageId] = useState<Record<string, MessageReaction[]>>({});
+
   // Selected Recording for Chapter Recording Landing Page
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
 
@@ -956,7 +1034,7 @@ export function useAppState() {
   // Hoisted rather than inlined because the playback effects below key off it:
   // flipping the Studio/Original switch changes this string, which is what
   // makes the player reload with the other version mid-listen.
-  const nowPlayingUrl = resolvePlaybackUrl(nowPlayingRecording, studioPlaybackActive);
+  const nowPlayingUrl = resolvePlaybackUrl(nowPlayingRecording, studioPlaybackActive, audioCache.map);
   const recordingPlayer = useAudioPlayer(nowPlayingUrl);
   const recordingPlayerStatus = useAudioPlayerStatus(recordingPlayer);
 
@@ -1779,6 +1857,141 @@ export function useAppState() {
     }
   };
 
+  // ==========================================
+  // 1:1 CHALLENGES -- see Challenge in types.ts. Verses are added to each
+  // side's own queue the moment that side is present for it: the sender at
+  // creation, the recipient at acceptance (declined/never-accepted
+  // challenges never touch the recipient's queue at all).
+  // ==========================================
+
+  const sendChallenge = async (
+    toUid: string,
+    toName: string,
+    toAvatarUrl: string,
+    range: { book: string; startChapter: number; endChapter: number; startVerse?: number; endVerse?: number }
+  ) => {
+    if (!auth.currentUser || toUid === auth.currentUser.uid) return;
+    const myUid = auth.currentUser.uid;
+    // Same deterministic id DM threads themselves use (see openDMThread) --
+    // computed directly rather than requiring a thread to already be open,
+    // so this works from MemberProfileScreen too. The DM thread doc doesn't
+    // need to exist yet; opening it later (openDMThread) lands on the same
+    // id and the pending card just shows up.
+    const dmThreadId = [myUid, toUid].sort().join('_');
+    try {
+      const { verses, totalVerses } = await fetchRangeVerses(selectedTranslationId, range);
+      if (totalVerses === 0) {
+        triggerToast("Couldn't find any verses in that range.");
+        return;
+      }
+      const nowISO = new Date().toISOString();
+      const data: any = {
+        fromUid: myUid,
+        fromName: auth.currentUser.displayName || 'Anonymous Disciple',
+        fromAvatarUrl: '',
+        toUid,
+        toName,
+        toAvatarUrl,
+        participantUids: [myUid, toUid].sort(),
+        dmThreadId,
+        book: range.book,
+        startChapter: range.startChapter,
+        endChapter: range.endChapter,
+        totalVerses,
+        status: 'pending',
+        createdAt: nowISO,
+        fromProgress: 0,
+        toProgress: 0,
+      };
+      if (range.startVerse != null) data.startVerse = range.startVerse;
+      if (range.endVerse != null) data.endVerse = range.endVerse;
+      await addDoc(collection(db, 'challenges'), data);
+      addVersesToQueue(verses, selectedTranslationId);
+      triggerToast(`Challenge sent to ${toName}! 🏆`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'challenges');
+      triggerToast("Couldn't send that challenge -- please try again.");
+    }
+  };
+
+  const acceptChallenge = async (challenge: Challenge) => {
+    if (!auth.currentUser || auth.currentUser.uid !== challenge.toUid) return;
+    try {
+      const { verses } = await fetchRangeVerses(selectedTranslationId, challenge);
+      await updateDoc(doc(db, 'challenges', challenge.id), {
+        status: 'active',
+        respondedAt: new Date().toISOString(),
+      });
+      addVersesToQueue(verses, selectedTranslationId);
+      triggerToast(`Challenge accepted! Race is on. 🏁`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `challenges/${challenge.id}`);
+    }
+  };
+
+  const declineChallenge = async (challenge: Challenge) => {
+    try {
+      await updateDoc(doc(db, 'challenges', challenge.id), {
+        status: 'declined',
+        respondedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `challenges/${challenge.id}`);
+    }
+  };
+
+  const cancelChallenge = async (challenge: Challenge) => {
+    try {
+      await deleteDoc(doc(db, 'challenges', challenge.id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `challenges/${challenge.id}`);
+    }
+  };
+
+  // ==========================================
+  // MESSAGE REACTIONS -- see MessageReaction in types.ts. One reaction per
+  // user per message; the doc id (`${messageId}_${uid}`) is what enforces
+  // that both client-side (this function) and in firestore.rules. Tapping
+  // an emoji I've already reacted with removes it; tapping a different one
+  // replaces it (delete + create, matching the rule's `update: if false`).
+  // ==========================================
+
+  const toggleReaction = async (
+    scope: 'dm' | 'circle',
+    containerId: string,
+    messageId: string,
+    emoji: string
+  ) => {
+    if (!auth.currentUser) return;
+    const myUid = auth.currentUser.uid;
+    const reactionRef = doc(
+      db,
+      scope === 'dm' ? 'dmThreads' : 'circles',
+      containerId,
+      'reactions',
+      `${messageId}_${myUid}`
+    );
+    const existing = reactionsByMessageId[messageId]?.find((r) => r.uid === myUid);
+    try {
+      if (existing?.emoji === emoji) {
+        await deleteDoc(reactionRef);
+        return;
+      }
+      if (existing) {
+        await deleteDoc(reactionRef);
+      }
+      await setDoc(reactionRef, {
+        messageId,
+        uid: myUid,
+        name: auth.currentUser.displayName || 'Anonymous Disciple',
+        emoji,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `${scope === 'dm' ? 'dmThreads' : 'circles'}/${containerId}/reactions`);
+    }
+  };
+
   const openCircleChat = (circleId: string) => {
     setActiveCircleChatId(circleId);
     navigateTo('circleChat');
@@ -1873,6 +2086,79 @@ export function useAppState() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDMThread?.id]);
 
+  // Live reactions for whichever DM thread is currently open -- grouped by
+  // messageId (a single flat query, not one listener per message). Shares
+  // reactionsByMessageId with the circle-chat reactions listener below since
+  // dmThread/circleChat are mutually exclusive screens, never open at once.
+  useEffect(() => {
+    if (!activeDMThread) {
+      setReactionsByMessageId({});
+      return;
+    }
+    const q = query(collection(db, 'dmThreads', activeDMThread.id, 'reactions'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const byMessage: Record<string, MessageReaction[]> = {};
+        snap.docs.forEach((d) => {
+          const reaction = { id: d.id, ...d.data() } as MessageReaction;
+          (byMessage[reaction.messageId] ||= []).push(reaction);
+        });
+        setReactionsByMessageId(byMessage);
+      },
+      (err) => console.error('Failed to load DM reactions:', err)
+    );
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDMThread?.id]);
+
+  // Live challenges for whichever DM thread is currently open (usually 0 or 1,
+  // but not constrained to that -- a past declined/completed challenge stays
+  // queryable here too, so the thread can show history if ever needed).
+  useEffect(() => {
+    if (!activeDMThread) {
+      setActiveChallenges([]);
+      return;
+    }
+    setLoadingActiveChallenges(true);
+    const q = query(collection(db, 'challenges'), where('dmThreadId', '==', activeDMThread.id));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setActiveChallenges(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Challenge));
+        setLoadingActiveChallenges(false);
+      },
+      (err) => {
+        console.error('Failed to load challenges:', err);
+        setLoadingActiveChallenges(false);
+      }
+    );
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDMThread?.id]);
+
+  // Lightweight always-on listener (not tied to any open thread) purely so
+  // MessagesScreen's inbox rows can show a 🏆 badge without opening each
+  // thread individually.
+  useEffect(() => {
+    if (!user) {
+      setMyChallengeBadges([]);
+      return;
+    }
+    const q = query(
+      collection(db, 'challenges'),
+      where('participantUids', 'array-contains', user.uid),
+      where('status', 'in', ['pending', 'active'])
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setMyChallengeBadges(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Challenge)),
+      (err) => console.error('Failed to load challenge badges:', err)
+    );
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   // Live messages for whichever circle's group chat is currently open.
   useEffect(() => {
     if (!activeCircleChatId) {
@@ -1896,6 +2182,30 @@ export function useAppState() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCircleChatId]);
 
+  // Live reactions for whichever circle chat is currently open -- mirrors
+  // the DM reactions listener above, same shared reactionsByMessageId state.
+  useEffect(() => {
+    if (!activeCircleChatId) {
+      setReactionsByMessageId({});
+      return;
+    }
+    const q = query(collection(db, 'circles', activeCircleChatId, 'reactions'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const byMessage: Record<string, MessageReaction[]> = {};
+        snap.docs.forEach((d) => {
+          const reaction = { id: d.id, ...d.data() } as MessageReaction;
+          (byMessage[reaction.messageId] ||= []).push(reaction);
+        });
+        setReactionsByMessageId(byMessage);
+      },
+      (err) => console.error('Failed to load circle chat reactions:', err)
+    );
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCircleChatId]);
+
   const loadPublicCircles = async () => {
     setLoadingPublicCircles(true);
     try {
@@ -1911,19 +2221,23 @@ export function useAppState() {
 
   const loadActiveCircleData = async (circleId: string) => {
     setLoadingActiveCircle(true);
+    setLoadingActiveCircleChallenges(true);
     try {
-      const [circleSnap, membersSnap, plansSnap] = await Promise.all([
+      const [circleSnap, membersSnap, plansSnap, challengesSnap] = await Promise.all([
         getDoc(doc(db, 'circles', circleId)),
         getDocs(collection(db, 'circles', circleId, 'members')),
         getDocs(collection(db, 'circles', circleId, 'groupPlans')),
+        getDocs(collection(db, 'circles', circleId, 'challenges')),
       ]);
       setActiveCircle(circleSnap.exists() ? ({ id: circleSnap.id, ...circleSnap.data() } as Circle) : null);
       setActiveCircleMembers(membersSnap.docs.map((d) => d.data() as CircleMember));
       setActiveCircleStudyPlans(plansSnap.docs.map((d) => normalizeStudyPlan(d.id, d.data())));
+      setActiveCircleChallenges(challengesSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as GroupChallenge));
     } catch (err) {
       console.error('Failed to load circle detail:', err);
     } finally {
       setLoadingActiveCircle(false);
+      setLoadingActiveCircleChallenges(false);
     }
   };
 
@@ -2155,6 +2469,125 @@ export function useAppState() {
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planId}`);
     }
+  };
+
+  // ==========================================
+  // GROUP CHALLENGES -- see GroupChallenge/GroupChallengeParticipant in
+  // types.ts. Unlike StudyPlan (leader-curated, verses trickle in weekly),
+  // any member can create one and the whole range front-loads into the
+  // joiner's queue immediately -- the "race" is who finishes reviewing it
+  // first, not a paced feed.
+  // ==========================================
+
+  const joinGroupChallenge = async (challenge: GroupChallenge) => {
+    if (!auth.currentUser) return;
+    const myUid = auth.currentUser.uid;
+    if (joinedGroupChallenges.some((m) => m.challengeId === challenge.id)) return;
+    try {
+      const { verses } = await fetchRangeVerses(selectedTranslationId, challenge);
+      await setDoc(doc(db, 'circles', challenge.circleId, 'challenges', challenge.id, 'participants', myUid), {
+        uid: myUid,
+        name: user?.displayName || 'Anonymous Disciple',
+        avatarUrl: user?.photoURL || '',
+        progress: 0,
+        joinedAt: new Date().toISOString(),
+      });
+      addVersesToQueue(verses, selectedTranslationId);
+      const membership: GroupChallengeMembership = {
+        circleId: challenge.circleId,
+        challengeId: challenge.id,
+        book: challenge.book,
+        startChapter: challenge.startChapter,
+        endChapter: challenge.endChapter,
+        startVerse: challenge.startVerse,
+        endVerse: challenge.endVerse,
+        totalVerses: challenge.totalVerses,
+        joinedAt: new Date().toISOString(),
+      };
+      const updated = [...joinedGroupChallenges.filter((m) => m.challengeId !== challenge.id), membership];
+      setJoinedGroupChallenges(updated);
+      await persistJoinedGroupChallenges(updated);
+      triggerToast(`Joined "${challenge.title}"! Verses added to your queue. 🏆`);
+    } catch (err) {
+      handleFirestoreError(
+        err,
+        OperationType.WRITE,
+        `circles/${challenge.circleId}/challenges/${challenge.id}/participants/${myUid}`
+      );
+    }
+  };
+
+  const createGroupChallenge = async (
+    circleId: string,
+    title: string,
+    range: { book: string; startChapter: number; endChapter: number; startVerse?: number; endVerse?: number }
+  ) => {
+    if (!auth.currentUser) return;
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      triggerToast('Please give the challenge a title! 🏷️');
+      return;
+    }
+    try {
+      const { totalVerses } = await fetchRangeVerses(selectedTranslationId, range);
+      if (totalVerses === 0) {
+        triggerToast("Couldn't find any verses in that range.");
+        return;
+      }
+      const challengeRef = doc(collection(db, 'circles', circleId, 'challenges'));
+      const data: any = {
+        circleId,
+        createdByUid: auth.currentUser.uid,
+        createdByName: user?.displayName || 'Anonymous Disciple',
+        title: trimmedTitle,
+        book: range.book,
+        startChapter: range.startChapter,
+        endChapter: range.endChapter,
+        totalVerses,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+      };
+      if (range.startVerse != null) data.startVerse = range.startVerse;
+      if (range.endVerse != null) data.endVerse = range.endVerse;
+      await setDoc(challengeRef, data);
+      const newChallenge = { id: challengeRef.id, ...data } as GroupChallenge;
+      setActiveCircleChallenges((prev) => [...prev, newChallenge]);
+      await joinGroupChallenge(newChallenge);
+      triggerToast(`Created "${trimmedTitle}"! 🏆`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `circles/${circleId}/challenges`);
+    }
+  };
+
+  const endGroupChallenge = async (challenge: GroupChallenge, status: 'completed' | 'cancelled' = 'completed') => {
+    if (!auth.currentUser || auth.currentUser.uid !== challenge.createdByUid) return;
+    try {
+      await updateDoc(doc(db, 'circles', challenge.circleId, 'challenges', challenge.id), { status });
+      setActiveCircleChallenges((prev) => prev.map((c) => (c.id === challenge.id ? { ...c, status } : c)));
+      triggerToast(status === 'cancelled' ? 'Challenge cancelled.' : 'Challenge ended! 🏁');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `circles/${challenge.circleId}/challenges/${challenge.id}`);
+    }
+  };
+
+  const openChallengeLeaderboardModal = async (challenge: GroupChallenge) => {
+    setOpenChallengeLeaderboardId(challenge.id);
+    setLoadingChallengeLeaderboard(true);
+    try {
+      const snap = await getDocs(collection(db, 'circles', challenge.circleId, 'challenges', challenge.id, 'participants'));
+      setOpenChallengeLeaderboard(
+        snap.docs.map((d) => d.data() as GroupChallengeParticipant).sort((a, b) => b.progress - a.progress)
+      );
+    } catch (err) {
+      console.error('Failed to load challenge leaderboard:', err);
+    } finally {
+      setLoadingChallengeLeaderboard(false);
+    }
+  };
+
+  const closeChallengeLeaderboard = () => {
+    setOpenChallengeLeaderboardId(null);
+    setOpenChallengeLeaderboard([]);
   };
 
   // Manager builds a plan's verse queue incrementally, a handful of verses
@@ -2500,6 +2933,16 @@ export function useAppState() {
     }
   };
 
+  const persistJoinedGroupChallenges = async (memberships: GroupChallengeMembership[]) => {
+    if (!auth.currentUser) return;
+    try {
+      const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
+      await setDoc(planRef, { joinedGroupChallenges: memberships, updatedAt: new Date() }, { merge: true });
+    } catch (err) {
+      console.error('Failed to persist joined group challenges:', err);
+    }
+  };
+
   const joinStudyPlan = async (plan: StudyPlan, priority: StudyPlanMembership['priority'] = 'individual') => {
     try {
       await addStudyPlanVersesToOwnQueue(plan.planId, plan.verseIds);
@@ -2549,6 +2992,15 @@ export function useAppState() {
     setJoinedStudyPlanMemberships(updatedMemberships);
     setJoinedStudyPlanDetails((prev) => prev.filter((p) => p.circleId !== circleId));
     persistJoinedStudyPlans(updatedMemberships);
+  };
+
+  // Same reasoning as clearStudyPlanMembershipsForCircle just above --
+  // leaving/disbanding a circle should also drop membership in whatever
+  // group challenges belonged to it.
+  const clearGroupChallengeMembershipsForCircle = (circleId: string) => {
+    const updatedMemberships = joinedGroupChallenges.filter((m) => m.circleId !== circleId);
+    setJoinedGroupChallenges(updatedMemberships);
+    persistJoinedGroupChallenges(updatedMemberships);
   };
 
   const handleActivatePlan = async (planId: string) => {
@@ -3163,6 +3615,8 @@ export function useAppState() {
           setJoinedStudyPlanDetails([]);
         }
 
+        setJoinedGroupChallenges((planData.joinedGroupChallenges as GroupChallengeMembership[]) || []);
+
         // Find the active plan and sync current state
         const active = plansList.find((p) => p.isActive) || plansList[0];
         if (active) {
@@ -3354,6 +3808,10 @@ export function useAppState() {
       setActiveCircleStudyPlans([]);
       setJoinedStudyPlanMemberships([]);
       setJoinedStudyPlanDetails([]);
+      setActiveCircleChallenges([]);
+      setJoinedGroupChallenges([]);
+      setOpenChallengeLeaderboardId(null);
+      setOpenChallengeLeaderboard([]);
       setViewingStudyPlan(null);
       setViewingGroupDetail(false);
       setActiveGroupId('');
@@ -3648,6 +4106,12 @@ export function useAppState() {
         })
       );
 
+      // Wipe the on-device cache outright rather than letting sign-out's
+      // releaseAudioCache leave the files for a next sign-in that will never
+      // come. Deleting the account should not leave its recitations readable
+      // on disk for whoever signs in next.
+      setAudioCache(await clearAudioCache());
+
       await deleteUser(auth.currentUser);
       return { ok: true };
     } catch (err: any) {
@@ -3745,6 +4209,162 @@ export function useAppState() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playingRecordingId, nowPlayingRecording]);
+
+  // ── CACHE ON PLAY ───────────────────────────────────────────────────────
+  // The first listen streams; every later one comes off disk. Fire-and-forget
+  // by design — a failed or slow download must never affect playback, which
+  // is already running against the remote URL.
+  //
+  // A finished download must NOT go straight into audioCache. Its map feeds
+  // nowPlayingUrl, and changing that string swaps recordingPlayer's source
+  // (see the playback effect above), which would restart the recitation from
+  // zero at whatever moment the download happened to land. New snapshots are
+  // parked here and flushed once nothing is playing.
+  const pendingCacheSnapshotRef = useRef<AudioCacheSnapshot | null>(null);
+  // Listen mode runs its own player inside PracticeModals and deliberately
+  // clears playingRecordingId when it starts, so that flag alone can't tell
+  // us whether audio is running. PracticeModals reports its state up.
+  const [listenModePlaying, setListenModePlaying] = useState(false);
+
+  const cacheRecordingAudio = (recording: Recording | null | undefined) => {
+    // The persisted preference, NOT studioPlaybackActive: the A/B switch on
+    // the detail screen is for comparing two takes back to back, and shouldn't
+    // pull a second copy of the same recitation onto disk.
+    const target = cacheableTarget(recording, studioPlaybackEnabled);
+    if (!target) return;
+    if (audioCache.map.has(target.storagePath)) {
+      noteAudioPlayed(target.storagePath);
+      return;
+    }
+    // No cancellation on unmount/re-run: the file is worth keeping regardless
+    // of which playback started it, and cacheAudioFile already de-dupes
+    // concurrent calls for the same path.
+    cacheAudioFile(target)
+      .then((snapshot) => {
+        if (snapshot) pendingCacheSnapshotRef.current = snapshot;
+      })
+      .catch((err) => console.error('Audio cache write failed:', err));
+  };
+
+  useEffect(() => {
+    if (!playingRecordingId) return;
+    cacheRecordingAudio(nowPlayingRecording);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playingRecordingId, nowPlayingRecording, studioPlaybackEnabled, audioCache]);
+
+  // Drops cached files for a recording, either all of them (deletion) or just
+  // the ones that are no longer the playback target (a studio render landing
+  // on a recording whose raw take was already cached).
+  //
+  // Applies the new snapshot immediately rather than parking it like
+  // cacheRecordingAudio does: the entries being removed belong to a recording
+  // that is either gone or not the one playing, so no in-flight player's
+  // source string can change underneath it.
+  const dropCachedAudio = async (recording: Recording, mode: 'all' | 'stale') => {
+    const paths = [recording.audioPath, recording.studioAudioPath];
+    const keep = mode === 'stale' ? cacheableTarget(recording, studioPlaybackEnabled)?.storagePath : undefined;
+    const snapshot = await removeCachedAudio(paths.filter((p) => p && p !== keep));
+    if (snapshot) setAudioCache(snapshot);
+  };
+
+  useEffect(() => {
+    if (playingRecordingId || listenModePlaying) return;
+    const pending = pendingCacheSnapshotRef.current;
+    if (!pending) return;
+    pendingCacheSnapshotRef.current = null;
+    setAudioCache(pending);
+  }, [playingRecordingId, listenModePlaying]);
+
+  // ── OFFLINE DOWNLOADS (user-driven) ─────────────────────────────────────
+  // Distinct from cache-on-play: these are pinned, so eviction never touches
+  // them. Applied immediately rather than parked — a user tapping "Save
+  // offline" is not mid-listen on that recording in any flow that reaches
+  // here, and the whole point is that the result is visible right away.
+  const [downloadingRecordingIds, setDownloadingRecordingIds] = useState<Set<string>>(new Set());
+
+  const markDownloading = (ids: string[], busy: boolean) =>
+    setDownloadingRecordingIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => (busy ? next.add(id) : next.delete(id)));
+      return next;
+    });
+
+  /** Downloads and pins one recording. Resolves once it is on disk. */
+  const saveRecordingOffline = async (recording: Recording): Promise<boolean> => {
+    const target = cacheableTarget(recording, studioPlaybackEnabled);
+    if (!target) {
+      triggerToast('This recording has no audio to download yet.');
+      return false;
+    }
+    markDownloading([recording.id], true);
+    try {
+      const snapshot = await cacheAudioFile(target, { pin: true });
+      if (snapshot) setAudioCache(snapshot);
+      return true;
+    } catch (err) {
+      console.error('Offline download failed:', err);
+      return false;
+    } finally {
+      markDownloading([recording.id], false);
+    }
+  };
+
+  /** Removes a download, freeing the disk immediately. */
+  const removeRecordingDownload = async (recording: Recording) => {
+    await dropCachedAudio(recording, 'all');
+    triggerToast('Download removed.');
+  };
+
+  /**
+   * Bulk download for a chapter. Sequential on purpose: these files are
+   * megabytes each, and firing a dozen parallel downloads over cellular is a
+   * good way to have most of them time out.
+   */
+  const saveChapterOffline = async (recordings: Recording[]) => {
+    // Keyed on `pinned`, not mere presence: an auto-cached file is still
+    // evictable, so "save this chapter offline" has real work to do even when
+    // every file already happens to be on disk (cacheAudioFile promotes those
+    // in place rather than re-downloading them).
+    const pending = recordings.filter((r) => {
+      const target = cacheableTarget(r, studioPlaybackEnabled);
+      return target && !audioCache.pinned.has(target.storagePath);
+    });
+    if (pending.length === 0) {
+      triggerToast('Already saved for offline. ✓');
+      return;
+    }
+    markDownloading(pending.map((r) => r.id), true);
+    triggerToast(`Downloading ${pending.length} recording${pending.length === 1 ? '' : 's'}…`);
+    let saved = 0;
+    for (const recording of pending) {
+      const target = cacheableTarget(recording, studioPlaybackEnabled);
+      if (!target) continue;
+      try {
+        const snapshot = await cacheAudioFile(target, { pin: true });
+        if (snapshot) {
+          setAudioCache(snapshot);
+          saved++;
+        }
+      } catch (err) {
+        console.error('Offline download failed:', recording.id, err);
+      }
+    }
+    markDownloading(pending.map((r) => r.id), false);
+    triggerToast(
+      saved === pending.length
+        ? `Saved ${saved} recording${saved === 1 ? '' : 's'} offline. ⬇️`
+        : `Saved ${saved} of ${pending.length} — check your connection.`
+    );
+  };
+
+  const setAudioCacheCap = async (bytes: number) => {
+    setAudioCache(await setCacheCapBytes(bytes));
+  };
+
+  const clearAudioDownloads = async () => {
+    setAudioCache(await clearAudioCache());
+    triggerToast('Downloaded audio cleared.');
+  };
 
   // Seek the currently-playing real recording by a relative number of seconds
   // (used by RecordingDetailScreen's -5s/+5s buttons).
@@ -4117,7 +4737,61 @@ export function useAppState() {
     );
     if (promotedCount > 0) {
       triggerToast(`Moved ${promotedCount === 1 ? 'that verse' : `${promotedCount} verses`} into Learning! 📖`);
+      syncChallengeProgress();
     }
+  };
+
+  // Shared by Challenge and GroupChallenge: a book/chapter span, with an
+  // optional verse sub-range only meaningful when startChapter === endChapter
+  // (a range spanning multiple chapters always uses whole chapters, same
+  // simplification this app already makes for goal-style ranges elsewhere).
+  type VerseRange = {
+    book: string;
+    startChapter: number;
+    endChapter: number;
+    startVerse?: number;
+    endVerse?: number;
+  };
+
+  // Pure -- counts how many of `queue`'s items fall inside `range` and have
+  // progressed out of 'queued' status. This is the app's existing
+  // "verses out of queued status" completion definition (used for goal-style
+  // ranges), reused here for both challenge types rather than inventing a
+  // separate notion of "done".
+  const countRangeProgress = (queue: QueueItem[], range: VerseRange): number =>
+    queue.filter((item) => {
+      if (item.book !== range.book) return false;
+      if (item.chapter < range.startChapter || item.chapter > range.endChapter) return false;
+      if (range.startChapter === range.endChapter && item.chapter === range.startChapter) {
+        if (range.startVerse != null && item.verseNumber < range.startVerse) return false;
+        if (range.endVerse != null && item.verseNumber > range.endVerse) return false;
+      }
+      return item.status !== 'queued';
+    }).length;
+
+  // Fetches every verse in `range` (looping fetchChapterText per chapter) as
+  // VerseState[] ready for addVersesToQueue, plus the total count -- shared
+  // by challenge creation/accept/join.
+  const fetchRangeVerses = async (
+    translationId: string,
+    range: VerseRange
+  ): Promise<{ verses: VerseState[]; totalVerses: number }> => {
+    const bookMeta = getBookByName(range.book);
+    if (!bookMeta) return { verses: [], totalVerses: 0 };
+    const verses: VerseState[] = [];
+    for (let chapter = range.startChapter; chapter <= range.endChapter; chapter++) {
+      const chapterText = await fetchChapterText(translationId, bookMeta.id, chapter);
+      if (!chapterText) continue;
+      Object.entries(chapterText.verses).forEach(([verseNumStr, text]) => {
+        const verseNum = Number(verseNumStr);
+        if (range.startChapter === range.endChapter && chapter === range.startChapter) {
+          if (range.startVerse != null && verseNum < range.startVerse) return;
+          if (range.endVerse != null && verseNum > range.endVerse) return;
+        }
+        verses.push({ book: range.book, chapter, verse: verseNum, text, status: 'untouched' });
+      });
+    }
+    return { verses, totalVerses: verses.length };
   };
 
   // Adds specific already-fetched verses (e.g. a selection made on
@@ -4292,6 +4966,7 @@ export function useAppState() {
     }
 
     updateMemoryQueue(() => [...nextQueue, ...additions]);
+    syncChallengeProgress();
 
     const phaseLabel =
       targetPhase === 'learning'
@@ -4303,6 +4978,55 @@ export function useAppState() {
       ? ` Next due ${new Date(dueDateISO).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}.`
       : '';
     triggerToast(`Set ${total} ${total === 1 ? 'verse' : 'verses'} to ${phaseLabel}.${dueNote} 🎯`);
+  };
+
+  // Ref cache of "the progress value I last actually wrote" per challenge,
+  // keyed so this can be called cheaply from every place a verse might leave
+  // 'queued' status (promoteToLearning, handleReviewCompleted,
+  // overrideVerseMemoryStatus) without re-writing when nothing changed --
+  // countRangeProgress only increases when a verse first leaves 'queued', so
+  // most calls here are no-ops by design, not just an optimization.
+  const challengeProgressSyncRef = useRef<Record<string, number>>({});
+
+  const syncChallengeProgress = () => {
+    if (!auth.currentUser) return;
+    const myUid = auth.currentUser.uid;
+    const freshQueue = memoryQueueRef.current;
+
+    activeChallenges.forEach((challenge) => {
+      if (challenge.status !== 'active') return;
+      if (challenge.fromUid !== myUid && challenge.toUid !== myUid) return;
+      const cacheKey = `c_${challenge.id}`;
+      const newProgress = countRangeProgress(freshQueue, challenge);
+      if (challengeProgressSyncRef.current[cacheKey] === newProgress) return;
+      challengeProgressSyncRef.current[cacheKey] = newProgress;
+      const isFrom = challenge.fromUid === myUid;
+      const myOldProgress = isFrom ? challenge.fromProgress : challenge.toProgress;
+      if (newProgress === myOldProgress) return;
+      const otherProgress = isFrom ? challenge.toProgress : challenge.fromProgress;
+      const bothDone = newProgress >= challenge.totalVerses && otherProgress >= challenge.totalVerses;
+      const patch: any = isFrom ? { fromProgress: newProgress } : { toProgress: newProgress };
+      if (bothDone) patch.status = 'completed';
+      updateDoc(doc(db, 'challenges', challenge.id), patch).catch((err) =>
+        handleFirestoreError(err, OperationType.UPDATE, `challenges/${challenge.id}`)
+      );
+    });
+
+    joinedGroupChallenges.forEach((membership) => {
+      const cacheKey = `g_${membership.challengeId}`;
+      const newProgress = countRangeProgress(freshQueue, membership);
+      if (challengeProgressSyncRef.current[cacheKey] === newProgress) return;
+      challengeProgressSyncRef.current[cacheKey] = newProgress;
+      updateDoc(doc(db, 'circles', membership.circleId, 'challenges', membership.challengeId, 'participants', myUid), {
+        progress: newProgress,
+      }).catch((err) =>
+        handleFirestoreError(
+          err,
+          OperationType.UPDATE,
+          `circles/${membership.circleId}/challenges/${membership.challengeId}/participants/${myUid}`
+        )
+      );
+    });
   };
 
   // `opts.perfect` — accuracy tier of the practice run behind this result
@@ -4603,6 +5327,7 @@ export function useAppState() {
         `All reviews done! ${releasedCount} verse${releasedCount > 1 ? 's' : ''} locked in and moved to spaced review. 🔓`
       );
     }
+    syncChallengeProgress();
 
     if (auth.currentUser) {
       try {
@@ -5326,6 +6051,16 @@ export function useAppState() {
               : r
           )
         );
+        // A render landing switches the playback target from the raw take to
+        // the studio version. Normally nothing is cached yet (cacheableTarget
+        // refuses to cache while 'pending'), but a legacy recording whose raw
+        // file was cached before a backfill produced a render would otherwise
+        // keep that now-unreachable file on disk forever.
+        //
+        // Reads the snapshot rather than the merged state above: a state
+        // updater is not guaranteed to have run by the time this line
+        // executes, and the doc already carries every path this needs.
+        void dropCachedAudio(data, 'stale');
         detach();
       },
       (err) => {
@@ -5618,6 +6353,10 @@ export function useAppState() {
           console.error('Failed to delete studio audio file:', err)
         );
       }
+      // Third copy: the on-device cache. Without this the local file outlives
+      // the recording entirely — invisible in the app, and only reclaimed
+      // whenever the LRU cap happens to evict it.
+      await dropCachedAudio(recording, 'all');
       setUserRecordings((prev) => prev.filter((r) => r.id !== recording.id));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `users/${uid}/recordings/${recording.id}`);
@@ -5731,7 +6470,7 @@ export function useAppState() {
 
     // core state
     verses, setVerses,
-    memoryQueue, setMemoryQueue, updateMemoryQueue,
+    memoryQueue, setMemoryQueue, updateMemoryQueue, countRangeProgress,
     primingLookahead, setPrimingLookahead,
     cognitiveLoadSensitivity, setCognitiveLoadSensitivity,
     showAddQueueItemModal, setShowAddQueueItemModal,
@@ -5754,6 +6493,9 @@ export function useAppState() {
     memoryGridColumns, setMemoryGridColumns,
     studioPlaybackEnabled, setStudioPlaybackEnabled,
     studioAbOverride, setStudioAbOverride,
+    audioCache, cacheRecordingAudio, setListenModePlaying,
+    downloadingRecordingIds, saveRecordingOffline, removeRecordingDownload, saveChapterOffline,
+    setAudioCacheCap, clearAudioDownloads,
     isEditingSync, setIsEditingSync,
     preset, setPreset,
     learningDays, setLearningDays,
@@ -5847,6 +6589,13 @@ export function useAppState() {
     openDMThread, closeDMThread, sendDMMessage,
     activeCircleChatId, activeCircleMessages, loadingActiveCircleMessages,
     openCircleChat, closeCircleChat, sendCircleMessage,
+    reactionsByMessageId, toggleReaction,
+    activeChallenges, loadingActiveChallenges, myChallengeBadges,
+    sendChallenge, acceptChallenge, declineChallenge, cancelChallenge,
+    activeCircleChallenges, loadingActiveCircleChallenges, joinedGroupChallenges,
+    createGroupChallenge, joinGroupChallenge, endGroupChallenge,
+    openChallengeLeaderboardId, openChallengeLeaderboard, loadingChallengeLeaderboard,
+    openChallengeLeaderboardModal, closeChallengeLeaderboard, clearGroupChallengeMembershipsForCircle,
     selectedRecording, setSelectedRecording,
     communitySubView, setCommunitySubView,
     activeGroupId,
