@@ -66,7 +66,7 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
             <TextInput
               value={createGroupDesc}
               onChangeText={setCreateGroupDesc}
-              placeholder="Describe the pacing target, meeting schedules, and target members..."
+              placeholder="Who is this circle for, and what are you working through together?"
               multiline
               numberOfLines={3}
               textAlignVertical="top"
@@ -80,7 +80,7 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
               <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">
                 Privacy Setting
               </Text>
-              <HelpTooltip text="Public groups can be joined instantly. Private groups require an administrator to input an invite code or approve join requests." />
+              <HelpTooltip text="Public circles show up in the directory and anyone can join them straight away. Private circles are hidden — people can only join with the invite code you share with them." />
             </View>
             <View className="flex-row gap-2 mt-1">
               <Pressable

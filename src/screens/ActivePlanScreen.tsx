@@ -1,11 +1,11 @@
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft, ArrowUp, ArrowDown, CalendarDays, ChevronRight, Plus, X, Trash2 } from 'lucide-react-native';
 
 import { useState } from 'react';
 
 import { AppState, buildVerseId } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
-import { FadeInView, useClampedNumberField } from '../components/ui';
+import { FadeInView, NumericInput, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { fetchChapterText, useChapterText } from '../state/useScripture';
 import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
@@ -218,7 +218,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           <View>
             <Text className="text-sm font-serif font-black text-[#1A1A1A]">Memory Rhythm</Text>
             <Text className="text-[10px] text-neutral-400 mt-0.5 font-sans">
-              Configure custom pacing, learn days, review days, and priming lookahead directly.
+              Which days you learn new verses, how many you take on, and how long a day's reviews should run.
             </Text>
           </View>
 
@@ -291,7 +291,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     <Text className="font-bold text-[#1A1A1A] text-base">+</Text>
                   </Pressable>
                 </View>
-                <Text className="text-[8px] font-sans text-neutral-400 text-center">How many verses enter the learning cycle.</Text>
+                <Text className="text-[8px] font-sans text-neutral-400 text-center">New verses that start on each memory day.</Text>
               </View>
 
               {/* Daily Review Time Limit */}
@@ -322,7 +322,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     <Text className="font-bold text-[#1A1A1A] text-base">+</Text>
                   </Pressable>
                 </View>
-                <Text className="text-[8px] font-sans text-neutral-400 text-center">Maximum target duration for daily practice.</Text>
+                <Text className="text-[8px] font-sans text-neutral-400 text-center">How long a day's reviews should take, at most.</Text>
               </View>
             </View>
 
@@ -376,8 +376,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                   </View>
                   <View className="flex-1" style={{ gap: 4 }}>
                     <Text className="text-[9px] font-bold text-neutral-400 uppercase">Chapter</Text>
-                    <TextInput
-                      keyboardType="numeric"
+                    <NumericInput
                       {...addChapterField}
                       className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
                     />
@@ -387,8 +386,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                 <View className="flex-row gap-2.5">
                   <View className="flex-1" style={{ gap: 4 }}>
                     <Text className="text-[9px] font-bold text-neutral-400 uppercase">Start Verse</Text>
-                    <TextInput
-                      keyboardType="numeric"
+                    <NumericInput
                       {...addStartVerseField}
                       className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
                     />
@@ -400,8 +398,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                         <Text className="text-[8px] font-mono text-neutral-400">max {addChapterData.verseCount}</Text>
                       )}
                     </View>
-                    <TextInput
-                      keyboardType="numeric"
+                    <NumericInput
                       {...addEndVerseField}
                       className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
                     />
@@ -636,7 +633,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           <View>
             <Text className="text-sm font-serif font-black text-[#1A1A1A]">Memory Load Forecast</Text>
             <Text className="text-[10px] text-neutral-400 mt-0.5">
-              Deterministic 7-day forecast representing estimated daily study time based on active queue items.
+              Estimated study time for each of the next seven days, based on what's in your queue right now.
             </Text>
           </View>
 

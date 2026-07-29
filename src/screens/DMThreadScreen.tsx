@@ -26,7 +26,7 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
     sendChallenge,
     acceptChallenge,
     declineChallenge,
-    cancelChallenge,
+    deleteChallenge,
   } = state;
 
   const [draft, setDraft] = useState('');
@@ -69,20 +69,21 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
           <Text className="text-sm font-serif font-bold text-neutral-900">{activeDMThread.otherName}</Text>
         </View>
 
+        {/* No status filter: declined/cancelled challenges render as a compact
+            dismissible row (see ChallengeCard) so they can actually be deleted
+            rather than lingering invisibly in Firestore. */}
         {activeChallenges.length > 0 && (
           <View className="px-3 pt-3">
-            {activeChallenges
-              .filter((c) => c.status === 'pending' || c.status === 'active' || c.status === 'completed')
-              .map((challenge) => (
-                <ChallengeCard
-                  key={challenge.id}
-                  challenge={challenge}
-                  myUid={user?.uid}
-                  onAccept={() => acceptChallenge(challenge)}
-                  onDecline={() => declineChallenge(challenge)}
-                  onCancel={() => cancelChallenge(challenge)}
-                />
-              ))}
+            {activeChallenges.map((challenge) => (
+              <ChallengeCard
+                key={challenge.id}
+                challenge={challenge}
+                myUid={user?.uid}
+                onAccept={() => acceptChallenge(challenge)}
+                onDecline={() => declineChallenge(challenge)}
+                onDelete={() => deleteChallenge(challenge)}
+              />
+            ))}
           </View>
         )}
 

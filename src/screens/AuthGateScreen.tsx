@@ -16,7 +16,7 @@ import { AppState } from '../state/useAppState';
 export default function AuthGateScreen({ state }: { state: AppState }) {
   const { triggerToast } = state;
   const { signInWithGoogle } = useGoogleSignIn();
-  const { signUp, signIn } = useEmailAuth();
+  const { signUp, signIn, resetPassword } = useEmailAuth();
 
   const [showEmailAuth, setShowEmailAuth] = useState(false);
   const [authMode, setAuthMode] = useState<'signIn' | 'signUp'>('signIn');
@@ -51,6 +51,17 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
     if (!result.ok) {
       triggerToast(result.message);
     }
+  };
+
+  const handleForgotPassword = async () => {
+    setSubmitting(true);
+    const result = await resetPassword(emailInput);
+    setSubmitting(false);
+    triggerToast(
+      result.ok
+        ? `If an account exists for ${emailInput.trim()}, a reset link is on its way. Check your inbox and spam folder.`
+        : result.message
+    );
   };
 
   return (
@@ -151,6 +162,17 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
                     {authMode === 'signUp' ? 'Create Account' : 'Sign In'}
                   </Text>
                 </Pressable>
+
+                {/* Sign-in only -- meaningless while creating an account.
+                    Reuses whatever is already typed in the Email field rather
+                    than adding a second address input. */}
+                {authMode === 'signIn' && (
+                  <Pressable onPress={handleForgotPassword} disabled={submitting} className="items-center pt-0.5">
+                    <Text className="text-[10px] font-sans font-bold underline text-neutral-500">
+                      Forgot your password?
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             </FadeInView>
           )}

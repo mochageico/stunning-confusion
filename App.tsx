@@ -15,7 +15,7 @@ import { Check, Home as HomeIcon, Mic, Pause, Sliders, User, Users, X } from 'lu
 
 import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
-import { FadeInView } from './src/components/ui';
+import { FadeInView, NumericKeyboardAccessory } from './src/components/ui';
 import { RECORDING_VISIBILITY_OPTIONS } from './src/data';
 
 import RecordingDetailScreen from './src/screens/RecordingDetailScreen';
@@ -643,6 +643,11 @@ function AppShell() {
       )}
 
       <ToastLayer state={state} />
+
+      {/* The shared "Done" bar for every numeric TextInput in the app -- see
+          NumericInput in ui.tsx. Registered once here for all normal screens;
+          Modals are their own iOS view controller and register their own. */}
+      <NumericKeyboardAccessory />
     </View>
   );
 }

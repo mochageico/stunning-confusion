@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Check, FileAudio, Folder, Mic, Pause, Play, RotateCcw, Upload } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { FadeInView, PulseView, WaveBars } from '../components/ui';
+import { FadeInView, NumericInput, PulseView, WaveBars } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
 import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
@@ -228,10 +228,9 @@ export default function RecordScreen({ state }: { state: AppState }) {
           </View>
           <View className="flex-row gap-2 items-center" style={{ opacity: isRecording ? 0.5 : 1 }}>
             <View className="flex-1">
-              <TextInput
+              <NumericInput
                 value={startText}
                 editable={!isRecording}
-                keyboardType="numeric"
                 onChangeText={(text) => {
                   setStartText(text);
                   const num = parseInt(text, 10);
@@ -246,10 +245,9 @@ export default function RecordScreen({ state }: { state: AppState }) {
             </View>
             <Text className="text-xs font-bold text-neutral-400">to</Text>
             <View className="flex-1">
-              <TextInput
+              <NumericInput
                 value={endText}
                 editable={!isRecording}
-                keyboardType="numeric"
                 onChangeText={(text) => {
                   setEndText(text);
                   const num = parseInt(text, 10);
@@ -281,9 +279,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
                 </Text>
                 <Text className="text-[10px] font-sans text-indigo-700">
                   This times your recitation automatically. Verse {recordingSelectedVerses[0]?.verse ?? 1} is already
-                  marked —{' '}
-                  {recordingSelectedVerses.length > 1 ? 'start tapping from the next verse.' : ''}
-                  {'  '}
+                  marked{recordingSelectedVerses.length > 1 ? ', so start tapping from the next one.' : '.'}{' '}
                   {taggedVerseCount}/{recordingSelectedVerses.length} verses marked.
                 </Text>
               </View>

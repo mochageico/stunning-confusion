@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Check, RefreshCw, Target, X } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
-import { ChipRow, FadeInView } from '../components/ui';
+import { AppState, isReviewDue } from '../state/useAppState';
+import { ChipRow, FadeInView, NumericInput } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import {
   buildReferenceRounds,
@@ -38,6 +38,20 @@ const SESSION_LENGTHS = [
   { id: 0, label: 'All' },
 ];
 
+// Which slice of the review system to quiz from. 'all' is every started
+// verse (the original, and still the default). The three retentionPhase
+// values let you drill one review set at a time -- e.g. "just my Monthly
+// verses", the ones most at risk of having quietly faded. 'learning' is the
+// other end: verses still being learned, not yet on a spaced schedule.
+const REVIEW_SETS = [
+  { id: 'all' as const, label: 'All started' },
+  { id: 'learning' as const, label: 'Learning' },
+  { id: 'daily' as const, label: 'Daily' },
+  { id: 'weekly' as const, label: 'Weekly' },
+  { id: 'monthly' as const, label: 'Monthly' },
+];
+type ReviewSet = (typeof REVIEW_SETS)[number]['id'];
+
 type Phase = 'setup' | 'playing' | 'done';
 
 export default function ReferenceDrillScreen({ state }: { state: AppState }) {
@@ -46,6 +60,13 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
   const [book, setBook] = useState('');
   const [startChapter, setStartChapter] = useState('');
   const [endChapter, setEndChapter] = useState('');
+  // Verse-level bounds, only applied when the range narrows to a single
+  // chapter -- a "verse 5 to verse 20" span means nothing across chapters
+  // with different verse counts. Same scoping rule the Goal feature uses.
+  const [startVerse, setStartVerse] = useState('');
+  const [endVerse, setEndVerse] = useState('');
+  const [reviewSet, setReviewSet] = useState<ReviewSet>('all');
+  const [dueTodayOnly, setDueTodayOnly] = useState(false);
   const [direction, setDirection] = useState<DrillDirection>('both');
   const [sessionLength, setSessionLength] = useState(10);
   const [hardMode, setHardMode] = useState(false);
@@ -62,6 +83,16 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
   // it themselves, reveals, and self-scores.
   const [revealed, setRevealed] = useState(false);
 
+  // Verse bounds only make sense inside one chapter, so they're offered (and
+  // applied) only when the chapter range collapses to a single chapter.
+  const singleChapter =
+    !!book && !!startChapter && (endChapter === '' || endChapter === startChapter) ? Number(startChapter) : null;
+  // Once a verse bound is actually typed, the chapter stops being a lower
+  // bound and pins to exactly that chapter. Without this, "Romans 8, verses
+  // 2-4" also matched Romans 12:2 -- From-chapter alone means "chapter >= 8",
+  // so every later chapter stayed in the pool and got verse-filtered too.
+  const verseBoundsActive = singleChapter !== null && (!!startVerse || !!endVerse);
+
   // Anything actually in the review system: learning, reviewing, or retained.
   // 'queued' verses haven't been started yet, so quizzing on them would be
   // testing something never taught.
@@ -69,15 +100,45 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
     const started = memoryQueue.filter((i) => i.status !== 'queued');
     const from = Number(startChapter);
     const to = Number(endChapter);
+    const fromV = Number(startVerse);
+    const toV = Number(endVerse);
     return started
       .filter((i) => {
         if (book && i.book !== book) return false;
         if (startChapter && Number.isFinite(from) && i.chapter < from) return false;
         if (endChapter && Number.isFinite(to) && i.chapter > to) return false;
+        if (verseBoundsActive) {
+          if (i.chapter !== singleChapter) return false;
+          if (startVerse && Number.isFinite(fromV) && i.verseNumber < fromV) return false;
+          if (endVerse && Number.isFinite(toV) && i.verseNumber > toV) return false;
+        }
+
+        // Review-set filter. 'learning' is a status; the three phase names are
+        // only meaningful on items that have actually reached 'reviewing'.
+        // 'retained' items carry retentionPhase 'monthly' from their last
+        // phase, so they're deliberately excluded from the phase buckets --
+        // those mean "currently on this review cadence".
+        if (reviewSet === 'learning' && i.status !== 'learning') return false;
+        if (reviewSet !== 'all' && reviewSet !== 'learning') {
+          if (i.status !== 'reviewing' || i.retentionPhase !== reviewSet) return false;
+        }
+
+        if (dueTodayOnly && !(i.status === 'reviewing' && isReviewDue(i.nextReviewDueDate))) return false;
         return true;
       })
       .map((i) => ({ book: i.book, chapter: i.chapter, verse: i.verseNumber, text: i.text }));
-  }, [memoryQueue, book, startChapter, endChapter]);
+  }, [
+    memoryQueue,
+    book,
+    startChapter,
+    endChapter,
+    startVerse,
+    endVerse,
+    singleChapter,
+    verseBoundsActive,
+    reviewSet,
+    dueTodayOnly,
+  ]);
 
   const uniqueCount = useMemo(() => new Set(pool.map(formatReference)).size, [pool]);
 
@@ -142,23 +203,48 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
               <View className="flex-row items-center gap-2">
                 <View className="flex-1">
                   <Text className="text-[9px] font-sans font-bold text-neutral-400 mb-1">From chapter</Text>
-                  <TextInput
+                  <NumericInput
                     value={startChapter}
                     onChangeText={setStartChapter}
                     placeholder="Any"
                     placeholderTextColor="#a3a3a3"
-                    keyboardType="number-pad"
                     className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs text-[#1A1A1A]"
                   />
                 </View>
                 <View className="flex-1">
                   <Text className="text-[9px] font-sans font-bold text-neutral-400 mb-1">To chapter</Text>
-                  <TextInput
+                  <NumericInput
                     value={endChapter}
                     onChangeText={setEndChapter}
                     placeholder="Any"
                     placeholderTextColor="#a3a3a3"
-                    keyboardType="number-pad"
+                    className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs text-[#1A1A1A]"
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Verse bounds appear only once the range is a single chapter --
+                see the singleChapter note above. */}
+            {singleChapter !== null && (
+              <View className="flex-row items-center gap-2">
+                <View className="flex-1">
+                  <Text className="text-[9px] font-sans font-bold text-neutral-400 mb-1">From verse</Text>
+                  <NumericInput
+                    value={startVerse}
+                    onChangeText={setStartVerse}
+                    placeholder="Any"
+                    placeholderTextColor="#a3a3a3"
+                    className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs text-[#1A1A1A]"
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[9px] font-sans font-bold text-neutral-400 mb-1">To verse</Text>
+                  <NumericInput
+                    value={endVerse}
+                    onChangeText={setEndVerse}
+                    placeholder="Any"
+                    placeholderTextColor="#a3a3a3"
                     className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs text-[#1A1A1A]"
                   />
                 </View>
@@ -167,8 +253,40 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             <Text className={`text-[10px] font-sans font-bold ${canStart ? 'text-neutral-500' : 'text-amber-700'}`}>
               {canStart
                 ? `${uniqueCount} ${uniqueCount === 1 ? 'verse' : 'verses'} available`
-                : 'No verses in that range yet — memorize some first, or widen the range.'}
+                : 'No verses match those filters yet — memorize some first, or widen the range.'}
             </Text>
+          </View>
+
+          {/* Review set */}
+          <View className="gap-2">
+            <Text className="text-[10px] font-sans font-extrabold uppercase tracking-wider text-neutral-400">
+              Pull from
+            </Text>
+            <ChipRow options={REVIEW_SETS} value={reviewSet} onChange={(s) => setReviewSet(s as ReviewSet)} wrap />
+            <Pressable
+              onPress={() => setDueTodayOnly((d) => !d)}
+              className={`flex-row items-center justify-between border rounded-xl p-3 ${
+                dueTodayOnly ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-300'
+              }`}
+            >
+              <View className="flex-1 pr-3">
+                <Text
+                  className={`text-[11px] font-sans font-extrabold ${dueTodayOnly ? 'text-white' : 'text-neutral-800'}`}
+                >
+                  Due today only
+                </Text>
+                <Text className={`text-[9px] font-sans leading-snug ${dueTodayOnly ? 'text-neutral-300' : 'text-neutral-500'}`}>
+                  Narrow to verses whose review is actually due today. Still practice only — it won't clear them.
+                </Text>
+              </View>
+              <View
+                className={`w-5 h-5 rounded-full items-center justify-center ${
+                  dueTodayOnly ? 'bg-white' : 'border border-neutral-300'
+                }`}
+              >
+                {dueTodayOnly && <Check size={12} color="#171717" />}
+              </View>
+            </Pressable>
           </View>
 
           {/* Direction */}
@@ -314,21 +432,19 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                     className="bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A]"
                   />
                   <View className="flex-row gap-2">
-                    <TextInput
+                    <NumericInput
                       value={freeGuess.chapter}
                       onChangeText={(t) => setFreeGuess((g) => ({ ...g, chapter: t }))}
                       placeholder="Chapter"
                       placeholderTextColor="#a3a3a3"
-                      keyboardType="number-pad"
                       editable={!answered}
                       className="flex-1 bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A]"
                     />
-                    <TextInput
+                    <NumericInput
                       value={freeGuess.verse}
                       onChangeText={(t) => setFreeGuess((g) => ({ ...g, verse: t }))}
                       placeholder="Verse"
                       placeholderTextColor="#a3a3a3"
-                      keyboardType="number-pad"
                       editable={!answered}
                       className="flex-1 bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A]"
                     />

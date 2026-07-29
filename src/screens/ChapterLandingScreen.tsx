@@ -326,7 +326,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             {showAudioSelector && (
               <View className="bg-[#F3F2F1] rounded-lg p-2.5 border border-[#E5E5E5] gap-2">
                 <Text className="text-[9px] font-bold uppercase text-neutral-400 tracking-wider">
-                  Recordings — drag to reorder priority
+                  Recordings — press and hold to reorder. The top one plays by default.
                 </Text>
                 <DraggableFlatList
                   data={optionsList}
@@ -702,7 +702,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 {(overridePhase === 'weekly' || overridePhase === 'monthly') && (
                   <View style={{ gap: 4 }}>
                     <Text className="text-[8px] font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
-                      Land review cycle on (optional) -- tap again to clear
+                      Land review cycle on (optional) — tap again to clear
                     </Text>
                     <ChipRow
                       wrap

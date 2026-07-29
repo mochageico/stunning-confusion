@@ -830,6 +830,10 @@ export function useAppState() {
   const [activeFeedFilter, setActiveFeedFilter] = useState<'global' | 'group' | 'friends'>('global');
   const [feedBookFilter, setFeedBookFilter] = useState<string>('');
   const [feedChapterFilter, setFeedChapterFilter] = useState<string>('');
+  // A BIBLE_TRANSLATIONS id ('ESV'/'KJV'/'WEB'), or '' for all. Matched
+  // case-insensitively against Recording.translation, which older recordings
+  // may hold as a display name rather than an id -- see AudioFeedScreen.
+  const [feedTranslationFilter, setFeedTranslationFilter] = useState<string>('');
 
   // Audio Selection mapping for specific chapters — which real recording
   // (from userRecordings) is chosen as the narration for a given chapter.
@@ -1940,11 +1944,21 @@ export function useAppState() {
     }
   };
 
-  const cancelChallenge = async (challenge: Challenge) => {
+  // Hard-deletes the challenge doc for BOTH sides, at any status -- either
+  // participant can do it (see firestore.rules). Verses already pulled into
+  // either side's memoryQueue are deliberately left alone: they're real
+  // memorization progress that happens to have been started by a challenge,
+  // not challenge-owned data.
+  const deleteChallenge = async (challenge: Challenge) => {
+    const myUid = auth.currentUser?.uid;
+    if (!myUid || (challenge.fromUid !== myUid && challenge.toUid !== myUid)) return;
     try {
       await deleteDoc(doc(db, 'challenges', challenge.id));
+      delete challengeProgressSyncRef.current[`c_${challenge.id}`];
+      triggerToast('Challenge deleted. Your verses stay in your queue.');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `challenges/${challenge.id}`);
+      triggerToast("Couldn't delete that challenge -- please try again.");
     }
   };
 
@@ -2567,6 +2581,68 @@ export function useAppState() {
       triggerToast(status === 'cancelled' ? 'Challenge cancelled.' : 'Challenge ended! 🏁');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `circles/${challenge.circleId}/challenges/${challenge.id}`);
+    }
+  };
+
+  // Creator-only, and genuinely destructive (unlike endGroupChallenge, which
+  // just flips status and leaves the card on the page as a finished race).
+  // Firestore has no cascading delete, so the participants subcollection is
+  // cleared FIRST -- deleting only the parent doc would leave an
+  // unreachable-but-permanent collection behind. Blast radius is bounded by
+  // circle size (one participant doc per member who joined), so a single
+  // batch is always sufficient here.
+  const deleteGroupChallenge = async (challenge: GroupChallenge) => {
+    const myUid = auth.currentUser?.uid;
+    if (!myUid || myUid !== challenge.createdByUid) return;
+    const challengePath = `circles/${challenge.circleId}/challenges/${challenge.id}`;
+    try {
+      const participantsSnap = await getDocs(
+        collection(db, 'circles', challenge.circleId, 'challenges', challenge.id, 'participants')
+      );
+      const batch = writeBatch(db);
+      participantsSnap.docs.forEach((d) => batch.delete(d.ref));
+      batch.delete(doc(db, 'circles', challenge.circleId, 'challenges', challenge.id));
+      await batch.commit();
+
+      setActiveCircleChallenges((prev) => prev.filter((c) => c.id !== challenge.id));
+      delete challengeProgressSyncRef.current[`g_${challenge.id}`];
+      // Only MY own membership record can be cleaned up from here --
+      // memoryPlans/{uid} is owner-write only, so other members keep a stale
+      // membership until their own client notices the participant doc is
+      // gone. syncChallengeProgress self-heals that (see the not-found
+      // handling there).
+      const remaining = joinedGroupChallenges.filter((m) => m.challengeId !== challenge.id);
+      if (remaining.length !== joinedGroupChallenges.length) {
+        setJoinedGroupChallenges(remaining);
+        await persistJoinedGroupChallenges(remaining);
+      }
+      triggerToast('Challenge deleted. Everyone keeps the verses in their queue.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, challengePath);
+      triggerToast("Couldn't delete that challenge -- please try again.");
+    }
+  };
+
+  // Anyone who joined can drop out, creator included (a creator who leaves
+  // still owns the challenge itself -- leaving and deleting are separate
+  // actions on purpose). Verses already in the leaver's queue stay: they may
+  // have real review progress on them by now.
+  const leaveGroupChallenge = async (challenge: GroupChallenge) => {
+    const myUid = auth.currentUser?.uid;
+    if (!myUid) return;
+    try {
+      await deleteDoc(doc(db, 'circles', challenge.circleId, 'challenges', challenge.id, 'participants', myUid));
+      delete challengeProgressSyncRef.current[`g_${challenge.id}`];
+      const remaining = joinedGroupChallenges.filter((m) => m.challengeId !== challenge.id);
+      setJoinedGroupChallenges(remaining);
+      await persistJoinedGroupChallenges(remaining);
+      triggerToast('Left the challenge. Your verses stay in your queue.');
+    } catch (err) {
+      handleFirestoreError(
+        err,
+        OperationType.DELETE,
+        `circles/${challenge.circleId}/challenges/${challenge.id}/participants/${myUid}`
+      );
     }
   };
 
@@ -4537,9 +4613,11 @@ export function useAppState() {
   // A fresh Learning-phase touch is real, unhurried practice, so it costs
   // much more per verse. (2026-07: the old 30/45/60s daily/weekly/monthly
   // tiering plus 120s/learning verse was making the estimate feel wildly
-  // inflated in practice -- simplified to these two flat numbers.)
-  const REVIEW_SECONDS_PER_VERSE = 25;
-  const LEARNING_SECONDS_PER_VERSE = 180;
+  // inflated in practice -- simplified to these two flat numbers, then
+  // trimmed again from 25s/180s after the estimate still read long against
+  // real practice sessions.)
+  const REVIEW_SECONDS_PER_VERSE = 15;
+  const LEARNING_SECONDS_PER_VERSE = 90;
 
   // Shared by getEstimatedReviewTime (today only) and getMemoryLoadForecast
   // (today + future days), so both always price a "due review" the same
@@ -5019,13 +5097,27 @@ export function useAppState() {
       challengeProgressSyncRef.current[cacheKey] = newProgress;
       updateDoc(doc(db, 'circles', membership.circleId, 'challenges', membership.challengeId, 'participants', myUid), {
         progress: newProgress,
-      }).catch((err) =>
+      }).catch((err) => {
+        // A 'not-found' here means the challenge (or at least my participant
+        // doc) was deleted by its creator while I still hold a membership
+        // record -- memoryPlans/{uid} is owner-write only, so they could
+        // never have cleaned mine up for me. Prune it locally instead of
+        // re-erroring on every future review.
+        if ((err as { code?: string })?.code === 'not-found') {
+          setJoinedGroupChallenges((prev) => {
+            const pruned = prev.filter((m) => m.challengeId !== membership.challengeId);
+            if (pruned.length !== prev.length) persistJoinedGroupChallenges(pruned);
+            return pruned;
+          });
+          delete challengeProgressSyncRef.current[cacheKey];
+          return;
+        }
         handleFirestoreError(
           err,
           OperationType.UPDATE,
           `circles/${membership.circleId}/challenges/${membership.challengeId}/participants/${myUid}`
-        )
-      );
+        );
+      });
     });
   };
 
@@ -6550,6 +6642,7 @@ export function useAppState() {
     activeFeedFilter, setActiveFeedFilter,
     feedBookFilter, setFeedBookFilter,
     feedChapterFilter, setFeedChapterFilter,
+    feedTranslationFilter, setFeedTranslationFilter,
     selectedChapterAudios, setSelectedChapterAudios,
     showAudioSelector, setShowAudioSelector,
     toastMessage, setToastMessage,
@@ -6591,9 +6684,10 @@ export function useAppState() {
     openCircleChat, closeCircleChat, sendCircleMessage,
     reactionsByMessageId, toggleReaction,
     activeChallenges, loadingActiveChallenges, myChallengeBadges,
-    sendChallenge, acceptChallenge, declineChallenge, cancelChallenge,
+    sendChallenge, acceptChallenge, declineChallenge, deleteChallenge,
     activeCircleChallenges, loadingActiveCircleChallenges, joinedGroupChallenges,
     createGroupChallenge, joinGroupChallenge, endGroupChallenge,
+    deleteGroupChallenge, leaveGroupChallenge,
     openChallengeLeaderboardId, openChallengeLeaderboard, loadingChallengeLeaderboard,
     openChallengeLeaderboardModal, closeChallengeLeaderboard, clearGroupChallengeMembershipsForCircle,
     selectedRecording, setSelectedRecording,

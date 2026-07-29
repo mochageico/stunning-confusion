@@ -1,5 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Keyboard, Modal, PanResponder, Platform, Pressable, Text, View, Image } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Image,
+  InputAccessoryView,
+  Keyboard,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  Text,
+  TextInput,
+  TextInputProps,
+  View,
+} from 'react-native';
 
 // ============================================================
 // useKeyboardHeight — manual native keyboard-height tracking, used instead
@@ -387,6 +401,58 @@ export function useClampedNumberField(value: number, commit: (n: number) => void
       setText(String(next));
     },
   };
+}
+
+// ============================================================
+// NumericInput / NumericKeyboardAccessory — the fix for "can't get rid of
+// the # keyboard".
+//
+// iOS's numeric keypad (keyboardType 'numeric' | 'number-pad' | 'decimal-pad')
+// has NO return key, so a bare numeric TextInput is a dead end: nothing
+// on screen dismisses it, and inside a bottom-anchored sheet the keypad
+// also covers the submit button, so the form becomes unusable. The standard
+// iOS answer is an accessory bar pinned directly above the keyboard, which
+// is what InputAccessoryView provides.
+//
+// Android is unaffected (its numeric keyboard has a system dismiss key) and
+// InputAccessoryView is iOS-only, so the accessory renders nothing there.
+//
+// PAIRING RULE: every NumericInput resolves its accessory by nativeID, and
+// an id only resolves within the same native view controller. A RN Modal is
+// its own controller on iOS, so any Modal containing numeric inputs must
+// render its OWN <NumericKeyboardAccessory nativeID="..."> and pass that
+// same id to its inputs as `accessoryID` -- it cannot borrow the app-root
+// one. Distinct ids (rather than re-registering the default in the modal)
+// keep the two registrations from colliding.
+// ============================================================
+export const NUMERIC_ACCESSORY_ID = 'numericDoneBar';
+
+export function NumericKeyboardAccessory({ nativeID = NUMERIC_ACCESSORY_ID }: { nativeID?: string }) {
+  if (Platform.OS !== 'ios') return null;
+  return (
+    <InputAccessoryView nativeID={nativeID}>
+      <View className="bg-neutral-100 border-t border-neutral-300 flex-row justify-end px-2 py-1.5">
+        <Pressable onPress={() => Keyboard.dismiss()} hitSlop={10} className="px-4 py-1.5">
+          <Text className="text-[15px] font-sans font-bold text-[#1A1A1A]">Done</Text>
+        </Pressable>
+      </View>
+    </InputAccessoryView>
+  );
+}
+
+// Drop-in replacement for a numeric <TextInput>. Props spread last so a
+// caller can still override keyboardType (e.g. 'decimal-pad').
+export function NumericInput({
+  accessoryID = NUMERIC_ACCESSORY_ID,
+  ...props
+}: TextInputProps & { accessoryID?: string }) {
+  return (
+    <TextInput
+      keyboardType="number-pad"
+      inputAccessoryViewID={Platform.OS === 'ios' ? accessoryID : undefined}
+      {...props}
+    />
+  );
 }
 
 // ============================================================

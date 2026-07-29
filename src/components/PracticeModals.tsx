@@ -1894,8 +1894,8 @@ function PracticeModalsInner({
                       <View className="items-center">
                         <Text className="text-lg font-serif font-bold text-neutral-900 leading-tight">Nice practice run!</Text>
                         <Text className="text-xs text-neutral-500 font-sans mt-0.5 text-center px-6 leading-relaxed">
-                          {pct}% word accuracy with {hideLevel}% of words hidden. Anything short of fully blind never counts
-                          toward mastery or a review -- it's just for warming up.
+                          {pct}% word accuracy with {hideLevel}% of words hidden. Anything short of fully blind is warm-up
+                          only — it never counts toward a mastery touch or a review.
                         </Text>
                       </View>
 
@@ -2000,7 +2000,7 @@ function PracticeModalsInner({
                             </Pressable>
                             <Text className="text-center text-[9px] text-neutral-400 font-sans font-bold px-4">
                               {assisted
-                                ? 'First-Letter hints mean this counts for spaced review, but never a mastery touch -- switch to % Hidden → Blind for that.'
+                                ? 'With first-letter hints on, this counts as a review but never as a mastery touch. Switch to % Hidden, set to fully blind, for that.'
                                 : 'Counts for verses in spaced review. Learning verses only bank a mastery touch on a perfect run.'}
                             </Text>
                           </>

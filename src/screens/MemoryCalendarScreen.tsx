@@ -138,8 +138,8 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
         </View>
 
         <Text className="text-[10px] text-neutral-400 leading-relaxed -mt-2">
-          Projects Daily/Weekly/Monthly reviews forward assuming every review goes well -- a real miss will shift things,
-          so treat this as a preview, not a guarantee.
+          Projects your Daily, Weekly, and Monthly reviews forward assuming every one goes well. A real miss shifts
+          things, so treat this as a preview, not a promise.
         </Text>
 
         {/* Week / Month Toggle */}
@@ -224,7 +224,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
                     ? 'Today'
                     : selectedDay?.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                 </Text>
-                {selectedDay?.data?.isSabbath && <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">Sabbath -- day off</Text>}
+                {selectedDay?.data?.isSabbath && <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">Sabbath — nothing scheduled</Text>}
               </View>
               <Pressable onPress={() => setSelectedDayIdx(null)} className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center">
                 <X size={14} color="#262626" />

@@ -127,9 +127,12 @@ service cloud.firestore {
           || (request.auth.uid == resource.data.toUid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['toProgress', 'status']))
         );
+      // Either participant may delete at ANY status, not just 'pending'.
+      // A finished/declined race is just clutter in the DM thread, and there
+      // is nothing to protect: progress lives in each side's own memoryQueue,
+      // so deleting the challenge doc never destroys memorization progress.
       allow delete: if isSignedIn()
-        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid)
-        && resource.data.status == 'pending';
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
     }
 
     // Accountability nudges (friend-only, sender-composed custom message,
@@ -303,12 +306,17 @@ service cloud.firestore {
 
         // Self-owned participant doc, same shape/trust model as
         // profiles/{uid}/friends/{friendUid} -- each member can only ever
-        // join/update/leave their OWN entry, never another's.
+        // join/update their OWN entry, never another's. Delete is the one
+        // exception: the challenge's creator may also delete any participant
+        // doc, purely so deleteGroupChallenge can clear the subcollection
+        // before removing its parent (Firestore has no cascading delete, and
+        // an orphaned participants collection is unreachable-but-permanent).
         match /participants/{uid} {
           allow read: if isSignedIn() && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
           allow create: if isOwner(uid) && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
           allow update: if isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['progress']);
-          allow delete: if isOwner(uid);
+          allow delete: if isOwner(uid)
+            || get(/databases/$(database)/documents/circles/$(circleId)/challenges/$(challengeId)).data.createdByUid == request.auth.uid;
         }
       }
     }

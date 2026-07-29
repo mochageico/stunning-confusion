@@ -205,9 +205,9 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           <View>
             <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Studio Mode</Text>
             <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">
-              Automatically cleans up new recitations — softens harsh "s" sounds, reduces background noise, and
-              evens out the volume so every recording plays back at the same level. Your original recording is
-              always kept.
+              Every recitation you record is cleaned up automatically — harsh "s" sounds softened, background
+              noise reduced, volume evened out. This just picks which version you hear. Your original take is
+              always kept, so you can switch back any time.
             </Text>
           </View>
           <View className="flex-row gap-2">

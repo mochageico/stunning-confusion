@@ -3,16 +3,16 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Plus } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { FadeInView, StepperRow, HelpTooltip, useClampedNumberField } from '../components/ui';
+import { FadeInView, NumericInput, StepperRow, HelpTooltip, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 import { useChapterText } from '../state/useScripture';
 import { StudyPlanMembership } from '../types';
 
 const PRIORITY_OPTIONS: { id: StudyPlanMembership['priority']; label: string; description: string }[] = [
-  { id: 'individual', label: 'Individual First', description: 'Your own queue is pulled before this plan’s verses.' },
-  { id: 'group', label: 'Plan First', description: "This plan's verses are pulled before your own queue, but still within your daily capacity." },
-  { id: 'additive', label: 'Additive', description: "This plan's full weekly pace is added on top of your daily capacity, on purpose exceeding it." },
+  { id: 'individual', label: 'Individual First', description: "Your own queue comes first. This plan's verses fill whatever room is left." },
+  { id: 'group', label: 'Plan First', description: "This plan's verses come first, then your own queue — still within your daily capacity." },
+  { id: 'additive', label: 'Additive', description: "This plan's full weekly pace stacks on top of your daily capacity, deliberately going over it." },
 ];
 
 interface VerseIdGroup {
@@ -209,7 +209,7 @@ export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
 
           {plan.verseIds.length === 0 && (
             <Text className="text-xs text-neutral-400 font-sans">
-              No verses yet. {isManager && 'Add a small range to get started -- a few verses at a time, not a whole book.'}
+              No verses yet. {isManager && 'Add a small range to get started — a few verses at a time, not a whole book.'}
             </Text>
           )}
 
@@ -223,10 +223,9 @@ export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
                   </View>
                   <View style={{ width: 70 }}>
                     <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Chapter</Text>
-                    <TextInput
+                    <NumericInput
                       value={addChapter}
                       onChangeText={setAddChapter}
-                      keyboardType="numeric"
                       className="w-full bg-white border border-neutral-300 rounded-lg px-2 py-2.5 text-xs text-center"
                     />
                   </View>
@@ -234,10 +233,9 @@ export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
                 <View className="flex-row gap-2 items-end">
                   <View className="flex-1">
                     <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Start Verse</Text>
-                    <TextInput
+                    <NumericInput
                       value={addStartVerse}
                       onChangeText={setAddStartVerse}
-                      keyboardType="numeric"
                       className="w-full bg-white border border-neutral-300 rounded-lg px-2 py-1.5 text-xs text-center"
                     />
                   </View>
@@ -248,10 +246,9 @@ export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
                         <Text className="text-[8px] font-mono text-neutral-400">max {addChapterData.verseCount}</Text>
                       )}
                     </View>
-                    <TextInput
+                    <NumericInput
                       value={addEndVerse}
                       onChangeText={setAddEndVerse}
-                      keyboardType="numeric"
                       className="w-full bg-white border border-neutral-300 rounded-lg px-2 py-1.5 text-xs text-center"
                     />
                   </View>

@@ -75,7 +75,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
           <Text className="text-[9px] font-sans font-extrabold uppercase tracking-widest text-neutral-400">Time Studied</Text>
           <Text className="text-3xl font-black text-white font-mono">{formatStudyTime(totalStudySeconds)}</Text>
           <Text className="text-[9px] font-sans text-neutral-500 text-center leading-relaxed">
-            Real time spent in practice/listen sessions, tracked live.
+            Total time with a practice or listen session open.
           </Text>
         </View>
 
@@ -113,7 +113,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
         <View style={{ gap: 8 }}>
           <View className="flex-row items-center px-1">
             <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">Past 90 Days</Text>
-            <HelpTooltip text="Every day you completed a mastery-touch practice. Darker green means more repetitions that day." />
+            <HelpTooltip text="One square per day. A square fills in on days you banked a mastery touch on a verse you're learning — darker green means more touches that day. Spaced reviews aren't counted here." />
           </View>
           <View className="border border-[#E5E5E5] rounded-xl p-2.5 bg-white">
             <View className="flex-row flex-wrap gap-[3px] justify-center">

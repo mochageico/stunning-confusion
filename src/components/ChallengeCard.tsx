@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { X } from 'lucide-react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
+import { Trash2, X } from 'lucide-react-native';
 
 import { Challenge } from '../types';
 import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 import { useChapterText } from '../state/useScripture';
 import { BookPicker } from './BookPicker';
-import { ProgressBar } from './ui';
+import { NumericInput, NumericKeyboardAccessory, ProgressBar } from './ui';
+
+// This sheet is a Modal -- its own iOS view controller -- so it must register
+// its own numeric "Done" accessory rather than using App.tsx's. See the
+// PAIRING RULE comment on NumericInput in ui.tsx.
+const CHALLENGE_ACCESSORY_ID = 'challengeSheetNumericDoneBar';
 
 export type ChallengeRange = {
   book: string;
@@ -83,10 +88,10 @@ export function ChallengeCreateSheet({
             </View>
             <View style={{ width: 70 }}>
               <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Chapter</Text>
-              <TextInput
+              <NumericInput
                 value={chapter}
                 onChangeText={setChapter}
-                keyboardType="numeric"
+                accessoryID={CHALLENGE_ACCESSORY_ID}
                 className="w-full bg-white border border-neutral-300 rounded-lg px-2 py-2.5 text-xs text-center"
               />
             </View>
@@ -95,10 +100,10 @@ export function ChallengeCreateSheet({
           <View className="flex-row gap-2 items-end">
             <View className="flex-1">
               <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Start Verse (optional)</Text>
-              <TextInput
+              <NumericInput
                 value={startVerse}
                 onChangeText={setStartVerse}
-                keyboardType="numeric"
+                accessoryID={CHALLENGE_ACCESSORY_ID}
                 placeholder="1"
                 placeholderTextColor="#a3a3a3"
                 className="w-full bg-white border border-neutral-300 rounded-lg px-2 py-1.5 text-xs text-center"
@@ -109,10 +114,10 @@ export function ChallengeCreateSheet({
                 <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest">End Verse</Text>
                 {chapterData && <Text className="text-[8px] font-mono text-neutral-400">max {chapterData.verseCount}</Text>}
               </View>
-              <TextInput
+              <NumericInput
                 value={endVerse}
                 onChangeText={setEndVerse}
-                keyboardType="numeric"
+                accessoryID={CHALLENGE_ACCESSORY_ID}
                 placeholder={chapterData ? String(chapterData.verseCount) : 'end'}
                 placeholderTextColor="#a3a3a3"
                 className="w-full bg-white border border-neutral-300 rounded-lg px-2 py-1.5 text-xs text-center"
@@ -125,40 +130,100 @@ export function ChallengeCreateSheet({
           </Pressable>
         </View>
       </View>
+      <NumericKeyboardAccessory nativeID={CHALLENGE_ACCESSORY_ID} />
     </Modal>
   );
 }
 
 // 1:1 challenge card -- pending (accept/decline for the recipient, waiting
 // note for the sender), active (dual progress bars), or completed/declined.
+//
+// Every status carries a delete control, because either participant can now
+// remove the challenge outright (see deleteChallenge in useAppState.ts). That
+// includes declined/cancelled ones: those used to render as `null`, which
+// meant a whole class of challenge was permanently un-deletable -- invisible
+// in the thread but still a live Firestore doc. They now show as a compact
+// dismissible row instead.
 export function ChallengeCard({
   challenge,
   myUid,
   onAccept,
   onDecline,
-  onCancel,
+  onDelete,
 }: {
   challenge: Challenge;
   myUid: string | undefined;
   onAccept: () => void;
   onDecline: () => void;
-  onCancel: () => void;
+  onDelete: () => void;
 }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const isRecipient = challenge.toUid === myUid;
   const myProgress = isRecipient ? challenge.toProgress : challenge.fromProgress;
   const theirProgress = isRecipient ? challenge.fromProgress : challenge.toProgress;
   const theirName = isRecipient ? challenge.fromName : challenge.toName;
 
-  if (challenge.status === 'declined' || challenge.status === 'cancelled') return null;
+  // Deleting is destructive for the OTHER person too, so it always asks first
+  // -- matching the inline confirm-card idiom used on Home/MemberProfile
+  // rather than a native Alert.
+  const deleteControl = (
+    <Pressable
+      onPress={() => setConfirmingDelete(true)}
+      hitSlop={8}
+      className="w-6 h-6 rounded-full items-center justify-center"
+    >
+      <Trash2 size={12} color="#a3a3a3" />
+    </Pressable>
+  );
+
+  const confirmRow = (
+    <View className="border border-neutral-200 bg-white rounded-lg p-2.5" style={{ gap: 8 }}>
+      <Text className="text-[10px] font-sans text-neutral-600 leading-snug">
+        Delete this challenge for both of you? Verses you've started stay in your queue.
+      </Text>
+      <View className="flex-row gap-2">
+        <Pressable
+          onPress={() => setConfirmingDelete(false)}
+          className="flex-1 bg-white border border-neutral-300 py-2 rounded-lg items-center"
+        >
+          <Text className="text-neutral-600 text-[9px] font-bold uppercase tracking-wide">Keep</Text>
+        </Pressable>
+        <Pressable onPress={onDelete} className="flex-1 bg-red-600 py-2 rounded-lg items-center">
+          <Text className="text-white text-[9px] font-bold uppercase tracking-wide">Delete</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  if (challenge.status === 'declined' || challenge.status === 'cancelled') {
+    return (
+      <View className="mx-1 mb-2 border border-neutral-200 bg-neutral-50 rounded-xl p-3" style={{ gap: 8 }}>
+        <View className="flex-row items-center justify-between">
+          <View className="flex-1 pr-2">
+            <Text className="text-[10px] font-sans font-bold text-neutral-500">
+              {referenceLabel(challenge)} — {challenge.status === 'declined' ? 'declined' : 'cancelled'}
+            </Text>
+          </View>
+          {deleteControl}
+        </View>
+        {confirmingDelete && confirmRow}
+      </View>
+    );
+  }
 
   return (
     <View className="mx-1 mb-2 border border-amber-200 bg-amber-50 rounded-xl p-3" style={{ gap: 8 }}>
-      <View className="flex-row items-center gap-1.5">
-        <Text className="text-xs">🏆</Text>
-        <Text className="text-[10px] font-sans font-extrabold text-amber-800 uppercase tracking-wide">
-          {referenceLabel(challenge)}
-        </Text>
+      <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center gap-1.5 flex-1 pr-2">
+          <Text className="text-xs">🏆</Text>
+          <Text className="text-[10px] font-sans font-extrabold text-amber-800 uppercase tracking-wide">
+            {referenceLabel(challenge)}
+          </Text>
+        </View>
+        {deleteControl}
       </View>
+
+      {confirmingDelete && confirmRow}
 
       {challenge.status === 'pending' && isRecipient && (
         <View style={{ gap: 8 }}>
@@ -177,7 +242,9 @@ export function ChallengeCard({
       {challenge.status === 'pending' && !isRecipient && (
         <View style={{ gap: 8 }}>
           <Text className="text-[10px] text-amber-700 font-sans">Waiting for {challenge.toName} to accept…</Text>
-          <Pressable onPress={onCancel} className="self-start bg-white border border-neutral-300 px-3 py-1.5 rounded-lg">
+          {/* No confirm step here -- nothing has been accepted yet, so
+              cancelling an unanswered invitation costs the other side nothing. */}
+          <Pressable onPress={onDelete} className="self-start bg-white border border-neutral-300 px-3 py-1.5 rounded-lg">
             <Text className="text-neutral-600 text-[9px] font-bold uppercase tracking-wide">Cancel Challenge</Text>
           </Pressable>
         </View>
@@ -205,7 +272,7 @@ export function ChallengeCard({
           </View>
           {challenge.status === 'completed' && (
             <Text className="text-[9px] font-sans font-bold text-emerald-700 uppercase tracking-wide">
-              🎉 Challenge complete -- you both finished!
+              🎉 Challenge complete — you both finished!
             </Text>
           )}
         </View>

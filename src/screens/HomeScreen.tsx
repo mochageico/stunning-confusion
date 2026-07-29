@@ -258,7 +258,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                   Learning phase...
                 </Text>
                 <HelpTooltip
-                  text={`Verses currently in active study phase. Requires ${masteryTouches} successful touches, at least an hour apart each, to graduate to Spaced Repetition.`}
+                  text={`Verses you're actively learning. Each one needs ${masteryTouches} perfect recalls, at least an hour apart, before it graduates into spaced review.`}
                 />
                 {memoryQueue.some((item) => item.status === 'queued') && (
                   <Pressable
@@ -277,7 +277,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
             {showPullShieldConfirm && (
               <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-3" style={{ gap: 8 }}>
                 <Text className="text-[11px] font-sans font-bold text-indigo-900">
-                  🛡️ Review Shield is active -- pull new verses anyway?
+                  🛡️ Review Shield is on — pull new verses anyway?
                 </Text>
                 <Text className="text-[9px] font-sans text-indigo-800/80 leading-relaxed">
                   Today's review time ({estMinutes}m) already meets or exceeds your {maxReviewCap}m daily limit.
@@ -358,7 +358,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                               {touchesCount}/{masteryTouches}
                             </Text>
                             {isBankedAwaitingReview && (
-                              <HelpTooltip text="Fully touched, but retention comes first: this verse will lock in and move to spaced review automatically as soon as today's due reviews are finished." />
+                              <HelpTooltip text="This verse has all its touches. Retention comes first, so it moves into spaced review on its own as soon as today's due reviews are done." />
                             )}
                           </View>
                         );
@@ -379,7 +379,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 <Text className="text-xs font-sans font-extrabold uppercase tracking-wider text-neutral-400">
                   Due reviews...
                 </Text>
-                <HelpTooltip text="Spaced Repetition system reviews. Verses are scheduled in Daily, Weekly, and Monthly intervals based on your retention performance." />
+                <HelpTooltip text="Verses you've already learned, coming back around on schedule. Each one cycles daily for a while, then weekly, then monthly, before it's retained for good." />
                 <Pressable
                   onPress={() => setShowResetConfirm(true)}
                   className="ml-2 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded flex-row items-center gap-0.5"
@@ -398,8 +398,8 @@ export default function HomeScreen({ state }: { state: AppState }) {
                   Are you sure you want to reset reviews for today?
                 </Text>
                 <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
-                  This undoes any reviews you already completed today -- only verses you reviewed today go back to
-                  due. Nothing reviewed on an earlier day, in any phase, is touched.
+                  This undoes any reviews you already finished today — only verses you reviewed today go back to
+                  due. Nothing you reviewed on an earlier day is affected.
                 </Text>
                 <View className="flex-row gap-2 justify-end pt-1">
                   <Pressable

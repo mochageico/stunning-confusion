@@ -19,6 +19,7 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
     acceptFriendRequest,
     declineFriendRequest,
     cancelFriendRequest,
+    viewMemberProfileById,
   } = state;
 
   return (
@@ -42,11 +43,13 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
-        {/* Incoming Requests */}
+        {/* Incoming Requests. Names tap through to the sender's profile so you
+            can see who they are before deciding -- previously the only thing
+            on offer was a bare name and two buttons. */}
         {incomingFriendRequests.length > 0 && (
           <View className="gap-2">
             <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
-              FRIEND REQUESTS ({incomingFriendRequests.length})
+              INCOMING REQUESTS ({incomingFriendRequests.length})
             </Text>
             <View className="gap-2">
               {incomingFriendRequests.map((req) => (
@@ -54,7 +57,10 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                   key={req.id}
                   className="border border-neutral-200 rounded-xl p-3 bg-white flex-row items-center justify-between"
                 >
-                  <Text className="text-xs font-sans font-bold text-neutral-800 flex-1 pr-2">{req.fromName}</Text>
+                  <Pressable className="flex-1 pr-2" onPress={() => viewMemberProfileById(req.fromUid)}>
+                    <Text className="text-xs font-sans font-bold text-neutral-800">{req.fromName}</Text>
+                    <Text className="text-[9px] font-sans text-neutral-400">Wants to be friends — tap to view</Text>
+                  </Pressable>
                   <View className="flex-row gap-1.5">
                     <Pressable
                       onPress={() => acceptFriendRequest(req)}
@@ -69,6 +75,38 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                       <X size={13} color="#525252" />
                     </Pressable>
                   </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Outgoing Requests -- these existed in state all along but were only
+            ever visible as inline status on a search result, so a request sent
+            and then navigated away from became invisible: no way to see who
+            you were waiting on, and no way to cancel without re-finding them
+            by search. */}
+        {outgoingFriendRequests.length > 0 && (
+          <View className="gap-2">
+            <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+              SENT REQUESTS ({outgoingFriendRequests.length})
+            </Text>
+            <View className="gap-2">
+              {outgoingFriendRequests.map((req) => (
+                <View
+                  key={req.id}
+                  className="border border-neutral-200 rounded-xl p-3 bg-neutral-50 flex-row items-center justify-between"
+                >
+                  <Pressable className="flex-1 pr-2" onPress={() => viewMemberProfileById(req.toUid)}>
+                    <Text className="text-xs font-sans font-bold text-neutral-700">{req.toName}</Text>
+                    <Text className="text-[9px] font-sans text-neutral-400">Waiting for them to accept</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => cancelFriendRequest(req)}
+                    className="bg-white border border-neutral-300 px-2.5 py-1 rounded-lg"
+                  >
+                    <Text className="text-[9px] font-bold uppercase tracking-wider text-neutral-600">Cancel</Text>
+                  </Pressable>
                 </View>
               ))}
             </View>
@@ -120,10 +158,10 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                   key={person.uid}
                   className="border border-neutral-200 rounded-xl p-3 bg-white flex-row items-center justify-between"
                 >
-                  <View className="flex-1 pr-2">
+                  <Pressable className="flex-1 pr-2" onPress={() => viewMemberProfileById(person.uid)}>
                     <Text className="text-xs font-sans font-bold text-neutral-800">{person.displayName}</Text>
                     {!!person.email && <Text className="text-[9px] font-sans text-neutral-400">{person.email}</Text>}
-                  </View>
+                  </Pressable>
 
                   {isFriend ? (
                     <View className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">

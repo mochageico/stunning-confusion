@@ -1,5 +1,10 @@
 import { useCallback } from 'react';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
 import { auth, db } from '../firebase';
@@ -62,5 +67,26 @@ export function useEmailAuth() {
     }
   }, []);
 
-  return { signUp, signIn };
+  // Firebase sends and hosts the reset flow itself (email -> its own hosted
+  // "choose a new password" page), so there's no reset screen to build here.
+  //
+  // Deliberately reports success even when the address has no account:
+  // 'auth/user-not-found' leaking through would turn this box into an
+  // account-enumeration oracle for anyone who can open the sign-in screen.
+  // Firebase's own newer projects suppress that code for the same reason, so
+  // this just makes the behaviour consistent either way.
+  const resetPassword = useCallback(async (email: string): Promise<AuthResult> => {
+    const trimmed = email.trim();
+    if (!trimmed) return { ok: false, message: 'Enter your email address first.' };
+    try {
+      await sendPasswordResetEmail(auth, trimmed);
+      return { ok: true };
+    } catch (error) {
+      const code = (error as { code?: string })?.code || '';
+      if (code === 'auth/user-not-found') return { ok: true };
+      return { ok: false, message: friendlyAuthError(error) };
+    }
+  }, []);
+
+  return { signUp, signIn, resetPassword };
 }

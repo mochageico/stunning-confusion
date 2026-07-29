@@ -35,7 +35,7 @@ const MISS_POLICY_TIERS: {
     grace: 1,
     dailyRefresher: 7,
     weeklyRefresher: 4,
-    desc: "Today's default: 1 free miss, then a refresher stint before returning.",
+    desc: 'The default. One free miss, then a short refresher stint before the verse returns to its phase.',
   },
   {
     key: 'graceDiscretion',
@@ -43,7 +43,7 @@ const MISS_POLICY_TIERS: {
     grace: 1,
     dailyRefresher: 7,
     weeklyRefresher: 4,
-    desc: "Never auto-escalates -- missed time just doesn't count, and you pick up exactly where you left off.",
+    desc: "Nothing ever escalates on its own — missed time simply doesn't count, and you pick up exactly where you left off.",
   },
 ];
 
@@ -322,7 +322,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                       key={`learn-${day}`}
                       onPress={() => {
                         if (!isActive && isSabbath) {
-                          triggerToast(`${day} is your Sabbath day -- change that first to use it for learning. 🕊️`);
+                          triggerToast(`${day} is your Sabbath day — change that first to use it for learning. 🕊️`);
                           return;
                         }
                         toggleDay(day, learningDays, setLearningDays);
@@ -402,7 +402,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               <View style={{ gap: 2 }}>
                 <Text className="text-xs font-serif font-bold text-[#1A1A1A]">Day Start Time</Text>
                 <Text className="text-[9px] text-neutral-400 font-sans leading-tight">
-                  When your "today" begins -- push this later if you're often still up past midnight.
+                  When your "today" begins — push this later if you're often still up past midnight.
                 </Text>
               </View>
               <ChipRow
@@ -478,7 +478,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             <View className="flex-row justify-between items-center">
               <View className="flex-row items-center">
                 <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Touches to Graduate a Verse</Text>
-                <HelpTooltip text="How many times you have to successfully recall a verse -- at least an hour apart each time -- before it can graduate out of Learning and into spaced review. Spacing the touches out like this stops cramming from counting as real mastery. Once a verse hits this count, it's 'banked' and will graduate automatically as soon as your other due reviews for the day are cleared." />
+                <HelpTooltip text="How many perfect recalls — at least an hour apart each — a verse needs before it leaves Learning for spaced review. The hour gap is what keeps cramming from counting. Once a verse hits the count it's banked, and graduates as soon as the day's remaining reviews are cleared." />
               </View>
               <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
                 {masteryTouches} touches
@@ -496,7 +496,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             <View className="flex-row justify-between items-center">
               <View className="flex-row items-center">
                 <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Reviews Needed Per Day to Advance</Text>
-                <HelpTooltip text="Once a verse is in spaced review (Daily/Weekly/Monthly), this is how many times you must successfully review it on the SAME day before that day counts toward its streak. Raising this means more repetition per sitting -- it doesn't add extra days between reviews." />
+                <HelpTooltip text="Once a verse is in spaced review, this is how many times you have to get it right on the same day for that day to count toward its streak. Raising it means more reps per sitting — it doesn't add days between reviews." />
               </View>
               <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
                 {reviewsRequired} reps
@@ -652,7 +652,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           </View>
 
           <Text className="text-[10px] text-neutral-500 font-sans -mt-2 leading-relaxed">
-            What happens when you miss review cycles while away -- vacations, busy weeks, etc.
+            What happens when reviews come due and you're not around — vacations, busy weeks, sick days.
           </Text>
 
           <View className="flex-row gap-2">

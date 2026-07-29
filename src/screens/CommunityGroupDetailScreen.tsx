@@ -54,6 +54,8 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     createGroupChallenge,
     joinGroupChallenge,
     endGroupChallenge,
+    deleteGroupChallenge,
+    leaveGroupChallenge,
     openChallengeLeaderboardId,
     openChallengeLeaderboard,
     loadingChallengeLeaderboard,
@@ -65,6 +67,8 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
   } = state;
 
   const [showChallengeSheet, setShowChallengeSheet] = useState(false);
+  // Which challenge's inline delete-confirm card is open (only one at a time).
+  const [confirmDeleteChallengeId, setConfirmDeleteChallengeId] = useState<string | null>(null);
 
   const isLeaderOrAdmin = !!activeCircle && !!user && activeCircle.ownerId === user.uid;
 
@@ -448,7 +452,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             {activeCircleChallenges.length === 0 ? (
               <View className="p-6 border border-dashed border-neutral-200 rounded-2xl items-center">
                 <Text className="text-center text-xs text-neutral-400 font-sans">
-                  No challenges yet. Start one -- any member can!
+                  No challenges yet. Any member can start one.
                 </Text>
               </View>
             ) : (
@@ -506,16 +510,79 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                       )
                     )}
 
-                    {isCreator && challenge.status === 'active' && (
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          endGroupChallenge(challenge, 'completed');
-                        }}
-                        className="self-start"
-                      >
-                        <Text className="text-[9px] font-sans font-bold text-neutral-400 uppercase tracking-wide">End Challenge</Text>
-                      </Pressable>
+                    {/* Three distinct actions, deliberately not collapsed
+                        into one: "End" freezes the race but keeps the card
+                        and its leaderboard; "Delete" removes it for the whole
+                        circle (creator only); "Leave" drops just me out of a
+                        race that stays alive for everyone else. */}
+                    <View className="flex-row items-center justify-between">
+                      {isCreator && challenge.status === 'active' ? (
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            endGroupChallenge(challenge, 'completed');
+                          }}
+                        >
+                          <Text className="text-[9px] font-sans font-bold text-neutral-400 uppercase tracking-wide">End Challenge</Text>
+                        </Pressable>
+                      ) : (
+                        <View />
+                      )}
+
+                      <View className="flex-row items-center gap-3">
+                        {membership && (
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              leaveGroupChallenge(challenge);
+                            }}
+                          >
+                            <Text className="text-[9px] font-sans font-bold text-neutral-400 uppercase tracking-wide">Leave</Text>
+                          </Pressable>
+                        )}
+                        {isCreator && (
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              setConfirmDeleteChallengeId(challenge.id);
+                            }}
+                            hitSlop={8}
+                            className="w-6 h-6 items-center justify-center"
+                          >
+                            <Trash2 size={12} color="#a3a3a3" />
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+
+                    {confirmDeleteChallengeId === challenge.id && (
+                      <View className="border border-neutral-200 bg-neutral-50 rounded-lg p-2.5" style={{ gap: 8 }}>
+                        <Text className="text-[10px] font-sans text-neutral-600 leading-snug">
+                          Delete "{challenge.title}" for the whole circle? Everyone keeps the verses already in their
+                          queue — only the race and its leaderboard go away.
+                        </Text>
+                        <View className="flex-row gap-2">
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              setConfirmDeleteChallengeId(null);
+                            }}
+                            className="flex-1 bg-white border border-neutral-300 py-2 rounded-lg items-center"
+                          >
+                            <Text className="text-neutral-600 text-[9px] font-bold uppercase tracking-wide">Keep</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              setConfirmDeleteChallengeId(null);
+                              deleteGroupChallenge(challenge);
+                            }}
+                            className="flex-1 bg-red-600 py-2 rounded-lg items-center"
+                          >
+                            <Text className="text-white text-[9px] font-bold uppercase tracking-wide">Delete</Text>
+                          </Pressable>
+                        </View>
+                      </View>
                     )}
                   </Pressable>
                 );

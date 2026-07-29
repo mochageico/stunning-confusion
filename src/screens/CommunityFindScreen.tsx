@@ -62,7 +62,7 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
             <Text className="text-xs font-sans font-extrabold text-neutral-800 uppercase tracking-wider">
               Join Private Circle via Invite Code
             </Text>
-            <HelpTooltip text="Enter a unique code sent by your study lead or pastor to join a private scripture pacing group." />
+            <HelpTooltip text="Private circles don't show up in the directory. If someone shared a code with you, enter it here to join theirs." />
           </View>
 
           <View className="flex-row gap-2">

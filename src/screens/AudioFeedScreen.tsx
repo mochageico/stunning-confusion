@@ -5,7 +5,7 @@ import { AppState } from '../state/useAppState';
 import { FadeInView, ProgressBar } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
-import { getBookByName } from '../data';
+import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
 
 // Helper to assign background/text colors to known users (mirrors original web app).
@@ -40,6 +40,8 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     setFeedChapterFilter,
     activeFeedFilter,
     setActiveFeedFilter,
+    feedTranslationFilter,
+    setFeedTranslationFilter,
     setPlayingRecordingId,
     playingRecordingId,
     playingRecProgress,
@@ -53,6 +55,27 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     formatTime,
     triggerToast,
   } = state;
+
+  // Translation options are derived from what the feed ACTUALLY contains
+  // rather than hardcoded from BIBLE_TRANSLATIONS: offering "KJV" when nobody
+  // has recorded a KJV reading is dead UI, and the guest-preview mock feed
+  // carries a few translation codes (NIV/NKJV/NASB) that have no imported
+  // text and so aren't in BIBLE_TRANSLATIONS at all. Known translations sort
+  // first, in canonical order; anything else follows alphabetically.
+  const presentTranslations = Array.from(
+    new Set(feedRecordings.map((r) => (r.translation || '').trim()).filter(Boolean))
+  ).sort((a, b) => {
+    const ia = BIBLE_TRANSLATIONS.findIndex((t) => t.id.toLowerCase() === a.toLowerCase());
+    const ib = BIBLE_TRANSLATIONS.findIndex((t) => t.id.toLowerCase() === b.toLowerCase());
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.localeCompare(b);
+  });
+  const translationOptions = [
+    { id: '', label: 'All' },
+    ...presentTranslations.map((t) => ({ id: t, label: t })),
+  ];
 
   const selectedBookMeta = feedBookFilter ? getBookByName(feedBookFilter) : undefined;
   const chapterOptions = selectedBookMeta
@@ -92,7 +115,12 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     filtered = filtered.filter((r) => r.chapter.toString() === feedChapterFilter);
   }
 
-  // 4. Filter by search query
+  // 4. Filter by Translation selection
+  if (feedTranslationFilter) {
+    filtered = filtered.filter((r) => (r.translation || '').toLowerCase() === feedTranslationFilter.toLowerCase());
+  }
+
+  // 5. Filter by search query
   if (audioSearchQuery.trim()) {
     const q = audioSearchQuery.toLowerCase();
     filtered = filtered.filter(
@@ -157,23 +185,46 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
           />
         </View>
 
-        {/* Chapter Filter — only meaningful once a specific book is chosen */}
-        {selectedBookMeta && (
-          <View className="gap-1">
-            <Text className="text-[8px] font-bold uppercase text-neutral-400 font-sans tracking-wider">Chapter</Text>
-            <View style={{ width: 140 }}>
-              <Dropdown
-                options={chapterOptions}
-                value={feedChapterFilter}
-                title="Select a Chapter"
-                onChange={(id) => {
-                  setFeedChapterFilter(id);
-                  setPlayingRecordingId(null);
-                }}
-              />
+        {/* Chapter + Translation filters. Chapter is only meaningful once a
+            specific book is chosen; Translation only once the feed actually
+            holds more than one. */}
+        <View className="flex-row gap-3">
+          {selectedBookMeta && (
+            <View className="gap-1">
+              <Text className="text-[8px] font-bold uppercase text-neutral-400 font-sans tracking-wider">Chapter</Text>
+              <View style={{ width: 140 }}>
+                <Dropdown
+                  options={chapterOptions}
+                  value={feedChapterFilter}
+                  title="Select a Chapter"
+                  onChange={(id) => {
+                    setFeedChapterFilter(id);
+                    setPlayingRecordingId(null);
+                  }}
+                />
+              </View>
             </View>
-          </View>
-        )}
+          )}
+
+          {presentTranslations.length > 1 && (
+            <View className="gap-1">
+              <Text className="text-[8px] font-bold uppercase text-neutral-400 font-sans tracking-wider">
+                Translation
+              </Text>
+              <View style={{ width: 140 }}>
+                <Dropdown
+                  options={translationOptions}
+                  value={feedTranslationFilter}
+                  title="Select a Translation"
+                  onChange={(id) => {
+                    setFeedTranslationFilter(id);
+                    setPlayingRecordingId(null);
+                  }}
+                />
+              </View>
+            </View>
+          )}
+        </View>
 
         {/* Filter Tabs */}
         <View className="flex-row gap-1 bg-[#F3F2F1] p-1 border border-[#E5E5E5] rounded-xl">
@@ -217,7 +268,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
               <Volume2 size={32} color="#d4d4d4" />
               <Text className="font-sans font-bold text-xs text-neutral-400">No recordings matched your criteria</Text>
               <Text className="text-[10px] font-sans text-neutral-400 text-center">
-                Be the first to share! Record a recitation under the Record tab and choose Circle or Public visibility.
+                Be the first to share one. Record a recitation from the Record tab and set its visibility to Circle or Public.
               </Text>
             </View>
           ) : (

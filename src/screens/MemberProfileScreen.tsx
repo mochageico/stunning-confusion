@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, Bell, MessageCircle, Trophy, UserMinus, X } from 'lucide-react-native';
+import { ArrowLeft, Bell, MessageCircle, Trophy, UserMinus, UserPlus, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
@@ -19,6 +19,12 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
     saveFriendMemoryPlan,
     triggerToast,
     sendChallenge,
+    incomingFriendRequests,
+    outgoingFriendRequests,
+    sendFriendRequest,
+    acceptFriendRequest,
+    declineFriendRequest,
+    cancelFriendRequest,
   } = state;
 
   const [showNudgeCompose, setShowNudgeCompose] = useState(false);
@@ -31,6 +37,11 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
   const isSelf = selectedUserProfile.uid === user?.uid;
   const isFriend = friends.some((f) => f.uid === selectedUserProfile.uid);
   const canNudge = canSendAccountabilityNudge(selectedUserProfile.uid);
+  // Friending was previously only reachable from the Find Friends search
+  // screen, which meant arriving at someone's profile any other way (circle
+  // member list, activity feed, a DM) left no way to add them.
+  const incomingFromThem = incomingFriendRequests.find((r) => r.fromUid === selectedUserProfile.uid);
+  const outgoingToThem = outgoingFriendRequests.find((r) => r.toUid === selectedUserProfile.uid);
 
   // Friend-visible sharing: a memory plan and/or memory queue this member chose
   // to show friends (Settings → Profile Sharing). Only surfaced when the viewer
@@ -112,7 +123,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
               <Pressable
                 onPress={() => {
                   if (!canNudge) {
-                    triggerToast('Accountability notification already sent for today -- you can send another tomorrow!');
+                    triggerToast('You already nudged this friend today — you can send another tomorrow.');
                     return;
                   }
                   setNudgeMessage('');
@@ -133,6 +144,51 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
               >
                 <Trophy size={12} color="#b45309" />
                 <Text className="font-sans font-bold text-[10px] uppercase tracking-wide text-amber-800">Challenge</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {/* Friend state for a non-friend: send / cancel / accept, mirroring the
+            same four states FindFriendsScreen's search results already show. */}
+        {!isSelf && !isFriend && (
+          <View>
+            {incomingFromThem ? (
+              <View className="border border-emerald-200 bg-emerald-50 rounded-xl p-3" style={{ gap: 8 }}>
+                <Text className="text-[10px] font-sans text-emerald-800">
+                  {selectedUserProfile.name} sent you a friend request.
+                </Text>
+                <View className="flex-row gap-2">
+                  <Pressable
+                    onPress={() => acceptFriendRequest(incomingFromThem)}
+                    className="flex-1 bg-emerald-600 py-2 rounded-lg items-center"
+                  >
+                    <Text className="text-white text-[9px] font-bold uppercase tracking-wide">Accept</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => declineFriendRequest(incomingFromThem)}
+                    className="flex-1 bg-white border border-neutral-300 py-2 rounded-lg items-center"
+                  >
+                    <Text className="text-neutral-600 text-[9px] font-bold uppercase tracking-wide">Decline</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : outgoingToThem ? (
+              <Pressable
+                onPress={() => cancelFriendRequest(outgoingToThem)}
+                className="flex-row items-center justify-center gap-1.5 py-2 rounded-xl bg-neutral-100 border border-neutral-200"
+              >
+                <Text className="text-neutral-600 font-sans font-bold text-[10px] uppercase tracking-wide">
+                  Request Sent — Cancel
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => sendFriendRequest(selectedUserProfile.uid, selectedUserProfile.name)}
+                className="flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl bg-indigo-600"
+              >
+                <UserPlus size={12} color="#FFFFFF" />
+                <Text className="text-white font-sans font-bold text-[10px] uppercase tracking-wide">Add Friend</Text>
               </Pressable>
             )}
           </View>

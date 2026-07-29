@@ -59,7 +59,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
               <Text className="text-lg font-serif font-bold text-[#1A1A1A] leading-tight">
                 {user?.displayName || 'Friend'}
               </Text>
-              <Text className="text-xs font-sans text-neutral-400 mt-0.5">Memory Level: Cloud Sync Active</Text>
+              <Text className="text-xs font-sans text-neutral-400 mt-0.5">Progress synced to your account</Text>
             </View>
           </View>
 
@@ -117,7 +117,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
               <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
                 PAST 15 DAYS ACTIVITY
               </Text>
-              <HelpTooltip text="Your consecutive study streak visualizer. Dark green indicates higher repetition volumes." />
+              <HelpTooltip text="One square per day. A square fills in on days you banked a mastery touch on a verse you're learning — darker green means more touches that day. Spaced reviews aren't counted here." />
             </View>
             <Pressable onPress={() => navigateTo('fullHistory')}>
               <Text className="text-[9px] font-sans font-bold underline text-neutral-500">View Full History</Text>
@@ -192,7 +192,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
               <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
                 FRIENDS ({friends.length})
               </Text>
-              <HelpTooltip text="Real, mutual friend connections — these persist even if you're no longer in a circle together." />
+              <HelpTooltip text="People who accepted your friend request, or whose request you accepted. Friends stay friends even if you leave a circle together." />
             </View>
             <Pressable
               onPress={() => navigateTo('findFriends')}
@@ -240,7 +240,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
               <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
                 COMMUNITIES ({myCircles.length})
               </Text>
-              <HelpTooltip text="Your active study groups and church pacing networks. Click any community to jump into its dashboard." />
+              <HelpTooltip text="The scripture circles you belong to. Tap one to open it." />
             </View>
           </View>
           <View className="gap-1.5">
@@ -275,7 +275,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
             <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
               RECORDED CHAPTERS ({userRecordings.length})
             </Text>
-            <HelpTooltip text="Chapters recited and recorded. Click any recording to inspect timestamps or verify sync alignments." />
+            <HelpTooltip text="Recitations you've recorded or imported. Tap one to play it back or adjust where each verse starts." />
           </View>
 
           <View style={{ maxHeight: 190 }}>
