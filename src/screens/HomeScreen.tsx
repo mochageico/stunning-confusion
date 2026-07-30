@@ -612,7 +612,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
         <View style={{ gap: 12 }}>
           <View className="flex-row" style={{ gap: 12 }}>
             <FeatureTile onPress={() => navigateTo('audioFeed')} Icon={Volume2} label="Find Audio Recordings" />
-            <FeatureTile onPress={() => navigateTo('savedPlans')} Icon={FolderOpen} label="My Memory Plans" />
+            <FeatureTile onPress={() => navigateTo('memoryDesk')} Icon={FolderOpen} label="Memory Desk" />
           </View>
           <View className="flex-row" style={{ gap: 12 }}>
             <FeatureTile onPress={() => navigateTo('books')} Icon={BookMarked} label="Verse Search / Bible" primary />

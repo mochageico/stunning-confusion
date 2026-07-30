@@ -29,6 +29,7 @@ import AudioFeedScreen from './src/screens/AudioFeedScreen';
 import PlanDesignerScreen from './src/screens/PlanDesignerScreen';
 import ActivePlanScreen from './src/screens/ActivePlanScreen';
 import SavedPlansScreen from './src/screens/SavedPlansScreen';
+import MemoryDeskScreen from './src/screens/MemoryDeskScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -133,6 +134,8 @@ function Screens({ state }: { state: AppState }) {
         return <ActivePlanScreen state={state} />;
       case 'savedPlans':
         return <SavedPlansScreen state={state} />;
+      case 'memoryDesk':
+        return <MemoryDeskScreen state={state} />;
       case 'memoryCalendar':
         return <MemoryCalendarScreen state={state} />;
       case 'referenceDrill':

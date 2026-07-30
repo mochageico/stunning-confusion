@@ -5,6 +5,7 @@ import { AppText, CollapsibleCard, FontScaleOverrideProvider } from '../componen
 import { MissPolicySection, type MissPolicy } from '../components/MissPolicySection';
 import PlanDesignerScreen from './PlanDesignerScreen';
 import HomeScreen from './HomeScreen';
+import MemoryDeskScreen from './MemoryDeskScreen';
 import type { AppState } from '../state/useAppState';
 
 // ============================================================================
@@ -60,6 +61,11 @@ export default function DevLayoutLab() {
               <SpecimenLabel text="CollapsibleCard — open as many as you like" />
               <FontScaleOverrideProvider scale={scale}>
                 <CollapseSpecimen scale={scale} />
+              </FontScaleOverrideProvider>
+
+              <SpecimenLabel text="Memory Desk — whole screen" />
+              <FontScaleOverrideProvider scale={scale}>
+                <LiveMemoryDesk />
               </FontScaleOverrideProvider>
 
               <SpecimenLabel text="Home — whole screen" />
@@ -244,6 +250,24 @@ function PhoneFrame({ children }: { children: React.ReactNode }) {
     >
       {children}
     </View>
+  );
+}
+
+/** The Memory Desk at true device width, driven by the Home mock's queue. */
+function LiveMemoryDesk() {
+  const mock = useMockHomeState();
+  const deskState = {
+    ...mock,
+    handleBack: () => {},
+    savedPlans: [
+      { id: 'p1', name: 'The Daily Drip', isActive: true },
+      { id: 'p2', name: 'Weekend Warrior', isActive: false },
+    ],
+  };
+  return (
+    <PhoneFrame>
+      <MemoryDeskScreen state={deskState as unknown as AppState} />
+    </PhoneFrame>
   );
 }
 

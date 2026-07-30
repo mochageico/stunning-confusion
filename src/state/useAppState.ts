@@ -98,6 +98,7 @@ export type ScreenName =
   | 'planDesigner'
   | 'activePlan'
   | 'savedPlans'
+  | 'memoryDesk'
   | 'memoryCalendar'
   | 'referenceDrill'
   | 'memberProfile'
@@ -124,6 +125,7 @@ const HOME_TAB_SCREENS: ScreenName[] = [
   'planDesigner',
   'activePlan',
   'savedPlans',
+  'memoryDesk',
   'memoryCalendar',
   'referenceDrill',
 ];

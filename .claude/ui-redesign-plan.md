@@ -174,12 +174,70 @@ site (`as unknown as AppState`).
   dropdown beside "# of verses".
 
 
+## Memory Desk — DONE (the hub), with follow-ups
+
+`src/screens/MemoryDeskScreen.tsx` is a menu, not an editor: five rows, each
+showing current state, each opening a full-width screen. Replaces the
+"My Memory Plans" tile on Home. Rows: Memory Queue (`activePlan`), Plan &
+Pacing (`planDesigner`), Memory Calendar (`memoryCalendar`), Saved Plans
+(`savedPlans`), History (`fullHistory`).
+
+Measured: rows 46px at 1.0× and the whole screen **fits one viewport**; 82px at
+1.3× and 93px at 1.5×, where label and detail stack to a column. Zero leaks and
+zero horizontal overflow at all three scales.
+
+Routing notes: `memoryDesk` was added to `ScreenName` and `HOME_TAB_SCREENS`
+plus the home-tab switch in `App.tsx`. `fullHistory` needed no change — it is
+handled *before* the tab checks in `Screens()`, so it is already tab-independent
+and works from both the Desk and Profile.
+
+Community study plans deliberately stay in the Community tab — group-owned
+content on a different lifecycle.
+
 ## Deferred — needs design, do not build
-**The "memory hub" restructure.** The user wants *Edit Memory Verse Queue* folded
-into the *My Memory Plans* screen, renamed to something like "Memory Hub". They
-explicitly said this "could use some more thought". It is an information
-architecture change, not layout. Leave the Edit Queue button where it is until
-this is designed and agreed. Bring sketches, don't improvise.
+
+### 1. Reconcile the rhythm commit paths  (NEXT, and it touches behaviour)
+
+`ActivePlanScreen` and `PlanDesignerScreen` both edit the same live state
+(`learningDays`, `newVersesPace`, `maxReviewCap`) but commit it differently:
+
+- `handleSavePlan` (Plan Designer, `useAppState.ts:3184`) branches on
+  `editingPlanId` and writes the whole plan including its name.
+- `saveActivePlanRhythm` (`useAppState.ts:3337`) targets
+  `editingPlanId || active plan || first plan` and writes only rhythm fields.
+
+**This is not simple duplication** — it is a working-copy vs saved-copy model,
+and only the queue screen falls back to "just update my active plan". Deleting
+the queue's rhythm editor without changing `handleSavePlan`'s targeting would be
+a functional regression: "change my active plan's pacing" would go through the
+no-`editingPlanId` branch, which appears to mint a NEW plan. That branch has not
+been traced to the end — do that first.
+
+User's stated direction (2026-07-30): they want to **remove plan modification
+from the queue page entirely**, and are likely to **redesign what the queue page
+does** more broadly. Explicit instruction alongside it: *keep things obvious for
+users*. So the replacement on the queue screen should be a read-only rhythm
+summary with a link to Plan & Pacing, not a silent removal.
+
+Unlike everything else in this document, this is a state/data-flow change. The
+layout lab cannot prove it correct.
+
+### 2. Queue page redesign
+Follows from the above. Not yet sketched.
+
+### 3. Tiny grey text pass
+The user observed that restructured screens still contain lots of small grey
+text that is hard to read. Confirmed — two separate problems:
+
+- **Size**: HomeScreen has 21 sub-11pt instances, PlanDesignerScreen has 29
+  (16 of them at 8px). These are most of the remaining `check:layout` warnings.
+  Fix by migrating remaining `<Text>` to `<AppText>`.
+- **Contrast** (the worse one). On white: `text-neutral-400` (#a3a3a3) is
+  **2.5:1**, `text-[#888]` is **3.5:1**, `text-neutral-500` (#737373) is
+  **4.7:1**. WCAG AA needs 4.5:1 for normal text, so the two most-used label
+  colours both fail. Proposal: `neutral-500` becomes the lightest permitted
+  colour for real text; `neutral-300`/`400` reserved for disabled states and
+  non-text decoration. Add a contrast rule to `check:layout` to hold the line.
 
 ## How to verify anything
 
