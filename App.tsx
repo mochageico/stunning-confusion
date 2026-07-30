@@ -35,6 +35,12 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import AuthGateScreen from './src/screens/AuthGateScreen';
+import DevLayoutLab from './src/screens/DevLayoutLab';
+
+// Set to true to mount the layout lab instead of the app -- side-by-side
+// specimens at every supported font scale, no sign-in required. Must be false
+// in anything that ships.
+const DEV_LAYOUT_LAB = false;
 import CommunityGroupDetailScreen from './src/screens/CommunityGroupDetailScreen';
 import StudyPlanDetailScreen from './src/screens/StudyPlanDetailScreen';
 import CommunityHomeScreen from './src/screens/CommunityHomeScreen';
@@ -689,7 +695,13 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AppShell />
+        {DEV_LAYOUT_LAB ? (
+          <SafeAreaView style={{ flex: 1 }}>
+            <DevLayoutLab />
+          </SafeAreaView>
+        ) : (
+          <AppShell />
+        )}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

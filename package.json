@@ -47,7 +47,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "check:recitation": "node scripts/run-recitation-check.cjs"
+    "check:recitation": "node scripts/run-recitation-check.cjs",
+    "check:layout": "node scripts/check-layout.cjs"
   },
   "private": true
 }

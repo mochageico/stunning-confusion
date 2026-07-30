@@ -15,6 +15,8 @@ import {
   View,
 } from 'react-native';
 
+import { AppText, useScaledSpace } from './design';
+
 // ============================================================
 // useKeyboardHeight — manual native keyboard-height tracking, used instead
 // of KeyboardAvoidingView's automatic "measure my own frame" approach.
@@ -181,16 +183,25 @@ export function StepperRow({
   const percent = max === min ? 0 : ((Math.max(min, Math.min(max, value)) - min) / (max - min)) * 100;
   const atMin = value <= min;
   const atMax = value >= max;
+  // minHeight, not height: the -/+ glyphs are text, so the row has to be able
+  // to grow when the OS font scale does. hitSlop keeps the tap target
+  // comfortable without inflating the visual button.
+  const space = useScaledSpace();
+  const button = space(28);
   return (
-    <View className="flex-row items-center gap-2.5" style={{ height: 32 }}>
+    <View className="flex-row items-center" style={{ minHeight: space(32), gap: space(10) }}>
       <Pressable
         onPress={() => setClamped(snapped - step)}
         disabled={atMin}
-        className={`w-7 h-7 rounded-lg border items-center justify-center ${
+        hitSlop={8}
+        className={`rounded-lg border items-center justify-center ${
           atMin ? 'bg-neutral-50 border-neutral-200' : 'bg-white border-neutral-400'
         }`}
+        style={{ width: button, height: button }}
       >
-        <Text className={`font-black text-sm ${atMin ? 'text-neutral-300' : 'text-[#1A1A1A]'}`}>−</Text>
+        <AppText variant="label" className={`font-black ${atMin ? 'text-neutral-300' : 'text-[#1A1A1A]'}`}>
+          −
+        </AppText>
       </Pressable>
       <View className="flex-1 bg-neutral-200 h-1.5 rounded-full overflow-hidden">
         <View className="bg-[#1A1A1A] h-full rounded-full" style={{ width: `${percent}%` }} />
@@ -198,11 +209,15 @@ export function StepperRow({
       <Pressable
         onPress={() => setClamped(snapped + step)}
         disabled={atMax}
-        className={`w-7 h-7 rounded-lg border items-center justify-center ${
+        hitSlop={8}
+        className={`rounded-lg border items-center justify-center ${
           atMax ? 'bg-neutral-50 border-neutral-200' : 'bg-white border-neutral-400'
         }`}
+        style={{ width: button, height: button }}
       >
-        <Text className={`font-black text-sm ${atMax ? 'text-neutral-300' : 'text-[#1A1A1A]'}`}>+</Text>
+        <AppText variant="label" className={`font-black ${atMax ? 'text-neutral-300' : 'text-[#1A1A1A]'}`}>
+          +
+        </AppText>
       </Pressable>
     </View>
   );

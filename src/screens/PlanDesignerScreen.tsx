@@ -3,7 +3,28 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Check, TrendingUp } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { ChipRow, FadeInView, HelpTooltip, PulseView, StepperRow } from '../components/ui';
+import { ChipRow, FadeInView, HelpTooltip, StepperRow } from '../components/ui';
+import { MissPolicySection } from '../components/MissPolicySection';
+import {
+  AppText,
+  CollapsibleCard,
+  MIN_TOUCH,
+  OptionCards,
+  useFontScale,
+  useScaledSpace,
+  type OptionCardItem,
+} from '../components/design';
+
+type PresetKey = 'drip' | 'warrior' | 'custom';
+
+// Was three `flex-1` cards at a fixed height: 100 -- roughly 105pt each on a
+// 375pt screen, so "Weekend Warrior" at 11px already wrapped tight and had
+// nowhere to grow. OptionCards handles the same choice responsively.
+const PRESET_OPTIONS: OptionCardItem<PresetKey>[] = [
+  { id: 'drip', title: 'The Daily Drip', desc: 'Steady pacing — 2 verses a day, Monday to Friday.' },
+  { id: 'warrior', title: 'Weekend Warrior', desc: 'Intense — 5 verses a day, Saturday and Sunday.' },
+  { id: 'custom', title: 'Custom', desc: 'Your own rhythm, set below.' },
+];
 
 const DAYS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
 
@@ -11,40 +32,6 @@ const RIGOR_TIERS: { key: 'light' | 'standard' | 'deep'; label: string; weeks: n
   { key: 'light', label: 'Light', weeks: 5, months: 4, years: 3 },
   { key: 'standard', label: 'Standard', weeks: 7, months: 6, years: 5 },
   { key: 'deep', label: 'Deep', weeks: 9, months: 8, years: 7 },
-];
-
-const MISS_POLICY_TIERS: {
-  key: 'lenient' | 'standard' | 'graceDiscretion';
-  label: string;
-  grace: number;
-  dailyRefresher: number;
-  weeklyRefresher: number;
-  desc: string;
-}[] = [
-  {
-    key: 'lenient',
-    label: 'Lenient',
-    grace: 2,
-    dailyRefresher: 4,
-    weeklyRefresher: 2,
-    desc: 'More free misses before anything changes, and shorter refreshers when it does.',
-  },
-  {
-    key: 'standard',
-    label: 'Standard',
-    grace: 1,
-    dailyRefresher: 7,
-    weeklyRefresher: 4,
-    desc: 'The default. One free miss, then a short refresher stint before the verse returns to its phase.',
-  },
-  {
-    key: 'graceDiscretion',
-    label: 'Grace at Your Discretion',
-    grace: 1,
-    dailyRefresher: 7,
-    weeklyRefresher: 4,
-    desc: "Nothing ever escalates on its own — missed time simply doesn't count, and you pick up exactly where you left off.",
-  },
 ];
 
 const COGNITIVE_LOAD_TIERS: { key: 'low' | 'medium' | 'high'; label: string }[] = [
@@ -109,13 +96,21 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     triggerToast(`Retention rigor set to ${cfg.label} (${cfg.weeks}-${cfg.months}-${cfg.years})! 🎯`);
   };
 
-  const applyMissPolicyPreset = (tier: 'lenient' | 'standard' | 'graceDiscretion') => {
-    const cfg = MISS_POLICY_TIERS.find((t) => t.key === tier)!;
-    setMissPolicy(tier);
-    setGraceCount(cfg.grace);
-    setRefresherDailyDays(cfg.dailyRefresher);
-    setRefresherWeeklyWeeks(cfg.weeklyRefresher);
-    triggerToast(`Missed-review handling set to ${cfg.label}! 🎯`);
+  const applyPreset = (id: PresetKey) => {
+    setPreset(id);
+    if (id === 'drip') {
+      setLearningDays(['M', 'T', 'W', 'Th', 'F']);
+      setNewVersesPace(2);
+      setMaxReviewCap(10);
+      triggerToast("Loaded 'The Daily Drip' preset! \u{1F4A7}");
+    } else if (id === 'warrior') {
+      setLearningDays(['S', 'Su']);
+      setNewVersesPace(5);
+      setMaxReviewCap(20);
+      triggerToast("Loaded 'Weekend Warrior' preset! ⚔️");
+    } else {
+      triggerToast('Switched to Custom configuration.');
+    }
   };
 
   const totalRigorDays = dailyPhaseWeeks * 7 + weeklyPhaseMonths * 30 + monthlyPhaseYears * 365;
@@ -138,9 +133,14 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
   // saved value regardless of which mode is showing.
   const [isAdvanced, setIsAdvanced] = useState(false);
 
+  const space = useScaledSpace();
+  const iconSize = Math.round(14 * useFontScale());
+
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
+      {/* pb-4 rather than pb-12: the Save action now lives in the pinned footer
+          below, so the scroll content no longer needs to clear it. */}
+      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-4" contentContainerStyle={{ gap: 16 }}>
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
           {state.onboardingStepInProgress === null && (
@@ -198,112 +198,16 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           />
         </View>
 
-        {/* Quick Presets Section */}
+        {/* Quick Presets */}
         <View style={{ gap: 8 }}>
-          <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Quick Presets</Text>
-          <View className="flex-row gap-2">
-            <Pressable
-              onPress={() => {
-                setPreset('drip');
-                setLearningDays(['M', 'T', 'W', 'Th', 'F']);
-                setNewVersesPace(2);
-                setMaxReviewCap(10);
-                triggerToast("Loaded 'The Daily Drip' preset! \u{1F4A7}");
-              }}
-              className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
-                preset === 'drip' ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
-              }`}
-              style={{ height: 100 }}
-            >
-              <View>
-                <Text
-                  className={`text-[8px] font-sans font-bold uppercase tracking-wider ${
-                    preset === 'drip' ? 'text-neutral-300' : 'text-neutral-400'
-                  }`}
-                >
-                  Pacing
-                </Text>
-                <Text
-                  className={`text-[11px] font-serif font-black leading-tight mt-0.5 ${
-                    preset === 'drip' ? 'text-white' : 'text-[#1A1A1A]'
-                  }`}
-                >
-                  The Daily Drip
-                </Text>
-              </View>
-              <Text className={`text-[8px] font-sans leading-tight ${preset === 'drip' ? 'text-neutral-200' : 'text-neutral-500'}`}>
-                2 v/day • M-F
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                setPreset('warrior');
-                setLearningDays(['S', 'Su']);
-                setNewVersesPace(5);
-                setMaxReviewCap(20);
-                triggerToast("Loaded 'Weekend Warrior' preset! ⚔️");
-              }}
-              className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
-                preset === 'warrior' ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
-              }`}
-              style={{ height: 100 }}
-            >
-              <View>
-                <Text
-                  className={`text-[8px] font-sans font-bold uppercase tracking-wider ${
-                    preset === 'warrior' ? 'text-neutral-300' : 'text-neutral-400'
-                  }`}
-                >
-                  Intense
-                </Text>
-                <Text
-                  className={`text-[11px] font-serif font-black leading-tight mt-0.5 ${
-                    preset === 'warrior' ? 'text-white' : 'text-[#1A1A1A]'
-                  }`}
-                >
-                  Weekend Warrior
-                </Text>
-              </View>
-              <Text className={`text-[8px] font-sans leading-tight ${preset === 'warrior' ? 'text-neutral-200' : 'text-neutral-500'}`}>
-                5 v/day • S-Su
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                setPreset('custom');
-                triggerToast('Switched to Custom configuration.');
-              }}
-              className={`flex-1 rounded-xl p-2.5 justify-between ${
-                // No conditional shadow-* classes anywhere in this file: toggling
-                // iOS shadow props on 2+ views in one Fabric commit deadlocks the
-                // JS thread on real devices (bisected on-device, 2026-07-16).
-                preset === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6]' : 'border-2 border-[#E5E5E5] bg-white'
-              }`}
-              style={{ height: 100 }}
-            >
-              <View>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-[8px] font-sans font-bold uppercase tracking-wider text-neutral-400">Flex</Text>
-                  {preset === 'custom' && <View className="w-1.5 h-1.5 bg-amber-500 rounded-full" />}
-                </View>
-                <Text className="text-[11px] font-serif font-black leading-tight mt-0.5 text-[#1A1A1A]">Custom</Text>
-              </View>
-              <Text className="text-[8px] font-sans text-neutral-500 leading-tight">Your custom rhythm</Text>
-            </Pressable>
-          </View>
+          <AppText variant="micro" className="uppercase tracking-wider font-bold text-[#888] font-sans">
+            Quick Presets
+          </AppText>
+          <OptionCards options={PRESET_OPTIONS} value={preset as PresetKey} onChange={applyPreset} />
         </View>
 
         {/* Weekly Rhythm section */}
-        <View className="border-2 border-[#1A1A1A] rounded-xl p-3.5 bg-white shadow-sm" style={{ gap: 16 }}>
-          <View className="flex-row items-center justify-between border-b border-neutral-100 pb-2">
-            <Text className="text-xs font-sans font-extrabold uppercase tracking-widest text-[#1A1A1A]">Weekly Rhythm</Text>
-            <Text className="text-[8px] bg-neutral-100 text-[#1A1A1A] border border-neutral-300 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
-              {preset === 'drip' ? 'The Daily Drip' : preset === 'warrior' ? 'Weekend Warrior' : 'Custom'}
-            </Text>
-          </View>
-
+        <CollapsibleCard storageKey="planDesigner.weeklyRhythm" title="Weekly Rhythm" summary={`${learningDays.length}/7 days`}>
           <View style={{ gap: 16 }}>
             {/* Learning Days */}
             <View style={{ gap: 6 }}>
@@ -417,10 +321,10 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             </View>
 
           </View>
-        </View>
+        </CollapsibleCard>
 
         {/* Pacing & Limits */}
-        <View className="border-2 border-[#1A1A1A] rounded-xl p-3.5 bg-white shadow-sm" style={{ gap: 16 }}>
+        <CollapsibleCard storageKey="planDesigner.pacing" title="Pacing & Limits" summary={`${newVersesPace}/day · ${maxReviewCap} min`}>
           {/* New Verses Slider */}
           <View style={{ gap: 6 }}>
             <View className="flex-row justify-between items-center">
@@ -536,17 +440,11 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           </View>
           </>
           )}
-        </View>
+        </CollapsibleCard>
 
         {/* Retention Rigor -- advanced only */}
         {isAdvanced && (
-        <View className="border-2 border-[#1A1A1A] rounded-xl p-3.5 bg-white shadow-sm" style={{ gap: 16 }}>
-          <View className="flex-row items-center justify-between border-b border-neutral-100 pb-2">
-            <Text className="text-xs font-sans font-extrabold uppercase tracking-widest text-[#1A1A1A]">Retention Rigor</Text>
-            <Text className="text-[8px] bg-neutral-100 text-[#1A1A1A] border border-neutral-300 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
-              {dailyPhaseWeeks}-{weeklyPhaseMonths}-{monthlyPhaseYears}
-            </Text>
-          </View>
+        <CollapsibleCard storageKey="planDesigner.retentionRigor" title="Retention Rigor" summary={`${dailyPhaseWeeks}-${weeklyPhaseMonths}-${monthlyPhaseYears}`}>
 
           <Text className="text-[10px] text-neutral-500 font-sans -mt-2 leading-relaxed">
             How long a verse stays in Daily, then Weekly, then Monthly review before it's retained for good. Higher
@@ -641,159 +539,68 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           <Text className="text-[10px] text-neutral-500 font-sans pt-2 border-t border-[#F3F2F1] leading-relaxed">
             At this rigor, a verse is fully retained for good after about <Text className="font-bold text-[#1A1A1A]">{totalRigorLabel}</Text>.
           </Text>
-        </View>
+        </CollapsibleCard>
         )}
 
-        {/* Missed Review Handling -- advanced only */}
+        {/* Missed Review Handling -- advanced only.
+            Extracted into its own component so the dev layout lab can render
+            it at every supported font scale without a signed-in user. */}
         {isAdvanced && (
-        <View className="border-2 border-[#1A1A1A] rounded-xl p-3.5 bg-white shadow-sm" style={{ gap: 16 }}>
-          <View className="flex-row items-center justify-between border-b border-neutral-100 pb-2">
-            <Text className="text-xs font-sans font-extrabold uppercase tracking-widest text-[#1A1A1A]">Missed Review Handling</Text>
-          </View>
-
-          <Text className="text-[10px] text-neutral-500 font-sans -mt-2 leading-relaxed">
-            What happens when reviews come due and you're not around — vacations, busy weeks, sick days.
-          </Text>
-
-          <View className="flex-row gap-2">
-            {MISS_POLICY_TIERS.map((tier) => {
-              const isActive = missPolicy === tier.key;
-              return (
-                <Pressable
-                  key={tier.key}
-                  onPress={() => applyMissPolicyPreset(tier.key)}
-                  className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
-                    isActive ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
-                  }`}
-                  style={{ height: 92 }}
-                >
-                  <Text className={`text-[11px] font-serif font-black leading-tight ${isActive ? 'text-white' : 'text-[#1A1A1A]'}`}>
-                    {tier.label}
-                  </Text>
-                  <Text className={`text-[8px] font-sans leading-tight ${isActive ? 'text-neutral-200' : 'text-neutral-500'}`}>
-                    {tier.desc}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              onPress={() => setMissPolicy('custom')}
-              className={`flex-1 rounded-xl p-2.5 justify-between ${
-                missPolicy === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6]' : 'border-2 border-[#E5E5E5] bg-white'
-              }`}
-              style={{ height: 92 }}
-            >
-              <View className="flex-row justify-between items-center">
-                <Text className="text-[11px] font-serif font-black leading-tight text-[#1A1A1A]">Custom</Text>
-                {missPolicy === 'custom' && <View className="w-1.5 h-1.5 bg-amber-500 rounded-full" />}
-              </View>
-              <Text className="text-[8px] font-mono leading-tight text-neutral-500">Fine-tune</Text>
-            </Pressable>
-          </View>
-
-          {missPolicy === 'custom' && (
-            <View style={{ gap: 16 }} className="pt-2 border-t border-[#F3F2F1]">
-              {/* Free misses before escalating */}
-              <View style={{ gap: 6 }}>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Free Misses Before Escalating</Text>
-                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                    {graceCount}
-                  </Text>
-                </View>
-                <StepperRow min={0} max={5} value={graceCount} onChange={setGraceCount} />
-                <View className="flex-row justify-between">
-                  <Text className="text-[8px] text-neutral-400 font-mono">0 (none)</Text>
-                  <Text className="text-[8px] text-neutral-400 font-mono">5</Text>
-                </View>
-              </View>
-
-              {/* Weekly -> Daily refresher length */}
-              <View style={{ gap: 6 }}>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Weekly -&gt; Daily Refresher</Text>
-                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                    {refresherDailyDays} days
-                  </Text>
-                </View>
-                <StepperRow min={2} max={21} value={refresherDailyDays} onChange={setRefresherDailyDays} />
-                <View className="flex-row justify-between">
-                  <Text className="text-[8px] text-neutral-400 font-mono">2 days</Text>
-                  <Text className="text-[8px] text-neutral-400 font-mono">21 days</Text>
-                </View>
-              </View>
-
-              {/* Monthly -> Weekly refresher length */}
-              <View style={{ gap: 6 }}>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Monthly -&gt; Weekly Refresher</Text>
-                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                    {refresherWeeklyWeeks} weeks
-                  </Text>
-                </View>
-                <StepperRow min={1} max={8} value={refresherWeeklyWeeks} onChange={setRefresherWeeklyWeeks} />
-                <View className="flex-row justify-between">
-                  <Text className="text-[8px] text-neutral-400 font-mono">1 week</Text>
-                  <Text className="text-[8px] text-neutral-400 font-mono">8 weeks</Text>
-                </View>
-              </View>
-            </View>
-          )}
-
-          <View className="flex-row items-center justify-between pt-2 border-t border-[#F3F2F1]">
-            <View style={{ gap: 2 }} className="flex-1 pr-2">
-              <Text className="text-[10px] font-sans font-bold text-neutral-800">When I miss reviews</Text>
-              <Text className="text-[9px] text-neutral-400 font-sans leading-tight">
-                {missPolicyAskEveryTime
-                  ? 'Ask me each time, with a chance to customize per verse.'
-                  : 'Apply the setting above automatically, no prompt.'}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => setMissPolicyAskEveryTime(!missPolicyAskEveryTime)}
-              className={`w-10 h-6 rounded-full justify-center px-0.5 ${missPolicyAskEveryTime ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
-            >
-              <View
-                className="w-5 h-5 rounded-full bg-white shadow"
-                style={{ transform: [{ translateX: missPolicyAskEveryTime ? 16 : 0 }] }}
-              />
-            </Pressable>
-          </View>
-        </View>
+          <MissPolicySection
+            missPolicy={missPolicy}
+            setMissPolicy={setMissPolicy}
+            missPolicyAskEveryTime={missPolicyAskEveryTime}
+            setMissPolicyAskEveryTime={setMissPolicyAskEveryTime}
+            graceCount={graceCount}
+            setGraceCount={setGraceCount}
+            refresherDailyDays={refresherDailyDays}
+            setRefresherDailyDays={setRefresherDailyDays}
+            refresherWeeklyWeeks={refresherWeeklyWeeks}
+            setRefresherWeeklyWeeks={setRefresherWeeklyWeeks}
+            onToast={triggerToast}
+          />
         )}
 
-        {/* Workload Forecast Sticky Bottom Card */}
-        <View className="bg-[#FBF9F6] border-2 border-[#1A1A1A] rounded-xl p-3.5 shadow-md" style={{ gap: 12 }}>
-          <View className="flex-row items-center justify-between pb-1.5 border-b border-neutral-200">
-            <View className="flex-row items-center gap-1.5">
-              <TrendingUp size={14} color="#1A1A1A" />
-              <Text className="text-[11px] font-sans font-bold uppercase tracking-wider text-[#1A1A1A]">Weekly Forecast</Text>
-            </View>
-            <Text className="text-[8px] font-mono text-neutral-400 font-bold uppercase">Projections</Text>
-          </View>
-
-          <View style={{ gap: 8 }}>
-            <View className="flex-row justify-between py-1 border-b border-dashed border-neutral-200">
-              <Text className="text-neutral-500 font-sans text-xs">Total New Verses This Week:</Text>
-              <Text className="font-mono font-bold text-[#1A1A1A] text-xs">{newVersesPace * learningDays.length}</Text>
-            </View>
-            <View className="flex-row justify-between py-1">
-              <Text className="text-neutral-500 font-sans text-xs">Estimated Max Daily Time:</Text>
-              <Text className="font-mono font-bold text-[#1A1A1A] text-xs">{maxReviewCap} mins</Text>
-            </View>
-          </View>
-
-          <PulseView>
-            <Pressable
-              onPress={() => handleSavePlan()}
-              className="w-full py-3 bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5 shadow-sm mt-1"
-            >
-              <Check size={14} color="#FFFFFF" />
-              <Text className="text-white font-sans font-bold text-xs uppercase tracking-widest">Save Plan</Text>
-            </Pressable>
-          </PulseView>
-        </View>
       </ScrollView>
+
+      {/* Sticky footer -- the forecast summary and Save, pinned outside the
+          ScrollView. Two reasons: the primary action is always reachable
+          without scrolling to the bottom (which at 1.5x was a long way down),
+          and the scroll content sheds ~150pt of chrome, which is what kept the
+          collapsed plan from fitting a screen.
+
+          Condensed to a single wrapping summary line rather than the old
+          two label/value rows -- a footer has to stay small at every font
+          scale, or it eats the screen it's pinned to. */}
+      <View
+        className="border-t-2 border-[#1A1A1A] bg-[#FBF9F6]"
+        style={{
+          paddingHorizontal: space(20),
+          paddingTop: space(10),
+          paddingBottom: space(14),
+          gap: space(8),
+        }}
+      >
+        <View className="flex-row items-center" style={{ gap: space(6) }}>
+          <View className="shrink-0">
+            <TrendingUp size={iconSize} color="#1A1A1A" />
+          </View>
+          <AppText variant="micro" className="font-sans text-neutral-600 flex-1">
+            {newVersesPace * learningDays.length} new verses this week · about {maxReviewCap} min a day
+          </AppText>
+        </View>
+
+        <Pressable
+          onPress={() => handleSavePlan()}
+          className="w-full bg-[#1A1A1A] rounded-xl flex-row items-center justify-center shadow-sm"
+          style={{ minHeight: MIN_TOUCH, paddingVertical: space(10), gap: space(6) }}
+        >
+          <Check size={iconSize} color="#FFFFFF" />
+          <AppText variant="label" className="text-white font-sans font-bold uppercase tracking-widest">
+            Save Plan
+          </AppText>
+        </Pressable>
+      </View>
     </FadeInView>
   );
 }
