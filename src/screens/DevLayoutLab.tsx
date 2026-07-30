@@ -4,6 +4,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { AppText, CollapsibleCard, FontScaleOverrideProvider } from '../components/design';
 import { MissPolicySection, type MissPolicy } from '../components/MissPolicySection';
 import PlanDesignerScreen from './PlanDesignerScreen';
+import HomeScreen from './HomeScreen';
 import type { AppState } from '../state/useAppState';
 
 // ============================================================================
@@ -59,6 +60,11 @@ export default function DevLayoutLab() {
               <SpecimenLabel text="CollapsibleCard — open as many as you like" />
               <FontScaleOverrideProvider scale={scale}>
                 <CollapseSpecimen scale={scale} />
+              </FontScaleOverrideProvider>
+
+              <SpecimenLabel text="Home — whole screen" />
+              <FontScaleOverrideProvider scale={scale}>
+                <LiveHome />
               </FontScaleOverrideProvider>
 
               <SpecimenLabel text="Plan Designer — whole screen" />
@@ -164,13 +170,100 @@ function useMockPlanState() {
   };
 }
 
-/** The real Plan Designer, in a 620pt-tall frame standing in for a phone screen. */
+/**
+ * Enough of AppState for HomeScreen, with a small fake queue so the Learning,
+ * Due reviews and Priming sections all have content to render.
+ */
+function useMockHomeState() {
+  const mkItem = (n: number, status: string) => ({
+    verseId: `ESV-John-3-${n}`,
+    book: 'John',
+    chapter: 3,
+    verseNumber: n,
+    translationId: 'ESV',
+    status,
+    nextReviewDueDate: '2020-01-01',
+    reviewPhase: 'daily',
+    touchLogs: [],
+  });
+  const memoryQueue = [
+    mkItem(16, 'learning'),
+    mkItem(17, 'learning'),
+    mkItem(1, 'reviewing'),
+    mkItem(2, 'reviewing'),
+    mkItem(30, 'queued'),
+    mkItem(31, 'queued'),
+  ];
+  const noop = () => {};
+  return {
+    user: { displayName: 'Micah Example' },
+    memoryQueue,
+    primingLookahead: 10,
+    setPrimingLookahead: noop,
+    cognitiveLoadSensitivity: 'medium',
+    maxReviewCap: 10,
+    getEstimatedReviewTime: () => 14,
+    isTodayLearningDay: () => true,
+    getTodayDateString: () => 'Thursday, July 30',
+    getGreeting: () => 'Good morning',
+    navigateTo: noop,
+    triggerToast: noop,
+    triggerMockDueReviews: noop,
+    masteryTouches: 3,
+    startPractice: noop,
+    startReviewSession: noop,
+    handleUpdateVerseStatus: noop,
+    triggerDailyPull: noop,
+    isReviewDue: () => true,
+    pausedAt: null,
+    pausedUntil: null,
+  };
+}
+
+/**
+ * Full-bleed phone frame for whole-screen specimens.
+ *
+ * Negative horizontal margin cancels the lab's own SCREEN_PADDING so the screen
+ * gets the true 375pt device width. Without this the screen renders ~73pt
+ * narrower than reality (the lab's padding plus the screen's own p-5 applied
+ * twice), which is a stricter test but makes every height measurement
+ * meaningless for a real device.
+ */
+function PhoneFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <View
+      style={{
+        width: SE_WIDTH,
+        height: 620,
+        marginHorizontal: -SCREEN_PADDING,
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: '#DDD',
+        overflow: 'hidden',
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+/** The real Home screen at true device width. */
+function LiveHome() {
+  const mock = useMockHomeState();
+  return (
+    <PhoneFrame>
+      <HomeScreen state={mock as unknown as AppState} />
+    </PhoneFrame>
+  );
+}
+
+/** The real Plan Designer at true device width. */
 function LivePlanDesigner() {
   const mock = useMockPlanState();
   return (
-    <View style={{ height: 620, borderWidth: 1, borderColor: '#DDD', borderRadius: 6, overflow: 'hidden' }}>
+    <PhoneFrame>
       <PlanDesignerScreen state={mock as unknown as AppState} />
-    </View>
+    </PhoneFrame>
   );
 }
 

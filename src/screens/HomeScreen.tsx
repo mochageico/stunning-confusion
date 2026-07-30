@@ -6,6 +6,45 @@ import { AppState } from '../state/useAppState';
 import { QueueItem, VerseState } from '../types';
 import { FadeInView, HelpTooltip } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
+import { AppText, CollapsibleCard, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
+
+/**
+ * One tile in the feature grid. Was three across at a fixed `h-24` plus a
+ * stranded `h-14` row: ~105pt per tile, so "Find Audio Recordings" wrapped to
+ * three lines inside a box that could not grow. Two across gives ~160pt and
+ * minHeight lets it grow.
+ */
+function FeatureTile({
+  onPress,
+  Icon,
+  label,
+  primary,
+}: {
+  onPress: () => void;
+  Icon: React.ComponentType<{ size?: number; color?: string }>;
+  label: string;
+  primary?: boolean;
+}) {
+  const scale = useFontScale();
+  const space = useScaledSpace();
+  return (
+    <Pressable
+      onPress={onPress}
+      className={`flex-1 rounded-xl bg-white items-center justify-center shadow-sm ${
+        primary ? 'border-2 border-[#1A1A1A]' : 'border border-[#E5E5E5]'
+      }`}
+      style={{ minHeight: Math.round(76 * scale), padding: space(10), gap: space(6) }}
+    >
+      <Icon size={Math.round(18 * scale)} color="#1A1A1A" />
+      <AppText
+        variant="caption"
+        className={`font-sans text-center ${primary ? 'font-extrabold text-[#1A1A1A]' : 'font-bold text-[#444]'}`}
+      >
+        {label}
+      </AppText>
+    </Pressable>
+  );
+}
 
 const LOOKAHEAD_OPTIONS = [
   { id: 10, label: '10' },
@@ -144,6 +183,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
   const firstName = (user?.displayName || 'Friend').split(' ')[0];
 
+  const space = useScaledSpace();
+  const iconSize = Math.round(14 * useFontScale());
+
   // Excludes verses that already banked every mastery touch -- they're done
   // learning and just waiting on their reviews to clear before promotion out
   // of 'learning' status, so bundling them into a fresh "Learn" group with
@@ -233,384 +275,348 @@ export default function HomeScreen({ state }: { state: AppState }) {
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 20 }}>
-        {/* Top Editorial Header */}
-        <View className="pb-3 border-b border-[#E5E5E5]">
-          <Text className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#888]">
+        {/* Top Editorial Header -- now carries the day's time estimate, which
+            summarises the whole day rather than belonging to any one section. */}
+        <View className="pb-3 border-b border-[#E5E5E5]" style={{ gap: 2 }}>
+          <AppText variant="micro" className="font-sans font-bold uppercase tracking-[0.15em] text-[#888]">
             {getTodayDateString()}
-          </Text>
-          <Text className="text-xl font-serif font-black mt-0.5 text-[#1A1A1A]">{getGreeting()}, {firstName}.</Text>
+          </AppText>
+          <AppText variant="display" className="font-serif font-black text-[#1A1A1A]">
+            {getGreeting()}, {firstName}.
+          </AppText>
+          <AppText variant="caption" className="font-mono font-bold uppercase tracking-wider text-neutral-500">
+            about {estMinutes} min today
+          </AppText>
         </View>
 
-        {/* TODAY'S CORE DASHBOARD CARD */}
-        <View className="border-2 border-[#1A1A1A] rounded-2xl p-5 bg-white shadow-xs" style={{ gap: 16 }}>
-          <View className="flex-row justify-between items-center pb-3 border-b border-neutral-100">
-            <Text className="font-serif font-black text-lg tracking-tight text-[#1A1A1A]">Today's Scripture</Text>
-            <Text className="bg-[#1A1A1A] text-white text-[10px] px-3 py-1 rounded-full font-mono font-bold uppercase tracking-wider overflow-hidden">
-              est. {estMinutes} mins
-            </Text>
+        <CollapsibleCard
+          storageKey="home.learning"
+          title="Learning phase"
+          summary={`${learningItems.length} verses`}
+          defaultCollapsed={learningItems.length === 0}
+        >
+          <View className="flex-row items-center" style={{ gap: space(6) }}>
+            <HelpTooltip
+              text={`Verses you're actively learning. Each one needs ${masteryTouches} perfect recalls, at least an hour apart, before it graduates into spaced review.`}
+            />
+            {memoryQueue.some((item) => item.status === 'queued') && (
+              <Pressable
+                onPress={handlePullNewVerses}
+                className="bg-neutral-900 rounded flex-row items-center justify-center"
+                style={{ minHeight: space(28), paddingHorizontal: space(8), paddingVertical: space(4) }}
+              >
+                <AppText variant="micro" className="text-white font-sans font-extrabold">
+                  Pull New Verses
+                </AppText>
+              </Pressable>
+            )}
           </View>
 
-          {/* LEARNING PHASE SECTION */}
-          <View style={{ gap: 8 }}>
-            <View className="flex-row justify-between items-center">
-              <View className="flex-row items-center">
-                <Text className="text-xs font-sans font-extrabold uppercase tracking-wider text-neutral-400">
-                  Learning phase...
-                </Text>
-                <HelpTooltip
-                  text={`Verses you're actively learning. Each one needs ${masteryTouches} perfect recalls, at least an hour apart, before it graduates into spaced review.`}
-                />
-                {memoryQueue.some((item) => item.status === 'queued') && (
-                  <Pressable
-                    onPress={handlePullNewVerses}
-                    className="ml-2 bg-neutral-900 px-1.5 py-0.5 rounded flex-row items-center gap-0.5"
-                  >
-                    <Text className="text-[8px] text-white font-sans font-extrabold">Pull New Verses</Text>
-                  </Pressable>
-                )}
-              </View>
-              <Text className="text-[10px] font-mono text-neutral-400 font-bold">
-                {learningItems.length} verses today
+          {showPullShieldConfirm && (
+            <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-3" style={{ gap: 8 }}>
+              <Text className="text-[11px] font-sans font-bold text-indigo-900">
+                🛡️ Review Shield is on — pull new verses anyway?
               </Text>
-            </View>
-
-            {showPullShieldConfirm && (
-              <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-3" style={{ gap: 8 }}>
-                <Text className="text-[11px] font-sans font-bold text-indigo-900">
-                  🛡️ Review Shield is on — pull new verses anyway?
-                </Text>
-                <Text className="text-[9px] font-sans text-indigo-800/80 leading-relaxed">
-                  Today's review time ({estMinutes}m) already meets or exceeds your {maxReviewCap}m daily limit.
-                  Pulling more now adds on top of that, on purpose.
-                </Text>
-                <View className="flex-row gap-2 justify-end pt-1">
-                  <Pressable
-                    onPress={() => setShowPullShieldConfirm(false)}
-                    className="px-3 py-1.5 border border-neutral-300 rounded-lg"
-                  >
-                    <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      triggerDailyPull({ bypassShield: true });
-                      setShowPullShieldConfirm(false);
-                    }}
-                    className="px-3 py-1.5 bg-indigo-600 rounded-lg"
-                  >
-                    <Text className="text-white font-sans font-bold text-[10px]">Yes, Pull Anyway</Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-
-            {groupedLearning.length > 0 ? (
-              <View style={{ gap: 8 }}>
-                {groupedLearning.map((group) => (
-                  <View
-                    key={group.label}
-                    className="flex-col bg-neutral-50 px-3 py-2.5 rounded-xl border border-neutral-100"
-                    style={{ gap: 8 }}
-                  >
-                    <View className="flex-row justify-between items-center">
-                      <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
-                        <Text className="text-xs font-serif font-bold text-[#1A1A1A]">{group.label}</Text>
-                      </Pressable>
-                      <View className="flex-row gap-1">
-                        <Pressable
-                          onPress={() => handleGroupPractice('listen', group.items)}
-                          className="bg-white border border-neutral-300 px-2 h-5 items-center justify-center rounded"
-                        >
-                          <Text className="text-neutral-700 text-[9px] font-bold">Listen</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleGroupPractice('learn', group.items)}
-                          className="bg-[#1A1A1A] px-2 h-5 items-center justify-center rounded"
-                        >
-                          <Text className="text-white text-[9px] font-bold">Learn</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-
-                    {/* Individual Verse mastery progress bars/dots */}
-                    <View className="flex-row flex-wrap gap-x-2 gap-y-1 pt-1.5 border-t border-neutral-100">
-                      {group.items.map((item) => {
-                        const touchesCount = item.touchLogs ? item.touchLogs.length : 0;
-                        const isBankedAwaitingReview = touchesCount >= masteryTouches;
-                        return (
-                          <View
-                            key={item.verseId}
-                            className={`flex-row items-center gap-1.5 px-2 py-0.5 rounded-md border ${
-                              isBankedAwaitingReview ? 'bg-neutral-100 border-neutral-200 opacity-60' : 'bg-white border-neutral-100'
-                            }`}
-                          >
-                            <Text className="text-[9.5px] font-sans font-bold text-neutral-500">v{item.verseNumber}</Text>
-                            <View className="flex-row gap-0.5">
-                              {Array.from({ length: masteryTouches }).map((_, i) => (
-                                <View
-                                  key={i}
-                                  className={`w-1.5 h-1.5 rounded-full ${
-                                    i < touchesCount ? 'bg-emerald-500 border border-emerald-600' : 'bg-neutral-200'
-                                  }`}
-                                />
-                              ))}
-                            </View>
-                            <Text className="text-[8px] font-mono font-black text-neutral-400">
-                              {touchesCount}/{masteryTouches}
-                            </Text>
-                            {isBankedAwaitingReview && (
-                              <HelpTooltip text="This verse has all its touches. Retention comes first, so it moves into spaced review on its own as soon as today's due reviews are done." />
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <Text className="text-xs text-neutral-400 italic pl-1">No verses currently in learning phase.</Text>
-            )}
-          </View>
-
-          {/* DUE REVIEWS SECTION */}
-          <View className="pt-1" style={{ gap: 8 }}>
-            <View className="flex-row justify-between items-center">
-              <View className="flex-row items-center gap-1">
-                <Text className="text-xs font-sans font-extrabold uppercase tracking-wider text-neutral-400">
-                  Due reviews...
-                </Text>
-                <HelpTooltip text="Verses you've already learned, coming back around on schedule. Each one cycles daily for a while, then weekly, then monthly, before it's retained for good." />
+              <Text className="text-[9px] font-sans text-indigo-800/80 leading-relaxed">
+                Today's review time ({estMinutes}m) already meets or exceeds your {maxReviewCap}m daily limit.
+                Pulling more now adds on top of that, on purpose.
+              </Text>
+              <View className="flex-row gap-2 justify-end pt-1">
                 <Pressable
-                  onPress={() => setShowResetConfirm(true)}
-                  className="ml-2 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded flex-row items-center gap-0.5"
+                  onPress={() => setShowPullShieldConfirm(false)}
+                  className="px-3 py-1.5 border border-neutral-300 rounded-lg"
                 >
-                  <Text className="text-[8px] text-red-700 font-sans font-extrabold">Reset Reviews for Today</Text>
+                  <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    triggerDailyPull({ bypassShield: true });
+                    setShowPullShieldConfirm(false);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-600 rounded-lg"
+                >
+                  <Text className="text-white font-sans font-bold text-[10px]">Yes, Pull Anyway</Text>
                 </Pressable>
               </View>
-              <Text className="text-[10px] font-mono text-neutral-400 font-bold">
-                {dueReviewItems.length} verses today
-              </Text>
             </View>
+          )}
 
-            {showResetConfirm && (
-              <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
-                <Text className="text-[11px] font-sans font-bold text-red-800">
-                  Are you sure you want to reset reviews for today?
-                </Text>
-                <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
-                  This undoes any reviews you already finished today — only verses you reviewed today go back to
-                  due. Nothing you reviewed on an earlier day is affected.
-                </Text>
-                <View className="flex-row gap-2 justify-end pt-1">
-                  <Pressable
-                    onPress={() => setShowResetConfirm(false)}
-                    className="px-3 py-1.5 border border-neutral-300 rounded-lg"
-                  >
-                    <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      triggerMockDueReviews();
-                      setShowResetConfirm(false);
-                    }}
-                    className="px-3 py-1.5 bg-red-600 rounded-lg"
-                  >
-                    <Text className="text-white font-sans font-bold text-[10px]">Yes, Reset</Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-
-            {/* Manual log for a group reviewed off-app. Inline card rather
-                than a modal, matching this screen's other confirm patterns. */}
-            {manualLogGroup && (
-              <View className="bg-neutral-50 border border-neutral-300 rounded-xl p-3" style={{ gap: 8 }}>
-                <View>
-                  <Text className="text-[11px] font-sans font-bold text-neutral-800">Log {manualLogGroup.label} manually</Text>
-                  <Text className="text-[9px] font-sans text-neutral-500 leading-relaxed">
-                    For a review you actually did somewhere else — out loud in the car, from a card, anywhere but here.
-                  </Text>
-                </View>
-                <View style={{ gap: 6 }}>
-                  <Pressable onPress={() => submitManualLog('perfect')} className="w-full py-2 bg-emerald-600 rounded-lg items-center">
-                    <Text className="text-white font-sans font-bold text-[10px]">Perfect — no mistakes</Text>
-                  </Pressable>
-                  <Pressable onPress={() => submitManualLog('passed')} className="w-full py-2 bg-indigo-600 rounded-lg items-center">
-                    <Text className="text-white font-sans font-bold text-[10px]">Got it, with a stumble</Text>
-                  </Pressable>
-                  <View className="flex-row gap-2">
-                    <Pressable
-                      onPress={() => submitManualLog('practice')}
-                      className="flex-1 py-1.5 border border-dashed border-neutral-300 rounded-lg items-center"
-                    >
-                      <Text className="text-neutral-500 font-sans font-bold text-[10px]">Needs practice</Text>
-                    </Pressable>
-                    <Pressable onPress={() => setManualLogGroup(null)} className="flex-1 py-1.5 border border-neutral-300 rounded-lg items-center">
-                      <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {dueReviewItems.length > 0 ? (
-              <View style={{ gap: 8 }}>
-                <Pressable
-                  onPress={handleReviewAllDue}
-                  className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center justify-center"
+          {groupedLearning.length > 0 ? (
+            <View style={{ gap: 8 }}>
+              {groupedLearning.map((group) => (
+                <View
+                  key={group.label}
+                  className="flex-col bg-neutral-50 px-3 py-2.5 rounded-xl border border-neutral-100"
+                  style={{ gap: 8 }}
                 >
-                  <Text className="text-white font-sans font-bold text-xs">
-                    Review All Due ({dueReviewItems.length} {dueReviewItems.length === 1 ? 'verse' : 'verses'})
-                  </Text>
-                </Pressable>
-
-                {/* Daily / Weekly / Monthly review groups, in that order --
-                    same order handleReviewAllDue chains them in. */}
-                {(
-                  [
-                    { groups: groupedDailyReviewing, theme: 'emerald' as const },
-                    { groups: groupedWeeklyReviewing, theme: 'blue' as const },
-                    { groups: groupedMonthlyReviewing, theme: 'amber' as const },
-                  ] as const
-                ).map(({ groups, theme }) =>
-                  groups.length === 0 ? null : (
-                    <View key={theme} style={{ gap: 6 }}>
-                      {groups.map((group) => (
-                        <DueReviewRow
-                          key={group.label}
-                          group={group}
-                          theme={theme}
-                          onOpenChapter={() => navigateTo('chapterLanding', group.book, group.chapter)}
-                          onListen={() => handleGroupPractice('listen', group.items)}
-                          onReview={() => handleGroupPractice('learn', group.items)}
-                          onManualLog={() => setManualLogGroup(group)}
-                        />
-                      ))}
-                    </View>
-                  )
-                )}
-              </View>
-            ) : (
-              <Text className="text-xs text-neutral-400 italic pl-1">No reviews due today! Keeping up nicely! 🎉</Text>
-            )}
-          </View>
-
-          {/* PRIMING SECTION */}
-          <View className="pt-3 border-t border-neutral-100" style={{ gap: 8 }}>
-            <View className="flex-row items-center justify-between">
-              <Text className="text-xs font-sans font-extrabold uppercase tracking-wider text-neutral-400">
-                Memory Priming
-              </Text>
-              <View className="flex-row items-center gap-1.5 bg-neutral-50 border border-neutral-200 px-2 py-0.5 rounded-lg">
-                <Text className="text-[10px] font-sans font-bold text-neutral-500"># of verses</Text>
-                <View style={{ width: 90 }}>
-                  <Dropdown options={LOOKAHEAD_OPTIONS} value={primingLookahead} onChange={setPrimingLookahead} title="Priming Window Size" />
-                </View>
-              </View>
-            </View>
-
-            {groupedPriming.length > 0 ? (
-              <View style={{ gap: 6 }}>
-                {groupedPriming.map((group) => (
-                  <View
-                    key={group.label}
-                    className="flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border border-neutral-200"
-                  >
+                  <View className="flex-row justify-between items-center">
                     <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
                       <Text className="text-xs font-serif font-bold text-[#1A1A1A]">{group.label}</Text>
                     </Pressable>
-                    <Pressable
-                      onPress={() => handleGroupPractice('listen', group.items)}
-                      className="bg-neutral-100 px-3 py-1 rounded-lg"
-                    >
-                      <Text className="text-[#1A1A1A] font-sans font-bold text-[10px]">Listen</Text>
-                    </Pressable>
+                    <View className="flex-row gap-1">
+                      <Pressable
+                        onPress={() => handleGroupPractice('listen', group.items)}
+                        className="bg-white border border-neutral-300 px-2 h-5 items-center justify-center rounded"
+                      >
+                        <Text className="text-neutral-700 text-[9px] font-bold">Listen</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleGroupPractice('learn', group.items)}
+                        className="bg-[#1A1A1A] px-2 h-5 items-center justify-center rounded"
+                      >
+                        <Text className="text-white text-[9px] font-bold">Learn</Text>
+                      </Pressable>
+                    </View>
                   </View>
-                ))}
-              </View>
-            ) : (
-              <Text className="text-xs text-neutral-400 italic pl-1">No queued verses remaining to prime!</Text>
-            )}
+
+                  {/* Individual Verse mastery progress bars/dots */}
+                  <View className="flex-row flex-wrap gap-x-2 gap-y-1 pt-1.5 border-t border-neutral-100">
+                    {group.items.map((item) => {
+                      const touchesCount = item.touchLogs ? item.touchLogs.length : 0;
+                      const isBankedAwaitingReview = touchesCount >= masteryTouches;
+                      return (
+                        <View
+                          key={item.verseId}
+                          className={`flex-row items-center gap-1.5 px-2 py-0.5 rounded-md border ${
+                            isBankedAwaitingReview ? 'bg-neutral-100 border-neutral-200 opacity-60' : 'bg-white border-neutral-100'
+                          }`}
+                        >
+                          <Text className="text-[9.5px] font-sans font-bold text-neutral-500">v{item.verseNumber}</Text>
+                          <View className="flex-row gap-0.5">
+                            {Array.from({ length: masteryTouches }).map((_, i) => (
+                              <View
+                                key={i}
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  i < touchesCount ? 'bg-emerald-500 border border-emerald-600' : 'bg-neutral-200'
+                                }`}
+                              />
+                            ))}
+                          </View>
+                          <Text className="text-[8px] font-mono font-black text-neutral-400">
+                            {touchesCount}/{masteryTouches}
+                          </Text>
+                          {isBankedAwaitingReview && (
+                            <HelpTooltip text="This verse has all its touches. Retention comes first, so it moves into spaced review on its own as soon as today's due reviews are done." />
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text className="text-xs text-neutral-400 italic pl-1">No verses currently in learning phase.</Text>
+          )}
+        </CollapsibleCard>
+
+        <CollapsibleCard
+          storageKey="home.reviews"
+          title="Due reviews"
+          summary={`${dueReviewItems.length} due`}
+          defaultCollapsed={dueReviewItems.length === 0}
+        >
+          <View className="flex-row items-center" style={{ gap: space(6) }}>
+            <HelpTooltip text="Verses you've already learned, coming back around on schedule. Each one cycles daily for a while, then weekly, then monthly, before it's retained for good." />
+            <Pressable
+              onPress={() => setShowResetConfirm(true)}
+              className="bg-red-50 border border-red-200 rounded flex-row items-center justify-center"
+              style={{ minHeight: space(28), paddingHorizontal: space(8), paddingVertical: space(4) }}
+            >
+              <AppText variant="micro" className="text-red-700 font-sans font-extrabold">
+                Reset Reviews for Today
+              </AppText>
+            </Pressable>
           </View>
 
-          {/* CARD FOOTER BUTTONS */}
-          <View className="pt-4 border-t border-neutral-100 flex-row gap-3 mt-4">
-            <Pressable
-              onPress={() => navigateTo('activePlan')}
-              className="flex-1 py-2.5 border-2 border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5 shadow-3xs"
-            >
-              <Text className="text-[#1A1A1A] font-sans font-bold text-xs">Edit Memory Verse Queue</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                const allDashItems = [...learningItems, ...dueReviewItems, ...queuedLookahead];
-                if (allDashItems.length > 0) {
-                  handleGroupPractice('listen', allDashItems);
-                } else {
-                  triggerToast("No items on dashboard to listen to!");
-                }
-              }}
-              className="flex-1 py-2.5 bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5 shadow-sm"
-            >
-              <Volume2 size={13} color="#FFFFFF" />
-              <Text className="text-white font-sans font-bold text-xs">Listen to Today's Scripture</Text>
-            </Pressable>
+          {showResetConfirm && (
+            <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
+              <Text className="text-[11px] font-sans font-bold text-red-800">
+                Are you sure you want to reset reviews for today?
+              </Text>
+              <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
+                This undoes any reviews you already finished today — only verses you reviewed today go back to
+                due. Nothing you reviewed on an earlier day is affected.
+              </Text>
+              <View className="flex-row gap-2 justify-end pt-1">
+                <Pressable
+                  onPress={() => setShowResetConfirm(false)}
+                  className="px-3 py-1.5 border border-neutral-300 rounded-lg"
+                >
+                  <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    triggerMockDueReviews();
+                    setShowResetConfirm(false);
+                  }}
+                  className="px-3 py-1.5 bg-red-600 rounded-lg"
+                >
+                  <Text className="text-white font-sans font-bold text-[10px]">Yes, Reset</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* Manual log for a group reviewed off-app. Inline card rather
+              than a modal, matching this screen's other confirm patterns. */}
+          {manualLogGroup && (
+            <View className="bg-neutral-50 border border-neutral-300 rounded-xl p-3" style={{ gap: 8 }}>
+              <View>
+                <Text className="text-[11px] font-sans font-bold text-neutral-800">Log {manualLogGroup.label} manually</Text>
+                <Text className="text-[9px] font-sans text-neutral-500 leading-relaxed">
+                  For a review you actually did somewhere else — out loud in the car, from a card, anywhere but here.
+                </Text>
+              </View>
+              <View style={{ gap: 6 }}>
+                <Pressable onPress={() => submitManualLog('perfect')} className="w-full py-2 bg-emerald-600 rounded-lg items-center">
+                  <Text className="text-white font-sans font-bold text-[10px]">Perfect — no mistakes</Text>
+                </Pressable>
+                <Pressable onPress={() => submitManualLog('passed')} className="w-full py-2 bg-indigo-600 rounded-lg items-center">
+                  <Text className="text-white font-sans font-bold text-[10px]">Got it, with a stumble</Text>
+                </Pressable>
+                <View className="flex-row gap-2">
+                  <Pressable
+                    onPress={() => submitManualLog('practice')}
+                    className="flex-1 py-1.5 border border-dashed border-neutral-300 rounded-lg items-center"
+                  >
+                    <Text className="text-neutral-500 font-sans font-bold text-[10px]">Needs practice</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setManualLogGroup(null)} className="flex-1 py-1.5 border border-neutral-300 rounded-lg items-center">
+                    <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {dueReviewItems.length > 0 ? (
+            <View style={{ gap: 8 }}>
+              <Pressable
+                onPress={handleReviewAllDue}
+                className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center justify-center"
+              >
+                <Text className="text-white font-sans font-bold text-xs">
+                  Review All Due ({dueReviewItems.length} {dueReviewItems.length === 1 ? 'verse' : 'verses'})
+                </Text>
+              </Pressable>
+
+              {/* Daily / Weekly / Monthly review groups, in that order --
+                  same order handleReviewAllDue chains them in. */}
+              {(
+                [
+                  { groups: groupedDailyReviewing, theme: 'emerald' as const },
+                  { groups: groupedWeeklyReviewing, theme: 'blue' as const },
+                  { groups: groupedMonthlyReviewing, theme: 'amber' as const },
+                ] as const
+              ).map(({ groups, theme }) =>
+                groups.length === 0 ? null : (
+                  <View key={theme} style={{ gap: 6 }}>
+                    {groups.map((group) => (
+                      <DueReviewRow
+                        key={group.label}
+                        group={group}
+                        theme={theme}
+                        onOpenChapter={() => navigateTo('chapterLanding', group.book, group.chapter)}
+                        onListen={() => handleGroupPractice('listen', group.items)}
+                        onReview={() => handleGroupPractice('learn', group.items)}
+                        onManualLog={() => setManualLogGroup(group)}
+                      />
+                    ))}
+                  </View>
+                )
+              )}
+            </View>
+          ) : (
+            <Text className="text-xs text-neutral-400 italic pl-1">No reviews due today! Keeping up nicely! 🎉</Text>
+          )}
+        </CollapsibleCard>
+
+        <CollapsibleCard
+          storageKey="home.priming"
+          title="Memory priming"
+          summary={`${queuedLookahead.length} queued`}
+          defaultCollapsed={queuedLookahead.length === 0}
+        >
+          {/* The section title and count now live on the collapsible header
+              above; this row keeps only the window-size control. */}
+          <View className="flex-row items-center" style={{ gap: space(6) }}>
+            <AppText variant="micro" className="font-sans font-bold text-neutral-500 shrink-0">
+              # of verses
+            </AppText>
+            <View style={{ flex: 1, maxWidth: 150 }}>
+              <Dropdown options={LOOKAHEAD_OPTIONS} value={primingLookahead} onChange={setPrimingLookahead} title="Priming Window Size" />
+            </View>
           </View>
+
+          {groupedPriming.length > 0 ? (
+            <View style={{ gap: 6 }}>
+              {groupedPriming.map((group) => (
+                <View
+                  key={group.label}
+                  className="flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border border-neutral-200"
+                >
+                  <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
+                    <Text className="text-xs font-serif font-bold text-[#1A1A1A]">{group.label}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleGroupPractice('listen', group.items)}
+                    className="bg-neutral-100 px-3 py-1 rounded-lg"
+                  >
+                    <Text className="text-[#1A1A1A] font-sans font-bold text-[10px]">Listen</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text className="text-xs text-neutral-400 italic pl-1">No queued verses remaining to prime!</Text>
+          )}
+        </CollapsibleCard>
+
+        {/* Primary action, promoted out of the old card footer to full width.
+            Edit Queue becomes a quieter link beneath it rather than an equal
+            half -- two long labels sharing a row is exactly the pattern that
+            breaks at larger text sizes. */}
+        <View style={{ gap: 8 }}>
+          <Pressable
+            onPress={() => {
+              const allDashItems = [...learningItems, ...dueReviewItems, ...queuedLookahead];
+              if (allDashItems.length > 0) {
+                handleGroupPractice('listen', allDashItems);
+              } else {
+                triggerToast("No items on dashboard to listen to!");
+              }
+            }}
+            className="w-full bg-[#1A1A1A] rounded-xl flex-row items-center justify-center shadow-sm"
+            style={{ minHeight: MIN_TOUCH, paddingVertical: space(12), gap: space(6) }}
+          >
+            <Volume2 size={iconSize} color="#FFFFFF" />
+            <AppText variant="label" className="text-white font-sans font-bold">
+              Listen to Today's Scripture
+            </AppText>
+          </Pressable>
+          <Pressable
+            onPress={() => navigateTo('activePlan')}
+            className="w-full items-center justify-center"
+            style={{ minHeight: MIN_TOUCH }}
+          >
+            <AppText variant="caption" className="text-neutral-500 font-sans font-bold underline">
+              Edit Memory Verse Queue
+            </AppText>
+          </Pressable>
         </View>
 
-        {/* FEATURES GRID */}
+        {/* FEATURES GRID -- 2x2 at minHeight, replacing 3-across at a fixed
+            h-24 plus a stranded h-14 row. There are exactly four features, so
+            two columns is simply the right shape for them. */}
         <View style={{ gap: 12 }}>
-          <View className="flex-row gap-3">
-            {/* Feature 1 */}
-            <Pressable
-              onPress={() => navigateTo('audioFeed')}
-              className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
-              style={{ gap: 6 }}
-            >
-              <Volume2 size={18} color="#1A1A1A" />
-              <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
-                Find Audio Recordings
-              </Text>
-            </Pressable>
-
-            {/* Feature 2: My Memory Plans */}
-            <Pressable
-              onPress={() => navigateTo('savedPlans')}
-              className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
-              style={{ gap: 6 }}
-            >
-              <FolderOpen size={18} color="#1A1A1A" />
-              <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
-                My Memory Plans
-              </Text>
-            </Pressable>
-
-            {/* Feature 3: Verse Search / Bible */}
-            <Pressable
-              onPress={() => navigateTo('books')}
-              className="flex-1 border-2 border-[#1A1A1A] p-3 rounded-xl bg-white items-center justify-center shadow-sm h-24"
-              style={{ gap: 6 }}
-            >
-              <BookMarked size={18} color="#1A1A1A" />
-              <Text className="text-[10px] font-extrabold font-sans text-[#1A1A1A] leading-tight text-center">
-                Verse Search / Bible
-              </Text>
-            </Pressable>
+          <View className="flex-row" style={{ gap: 12 }}>
+            <FeatureTile onPress={() => navigateTo('audioFeed')} Icon={Volume2} label="Find Audio Recordings" />
+            <FeatureTile onPress={() => navigateTo('savedPlans')} Icon={FolderOpen} label="My Memory Plans" />
           </View>
-
-          <View className="flex-row gap-3">
-            {/* Feature 4: Reference Drill -- practice only, never touches the
-                review schedule (see ReferenceDrillScreen). */}
-            <Pressable
-              onPress={() => navigateTo('referenceDrill')}
-              className="flex-1 border border-[#E5E5E5] p-3 rounded-xl bg-white flex-row items-center justify-center shadow-sm h-14"
-              style={{ gap: 8 }}
-            >
-              <Target size={18} color="#1A1A1A" />
-              <Text className="text-[10px] font-bold font-sans text-[#444] leading-tight text-center">
-                Reference Drill (practice)
-              </Text>
-            </Pressable>
+          <View className="flex-row" style={{ gap: 12 }}>
+            <FeatureTile onPress={() => navigateTo('books')} Icon={BookMarked} label="Verse Search / Bible" primary />
+            <FeatureTile onPress={() => navigateTo('referenceDrill')} Icon={Target} label="Reference Drill (practice)" />
           </View>
         </View>
       </ScrollView>

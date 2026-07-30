@@ -105,7 +105,48 @@ Forecast + Save Plan card. Getting to ~1 screen would mean making Quick Presets
 and/or Plan Name collapsible too, or moving the Weekly Forecast out of the scroll
 flow into a sticky footer. Not done — it needs a design call, not just a refactor.
 
-### 3. H3 + F2 — Home screen  (NEXT)
+### 3. H3 + F2 — Home screen  — DONE, verified
+
+The mega-card is dissolved into three sibling `CollapsibleCard`s with counts on
+their headers: `LEARNING PHASE · 2 verses`, `DUE REVIEWS · 2 due`,
+`MEMORY PRIMING · 2 queued`. Storage keys `home.learning` / `.reviews` /
+`.priming`.
+
+**Default open state deviates from the original spec, deliberately.** The plan
+said "reviews open if any due, else learning, else priming" — one section open.
+That conflicts with the user's stated preference for seeing everything at once,
+so instead **every section with content in it opens**, and only genuinely empty
+sections start collapsed (`defaultCollapsed={learningItems.length === 0}` etc).
+A stored choice still wins over the default.
+
+Other changes: `est. N mins` moved to the greeting header ("about 14 min today"),
+*Listen to Today's Scripture* promoted to a full-width primary action with
+*Edit Memory Verse Queue* demoted to a quiet link beneath it, and the feature
+grid is now 2×2 via a `FeatureTile` component (`minHeight`, grows 76 → 103 →
+118px across scales) instead of 3-across at a fixed `h-24` plus a stranded
+`h-14` row.
+
+Measured at true 375pt device width, all three sections open:
+
+| scale | content height | viewport | tile height |
+|---|---|---|---|
+| 1.0× | 1044px | 619px | 76px |
+| 1.3× | 1196px | 619px | 103px |
+| 1.5× | 1354px | 619px | 118px |
+
+Zero vertical leaks and zero horizontal overflow at every scale. Collapsing
+Learning left Reviews and Priming open (independence verified on the real
+screen). Collapsing one section saves ~133–163px.
+
+**Lab fix made while doing this:** whole-screen specimens now render inside
+`PhoneFrame`, which cancels the lab's own `SCREEN_PADDING` with a negative
+margin so screens get the true 375pt width. Before this they rendered ~73pt
+narrower (lab padding plus the screen's own `p-5`), which was a stricter test
+but made every height figure meaningless for a real device. The Plan Designer
+numbers recorded in section 2 above were taken at the OLD narrow width and are
+therefore pessimistic — re-measure if the exact figures matter.
+
+### 4. Dashboard screen  (NEXT)
 
 `CollapsibleCard` / `useCollapsed` already exist and are verified (independent
 non-exclusive state, per-card `defaultCollapsed`, persisted via AsyncStorage under
@@ -132,8 +173,6 @@ site (`as unknown as AppState`).
   Pull New Verses + count into one row, and the Priming header's `width: 90`
   dropdown beside "# of verses".
 
-### 4. Dashboard screen
-Same treatment. Not yet sketched.
 
 ## Deferred — needs design, do not build
 **The "memory hub" restructure.** The user wants *Edit Memory Verse Queue* folded
