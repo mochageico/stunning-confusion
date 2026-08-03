@@ -1,15 +1,15 @@
-import { QueueItem, StudyPlan, StudyPlanMembership } from '../types';
+import { QueueItem, GroupPlan, GroupPlanMembership } from '../types';
 
 // ============================================================================
-// STUDY PLAN SCHEDULER
+// GROUP PLAN SCHEDULER
 // ----------------------------------------------------------------------------
 // Pure logic, no React/Firestore -- mirrors reviewCalendar.ts's/recitation.ts's
 // shape. Decides which verseIds a member's daily new-verse pull should
 // actually promote out of 'queued' today, blending their own individual
-// queue with verses from however many StudyPlans they've joined.
+// queue with verses from however many GroupPlans they've joined.
 //
 // Deployment TIMING (which days count at all) always comes from the member's
-// own personal learningDays/Sabbath -- a StudyPlan has no day-of-week concept
+// own personal learningDays/Sabbath -- a GroupPlan has no day-of-week concept
 // of its own. This module assumes the caller has already confirmed today is
 // a real learning day for this member; it only decides HOW MANY of which
 // origin to pull once that's true.
@@ -47,7 +47,7 @@ function pulledFromPlanLast7Days(queue: QueueItem[], planId: string, today: Date
 // member's own fixed weekly learning-day count, but never more than what's
 // actually left of this plan's weekly budget (self-corrects if a learning
 // day was skipped, rather than permanently losing that capacity).
-function dailyShareForPlan(plan: StudyPlan, queue: QueueItem[], learningDaysPerWeek: number, today: Date): number {
+function dailyShareForPlan(plan: GroupPlan, queue: QueueItem[], learningDaysPerWeek: number, today: Date): number {
   const remainingWeeklyBudget = Math.max(0, plan.versesPerWeek - pulledFromPlanLast7Days(queue, plan.planId, today));
   const evenShare = Math.ceil(plan.versesPerWeek / Math.max(1, learningDaysPerWeek));
   return Math.min(evenShare, remainingWeeklyBudget);
@@ -82,8 +82,8 @@ function queuedIndividualVerseIds(queue: QueueItem[]): string[] {
 export function computeDailyPull(
   queue: QueueItem[],
   personal: PersonalPacingSettings,
-  joinedPlans: StudyPlan[],
-  memberships: StudyPlanMembership[],
+  joinedPlans: GroupPlan[],
+  memberships: GroupPlanMembership[],
   today: Date = new Date()
 ): DailyPullResult {
   const learningDaysPerWeek = personal.learningDays.length;
@@ -91,12 +91,12 @@ export function computeDailyPull(
 
   const membershipsWithPlan = memberships
     .map((m) => ({ membership: m, plan: planById.get(m.planId) }))
-    .filter((x): x is { membership: StudyPlanMembership; plan: StudyPlan } => !!x.plan);
+    .filter((x): x is { membership: GroupPlanMembership; plan: GroupPlan } => !!x.plan);
 
   const fromPlans: Record<string, string[]> = {};
   const verseIds: string[] = [];
 
-  const pullFromPlan = (plan: StudyPlan, cap: number): string[] => {
+  const pullFromPlan = (plan: GroupPlan, cap: number): string[] => {
     const available = queuedVerseIdsForPlan(queue, plan.planId);
     const share = dailyShareForPlan(plan, queue, learningDaysPerWeek, today);
     const take = Math.max(0, Math.min(share, cap, available.length));

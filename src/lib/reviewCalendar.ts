@@ -1,5 +1,5 @@
-import { QueueItem, StudyPlan, StudyPlanMembership } from '../types';
-import { computeDailyPull } from './studyPlanScheduler';
+import { QueueItem, GroupPlan, GroupPlanMembership } from '../types';
+import { computeDailyPull } from './groupPlanScheduler';
 
 // ============================================================================
 // MEMORY CALENDAR — RECURRING REVIEW PROJECTION
@@ -33,8 +33,8 @@ export interface CalendarPlanSettings {
   // plan and badly wrong on an 'additive' membership, where the real pull
   // deliberately exceeds the personal pace. Optional: callers with no group
   // plans (and the layout lab) can leave them out.
-  joinedPlans?: StudyPlan[];
-  memberships?: StudyPlanMembership[];
+  joinedPlans?: GroupPlan[];
+  memberships?: GroupPlanMembership[];
 }
 
 export interface CalendarDayProjection {

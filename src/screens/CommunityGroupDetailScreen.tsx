@@ -25,11 +25,11 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     user,
     activeCircle,
     activeCircleMembers,
-    activeCircleStudyPlans,
+    activeCircleGroupPlans,
     loadingActiveCircle,
     updateCircleSettings,
-    createStudyPlan,
-    deleteStudyPlan,
+    createGroupPlan,
+    deleteGroupPlan,
     removeCircleMember,
     leaveCircle,
     disbandCircle,
@@ -43,10 +43,10 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setNewPlanName,
     newPlanDesc,
     setNewPlanDesc,
-    joinedStudyPlanMemberships,
-    setViewingStudyPlan,
+    joinedGroupPlanMemberships,
+    setViewingGroupPlan,
     navigateTo,
-    clearStudyPlanMembershipsForCircle,
+    clearGroupPlanMembershipsForCircle,
     triggerToast,
     openCircleChat,
     activeCircleChallenges,
@@ -87,15 +87,15 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
 
   const handleCreatePlan = async () => {
     if (!activeCircle) return;
-    await createStudyPlan(activeCircle.id, { name: newPlanName, description: newPlanDesc });
+    await createGroupPlan(activeCircle.id, { name: newPlanName, description: newPlanDesc });
     setShowCreatePlanForm(false);
     setNewPlanName('');
     setNewPlanDesc('');
   };
 
-  const openStudyPlan = (plan: (typeof activeCircleStudyPlans)[number]) => {
-    setViewingStudyPlan(plan);
-    navigateTo('studyPlanDetail');
+  const openGroupPlan = (plan: (typeof activeCircleGroupPlans)[number]) => {
+    setViewingGroupPlan(plan);
+    navigateTo('groupPlanDetail');
   };
 
   const [showLeaveDisbandConfirm, setShowLeaveDisbandConfirm] = useState(false);
@@ -107,7 +107,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
       setShowLeaveDisbandConfirm(true);
     } else {
       leaveCircle(activeCircle.id);
-      clearStudyPlanMembershipsForCircle(activeCircle.id);
+      clearGroupPlanMembershipsForCircle(activeCircle.id);
       clearGroupChallengeMembershipsForCircle(activeCircle.id);
     }
   };
@@ -116,7 +116,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     if (!activeCircle) return;
     setShowLeaveDisbandConfirm(false);
     await disbandCircle(activeCircle.id);
-    clearStudyPlanMembershipsForCircle(activeCircle.id);
+    clearGroupPlanMembershipsForCircle(activeCircle.id);
     clearGroupChallengeMembershipsForCircle(activeCircle.id);
   };
 
@@ -287,14 +287,14 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           </FadeInView>
         )}
 
-        {/* STUDY PLANS PANEL */}
+        {/* GROUP PLANS PANEL */}
         <View style={{ gap: 12 }}>
           <View className="flex-row justify-between items-center px-1">
             <Text className="text-xs font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
-              Study Plans ({activeCircleStudyPlans.length})
+              Group Plans ({activeCircleGroupPlans.length})
             </Text>
 
-            {/* Add Study Plan Button (Leaders/Mentors only) */}
+            {/* Add Group Plan Button (Leaders/Mentors only) */}
             {isLeaderOrAdmin && (
               <Pressable
                 onPress={() => {
@@ -310,14 +310,14 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             )}
           </View>
 
-          {/* CREATE STUDY PLAN FORM -- title + description only. The actual
+          {/* CREATE GROUP PLAN FORM -- title + description only. The actual
               verse queue and weekly pace are set up afterward from the
-              plan's own landing page (StudyPlanDetailScreen). */}
+              plan's own landing page (GroupPlanDetailScreen). */}
           {showCreatePlanForm && isLeaderOrAdmin && (
             <FadeInView>
               <View className="bg-[#1A1A1A] border border-neutral-900 rounded-xl p-4" style={{ gap: 12 }}>
                 <View className="flex-row justify-between items-center border-b border-neutral-800 pb-1.5">
-                  <Text className="text-[10px] font-black uppercase tracking-wider text-neutral-300">New Study Plan</Text>
+                  <Text className="text-[10px] font-black uppercase tracking-wider text-neutral-300">New Group Plan</Text>
                   <Text className="text-[7px] bg-indigo-600 text-white px-2 py-0.5 rounded uppercase font-black">SPONSOR</Text>
                 </View>
 
@@ -364,22 +364,22 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             </FadeInView>
           )}
 
-          {/* List of the circle's Study Plans -- each tap opens its own landing page */}
+          {/* List of the circle's Group Plans -- each tap opens its own landing page */}
           <View style={{ gap: 12 }}>
-            {activeCircleStudyPlans.length === 0 ? (
+            {activeCircleGroupPlans.length === 0 ? (
               <View className="p-6 border border-dashed border-neutral-200 rounded-2xl items-center">
                 <Text className="text-center text-xs text-neutral-400 font-sans">
-                  No Study Plans created for this circle yet. {isLeaderOrAdmin && 'Create one above!'}
+                  No Group Plans created for this circle yet. {isLeaderOrAdmin && 'Create one above!'}
                 </Text>
               </View>
             ) : (
-              activeCircleStudyPlans.map((plan) => {
-                const isJoined = joinedStudyPlanMemberships.some((m) => m.planId === plan.planId);
+              activeCircleGroupPlans.map((plan) => {
+                const isJoined = joinedGroupPlanMemberships.some((m) => m.planId === plan.planId);
 
                 return (
                   <Pressable
                     key={plan.planId}
-                    onPress={() => openStudyPlan(plan)}
+                    onPress={() => openGroupPlan(plan)}
                     className="border border-[#E5E5E5] rounded-xl p-3.5 bg-white shadow-sm"
                     style={{ gap: 10 }}
                   >
@@ -400,7 +400,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                           <Pressable
                             onPress={(e) => {
                               e.stopPropagation();
-                              deleteStudyPlan(activeCircle.id, plan.planId);
+                              deleteGroupPlan(activeCircle.id, plan.planId);
                             }}
                             className="p-0.5"
                           >
@@ -432,7 +432,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         {/* GROUP CHALLENGES PANEL -- open to any member, not leader-gated
             (peer competition, not curated content). The whole range
             front-loads into a joiner's queue immediately (see
-            joinGroupChallenge), unlike Study Plans above which trickle
+            joinGroupChallenge), unlike Group Plans above which trickle
             verses in weekly. */}
         <View style={{ gap: 12 }}>
           <View className="flex-row justify-between items-center px-1">

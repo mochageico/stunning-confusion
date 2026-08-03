@@ -62,7 +62,7 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
             <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
               YOUR ACTIVE COMMUNITIES ({myCircles.length})
             </Text>
-            <HelpTooltip text="The scripture circles you've joined. Tap one to open its members, shared study plans, challenges, and group chat." />
+            <HelpTooltip text="The scripture circles you've joined. Tap one to open its members, shared group plans, challenges, and group chat." />
           </View>
 
           <View className="gap-2">

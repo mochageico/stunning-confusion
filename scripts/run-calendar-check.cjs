@@ -1,7 +1,7 @@
 // Runs src/lib/reviewCalendar.projection.check.ts standalone under plain Node.
 //
 // Same shape as run-recitation-check.cjs, and for the same reason: the logic
-// under test is pure (reviewCalendar.ts + studyPlanScheduler.ts import
+// under test is pure (reviewCalendar.ts + groupPlanScheduler.ts import
 // nothing but types), but it's TypeScript, so esbuild bundles it to CJS in
 // memory and Node executes the result. No react-native alias is needed here
 // -- neither module touches it.

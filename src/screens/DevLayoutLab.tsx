@@ -9,7 +9,7 @@ import PlanDesignerScreen from './PlanDesignerScreen';
 import HomeScreen from './HomeScreen';
 import MemoryDeskScreen from './MemoryDeskScreen';
 import type { AppState } from '../state/useAppState';
-import type { Rhythm, StudyPlan, StudyPlanMembership } from '../types';
+import type { Rhythm, GroupPlan, GroupPlanMembership } from '../types';
 
 // ============================================================================
 // DEV LAYOUT LAB — not reachable in the shipped app.
@@ -125,8 +125,8 @@ function LiveRhythmEditor() {
 
 /** Two sources competing, with the three priority pills in one row. */
 function LiveQueueSources() {
-  const [priority, setPriority] = useState<StudyPlanMembership['priority']>('group');
-  const plan: StudyPlan = {
+  const [priority, setPriority] = useState<GroupPlanMembership['priority']>('group');
+  const plan: GroupPlan = {
     planId: 'p1',
     circleId: 'c1',
     name: 'Romans Challenge',

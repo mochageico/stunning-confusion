@@ -43,7 +43,7 @@ import DevLayoutLab from './src/screens/DevLayoutLab';
 // in anything that ships.
 const DEV_LAYOUT_LAB = false;
 import CommunityGroupDetailScreen from './src/screens/CommunityGroupDetailScreen';
-import StudyPlanDetailScreen from './src/screens/StudyPlanDetailScreen';
+import GroupPlanDetailScreen from './src/screens/GroupPlanDetailScreen';
 import CommunityHomeScreen from './src/screens/CommunityHomeScreen';
 import CommunityFindScreen from './src/screens/CommunityFindScreen';
 import CommunityCreateScreen from './src/screens/CommunityCreateScreen';
@@ -91,8 +91,8 @@ function Screens({ state }: { state: AppState }) {
   if (state.currentScreen === 'memberProfile' && state.selectedUserProfile) {
     return <MemberProfileScreen state={state} />;
   }
-  if (state.currentScreen === 'studyPlanDetail' && state.viewingStudyPlan) {
-    return <StudyPlanDetailScreen state={state} />;
+  if (state.currentScreen === 'groupPlanDetail' && state.viewingGroupPlan) {
+    return <GroupPlanDetailScreen state={state} />;
   }
   if (state.currentScreen === 'fullHistory') {
     return <FullHistoryScreen state={state} />;

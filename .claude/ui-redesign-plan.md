@@ -270,6 +270,31 @@ names the verses starting that day.
 - Found and fixed while measuring: the Sabbath switch had a fixed `w-12` track
   with a font-scaled knob, pushing 17px out of the card at 1.5×.
 
+### Naming — DONE (2026-08-03)
+
+Three concepts, three names, no overlap:
+
+| Name | What it is | Where |
+|---|---|---|
+| **Rhythm** | your cadence — days, pace, review cap, sabbath, pause | Memory Queue screen |
+| **Memory Plan** | your retention method | Plan designer / Saved Plans |
+| **Group Plan** | circle-owned, manager-curated (was "Study Plan") | Community tab |
+
+`StudyPlan*` → `GroupPlan*` throughout: types, handlers, the `studyPlanDetail`
+route, `studyPlanScheduler.ts` → `groupPlanScheduler.ts`,
+`StudyPlanDetailScreen.tsx` → `GroupPlanDetailScreen.tsx`, and all UI copy.
+
+**One exception, deliberate:** the Firestore field `joinedStudyPlans` on
+`memoryPlans/{uid}` keeps its old name, behind `JOINED_GROUP_PLANS_FIELD` in
+`useAppState.ts`. It's written into every existing user's document; renaming it
+would orphan every membership on next load and silently un-join everyone. The
+Firestore *collection* was always `circles/{id}/groupPlans`, so this one field
+is the only place the old wording survives.
+
+Gotcha for future renames: `scripts/check-layout.cjs`'s `LEGACY` list is keyed
+by file path, so renaming a file silently promotes its warnings to errors. The
+entry was updated; check went 21 errors → 0.
+
 ### Not verified in-browser
 The real Memory Calendar and Queue screens need a signed-in user, and there's
 no guest mode (see the harness note in memory). Both typecheck, and the

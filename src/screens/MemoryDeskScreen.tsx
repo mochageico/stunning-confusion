@@ -21,7 +21,7 @@ import { AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/
 // you can read where everything stands at a glance without opening anything,
 // so the menu informs rather than hides.
 //
-// Community study plans deliberately do NOT live here -- they're group-owned
+// Community group plans deliberately do NOT live here -- they're group-owned
 // content on a different lifecycle, and belong in the Community tab.
 // ============================================================================
 

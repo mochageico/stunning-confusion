@@ -65,7 +65,7 @@ const LEGACY = new Set([
   'screens/ReferenceDrillScreen.tsx',
   'screens/SavedPlansScreen.tsx',
   'screens/SettingsScreen.tsx',
-  'screens/StudyPlanDetailScreen.tsx',
+  'screens/GroupPlanDetailScreen.tsx',
 ]);
 
 const MIN_FONT_PT = 11;

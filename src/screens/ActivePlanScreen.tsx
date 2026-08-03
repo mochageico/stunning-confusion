@@ -87,9 +87,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     promoteToLearning,
     savedPlans,
     cognitiveLoadSensitivity,
-    joinedStudyPlanDetails,
-    joinedStudyPlanMemberships,
-    setStudyPlanPriority,
+    joinedGroupPlanDetails,
+    joinedGroupPlanMemberships,
+    setGroupPlanPriority,
     getNextPullPreview,
   } = state;
 
@@ -152,7 +152,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   // yours but not which plan put it there -- so the priority setting had no
   // visible subject.
   const planNameFor = (planId?: string) =>
-    joinedStudyPlanDetails.find((p) => p.planId === planId)?.name || 'Group';
+    joinedGroupPlanDetails.find((p) => p.planId === planId)?.name || 'Group';
 
   const moveGroupUp = (idx: number) => {
     if (idx === 0) return;
@@ -232,19 +232,19 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 
         {/* WHERE VERSES COME FROM -- only worth a section once there's more
             than one source competing for the daily budget. */}
-        {joinedStudyPlanMemberships.length > 0 && (
+        {joinedGroupPlanMemberships.length > 0 && (
           <CollapsibleCard
             storageKey="queue.sources"
             title="Where verses come from"
-            summary={`${joinedStudyPlanMemberships.length + 1} sources`}
+            summary={`${joinedGroupPlanMemberships.length + 1} sources`}
           >
             <QueueSources
               individualQueuedCount={individualQueuedCount}
-              joinedPlans={joinedStudyPlanDetails}
-              memberships={joinedStudyPlanMemberships}
+              joinedPlans={joinedGroupPlanDetails}
+              memberships={joinedGroupPlanMemberships}
               previewFromPlans={pullPreview.fromPlans}
               previewFromIndividual={pullPreview.fromIndividual}
-              onChangePriority={setStudyPlanPriority}
+              onChangePriority={setGroupPlanPriority}
             />
           </CollapsibleCard>
         )}

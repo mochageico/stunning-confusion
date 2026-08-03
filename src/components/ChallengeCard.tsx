@@ -29,7 +29,7 @@ const referenceLabel = (c: Pick<ChallengeRange, 'book' | 'startChapter' | 'endCh
 };
 
 // Single-chapter range picker (Book + Chapter + optional Start/End Verse),
-// same inputs/layout StudyPlanDetailScreen's "Add Verses" form already uses
+// same inputs/layout GroupPlanDetailScreen's "Add Verses" form already uses
 // -- deliberately not a multi-chapter book-range picker, matching that
 // screen's own scope decision to trade a few repeated taps for a simpler
 // build. Shared by DMThreadScreen (1:1 challenge) and

@@ -99,8 +99,8 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
     newVersesPace,
     sabbathEnabled,
     sabbathDay,
-    joinedStudyPlanDetails,
-    joinedStudyPlanMemberships,
+    joinedGroupPlanDetails,
+    joinedGroupPlanMemberships,
     cognitiveLoadSensitivity,
     getEstimatedReviewTime,
   } = state;
@@ -144,12 +144,12 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
           newVersesPace,
           sabbathEnabled,
           sabbathDay,
-          joinedPlans: joinedStudyPlanDetails,
-          memberships: joinedStudyPlanMemberships,
+          joinedPlans: joinedGroupPlanDetails,
+          memberships: joinedGroupPlanMemberships,
         },
         Math.max(daysFromTodayThroughGridEnd, 1)
       ),
-    [memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedStudyPlanDetails, joinedStudyPlanMemberships, daysFromTodayThroughGridEnd]
+    [memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, daysFromTodayThroughGridEnd]
   );
 
   // Estimated minutes for a projected day, reusing the same per-verse math
@@ -157,7 +157,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
   // Memory Load Forecast on the queue screen used to show; it belongs here,
   // next to the day it describes and the verses that make it up.
   const planNameById = (planId?: string) =>
-    planId ? joinedStudyPlanDetails.find((p) => p.planId === planId)?.name : undefined;
+    planId ? joinedGroupPlanDetails.find((p) => p.planId === planId)?.name : undefined;
 
   const loadMinsFor = (day: CalendarDayProjection | null) => {
     if (!day) return 0;

@@ -207,7 +207,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
         </View>
 
         {/* Verse range — plain typed numbers, like the "Add Verses" box on
-            the Study Plan screen, instead of scrolling two long dropdowns. */}
+            the Group Plan screen, instead of scrolling two long dropdowns. */}
         <View className="gap-1">
           <View className="flex-row items-center justify-between">
             <Text className="text-[8px] font-extrabold uppercase text-neutral-400 font-sans tracking-wider">

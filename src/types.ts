@@ -43,10 +43,10 @@ export interface TouchLog {
 
 // A circle-scoped, manager-curated shared memorization plan. Members join it
 // and its verses feed automatically into their own personal queue (see
-// src/lib/studyPlanScheduler.ts) at whatever weekly pace the manager sets --
+// src/lib/groupPlanScheduler.ts) at whatever weekly pace the manager sets --
 // there's no separate "learning days" here, and no manual pointer; deployment
 // timing always comes from each member's own personal learningDays/pace.
-export interface StudyPlan {
+export interface GroupPlan {
   planId: string;
   circleId: string;
   name: string;
@@ -59,12 +59,12 @@ export interface StudyPlan {
   updatedAt: string;
 }
 
-// A member's relationship to one joined StudyPlan -- in particular, how that
+// A member's relationship to one joined GroupPlan -- in particular, how that
 // plan's verses should compete with the member's own individual queue when
 // there isn't enough daily capacity for both. See computeDailyPull in
-// src/lib/studyPlanScheduler.ts for exactly how each mode is resolved,
+// src/lib/groupPlanScheduler.ts for exactly how each mode is resolved,
 // especially when a member has joined more than one plan at once.
-export interface StudyPlanMembership {
+export interface GroupPlanMembership {
   planId: string;
   circleId: string;
   // 'individual' -- the member's own queued verses are pulled first; this
@@ -88,7 +88,7 @@ export interface QueueItem {
   orderIndex: number;          // Position in the queue
   status: 'queued' | 'learning' | 'reviewing' | 'retained';
   origin?: 'individual' | 'group'; // Origin of the verse (colored orange/red for individual, blue/purple for group)
-  originPlanId?: string;       // Which StudyPlan this verse came from, when origin === 'group' -- lets the scheduler charge it against that plan's own weekly pace budget, and lets leaveStudyPlan clean up only that plan's still-queued verses.
+  originPlanId?: string;       // Which GroupPlan this verse came from, when origin === 'group' -- lets the scheduler charge it against that plan's own weekly pace budget, and lets leaveGroupPlan clean up only that plan's still-queued verses.
 
   // 7-6-5 Retention System State
   retentionPhase: 'none' | 'daily' | 'weekly' | 'monthly';
@@ -408,7 +408,7 @@ export interface Challenge {
 }
 
 // Open-enrollment group challenge hosted inside a Circle -- any member can
-// join (unlike StudyPlan, which is leader-curated). Stored at
+// join (unlike GroupPlan, which is leader-curated). Stored at
 // circles/{circleId}/challenges/{id}. Participants are their own self-owned
 // subcollection docs (see GroupChallengeParticipant below), not a map field
 // on this doc, so firestore.rules can restrict each participant to writing
@@ -441,7 +441,7 @@ export interface GroupChallengeParticipant {
 
 // My own record of a GroupChallenge I've joined -- denormalized onto
 // memoryPlans/{uid}.joinedGroupChallenges, same "membership record" pattern
-// StudyPlanMembership already uses for joinedStudyPlans. Self-contained
+// GroupPlanMembership already uses for joinedGroupPlans. Self-contained
 // (carries its own range/totalVerses) so progress-sync after a review never
 // needs to re-fetch the parent GroupChallenge doc just to know what to count.
 export interface GroupChallengeMembership {

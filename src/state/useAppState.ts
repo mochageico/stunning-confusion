@@ -84,13 +84,13 @@ import {
   QueueItem,
   Recording,
   Rhythm,
-  StudyPlan,
-  StudyPlanMembership,
+  GroupPlan,
+  GroupPlanMembership,
   TouchLog,
   VerseState,
   VerseTimestamp,
 } from '../types';
-import { computeDailyPull, PersonalPacingSettings } from '../lib/studyPlanScheduler';
+import { computeDailyPull, PersonalPacingSettings } from '../lib/groupPlanScheduler';
 
 export type ScreenName =
   | 'home'
@@ -105,7 +105,7 @@ export type ScreenName =
   | 'memoryCalendar'
   | 'referenceDrill'
   | 'memberProfile'
-  | 'studyPlanDetail'
+  | 'groupPlanDetail'
   | 'fullHistory'
   | 'dashboard'
   | 'settings'
@@ -438,13 +438,13 @@ const computeMissedCycles = (
 };
 
 // Back-compat: normalizes a raw Firestore 'groupPlans' doc into the current
-// StudyPlan shape. Docs created before the Study Plan revamp (the old
-// GroupPlan model) have `scriptureRange`/`pacingPerWeek` instead of
+// GroupPlan shape. Docs created before the group-plan revamp (the old
+// single-plan model) have `scriptureRange`/`pacingPerWeek` instead of
 // `verseIds`/`versesPerWeek`, and no `description`/`createdAt`/`updatedAt` --
-// reading one of those directly as a StudyPlan left `verseIds` undefined,
+// reading one of those directly as a GroupPlan left `verseIds` undefined,
 // crashing any `plan.verseIds.length` in the UI. Same pattern already used
 // for old MemoryPlan docs missing retention-rigor/mastery-touches fields.
-const normalizeStudyPlan = (planId: string, data: any): StudyPlan => ({
+const normalizeGroupPlan = (planId: string, data: any): GroupPlan => ({
   planId,
   circleId: data.circleId,
   name: data.name || 'Untitled Plan',
@@ -539,6 +539,14 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 // here rather than copied over.
 //
 // `isActive`/`updatedAt` are set for the adopter; callers supply id + name.
+// Wire name for the membership list on memoryPlans/{uid}. These were called
+// "study plans" before the rename to "group plans", but this key is already
+// written into every existing user's document -- renaming it would orphan
+// every membership on the next load and silently un-join everyone. The
+// Firestore COLLECTION was always 'groupPlans' (circles/{id}/groupPlans), so
+// this single field is the only place the old wording survives.
+const JOINED_GROUP_PLANS_FIELD = 'joinedStudyPlans';
+
 function normalizeAdoptedPlan(plan: any): MemoryPlan {
   return {
     id: '',
@@ -882,7 +890,7 @@ export function useAppState() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 3-Touch Mastery & Study Plan States
+  // 3-Touch Mastery & Group Plan States
   const [masteryTouches, setMasteryTouches] = useState<number>(3);
   const [reviewsRequired, setReviewsRequired] = useState<number>(1);
   // Sabbath: an optional single weekday, off by default, free from both
@@ -907,13 +915,13 @@ export function useAppState() {
   // review activity changes items' due dates.
   const [missedReviewQueue, setMissedReviewQueue] = useState<{ item: QueueItem; missedCycles: number }[]>([]);
   const [showMissedReviewPrompt, setShowMissedReviewPrompt] = useState(false);
-  // Every StudyPlan this member has joined (possibly more than one, each with
-  // its own priority setting -- see src/lib/studyPlanScheduler.ts) plus the
-  // resolved StudyPlan docs themselves (versesPerWeek, verseIds, etc.), kept
+  // Every GroupPlan this member has joined (possibly more than one, each with
+  // its own priority setting -- see src/lib/groupPlanScheduler.ts) plus the
+  // resolved GroupPlan docs themselves (versesPerWeek, verseIds, etc.), kept
   // in sync so the scheduler always has real, current data to work from.
-  const [joinedStudyPlanMemberships, setJoinedStudyPlanMemberships] = useState<StudyPlanMembership[]>([]);
-  const [joinedStudyPlanDetails, setJoinedStudyPlanDetails] = useState<StudyPlan[]>([]);
-  const [viewingStudyPlan, setViewingStudyPlan] = useState<StudyPlan | null>(null);
+  const [joinedGroupPlanMemberships, setJoinedGroupPlanMemberships] = useState<GroupPlanMembership[]>([]);
+  const [joinedGroupPlanDetails, setJoinedGroupPlanDetails] = useState<GroupPlan[]>([]);
+  const [viewingGroupPlan, setViewingGroupPlan] = useState<GroupPlan | null>(null);
   const [viewingGroupDetail, setViewingGroupDetail] = useState<boolean>(false);
 
   // Scripture Circles (real Firestore-backed community groups — see circles/{id}
@@ -926,7 +934,7 @@ export function useAppState() {
 
   const [activeCircle, setActiveCircle] = useState<Circle | null>(null);
   const [activeCircleMembers, setActiveCircleMembers] = useState<CircleMember[]>([]);
-  const [activeCircleStudyPlans, setActiveCircleStudyPlans] = useState<StudyPlan[]>([]);
+  const [activeCircleGroupPlans, setActiveCircleGroupPlans] = useState<GroupPlan[]>([]);
   const [loadingActiveCircle, setLoadingActiveCircle] = useState(false);
 
   // "Friends" = real co-members across every circle the user belongs to
@@ -996,7 +1004,7 @@ export function useAppState() {
   // My own membership records across ALL group challenges I've joined
   // (not just whichever circle is currently open) -- denormalized onto
   // memoryPlans/{uid}.joinedGroupChallenges, same pattern as
-  // joinedStudyPlanMemberships, needed so progress-sync after a review can
+  // joinedGroupPlanMemberships, needed so progress-sync after a review can
   // find "am I in a challenge for this verse" without opening every circle.
   const [joinedGroupChallenges, setJoinedGroupChallenges] = useState<GroupChallengeMembership[]>([]);
 
@@ -1027,9 +1035,9 @@ export function useAppState() {
   };
 
   const [isEditingCircleSettings, setIsEditingCircleSettings] = useState<boolean>(false);
-  // Study Plan creation only asks for a title + description -- pacing and
+  // Group Plan creation only asks for a title + description -- pacing and
   // the verse queue itself are set/built from the plan's own landing page
-  // (StudyPlanDetailScreen), using local ephemeral form state there instead
+  // (GroupPlanDetailScreen), using local ephemeral form state there instead
   // of more global fields here.
   const [showCreatePlanForm, setShowCreatePlanForm] = useState<boolean>(false);
   const [newPlanName, setNewPlanName] = useState<string>('');
@@ -1282,7 +1290,7 @@ export function useAppState() {
 
     if (
       currentScreen === 'memberProfile' ||
-      currentScreen === 'studyPlanDetail' ||
+      currentScreen === 'groupPlanDetail' ||
       currentScreen === 'fullHistory' ||
       currentScreen === 'dashboard' ||
       currentScreen === 'settings' ||
@@ -2316,7 +2324,7 @@ export function useAppState() {
       ]);
       setActiveCircle(circleSnap.exists() ? ({ id: circleSnap.id, ...circleSnap.data() } as Circle) : null);
       setActiveCircleMembers(membersSnap.docs.map((d) => d.data() as CircleMember));
-      setActiveCircleStudyPlans(plansSnap.docs.map((d) => normalizeStudyPlan(d.id, d.data())));
+      setActiveCircleGroupPlans(plansSnap.docs.map((d) => normalizeGroupPlan(d.id, d.data())));
       setActiveCircleChallenges(challengesSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as GroupChallenge));
     } catch (err) {
       console.error('Failed to load circle detail:', err);
@@ -2506,9 +2514,9 @@ export function useAppState() {
   // Creation only asks for a title + description -- no book/chapter/speed
   // up front. Per explicit user direction: real people rarely memorize
   // whole books together, so the actual verse queue is built incrementally
-  // from the plan's own landing page (addVersesToStudyPlan below), and its
+  // from the plan's own landing page (addVersesToGroupPlan below), and its
   // pace (versesPerWeek) is set/edited there too, not at creation time.
-  const createStudyPlan = async (circleId: string, input: { name: string; description: string }) => {
+  const createGroupPlan = async (circleId: string, input: { name: string; description: string }) => {
     if (!auth.currentUser) return;
     const trimmedName = input.name.trim();
     if (!trimmedName) {
@@ -2517,7 +2525,7 @@ export function useAppState() {
     }
     const planRef = doc(collection(db, 'circles', circleId, 'groupPlans'));
     const now = new Date().toISOString();
-    const newPlan: StudyPlan = {
+    const newPlan: GroupPlan = {
       planId: planRef.id,
       circleId,
       name: trimmedName,
@@ -2532,25 +2540,25 @@ export function useAppState() {
 
     try {
       await setDoc(planRef, newPlan);
-      setActiveCircleStudyPlans((prev) => [...prev, newPlan]);
+      setActiveCircleGroupPlans((prev) => [...prev, newPlan]);
       triggerToast(`Created "${trimmedName}"! Add verses and set a pace from its page. 🛡️`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planRef.id}`);
     }
   };
 
-  const updateStudyPlan = async (
+  const updateGroupPlan = async (
     circleId: string,
     planId: string,
-    fields: Partial<Pick<StudyPlan, 'name' | 'description' | 'versesPerWeek'>>
+    fields: Partial<Pick<GroupPlan, 'name' | 'description' | 'versesPerWeek'>>
   ) => {
     try {
       const updatedAt = new Date().toISOString();
       await updateDoc(doc(db, 'circles', circleId, 'groupPlans', planId), { ...fields, updatedAt });
-      const apply = (p: StudyPlan) => (p.planId === planId ? { ...p, ...fields, updatedAt } : p);
-      setActiveCircleStudyPlans((prev) => prev.map(apply));
-      setJoinedStudyPlanDetails((prev) => prev.map(apply));
-      setViewingStudyPlan((prev) => (prev && prev.planId === planId ? apply(prev) : prev));
+      const apply = (p: GroupPlan) => (p.planId === planId ? { ...p, ...fields, updatedAt } : p);
+      setActiveCircleGroupPlans((prev) => prev.map(apply));
+      setJoinedGroupPlanDetails((prev) => prev.map(apply));
+      setViewingGroupPlan((prev) => (prev && prev.planId === planId ? apply(prev) : prev));
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planId}`);
     }
@@ -2558,7 +2566,7 @@ export function useAppState() {
 
   // ==========================================
   // GROUP CHALLENGES -- see GroupChallenge/GroupChallengeParticipant in
-  // types.ts. Unlike StudyPlan (leader-curated, verses trickle in weekly),
+  // types.ts. Unlike GroupPlan (leader-curated, verses trickle in weekly),
   // any member can create one and the whole range front-loads into the
   // joiner's queue immediately -- the "race" is who finishes reviewing it
   // first, not a paced feed.
@@ -2740,7 +2748,7 @@ export function useAppState() {
   // Manager builds a plan's verse queue incrementally, a handful of verses
   // at a time, from real scripture text -- rather than committing a whole
   // book/chapter up front like the old "Deploy New Circle Plan" form did.
-  const addVersesToStudyPlan = async (
+  const addVersesToGroupPlan = async (
     circleId: string,
     planId: string,
     book: string,
@@ -2769,23 +2777,23 @@ export function useAppState() {
       return;
     }
 
-    const existingPlan = activeCircleStudyPlans.find((p) => p.planId === planId);
+    const existingPlan = activeCircleGroupPlans.find((p) => p.planId === planId);
     const mergedVerseIds = Array.from(new Set([...(existingPlan?.verseIds || []), ...newVerseIds]));
 
     try {
       const updatedAt = new Date().toISOString();
       await updateDoc(doc(db, 'circles', circleId, 'groupPlans', planId), { verseIds: mergedVerseIds, updatedAt });
-      const apply = (p: StudyPlan) => (p.planId === planId ? { ...p, verseIds: mergedVerseIds, updatedAt } : p);
-      setActiveCircleStudyPlans((prev) => prev.map(apply));
-      setJoinedStudyPlanDetails((prev) => prev.map(apply));
-      setViewingStudyPlan((prev) => (prev && prev.planId === planId ? apply(prev) : prev));
+      const apply = (p: GroupPlan) => (p.planId === planId ? { ...p, verseIds: mergedVerseIds, updatedAt } : p);
+      setActiveCircleGroupPlans((prev) => prev.map(apply));
+      setJoinedGroupPlanDetails((prev) => prev.map(apply));
+      setViewingGroupPlan((prev) => (prev && prev.planId === planId ? apply(prev) : prev));
 
       // Self-heal the manager's OWN queue immediately if they're also a
       // member -- other members' queues pick up the new verses the next
       // time their own session loads (see loadUserData), since a client
       // can't write into another user's private memoryQueue.
-      if (joinedStudyPlanMemberships.some((m) => m.planId === planId)) {
-        await addStudyPlanVersesToOwnQueue(planId, newVerseIds);
+      if (joinedGroupPlanMemberships.some((m) => m.planId === planId)) {
+        await addGroupPlanVersesToOwnQueue(planId, newVerseIds);
       }
 
       triggerToast(`Added ${newVerseIds.length} verse${newVerseIds.length === 1 ? '' : 's'} to the plan. 📖`);
@@ -2794,13 +2802,13 @@ export function useAppState() {
     }
   };
 
-  const deleteStudyPlan = async (circleId: string, planId: string) => {
+  const deleteGroupPlan = async (circleId: string, planId: string) => {
     try {
       await deleteDoc(doc(db, 'circles', circleId, 'groupPlans', planId));
-      setActiveCircleStudyPlans((prev) => prev.filter((p) => p.planId !== planId));
-      setJoinedStudyPlanDetails((prev) => prev.filter((p) => p.planId !== planId));
-      setViewingStudyPlan((prev) => (prev && prev.planId === planId ? null : prev));
-      triggerToast('Deleted study plan. 🗑️');
+      setActiveCircleGroupPlans((prev) => prev.filter((p) => p.planId !== planId));
+      setJoinedGroupPlanDetails((prev) => prev.filter((p) => p.planId !== planId));
+      setViewingGroupPlan((prev) => (prev && prev.planId === planId ? null : prev));
+      triggerToast('Deleted group plan. 🗑️');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planId}`);
     }
@@ -2960,10 +2968,10 @@ export function useAppState() {
 
   // Fetches real verse text for whichever of `verseIds` aren't already in
   // the member's own queue and appends them as 'queued', tagged to this
-  // plan -- shared by joinStudyPlan (the plan's full current range) and
-  // addVersesToStudyPlan's self-heal path (just the newly-added verses).
-  const addStudyPlanVersesToOwnQueue = async (planId: string, verseIds: string[]) => {
-    // StudyPlan.verseIds are translation-less ("GEN_1_3") -- group plans
+  // plan -- shared by joinGroupPlan (the plan's full current range) and
+  // addVersesToGroupPlan's self-heal path (just the newly-added verses).
+  const addGroupPlanVersesToOwnQueue = async (planId: string, verseIds: string[]) => {
+    // GroupPlan.verseIds are translation-less ("GEN_1_3") -- group plans
     // don't have per-member translation choice yet, always resolved as
     // DEFAULT_TRANSLATION_ID, so "already in my queue" means the
     // DEFAULT_TRANSLATION_ID-prefixed form of this reference already exists
@@ -3024,15 +3032,18 @@ export function useAppState() {
     }
   };
 
-  const persistJoinedStudyPlans = async (memberships: StudyPlanMembership[]) => {
+  const persistJoinedGroupPlans = async (memberships: GroupPlanMembership[]) => {
     if (!auth.currentUser) return;
     try {
       const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
       // merge: true — this doc also holds savedPlans and other top-level
       // plan fields; a plain setDoc here would silently erase them.
-      await setDoc(planRef, { joinedStudyPlans: memberships, updatedAt: new Date() }, { merge: true });
+      //
+      // The constant, not a literal: this key still carries the pre-rename
+      // wording on every existing document. See its definition.
+      await setDoc(planRef, { [JOINED_GROUP_PLANS_FIELD]: memberships, updatedAt: new Date() }, { merge: true });
     } catch (err) {
-      console.error('Failed to persist joined study plans:', err);
+      console.error('Failed to persist joined group plans:', err);
     }
   };
 
@@ -3046,58 +3057,58 @@ export function useAppState() {
     }
   };
 
-  const joinStudyPlan = async (plan: StudyPlan, priority: StudyPlanMembership['priority'] = 'group') => {
+  const joinGroupPlan = async (plan: GroupPlan, priority: GroupPlanMembership['priority'] = 'group') => {
     try {
-      await addStudyPlanVersesToOwnQueue(plan.planId, plan.verseIds);
+      await addGroupPlanVersesToOwnQueue(plan.planId, plan.verseIds);
 
-      const membership: StudyPlanMembership = {
+      const membership: GroupPlanMembership = {
         planId: plan.planId,
         circleId: plan.circleId,
         priority,
         joinedAt: new Date().toISOString(),
       };
-      const updatedMemberships = [...joinedStudyPlanMemberships.filter((m) => m.planId !== plan.planId), membership];
-      setJoinedStudyPlanMemberships(updatedMemberships);
-      setJoinedStudyPlanDetails((prev) => [...prev.filter((p) => p.planId !== plan.planId), plan]);
-      await persistJoinedStudyPlans(updatedMemberships);
+      const updatedMemberships = [...joinedGroupPlanMemberships.filter((m) => m.planId !== plan.planId), membership];
+      setJoinedGroupPlanMemberships(updatedMemberships);
+      setJoinedGroupPlanDetails((prev) => [...prev.filter((p) => p.planId !== plan.planId), plan]);
+      await persistJoinedGroupPlans(updatedMemberships);
 
       triggerToast(`Joined "${plan.name}"! Verses added to your queue. 🎯`);
     } catch (err) {
-      console.error('Error joining study plan:', err);
-      triggerToast('Failed to join this study plan.');
+      console.error('Error joining group plan:', err);
+      triggerToast('Failed to join this group plan.');
     }
   };
 
   // Only strips verses that are still 'queued' (never actually started) --
   // anything already being learned/reviewed/retained is left alone, since
   // leaving a plan shouldn't erase real progress already made on it.
-  const leaveStudyPlan = async (planId: string) => {
-    const updatedMemberships = joinedStudyPlanMemberships.filter((m) => m.planId !== planId);
-    setJoinedStudyPlanMemberships(updatedMemberships);
-    setJoinedStudyPlanDetails((prev) => prev.filter((p) => p.planId !== planId));
+  const leaveGroupPlan = async (planId: string) => {
+    const updatedMemberships = joinedGroupPlanMemberships.filter((m) => m.planId !== planId);
+    setJoinedGroupPlanMemberships(updatedMemberships);
+    setJoinedGroupPlanDetails((prev) => prev.filter((p) => p.planId !== planId));
     updateMemoryQueue((prev) => prev.filter((item) => !(item.originPlanId === planId && item.status === 'queued')));
-    await persistJoinedStudyPlans(updatedMemberships);
-    triggerToast('Left the study plan.');
+    await persistJoinedGroupPlans(updatedMemberships);
+    triggerToast('Left the group plan.');
   };
 
-  const setStudyPlanPriority = async (planId: string, priority: StudyPlanMembership['priority']) => {
-    const updatedMemberships = joinedStudyPlanMemberships.map((m) => (m.planId === planId ? { ...m, priority } : m));
-    setJoinedStudyPlanMemberships(updatedMemberships);
-    await persistJoinedStudyPlans(updatedMemberships);
+  const setGroupPlanPriority = async (planId: string, priority: GroupPlanMembership['priority']) => {
+    const updatedMemberships = joinedGroupPlanMemberships.map((m) => (m.planId === planId ? { ...m, priority } : m));
+    setJoinedGroupPlanMemberships(updatedMemberships);
+    await persistJoinedGroupPlans(updatedMemberships);
   };
 
   // Leaving/disbanding an entire circle should also drop membership in
-  // whatever Study Plans belonged to it -- mirrors the old single-plan
+  // whatever Group Plans belonged to it -- mirrors the old single-plan
   // code's setActiveGroupPlan(null) on the same actions, just generalized
   // to however many plans of that circle this member had joined.
-  const clearStudyPlanMembershipsForCircle = (circleId: string) => {
-    const updatedMemberships = joinedStudyPlanMemberships.filter((m) => m.circleId !== circleId);
-    setJoinedStudyPlanMemberships(updatedMemberships);
-    setJoinedStudyPlanDetails((prev) => prev.filter((p) => p.circleId !== circleId));
-    persistJoinedStudyPlans(updatedMemberships);
+  const clearGroupPlanMembershipsForCircle = (circleId: string) => {
+    const updatedMemberships = joinedGroupPlanMemberships.filter((m) => m.circleId !== circleId);
+    setJoinedGroupPlanMemberships(updatedMemberships);
+    setJoinedGroupPlanDetails((prev) => prev.filter((p) => p.circleId !== circleId));
+    persistJoinedGroupPlans(updatedMemberships);
   };
 
-  // Same reasoning as clearStudyPlanMembershipsForCircle just above --
+  // Same reasoning as clearGroupPlanMembershipsForCircle just above --
   // leaving/disbanding a circle should also drop membership in whatever
   // group challenges belonged to it.
   const clearGroupChallengeMembershipsForCircle = (circleId: string) => {
@@ -3615,13 +3626,13 @@ export function useAppState() {
 
         setSavedPlans(plansList);
 
-        // Joined Study Plans: resolve membership records into the real
-        // StudyPlan docs they point to. This also fixes a pre-existing bug
+        // Joined Group Plans: resolve membership records into the real
+        // GroupPlan docs they point to. This also fixes a pre-existing bug
         // where the old singular activeGroupPlan was written to Firestore on
         // join but never actually read back on load -- it silently reset to
         // null every reload even though the user was still really a member.
-        const memberships: StudyPlanMembership[] = planData.joinedStudyPlans || [];
-        setJoinedStudyPlanMemberships(memberships);
+        const memberships: GroupPlanMembership[] = planData[JOINED_GROUP_PLANS_FIELD] || [];
+        setJoinedGroupPlanMemberships(memberships);
         if (memberships.length > 0) {
           try {
             const planDocs = await Promise.all(
@@ -3629,13 +3640,13 @@ export function useAppState() {
             );
             const resolvedPlans = planDocs
               .filter((snap) => snap.exists())
-              .map((snap) => normalizeStudyPlan(snap.id, snap.data()));
-            setJoinedStudyPlanDetails(resolvedPlans);
+              .map((snap) => normalizeGroupPlan(snap.id, snap.data()));
+            setJoinedGroupPlanDetails(resolvedPlans);
           } catch (e) {
-            console.error('Failed to resolve joined study plans:', e);
+            console.error('Failed to resolve joined group plans:', e);
           }
         } else {
-          setJoinedStudyPlanDetails([]);
+          setJoinedGroupPlanDetails([]);
         }
 
         setJoinedGroupChallenges((planData.joinedGroupChallenges as GroupChallengeMembership[]) || []);
@@ -3829,14 +3840,14 @@ export function useAppState() {
       // membership). Reset on every auth transition, not just sign-out.
       setActiveCircle(null);
       setActiveCircleMembers([]);
-      setActiveCircleStudyPlans([]);
-      setJoinedStudyPlanMemberships([]);
-      setJoinedStudyPlanDetails([]);
+      setActiveCircleGroupPlans([]);
+      setJoinedGroupPlanMemberships([]);
+      setJoinedGroupPlanDetails([]);
       setActiveCircleChallenges([]);
       setJoinedGroupChallenges([]);
       setOpenChallengeLeaderboardId(null);
       setOpenChallengeLeaderboard([]);
-      setViewingStudyPlan(null);
+      setViewingGroupPlan(null);
       setViewingGroupDetail(false);
       setActiveGroupId('');
       setCommunitySubView('home');
@@ -4660,7 +4671,7 @@ export function useAppState() {
     // picks it. With the shield up we re-run the pull with a zero personal
     // budget and only the additive memberships, so exactly that plan's own
     // weekly share comes through.
-    const additiveMemberships = joinedStudyPlanMemberships.filter((m) => m.priority === 'additive');
+    const additiveMemberships = joinedGroupPlanMemberships.filter((m) => m.priority === 'additive');
     if (shieldActive && additiveMemberships.length === 0) {
       triggerToast(`Review Shield is Active! Review time (${estTime}m) >= limit (${maxReviewCap}m). No new verses pulled today. 🛡️`);
       return;
@@ -4671,9 +4682,9 @@ export function useAppState() {
       return;
     }
 
-    // Blends the personal queue with however many StudyPlans this member has
+    // Blends the personal queue with however many GroupPlans this member has
     // joined, at whatever pace/priority each calls for -- see
-    // src/lib/studyPlanScheduler.ts for the full resolution rules (additive
+    // src/lib/groupPlanScheduler.ts for the full resolution rules (additive
     // plans first and uncapped, then group-priority > individual >
     // individual-priority within the personal daily budget).
     const personal: PersonalPacingSettings = {
@@ -4683,8 +4694,8 @@ export function useAppState() {
     const { verseIds: pulledVerseIds, fromIndividual, fromPlans } = computeDailyPull(
       memoryQueue,
       personal,
-      joinedStudyPlanDetails,
-      shieldActive ? additiveMemberships : joinedStudyPlanMemberships,
+      joinedGroupPlanDetails,
+      shieldActive ? additiveMemberships : joinedGroupPlanMemberships,
       new Date()
     );
 
@@ -4742,7 +4753,7 @@ export function useAppState() {
 
     const planBreakdown = Object.entries(fromPlans)
       .map(([planId, ids]) => {
-        const planName = joinedStudyPlanDetails.find((p) => p.planId === planId)?.name || 'a study plan';
+        const planName = joinedGroupPlanDetails.find((p) => p.planId === planId)?.name || 'a group plan';
         return `${ids.length} from "${planName}"`;
       })
       .join(', ');
@@ -4767,8 +4778,8 @@ export function useAppState() {
     computeDailyPull(
       memoryQueue,
       { newVersesPace, learningDays },
-      joinedStudyPlanDetails,
-      joinedStudyPlanMemberships,
+      joinedGroupPlanDetails,
+      joinedGroupPlanMemberships,
       new Date()
     );
 
@@ -6651,13 +6662,13 @@ export function useAppState() {
     missedReviewQueue,
     showMissedReviewPrompt, setShowMissedReviewPrompt,
     resolveMissedReviewChoice,
-    joinedStudyPlanMemberships,
-    joinedStudyPlanDetails,
-    viewingStudyPlan, setViewingStudyPlan,
+    joinedGroupPlanMemberships,
+    joinedGroupPlanDetails,
+    viewingGroupPlan, setViewingGroupPlan,
     viewingGroupDetail, setViewingGroupDetail,
     myCircles, loadingMyCircles,
     publicCircles, loadingPublicCircles,
-    activeCircle, activeCircleMembers, activeCircleStudyPlans, loadingActiveCircle,
+    activeCircle, activeCircleMembers, activeCircleGroupPlans, loadingActiveCircle,
     circleFriends, loadCircleFriends,
     activityEvents, loadingActivityEvents, loadActivityFeed,
     friends, loadingFriends, loadFriends,
@@ -6740,17 +6751,17 @@ export function useAppState() {
     disbandCircle,
     removeCircleMember,
     updateCircleSettings,
-    createStudyPlan,
-    updateStudyPlan,
-    addVersesToStudyPlan,
-    deleteStudyPlan,
-    joinStudyPlan,
+    createGroupPlan,
+    updateGroupPlan,
+    addVersesToGroupPlan,
+    deleteGroupPlan,
+    joinGroupPlan,
     getNextPullPreview,
-    leaveStudyPlan,
-    setStudyPlanPriority,
-    clearStudyPlanMembershipsForCircle,
+    leaveGroupPlan,
+    setGroupPlanPriority,
+    clearGroupPlanMembershipsForCircle,
 
-    // shared plan handlers (personal-settings templates, separate concept from Study Plans)
+    // shared plan handlers (personal-settings templates, separate concept from Group Plans)
     loadSharedPlans,
     joinSharedPlan,
     handleActivatePlan,

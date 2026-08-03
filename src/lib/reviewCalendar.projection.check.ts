@@ -5,9 +5,9 @@
 // the projection now runs the REAL computeDailyPull forward, day by day,
 // against a simulated queue, instead of assuming every learning day pulls
 // exactly newVersesPace of your own verses. That assumption was wrong for
-// anyone in a study plan and badly wrong on an 'additive' membership.
+// anyone in a group plan and badly wrong on an 'additive' membership.
 
-import { QueueItem, StudyPlan, StudyPlanMembership } from '../types';
+import { QueueItem, GroupPlan, GroupPlanMembership } from '../types';
 import { getMemoryCalendarProjection, CalendarPlanSettings } from './reviewCalendar';
 
 let failures = 0;
@@ -54,7 +54,7 @@ const BASE: CalendarPlanSettings = {
   sabbathDay: 'Su',
 };
 
-const groupPlan: StudyPlan = {
+const groupPlan: GroupPlan = {
   planId: 'plan-a',
   circleId: 'c1',
   name: 'Romans Challenge',
@@ -103,7 +103,7 @@ console.log('reviewCalendar — new-verse projection');
     ...Array.from({ length: 20 }, (_, i) => queued(`mine${i}`, i)),
     ...Array.from({ length: 20 }, (_, i) => queued(`grp${i}`, 100 + i, 'plan-a')),
   ];
-  const memberships: StudyPlanMembership[] = [
+  const memberships: GroupPlanMembership[] = [
     { planId: 'plan-a', circleId: 'c1', priority: 'additive', joinedAt: '' },
   ];
   const days = getMemoryCalendarProjection(
@@ -142,7 +142,7 @@ console.log('reviewCalendar — new-verse projection');
     ...Array.from({ length: 20 }, (_, i) => queued(`mine${i}`, i)),
     ...Array.from({ length: 20 }, (_, i) => queued(`grp${i}`, 100 + i, 'plan-a')),
   ];
-  const memberships: StudyPlanMembership[] = [
+  const memberships: GroupPlanMembership[] = [
     { planId: 'plan-a', circleId: 'c1', priority: 'group', joinedAt: '' },
   ];
   const days = getMemoryCalendarProjection(queue, { ...BASE, joinedPlans: [groupPlan], memberships }, 8);

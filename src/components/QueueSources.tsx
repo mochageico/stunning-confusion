@@ -1,12 +1,12 @@
 import { Pressable, View } from 'react-native';
 
-import { StudyPlan, StudyPlanMembership } from '../types';
+import { GroupPlan, GroupPlanMembership } from '../types';
 import { AppText, MIN_TOUCH, useFontScale, useScaledSpace } from './design';
 
-// Short forms of StudyPlanDetailScreen's PRIORITY_OPTIONS, for the inline
+// Short forms of GroupPlanDetailScreen's PRIORITY_OPTIONS, for the inline
 // control here. Same three modes, same order, same plain language -- see
-// src/lib/studyPlanScheduler.ts for what each one actually does to the pull.
-const PRIORITY_LABELS: { id: StudyPlanMembership['priority']; short: string }[] = [
+// src/lib/groupPlanScheduler.ts for what each one actually does to the pull.
+const PRIORITY_LABELS: { id: GroupPlanMembership['priority']; short: string }[] = [
   { id: 'group', short: 'Plan first' },
   { id: 'individual', short: 'Mine first' },
   { id: 'additive', short: 'Side by side' },
@@ -15,13 +15,13 @@ const PRIORITY_LABELS: { id: StudyPlanMembership['priority']; short: string }[] 
 export interface QueueSourcesProps {
   /** Queued (not yet started) verses that came from your own adding. */
   individualQueuedCount: number;
-  joinedPlans: StudyPlan[];
-  memberships: StudyPlanMembership[];
+  joinedPlans: GroupPlan[];
+  memberships: GroupPlanMembership[];
   /** planId -> verseIds the next pull would take from that plan. */
   previewFromPlans: Record<string, string[]>;
   /** verseIds the next pull would take from your own queue. */
   previewFromIndividual: string[];
-  onChangePriority: (planId: string, priority: StudyPlanMembership['priority']) => void;
+  onChangePriority: (planId: string, priority: GroupPlanMembership['priority']) => void;
 }
 
 /**
@@ -50,7 +50,7 @@ export function QueueSources({
   const planById = new Map(joinedPlans.map((p) => [p.planId, p]));
   const rows = memberships
     .map((m) => ({ membership: m, plan: planById.get(m.planId) }))
-    .filter((r): r is { membership: StudyPlanMembership; plan: StudyPlan } => !!r.plan);
+    .filter((r): r is { membership: GroupPlanMembership; plan: GroupPlan } => !!r.plan);
 
   const previewParts = [
     previewFromIndividual.length > 0 ? `${previewFromIndividual.length} of your own` : null,
