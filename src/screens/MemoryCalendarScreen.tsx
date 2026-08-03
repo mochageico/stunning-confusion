@@ -55,6 +55,38 @@ function versesLabel(verses: number[]): string {
   return verses.length === 1 ? `${verses[0]}` : `${verses[0]}-${verses[verses.length - 1]}`;
 }
 
+// Same consecutive-run grouping as groupDueReviews, for the new verses a
+// projected day would START (rather than review). Splits on originPlanId as
+// well as book/chapter so a run never merges verses from two different
+// sources under one plan label.
+function groupNewVerses(
+  items: QueueItem[],
+  planNameById: (planId?: string) => string | undefined
+): { book: string; chapter: number; verses: number[]; planName?: string }[] {
+  const groups: { book: string; chapter: number; verses: number[]; planId?: string; planName?: string }[] = [];
+  items.forEach((item) => {
+    const last = groups[groups.length - 1];
+    if (
+      last &&
+      last.book === item.book &&
+      last.chapter === item.chapter &&
+      last.planId === item.originPlanId &&
+      last.verses[last.verses.length - 1] === item.verseNumber - 1
+    ) {
+      last.verses.push(item.verseNumber);
+    } else {
+      groups.push({
+        book: item.book,
+        chapter: item.chapter,
+        verses: [item.verseNumber],
+        planId: item.originPlanId,
+        planName: planNameById(item.originPlanId),
+      });
+    }
+  });
+  return groups;
+}
+
 export default function MemoryCalendarScreen({ state }: { state: AppState }) {
   const {
     handleBack,
@@ -67,6 +99,10 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
     newVersesPace,
     sabbathEnabled,
     sabbathDay,
+    joinedStudyPlanDetails,
+    joinedStudyPlanMemberships,
+    cognitiveLoadSensitivity,
+    getEstimatedReviewTime,
   } = state;
 
   const [viewMode, setViewMode] = useState<'week' | 'month'>('month');
@@ -100,11 +136,37 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
     () =>
       getMemoryCalendarProjection(
         memoryQueue,
-        { dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, learningDays, newVersesPace, sabbathEnabled, sabbathDay },
+        {
+          dailyPhaseWeeks,
+          weeklyPhaseMonths,
+          monthlyPhaseYears,
+          learningDays,
+          newVersesPace,
+          sabbathEnabled,
+          sabbathDay,
+          joinedPlans: joinedStudyPlanDetails,
+          memberships: joinedStudyPlanMemberships,
+        },
         Math.max(daysFromTodayThroughGridEnd, 1)
       ),
-    [memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, learningDays, newVersesPace, sabbathEnabled, sabbathDay, daysFromTodayThroughGridEnd]
+    [memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedStudyPlanDetails, joinedStudyPlanMemberships, daysFromTodayThroughGridEnd]
   );
+
+  // Estimated minutes for a projected day, reusing the same per-verse math
+  // the Home screen's "about N min today" uses. This is what the 7-day
+  // Memory Load Forecast on the queue screen used to show; it belongs here,
+  // next to the day it describes and the verses that make it up.
+  const planNameById = (planId?: string) =>
+    planId ? joinedStudyPlanDetails.find((p) => p.planId === planId)?.name : undefined;
+
+  const loadMinsFor = (day: CalendarDayProjection | null) => {
+    if (!day) return 0;
+    const dayItems = [
+      ...day.dueReviews.map((r) => r.item),
+      ...day.newVerseItems,
+    ];
+    return dayItems.length === 0 ? 0 : getEstimatedReviewTime(dayItems, cognitiveLoadSensitivity);
+  };
 
   // projection[0] is always TODAY -- look up a projection day by its offset
   // from today (may be negative for the faded pre-today grid padding, which
@@ -184,7 +246,14 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
         {viewMode === 'week' ? (
           <View className="flex-row gap-1.5">
             {gridDays.map((day, idx) => (
-              <DayCell key={idx} day={day} isToday={day.offsetFromToday === 0} large onPress={() => setSelectedDayIdx(idx)} />
+              <DayCell
+                key={idx}
+                day={day}
+                isToday={day.offsetFromToday === 0}
+                large
+                loadMins={loadMinsFor(day.data)}
+                onPress={() => setSelectedDayIdx(idx)}
+              />
             ))}
           </View>
         ) : (
@@ -204,6 +273,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
                     day={day}
                     isToday={day.offsetFromToday === 0}
                     faded={day.offsetFromToday < 0}
+                    loadMins={loadMinsFor(day.data)}
                     onPress={() => setSelectedDayIdx(week * 7 + i)}
                   />
                 ))}
@@ -273,10 +343,36 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
                     </View>
                   )}
 
-                  {selectedDay?.data && selectedDay.data.newVersesPulled > 0 && (
-                    <Text className="text-[10px] text-neutral-400 font-sans px-1">
-                      +{selectedDay.data.newVersesPulled} new verse{selectedDay.data.newVersesPulled === 1 ? '' : 's'} pulled into Learning this day.
-                    </Text>
+                  {/* The specific verses this day's pull would start, not
+                      just how many. The projection runs the real
+                      computeDailyPull forward, so this also reflects any
+                      joined group plans and their priority. */}
+                  {selectedDay?.data && selectedDay.data.newVerseItems.length > 0 && (
+                    <View style={{ gap: 8 }}>
+                      <Text className="text-[10px] font-bold text-neutral-400 tracking-widest font-sans">STARTING THIS DAY</Text>
+                      {groupNewVerses(selectedDay.data.newVerseItems, planNameById).map((g, idx) => (
+                        <Pressable
+                          key={idx}
+                          onPress={() => {
+                            setSelectedDayIdx(null);
+                            navigateTo('chapterLanding', g.book, g.chapter);
+                          }}
+                          className="flex-row items-center justify-between px-3 py-2.5 rounded-xl border-l-4 border-l-neutral-400 border border-neutral-200 bg-neutral-50"
+                        >
+                          <View className="flex-row items-center gap-2 flex-1">
+                            <Sparkles size={13} color="#525252" />
+                            <Text className="text-xs font-serif font-black text-neutral-700">
+                              {g.book} {g.chapter}:{versesLabel(g.verses)}
+                            </Text>
+                          </View>
+                          {g.planName && (
+                            <Text className="text-[8px] font-sans font-bold uppercase text-indigo-700 shrink-0">
+                              {g.planName}
+                            </Text>
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
                   )}
 
                   {selectedDay?.data &&
@@ -299,17 +395,24 @@ function DayCell({
   isToday,
   faded,
   large,
+  loadMins,
   onPress,
 }: {
   day: { date: Date; offsetFromToday: number; data: CalendarDayProjection | null };
   isToday: boolean;
   faded?: boolean;
   large?: boolean;
+  /** Estimated minutes for this day -- the old queue-screen forecast, per cell. */
+  loadMins: number;
   onPress: () => void;
 }) {
   const phasesPresent = Array.from(new Set((day.data?.dueReviews || []).map((r) => r.phase)));
   const totalDue = day.data?.dueReviews.length || 0;
   const hasLearning = (day.data?.learningCount || 0) > 0;
+  // Week view has room to name what's actually due, which is the thing the
+  // old bar chart could never show. Month cells stay dots-only.
+  const firstRef = day.data?.dueReviews[0]?.item;
+  const extraRefs = Math.max(0, totalDue - 1);
 
   return (
     <Pressable
@@ -328,14 +431,29 @@ function DayCell({
       </Text>
 
       {!faded && (
-        <View className="items-center" style={{ gap: 2, minHeight: 14 }}>
+        <View className="items-center px-0.5" style={{ gap: 2, minHeight: 14 }}>
           <View className="flex-row gap-0.5">
             {phasesPresent.map((phase) => (
               <View key={phase} className={`w-1.5 h-1.5 rounded-full ${PHASE_COLORS[phase].dot}`} />
             ))}
             {hasLearning && <View className="w-1.5 h-1.5 rounded-full bg-neutral-300" />}
           </View>
-          {large && totalDue > 0 && <Text className="text-[9px] font-mono font-bold text-neutral-500">{totalDue} due</Text>}
+
+          {large && firstRef && (
+            <Text className="text-[8px] font-serif font-bold text-neutral-700 text-center" numberOfLines={2}>
+              {firstRef.book.slice(0, 3)} {firstRef.chapter}:{firstRef.verseNumber}
+              {extraRefs > 0 ? ` +${extraRefs}` : ''}
+            </Text>
+          )}
+          {large && !firstRef && day.data && day.data.newVersesPulled > 0 && (
+            <Text className="text-[8px] font-sans font-bold text-neutral-500 text-center" numberOfLines={1}>
+              +{day.data.newVersesPulled} new
+            </Text>
+          )}
+
+          {loadMins > 0 && (
+            <Text className="text-[9px] font-mono font-bold text-neutral-500">{loadMins}m</Text>
+          )}
         </View>
       )}
     </Pressable>

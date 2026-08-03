@@ -72,7 +72,7 @@ function DeskRow({
 }
 
 export default function MemoryDeskScreen({ state }: { state: AppState }) {
-  const { handleBack, navigateTo, memoryQueue, savedPlans, isReviewDue } = state;
+  const { handleBack, navigateTo, memoryQueue, savedPlans, isReviewDue, openActivePlanDesigner, learningDays, newVersesPace } = state;
   const space = useScaledSpace();
   const scale = useFontScale();
 
@@ -115,17 +115,24 @@ export default function MemoryDeskScreen({ state }: { state: AppState }) {
         </AppText>
 
         <View style={{ gap: space(8) }}>
+          {/* Queue owns Rhythm now, so its detail line says what your week
+              looks like, not just how many verses are sitting there. */}
           <DeskRow
             Icon={ListOrdered}
-            label="Memory Queue"
-            detail={`${queuedCount} queued · ${learningCount} learning`}
+            label="Memory Queue & Rhythm"
+            detail={`${queuedCount} queued · ${newVersesPace}/day, ${learningDays.length} days`}
             onPress={go('activePlan')}
           />
+          {/* openActivePlanDesigner, not go('planDesigner'): the designer has
+              to be told which plan it's editing. A bare navigateTo left
+              editingPlanId null on a fresh launch, and Save then took the
+              create-new branch -- minting a duplicate plan with the same name
+              and deactivating the real one. */}
           <DeskRow
             Icon={SlidersHorizontal}
-            label="Plan & Pacing"
+            label="Memory Plan"
             detail={activePlanName ?? 'No active plan'}
-            onPress={go('planDesigner')}
+            onPress={openActivePlanDesigner}
           />
           <DeskRow
             Icon={CalendarDays}

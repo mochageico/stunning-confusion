@@ -9,11 +9,21 @@ import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, getBookByName } from '../data'
 import { useChapterText } from '../state/useScripture';
 import { StudyPlanMembership } from '../types';
 
+// Plain language, and ordered by how most people actually want it: joining a
+// group thing usually means you want the group's verses to lead. The old
+// labels ("Individual First"/"Plan First"/"Additive") described the
+// scheduler's internals rather than the choice being made.
 const PRIORITY_OPTIONS: { id: StudyPlanMembership['priority']; label: string; description: string }[] = [
-  { id: 'individual', label: 'Individual First', description: "Your own queue comes first. This plan's verses fill whatever room is left." },
-  { id: 'group', label: 'Plan First', description: "This plan's verses come first, then your own queue — still within your daily capacity." },
-  { id: 'additive', label: 'Additive', description: "This plan's full weekly pace stacks on top of your daily capacity, deliberately going over it." },
+  { id: 'group', label: "Group verses first", description: "This plan leads. Your own verses fill whatever room is left in your daily pace." },
+  { id: 'individual', label: 'My verses first', description: "Your own queue leads. This plan fills whatever room is left in your daily pace." },
+  { id: 'additive', label: 'Both, side by side', description: "This plan pulls its full pace on top of your own — deliberately over your daily limits." },
 ];
+
+// What a brand-new member gets. Previously the Join button hardcoded
+// 'individual', which meant the plan only ever got leftover capacity -- so
+// anyone with a full personal queue joined a group plan and saw nothing
+// happen at all.
+const DEFAULT_JOIN_PRIORITY: StudyPlanMembership['priority'] = 'group';
 
 interface VerseIdGroup {
   key: string;
@@ -64,6 +74,7 @@ export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
   const [addChapter, setAddChapter] = useState('1');
   const [addStartVerse, setAddStartVerse] = useState('1');
   const [addEndVerse, setAddEndVerse] = useState('1');
+  const [joinPriority, setJoinPriority] = useState<StudyPlanMembership['priority']>(DEFAULT_JOIN_PRIORITY);
 
   if (!viewingStudyPlan) return null;
   const plan = viewingStudyPlan;
@@ -312,12 +323,44 @@ export default function StudyPlanDetailScreen({ state }: { state: AppState }) {
               </Pressable>
             </>
           ) : (
-            <Pressable
-              onPress={() => joinStudyPlan(plan, 'individual')}
-              className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center"
-            >
-              <Text className="text-white font-sans font-bold text-xs">Join Plan</Text>
-            </Pressable>
+            <>
+              {/* The priority choice is made HERE, at join, rather than being
+                  hardcoded and only changeable afterwards on a screen most
+                  members never come back to. */}
+              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">
+                How should these verses fit in?
+              </Text>
+              <View style={{ gap: 6 }}>
+                {PRIORITY_OPTIONS.map((opt) => {
+                  const active = opt.id === joinPriority;
+                  return (
+                    <Pressable
+                      key={opt.id}
+                      onPress={() => setJoinPriority(opt.id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: active }}
+                      aria-checked={active}
+                      className={`px-3 py-2.5 rounded-xl border-2 ${active ? 'border-[#1A1A1A] bg-[#FBF9F6]' : 'border-neutral-200 bg-white'}`}
+                      style={{ gap: 2 }}
+                    >
+                      <Text className={`text-[11px] font-sans font-bold ${active ? 'text-[#1A1A1A]' : 'text-neutral-700'}`}>
+                        {opt.label}
+                      </Text>
+                      <Text className="text-[9px] text-neutral-500 font-sans leading-tight">{opt.description}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text className="text-[9px] text-neutral-500 font-sans leading-tight">
+                You can change this any time. It decides which verses win when there isn't room for everything.
+              </Text>
+              <Pressable
+                onPress={() => joinStudyPlan(plan, joinPriority)}
+                className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center"
+              >
+                <Text className="text-white font-sans font-bold text-xs">Join Plan</Text>
+              </Pressable>
+            </>
           )}
         </View>
       </ScrollView>

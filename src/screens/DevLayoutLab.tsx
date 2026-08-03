@@ -3,10 +3,13 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { AppText, CollapsibleCard, FontScaleOverrideProvider } from '../components/design';
 import { MissPolicySection, type MissPolicy } from '../components/MissPolicySection';
+import { RhythmEditor } from '../components/RhythmEditor';
+import { QueueSources } from '../components/QueueSources';
 import PlanDesignerScreen from './PlanDesignerScreen';
 import HomeScreen from './HomeScreen';
 import MemoryDeskScreen from './MemoryDeskScreen';
 import type { AppState } from '../state/useAppState';
+import type { Rhythm, StudyPlan, StudyPlanMembership } from '../types';
 
 // ============================================================================
 // DEV LAYOUT LAB — not reachable in the shipped app.
@@ -73,6 +76,16 @@ export default function DevLayoutLab() {
                 <LiveHome />
               </FontScaleOverrideProvider>
 
+              <SpecimenLabel text="Rhythm editor — day pills + steppers" />
+              <FontScaleOverrideProvider scale={scale}>
+                <LiveRhythmEditor />
+              </FontScaleOverrideProvider>
+
+              <SpecimenLabel text="Queue sources — group plan priority" />
+              <FontScaleOverrideProvider scale={scale}>
+                <LiveQueueSources />
+              </FontScaleOverrideProvider>
+
               <SpecimenLabel text="Plan Designer — whole screen" />
               <FontScaleOverrideProvider scale={scale}>
                 <LivePlanDesigner />
@@ -81,6 +94,59 @@ export default function DevLayoutLab() {
           </View>
         ))}
       </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * The Rhythm editor, driven by local state. Seven day pills in one row is the
+ * densest thing on the queue screen and the most likely to overflow at 1.5x,
+ * so it gets its own specimen rather than only being checked inside the whole
+ * screen.
+ */
+function LiveRhythmEditor() {
+  const [rhythm, setRhythm] = useState<Rhythm>({
+    learningDays: ['M', 'W', 'F'],
+    newVersesPace: 3,
+    maxReviewCap: 15,
+    sabbathEnabled: true,
+    sabbathDay: 'Su',
+    dayStartHour: 0,
+    cognitiveLoadSensitivity: 'medium',
+    pausedAt: null,
+    pausedUntil: null,
+  });
+  return (
+    <View className="border-2 border-[#1A1A1A] rounded-xl bg-white p-4">
+      <RhythmEditor rhythm={rhythm} onChange={(patch) => setRhythm((prev) => ({ ...prev, ...patch }))} />
+    </View>
+  );
+}
+
+/** Two sources competing, with the three priority pills in one row. */
+function LiveQueueSources() {
+  const [priority, setPriority] = useState<StudyPlanMembership['priority']>('group');
+  const plan: StudyPlan = {
+    planId: 'p1',
+    circleId: 'c1',
+    name: 'Romans Challenge',
+    description: '',
+    managerId: 'u1',
+    versesPerWeek: 5,
+    verseIds: [],
+    createdAt: '',
+    updatedAt: '',
+  };
+  return (
+    <View className="border-2 border-[#1A1A1A] rounded-xl bg-white p-4">
+      <QueueSources
+        individualQueuedCount={12}
+        joinedPlans={[plan]}
+        memberships={[{ planId: 'p1', circleId: 'c1', priority, joinedAt: '' }]}
+        previewFromPlans={{ p1: ['a', 'b'] }}
+        previewFromIndividual={['c']}
+        onChangePriority={(_, p) => setPriority(p)}
+      />
     </View>
   );
 }
@@ -124,7 +190,6 @@ function LiveMissPolicy() {
  */
 function useMockPlanState() {
   const [s, setS] = useState({
-    preset: 'drip',
     learningDays: ['M', 'T', 'W', 'Th', 'F'],
     newVersesPace: 2,
     maxReviewCap: 10,
@@ -149,7 +214,6 @@ function useMockPlanState() {
   const noop = () => {};
   return {
     ...s,
-    setPreset: set('preset'),
     setLearningDays: set('learningDays'),
     setNewVersesPace: set('newVersesPace'),
     setMaxReviewCap: set('maxReviewCap'),
@@ -169,6 +233,8 @@ function useMockPlanState() {
     setRefresherDailyDays: set('refresherDailyDays'),
     setRefresherWeeklyWeeks: set('refresherWeeklyWeeks'),
     setCustomPlanName: set('customPlanName'),
+    isEditingBuiltInPlan: false,
+    navigateTo: noop,
     onboardingStepInProgress: null,
     handleBack: noop,
     handleSavePlan: noop,
@@ -259,9 +325,14 @@ function LiveMemoryDesk() {
   const deskState = {
     ...mock,
     handleBack: () => {},
+    // Rhythm fields: the Queue row's detail line reads these now that the
+    // queue screen owns pacing.
+    learningDays: ['M', 'W', 'F'],
+    newVersesPace: 3,
+    openActivePlanDesigner: () => {},
     savedPlans: [
-      { id: 'p1', name: 'The Daily Drip', isActive: true },
-      { id: 'p2', name: 'Weekend Warrior', isActive: false },
+      { id: 'standard-plan', name: 'Standard', isActive: true, isBuiltIn: true },
+      { id: 'p2', name: 'Deep Retention', isActive: false },
     ],
   };
   return (

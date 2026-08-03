@@ -6,11 +6,12 @@ import { useState } from 'react';
 import { AppState, buildVerseId } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
 import { FadeInView, NumericInput, useClampedNumberField } from '../components/ui';
+import { AppText, CollapsibleCard, useScaledSpace } from '../components/design';
+import { RhythmEditor } from '../components/RhythmEditor';
+import { QueueSources } from '../components/QueueSources';
 import { BookPicker } from '../components/BookPicker';
 import { fetchChapterText, useChapterText } from '../state/useScripture';
 import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
-
-const WEEK_DAYS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
 
 function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
   if (items.length === 0) return [];
@@ -61,12 +62,14 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     handleBack,
     navigateTo,
     learningDays,
-    setLearningDays,
-    setPreset,
     newVersesPace,
-    setNewVersesPace,
     maxReviewCap,
-    setMaxReviewCap,
+    sabbathEnabled,
+    sabbathDay,
+    dayStartHour,
+    pausedAt,
+    pausedUntil,
+    updateRhythm,
     triggerToast,
     showAddQueueItemModal,
     setShowAddQueueItemModal,
@@ -83,11 +86,14 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     triggerDailyPull,
     promoteToLearning,
     savedPlans,
-    editingPlanId,
-    saveActivePlanRhythm,
-    getMemoryLoadForecast,
     cognitiveLoadSensitivity,
+    joinedStudyPlanDetails,
+    joinedStudyPlanMemberships,
+    setStudyPlanPriority,
+    getNextPullPreview,
   } = state;
+
+  const space = useScaledSpace();
 
   const [isAddingVerses, setIsAddingVerses] = useState(false);
 
@@ -119,15 +125,34 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   // actively managed -- show.
   const grouped = groupQueueItems(memoryQueue.filter((item) => item.status === 'queued' || item.status === 'learning'));
 
-  const rhythmTargetPlan = savedPlans.find((p) => p.id === editingPlanId) || savedPlans.find((p) => p.isActive) || savedPlans[0];
+  // Rhythm is user-level and commits live, so there is no target plan to
+  // diff against and no dirty state -- both of which this screen used to
+  // maintain, along with a Save button that misrepresented what it did.
+  const rhythm = {
+    learningDays,
+    newVersesPace,
+    maxReviewCap,
+    sabbathEnabled,
+    sabbathDay,
+    dayStartHour,
+    cognitiveLoadSensitivity,
+    pausedAt,
+    pausedUntil,
+  };
 
-  const sameDaySet = (a: string[], b: string[]) => a.length === b.length && a.every((d) => b.includes(d));
+  const activePlan = savedPlans.find((p) => p.isActive) || savedPlans[0];
 
-  const isRhythmDirty = rhythmTargetPlan
-    ? !sameDaySet(learningDays, rhythmTargetPlan.learningDays) ||
-      newVersesPace !== rhythmTargetPlan.newVersesPace ||
-      maxReviewCap !== rhythmTargetPlan.maxReviewCap
-    : false;
+  const individualQueuedCount = memoryQueue.filter(
+    (item) => item.status === 'queued' && item.origin !== 'group'
+  ).length;
+
+  const pullPreview = getNextPullPreview();
+
+  // Group rows used to say a generic "Group", which told you a verse wasn't
+  // yours but not which plan put it there -- so the priority setting had no
+  // visible subject.
+  const planNameFor = (planId?: string) =>
+    joinedStudyPlanDetails.find((p) => p.planId === planId)?.name || 'Group';
 
   const moveGroupUp = (idx: number) => {
     if (idx === 0) return;
@@ -169,28 +194,11 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     triggerToast('Moved consecutive group down.');
   };
 
-  // Real 7-day projection: same time-per-verse math as HomeScreen's today
-  // estimate (via getMemoryLoadForecast, sharing computeDayReviewLoad under
-  // the hood) and the plan's actual learningDays, instead of a hardcoded
-  // "every other day" guess with its own made-up time constants.
-  const forecastDays = (() => {
-    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const forecast = getMemoryLoadForecast(memoryQueue, cognitiveLoadSensitivity, learningDays, newVersesPace, 7);
-
-    return forecast.map((day, i) => {
-      const dateStr = day.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const heightPercent = Math.min(100, Math.max(15, (day.loadMins / 30) * 100));
-
-      return {
-        dayName: daysOfWeek[day.date.getDay()],
-        dateStr,
-        loadMins: day.loadMins,
-        versesCount: day.versesCount,
-        barHeight: heightPercent,
-        isToday: i === 0,
-      };
-    });
-  })();
+  // The 7-day Memory Load Forecast used to live here. It moved to the Memory
+  // Calendar, which already projects the same days and can name the actual
+  // verses due on each one instead of only counting them -- see
+  // getMemoryCalendarProjection. Keeping a second, vaguer copy of that on
+  // this screen was the reason this page had two jobs.
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -208,139 +216,38 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
               <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
                 SCRIPTURE OVERVIEW
               </Text>
-              <Text className="text-xl font-serif font-black text-neutral-900 mt-0.5">Memory Plan & Queue</Text>
+              <Text className="text-xl font-serif font-black text-neutral-900 mt-0.5">Memory Queue</Text>
             </View>
           </View>
         </View>
 
-        {/* MEMORY RHYTHM SECTION */}
-        <View className="border-2 border-[#1A1A1A] rounded-2xl p-5 bg-white text-left" style={{ gap: 16 }}>
-          <View>
-            <Text className="text-sm font-serif font-black text-[#1A1A1A]">Memory Rhythm</Text>
-            <Text className="text-[10px] text-neutral-400 mt-0.5 font-sans">
-              Which days you learn new verses, how many you take on, and how long a day's reviews should run.
-            </Text>
-          </View>
+        {/* YOUR RHYTHM -- user-level pacing, commits live. */}
+        <CollapsibleCard
+          storageKey="queue.rhythm"
+          title="Your Rhythm"
+          summary={`${learningDays.length} days · ${newVersesPace}/day · ${maxReviewCap} min`}
+        >
+          <RhythmEditor rhythm={rhythm} onChange={updateRhythm} />
+        </CollapsibleCard>
 
-          <View style={{ gap: 16 }}>
-            {/* Interactive Rhythm Row */}
-            <View className="bg-neutral-50/70 p-4 rounded-2xl border border-neutral-100">
-              {/* mem row */}
-              <View className="flex-row items-center justify-between gap-2">
-                <View className="text-left">
-                  <Text className="text-[10px] font-sans font-extrabold uppercase tracking-widest text-[#1A1A1A]">mem</Text>
-                  <Text className="text-[9px] text-neutral-400 font-sans -mt-0.5">Active Memory Days</Text>
-                </View>
-                <View className="flex-row items-center gap-1.5">
-                  {WEEK_DAYS.map((d) => {
-                    const isActive = learningDays.includes(d);
-                    return (
-                      <Pressable
-                        key={`mem-${d}`}
-                        onPress={() => {
-                          if (learningDays.includes(d)) {
-                            setLearningDays(learningDays.filter((day) => day !== d));
-                          } else {
-                            setLearningDays([...learningDays, d]);
-                          }
-                          setPreset('custom');
-                        }}
-                        className={`w-7 h-7 rounded-full items-center justify-center border ${
-                          isActive ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                        }`}
-                      >
-                        <Text
-                          className={`text-[10px] font-sans font-bold ${isActive ? 'text-white font-black' : 'text-neutral-400'}`}
-                        >
-                          {d}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
-
-            {/* Steppers Row */}
-            <View className="flex-row gap-4">
-              {/* New Verses / Memory Day */}
-              <View className="flex-1 items-center justify-center p-3.5 bg-neutral-50/50 rounded-2xl border border-neutral-100" style={{ gap: 6 }}>
-                <Text className="text-[10px] font-sans font-extrabold uppercase tracking-widest text-neutral-500 text-center">
-                  New Verses / Memory Day
-                </Text>
-                <View className="flex-row items-center gap-4">
-                  <Pressable
-                    onPress={() => {
-                      const nextVal = Math.max(1, newVersesPace - 1);
-                      setNewVersesPace(nextVal);
-                      triggerToast(`Pacing speed decreased to ${nextVal} verses per day`);
-                    }}
-                    className="w-8 h-8 rounded-full border-2 border-[#1A1A1A] bg-white items-center justify-center"
-                  >
-                    <Text className="font-bold text-[#1A1A1A] text-base">-</Text>
-                  </Pressable>
-                  <Text className="text-2xl font-serif font-black text-[#1A1A1A] w-12 text-center">{newVersesPace}</Text>
-                  <Pressable
-                    onPress={() => {
-                      const nextVal = Math.min(10, newVersesPace + 1);
-                      setNewVersesPace(nextVal);
-                      triggerToast(`Pacing speed increased to ${nextVal} verses per day`);
-                    }}
-                    className="w-8 h-8 rounded-full border-2 border-[#1A1A1A] bg-white items-center justify-center"
-                  >
-                    <Text className="font-bold text-[#1A1A1A] text-base">+</Text>
-                  </Pressable>
-                </View>
-                <Text className="text-[8px] font-sans text-neutral-400 text-center">New verses that start on each memory day.</Text>
-              </View>
-
-              {/* Daily Review Time Limit */}
-              <View className="flex-1 items-center justify-center p-3.5 bg-neutral-50/50 rounded-2xl border border-neutral-100" style={{ gap: 6 }}>
-                <Text className="text-[10px] font-sans font-extrabold uppercase tracking-widest text-neutral-500 text-center">
-                  Daily Review Time Limit
-                </Text>
-                <View className="flex-row items-center gap-4">
-                  <Pressable
-                    onPress={() => {
-                      const nextVal = Math.max(5, maxReviewCap - 5);
-                      setMaxReviewCap(nextVal);
-                      triggerToast(`Daily review time limit decreased to ${nextVal} mins`);
-                    }}
-                    className="w-8 h-8 rounded-full border-2 border-[#1A1A1A] bg-white items-center justify-center"
-                  >
-                    <Text className="font-bold text-[#1A1A1A] text-base">-</Text>
-                  </Pressable>
-                  <Text className="text-xl font-serif font-black text-[#1A1A1A] w-16 text-center">{maxReviewCap}m</Text>
-                  <Pressable
-                    onPress={() => {
-                      const nextVal = Math.min(120, maxReviewCap + 5);
-                      setMaxReviewCap(nextVal);
-                      triggerToast(`Daily review time limit increased to ${nextVal} mins`);
-                    }}
-                    className="w-8 h-8 rounded-full border-2 border-[#1A1A1A] bg-white items-center justify-center"
-                  >
-                    <Text className="font-bold text-[#1A1A1A] text-base">+</Text>
-                  </Pressable>
-                </View>
-                <Text className="text-[8px] font-sans text-neutral-400 text-center">How long a day's reviews should take, at most.</Text>
-              </View>
-            </View>
-
-            {/* Save Rhythm button — only appears once the rhythm diverges from the saved plan */}
-            {isRhythmDirty && (
-              <Pressable
-                onPress={async () => {
-                  await saveActivePlanRhythm();
-                }}
-                className="w-full py-2.5 bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5"
-              >
-                <Text className="text-white font-sans font-bold text-xs uppercase tracking-widest">
-                  Save Rhythm to {rhythmTargetPlan ? rhythmTargetPlan.name : 'Plan'}
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
+        {/* WHERE VERSES COME FROM -- only worth a section once there's more
+            than one source competing for the daily budget. */}
+        {joinedStudyPlanMemberships.length > 0 && (
+          <CollapsibleCard
+            storageKey="queue.sources"
+            title="Where verses come from"
+            summary={`${joinedStudyPlanMemberships.length + 1} sources`}
+          >
+            <QueueSources
+              individualQueuedCount={individualQueuedCount}
+              joinedPlans={joinedStudyPlanDetails}
+              memberships={joinedStudyPlanMemberships}
+              previewFromPlans={pullPreview.fromPlans}
+              previewFromIndividual={pullPreview.fromIndividual}
+              onChangePriority={setStudyPlanPriority}
+            />
+          </CollapsibleCard>
+        )}
 
         {/* MEMORY QUEUE SECTION */}
         <View style={{ gap: 12 }}>
@@ -493,12 +400,18 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             </FadeInView>
           )}
 
-          {/* Scrollable Queue List -- verses in Spaced Review live in the Memory
-              Calendar now, not here (see the `grouped` filter above). */}
-          <ScrollView
-            style={{ maxHeight: 360 }}
+          {/* Queue list -- verses in Spaced Review live in the Memory
+              Calendar now, not here (see the `grouped` filter above).
+
+              A plain View, not a nested ScrollView. This used to be a
+              ScrollView with maxHeight: 360 inside the screen's own
+              ScrollView; on a touch device the inner one swallows vertical
+              drags that start over it, so the page underneath felt stuck,
+              and anything past 360px was hidden behind a scrollbar most
+              people never noticed. The list is now part of the page. */}
+          <View
             className="border border-neutral-100 p-2 rounded-2xl bg-neutral-50/30"
-            contentContainerStyle={{ gap: 8 }}
+            style={{ gap: 8 }}
           >
             {grouped.length === 0 ? (
               <Text className="py-8 text-center text-xs text-neutral-400 font-sans italic">
@@ -551,7 +464,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                                 : 'bg-orange-50 text-orange-700 border border-orange-200'
                             }`}
                           >
-                            {isGroup ? 'Group' : 'Individual'}
+                            {isGroup ? planNameFor(group.items[0].originPlanId) : 'Mine'}
                           </Text>
                           {hasMultiple && (
                             <Text className="text-[8px] px-1.5 py-0.5 rounded-full font-sans font-bold bg-neutral-100 text-neutral-600 border border-neutral-200">
@@ -604,7 +517,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                 );
               })
             )}
-          </ScrollView>
+          </View>
         </View>
 
         {/* MEMORY CALENDAR ENTRY -- its own prominent card, not a small button
@@ -627,50 +540,20 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           <ChevronRight size={22} color="#ffffff" />
         </Pressable>
 
-        {/* MEMORY LOAD FORECAST SECTION -- nothing to forecast with an empty queue */}
-        {memoryQueue.length > 0 && (
-        <View style={{ gap: 12 }}>
-          <View>
-            <Text className="text-sm font-serif font-black text-[#1A1A1A]">Memory Load Forecast</Text>
-            <Text className="text-[10px] text-neutral-400 mt-0.5">
-              Estimated study time for each of the next seven days, based on what's in your queue right now.
-            </Text>
-          </View>
-
-          {/* Bento-style 7-day forecast row */}
-          <View className="flex-row gap-1.5">
-            {forecastDays.map((fDay, idx) => (
-              <View
-                key={idx}
-                className={`flex-1 items-center p-2 rounded-xl border text-center bg-white ${
-                  fDay.isToday ? 'border-2 border-[#1A1A1A]' : 'border-neutral-200'
-                }`}
-                style={{ gap: 8 }}
-              >
-                <Text className={`text-[8px] font-sans font-extrabold uppercase ${fDay.isToday ? 'text-[#1A1A1A]' : 'text-neutral-400'}`}>
-                  {fDay.dayName}
-                </Text>
-                <Text className="text-[7px] font-mono font-bold text-neutral-400 -mt-1">{fDay.dateStr}</Text>
-
-                {/* Relative Load Bar indicator */}
-                <View className="w-2.5 h-14 bg-neutral-50 rounded-full items-center justify-end overflow-hidden border border-neutral-100">
-                  <View
-                    className={`w-full rounded-full ${
-                      fDay.isToday ? 'bg-[#1A1A1A]' : fDay.loadMins > 18 ? 'bg-amber-500' : 'bg-emerald-500'
-                    }`}
-                    style={{ height: `${fDay.barHeight}%` }}
-                  />
-                </View>
-
-                <View style={{ gap: 2 }}>
-                  <Text className="text-[10px] font-serif font-black text-neutral-800 leading-none">{fDay.loadMins}m</Text>
-                  <Text className="text-[7px] font-sans font-medium text-neutral-400 leading-none">{fDay.versesCount} v</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-        )}
+        {/* RETENTION FOOTER -- read-only. Keeps the two halves of the split
+            visibly connected (this page owns pacing, the designer owns the
+            method) without letting you edit the plan from here, which is the
+            two-editors-one-state problem the split exists to remove. */}
+        <Pressable
+          onPress={() => navigateTo('planDesigner')}
+          className="flex-row items-center border-t border-neutral-200"
+          style={{ paddingTop: space(14), gap: space(8), minHeight: 44 }}
+        >
+          <AppText variant="micro" className="font-sans text-neutral-600 flex-1">
+            Retention: {activePlan ? activePlan.name : 'no plan'} — change in Plan & Pacing
+          </AppText>
+          <ChevronRight size={14} color="#737373" />
+        </Pressable>
       </ScrollView>
     </FadeInView>
   );

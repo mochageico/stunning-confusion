@@ -58,7 +58,9 @@ import { pendingSignUpDisplayName } from './useEmailAuth';
 import {
   ALL_BIBLE_BOOKS,
   BOOKS,
+  BUILT_IN_PLAN_ID,
   DEFAULT_PLANS,
+  DEFAULT_RHYTHM,
   DEFAULT_TRANSLATION_ID,
   getBookByName,
   SUGGESTED_FEED_RECORDINGS,
@@ -81,6 +83,7 @@ import {
   MessageReaction,
   QueueItem,
   Recording,
+  Rhythm,
   StudyPlan,
   StudyPlanMembership,
   TouchLog,
@@ -529,6 +532,33 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
 }
 
+// Normalizes a loosely-typed shared/friend plan doc into a real MemoryPlan.
+// Retention fields only: adopting someone else's plan must never touch the
+// adopter's Rhythm, and pre-split shared docs still carry the author's
+// learningDays/newVersesPace/maxReviewCap, which are deliberately ignored
+// here rather than copied over.
+//
+// `isActive`/`updatedAt` are set for the adopter; callers supply id + name.
+function normalizeAdoptedPlan(plan: any): MemoryPlan {
+  return {
+    id: '',
+    name: plan.name || 'Custom Plan',
+    retentionRigor: plan.retentionRigor || 'standard',
+    dailyPhaseWeeks: plan.dailyPhaseWeeks ?? 7,
+    weeklyPhaseMonths: plan.weeklyPhaseMonths ?? 6,
+    monthlyPhaseYears: plan.monthlyPhaseYears ?? 5,
+    masteryTouches: plan.masteryTouches ?? 3,
+    reviewsRequired: plan.reviewsRequired ?? 1,
+    missPolicy: plan.missPolicy || 'standard',
+    missPolicyAskEveryTime: plan.missPolicyAskEveryTime ?? false,
+    graceCount: plan.graceCount ?? 1,
+    refresherDailyDays: plan.refresherDailyDays ?? 7,
+    refresherWeeklyWeeks: plan.refresherWeeklyWeeks ?? 4,
+    isActive: true,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 /**
  * Centralizes every piece of state and business-logic handler from the original
  * web app's single-file App component. Screens receive the return value of this
@@ -708,11 +738,14 @@ export function useAppState() {
   // scratch state with no reason to survive a navigation away and back.
   const [isEditingSync, setIsEditingSync] = useState<boolean>(false);
 
-  // Memory Plan Designer States
-  const [preset, setPreset] = useState<'drip' | 'warrior' | 'custom'>('custom');
-  const [learningDays, setLearningDays] = useState<string[]>(['M', 'W', 'F']);
-  const [newVersesPace, setNewVersesPace] = useState<number>(3);
-  const [maxReviewCap, setMaxReviewCap] = useState<number>(15);
+  // Rhythm: your personal cadence, user-level and independent of any plan.
+  // The `preset` field ('drip'/'warrior'/'custom') was deleted with the
+  // plan/rhythm split -- it only ever labelled a combination of the three
+  // dials below, and every manual change slammed it straight back to
+  // 'custom', so it carried no information the dials don't already hold.
+  const [learningDays, setLearningDays] = useState<string[]>(DEFAULT_RHYTHM.learningDays);
+  const [newVersesPace, setNewVersesPace] = useState<number>(DEFAULT_RHYTHM.newVersesPace);
+  const [maxReviewCap, setMaxReviewCap] = useState<number>(DEFAULT_RHYTHM.maxReviewCap);
   // Retention rigor: how long a verse stays in each review phase before
   // graduating (default 7-6-5 == today's previously-hardcoded behavior).
   const [retentionRigor, setRetentionRigor] = useState<'light' | 'standard' | 'deep' | 'custom'>('standard');
@@ -1106,61 +1139,96 @@ export function useAppState() {
   // ==========================================
   // PLAN <-> DESIGNER STATE SYNC HELPERS
   // ==========================================
-  // Single source of truth for "load a plan's settings into the live
-  // designer state" and "flatten a plan into the memoryPlans/{uid} doc's
-  // top-level fields". Previously this was six hand-copied 14-setter
-  // blocks, several of which had drifted out of sync (navigateTo('activePlan')
-  // only synced 5 of the 14 fields; handleSavePlan's Firestore write dropped
-  // the rigor/mastery/sabbath fields entirely).
+  // Single source of truth for "load a plan's settings into the live designer
+  // state" and "flatten a plan into the memoryPlans/{uid} doc's top-level
+  // fields".
+  //
+  // Post plan/rhythm split these touch ONLY retention fields. Rhythm
+  // (learningDays, pace, review cap, sabbath, dayStartHour, load sensitivity,
+  // pause) is user-level and is never read from or written to a plan --
+  // that's the whole point of the split, and it's why activating another
+  // plan can no longer change your pacing or silently un-pause you.
   const syncDesignerFromPlan = (plan: MemoryPlan) => {
-    setPreset(plan.preset);
-    setLearningDays(plan.learningDays);
-    setNewVersesPace(plan.newVersesPace);
-    setMaxReviewCap(plan.maxReviewCap);
     setRetentionRigor(plan.retentionRigor || 'standard');
     setDailyPhaseWeeks(plan.dailyPhaseWeeks ?? 7);
     setWeeklyPhaseMonths(plan.weeklyPhaseMonths ?? 6);
     setMonthlyPhaseYears(plan.monthlyPhaseYears ?? 5);
     setMasteryTouches(plan.masteryTouches ?? 3);
     setReviewsRequired(plan.reviewsRequired ?? 1);
-    setSabbathEnabled(plan.sabbathEnabled ?? false);
-    setSabbathDay(plan.sabbathDay || 'Su');
-    setDayStartHour(plan.dayStartHour ?? 0);
-    setCognitiveLoadSensitivity(plan.cognitiveLoadSensitivity || 'medium');
     setMissPolicy(plan.missPolicy || 'standard');
     setMissPolicyAskEveryTime(plan.missPolicyAskEveryTime ?? false);
     setGraceCount(plan.graceCount ?? 1);
     setRefresherDailyDays(plan.refresherDailyDays ?? 7);
     setRefresherWeeklyWeeks(plan.refresherWeeklyWeeks ?? 4);
-    setPausedAt(plan.pausedAt ?? null);
-    setPausedUntil(plan.pausedUntil ?? null);
     setCustomPlanName(plan.name);
   };
 
   const planTopLevelFields = (plan: MemoryPlan) => ({
-    preset: plan.preset,
-    learningDays: plan.learningDays,
-    newVersesPace: plan.newVersesPace,
-    maxReviewCap: plan.maxReviewCap,
     retentionRigor: plan.retentionRigor,
     dailyPhaseWeeks: plan.dailyPhaseWeeks,
     weeklyPhaseMonths: plan.weeklyPhaseMonths,
     monthlyPhaseYears: plan.monthlyPhaseYears,
     masteryTouches: plan.masteryTouches,
     reviewsRequired: plan.reviewsRequired,
-    sabbathEnabled: plan.sabbathEnabled,
-    sabbathDay: plan.sabbathDay,
-    dayStartHour: plan.dayStartHour,
-    cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity,
     missPolicy: plan.missPolicy,
     missPolicyAskEveryTime: plan.missPolicyAskEveryTime,
     graceCount: plan.graceCount,
     refresherDailyDays: plan.refresherDailyDays,
     refresherWeeklyWeeks: plan.refresherWeeklyWeeks,
-    pausedAt: plan.pausedAt,
-    pausedUntil: plan.pausedUntil,
     name: plan.name,
   });
+
+  // The live Rhythm, flattened for the memoryPlans/{uid} doc root. These
+  // field names are unchanged from before the split -- pre-split docs already
+  // mirrored the active plan's pacing to exactly these root keys, so existing
+  // documents migrate by simply being read from the root instead of from the
+  // active plan (see the load path), with no destructive rewrite needed.
+  const rhythmFields = (): Rhythm => ({
+    learningDays,
+    newVersesPace,
+    maxReviewCap,
+    sabbathEnabled,
+    sabbathDay,
+    dayStartHour,
+    cognitiveLoadSensitivity,
+    pausedAt,
+    pausedUntil,
+  });
+
+  // Rhythm commits LIVE -- every dial on the queue page calls this straight
+  // away. There is no dirty state and no Save button, because the engine
+  // already reads these values from live state the moment they change; the
+  // old "Save Rhythm" button only ever controlled whether the change survived
+  // a reload, while pretending to control whether it applied at all.
+  const persistRhythm = async (overrides: Partial<Rhythm> = {}) => {
+    if (!auth.currentUser) return;
+    try {
+      await setDoc(
+        doc(db, 'memoryPlans', auth.currentUser.uid),
+        { ...rhythmFields(), ...overrides, updatedAt: new Date() },
+        { merge: true }
+      );
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
+    }
+  };
+
+  // The single entry point every Rhythm control uses. `patch` is passed
+  // through to the write as an override because the setState calls below
+  // won't have landed yet when persistRhythm reads rhythmFields() in this
+  // same tick.
+  const updateRhythm = (patch: Partial<Rhythm>) => {
+    if (patch.learningDays !== undefined) setLearningDays(patch.learningDays);
+    if (patch.newVersesPace !== undefined) setNewVersesPace(patch.newVersesPace);
+    if (patch.maxReviewCap !== undefined) setMaxReviewCap(patch.maxReviewCap);
+    if (patch.sabbathEnabled !== undefined) setSabbathEnabled(patch.sabbathEnabled);
+    if (patch.sabbathDay !== undefined) setSabbathDay(patch.sabbathDay);
+    if (patch.dayStartHour !== undefined) setDayStartHour(patch.dayStartHour);
+    if (patch.cognitiveLoadSensitivity !== undefined) setCognitiveLoadSensitivity(patch.cognitiveLoadSensitivity);
+    if (patch.pausedAt !== undefined) setPausedAt(patch.pausedAt);
+    if (patch.pausedUntil !== undefined) setPausedUntil(patch.pausedUntil);
+    void persistRhythm(patch);
+  };
 
   // ==========================================
   // NAVIGATION HANDLERS
@@ -1176,13 +1244,14 @@ export function useAppState() {
       setCurrentTab('home');
     }
 
-    if (screen === 'activePlan') {
-      const active = savedPlans.find((p) => p.isActive) || savedPlans[0];
-      if (active) {
-        setEditingPlanId(active.id);
-        syncDesignerFromPlan(active);
-      }
-    }
+    // NOTE: navigateTo deliberately has no per-screen plan side effects any
+    // more. It used to set editingPlanId + sync the designer on
+    // navigateTo('activePlan'), which is what made the queue screen an
+    // implicit plan editor. The queue screen now edits only Rhythm, which is
+    // user-level, and the designer is targeted explicitly by its openers
+    // (openActivePlanDesigner / handleEditPlan / handleCreateNewPlan) --
+    // doing it here would clobber their setEditingPlanId, since theirs runs
+    // before navigateTo and React would apply this one last.
 
     setCurrentScreen(screen);
     // Reset selections on screen change
@@ -2803,31 +2872,9 @@ export function useAppState() {
       // once, then reuse it for both the designer sync and the Firestore
       // write, so defaults can't drift between the two.
       const adopted: MemoryPlan = {
+        ...normalizeAdoptedPlan(plan),
         id: 'shared-' + (plan.id || Date.now()),
         name: plan.name || 'Custom Plan',
-        preset: plan.preset || 'custom',
-        learningDays: plan.learningDays || ['M', 'W', 'F'],
-        newVersesPace: plan.newVersesPace ?? 3,
-        maxReviewCap: plan.maxReviewCap ?? 15,
-        retentionRigor: plan.retentionRigor || 'standard',
-        dailyPhaseWeeks: plan.dailyPhaseWeeks ?? 7,
-        weeklyPhaseMonths: plan.weeklyPhaseMonths ?? 6,
-        monthlyPhaseYears: plan.monthlyPhaseYears ?? 5,
-        masteryTouches: plan.masteryTouches ?? 3,
-        reviewsRequired: plan.reviewsRequired ?? 1,
-        sabbathEnabled: plan.sabbathEnabled ?? false,
-        sabbathDay: plan.sabbathDay || 'Su',
-        dayStartHour: plan.dayStartHour ?? 0,
-        cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity || 'medium',
-        missPolicy: plan.missPolicy || 'standard',
-        missPolicyAskEveryTime: plan.missPolicyAskEveryTime ?? false,
-        graceCount: plan.graceCount ?? 1,
-        refresherDailyDays: plan.refresherDailyDays ?? 7,
-        refresherWeeklyWeeks: plan.refresherWeeklyWeeks ?? 4,
-        pausedAt: plan.pausedAt ?? null,
-        pausedUntil: plan.pausedUntil ?? null,
-        isActive: true,
-        updatedAt: new Date().toISOString(),
       };
       syncDesignerFromPlan(adopted);
 
@@ -2881,31 +2928,9 @@ export function useAppState() {
     }
     try {
       const adopted: MemoryPlan = {
+        ...normalizeAdoptedPlan(plan),
         id: 'friend-' + Date.now(),
         name: plan.name || `${fromName ? fromName + "'s" : 'Saved'} Plan`,
-        preset: plan.preset || 'custom',
-        learningDays: plan.learningDays || ['M', 'W', 'F'],
-        newVersesPace: plan.newVersesPace ?? 3,
-        maxReviewCap: plan.maxReviewCap ?? 15,
-        retentionRigor: plan.retentionRigor || 'standard',
-        dailyPhaseWeeks: plan.dailyPhaseWeeks ?? 7,
-        weeklyPhaseMonths: plan.weeklyPhaseMonths ?? 6,
-        monthlyPhaseYears: plan.monthlyPhaseYears ?? 5,
-        masteryTouches: plan.masteryTouches ?? 3,
-        reviewsRequired: plan.reviewsRequired ?? 1,
-        sabbathEnabled: plan.sabbathEnabled ?? false,
-        sabbathDay: plan.sabbathDay || 'Su',
-        dayStartHour: plan.dayStartHour ?? 0,
-        cognitiveLoadSensitivity: plan.cognitiveLoadSensitivity || 'medium',
-        missPolicy: plan.missPolicy || 'standard',
-        missPolicyAskEveryTime: plan.missPolicyAskEveryTime ?? false,
-        graceCount: plan.graceCount ?? 1,
-        refresherDailyDays: plan.refresherDailyDays ?? 7,
-        refresherWeeklyWeeks: plan.refresherWeeklyWeeks ?? 4,
-        pausedAt: plan.pausedAt ?? null,
-        pausedUntil: plan.pausedUntil ?? null,
-        isActive: true,
-        updatedAt: new Date().toISOString(),
       };
       syncDesignerFromPlan(adopted);
 
@@ -3021,7 +3046,7 @@ export function useAppState() {
     }
   };
 
-  const joinStudyPlan = async (plan: StudyPlan, priority: StudyPlanMembership['priority'] = 'individual') => {
+  const joinStudyPlan = async (plan: StudyPlan, priority: StudyPlanMembership['priority'] = 'group') => {
     try {
       await addStudyPlanVersesToOwnQueue(plan.planId, plan.verseIds);
 
@@ -3164,94 +3189,97 @@ export function useAppState() {
     navigateTo('planDesigner');
   };
 
+  // "Plan & Pacing" from the Memory Desk: edit whichever plan is actually
+  // active. Explicit rather than a navigateTo side effect -- see the note
+  // there.
+  const openActivePlanDesigner = () => {
+    const active = savedPlans.find((p) => p.isActive) || savedPlans[0];
+    if (active) {
+      setEditingPlanId(active.id);
+      syncDesignerFromPlan(active);
+    } else {
+      setEditingPlanId(null);
+    }
+    navigateTo('planDesigner');
+  };
+
   const handleCreateNewPlan = () => {
     setEditingPlanId(null);
-    setPreset('custom');
-    setLearningDays(['M', 'W', 'F']);
-    setNewVersesPace(3);
-    setMaxReviewCap(15);
     setRetentionRigor('standard');
     setDailyPhaseWeeks(7);
     setWeeklyPhaseMonths(6);
     setMonthlyPhaseYears(5);
     setMasteryTouches(3);
     setReviewsRequired(1);
-    setSabbathEnabled(false);
-    setSabbathDay('Su');
-    setCognitiveLoadSensitivity('medium');
+    setMissPolicy('standard');
+    setMissPolicyAskEveryTime(false);
+    setGraceCount(1);
+    setRefresherDailyDays(7);
+    setRefresherWeeklyWeeks(4);
     setCustomPlanName('New Custom Plan');
     navigateTo('planDesigner');
   };
 
+  // Is the designer currently pointed at the shipped, immutable plan?
+  // PlanDesignerScreen uses this to require a new name before saving.
+  const isEditingBuiltInPlan = savedPlans.some((p) => p.id === editingPlanId && p.isBuiltIn);
+
   const handleSavePlan = async () => {
     let updatedPlans = [...savedPlans];
 
-    if (editingPlanId) {
-      updatedPlans = updatedPlans.map((p) => {
-        if (p.id === editingPlanId) {
-          return {
-            ...p,
-            name: customPlanName || 'My Custom Plan',
-            preset,
-            learningDays,
-            newVersesPace,
-            maxReviewCap,
-            retentionRigor,
-            dailyPhaseWeeks,
-            weeklyPhaseMonths,
-            monthlyPhaseYears,
-            masteryTouches,
-            reviewsRequired,
-            sabbathEnabled,
-            sabbathDay,
-            dayStartHour,
-            cognitiveLoadSensitivity,
-            missPolicy,
-            missPolicyAskEveryTime,
-            graceCount,
-            refresherDailyDays,
-            refresherWeeklyWeeks,
-            pausedAt,
-            pausedUntil,
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return p;
-      });
+    // Retention fields only -- pacing lives in Rhythm now and is never
+    // written to a plan.
+    const editedFields = {
+      retentionRigor,
+      dailyPhaseWeeks,
+      weeklyPhaseMonths,
+      monthlyPhaseYears,
+      masteryTouches,
+      reviewsRequired,
+      missPolicy,
+      missPolicyAskEveryTime,
+      graceCount,
+      refresherDailyDays,
+      refresherWeeklyWeeks,
+    };
+
+    const targetPlan = savedPlans.find((p) => p.id === editingPlanId);
+    // Copy-on-write: the shipped plan is the baseline every account starts
+    // from, so editing it forks a renamed copy instead of mutating it. The
+    // screen requires a changed name before it will call this, so reaching
+    // here with the built-in's own name would mean a UI bug, not a user
+    // choice -- fall back to a suffixed name rather than silently
+    // overwriting the baseline.
+    const isForkingBuiltIn = !!targetPlan?.isBuiltIn;
+
+    if (targetPlan && !isForkingBuiltIn) {
+      updatedPlans = updatedPlans.map((p) =>
+        p.id === editingPlanId
+          ? { ...p, name: customPlanName || 'My Custom Plan', ...editedFields, updatedAt: new Date().toISOString() }
+          : p
+      );
       triggerToast(`Plan "${customPlanName}" updated successfully! 🎯`);
     } else {
-      const newPlanId = 'plan-' + Date.now();
+      const forkedName =
+        isForkingBuiltIn && customPlanName.trim() === targetPlan?.name
+          ? `${targetPlan.name} (Custom)`
+          : customPlanName || 'My Custom Plan';
+
       const newPlan: MemoryPlan = {
-        id: newPlanId,
-        name: customPlanName || 'My Custom Plan',
-        preset,
-        learningDays,
-        newVersesPace,
-        maxReviewCap,
-        retentionRigor,
-        dailyPhaseWeeks,
-        weeklyPhaseMonths,
-        monthlyPhaseYears,
-        masteryTouches,
-        reviewsRequired,
-        sabbathEnabled,
-        sabbathDay,
-        dayStartHour,
-        cognitiveLoadSensitivity,
-        missPolicy,
-        missPolicyAskEveryTime,
-        graceCount,
-        refresherDailyDays,
-        refresherWeeklyWeeks,
-        pausedAt,
-        pausedUntil,
+        id: 'plan-' + Date.now(),
+        name: forkedName,
+        ...editedFields,
         isActive: true,
         updatedAt: new Date().toISOString(),
       };
 
       updatedPlans = updatedPlans.map((p) => ({ ...p, isActive: false }));
       updatedPlans.push(newPlan);
-      triggerToast(`New plan "${customPlanName}" saved and activated! 🎯`);
+      triggerToast(
+        isForkingBuiltIn
+          ? `Created "${forkedName}" from Standard and switched to it. 🎯`
+          : `New plan "${forkedName}" saved and activated! 🎯`
+      );
     }
 
     const activePlan = updatedPlans.find((p) => p.isActive) || updatedPlans[0];
@@ -3292,28 +3320,18 @@ export function useAppState() {
   // pause status without needing read access to this private plan doc.
   // Immediate, not gated behind Plan Designer's Save button -- pausing is a
   // "I'm leaving right now" action, same urgency as the rest of Settings.
+  // Pause is part of Rhythm, so it targets the user, not a plan. Before the
+  // split it was written into whichever plan was active, which meant
+  // activating a different plan reloaded that plan's (null) pause fields and
+  // silently un-paused you mid-vacation.
   const setPauseState = async (newPausedAt: string | null, newPausedUntil: string | null) => {
-    const targetId = editingPlanId || savedPlans.find((p) => p.isActive)?.id || savedPlans[0]?.id;
-    setPausedAt(newPausedAt);
-    setPausedUntil(newPausedUntil);
-    if (!targetId) return;
-
-    const updatedPlans = savedPlans.map((p) =>
-      p.id === targetId ? { ...p, pausedAt: newPausedAt, pausedUntil: newPausedUntil, updatedAt: new Date().toISOString() } : p
-    );
-    setSavedPlans(updatedPlans);
+    updateRhythm({ pausedAt: newPausedAt, pausedUntil: newPausedUntil });
 
     if (auth.currentUser) {
       try {
-        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(
-          planRef,
-          { savedPlans: updatedPlans, pausedAt: newPausedAt, pausedUntil: newPausedUntil, updatedAt: new Date() },
-          { merge: true }
-        );
         await setDoc(doc(db, 'profiles', auth.currentUser.uid), { isPaused: !!newPausedAt }, { merge: true });
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
+        handleFirestoreError(error, OperationType.WRITE, `profiles/${auth.currentUser.uid}`);
       }
     }
   };
@@ -3332,48 +3350,10 @@ export function useAppState() {
     triggerToast('Welcome back! Reviews have resumed. 🎯');
   };
 
-  // Persists just the Memory Rhythm fields (learning days, pace, and review
-  // cap) to whichever plan is currently selected, in place — unlike
-  // handleSavePlan, this doesn't navigate away or clear editingPlanId, since
-  // it's used inline on the Memory Plan & Queue screen.
-  const saveActivePlanRhythm = async () => {
-    const targetId = editingPlanId || savedPlans.find((p) => p.isActive)?.id || savedPlans[0]?.id;
-    if (!targetId) {
-      triggerToast('No memory plan found to save to.');
-      return;
-    }
-
-    const updatedPlans = savedPlans.map((p) =>
-      p.id === targetId
-        ? { ...p, learningDays, newVersesPace, maxReviewCap, preset, updatedAt: new Date().toISOString() }
-        : p
-    );
-    setSavedPlans(updatedPlans);
-
-    const targetPlan = updatedPlans.find((p) => p.id === targetId)!;
-
-    if (auth.currentUser) {
-      try {
-        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(
-          planRef,
-          {
-            savedPlans: updatedPlans,
-            learningDays: targetPlan.learningDays,
-            newVersesPace: targetPlan.newVersesPace,
-            maxReviewCap: targetPlan.maxReviewCap,
-            preset: targetPlan.preset,
-            updatedAt: new Date(),
-          },
-          { merge: true }
-        );
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
-      }
-    }
-
-    triggerToast(`Memory rhythm saved to "${targetPlan.name}"! 🎯`);
-  };
+  // saveActivePlanRhythm was deleted here. It existed to persist the queue
+  // screen's rhythm edits into a plan, which is exactly the coupling the
+  // plan/rhythm split removes -- rhythm now commits live via updateRhythm and
+  // targets the user, so there is nothing to "save to a plan" any more.
 
   const publishSharedPlan = async () => {
     if (!customPlanName.trim()) {
@@ -3381,27 +3361,27 @@ export function useAppState() {
       return;
     }
     try {
-      const planPayload = {
-        name: customPlanName,
-        preset,
-        learningDays,
-        newVersesPace,
-        maxReviewCap,
+      // Retention method only. Publishing used to ship the author's learning
+      // days, pace and review cap along with it, so adopting a plan silently
+      // rewrote the adopter's whole schedule -- someone else's Tuesday
+      // availability is not part of their memorization method.
+      const sharedRetentionFields = {
         retentionRigor,
         dailyPhaseWeeks,
         weeklyPhaseMonths,
         monthlyPhaseYears,
         masteryTouches,
         reviewsRequired,
-        sabbathEnabled,
-        sabbathDay,
-        dayStartHour,
-        cognitiveLoadSensitivity,
         missPolicy,
         missPolicyAskEveryTime,
         graceCount,
         refresherDailyDays,
         refresherWeeklyWeeks,
+      };
+
+      const planPayload = {
+        name: customPlanName,
+        ...sharedRetentionFields,
         creatorName: user?.displayName || 'Anonymous Disciple',
         creatorId: user?.uid || 'anonymous',
         createdAt: new Date().toISOString(),
@@ -3414,64 +3394,18 @@ export function useAppState() {
 
         // Also save/update inside savedPlans array!
         let updatedPlans = [...savedPlans];
-        if (editingPlanId) {
-          updatedPlans = updatedPlans.map((p) => {
-            if (p.id === editingPlanId) {
-              return {
-                ...p,
-                name: customPlanName,
-                preset,
-                learningDays,
-                newVersesPace,
-                maxReviewCap,
-                retentionRigor,
-                dailyPhaseWeeks,
-                weeklyPhaseMonths,
-                monthlyPhaseYears,
-                masteryTouches,
-                reviewsRequired,
-                sabbathEnabled,
-                sabbathDay,
-                dayStartHour,
-                cognitiveLoadSensitivity,
-                missPolicy,
-                missPolicyAskEveryTime,
-                graceCount,
-                refresherDailyDays,
-                refresherWeeklyWeeks,
-                pausedAt,
-                pausedUntil,
-                updatedAt: new Date().toISOString(),
-              };
-            }
-            return p;
-          });
+        const publishTarget = savedPlans.find((p) => p.id === editingPlanId);
+        if (publishTarget && !publishTarget.isBuiltIn) {
+          updatedPlans = updatedPlans.map((p) =>
+            p.id === editingPlanId
+              ? { ...p, name: customPlanName, ...sharedRetentionFields, updatedAt: new Date().toISOString() }
+              : p
+          );
         } else {
-          const newPlanId = 'plan-' + Date.now();
           const newPlan: MemoryPlan = {
-            id: newPlanId,
+            id: 'plan-' + Date.now(),
             name: customPlanName,
-            preset,
-            learningDays,
-            newVersesPace,
-            maxReviewCap,
-            retentionRigor,
-            dailyPhaseWeeks,
-            weeklyPhaseMonths,
-            monthlyPhaseYears,
-            masteryTouches,
-            reviewsRequired,
-            sabbathEnabled,
-            sabbathDay,
-            dayStartHour,
-            cognitiveLoadSensitivity,
-            missPolicy,
-            missPolicyAskEveryTime,
-            graceCount,
-            refresherDailyDays,
-            refresherWeeklyWeeks,
-            pausedAt,
-            pausedUntil,
+            ...sharedRetentionFields,
             isActive: true,
             updatedAt: new Date().toISOString(),
           };
@@ -3595,6 +3529,10 @@ export function useAppState() {
       // were just loaded, instead of racing React state that may not have
       // flushed yet.
       let resolvedActivePlan: MemoryPlan = DEFAULT_PLANS[0];
+      // Same reason as resolvedActivePlan: the missed-review scan below runs
+      // before React has flushed the rhythm setters, so it reads this rather
+      // than the live state.
+      let resolvedRhythm: Rhythm = DEFAULT_RHYTHM;
 
       // 2. Memory Plan
       console.log('Step 2: Fetching memory plan...');
@@ -3611,42 +3549,55 @@ export function useAppState() {
         const planData = planSnap.data();
         let plansList: MemoryPlan[] = planData.savedPlans || [];
 
-        // If there are no saved plans in the cloud but we have top-level plan parameters, migrate them as active
+        // ---- RHYTHM ----
+        // Read from the doc ROOT, which is where pacing has always been
+        // mirrored (pre-split, planTopLevelFields wrote the active plan's
+        // pacing to exactly these keys on every save). So a pre-split account
+        // migrates by simply being read from here: the values it lands on are
+        // the ones its active plan carried. No destructive rewrite, and stale
+        // per-plan copies inside savedPlans are just ignored from now on.
+        //
+        // The active plan is the second fallback for an account whose root
+        // keys somehow never got written.
+        const rootActive: any = (planData.savedPlans || []).find((p: any) => p.isActive) || {};
+        const loadedRhythm: Rhythm = {
+          learningDays: planData.learningDays || rootActive.learningDays || DEFAULT_RHYTHM.learningDays,
+          newVersesPace: planData.newVersesPace ?? rootActive.newVersesPace ?? DEFAULT_RHYTHM.newVersesPace,
+          maxReviewCap: planData.maxReviewCap ?? rootActive.maxReviewCap ?? DEFAULT_RHYTHM.maxReviewCap,
+          sabbathEnabled: planData.sabbathEnabled ?? rootActive.sabbathEnabled ?? DEFAULT_RHYTHM.sabbathEnabled,
+          sabbathDay: planData.sabbathDay || rootActive.sabbathDay || DEFAULT_RHYTHM.sabbathDay,
+          dayStartHour: planData.dayStartHour ?? rootActive.dayStartHour ?? DEFAULT_RHYTHM.dayStartHour,
+          cognitiveLoadSensitivity:
+            planData.cognitiveLoadSensitivity || rootActive.cognitiveLoadSensitivity || DEFAULT_RHYTHM.cognitiveLoadSensitivity,
+          pausedAt: planData.pausedAt ?? rootActive.pausedAt ?? null,
+          pausedUntil: planData.pausedUntil ?? rootActive.pausedUntil ?? null,
+        };
+        setLearningDays(loadedRhythm.learningDays);
+        setNewVersesPace(loadedRhythm.newVersesPace);
+        setMaxReviewCap(loadedRhythm.maxReviewCap);
+        setSabbathEnabled(loadedRhythm.sabbathEnabled);
+        setSabbathDay(loadedRhythm.sabbathDay);
+        setDayStartHour(loadedRhythm.dayStartHour);
+        setCognitiveLoadSensitivity(loadedRhythm.cognitiveLoadSensitivity);
+        setPausedAt(loadedRhythm.pausedAt);
+        setPausedUntil(loadedRhythm.pausedUntil);
+        resolvedRhythm = loadedRhythm;
+
+        // ---- PLANS ----
+        // An account with no savedPlans array at all (or one emptied by an
+        // older migration) starts from the shipped plan rather than
+        // reconstructing a pseudo-plan out of the root keys -- those keys are
+        // Rhythm now, and carry nothing about retention that DEFAULT_PLANS
+        // doesn't already say.
         if (plansList.length === 0) {
-          const activePlan: MemoryPlan = {
-            id: 'example-plan',
-            name: planData.name || 'Example Plan',
-            preset: planData.preset || 'custom',
-            learningDays: planData.learningDays || ['M', 'W', 'F'],
-            newVersesPace: planData.newVersesPace || 3,
-            maxReviewCap: planData.maxReviewCap || 15,
-            retentionRigor: planData.retentionRigor || 'standard',
-            dailyPhaseWeeks: planData.dailyPhaseWeeks ?? 7,
-            weeklyPhaseMonths: planData.weeklyPhaseMonths ?? 6,
-            monthlyPhaseYears: planData.monthlyPhaseYears ?? 5,
-            masteryTouches: planData.masteryTouches ?? 3,
-            reviewsRequired: planData.reviewsRequired ?? 1,
-            sabbathEnabled: planData.sabbathEnabled ?? false,
-            sabbathDay: planData.sabbathDay || 'Su',
-            dayStartHour: planData.dayStartHour ?? 0,
-            cognitiveLoadSensitivity: planData.cognitiveLoadSensitivity || 'medium',
-            missPolicy: planData.missPolicy || 'standard',
-            missPolicyAskEveryTime: planData.missPolicyAskEveryTime ?? false,
-            graceCount: planData.graceCount ?? 1,
-            refresherDailyDays: planData.refresherDailyDays ?? 7,
-            refresherWeeklyWeeks: planData.refresherWeeklyWeeks ?? 4,
-            pausedAt: planData.pausedAt ?? null,
-            pausedUntil: planData.pausedUntil ?? null,
-            isActive: true,
-            updatedAt: new Date().toISOString(),
-          };
-          plansList = [activePlan];
+          plansList = [{ ...DEFAULT_PLANS[0], ...normalizeAdoptedPlan(planData), id: BUILT_IN_PLAN_ID, isBuiltIn: true }];
         }
 
         // Back-compat: plans saved before retention-rigor/mastery-touches/
-        // sabbath/cognitiveLoadSensitivity/missPolicy/pause existed won't
-        // have these fields in Firestore — default them to prior hardcoded
-        // behavior so existing plans don't change silently.
+        // missPolicy existed won't have these fields in Firestore — default
+        // them to prior hardcoded behavior so existing plans don't change
+        // silently. Pacing fields that pre-split plans still carry are left
+        // untouched in the stored object and simply never read.
         plansList = plansList.map((p) => ({
           ...p,
           retentionRigor: p.retentionRigor || 'standard',
@@ -3655,17 +3606,11 @@ export function useAppState() {
           monthlyPhaseYears: p.monthlyPhaseYears ?? 5,
           masteryTouches: p.masteryTouches ?? 3,
           reviewsRequired: p.reviewsRequired ?? 1,
-          sabbathEnabled: p.sabbathEnabled ?? false,
-          sabbathDay: p.sabbathDay || 'Su',
-          dayStartHour: p.dayStartHour ?? 0,
-          cognitiveLoadSensitivity: p.cognitiveLoadSensitivity || 'medium',
           missPolicy: p.missPolicy || 'standard',
           missPolicyAskEveryTime: p.missPolicyAskEveryTime ?? false,
           graceCount: p.graceCount ?? 1,
           refresherDailyDays: p.refresherDailyDays ?? 7,
           refresherWeeklyWeeks: p.refresherWeeklyWeeks ?? 4,
-          pausedAt: p.pausedAt ?? null,
-          pausedUntil: p.pausedUntil ?? null,
         }));
 
         setSavedPlans(plansList);
@@ -3708,6 +3653,7 @@ export function useAppState() {
           await setDoc(planRef, {
             savedPlans: DEFAULT_PLANS,
             ...planTopLevelFields(DEFAULT_PLANS[0]),
+            ...DEFAULT_RHYTHM,
             updatedAt: new Date(),
           });
           console.log('Memory plan created successfully.');
@@ -3827,11 +3773,11 @@ export function useAppState() {
               item: qItem,
               missedCycles: computeMissedCycles(
                 qItem,
-                resolvedActivePlan.dayStartHour,
-                resolvedActivePlan.sabbathEnabled,
-                resolvedActivePlan.sabbathDay,
-                resolvedActivePlan.pausedAt,
-                resolvedActivePlan.pausedUntil
+                resolvedRhythm.dayStartHour,
+                resolvedRhythm.sabbathEnabled,
+                resolvedRhythm.sabbathDay,
+                resolvedRhythm.pausedAt,
+                resolvedRhythm.pausedUntil
               ),
             }))
             .filter((entry) => entry.missedCycles > 0);
@@ -3933,10 +3879,14 @@ export function useAppState() {
         setVerses([]);
         updateMemoryQueue(() => []);
         queueHydratedRef.current = true;
-        setPreset('custom');
-        setLearningDays(['M', 'W', 'F']);
-        setNewVersesPace(3);
-        setMaxReviewCap(15);
+        setLearningDays(DEFAULT_RHYTHM.learningDays);
+        setNewVersesPace(DEFAULT_RHYTHM.newVersesPace);
+        setMaxReviewCap(DEFAULT_RHYTHM.maxReviewCap);
+        setSabbathEnabled(DEFAULT_RHYTHM.sabbathEnabled);
+        setSabbathDay(DEFAULT_RHYTHM.sabbathDay);
+        setCognitiveLoadSensitivity(DEFAULT_RHYTHM.cognitiveLoadSensitivity);
+        setPausedAt(null);
+        setPausedUntil(null);
         setMyCircles([]);
         setCircleFriends([]);
         setDefaultRecordingVisibility(null);
@@ -4700,7 +4650,18 @@ export function useAppState() {
     }
 
     const estTime = getEstimatedReviewTime(memoryQueue, cognitiveLoadSensitivity);
-    if (estTime >= maxReviewCap && !opts?.bypassShield) {
+    const shieldActive = estTime >= maxReviewCap && !opts?.bypassShield;
+
+    // An 'additive' plan is defined as deliberately going over your daily
+    // limits -- BOTH the new-verse pace and the review-time cap. So the
+    // Review Shield holds back your own queue and your capped plans, but
+    // never an additive one; otherwise "additive" would quietly mean
+    // "additive until you get busy", which is the opposite of why someone
+    // picks it. With the shield up we re-run the pull with a zero personal
+    // budget and only the additive memberships, so exactly that plan's own
+    // weekly share comes through.
+    const additiveMemberships = joinedStudyPlanMemberships.filter((m) => m.priority === 'additive');
+    if (shieldActive && additiveMemberships.length === 0) {
       triggerToast(`Review Shield is Active! Review time (${estTime}m) >= limit (${maxReviewCap}m). No new verses pulled today. 🛡️`);
       return;
     }
@@ -4715,14 +4676,23 @@ export function useAppState() {
     // src/lib/studyPlanScheduler.ts for the full resolution rules (additive
     // plans first and uncapped, then group-priority > individual >
     // individual-priority within the personal daily budget).
-    const personal: PersonalPacingSettings = { newVersesPace, learningDays };
+    const personal: PersonalPacingSettings = {
+      newVersesPace: shieldActive ? 0 : newVersesPace,
+      learningDays,
+    };
     const { verseIds: pulledVerseIds, fromIndividual, fromPlans } = computeDailyPull(
       memoryQueue,
       personal,
       joinedStudyPlanDetails,
-      joinedStudyPlanMemberships,
+      shieldActive ? additiveMemberships : joinedStudyPlanMemberships,
       new Date()
     );
+
+    if (shieldActive && pulledVerseIds.length > 0) {
+      triggerToast(
+        `Review Shield held back your own queue (${estTime}m >= ${maxReviewCap}m), but your additive plan still pulled. 🛡️`
+      );
+    }
 
     if (pulledVerseIds.length === 0) {
       triggerToast('No more queued verses to pull! 🎉');
@@ -4787,6 +4757,20 @@ export function useAppState() {
       `Successfully pulled ${pulledVerseIds.length} new ${pulledVerseIds.length === 1 ? 'verse' : 'verses'} into your learning queue!${breakdown} 🚀`
     );
   };
+
+  // Read-only preview of what the next learning day's pull would promote,
+  // for the "Where verses come from" block on the queue screen. Runs the
+  // exact same pure function the real pull runs, so the preview can't drift
+  // from the behaviour it describes -- which is the whole point of showing
+  // it, since the priority setting was previously impossible to observe.
+  const getNextPullPreview = () =>
+    computeDailyPull(
+      memoryQueue,
+      { newVersesPace, learningDays },
+      joinedStudyPlanDetails,
+      joinedStudyPlanMemberships,
+      new Date()
+    );
 
   // Manually moves specific queued verses straight into Learning, bypassing
   // triggerDailyPull's pace/learning-day/review-cap gating -- those exist to
@@ -6591,7 +6575,10 @@ export function useAppState() {
     downloadingRecordingIds, saveRecordingOffline, removeRecordingDownload, saveChapterOffline,
     setAudioCacheCap, clearAudioDownloads,
     isEditingSync, setIsEditingSync,
-    preset, setPreset,
+    // Rhythm: read these freely, but write through updateRhythm so the
+    // change persists. The raw setters stay exported for the load path and
+    // the layout lab's mock state only.
+    updateRhythm,
     learningDays, setLearningDays,
     newVersesPace, setNewVersesPace,
     maxReviewCap, setMaxReviewCap,
@@ -6758,6 +6745,7 @@ export function useAppState() {
     addVersesToStudyPlan,
     deleteStudyPlan,
     joinStudyPlan,
+    getNextPullPreview,
     leaveStudyPlan,
     setStudyPlanPriority,
     clearStudyPlanMembershipsForCircle,
@@ -6768,9 +6756,10 @@ export function useAppState() {
     handleActivatePlan,
     handleDeletePlan,
     handleEditPlan,
+    openActivePlanDesigner,
+    isEditingBuiltInPlan,
     handleCreateNewPlan,
     handleSavePlan,
-    saveActivePlanRhythm,
     publishSharedPlan,
     loadUserData,
 

@@ -15,55 +15,38 @@ import {
   type OptionCardItem,
 } from '../components/design';
 
-type PresetKey = 'drip' | 'warrior' | 'custom';
+// The Daily Drip / Weekend Warrior pacing presets were deleted with the
+// plan/rhythm split: they set learning days, pace and review cap, all of
+// which are Rhythm now and live on the queue screen. They were also the
+// reason the three shipped "plans" were indistinguishable -- see
+// DEFAULT_PLANS in data.ts.
 
-// Was three `flex-1` cards at a fixed height: 100 -- roughly 105pt each on a
-// 375pt screen, so "Weekend Warrior" at 11px already wrapped tight and had
-// nowhere to grow. OptionCards handles the same choice responsively.
-const PRESET_OPTIONS: OptionCardItem<PresetKey>[] = [
-  { id: 'drip', title: 'The Daily Drip', desc: 'Steady pacing — 2 verses a day, Monday to Friday.' },
-  { id: 'warrior', title: 'Weekend Warrior', desc: 'Intense — 5 verses a day, Saturday and Sunday.' },
-  { id: 'custom', title: 'Custom', desc: 'Your own rhythm, set below.' },
+type RigorKey = 'light' | 'standard' | 'deep';
+
+// The three retention tiers, and the only preset system left on this screen.
+// Touches: Light and Standard both graduate at 3, Deep at 4.
+const RIGOR_OPTIONS: OptionCardItem<RigorKey>[] = [
+  { id: 'light', title: 'Light', desc: '5-4-3 phases, 3 touches to graduate. Quicker to finish, less durable.' },
+  { id: 'standard', title: 'Standard', desc: '7-6-5 phases, 3 touches to graduate. The default balance.' },
+  { id: 'deep', title: 'Deep', desc: '9-8-7 phases, 4 touches to graduate. Slowest, and the stickiest.' },
 ];
 
-const DAYS = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
-
-const RIGOR_TIERS: { key: 'light' | 'standard' | 'deep'; label: string; weeks: number; months: number; years: number }[] = [
-  { key: 'light', label: 'Light', weeks: 5, months: 4, years: 3 },
-  { key: 'standard', label: 'Standard', weeks: 7, months: 6, years: 5 },
-  { key: 'deep', label: 'Deep', weeks: 9, months: 8, years: 7 },
-];
-
-const COGNITIVE_LOAD_TIERS: { key: 'low' | 'medium' | 'high'; label: string }[] = [
-  { key: 'low', label: 'Relaxed' },
-  { key: 'medium', label: 'Balanced' },
-  { key: 'high', label: 'Intense' },
+const RIGOR_TIERS: { key: RigorKey; label: string; weeks: number; months: number; years: number; touches: number }[] = [
+  { key: 'light', label: 'Light', weeks: 5, months: 4, years: 3, touches: 3 },
+  { key: 'standard', label: 'Standard', weeks: 7, months: 6, years: 5, touches: 3 },
+  { key: 'deep', label: 'Deep', weeks: 9, months: 8, years: 7, touches: 4 },
 ];
 
 export default function PlanDesignerScreen({ state }: { state: AppState }) {
   const {
     handleBack,
+    navigateTo,
     triggerToast,
-    preset,
-    setPreset,
-    learningDays,
-    setLearningDays,
-    newVersesPace,
-    setNewVersesPace,
-    maxReviewCap,
-    setMaxReviewCap,
     masteryTouches,
     setMasteryTouches,
     reviewsRequired,
     setReviewsRequired,
-    sabbathEnabled,
-    setSabbathEnabled,
-    sabbathDay,
-    setSabbathDay,
-    dayStartHour,
-    setDayStartHour,
-    cognitiveLoadSensitivity,
-    setCognitiveLoadSensitivity,
+    isEditingBuiltInPlan,
     retentionRigor,
     setRetentionRigor,
     dailyPhaseWeeks,
@@ -87,51 +70,25 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     handleSavePlan,
   } = state;
 
-  const applyRigorPreset = (tier: 'light' | 'standard' | 'deep') => {
+  const applyRigorPreset = (tier: RigorKey) => {
     const cfg = RIGOR_TIERS.find((t) => t.key === tier)!;
     setRetentionRigor(tier);
     setDailyPhaseWeeks(cfg.weeks);
     setWeeklyPhaseMonths(cfg.months);
     setMonthlyPhaseYears(cfg.years);
-    triggerToast(`Retention rigor set to ${cfg.label} (${cfg.weeks}-${cfg.months}-${cfg.years})! 🎯`);
-  };
-
-  const applyPreset = (id: PresetKey) => {
-    setPreset(id);
-    if (id === 'drip') {
-      setLearningDays(['M', 'T', 'W', 'Th', 'F']);
-      setNewVersesPace(2);
-      setMaxReviewCap(10);
-      triggerToast("Loaded 'The Daily Drip' preset! \u{1F4A7}");
-    } else if (id === 'warrior') {
-      setLearningDays(['S', 'Su']);
-      setNewVersesPace(5);
-      setMaxReviewCap(20);
-      triggerToast("Loaded 'Weekend Warrior' preset! ⚔️");
-    } else {
-      triggerToast('Switched to Custom configuration.');
-    }
+    setMasteryTouches(cfg.touches);
+    triggerToast(`Retention set to ${cfg.label} (${cfg.weeks}-${cfg.months}-${cfg.years}, ${cfg.touches} touches). 🎯`);
   };
 
   const totalRigorDays = dailyPhaseWeeks * 7 + weeklyPhaseMonths * 30 + monthlyPhaseYears * 365;
   const totalRigorLabel =
     totalRigorDays >= 365 ? `${(totalRigorDays / 365).toFixed(1)} years` : `${Math.round(totalRigorDays)} days`;
 
-  const toggleDay = (day: string, list: string[], setList: (v: string[]) => void) => {
-    if (list.includes(day)) {
-      setList(list.filter((d) => d !== day));
-    } else {
-      setList([...list, day]);
-    }
-    setPreset('custom');
-  };
-
-  // Defaults to Basic -- a newer/less technical user opening this screen
-  // sees just the essentials (presets, weekly rhythm, sabbath, new-verse
-  // pace) instead of the full set of tuning knobs. Purely a display
-  // toggle, session-local: every underlying setting still has its real
-  // saved value regardless of which mode is showing.
-  const [isAdvanced, setIsAdvanced] = useState(false);
+  // Copy-on-write: the shipped Standard plan is the baseline every account
+  // starts from, so it can't be edited in place. Renaming is what turns an
+  // edit into your own plan, and the Save button stays disabled until you do.
+  const nameChangedFromBuiltIn = customPlanName.trim().length > 0 && customPlanName.trim() !== 'Standard';
+  const canSave = !isEditingBuiltInPlan || nameChangedFromBuiltIn;
 
   const space = useScaledSpace();
   const iconSize = Math.round(14 * useFontScale());
@@ -153,41 +110,36 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           )}
           <View>
             <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Settings</Text>
-            <Text className="text-xl font-serif font-bold text-[#1A1A1A]">Memory Plan Designer</Text>
+            <Text className="text-xl font-serif font-bold text-[#1A1A1A]">Memory Plan</Text>
           </View>
         </View>
         <Text className="text-xs text-neutral-500 font-sans -mt-1 leading-relaxed">
-          Customize your pacing and daily routine.
+          How a verse graduates, and what happens when you miss one. Your schedule and speed live on the Memory Queue
+          screen, under Your Rhythm.
         </Text>
 
-        {/* Basic / Advanced toggle */}
-        <View className="flex-row gap-2 -mt-1">
-          <Pressable
-            onPress={() => setIsAdvanced(false)}
-            className={`flex-1 py-2 rounded-xl border-2 items-center ${
-              !isAdvanced ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
-            }`}
-          >
-            <Text className={`text-[10px] font-sans font-bold uppercase tracking-wider ${!isAdvanced ? 'text-white' : 'text-neutral-500'}`}>
-              Basic
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setIsAdvanced(true)}
-            className={`flex-1 py-2 rounded-xl border-2 items-center ${
-              isAdvanced ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
-            }`}
-          >
-            <Text className={`text-[10px] font-sans font-bold uppercase tracking-wider ${isAdvanced ? 'text-white' : 'text-neutral-500'}`}>
-              Advanced
-            </Text>
-          </Pressable>
-        </View>
+        {/* The Basic/Advanced toggle was removed along with the pacing
+            sections. It existed to hide the tuning knobs from a newer user
+            while leaving presets and pacing visible -- but retention IS the
+            screen now, so Advanced would have hidden the entire point of it. */}
 
-        {/* Plan Name -- not gated behind Advanced. An unnamed plan is
-            indistinguishable from any other in Saved Plans/Community, so
-            this is essential regardless of how much other tuning a user
-            wants to see. */}
+        {/* Copy-on-write notice. The shipped plan is the baseline every
+            account starts from, so the only way to "edit" it is to make it
+            yours first. */}
+        {isEditingBuiltInPlan && (
+          <View className="rounded-xl border-2 border-amber-300 bg-amber-50" style={{ padding: space(12), gap: space(4) }}>
+            <AppText variant="label" className="font-sans font-bold text-amber-900">
+              Standard is the built-in plan
+            </AppText>
+            <AppText variant="micro" className="font-sans text-amber-800 leading-relaxed">
+              Give it a new name below to make your own copy. Standard itself stays as it is, so you can always come
+              back to it.
+            </AppText>
+          </View>
+        )}
+
+        {/* Plan Name. An unnamed plan is indistinguishable from any other in
+            Saved Plans/Community, and renaming is what forks the built-in. */}
         <View style={{ gap: 6 }}>
           <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Plan Name</Text>
           <TextInput
@@ -198,297 +150,35 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           />
         </View>
 
-        {/* Quick Presets */}
+        {/* Retention tier -- the primary choice on this screen. */}
         <View style={{ gap: 8 }}>
           <AppText variant="micro" className="uppercase tracking-wider font-bold text-[#888] font-sans">
-            Quick Presets
+            Retention
           </AppText>
-          <OptionCards options={PRESET_OPTIONS} value={preset as PresetKey} onChange={applyPreset} />
+          <OptionCards
+            options={RIGOR_OPTIONS}
+            value={(retentionRigor === 'custom' ? 'standard' : retentionRigor) as RigorKey}
+            onChange={applyRigorPreset}
+          />
         </View>
 
-        {/* Weekly Rhythm section */}
-        <CollapsibleCard storageKey="planDesigner.weeklyRhythm" title="Weekly Rhythm" summary={`${learningDays.length}/7 days`}>
-          <View style={{ gap: 16 }}>
-            {/* Learning Days */}
-            <View style={{ gap: 6 }}>
-              <View className="flex-row justify-between items-center">
-                <Text className="text-xs font-serif font-bold text-[#1A1A1A]">Learning Days</Text>
-                <Text className="text-[9px] font-mono font-bold text-neutral-400 bg-neutral-50 border border-neutral-200 px-1 rounded">
-                  {learningDays.length}/7 active
-                </Text>
-              </View>
-              <View className="flex-row justify-between">
-                {DAYS.map((day) => {
-                  const isActive = learningDays.includes(day);
-                  const isSabbath = sabbathEnabled && day === sabbathDay;
-                  return (
-                    <Pressable
-                      key={`learn-${day}`}
-                      onPress={() => {
-                        if (!isActive && isSabbath) {
-                          triggerToast(`${day} is your Sabbath day — change that first to use it for learning. 🕊️`);
-                          return;
-                        }
-                        toggleDay(day, learningDays, setLearningDays);
-                      }}
-                      className={`w-7 h-7 rounded-full border items-center justify-center ${
-                        isActive ? 'bg-[#1A1A1A] border-[#1A1A1A]' : isSabbath ? 'bg-neutral-100 border-neutral-200' : 'bg-white border-neutral-200'
-                      }`}
-                    >
-                      <Text className={`font-sans font-bold text-[10px] ${isActive ? 'text-white' : isSabbath ? 'text-neutral-300' : 'text-neutral-500'}`}>{day}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Sabbath Day (optional, off by default) */}
-            <View style={{ gap: 6 }} className="pt-2 border-t border-[#F3F2F1]">
-              <View className="flex-row items-center justify-between">
-                <View style={{ gap: 2 }} className="flex-1 pr-2">
-                  <Text className="text-xs font-serif font-bold text-[#1A1A1A]">Sabbath Day</Text>
-                  <Text className="text-[9px] text-neutral-400 font-sans leading-tight">
-                    A day fully free from learning and reviewing. The engine treats it as if it doesn't exist.
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => {
-                    const turningOn = !sabbathEnabled;
-                    setSabbathEnabled(turningOn);
-                    // A day can't be both a learning day and the Sabbath at
-                    // once -- turning Sabbath on immediately frees up its day.
-                    if (turningOn && learningDays.includes(sabbathDay)) {
-                      setLearningDays(learningDays.filter((d) => d !== sabbathDay));
-                    }
-                  }}
-                  className={`w-10 h-6 rounded-full justify-center px-0.5 ${sabbathEnabled ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
-                >
-                  <View
-                    className="w-5 h-5 rounded-full bg-white shadow"
-                    style={{ transform: [{ translateX: sabbathEnabled ? 16 : 0 }] }}
-                  />
-                </Pressable>
-              </View>
-
-              {sabbathEnabled && (
-                <View className="flex-row justify-between pt-2">
-                  {DAYS.map((day) => {
-                    const isActive = sabbathDay === day;
-                    return (
-                      <Pressable
-                        key={`sabbath-${day}`}
-                        onPress={() => {
-                          setSabbathDay(day);
-                          if (learningDays.includes(day)) {
-                            setLearningDays(learningDays.filter((d) => d !== day));
-                          }
-                        }}
-                        className={`w-7 h-7 rounded-full border items-center justify-center ${
-                          isActive ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                        }`}
-                      >
-                        <Text className={`font-sans font-bold text-[10px] ${isActive ? 'text-white' : 'text-neutral-500'}`}>
-                          {day}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-
-            {/* Day Start Time -- when "today" logically begins, for both
-                review scheduling and the accountability-notification daily
-                limits. Defaults to real midnight; a night owl can push it to
-                1am/2am so a late night doesn't flip over into "tomorrow"
-                before they've actually gone to bed. */}
-            <View style={{ gap: 6 }} className="pt-2 border-t border-[#F3F2F1]">
-              <View style={{ gap: 2 }}>
-                <Text className="text-xs font-serif font-bold text-[#1A1A1A]">Day Start Time</Text>
-                <Text className="text-[9px] text-neutral-400 font-sans leading-tight">
-                  When your "today" begins — push this later if you're often still up past midnight.
-                </Text>
-              </View>
-              <ChipRow
-                value={dayStartHour}
-                onChange={setDayStartHour}
-                options={[
-                  { id: 0, label: '12 AM' },
-                  { id: 1, label: '1 AM' },
-                  { id: 2, label: '2 AM' },
-                ]}
-              />
-            </View>
-
-          </View>
-        </CollapsibleCard>
-
-        {/* Pacing & Limits */}
-        <CollapsibleCard storageKey="planDesigner.pacing" title="Pacing & Limits" summary={`${newVersesPace}/day · ${maxReviewCap} min`}>
-          {/* New Verses Slider */}
-          <View style={{ gap: 6 }}>
-            <View className="flex-row justify-between items-center">
-              <Text className="text-xs font-sans font-bold text-[#1A1A1A]">New Verses per Learning Day</Text>
-              <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                {newVersesPace}
-              </Text>
-            </View>
-            <StepperRow
-              min={1}
-              max={10}
-              value={newVersesPace}
-              onChange={(v) => {
-                setNewVersesPace(v);
-                setPreset('custom');
-              }}
-            />
-            <View className="flex-row justify-between">
-              <Text className="text-[8px] text-neutral-400 font-mono">1 verse (Gentle)</Text>
-              <Text className="text-[8px] text-neutral-400 font-mono">10 verses (Extreme)</Text>
-            </View>
-          </View>
-
-          {isAdvanced && (
-          <>
-          {/* Review Cap Slider */}
-          <View style={{ gap: 6 }}>
-            <View className="flex-row justify-between items-center">
-              <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Daily Review Time Limit</Text>
-              <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                {maxReviewCap} mins
-              </Text>
-            </View>
-            <StepperRow
-              min={5}
-              max={30}
-              step={5}
-              value={maxReviewCap}
-              onChange={(v) => {
-                setMaxReviewCap(v);
-                setPreset('custom');
-              }}
-            />
-            <View className="flex-row justify-between">
-              <Text className="text-[8px] text-neutral-400 font-mono">5 mins (Sprint)</Text>
-              <Text className="text-[8px] text-neutral-400 font-mono">30 mins (Marathon)</Text>
-            </View>
-            <Text className="text-[10px] text-neutral-500 font-sans leading-normal pt-2 border-t border-[#F3F2F1]">
-              If your queue exceeds this, easier verses will defer to tomorrow.
-            </Text>
-          </View>
-
-          {/* 3-Touch Mastery Gate setting */}
-          <View style={{ gap: 6 }} className="pt-4 border-t border-[#F3F2F1]">
-            <View className="flex-row justify-between items-center">
-              <View className="flex-row items-center">
-                <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Touches to Graduate a Verse</Text>
-                <HelpTooltip text="How many perfect recalls — at least an hour apart each — a verse needs before it leaves Learning for spaced review. The hour gap is what keeps cramming from counting. Once a verse hits the count it's banked, and graduates as soon as the day's remaining reviews are cleared." />
-              </View>
-              <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                {masteryTouches} touches
-              </Text>
-            </View>
-            <StepperRow min={3} max={10} value={masteryTouches} onChange={setMasteryTouches} />
-            <View className="flex-row justify-between">
-              <Text className="text-[8px] text-neutral-400 font-mono">3 touches</Text>
-              <Text className="text-[8px] text-neutral-400 font-mono">10 touches</Text>
-            </View>
-          </View>
-
-          {/* Standard Reviews Required setting */}
-          <View style={{ gap: 6 }} className="pt-4 border-t border-[#F3F2F1]">
-            <View className="flex-row justify-between items-center">
-              <View className="flex-row items-center">
-                <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Reviews Needed Per Day to Advance</Text>
-                <HelpTooltip text="Once a verse is in spaced review, this is how many times you have to get it right on the same day for that day to count toward its streak. Raising it means more reps per sitting — it doesn't add days between reviews." />
-              </View>
-              <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                {reviewsRequired} reps
-              </Text>
-            </View>
-            <StepperRow min={1} max={3} value={reviewsRequired} onChange={setReviewsRequired} />
-            <View className="flex-row justify-between">
-              <Text className="text-[8px] text-neutral-400 font-mono">1 review</Text>
-              <Text className="text-[8px] text-neutral-400 font-mono">3 reviews</Text>
-            </View>
-          </View>
-
-          {/* Time Estimate Buffer (cognitiveLoadSensitivity) */}
-          <View style={{ gap: 6 }} className="pt-4 border-t border-[#F3F2F1]">
-            <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Time Estimate Buffer</Text>
-            <Text className="text-[9px] text-neutral-400 font-sans leading-relaxed">
-              How much extra time to build into your daily estimate, in case reviews take you longer than average.
-            </Text>
-            <View className="flex-row gap-2 pt-1">
-              {COGNITIVE_LOAD_TIERS.map((tier) => {
-                const isActive = cognitiveLoadSensitivity === tier.key;
-                return (
-                  <Pressable
-                    key={tier.key}
-                    onPress={() => setCognitiveLoadSensitivity(tier.key)}
-                    className={`flex-1 border-2 rounded-xl p-2 items-center ${
-                      isActive ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
-                    }`}
-                  >
-                    <Text className={`text-[11px] font-serif font-black ${isActive ? 'text-white' : 'text-[#1A1A1A]'}`}>
-                      {tier.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-          </>
-          )}
-        </CollapsibleCard>
-
-        {/* Retention Rigor -- advanced only */}
-        {isAdvanced && (
-        <CollapsibleCard storageKey="planDesigner.retentionRigor" title="Retention Rigor" summary={`${dailyPhaseWeeks}-${weeklyPhaseMonths}-${monthlyPhaseYears}`}>
-
-          <Text className="text-[10px] text-neutral-500 font-sans -mt-2 leading-relaxed">
+        {/* Fine-tuning: the exact phase lengths and mastery gates behind the
+            three tiers above. Collapsed by default -- picking a tier is
+            enough for most people, and touching anything here moves the plan
+            to 'custom'. */}
+        <CollapsibleCard
+          storageKey="planDesigner.retentionRigor"
+          title="Fine-tune retention"
+          summary={`${dailyPhaseWeeks}-${weeklyPhaseMonths}-${monthlyPhaseYears} · ${masteryTouches} touches`}
+          defaultCollapsed
+        >
+          <Text className="text-[10px] text-neutral-500 font-sans leading-relaxed">
             How long a verse stays in Daily, then Weekly, then Monthly review before it's retained for good. Higher
             numbers mean deeper, more permanent memorization.
           </Text>
 
-          <View className="flex-row gap-2">
-            {RIGOR_TIERS.map((tier) => {
-              const isActive = retentionRigor === tier.key;
-              return (
-                <Pressable
-                  key={tier.key}
-                  onPress={() => applyRigorPreset(tier.key)}
-                  className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
-                    isActive ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
-                  }`}
-                  style={{ height: 76 }}
-                >
-                  <Text className={`text-[11px] font-serif font-black leading-tight ${isActive ? 'text-white' : 'text-[#1A1A1A]'}`}>
-                    {tier.label}
-                  </Text>
-                  <Text className={`text-[8px] font-mono leading-tight ${isActive ? 'text-neutral-200' : 'text-neutral-500'}`}>
-                    {tier.weeks}-{tier.months}-{tier.years}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              onPress={() => setRetentionRigor('custom')}
-              className={`flex-1 rounded-xl p-2.5 justify-between ${
-                retentionRigor === 'custom' ? 'border-2 border-[#1A1A1A] bg-[#FBF9F6]' : 'border-2 border-[#E5E5E5] bg-white'
-              }`}
-              style={{ height: 76 }}
-            >
-              <View className="flex-row justify-between items-center">
-                <Text className="text-[11px] font-serif font-black leading-tight text-[#1A1A1A]">Custom</Text>
-                {retentionRigor === 'custom' && <View className="w-1.5 h-1.5 bg-amber-500 rounded-full" />}
-              </View>
-              <Text className="text-[8px] font-mono leading-tight text-neutral-500">Fine-tune</Text>
-            </Pressable>
-          </View>
-
-          {retentionRigor === 'custom' && (
-            <View style={{ gap: 16 }} className="pt-2 border-t border-[#F3F2F1]">
+          <View style={{ gap: 16 }}>
+            <View style={{ gap: 16 }}>
               {/* Daily Phase Length */}
               <View style={{ gap: 6 }}>
                 <View className="flex-row justify-between items-center">
@@ -533,33 +223,70 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                   <Text className="text-[8px] text-neutral-400 font-mono">10 years</Text>
                 </View>
               </View>
+
+              {/* Mastery gates. These moved here from the deleted "Pacing &
+                  Limits" section -- they were never pacing: they decide when
+                  a verse graduates, which is retention. */}
+              <View style={{ gap: 6 }} className="pt-2 border-t border-[#F3F2F1]">
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Touches to Graduate</Text>
+                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
+                    {masteryTouches}
+                  </Text>
+                </View>
+                <StepperRow
+                  min={1}
+                  max={6}
+                  value={masteryTouches}
+                  onChange={(v) => {
+                    setMasteryTouches(v);
+                    setRetentionRigor('custom');
+                  }}
+                />
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Reviews Required per Cycle</Text>
+                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
+                    {reviewsRequired}
+                  </Text>
+                </View>
+                <StepperRow
+                  min={1}
+                  max={5}
+                  value={reviewsRequired}
+                  onChange={(v) => {
+                    setReviewsRequired(v);
+                    setRetentionRigor('custom');
+                  }}
+                />
+              </View>
             </View>
-          )}
+          </View>
 
           <Text className="text-[10px] text-neutral-500 font-sans pt-2 border-t border-[#F3F2F1] leading-relaxed">
             At this rigor, a verse is fully retained for good after about <Text className="font-bold text-[#1A1A1A]">{totalRigorLabel}</Text>.
           </Text>
         </CollapsibleCard>
-        )}
 
-        {/* Missed Review Handling -- advanced only.
-            Extracted into its own component so the dev layout lab can render
-            it at every supported font scale without a signed-in user. */}
-        {isAdvanced && (
-          <MissPolicySection
-            missPolicy={missPolicy}
-            setMissPolicy={setMissPolicy}
-            missPolicyAskEveryTime={missPolicyAskEveryTime}
-            setMissPolicyAskEveryTime={setMissPolicyAskEveryTime}
-            graceCount={graceCount}
-            setGraceCount={setGraceCount}
-            refresherDailyDays={refresherDailyDays}
-            setRefresherDailyDays={setRefresherDailyDays}
-            refresherWeeklyWeeks={refresherWeeklyWeeks}
-            setRefresherWeeklyWeeks={setRefresherWeeklyWeeks}
-            onToast={triggerToast}
-          />
-        )}
+        {/* Missed Review Handling. Extracted into its own component so the
+            dev layout lab can render it at every supported font scale
+            without a signed-in user. No longer Advanced-gated: what happens
+            when you miss a review is half of what a plan even is. */}
+        <MissPolicySection
+          missPolicy={missPolicy}
+          setMissPolicy={setMissPolicy}
+          missPolicyAskEveryTime={missPolicyAskEveryTime}
+          setMissPolicyAskEveryTime={setMissPolicyAskEveryTime}
+          graceCount={graceCount}
+          setGraceCount={setGraceCount}
+          refresherDailyDays={refresherDailyDays}
+          setRefresherDailyDays={setRefresherDailyDays}
+          refresherWeeklyWeeks={refresherWeeklyWeeks}
+          setRefresherWeeklyWeeks={setRefresherWeeklyWeeks}
+          onToast={triggerToast}
+        />
 
       </ScrollView>
 
@@ -586,18 +313,28 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             <TrendingUp size={iconSize} color="#1A1A1A" />
           </View>
           <AppText variant="micro" className="font-sans text-neutral-600 flex-1">
-            {newVersesPace * learningDays.length} new verses this week · about {maxReviewCap} min a day
+            {dailyPhaseWeeks}-{weeklyPhaseMonths}-{monthlyPhaseYears} · {masteryTouches} touches · retained after about{' '}
+            {totalRigorLabel}
           </AppText>
         </View>
 
         <Pressable
-          onPress={() => handleSavePlan()}
-          className="w-full bg-[#1A1A1A] rounded-xl flex-row items-center justify-center shadow-sm"
+          onPress={() => {
+            if (!canSave) {
+              triggerToast('Give your plan a new name first — Standard is the built-in one.');
+              return;
+            }
+            handleSavePlan();
+          }}
+          accessibilityState={{ disabled: !canSave }}
+          className={`w-full rounded-xl flex-row items-center justify-center shadow-sm ${
+            canSave ? 'bg-[#1A1A1A]' : 'bg-neutral-300'
+          }`}
           style={{ minHeight: MIN_TOUCH, paddingVertical: space(10), gap: space(6) }}
         >
           <Check size={iconSize} color="#FFFFFF" />
           <AppText variant="label" className="text-white font-sans font-bold uppercase tracking-widest">
-            Save Plan
+            {isEditingBuiltInPlan ? 'Save as My Plan' : 'Save Plan'}
           </AppText>
         </Pressable>
       </View>

@@ -201,26 +201,20 @@ export interface GroupedQueueItem {
   items: QueueItem[];
 }
 
-export interface MemoryPlan {
-  id: string;
-  name: string;
-  preset: 'drip' | 'warrior' | 'custom';
+// Your personal cadence: which days you take on new verses, how many, how
+// long a day's reviews may run, and when you're away. ONE per user, stored
+// at the root of memoryPlans/{uid} -- deliberately NOT part of MemoryPlan.
+//
+// Everything here is a statement about your week and your capacity, not
+// about a memorization method, so swapping plans no longer changes any of
+// it (and adopting someone else's plan no longer imposes their schedule on
+// you). The engine reads these values directly, which is why the Rhythm
+// editor commits live rather than behind a Save button -- there was never a
+// staged copy, only a persistence lag that pretended to be one.
+export interface Rhythm {
   learningDays: string[];
   newVersesPace: number;
   maxReviewCap: number;
-  // Retention rigor: how many weeks/months/years a verse spends in each
-  // review phase before graduating. 'light'/'standard'/'deep' are named
-  // presets (5-4-3 / 7-6-5 / 9-8-7); 'custom' means the three *PhaseX
-  // fields below were hand-set and don't match a named preset.
-  retentionRigor: 'light' | 'standard' | 'deep' | 'custom';
-  dailyPhaseWeeks: number;
-  weeklyPhaseMonths: number;
-  monthlyPhaseYears: number;
-  // Mastery-gate settings: these were previously live useState values that
-  // drove the engine but were never part of the saved plan, so they didn't
-  // survive a save/switch/reload. Now part of the plan like everything else.
-  masteryTouches: number;
-  reviewsRequired: number;
   // Sabbath: an optional single weekday, off by default, free from both
   // learning and reviewing -- the engine treats it as not existing at all
   // (due dates never land on it, and it doesn't count as elapsed time when
@@ -233,9 +227,40 @@ export interface MemoryPlan {
   // 0 (the default) is exactly today's existing midnight-based behavior.
   dayStartHour: number;
   // Multiplier applied to the daily time estimate (0.75/1.0/1.5 for
-  // low/medium/high) -- previously a live useState with no UI control and
-  // no persistence, so it silently reset to 'medium' every reload.
+  // low/medium/high).
   cognitiveLoadSensitivity: 'low' | 'medium' | 'high';
+  // Pause: a proactive "nothing is due, nothing counts as missed" window
+  // (vacations, etc), distinct from the reactive miss-policy on the plan.
+  // Treated like Sabbath but for a date range instead of a single weekday.
+  // Null pausedUntil with a set pausedAt means paused indefinitely until
+  // resumed manually. User-level, so activating a different plan can no
+  // longer silently un-pause you.
+  pausedAt: string | null;
+  pausedUntil: string | null;
+}
+
+// A memorization METHOD: how a verse graduates, and what happens when you
+// miss one. Nothing about your schedule or speed lives here -- see Rhythm.
+// This is what's shareable, swappable, and comparable between people.
+export interface MemoryPlan {
+  id: string;
+  name: string;
+  // The one shipped plan (id BUILT_IN_PLAN_ID) is immutable: editing it
+  // prompts for a new name and forks a copy, rather than mutating the
+  // baseline everyone starts from. Absent/false on user-created plans.
+  isBuiltIn?: boolean;
+  // Retention rigor: how many weeks/months/years a verse spends in each
+  // review phase before graduating. 'light'/'standard'/'deep' are named
+  // presets (5-4-3 / 7-6-5 / 9-8-7); 'custom' means the three *PhaseX
+  // fields below were hand-set and don't match a named preset.
+  retentionRigor: 'light' | 'standard' | 'deep' | 'custom';
+  dailyPhaseWeeks: number;
+  weeklyPhaseMonths: number;
+  monthlyPhaseYears: number;
+  // Mastery-gate settings: how many successful touches graduate a verse,
+  // and how many reviews are required per cycle.
+  masteryTouches: number;
+  reviewsRequired: number;
   // Missed-review handling: how many free misses before escalating, how
   // long the weekly->daily and monthly->weekly refreshers run, and whether
   // to just apply the preset automatically or ask via a popup each time
@@ -246,13 +271,6 @@ export interface MemoryPlan {
   graceCount: number;
   refresherDailyDays: number;
   refresherWeeklyWeeks: number;
-  // Pause: a proactive "nothing is due, nothing counts as missed" window
-  // (vacations, etc), distinct from the reactive miss-policy above. Treated
-  // like Sabbath but for a date range instead of a single weekday. Null
-  // pausedUntil with a set pausedAt means paused indefinitely until resumed
-  // manually.
-  pausedAt: string | null;
-  pausedUntil: string | null;
   isActive: boolean;
   updatedAt: string | Date;
 }

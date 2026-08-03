@@ -85,8 +85,14 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                         {plan.name}
                       </Text>
                     </View>
-                    <Text className="text-[10px] font-sans text-neutral-400">
-                      {plan.learningDays.length} learning days · {plan.newVersesPace} v/day
+                    {/* Retention, not pacing. Every plan used to be labelled
+                        by its learning days and verses-per-day, which is
+                        precisely what no longer varies between plans -- and
+                        was why three visibly different "plans" all behaved
+                        identically once you started using them. */}
+                    <Text className="text-[10px] font-sans text-neutral-500">
+                      {plan.dailyPhaseWeeks}-{plan.weeklyPhaseMonths}-{plan.monthlyPhaseYears} · {plan.masteryTouches} touches
+                      {plan.isBuiltIn ? ' · built-in' : ''}
                     </Text>
                   </View>
 

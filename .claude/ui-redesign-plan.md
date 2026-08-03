@@ -194,38 +194,91 @@ and works from both the Desk and Profile.
 Community study plans deliberately stay in the Community tab — group-owned
 content on a different lifecycle.
 
+## The plan/rhythm split — DONE (2026-08-03)
+
+Replaces what were deferred items 1 and 2 (rhythm commit paths + queue page
+redesign). Both turned out to be the same problem, and the fix was a data
+model change, not a UI one.
+
+**What was actually wrong.** The doc framed the two commit paths as a
+working-copy vs saved-copy model. They weren't: the engine reads the
+*top-level* state (`isTodayLearningDay` → `learningDays`, `triggerDailyPull` →
+`{ newVersesPace, learningDays }`), so a rhythm edit took effect the instant
+you made it. The Save button only controlled whether it survived a reload,
+while implying it controlled whether it applied at all.
+
+The untraced branch traced out badly: `editingPlanId` was only ever set by
+`navigateTo('activePlan')` or `handleEditPlan`, so Memory Desk → Plan & Pacing
+left it null on a fresh launch, and Save minted a duplicate plan **with the
+same name** and deactivated the real one.
+
+And the three shipped plans (Example / Warrior Track / Gentle Drip) were
+identical on every retention field — three schedules wearing plan costumes,
+which is what made "pick a plan" meaningless to a first-time tester.
+
+**The split.** `MemoryPlan` is now purely a retention method: rigor, phase
+lengths, mastery gates, miss policy. Everything about *your week and your
+capacity* moved to a new user-level `Rhythm` type — learning days, pace,
+review cap, sabbath, dayStartHour, load sensitivity, pause.
+
+Migration was nearly free: `planTopLevelFields` already mirrored the active
+plan's pacing to the root of `memoryPlans/{uid}`, so the load path just reads
+rhythm from the root instead of from the active plan. No destructive rewrite;
+stale per-plan pacing copies are simply never read again.
+
+Consequences worth knowing:
+- **Rhythm commits live** via `updateRhythm(patch)`. No Save button, no dirty
+  state, no `saveActivePlanRhythm`.
+- **Copy-on-write plans.** One shipped plan (`BUILT_IN_PLAN_ID`, "Standard",
+  `isBuiltIn: true`). Editing it requires a rename and forks a copy — which
+  also structurally removes the duplicate-plan bug.
+- **`preset` ('drip'/'warrior'/'custom') is deleted.** It only labelled a
+  combination of three dials and every manual change reset it to 'custom'.
+- **Adoption no longer imposes the author's schedule.** `normalizeAdoptedPlan`
+  takes retention fields only.
+- **Pause is user-level**, so activating another plan no longer silently
+  un-pauses you.
+- **Lost deliberately:** you can't have per-plan pacing any more. Swapping
+  plans doesn't change your speed.
+
+**Queue page** is now Rhythm · Sources · Up Next · read-only retention footer.
+The 7-day forecast moved to the Memory Calendar, which already projects the
+same days and can name the verses. The nested `maxHeight: 360` ScrollView is
+gone — it swallowed vertical drags on device.
+
+**Group plans.** The priority setting was real and wired end to end, but
+unobservable: the Join button hardcoded `'individual'` (the mode where the
+plan only gets leftover capacity, so a member with a full queue joined and saw
+nothing happen), the control lived in the Community tab, and queue rows said a
+generic "Group". Now: priority is chosen at join and defaults to `'group'`,
+labels are plain language, group rows name their plan, and a Sources block
+shows the next pull's actual breakdown from `computeDailyPull`. `'additive'`
+now bypasses the Review Shield as well as the pace cap.
+
+**Calendar** runs the real `computeDailyPull` forward against a simulated
+queue, so `newVersesPulled` is correct for joined plans and the day sheet
+names the verses starting that day.
+
+### Verified
+- `npx tsc --noEmit` clean; `npm run check:layout` 0 errors (575 → 524 warnings).
+- **`npm run check:calendar`** (new) — 13 assertions on the projection under
+  plain Node, following the `check:recitation` pattern. Covers additive vs
+  group priority, the 7-day budget not being re-spent daily, queue exhaustion,
+  and sabbath.
+- Layout lab at 1.0/1.3/1.5×: RhythmEditor and QueueSources both **0 leaks, 0
+  horizontal overflow**. Heights 466/660/797 and 249/356/422.
+- Found and fixed while measuring: the Sabbath switch had a fixed `w-12` track
+  with a font-scaled knob, pushing 17px out of the card at 1.5×.
+
+### Not verified in-browser
+The real Memory Calendar and Queue screens need a signed-in user, and there's
+no guest mode (see the harness note in memory). Both typecheck, and the
+calendar's risky logic is covered by `check:calendar`, but the assembled
+screens have not been rendered.
+
 ## Deferred — needs design, do not build
 
-### 1. Reconcile the rhythm commit paths  (NEXT, and it touches behaviour)
-
-`ActivePlanScreen` and `PlanDesignerScreen` both edit the same live state
-(`learningDays`, `newVersesPace`, `maxReviewCap`) but commit it differently:
-
-- `handleSavePlan` (Plan Designer, `useAppState.ts:3184`) branches on
-  `editingPlanId` and writes the whole plan including its name.
-- `saveActivePlanRhythm` (`useAppState.ts:3337`) targets
-  `editingPlanId || active plan || first plan` and writes only rhythm fields.
-
-**This is not simple duplication** — it is a working-copy vs saved-copy model,
-and only the queue screen falls back to "just update my active plan". Deleting
-the queue's rhythm editor without changing `handleSavePlan`'s targeting would be
-a functional regression: "change my active plan's pacing" would go through the
-no-`editingPlanId` branch, which appears to mint a NEW plan. That branch has not
-been traced to the end — do that first.
-
-User's stated direction (2026-07-30): they want to **remove plan modification
-from the queue page entirely**, and are likely to **redesign what the queue page
-does** more broadly. Explicit instruction alongside it: *keep things obvious for
-users*. So the replacement on the queue screen should be a read-only rhythm
-summary with a link to Plan & Pacing, not a silent removal.
-
-Unlike everything else in this document, this is a state/data-flow change. The
-layout lab cannot prove it correct.
-
-### 2. Queue page redesign
-Follows from the above. Not yet sketched.
-
-### 3. Tiny grey text pass
+### 1. Tiny grey text pass
 The user observed that restructured screens still contain lots of small grey
 text that is hard to read. Confirmed — two separate problems:
 

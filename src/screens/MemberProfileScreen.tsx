@@ -250,32 +250,32 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                   <Text className="text-xs font-sans font-black text-[#1A1A1A] leading-tight">
                     {sharedPlan.name || 'Memory Plan'}
                   </Text>
-                  <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
-                    {selectedUserProfile.name}'s pacing
+                  <Text className="text-[9px] font-sans text-neutral-500 mt-0.5">
+                    {selectedUserProfile.name}'s retention method
                   </Text>
                 </View>
-                {sharedPlan.preset && (
-                  <View className="bg-neutral-100 border border-neutral-200 px-1.5 py-0.5 rounded">
-                    <Text className="text-[8px] font-sans font-bold uppercase">{sharedPlan.preset}</Text>
-                  </View>
-                )}
               </View>
 
+              {/* Retention only. This used to show their pace, daily cap and
+                  learning days -- none of which transfer when you save the
+                  plan any more, because those are your own Rhythm. Showing
+                  them here implied adopting the plan would change your
+                  schedule, which it did, and shouldn't have. */}
               <View className="flex-row gap-2 py-1.5 border-y border-dashed border-neutral-100">
                 <View className="flex-1">
-                  <Text className="text-[8px] text-neutral-400 uppercase">Pace</Text>
+                  <Text className="text-[8px] text-neutral-500 uppercase">Phases</Text>
                   <Text className="text-[10px] font-sans font-bold text-neutral-800">
-                    {sharedPlan.newVersesPace ?? '—'} verses/day
+                    {sharedPlan.dailyPhaseWeeks ?? '—'}-{sharedPlan.weeklyPhaseMonths ?? '—'}-{sharedPlan.monthlyPhaseYears ?? '—'}
                   </Text>
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[8px] text-neutral-400 uppercase">Daily Cap</Text>
-                  <Text className="text-[10px] font-sans font-bold text-neutral-800">{sharedPlan.maxReviewCap ?? '—'} mins</Text>
+                  <Text className="text-[8px] text-neutral-500 uppercase">Touches</Text>
+                  <Text className="text-[10px] font-sans font-bold text-neutral-800">{sharedPlan.masteryTouches ?? '—'}</Text>
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[8px] text-neutral-400 uppercase">Learn Days</Text>
-                  <Text className="text-[10px] font-sans font-bold text-neutral-800">
-                    {sharedPlan.learningDays?.length ?? 0}/wk
+                  <Text className="text-[8px] text-neutral-500 uppercase">Misses</Text>
+                  <Text className="text-[10px] font-sans font-bold text-neutral-800 capitalize">
+                    {sharedPlan.missPolicy ?? '—'}
                   </Text>
                 </View>
               </View>
@@ -286,6 +286,9 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
               >
                 <Text className="text-white text-[10px] font-bold uppercase tracking-wider">Save Memory Plan</Text>
               </Pressable>
+              <Text className="text-[8px] font-sans text-neutral-500 text-center leading-relaxed">
+                Saves their retention method. Your own schedule and pace stay as they are.
+              </Text>
             </View>
           </View>
         )}

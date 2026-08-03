@@ -1,4 +1,5 @@
-import { QueueItem } from '../types';
+import { QueueItem, StudyPlan, StudyPlanMembership } from '../types';
+import { computeDailyPull } from './studyPlanScheduler';
 
 // ============================================================================
 // MEMORY CALENDAR — RECURRING REVIEW PROJECTION
@@ -26,6 +27,14 @@ export interface CalendarPlanSettings {
   newVersesPace: number;
   sabbathEnabled: boolean;
   sabbathDay: string;
+  // Joined group plans, so the projection matches what the real pull will
+  // do. Without these the calendar assumed every learning day pulls exactly
+  // newVersesPace of your own verses, which is wrong for anyone in a study
+  // plan and badly wrong on an 'additive' membership, where the real pull
+  // deliberately exceeds the personal pace. Optional: callers with no group
+  // plans (and the layout lab) can leave them out.
+  joinedPlans?: StudyPlan[];
+  memberships?: StudyPlanMembership[];
 }
 
 export interface CalendarDayProjection {
@@ -36,8 +45,16 @@ export interface CalendarDayProjection {
   dueReviews: { item: QueueItem; phase: RetentionPhase }[];
   /** Flat ongoing Learning-phase count -- not date-scheduled, same value every day (see module doc on HomeScreen/getMemoryLoadForecast for why). */
   learningCount: number;
-  /** New verses projected to be pulled into Learning this day (count only -- which specific verses depends on queue order at pull time, unknowable in advance). */
+  /** New verses projected to be pulled into Learning this day. */
   newVersesPulled: number;
+  /**
+   * WHICH verses that pull would take, in pull order. Previously this was a
+   * count only, on the grounds that the specific verses depend on queue
+   * order at pull time -- but the pull is deterministic given queue order
+   * and the scheduler, so running the real computeDailyPull forward names
+   * them exactly.
+   */
+  newVerseItems: QueueItem[];
 }
 
 // Duplicated from useAppState.ts's private DAY_ABBREVS/advancePastSabbath
@@ -246,6 +263,16 @@ export function getMemoryCalendarProjection(queue: QueueItem[], plan: CalendarPl
     });
   });
 
+  // Forward simulation of the real daily pull. `simQueue` starts as the
+  // actual queue and is mutated day by day exactly as triggerDailyPull would
+  // mutate it (status -> 'learning', dateStarted set), so each subsequent
+  // day's computeDailyPull sees a truthful history. That history matters:
+  // a plan's remaining weekly budget is derived from what was pulled in the
+  // previous 7 days, so a naive per-day call would let every plan re-spend
+  // its full weekly allowance every single learning day.
+  const byId = new Map(queue.map((item) => [item.verseId, item]));
+  let simQueue = queue;
+
   let cumulativeNewVerses = 0;
   return Array.from({ length: days }, (_, i) => {
     const date = new Date(today);
@@ -257,8 +284,26 @@ export function getMemoryCalendarProjection(queue: QueueItem[], plan: CalendarPl
     // Today's own pull, if any, is already reflected in the real queue
     // (baseLearningCount) -- only project pulls for days AFTER today,
     // matching getMemoryLoadForecast's exact same convention.
-    const pullsToday = i > 0 && isLearningDay ? plan.newVersesPace : 0;
-    cumulativeNewVerses += pullsToday;
+    let newVerseItems: QueueItem[] = [];
+    if (i > 0 && isLearningDay) {
+      const { verseIds } = computeDailyPull(
+        simQueue,
+        { newVersesPace: plan.newVersesPace, learningDays: plan.learningDays },
+        plan.joinedPlans || [],
+        plan.memberships || [],
+        date
+      );
+      newVerseItems = verseIds.map((id) => byId.get(id)).filter((item): item is QueueItem => !!item);
+
+      if (verseIds.length > 0) {
+        const pulled = new Set(verseIds);
+        const startedISO = date.toISOString();
+        simQueue = simQueue.map((item) =>
+          pulled.has(item.verseId) ? { ...item, status: 'learning' as const, dateStarted: startedISO } : item
+        );
+      }
+    }
+    cumulativeNewVerses += newVerseItems.length;
 
     return {
       date,
@@ -266,7 +311,8 @@ export function getMemoryCalendarProjection(queue: QueueItem[], plan: CalendarPl
       isSabbath,
       dueReviews: occurrencesByDateKey.get(date.toDateString()) || [],
       learningCount: baseLearningCount + cumulativeNewVerses,
-      newVersesPulled: pullsToday,
+      newVersesPulled: newVerseItems.length,
+      newVerseItems,
     };
   });
 }
