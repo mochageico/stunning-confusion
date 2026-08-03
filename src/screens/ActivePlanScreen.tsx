@@ -10,6 +10,7 @@ import { AppText, CollapsibleCard, useScaledSpace } from '../components/design';
 import { RhythmEditor } from '../components/RhythmEditor';
 import { QueueSources } from '../components/QueueSources';
 import { BookPicker } from '../components/BookPicker';
+import { reorderQueueGroups } from '../lib/queueReorder';
 import { fetchChapterText, useChapterText } from '../state/useScripture';
 import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 
@@ -91,6 +92,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     joinedGroupPlanMemberships,
     setGroupPlanPriority,
     getNextPullPreview,
+    removeQueueItems,
   } = state;
 
   const space = useScaledSpace();
@@ -154,43 +156,32 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const planNameFor = (planId?: string) =>
     joinedGroupPlanDetails.find((p) => p.planId === planId)?.name || 'Group';
 
+  // Reorders two adjacent VISIBLE groups.
+  //
+  // This must never rebuild the queue from `grouped`. `grouped` is a filtered
+  // view -- queued/learning only -- so flattening it and passing the result to
+  // updateMemoryQueue() replaces the entire queue with just those items, and
+  // every reviewing/retained verse silently disappears from state. The
+  // auto-sync then reads that as "the user removed 100+ verses" and deletes
+  // the documents. That is exactly how a real user's whole review history was
+  // destroyed by a single tap on an arrow.
+  //
+  // So: permute orderIndex AMONG the visible items only, reusing the index
+  // slots they already occupy, and map over `prev` so every other item is
+  // carried through untouched.
+  const reorderGroups = (from: number, to: number) => {
+    updateMemoryQueue((prev) => reorderQueueGroups(prev, grouped, from, to));
+  };
+
   const moveGroupUp = (idx: number) => {
     if (idx === 0) return;
-    const targetIndex = idx - 1;
-    const newGroups = [...grouped];
-    const temp = newGroups[idx];
-    newGroups[idx] = newGroups[targetIndex];
-    newGroups[targetIndex] = temp;
-
-    const flattened: QueueItem[] = [];
-    newGroups.forEach((g) => {
-      g.items.forEach((item) => {
-        flattened.push(item);
-      });
-    });
-
-    const reindexed = flattened.map((q, qidx) => ({ ...q, orderIndex: qidx }));
-    updateMemoryQueue(() => reindexed);
+    reorderGroups(idx, idx - 1);
     triggerToast('Moved consecutive group up.');
   };
 
   const moveGroupDown = (idx: number) => {
     if (idx === grouped.length - 1) return;
-    const targetIndex = idx + 1;
-    const newGroups = [...grouped];
-    const temp = newGroups[idx];
-    newGroups[idx] = newGroups[targetIndex];
-    newGroups[targetIndex] = temp;
-
-    const flattened: QueueItem[] = [];
-    newGroups.forEach((g) => {
-      g.items.forEach((item) => {
-        flattened.push(item);
-      });
-    });
-
-    const reindexed = flattened.map((q, qidx) => ({ ...q, orderIndex: qidx }));
-    updateMemoryQueue(() => reindexed);
+    reorderGroups(idx, idx + 1);
     triggerToast('Moved consecutive group down.');
   };
 
@@ -504,8 +495,10 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                       </Text>
                       <Pressable
                         onPress={() => {
-                          const idsToDelete = new Set(group.items.map((item) => item.verseId));
-                          updateMemoryQueue((prev) => prev.filter((item) => !idsToDelete.has(item.verseId)));
+                          // removeQueueItems, not a raw filter: deleting from
+                          // Firestore now requires recorded intent, so this is
+                          // the only route that actually removes documents.
+                          removeQueueItems(group.items.map((item) => item.verseId));
                           triggerToast('Removed consecutive group from Memory Queue.');
                         }}
                         className="p-1 rounded"

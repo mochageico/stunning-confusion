@@ -1101,6 +1101,18 @@ export function useAppState() {
   // including deletions — into the NEW account before loadUserData finishes.
   const queueHydratedRef = useRef(false);
 
+  // Verse ids the user has ACTUALLY asked to remove. The auto-sync will only
+  // delete documents named here.
+  //
+  // This exists because inferring deletion from state shrinkage is unsafe: any
+  // bug that drops items from `memoryQueue` silently becomes permanent data
+  // loss on the next debounce tick. That is exactly what happened -- the queue
+  // screen's reorder buttons rebuilt the queue from a filtered view
+  // (queued/learning only), so one tap on an arrow dropped every reviewing and
+  // retained verse from state, and the sync dutifully deleted all of them from
+  // Firestore. Deletion is now an explicit act, not something derived.
+  const pendingQueueDeletionsRef = useRef<Set<string>>(new Set());
+
   // Tracks the uid the auth listener last processed a full transition for.
   // updateProfile() (e.g. display name edits) re-fires onAuthStateChanged
   // for the SAME signed-in user -- without this guard, that re-fire is
@@ -3086,7 +3098,11 @@ export function useAppState() {
     const updatedMemberships = joinedGroupPlanMemberships.filter((m) => m.planId !== planId);
     setJoinedGroupPlanMemberships(updatedMemberships);
     setJoinedGroupPlanDetails((prev) => prev.filter((p) => p.planId !== planId));
-    updateMemoryQueue((prev) => prev.filter((item) => !(item.originPlanId === planId && item.status === 'queued')));
+    removeQueueItems(
+      memoryQueueRef.current
+        .filter((item) => item.originPlanId === planId && item.status === 'queued')
+        .map((item) => item.verseId)
+    );
     await persistJoinedGroupPlans(updatedMemberships);
     triggerToast('Left the group plan.');
   };
@@ -4445,7 +4461,22 @@ export function useAppState() {
       if (!uid || !queueHydratedRef.current) return;
 
       const currentIds = new Set(memoryQueue.map((item) => item.verseId));
-      const removedIds = [...prevSyncedQueueIdsRef.current].filter((id) => !currentIds.has(id));
+      const vanishedIds = [...prevSyncedQueueIdsRef.current].filter((id) => !currentIds.has(id));
+
+      // Only delete what the user actually asked to remove. Anything that
+      // vanished from state without a matching intent is a BUG, not an
+      // instruction -- leave those documents alone and say so loudly. The
+      // stale ids stay in the baseline so a later legitimate delete still
+      // works, and the verses come back on the next reload.
+      const removedIds = vanishedIds.filter((id) => pendingQueueDeletionsRef.current.has(id));
+      const unexplained = vanishedIds.filter((id) => !pendingQueueDeletionsRef.current.has(id));
+      if (unexplained.length > 0) {
+        console.error(
+          `[queue-sync] ${unexplained.length} verse(s) disappeared from memoryQueue with no delete intent. ` +
+            'Refusing to delete them from Firestore. This is a bug -- please report it.',
+          unexplained.slice(0, 20)
+        );
+      }
 
       try {
         const batch = writeBatch(db);
@@ -4456,7 +4487,10 @@ export function useAppState() {
           batch.delete(doc(db, 'users', uid, 'memoryQueue', id));
         });
         await batch.commit();
-        prevSyncedQueueIdsRef.current = currentIds;
+        removedIds.forEach((id) => pendingQueueDeletionsRef.current.delete(id));
+        // Keep unexplained ids in the baseline: they still exist in Firestore,
+        // so dropping them here would let a later shrink delete them silently.
+        prevSyncedQueueIdsRef.current = new Set([...currentIds, ...unexplained]);
       } catch (err) {
         console.error('Failed to auto-sync memory queue to Firestore:', err);
       }
@@ -4767,6 +4801,17 @@ export function useAppState() {
     triggerToast(
       `Successfully pulled ${pulledVerseIds.length} new ${pulledVerseIds.length === 1 ? 'verse' : 'verses'} into your learning queue!${breakdown} 🚀`
     );
+  };
+
+  // The ONLY supported way to remove verses from the queue. Records the
+  // intent first, so the auto-sync is allowed to delete these specific
+  // documents; anything that leaves `memoryQueue` by any other route is
+  // treated as a bug and left alone in Firestore.
+  const removeQueueItems = (verseIds: string[]) => {
+    if (verseIds.length === 0) return;
+    verseIds.forEach((id) => pendingQueueDeletionsRef.current.add(id));
+    const doomed = new Set(verseIds);
+    updateMemoryQueue((prev) => prev.filter((item) => !doomed.has(item.verseId)));
   };
 
   // Read-only preview of what the next learning day's pull would promote,
@@ -6757,6 +6802,7 @@ export function useAppState() {
     deleteGroupPlan,
     joinGroupPlan,
     getNextPullPreview,
+    removeQueueItems,
     leaveGroupPlan,
     setGroupPlanPriority,
     clearGroupPlanMembershipsForCircle,

@@ -49,7 +49,8 @@
     "web": "expo start --web",
     "check:recitation": "node scripts/run-recitation-check.cjs",
     "check:layout": "node scripts/check-layout.cjs",
-    "check:calendar": "node scripts/run-calendar-check.cjs"
+    "check:calendar": "node scripts/run-calendar-check.cjs",
+    "check:queue": "node scripts/run-queue-check.cjs"
   },
   "private": true
 }
