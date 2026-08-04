@@ -111,7 +111,12 @@ service cloud.firestore {
     // update is also what flips status to 'completed' once both sides are
     // known (client-side) to have hit totalVerses.
     match /challenges/{challengeId} {
-      allow read: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      // Includes the participantUids check (not just fromUid/toUid) because
+      // the always-on badge listener in useAppState queries with
+      // `where('participantUids', 'array-contains', uid)` -- Firestore
+      // rejects a list query outright unless the rule is provably satisfied
+      // by the query's own filters, so the rule must reference the same field.
+      allow read: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || request.auth.uid in resource.data.participantUids);
       allow create: if isSignedIn()
         && request.resource.data.fromUid == request.auth.uid
         && request.resource.data.status == 'pending';
