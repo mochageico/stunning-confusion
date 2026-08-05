@@ -475,22 +475,19 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 </AppText>
               </View>
               <View style={{ gap: 6 }}>
-                <Pressable onPress={() => submitManualLog('perfect')} className="w-full py-2 bg-emerald-600 rounded-lg items-center">
+                <AppButton size="md" onPress={() => submitManualLog('perfect')} className="w-full bg-emerald-600 rounded-lg items-center">
                   <AppText variant="caption" className="text-white font-sans font-bold ">Perfect — no mistakes</AppText>
-                </Pressable>
-                <Pressable onPress={() => submitManualLog('passed')} className="w-full py-2 bg-indigo-600 rounded-lg items-center">
+                </AppButton>
+                <AppButton size="md" onPress={() => submitManualLog('passed')} className="w-full bg-indigo-600 rounded-lg items-center">
                   <AppText variant="caption" className="text-white font-sans font-bold ">Got it, with a stumble</AppText>
-                </Pressable>
+                </AppButton>
                 <View className="flex-row gap-2">
-                  <Pressable
-                    onPress={() => submitManualLog('practice')}
-                    className="flex-1 py-1.5 border border-dashed border-neutral-300 rounded-lg items-center"
-                  >
+                  <AppButton size="sm" onPress={() => submitManualLog('practice')} className="flex-1 border border-dashed border-neutral-300 rounded-lg items-center">
                     <AppText variant="caption" className="text-neutral-500 font-sans font-bold ">Needs practice</AppText>
-                  </Pressable>
-                  <Pressable onPress={() => setManualLogGroup(null)} className="flex-1 py-1.5 border border-neutral-300 rounded-lg items-center">
+                  </AppButton>
+                  <AppButton size="sm" onPress={() => setManualLogGroup(null)} className="flex-1 border border-neutral-300 rounded-lg items-center">
                     <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
-                  </Pressable>
+                  </AppButton>
                 </View>
               </View>
             </View>
@@ -498,14 +495,11 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
           {dueReviewItems.length > 0 ? (
             <View style={{ gap: 8 }}>
-              <Pressable
-                onPress={handleReviewAllDue}
-                className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center justify-center"
-              >
+              <AppButton size="md" onPress={handleReviewAllDue} className="w-full bg-[#1A1A1A] rounded-xl items-center justify-center">
                 <AppText variant="label" className="text-white font-sans font-bold ">
                   Review All Due ({dueReviewItems.length} {dueReviewItems.length === 1 ? 'verse' : 'verses'})
                 </AppText>
-              </Pressable>
+              </AppButton>
 
               {/* Daily / Weekly / Monthly review groups, in that order --
                   same order handleReviewAllDue chains them in. */}

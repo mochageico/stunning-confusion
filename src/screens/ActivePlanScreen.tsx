@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { AppState, buildVerseId } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
 import { FadeInView, NumericInput, useClampedNumberField } from '../components/ui';
-import { AppText, CollapsibleCard, useScaledSpace } from '../components/design';
+import { AppButton, AppIconButton, AppText, CollapsibleCard, useScaledSpace } from '../components/design';
 import { RhythmEditor } from '../components/RhythmEditor';
 import { QueueSources } from '../components/QueueSources';
 import { BookPicker } from '../components/BookPicker';
@@ -197,12 +197,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         {/* Header Row */}
         <View className="flex-row items-start justify-between">
           <View className="flex-row items-center gap-3">
-            <Pressable
-              onPress={handleBack}
-              className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-            >
-              <ArrowLeft size={14} color="#262626" />
-            </Pressable>
+            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
             <View>
               <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
                 SCRIPTURE OVERVIEW
@@ -247,13 +242,10 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
               <AppText variant="body" className="font-serif font-black text-[#1A1A1A]">Memory Queue</AppText>
               <AppText variant="caption" className="text-neutral-400 mt-0.5">Reorder, customize, and add individual or group scriptures.</AppText>
             </View>
-            <Pressable
-              onPress={() => setShowAddQueueItemModal(!showAddQueueItemModal)}
-              className="px-3 py-1.5 bg-[#1A1A1A] rounded-xl flex-row items-center gap-1"
-            >
+            <AppButton size="sm" onPress={() => setShowAddQueueItemModal(!showAddQueueItemModal)} className="bg-[#1A1A1A] rounded-xl flex-row items-center gap-1">
               <Plus size={12} color="#ffffff" />
               <AppText variant="label" className="font-sans font-bold text-white">Add Verses</AppText>
-            </Pressable>
+            </AppButton>
           </View>
 
           {/* Inline Verse Addition Form */}

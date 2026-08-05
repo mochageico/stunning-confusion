@@ -3,7 +3,7 @@ import { Check, Lock, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
-import { AppText } from '../components/design';
+import { AppIconButton, AppText } from '../components/design';
 
 export default function OnboardingScreen({ state }: { state: AppState }) {
   const {
@@ -58,12 +58,7 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
             <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">WELCOME</AppText>
             <AppText variant="title" className="font-serif font-black text-[#1A1A1A] leading-none mt-0.5">Getting Started</AppText>
           </View>
-          <Pressable
-            onPress={dismissOnboarding}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <X size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={X} diameter={32} iconSize={14} iconColor="#262626" onPress={dismissOnboarding} className="rounded-full border border-neutral-200 bg-white" />
         </View>
 
         {allComplete ? (

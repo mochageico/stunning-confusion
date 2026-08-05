@@ -5,7 +5,7 @@ import { ArrowLeft, Check, RefreshCw, Target, X } from 'lucide-react-native';
 import { AppState, isReviewDue } from '../state/useAppState';
 import { ChipRow, FadeInView, NumericInput } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 import {
   buildReferenceRounds,
   formatReference,
@@ -182,9 +182,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
       <FadeInView style={{ flex: 1 }}>
         <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 18 }}>
           <View className="flex-row items-center gap-3">
-            <Pressable onPress={handleBack} className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white">
-              <ArrowLeft size={14} color="#262626" />
-            </Pressable>
+            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
             <View>
               <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">Practice</AppText>
               <AppText variant="title" className="font-serif font-black text-neutral-900 mt-0.5">Reference Drill</AppText>
@@ -327,14 +325,10 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             </View>
           </Pressable>
 
-          <Pressable
-            onPress={startSession}
-            disabled={!canStart}
-            className={`w-full py-3 rounded-xl flex-row items-center justify-center gap-2 ${canStart ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
-          >
+          <AppButton size="lg" onPress={startSession} disabled={!canStart} className={`w-full rounded-xl flex-row items-center justify-center gap-2 ${canStart ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}>
             <Target size={15} color={canStart ? '#ffffff' : '#a3a3a3'} />
             <AppText variant="label" className={`font-sans font-bold ${canStart ? 'text-white' : 'text-neutral-400'}`}>Start Drill</AppText>
-          </Pressable>
+          </AppButton>
         </ScrollView>
       </FadeInView>
     );
@@ -362,13 +356,13 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
           </View>
 
           <View className="gap-2">
-            <Pressable onPress={startSession} className="w-full py-3 bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-2">
+            <AppButton size="lg" onPress={startSession} className="w-full bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-2">
               <RefreshCw size={14} color="#ffffff" />
               <AppText variant="label" className="font-sans font-bold text-white">Run It Again</AppText>
-            </Pressable>
-            <Pressable onPress={() => setPhase('setup')} className="w-full py-2.5 border border-neutral-300 rounded-xl items-center">
+            </AppButton>
+            <AppButton size="md" onPress={() => setPhase('setup')} className="w-full border border-neutral-300 rounded-xl items-center">
               <AppText variant="caption" className="font-sans font-bold text-neutral-700">Change Settings</AppText>
-            </Pressable>
+            </AppButton>
             <Pressable onPress={handleBack} className="w-full py-2 items-center">
               <AppText variant="caption" className="font-sans font-bold text-neutral-400">Done</AppText>
             </Pressable>
@@ -399,9 +393,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
               Score {score}/{roundIndex + (answered ? 1 : 0)}
             </AppText>
           </View>
-          <Pressable onPress={() => setPhase('done')} className="w-9 h-9 rounded-full border border-neutral-300 items-center justify-center" hitSlop={8}>
-            <X size={16} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={X} diameter={36} iconSize={16} iconColor="#262626" onPress={() => setPhase('done')} className="rounded-full border border-neutral-300" hitSlop={8} />
         </View>
 
         <ScrollView className="flex-1" contentContainerStyle={{ gap: 14, paddingBottom: 12 }}>
@@ -440,17 +432,11 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                     />
                   </View>
                   {!answered && (
-                    <Pressable
-                      onPress={() => recordResult(referenceAnswerMatches(currentRound.answer, freeGuess))}
-                      disabled={!freeGuess.book || !freeGuess.chapter || !freeGuess.verse}
-                      className={`w-full py-2.5 rounded-xl items-center ${
-                        freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'bg-[#1A1A1A]' : 'bg-neutral-200'
-                      }`}
-                    >
+                    <AppButton size="md" onPress={() => recordResult(referenceAnswerMatches(currentRound.answer, freeGuess))} disabled={!freeGuess.book || !freeGuess.chapter || !freeGuess.verse} className={`w-full rounded-xl items-center ${ freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'bg-[#1A1A1A]' : 'bg-neutral-200' }`}>
                       <AppText variant="label" className={`font-sans font-bold ${ freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'text-white' : 'text-neutral-400' }`} >
                         Check Answer
                       </AppText>
-                    </Pressable>
+                    </AppButton>
                   )}
                 </View>
               ) : (
@@ -495,19 +481,19 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                       </View>
                       {!answered && (
                         <View className="flex-row gap-2">
-                          <Pressable onPress={() => recordResult(false)} className="flex-1 py-2.5 border border-neutral-300 rounded-xl items-center">
+                          <AppButton size="md" onPress={() => recordResult(false)} className="flex-1 border border-neutral-300 rounded-xl items-center">
                             <AppText variant="caption" className="font-sans font-bold text-neutral-600">Missed it</AppText>
-                          </Pressable>
-                          <Pressable onPress={() => recordResult(true)} className="flex-1 py-2.5 bg-emerald-600 rounded-xl items-center">
+                          </AppButton>
+                          <AppButton size="md" onPress={() => recordResult(true)} className="flex-1 bg-emerald-600 rounded-xl items-center">
                             <AppText variant="caption" className="font-sans font-bold text-white">I knew it</AppText>
-                          </Pressable>
+                          </AppButton>
                         </View>
                       )}
                     </>
                   ) : (
-                    <Pressable onPress={() => setRevealed(true)} className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center">
+                    <AppButton size="md" onPress={() => setRevealed(true)} className="w-full bg-[#1A1A1A] rounded-xl items-center">
                       <AppText variant="label" className="font-sans font-bold text-white">Recall it, then reveal</AppText>
-                    </Pressable>
+                    </AppButton>
                   )}
                 </View>
               ) : (
@@ -547,11 +533,11 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                 {lastResult === 'right' ? 'Correct!' : `Not quite — that was ${answerRef}.`}
               </AppText>
             </View>
-            <Pressable onPress={advance} className="w-full py-3 bg-[#1A1A1A] rounded-xl items-center">
+            <AppButton size="lg" onPress={advance} className="w-full bg-[#1A1A1A] rounded-xl items-center">
               <AppText variant="label" className="font-sans font-bold text-white">
                 {roundIndex >= rounds.length - 1 ? 'See Score' : 'Next Question'}
               </AppText>
-            </Pressable>
+            </AppButton>
           </View>
         )}
       </View>

@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { BOOKS } from '../data';
-import { AppText } from '../components/design';
+import { AppIconButton, AppText } from '../components/design';
 
 export default function ChaptersScreen({ state }: { state: AppState }) {
   const { handleBack, navigateTo, selectedBook } = state;
@@ -17,12 +17,7 @@ export default function ChaptersScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
-          <Pressable
-            onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={15} color="#1A1A1A" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
           <View>
             <AppText variant="micro" className="uppercase tracking-wider font-bold text-neutral-400 font-sans">
               CHAPTERS AVAILABLE

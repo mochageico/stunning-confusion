@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { REACTION_EMOJIS } from '../data';
 import { MessageReaction } from '../types';
-import { AppText } from './design';
+import { AppButton, AppText } from './design';
 
 // Shared by DMThreadScreen and CircleChatScreen -- renders under a message
 // bubble. Grouped pills (one per emoji actually used, with a count) plus a
@@ -46,18 +46,12 @@ export function ReactionBar({
       {grouped.map(({ emoji, reactors }) => {
         const mine = reactors.some((r) => r.uid === myUid);
         return (
-          <Pressable
-            key={emoji}
-            onPress={() => onToggle(emoji)}
-            className={`flex-row items-center gap-1 px-1.5 py-0.5 rounded-full border ${
-              mine ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-neutral-50 border-neutral-200'
-            }`}
-          >
+          <AppButton size="sm" key={emoji} onPress={() => onToggle(emoji)} className={`flex-row items-center gap-1 rounded-full border ${ mine ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-neutral-50 border-neutral-200' }`}>
             <AppText variant="caption">{emoji}</AppText>
             <AppText variant="micro" className={`font-sans font-bold ${mine ? 'text-white' : 'text-neutral-500'}`}>
               {reactors.length}
             </AppText>
-          </Pressable>
+          </AppButton>
         );
       })}
       <Pressable

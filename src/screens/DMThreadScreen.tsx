@@ -7,7 +7,7 @@ import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
 import { ReactionBar } from '../components/ReactionBar';
 import { ChallengeCard, ChallengeCreateSheet } from '../components/ChallengeCard';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
 export default function DMThreadScreen({ state }: { state: AppState }) {
   const {
@@ -60,12 +60,7 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
   return (
     <FadeInView style={{ flex: 1 }}>
         <View className="flex-row items-center gap-3 border-b border-neutral-100 p-4">
-          <Pressable
-            onPress={goBack}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={goBack} className="rounded-full border border-neutral-200 bg-white" />
           <AvatarCircle name={activeDMThread.otherName} photoUri={activeDMThread.otherAvatarUrl || null} size={30} />
           <AppText variant="body" className="font-serif font-bold text-neutral-900">{activeDMThread.otherName}</AppText>
         </View>
@@ -133,19 +128,8 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
             style={{ paddingBottom: Math.max(bottomPad, 12) }}
           >
             <AppTextInput value={draft} onChangeText={setDraft} placeholder="Type a message…" placeholderTextColor="#a3a3a3" multiline className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 text-neutral-800 font-sans max-h-24" />
-            <Pressable
-              onPress={() => setShowChallengeSheet(true)}
-              className="w-9 h-9 rounded-full items-center justify-center border border-amber-200 bg-amber-50"
-            >
-              <Trophy size={14} color="#b45309" />
-            </Pressable>
-            <Pressable
-              onPress={handleSend}
-              disabled={!draft.trim()}
-              className={`w-9 h-9 rounded-full items-center justify-center ${draft.trim() ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
-            >
-              <Send size={14} color="#FFFFFF" />
-            </Pressable>
+            <AppIconButton Icon={Trophy} diameter={36} iconSize={14} iconColor="#b45309" onPress={() => setShowChallengeSheet(true)} className="rounded-full border border-amber-200 bg-amber-50" />
+            <AppIconButton Icon={Send} diameter={36} iconSize={14} iconColor="#FFFFFF" onPress={handleSend} disabled={!draft.trim()} className={` rounded-full ${draft.trim() ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`} />
           </View>
         ) : (
           <View
@@ -162,18 +146,12 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
               You and {activeDMThread.otherName} are no longer friends or sharing a community, so new messages are
               disabled. History is kept. Send a friend request to keep the conversation going.
             </AppText>
-            <Pressable
-              onPress={() => !requestAlreadySent && sendFriendRequest(activeDMThread.otherUid, activeDMThread.otherName)}
-              disabled={requestAlreadySent}
-              className={`flex-row items-center justify-center gap-1.5 py-2 rounded-xl ${
-                requestAlreadySent ? 'bg-neutral-200' : 'bg-[#1A1A1A]'
-              }`}
-            >
+            <AppButton size="md" onPress={() => !requestAlreadySent && sendFriendRequest(activeDMThread.otherUid, activeDMThread.otherName)} disabled={requestAlreadySent} className={`flex-row items-center justify-center gap-1.5 rounded-xl ${ requestAlreadySent ? 'bg-neutral-200' : 'bg-[#1A1A1A]' }`}>
               <UserPlus size={12} color={requestAlreadySent ? '#737373' : '#FFFFFF'} />
               <AppText variant="section" className={`font-sans font-bold uppercase tracking-wide ${requestAlreadySent ? 'text-neutral-500' : 'text-white'}`}>
                 {requestAlreadySent ? 'Friend Request Sent' : 'Send Friend Request'}
               </AppText>
-            </Pressable>
+            </AppButton>
           </View>
         )}
 

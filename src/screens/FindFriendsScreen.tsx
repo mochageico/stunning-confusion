@@ -3,7 +3,7 @@ import { ArrowLeft, Check, UserPlus, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
 export default function FindFriendsScreen({ state }: { state: AppState }) {
   const {
@@ -28,12 +28,7 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
         {/* Header with back */}
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <Pressable
-            onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
           <View>
             <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans">
               FIND FRIENDS
@@ -63,18 +58,8 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                     <AppText variant="micro" className="font-sans text-neutral-400">Wants to be friends — tap to view</AppText>
                   </Pressable>
                   <View className="flex-row gap-1.5">
-                    <Pressable
-                      onPress={() => acceptFriendRequest(req)}
-                      className="w-7 h-7 rounded-full bg-emerald-600 items-center justify-center"
-                    >
-                      <Check size={13} color="#FFFFFF" />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => declineFriendRequest(req)}
-                      className="w-7 h-7 rounded-full bg-neutral-100 border border-neutral-200 items-center justify-center"
-                    >
-                      <X size={13} color="#525252" />
-                    </Pressable>
+                    <AppIconButton Icon={Check} diameter={28} iconSize={13} iconColor="#FFFFFF" onPress={() => acceptFriendRequest(req)} className="rounded-full bg-emerald-600" />
+                    <AppIconButton Icon={X} diameter={28} iconSize={13} iconColor="#525252" onPress={() => declineFriendRequest(req)} className="rounded-full bg-neutral-100 border border-neutral-200" />
                   </View>
                 </View>
               ))}
@@ -121,12 +106,9 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
           </AppText>
           <View className="flex-row gap-2">
             <AppTextInput value={userSearchQuery} onChangeText={setUserSearchQuery} onSubmitEditing={() => searchUsers(userSearchQuery)} placeholder="e.g. Jane or jane@example.com" autoCapitalize="none" className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded-xl" />
-            <Pressable
-              onPress={() => searchUsers(userSearchQuery)}
-              className="px-4 py-2 bg-[#1A1A1A] rounded-xl items-center justify-center"
-            >
+            <AppButton size="md" onPress={() => searchUsers(userSearchQuery)} className="bg-[#1A1A1A] rounded-xl items-center justify-center">
               <AppText variant="label" className="text-white font-bold">Search</AppText>
-            </Pressable>
+            </AppButton>
           </View>
         </View>
 
@@ -163,18 +145,8 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                     </View>
                   ) : incoming ? (
                     <View className="flex-row gap-1.5">
-                      <Pressable
-                        onPress={() => acceptFriendRequest(incoming)}
-                        className="w-7 h-7 rounded-full bg-emerald-600 items-center justify-center"
-                      >
-                        <Check size={13} color="#FFFFFF" />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => declineFriendRequest(incoming)}
-                        className="w-7 h-7 rounded-full bg-neutral-100 border border-neutral-200 items-center justify-center"
-                      >
-                        <X size={13} color="#525252" />
-                      </Pressable>
+                      <AppIconButton Icon={Check} diameter={28} iconSize={13} iconColor="#FFFFFF" onPress={() => acceptFriendRequest(incoming)} className="rounded-full bg-emerald-600" />
+                      <AppIconButton Icon={X} diameter={28} iconSize={13} iconColor="#525252" onPress={() => declineFriendRequest(incoming)} className="rounded-full bg-neutral-100 border border-neutral-200" />
                     </View>
                   ) : outgoing ? (
                     <Pressable
@@ -186,13 +158,10 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                       </AppText>
                     </Pressable>
                   ) : (
-                    <Pressable
-                      onPress={() => sendFriendRequest(person.uid, person.displayName)}
-                      className="bg-[#1A1A1A] px-2.5 py-1 rounded-lg flex-row items-center gap-1"
-                    >
+                    <AppButton size="sm" onPress={() => sendFriendRequest(person.uid, person.displayName)} className="bg-[#1A1A1A] rounded-lg flex-row items-center gap-1">
                       <UserPlus size={11} color="#FFFFFF" />
                       <AppText variant="micro" className="font-bold uppercase tracking-wider text-white">Add Friend</AppText>
-                    </Pressable>
+                    </AppButton>
                   )}
                 </View>
               );

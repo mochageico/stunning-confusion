@@ -210,6 +210,55 @@ export const BUTTON_SIZE: Record<
 };
 
 /**
+ * A circular icon-only control: back, close, send, play.
+ *
+ * A FIXED width/height is correct here and is not a rule-3 violation, because
+ * the thing being contained is an icon, not text -- there is no label that can
+ * wrap and overflow. What was actually wrong with these is subtler:
+ *
+ *   - 32pt (`w-8 h-8`, 21 of the app's back buttons) is well under MIN_TOUCH.
+ *   - The circle didn't scale, so at 1.5x every header grew around a back
+ *     button that stayed exactly the same size.
+ *
+ * Both are fixed without making headers bulkier: the circle scales with the
+ * font setting, and `hitSlop` makes up whatever is still missing to reach
+ * MIN_TOUCH. The visual stays as small as the design wants; the tap target
+ * doesn't.
+ */
+export function AppIconButton({
+  Icon,
+  diameter = 32,
+  iconSize,
+  iconColor = '#1A1A1A',
+  className = '',
+  style,
+  ...rest
+}: Omit<React.ComponentProps<typeof Pressable>, 'style' | 'children'> & {
+  Icon: React.ComponentType<{ size?: number; color?: string }>;
+  /** Unscaled circle size. The app's conventions: 28 close, 32 back, 36 send. */
+  diameter?: number;
+  /** Unscaled icon size. Defaults to a proportion that reads well at every diameter. */
+  iconSize?: number;
+  iconColor?: string;
+  style?: ViewStyle;
+}) {
+  const scale = useFontScale();
+  const d = Math.round(diameter * scale);
+  // Whatever the circle still lacks to be comfortably tappable, spread evenly.
+  const slop = Math.max(0, Math.round((MIN_TOUCH - d) / 2));
+  return (
+    <Pressable
+      className={`items-center justify-center ${className}`}
+      hitSlop={slop || undefined}
+      style={[{ width: d, height: d }, style]}
+      {...rest}
+    >
+      <Icon size={Math.round((iconSize ?? Math.round(diameter * 0.44)) * scale)} color={iconColor} />
+    </Pressable>
+  );
+}
+
+/**
  * A button that grows with its text instead of clipping it.
  *
  * Colour stays in `className` rather than becoming a `variant` prop: the app

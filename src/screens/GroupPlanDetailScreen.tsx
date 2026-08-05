@@ -8,7 +8,7 @@ import { BookPicker } from '../components/BookPicker';
 import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 import { useChapterText } from '../state/useScripture';
 import { GroupPlanMembership } from '../types';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
 // Plain language, and ordered by how most people actually want it: joining a
 // group thing usually means you want the group's verses to lead. The old
@@ -115,12 +115,7 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 20 }}>
         {/* Header */}
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <Pressable
-            onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
           <View className="flex-1">
             <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">GROUP PLAN</AppText>
             <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]" numberOfLines={1}>
@@ -192,13 +187,10 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
               Verse Queue ({plan.verseIds.length})
             </AppText>
             {isManager && (
-              <Pressable
-                onPress={() => setShowAddVerses(!showAddVerses)}
-                className="bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-lg flex-row items-center gap-1"
-              >
+              <AppButton size="sm" onPress={() => setShowAddVerses(!showAddVerses)} className="bg-indigo-50 border border-indigo-200 rounded-lg flex-row items-center gap-1">
                 <Plus size={10} color="#4338ca" />
                 <AppText variant="micro" className="font-bold text-indigo-600">{showAddVerses ? 'Hide' : 'Add Verses'}</AppText>
-              </Pressable>
+              </AppButton>
             )}
           </View>
 
@@ -299,12 +291,9 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                   );
                 })}
               </View>
-              <Pressable
-                onPress={() => leaveGroupPlan(plan.planId)}
-                className="w-full py-2 mt-1 bg-red-50 border border-red-200 rounded-xl items-center"
-              >
+              <AppButton size="md" onPress={() => leaveGroupPlan(plan.planId)} className="w-full mt-1 bg-red-50 border border-red-200 rounded-xl items-center">
                 <AppText variant="caption" className="text-red-600 font-sans font-bold ">Leave Plan</AppText>
-              </Pressable>
+              </AppButton>
             </>
           ) : (
             <>
@@ -338,12 +327,9 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
               <AppText variant="micro" className="text-neutral-500 font-sans leading-tight">
                 You can change this any time. It decides which verses win when there isn't room for everything.
               </AppText>
-              <Pressable
-                onPress={() => joinGroupPlan(plan, joinPriority)}
-                className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center"
-              >
+              <AppButton size="md" onPress={() => joinGroupPlan(plan, joinPriority)} className="w-full bg-[#1A1A1A] rounded-xl items-center">
                 <AppText variant="label" className="text-white font-sans font-bold ">Join Plan</AppText>
-              </Pressable>
+              </AppButton>
             </>
           )}
         </View>

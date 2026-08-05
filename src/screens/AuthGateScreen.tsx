@@ -6,7 +6,7 @@ import { FadeInView, useKeyboardHeight } from '../components/ui';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { useEmailAuth } from '../state/useEmailAuth';
 import { AppState } from '../state/useAppState';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppTextInput, AppText } from '../components/design';
 
 // Shown instead of the whole tabbed app whenever there's no signed-in user --
 // sign-in/sign-up now happens here, up front, rather than being buried in the
@@ -88,15 +88,11 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
         </View>
 
         <View style={{ gap: 12 }}>
-          <Pressable
-            onPress={handleGoogleSignIn}
-            disabled={submitting}
-            className="w-full py-3 border-2 border-[#1A1A1A] rounded-xl items-center"
-          >
+          <AppButton size="lg" onPress={handleGoogleSignIn} disabled={submitting} className="w-full border-2 border-[#1A1A1A] rounded-xl items-center">
             <AppText variant="label" className="text-[#1A1A1A] font-sans font-bold uppercase tracking-wider">
               Continue with Google
             </AppText>
-          </Pressable>
+          </AppButton>
 
           <Pressable onPress={() => setShowEmailAuth(!showEmailAuth)}>
             <AppText variant="caption" className="font-sans font-bold underline text-neutral-500 text-center">
@@ -108,26 +104,16 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
             <FadeInView>
               <View className="border border-neutral-200 rounded-xl p-4" style={{ gap: 10 }}>
                 <View className="flex-row gap-2">
-                  <Pressable
-                    onPress={() => setAuthMode('signIn')}
-                    className={`flex-1 py-2 rounded-lg border items-center ${
-                      authMode === 'signIn' ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                    }`}
-                  >
+                  <AppButton size="md" onPress={() => setAuthMode('signIn')} className={`flex-1 rounded-lg border items-center ${ authMode === 'signIn' ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200' }`}>
                     <AppText variant="caption" className={`font-sans font-bold uppercase ${authMode === 'signIn' ? 'text-white' : 'text-neutral-500'}`}>
                       Sign In
                     </AppText>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setAuthMode('signUp')}
-                    className={`flex-1 py-2 rounded-lg border items-center ${
-                      authMode === 'signUp' ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                    }`}
-                  >
+                  </AppButton>
+                  <AppButton size="md" onPress={() => setAuthMode('signUp')} className={`flex-1 rounded-lg border items-center ${ authMode === 'signUp' ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200' }`}>
                     <AppText variant="caption" className={`font-sans font-bold uppercase ${authMode === 'signUp' ? 'text-white' : 'text-neutral-500'}`}>
                       Create Account
                     </AppText>
-                  </Pressable>
+                  </AppButton>
                 </View>
 
                 {authMode === 'signUp' && (
@@ -136,15 +122,11 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
                 <AppTextInput value={emailInput} onChangeText={setEmailInput} placeholder="Email" autoCapitalize="none" keyboardType="email-address" className="w-full px-3 py-2.5 bg-white border border-neutral-300 rounded-xl" />
                 <AppTextInput value={passwordInput} onChangeText={setPasswordInput} placeholder="Password" secureTextEntry className="w-full px-3 py-2.5 bg-white border border-neutral-300 rounded-xl" />
 
-                <Pressable
-                  onPress={handleEmailAuthSubmit}
-                  disabled={submitting}
-                  className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center"
-                >
+                <AppButton size="md" onPress={handleEmailAuthSubmit} disabled={submitting} className="w-full bg-[#1A1A1A] rounded-xl items-center">
                   <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wider">
                     {authMode === 'signUp' ? 'Create Account' : 'Sign In'}
                   </AppText>
-                </Pressable>
+                </AppButton>
 
                 {/* Sign-in only -- meaningless while creating an account.
                     Reuses whatever is already typed in the Email field rather

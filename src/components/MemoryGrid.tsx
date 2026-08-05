@@ -4,7 +4,7 @@ import { Highlighter, Pencil, X } from 'lucide-react-native';
 
 import { firstLetterLine, firstLetterOnly } from '../lib/recitation';
 import DoodleCanvas from './DoodleCanvas';
-import { AppText } from './design';
+import { AppButton, AppText } from './design';
 
 // ============================================================================
 // MEMORY GRID
@@ -194,9 +194,9 @@ export default function MemoryGrid({
                 strokes={doodles?.[doodleOpenKey!] || []}
                 onChange={(strokes) => onSaveDoodle(doodleOpenKey!, doodleOpenVerse, strokes)}
               />
-              <Pressable onPress={() => setDoodleOpenKey(null)} className="py-2.5 bg-[#1A1A1A] rounded-xl items-center">
+              <AppButton size="md" onPress={() => setDoodleOpenKey(null)} className="bg-[#1A1A1A] rounded-xl items-center">
                 <AppText variant="label" className="text-white font-sans font-bold">Done</AppText>
-              </Pressable>
+              </AppButton>
             </View>
           </View>
         </Modal>

@@ -6,7 +6,7 @@ import { ArrowLeft, Send } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
 import { ReactionBar } from '../components/ReactionBar';
-import { AppTextInput, AppText } from '../components/design';
+import { AppIconButton, AppTextInput, AppText } from '../components/design';
 
 export default function CircleChatScreen({ state }: { state: AppState }) {
   const {
@@ -47,12 +47,7 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
   return (
     <FadeInView style={{ flex: 1 }}>
         <View className="flex-row items-center gap-3 border-b border-neutral-100 p-4">
-          <Pressable
-            onPress={goBack}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={goBack} className="rounded-full border border-neutral-200 bg-white" />
           <View>
             <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">Group Chat</AppText>
             <AppText variant="body" className="font-serif font-bold text-neutral-900 leading-none mt-0.5">{activeCircle.name}</AppText>
@@ -101,13 +96,7 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
           style={{ paddingBottom: Math.max(bottomPad, 12) }}
         >
           <AppTextInput value={draft} onChangeText={setDraft} placeholder="Message the circle…" placeholderTextColor="#a3a3a3" multiline className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 text-neutral-800 font-sans max-h-24" />
-          <Pressable
-            onPress={handleSend}
-            disabled={!draft.trim()}
-            className={`w-9 h-9 rounded-full items-center justify-center ${draft.trim() ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
-          >
-            <Send size={14} color="#FFFFFF" />
-          </Pressable>
+          <AppIconButton Icon={Send} diameter={36} iconSize={14} iconColor="#FFFFFF" onPress={handleSend} disabled={!draft.trim()} className={` rounded-full ${draft.trim() ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`} />
         </View>
       </FadeInView>
   );

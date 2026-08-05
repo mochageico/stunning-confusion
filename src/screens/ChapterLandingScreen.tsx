@@ -11,7 +11,7 @@ import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { printMemoryGrid } from '../lib/printMemoryGrid';
 import { Recording } from '../types';
 import { BIBLE_TRANSLATIONS } from '../data';
-import { AppText } from '../components/design';
+import { AppButton, AppIconButton, AppText } from '../components/design';
 
 const OVERRIDE_PHASE_OPTIONS: { id: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; label: string }[] = [
   { id: 'learning', label: 'Learning' },
@@ -169,12 +169,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         {/* Title Header with back */}
         <View className="flex-row items-center justify-between border-b border-[#E5E5E5] pb-2">
           <View className="flex-row items-center gap-2">
-            <Pressable
-              onPress={handleBack}
-              className="w-7 h-7 rounded-full border border-[#E5E5E5] items-center justify-center bg-white"
-            >
-              <ArrowLeft size={14} color="#1A1A1A" />
-            </Pressable>
+            <AppIconButton Icon={ArrowLeft} diameter={28} iconSize={14} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white" />
             <AppText variant="title" className="font-serif font-extrabold text-[#1A1A1A]">
               {selectedBook} {selectedChapter}
             </AppText>
@@ -249,18 +244,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               <AppText variant="caption" className="font-sans text-neutral-400 text-center">
                 Record one from the Record tab, or find one in the community library.
               </AppText>
-              <Pressable
-                onPress={() => {
-                  setFeedBookFilter(selectedBook || '');
-                  setFeedChapterFilter(String(selectedChapter ?? ''));
-                  navigateTo('audioFeed');
-                  triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`);
-                }}
-                className="mt-1 py-1.5 px-3 bg-[#1A1A1A] rounded-md flex-row items-center justify-center gap-1"
-              >
+              <AppButton size="sm" onPress={() => { setFeedBookFilter(selectedBook || ''); setFeedChapterFilter(String(selectedChapter ?? '')); navigateTo('audioFeed'); triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`); }} className="mt-1 bg-[#1A1A1A] rounded-md flex-row items-center justify-center gap-1">
                 <Search size={11} color="#FFFFFF" />
                 <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wider">Find Recordings</AppText>
-              </Pressable>
+              </AppButton>
             </View>
           ) : (
           <View className="gap-3">
@@ -371,13 +358,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
 
                 <View className="border-t border-[#E5E5E5]/60 pt-2 gap-1.5">
                   {downloadableNarrations.length > 0 && (
-                    <Pressable
-                      onPress={() => saveChapterOffline(downloadableNarrations)}
-                      disabled={chapterDownloadBusy || notYetDownloaded.length === 0}
-                      className={`w-full py-1.5 rounded-md flex-row items-center justify-center gap-1 border ${
-                        notYetDownloaded.length === 0 ? 'bg-white/60 border-[#E5E5E5]' : 'bg-white border-[#1A1A1A]'
-                      } ${chapterDownloadBusy ? 'opacity-50' : ''}`}
-                    >
+                    <AppButton size="sm" onPress={() => saveChapterOffline(downloadableNarrations)} disabled={chapterDownloadBusy || notYetDownloaded.length === 0} className={`w-full rounded-md flex-row items-center justify-center gap-1 border ${ notYetDownloaded.length === 0 ? 'bg-white/60 border-[#E5E5E5]' : 'bg-white border-[#1A1A1A]' } ${chapterDownloadBusy ? 'opacity-50' : ''}`}>
                       {notYetDownloaded.length === 0 ? (
                         <Check size={11} color="#525252" />
                       ) : (
@@ -390,23 +371,14 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                             ? 'Saved Offline'
                             : `Save ${notYetDownloaded.length} Offline`}
                       </AppText>
-                    </Pressable>
+                    </AppButton>
                   )}
-                  <Pressable
-                    onPress={() => {
-                      setFeedBookFilter(selectedBook || '');
-                      setFeedChapterFilter(String(selectedChapter ?? ''));
-                      navigateTo('audioFeed');
-                      setShowAudioSelector(false);
-                      triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`);
-                    }}
-                    className="w-full py-1.5 bg-[#1A1A1A] rounded-md flex-row items-center justify-center gap-1"
-                  >
+                  <AppButton size="sm" onPress={() => { setFeedBookFilter(selectedBook || ''); setFeedChapterFilter(String(selectedChapter ?? '')); navigateTo('audioFeed'); setShowAudioSelector(false); triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`); }} className="w-full bg-[#1A1A1A] rounded-md flex-row items-center justify-center gap-1">
                     <Search size={11} color="#FFFFFF" />
                     <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wider">
                       Find More Recordings
                     </AppText>
-                  </Pressable>
+                  </AppButton>
                 </View>
               </View>
             )}
@@ -547,23 +519,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     </AppText>
                   </Pressable>
                 </View>
-                <Pressable
-                  onPress={() =>
-                    printMemoryGrid(
-                      activeChapterVerses.map((v) => ({
-                        book: selectedBook || '',
-                        chapter: selectedChapter || 0,
-                        verse: v.verse,
-                        text: v.text,
-                      })),
-                      `${selectedBook} ${selectedChapter}`
-                    )
-                  }
-                  className="flex-row items-center gap-1.5 bg-[#1A1A1A] px-3 py-1.5 rounded-lg"
-                >
+                <AppButton size="sm" onPress={() => printMemoryGrid( activeChapterVerses.map((v) => ({ book: selectedBook || '', chapter: selectedChapter || 0, verse: v.verse, text: v.text, })), `${selectedBook} ${selectedChapter}` ) } className="flex-row items-center gap-1.5 bg-[#1A1A1A] rounded-lg">
                   <Printer size={12} color="#ffffff" />
                   <AppText variant="caption" className="font-sans font-extrabold text-white">Printable PDF</AppText>
-                </Pressable>
+                </AppButton>
               </View>
               <MemoryGrid
                 verses={activeChapterVerses.map((v) => ({
@@ -630,38 +589,21 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             </Pressable>
           </View>
           <View className="flex-row gap-1.5">
-            <Pressable
-              onPress={() => {
-                addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), selectedTranslationId);
-                setSelectedVerseNumbers([]);
-              }}
-              className="flex-1 py-2 items-center bg-emerald-600 rounded-lg"
-            >
+            <AppButton size="md" onPress={() => { addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), selectedTranslationId); setSelectedVerseNumbers([]); }} className="flex-1 items-center bg-emerald-600 rounded-lg">
               <AppText variant="micro" className="text-white font-bold uppercase tracking-wide" numberOfLines={1}>
                 Add to Queue
               </AppText>
-            </Pressable>
-            <Pressable
-              onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
-              className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
-            >
+            </AppButton>
+            <AppButton size="md" onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))} className="flex-1 items-center bg-[#1A1A1A] rounded-lg">
               <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Listen</AppText>
-            </Pressable>
-            <Pressable
-              onPress={() => startPractice('learn', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
-              className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
-            >
+            </AppButton>
+            <AppButton size="md" onPress={() => startPractice('learn', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))} className="flex-1 items-center bg-[#1A1A1A] rounded-lg">
               <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Learn</AppText>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowStatusOverride((s) => !s)}
-              className={`flex-1 py-2 items-center rounded-lg flex-row justify-center gap-1 ${
-                showStatusOverride ? 'bg-indigo-700' : 'bg-indigo-600'
-              }`}
-            >
+            </AppButton>
+            <AppButton size="md" onPress={() => setShowStatusOverride((s) => !s)} className={`flex-1 items-center rounded-lg flex-row justify-center gap-1 ${ showStatusOverride ? 'bg-indigo-700' : 'bg-indigo-600' }`}>
               <SlidersHorizontal size={10} color="#FFFFFF" />
               <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Status</AppText>
-            </Pressable>
+            </AppButton>
           </View>
 
           {/* Manual memory-status override -- for verses already memorized
@@ -734,22 +676,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   </View>
                 )}
 
-                <Pressable
-                  onPress={() => {
-                    overrideVerseMemoryStatus(
-                      activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)),
-                      overridePhase,
-                      selectedTranslationId,
-                      overrideWeekday ?? undefined,
-                      overrideProgressCount
-                    );
-                    setSelectedVerseNumbers([]);
-                    setShowStatusOverride(false);
-                  }}
-                  className="w-full py-2 items-center bg-indigo-700 rounded-lg"
-                >
+                <AppButton size="md" onPress={() => { overrideVerseMemoryStatus( activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), overridePhase, selectedTranslationId, overrideWeekday ?? undefined, overrideProgressCount ); setSelectedVerseNumbers([]); setShowStatusOverride(false); }} className="w-full items-center bg-indigo-700 rounded-lg">
                   <AppText variant="section" className="text-white font-bold uppercase tracking-wide">Apply Override</AppText>
-                </Pressable>
+                </AppButton>
               </View>
             </FadeInView>
           )}

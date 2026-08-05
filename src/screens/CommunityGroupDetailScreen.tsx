@@ -19,7 +19,7 @@ import { AppState } from '../state/useAppState';
 import { Circle } from '../types';
 import { AvatarCircle, FadeInView, ProgressBar } from '../components/ui';
 import { ChallengeCreateInline } from '../components/ChallengeCard';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
 export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
   const {
@@ -137,9 +137,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         {/* Header Row: back, privacy badge, settings */}
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2.5">
-            <Pressable onPress={closeConsole} className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white">
-              <ArrowLeft size={14} color="#262626" />
-            </Pressable>
+            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={closeConsole} className="rounded-full border border-neutral-200 bg-white" />
             <View className="flex-row items-center gap-1 bg-neutral-100 px-2.5 py-1 rounded-full">
               {activeCircle.isPublic ? <Globe size={10} color="#525252" /> : <Lock size={10} color="#525252" />}
               <AppText variant="micro" className="font-sans font-bold text-neutral-600 uppercase tracking-wide">
@@ -149,27 +147,19 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           </View>
 
           <View className="flex-row items-center gap-2.5">
-            <Pressable
-              onPress={() => openCircleChat(activeCircle.id)}
-              className="px-3.5 py-2.5 rounded-xl border border-neutral-300 bg-white flex-row items-center gap-2 shadow-sm"
-            >
+            <AppButton size="md" onPress={() => openCircleChat(activeCircle.id)} className="rounded-xl border border-neutral-300 bg-white flex-row items-center gap-2 shadow-sm">
               <MessageCircle size={14} color="#404040" />
               <AppText variant="caption" className="font-sans font-bold text-neutral-700">Group Chat</AppText>
-            </Pressable>
+            </AppButton>
 
             {/* Settings Button for Leader/Admin */}
             {isLeaderOrAdmin && (
-            <Pressable
-              onPress={() => setIsEditingCircleSettings(!isEditingCircleSettings)}
-              className={`px-3.5 py-2.5 rounded-xl border flex-row items-center gap-2 shadow-sm ${
-                isEditingCircleSettings ? 'bg-neutral-900 border-neutral-900' : 'bg-white border-neutral-300'
-              }`}
-            >
+            <AppButton size="md" onPress={() => setIsEditingCircleSettings(!isEditingCircleSettings)} className={` rounded-xl border flex-row items-center gap-2 shadow-sm ${ isEditingCircleSettings ? 'bg-neutral-900 border-neutral-900' : 'bg-white border-neutral-300' }`}>
               <Sliders size={14} color={isEditingCircleSettings ? '#FFFFFF' : '#404040'} />
               <AppText variant="caption" className={`font-sans font-bold ${isEditingCircleSettings ? 'text-white' : 'text-neutral-700'}`}>
                 {isEditingCircleSettings ? 'Close Settings' : 'Circle Settings'}
               </AppText>
-            </Pressable>
+            </AppButton>
             )}
           </View>
         </View>
@@ -268,19 +258,12 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
 
             {/* Add Group Plan Button (Leaders/Mentors only) */}
             {isLeaderOrAdmin && (
-              <Pressable
-                onPress={() => {
-                  setShowCreatePlanForm(!showCreatePlanForm);
-                  setNewPlanName('');
-                  setNewPlanDesc('');
-                }}
-                className="bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-lg flex-row items-center gap-1"
-              >
+              <AppButton size="sm" onPress={() => { setShowCreatePlanForm(!showCreatePlanForm); setNewPlanName(''); setNewPlanDesc(''); }} className="bg-indigo-50 border border-indigo-200 rounded-lg flex-row items-center gap-1">
                 <Plus size={10} color="#4338ca" />
                 <AppText variant="micro" className="font-bold text-indigo-600">
                   {showCreatePlanForm ? 'Hide Form' : 'New Group Plan'}
                 </AppText>
-              </Pressable>
+              </AppButton>
             )}
           </View>
 
@@ -398,15 +381,12 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             <AppText variant="label" className="font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
               Challenges ({activeCircleChallenges.length})
             </AppText>
-            <Pressable
-              onPress={() => setShowCreateChallengeForm(!showCreateChallengeForm)}
-              className="bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg flex-row items-center gap-1"
-            >
+            <AppButton size="sm" onPress={() => setShowCreateChallengeForm(!showCreateChallengeForm)} className="bg-amber-50 border border-amber-200 rounded-lg flex-row items-center gap-1">
               <Trophy size={10} color="#b45309" />
               <AppText variant="micro" className="font-bold text-amber-700">
                 {showCreateChallengeForm ? 'Hide Form' : 'New Challenge'}
               </AppText>
-            </Pressable>
+            </AppButton>
           </View>
 
           {/* Expands in place, exactly like the New Group Plan form above --
@@ -474,15 +454,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                       </View>
                     ) : (
                       challenge.status === 'active' && (
-                        <Pressable
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            joinGroupChallenge(challenge);
-                          }}
-                          className="bg-[#1A1A1A] py-2 rounded-lg items-center"
-                        >
+                        <AppButton size="md" onPress={(e) => { e.stopPropagation(); joinGroupChallenge(challenge); }} className="bg-[#1A1A1A] rounded-lg items-center">
                           <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Join Challenge</AppText>
-                        </Pressable>
+                        </AppButton>
                       )
                     )}
 
@@ -538,25 +512,12 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                           queue — only the race and its leaderboard go away.
                         </AppText>
                         <View className="flex-row gap-2">
-                          <Pressable
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              setConfirmDeleteChallengeId(null);
-                            }}
-                            className="flex-1 bg-white border border-neutral-300 py-2 rounded-lg items-center"
-                          >
+                          <AppButton size="md" onPress={(e) => { e.stopPropagation(); setConfirmDeleteChallengeId(null); }} className="flex-1 bg-white border border-neutral-300 rounded-lg items-center">
                             <AppText variant="micro" className="text-neutral-600 font-bold uppercase tracking-wide">Keep</AppText>
-                          </Pressable>
-                          <Pressable
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              setConfirmDeleteChallengeId(null);
-                              deleteGroupChallenge(challenge);
-                            }}
-                            className="flex-1 bg-red-600 py-2 rounded-lg items-center"
-                          >
+                          </AppButton>
+                          <AppButton size="md" onPress={(e) => { e.stopPropagation(); setConfirmDeleteChallengeId(null); deleteGroupChallenge(challenge); }} className="flex-1 bg-red-600 rounded-lg items-center">
                             <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Delete</AppText>
-                          </Pressable>
+                          </AppButton>
                         </View>
                       </View>
                     )}
@@ -599,16 +560,10 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             </View>
 
             <View className="flex-row gap-2">
-              <Pressable
-                onPress={async () => {
-                  await Clipboard.setStringAsync(shareUrl);
-                  triggerToast('Share link copied to clipboard! 📋');
-                }}
-                className="flex-1 py-1.5 bg-white border border-neutral-300 rounded-lg flex-row items-center justify-center gap-1.5"
-              >
+              <AppButton size="sm" onPress={async () => { await Clipboard.setStringAsync(shareUrl); triggerToast('Share link copied to clipboard! 📋'); }} className="flex-1 bg-white border border-neutral-300 rounded-lg flex-row items-center justify-center gap-1.5">
                 <Share2 size={11} color="#262626" />
                 <AppText variant="caption" className="text-neutral-800 font-sans font-bold ">Copy Share Link</AppText>
-              </Pressable>
+              </AppButton>
             </View>
           </View>
         </View>
@@ -633,11 +588,11 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             </View>
           </View>
         ) : (
-          <Pressable onPress={handleLeaveOrDisband} className="w-full py-2.5 bg-red-50 border border-red-200 rounded-xl items-center justify-center">
+          <AppButton size="md" onPress={handleLeaveOrDisband} className="w-full bg-red-50 border border-red-200 rounded-xl items-center justify-center">
             <AppText variant="label" className="text-red-600 font-sans font-bold text-center">
               {isLeaderOrAdmin ? 'Disband & Delete Scripture Circle' : 'Leave Circle'}
             </AppText>
-          </Pressable>
+          </AppButton>
         )}
       </ScrollView>
 
@@ -649,12 +604,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
               <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">
                 Members ({activeCircleMembers.length})
               </AppText>
-              <Pressable
-                onPress={() => setShowMembersModal(false)}
-                className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center"
-              >
-                <X size={14} color="#262626" />
-              </Pressable>
+              <AppIconButton Icon={X} diameter={28} iconSize={14} iconColor="#262626" onPress={() => setShowMembersModal(false)} className="rounded-full border border-neutral-300" />
             </View>
 
             <ScrollView contentContainerStyle={{ padding: 20, gap: 8 }}>
@@ -704,12 +654,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           <View className="bg-white rounded-t-3xl" style={{ height: '70%' }}>
             <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-neutral-100">
               <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">🏆 Leaderboard</AppText>
-              <Pressable
-                onPress={closeChallengeLeaderboard}
-                className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center"
-              >
-                <X size={14} color="#262626" />
-              </Pressable>
+              <AppIconButton Icon={X} diameter={28} iconSize={14} iconColor="#262626" onPress={closeChallengeLeaderboard} className="rounded-full border border-neutral-300" />
             </View>
 
             {loadingChallengeLeaderboard ? (

@@ -7,7 +7,7 @@ import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
 import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
 // Helper to assign background/text colors to known users (mirrors original web app).
 const getAvatarStyle = (user: string = '') => {
@@ -138,12 +138,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
         {/* Header Row */}
         <View className="flex-row items-center gap-3 border-b border-[#E5E5E5] pb-1">
-          <Pressable
-            onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-[#E5E5E5] items-center justify-center bg-white shadow-xs"
-          >
-            <ArrowLeft size={15} color="#1A1A1A" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white shadow-xs" />
           <View>
             <AppText variant="micro" className="uppercase tracking-wider font-bold text-neutral-400 font-sans">
               SCRIPTURE AUDIO LIBRARY
@@ -232,18 +227,11 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
           ).map((opt) => {
             const active = activeFeedFilter === opt.id;
             return (
-              <Pressable
-                key={opt.id}
-                onPress={() => {
-                  setActiveFeedFilter(opt.id);
-                  setPlayingRecordingId(null);
-                }}
-                className={`flex-1 py-2 px-2 rounded-lg items-center ${active ? 'bg-[#1A1A1A]' : ''}`}
-              >
+              <AppButton size="md" key={opt.id} onPress={() => { setActiveFeedFilter(opt.id); setPlayingRecordingId(null); }} className={`flex-1 rounded-lg items-center ${active ? 'bg-[#1A1A1A]' : ''}`}>
                 <AppText variant="section" className={`uppercase tracking-wider font-sans font-bold ${ active ? 'text-white' : 'text-neutral-500' }`} >
                   {opt.label}
                 </AppText>
-              </Pressable>
+              </AppButton>
             );
           })}
         </View>
@@ -357,23 +345,12 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                       </AppText>
                     </View>
 
-                    <Pressable
-                      onPress={() => {
-                        if (isSaved) {
-                          triggerToast(`"${rec.title}" is already in your library!`);
-                          return;
-                        }
-                        saveSharedRecordingToLibrary(rec);
-                      }}
-                      className={`flex-row items-center gap-1 py-1.5 px-3 rounded-lg ${
-                        isSaved ? 'bg-emerald-50 border border-emerald-200' : 'bg-neutral-50 border border-[#E5E5E5]'
-                      }`}
-                    >
+                    <AppButton size="sm" onPress={() => { if (isSaved) { triggerToast(`"${rec.title}" is already in your library!`); return; } saveSharedRecordingToLibrary(rec); }} className={`flex-row items-center gap-1 rounded-lg ${ isSaved ? 'bg-emerald-50 border border-emerald-200' : 'bg-neutral-50 border border-[#E5E5E5]' }`}>
                       {isSaved ? <Check size={11} color="#059669" /> : <Plus size={11} color="#737373" />}
                       <AppText variant="caption" className={`font-sans font-bold ${isSaved ? 'text-emerald-700' : 'text-[#1A1A1A]'}`} >
                         {isSaved ? 'Saved to Library' : 'Save to Library'}
                       </AppText>
-                    </Pressable>
+                    </AppButton>
                   </View>
 
                   {/* Custom Playback Progress indicator inside the active card */}

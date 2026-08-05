@@ -3,7 +3,7 @@ import { ScrollView, View, Text, Pressable } from 'react-native';
 import { ArrowLeft, ChevronRight, Search, X } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
-import { AppTextInput, AppText } from '../components/design';
+import { AppIconButton, AppTextInput, AppText } from '../components/design';
 
 export default function BooksScreen({ state }: { state: AppState }) {
   const { BOOKS, handleBack, navigateTo } = state;
@@ -19,12 +19,7 @@ export default function BooksScreen({ state }: { state: AppState }) {
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
           {state.onboardingStepInProgress === null && (
-            <Pressable
-              onPress={handleBack}
-              className="w-8 h-8 rounded-full border border-[#E5E5E5] items-center justify-center bg-white"
-            >
-              <ArrowLeft size={15} color="#1A1A1A" />
-            </Pressable>
+            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white" />
           )}
           <View>
             <AppText variant="micro" className="uppercase tracking-wider font-bold text-[#888] font-sans">BIBLE DIRECTORY</AppText>

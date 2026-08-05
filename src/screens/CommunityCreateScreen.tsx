@@ -3,7 +3,7 @@ import { ArrowLeft } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, HelpTooltip } from '../components/ui';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
 export default function CommunityCreateScreen({ state }: { state: AppState }) {
   const {
@@ -30,12 +30,7 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
         {/* Header with back */}
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <Pressable
-            onPress={() => setCommunitySubView('home')}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={() => setCommunitySubView('home')} className="rounded-full border border-neutral-200 bg-white" />
           <View>
             <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans">
               ADMINISTRATION
@@ -94,9 +89,9 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
           </View>
 
           {/* Create Action */}
-          <Pressable onPress={handleCreateCircle} className="w-full py-3 bg-[#1A1A1A] rounded-xl items-center shadow-md">
+          <AppButton size="lg" onPress={handleCreateCircle} className="w-full bg-[#1A1A1A] rounded-xl items-center shadow-md">
             <AppText variant="label" className="text-white font-black uppercase tracking-wider">Create Scripture Circle 🛡️</AppText>
-          </Pressable>
+          </AppButton>
         </View>
       </ScrollView>
     </FadeInView>

@@ -7,7 +7,7 @@ import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 import { useChapterText } from '../state/useScripture';
 import { BookPicker } from './BookPicker';
 import { NumericInput, NumericKeyboardAccessory, ProgressBar } from './ui';
-import { AppText } from './design';
+import { AppButton, AppIconButton, AppText } from './design';
 
 // This sheet is a Modal -- its own iOS view controller -- so it must register
 // its own numeric "Done" accessory rather than using App.tsx's. See the
@@ -144,9 +144,9 @@ function ChallengeRangeForm({
           </Pressable>
         </View>
       ) : (
-        <Pressable onPress={handleSubmit} className="bg-[#1A1A1A] py-3 rounded-xl items-center">
+        <AppButton size="lg" onPress={handleSubmit} className="bg-[#1A1A1A] rounded-xl items-center">
           <AppText variant="section" className="text-white font-bold uppercase tracking-wider">{submitLabel}</AppText>
-        </Pressable>
+        </AppButton>
       )}
     </View>
   );
@@ -171,9 +171,7 @@ export function ChallengeCreateSheet({
         <View className="bg-white rounded-t-2xl p-5" style={{ gap: 12 }}>
           <View className="flex-row items-center justify-between">
             <AppText variant="body" className="font-serif font-bold text-neutral-900">{title}</AppText>
-            <Pressable onPress={onClose} className="w-7 h-7 rounded-full border border-neutral-200 items-center justify-center">
-              <X size={12} color="#262626" />
-            </Pressable>
+            <AppIconButton Icon={X} diameter={28} iconSize={12} iconColor="#262626" onPress={onClose} className="rounded-full border border-neutral-200" />
           </View>
 
           <ChallengeRangeForm
@@ -243,13 +241,7 @@ export function ChallengeCard({
   // -- matching the inline confirm-card idiom used on Home/MemberProfile
   // rather than a native Alert.
   const deleteControl = (
-    <Pressable
-      onPress={() => setConfirmingDelete(true)}
-      hitSlop={8}
-      className="w-6 h-6 rounded-full items-center justify-center"
-    >
-      <Trash2 size={12} color="#a3a3a3" />
-    </Pressable>
+    <AppIconButton Icon={Trash2} diameter={24} iconSize={12} iconColor="#a3a3a3" onPress={() => setConfirmingDelete(true)} hitSlop={8} className="rounded-full" />
   );
 
   const confirmRow = (
@@ -258,15 +250,12 @@ export function ChallengeCard({
         Delete this challenge for both of you? Verses you've started stay in your queue.
       </AppText>
       <View className="flex-row gap-2">
-        <Pressable
-          onPress={() => setConfirmingDelete(false)}
-          className="flex-1 bg-white border border-neutral-300 py-2 rounded-lg items-center"
-        >
+        <AppButton size="md" onPress={() => setConfirmingDelete(false)} className="flex-1 bg-white border border-neutral-300 rounded-lg items-center">
           <AppText variant="micro" className="text-neutral-600 font-bold uppercase tracking-wide">Keep</AppText>
-        </Pressable>
-        <Pressable onPress={onDelete} className="flex-1 bg-red-600 py-2 rounded-lg items-center">
+        </AppButton>
+        <AppButton size="md" onPress={onDelete} className="flex-1 bg-red-600 rounded-lg items-center">
           <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Delete</AppText>
-        </Pressable>
+        </AppButton>
       </View>
     </View>
   );
@@ -305,12 +294,12 @@ export function ChallengeCard({
         <View style={{ gap: 8 }}>
           <AppText variant="caption" className="text-amber-700 font-sans">{challenge.fromName} challenged you to a memorization race!</AppText>
           <View className="flex-row gap-2">
-            <Pressable onPress={onAccept} className="flex-1 bg-[#1A1A1A] py-2 rounded-lg items-center">
+            <AppButton size="md" onPress={onAccept} className="flex-1 bg-[#1A1A1A] rounded-lg items-center">
               <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Accept</AppText>
-            </Pressable>
-            <Pressable onPress={onDecline} className="flex-1 bg-white border border-neutral-300 py-2 rounded-lg items-center">
+            </AppButton>
+            <AppButton size="md" onPress={onDecline} className="flex-1 bg-white border border-neutral-300 rounded-lg items-center">
               <AppText variant="micro" className="text-neutral-600 font-bold uppercase tracking-wide">Decline</AppText>
-            </Pressable>
+            </AppButton>
           </View>
         </View>
       )}

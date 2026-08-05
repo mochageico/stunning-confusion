@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
 import { AppState } from '../state/useAppState';
 import { recordingLabel } from '../lib/recordingLabel';
-import { AppText } from '../components/design';
+import { AppButton, AppText } from '../components/design';
 
 export default function ProfileScreen({ state }: { state: AppState }) {
   const {
@@ -104,12 +104,9 @@ export default function ProfileScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
-        <Pressable
-          onPress={() => navigateTo('dashboard')}
-          className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center justify-center"
-        >
+        <AppButton size="md" onPress={() => navigateTo('dashboard')} className="w-full bg-[#1A1A1A] rounded-xl items-center justify-center">
           <AppText variant="label" className="text-white font-sans font-bold ">View Full Dashboard 📊</AppText>
-        </Pressable>
+        </AppButton>
 
         {/* GitHub-style visual memory grid representation */}
         <View className="gap-1.5">

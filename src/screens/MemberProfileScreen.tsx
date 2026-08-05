@@ -5,7 +5,7 @@ import { ArrowLeft, Bell, MessageCircle, Trophy, UserMinus, UserPlus, X } from '
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { ChallengeCreateSheet } from '../components/ChallengeCard';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
 export default function MemberProfileScreen({ state }: { state: AppState }) {
   const {
@@ -83,12 +83,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
         {/* Header / Back Button */}
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <Pressable
-            onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
           <View>
             <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
               MEMBER PROFILE
@@ -113,39 +108,23 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
 
         {!isSelf && (
           <View className="flex-row gap-2">
-            <Pressable
-              onPress={() => openDMThread(selectedUserProfile.uid, selectedUserProfile.name, '')}
-              className="flex-1 flex-row items-center justify-center gap-1.5 py-2 bg-[#1A1A1A] rounded-xl"
-            >
+            <AppButton size="md" onPress={() => openDMThread(selectedUserProfile.uid, selectedUserProfile.name, '')} className="flex-1 flex-row items-center justify-center gap-1.5 bg-[#1A1A1A] rounded-xl">
               <MessageCircle size={12} color="#FFFFFF" />
               <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wide">Message</AppText>
-            </Pressable>
+            </AppButton>
             {isFriend && (
-              <Pressable
-                onPress={() => {
-                  if (!canNudge) {
-                    triggerToast('You already nudged this friend today — you can send another tomorrow.');
-                    return;
-                  }
-                  setNudgeMessage('');
-                  setShowNudgeCompose(true);
-                }}
-                className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-xl ${canNudge ? 'bg-amber-600' : 'bg-neutral-200'}`}
-              >
+              <AppButton size="md" onPress={() => { if (!canNudge) { triggerToast('You already nudged this friend today — you can send another tomorrow.'); return; } setNudgeMessage(''); setShowNudgeCompose(true); }} className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl ${canNudge ? 'bg-amber-600' : 'bg-neutral-200'}`}>
                 <Bell size={12} color={canNudge ? '#FFFFFF' : '#a3a3a3'} />
                 <AppText variant="section" className={`font-sans font-bold uppercase tracking-wide ${canNudge ? 'text-white' : 'text-neutral-400'}`}>
                   Nudge
                 </AppText>
-              </Pressable>
+              </AppButton>
             )}
             {isFriend && (
-              <Pressable
-                onPress={() => setShowChallengeSheet(true)}
-                className="flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-xl bg-amber-50 border border-amber-200"
-              >
+              <AppButton size="md" onPress={() => setShowChallengeSheet(true)} className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-amber-50 border border-amber-200">
                 <Trophy size={12} color="#b45309" />
                 <AppText variant="section" className="font-sans font-bold uppercase tracking-wide text-amber-800">Challenge</AppText>
-              </Pressable>
+              </AppButton>
             )}
           </View>
         )}
@@ -160,37 +139,25 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                   {selectedUserProfile.name} sent you a friend request.
                 </AppText>
                 <View className="flex-row gap-2">
-                  <Pressable
-                    onPress={() => acceptFriendRequest(incomingFromThem)}
-                    className="flex-1 bg-emerald-600 py-2 rounded-lg items-center"
-                  >
+                  <AppButton size="md" onPress={() => acceptFriendRequest(incomingFromThem)} className="flex-1 bg-emerald-600 rounded-lg items-center">
                     <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Accept</AppText>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => declineFriendRequest(incomingFromThem)}
-                    className="flex-1 bg-white border border-neutral-300 py-2 rounded-lg items-center"
-                  >
+                  </AppButton>
+                  <AppButton size="md" onPress={() => declineFriendRequest(incomingFromThem)} className="flex-1 bg-white border border-neutral-300 rounded-lg items-center">
                     <AppText variant="micro" className="text-neutral-600 font-bold uppercase tracking-wide">Decline</AppText>
-                  </Pressable>
+                  </AppButton>
                 </View>
               </View>
             ) : outgoingToThem ? (
-              <Pressable
-                onPress={() => cancelFriendRequest(outgoingToThem)}
-                className="flex-row items-center justify-center gap-1.5 py-2 rounded-xl bg-neutral-100 border border-neutral-200"
-              >
+              <AppButton size="md" onPress={() => cancelFriendRequest(outgoingToThem)} className="flex-row items-center justify-center gap-1.5 rounded-xl bg-neutral-100 border border-neutral-200">
                 <AppText variant="section" className="text-neutral-600 font-sans font-bold uppercase tracking-wide">
                   Request Sent — Cancel
                 </AppText>
-              </Pressable>
+              </AppButton>
             ) : (
-              <Pressable
-                onPress={() => sendFriendRequest(selectedUserProfile.uid, selectedUserProfile.name)}
-                className="flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl bg-indigo-600"
-              >
+              <AppButton size="md" onPress={() => sendFriendRequest(selectedUserProfile.uid, selectedUserProfile.name)} className="flex-row items-center justify-center gap-1.5 rounded-xl bg-indigo-600">
                 <UserPlus size={12} color="#FFFFFF" />
                 <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wide">Add Friend</AppText>
-              </Pressable>
+              </AppButton>
             )}
           </View>
         )}
@@ -281,12 +248,9 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                 </View>
               </View>
 
-              <Pressable
-                onPress={() => saveFriendMemoryPlan(sharedPlan, selectedUserProfile.name)}
-                className="bg-[#1A1A1A] rounded-md py-2 items-center"
-              >
+              <AppButton size="md" onPress={() => saveFriendMemoryPlan(sharedPlan, selectedUserProfile.name)} className="bg-[#1A1A1A] rounded-md items-center">
                 <AppText variant="section" className="text-white font-bold uppercase tracking-wider">Save Memory Plan</AppText>
-              </Pressable>
+              </AppButton>
               <AppText variant="micro" className="font-sans text-neutral-500 text-center leading-relaxed">
                 Saves their retention method. Your own schedule and pace stay as they are.
               </AppText>
@@ -371,18 +335,9 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                 </Pressable>
               </View>
               <AppTextInput variant="body" value={nudgeMessage} onChangeText={setNudgeMessage} placeholder="Hey! Have you reviewed your verses today?" placeholderTextColor="#a3a3a3" multiline autoFocus className="border border-neutral-300 rounded-xl p-3 font-sans text-neutral-900 min-h-[80px]" style={{ textAlignVertical: 'top' }} />
-              <Pressable
-                onPress={async () => {
-                  setShowNudgeCompose(false);
-                  await sendAccountabilityNudge(
-                    { uid: selectedUserProfile.uid, displayName: selectedUserProfile.name, avatarUrl: '', friendsSince: '' },
-                    nudgeMessage
-                  );
-                }}
-                className="bg-amber-600 rounded-xl py-2.5 items-center"
-              >
+              <AppButton size="md" onPress={async () => { setShowNudgeCompose(false); await sendAccountabilityNudge( { uid: selectedUserProfile.uid, displayName: selectedUserProfile.name, avatarUrl: '', friendsSince: '' }, nudgeMessage ); }} className="bg-amber-600 rounded-xl items-center">
                 <AppText variant="label" className="text-white font-sans font-bold ">Send Nudge</AppText>
-              </Pressable>
+              </AppButton>
             </View>
           </FadeInView>
         </View>
@@ -400,26 +355,12 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                 </AppText>
               </View>
               <View className="flex-row gap-2.5">
-                <Pressable
-                  onPress={() => setShowRemoveFriendConfirm(false)}
-                  className="flex-1 py-2.5 border border-neutral-300 rounded-xl items-center"
-                >
+                <AppButton size="md" onPress={() => setShowRemoveFriendConfirm(false)} className="flex-1 border border-neutral-300 rounded-xl items-center">
                   <AppText variant="label" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
-                </Pressable>
-                <Pressable
-                  onPress={async () => {
-                    setShowRemoveFriendConfirm(false);
-                    await removeFriend({
-                      uid: selectedUserProfile.uid,
-                      displayName: selectedUserProfile.name,
-                      avatarUrl: '',
-                      friendsSince: '',
-                    });
-                  }}
-                  className="flex-1 py-2.5 bg-red-600 rounded-xl items-center"
-                >
+                </AppButton>
+                <AppButton size="md" onPress={async () => { setShowRemoveFriendConfirm(false); await removeFriend({ uid: selectedUserProfile.uid, displayName: selectedUserProfile.name, avatarUrl: '', friendsSince: '', }); }} className="flex-1 bg-red-600 rounded-xl items-center">
                   <AppText variant="label" className="text-white font-sans font-bold ">Remove</AppText>
-                </Pressable>
+                </AppButton>
               </View>
             </View>
           </FadeInView>

@@ -4,7 +4,7 @@ import { ArrowLeft, Check, TrendingUp } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView, StepperRow } from '../components/ui';
 import { MissPolicySection } from '../components/MissPolicySection';
-import { AppTextInput,
+import { AppIconButton, AppTextInput,
   AppText,
   CollapsibleCard,
   MIN_TOUCH,
@@ -135,12 +135,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
           {state.onboardingStepInProgress === null && (
-            <Pressable
-              onPress={handleBack}
-              className="w-8 h-8 rounded-full border border-[#E5E5E5] items-center justify-center bg-white shrink-0"
-            >
-              <ArrowLeft size={15} color="#1A1A1A" />
-            </Pressable>
+            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white shrink-0" />
           )}
           <View className="flex-1">
             <AppText variant="section" className="uppercase tracking-wider font-bold text-neutral-700 font-sans">

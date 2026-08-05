@@ -3,7 +3,7 @@ import { ArrowLeft, Globe, Lock } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
-import { AppText } from '../components/design';
+import { AppButton, AppIconButton, AppText } from '../components/design';
 
 // Read-only "profile page" for a community someone isn't a member of yet --
 // same hero layout as CommunityGroupDetailScreen's header, but with none of
@@ -20,12 +20,7 @@ export default function CommunityPreviewScreen({ state }: { state: AppState }) {
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 20 }}>
         <View className="flex-row items-center gap-2.5">
-          <Pressable
-            onPress={closeCirclePreview}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={closeCirclePreview} className="rounded-full border border-neutral-200 bg-white" />
           <View className="flex-row items-center gap-1 bg-neutral-100 px-2.5 py-1 rounded-full">
             {previewCircle.isPublic ? <Globe size={10} color="#525252" /> : <Lock size={10} color="#525252" />}
             <AppText variant="micro" className="font-sans font-bold text-neutral-600 uppercase tracking-wide">
@@ -48,16 +43,11 @@ export default function CommunityPreviewScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
-        <Pressable
-          onPress={() => (isAlreadyJoined ? openCircle(previewCircle.id) : joinCircle(previewCircle.id, previewCircle.name))}
-          className={`w-full py-3.5 rounded-2xl items-center justify-center shadow-sm ${
-            isAlreadyJoined ? 'bg-neutral-100 border border-neutral-300' : 'bg-[#1A1A1A]'
-          }`}
-        >
+        <AppButton size="lg" onPress={() => (isAlreadyJoined ? openCircle(previewCircle.id) : joinCircle(previewCircle.id, previewCircle.name))} className={`w-full rounded-2xl items-center justify-center shadow-sm ${ isAlreadyJoined ? 'bg-neutral-100 border border-neutral-300' : 'bg-[#1A1A1A]' }`}>
           <AppText variant="label" className={`font-bold uppercase tracking-wider ${isAlreadyJoined ? 'text-neutral-700' : 'text-white'}`}>
             {isAlreadyJoined ? 'View Dashboard' : 'Join Circle'}
           </AppText>
-        </Pressable>
+        </AppButton>
 
         {!isAlreadyJoined && (
           <AppText variant="caption" className="text-neutral-400 font-sans text-center -mt-2">

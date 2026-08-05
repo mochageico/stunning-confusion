@@ -8,7 +8,7 @@ import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
 import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
-import { AppText } from '../components/design';
+import { AppButton, AppText } from '../components/design';
 
 // Derived from the single source of truth (data.ts) instead of its own
 // hardcoded list -- previously listed NIV/NKJV/NLT despite zero real text
@@ -129,30 +129,18 @@ export default function RecordScreen({ state }: { state: AppState }) {
 
         {/* Record vs Import sub-mode tabs */}
         <View className="flex-row bg-neutral-100 p-1 rounded-xl border border-neutral-200">
-          <Pressable
-            onPress={() => setSubMode('record')}
-            disabled={isRecording}
-            className={`flex-1 py-1.5 rounded-lg flex-row items-center justify-center gap-1.5 ${
-              subMode === 'record' ? 'bg-[#1A1A1A]' : ''
-            } ${isRecording ? 'opacity-60' : ''}`}
-          >
+          <AppButton size="sm" onPress={() => setSubMode('record')} disabled={isRecording} className={`flex-1 rounded-lg flex-row items-center justify-center gap-1.5 ${ subMode === 'record' ? 'bg-[#1A1A1A]' : '' } ${isRecording ? 'opacity-60' : ''}`}>
             <Mic size={12} color={subMode === 'record' ? '#ffffff' : '#737373'} />
             <AppText variant="section" className={`uppercase tracking-wider font-sans font-extrabold ${ subMode === 'record' ? 'text-white' : 'text-neutral-500' }`} >
               Record Live
             </AppText>
-          </Pressable>
-          <Pressable
-            onPress={() => setSubMode('import')}
-            disabled={isRecording}
-            className={`flex-1 py-1.5 rounded-lg flex-row items-center justify-center gap-1.5 ${
-              subMode === 'import' ? 'bg-[#1A1A1A]' : ''
-            } ${isRecording ? 'opacity-60' : ''}`}
-          >
+          </AppButton>
+          <AppButton size="sm" onPress={() => setSubMode('import')} disabled={isRecording} className={`flex-1 rounded-lg flex-row items-center justify-center gap-1.5 ${ subMode === 'import' ? 'bg-[#1A1A1A]' : '' } ${isRecording ? 'opacity-60' : ''}`}>
             <Upload size={12} color={subMode === 'import' ? '#ffffff' : '#737373'} />
             <AppText variant="section" className={`uppercase tracking-wider font-sans font-extrabold ${ subMode === 'import' ? 'text-white' : 'text-neutral-500' }`} >
               Import Audio
             </AppText>
-          </Pressable>
+          </AppButton>
         </View>
 
         {/* What are you recording/tagging? — book + chapter + translation,
@@ -337,13 +325,10 @@ export default function RecordScreen({ state }: { state: AppState }) {
             {/* Recording Controls */}
             <View className="pt-2">
               {!isRecording ? (
-                <Pressable
-                  onPress={handleStartRecording}
-                  className="w-full bg-[#1A1A1A] py-3.5 px-4 rounded-xl flex-row items-center justify-center gap-2 shadow"
-                >
+                <AppButton size="lg" onPress={handleStartRecording} className="w-full bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-2 shadow">
                   <Mic size={16} color="#FFFFFF" />
                   <AppText variant="body" className="text-white font-sans font-bold ">Tap to Record recitation</AppText>
-                </Pressable>
+                </AppButton>
               ) : showResetConfirm ? (
                 <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
                   <AppText variant="caption" className="font-sans font-bold text-red-800">Discard this recording?</AppText>
@@ -377,15 +362,12 @@ export default function RecordScreen({ state }: { state: AppState }) {
                   >
                     <RotateCcw size={16} color="#737373" />
                   </Pressable>
-                  <Pressable
-                    onPress={isRecordingPaused ? handleResumeRecording : handlePauseRecording}
-                    className="flex-1 bg-neutral-800 py-3.5 px-4 rounded-xl flex-row items-center justify-center gap-2 shadow"
-                  >
+                  <AppButton size="lg" onPress={isRecordingPaused ? handleResumeRecording : handlePauseRecording} className="flex-1 bg-neutral-800 rounded-xl flex-row items-center justify-center gap-2 shadow">
                     {isRecordingPaused ? <Play size={16} color="#FFFFFF" /> : <Pause size={16} color="#FFFFFF" />}
                     <AppText variant="body" className="text-white font-sans font-bold ">
                       {isRecordingPaused ? 'Resume' : 'Pause'}
                     </AppText>
-                  </Pressable>
+                  </AppButton>
                   <PulseView>
                     <Pressable
                       onPress={handleStopRecording}
@@ -414,13 +396,10 @@ export default function RecordScreen({ state }: { state: AppState }) {
                     just like recording live, but for audio you already have.
                   </AppText>
                 </View>
-                <Pressable
-                  onPress={pickImportAudio}
-                  className="flex-row items-center gap-2 bg-[#1A1A1A] px-4 py-2.5 rounded-xl"
-                >
+                <AppButton size="md" onPress={pickImportAudio} className="flex-row items-center gap-2 bg-[#1A1A1A] rounded-xl">
                   <Folder size={14} color="#FFFFFF" />
                   <AppText variant="label" className="text-white font-sans font-bold ">Choose Audio File</AppText>
-                </Pressable>
+                </AppButton>
               </View>
             ) : (
               <>
@@ -528,26 +507,14 @@ export default function RecordScreen({ state }: { state: AppState }) {
 
                 {/* Tagging controls */}
                 <View className="flex-row gap-2">
-                  <Pressable
-                    onPress={resetImportTaps}
-                    disabled={importTaggedCount === 0}
-                    className={`flex-1 py-2.5 px-3 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5 ${
-                      importTaggedCount === 0 ? 'opacity-40' : ''
-                    }`}
-                  >
+                  <AppButton size="md" onPress={resetImportTaps} disabled={importTaggedCount === 0} className={`flex-1 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5 ${ importTaggedCount === 0 ? 'opacity-40' : '' }`}>
                     <RotateCcw size={13} color="#525252" />
                     <AppText variant="label" className="font-sans font-bold text-neutral-600">Reset Tags</AppText>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleFinishImportTagging}
-                    disabled={importTaggedCount === 0}
-                    className={`flex-[2] py-2.5 px-3 bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5 ${
-                      importTaggedCount === 0 ? 'opacity-40' : ''
-                    }`}
-                  >
+                  </AppButton>
+                  <AppButton size="md" onPress={handleFinishImportTagging} disabled={importTaggedCount === 0} className={`flex-[2] bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5 ${ importTaggedCount === 0 ? 'opacity-40' : '' }`}>
                     <Check size={14} color="#FFFFFF" />
                     <AppText variant="body" className="text-white font-sans font-bold ">Finish & Save Recitation</AppText>
-                  </Pressable>
+                  </AppButton>
                 </View>
 
                 <Pressable onPress={clearImportedAudio} className="items-center py-1">

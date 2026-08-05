@@ -9,7 +9,7 @@ import { BIBLE_TRANSLATIONS } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
 import { cacheableTarget } from '../lib/audioCache';
 import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/studioAudio';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
 // Derived from the single source of truth (data.ts) instead of its own
 // separately-hardcoded lookup -- previously listed NIV/NKJV/NLT despite zero
@@ -300,12 +300,7 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
         {/* Header / Back Button */}
         <View className="flex-row items-center justify-between border-b border-neutral-100 pb-3">
           <View className="flex-row items-center gap-3">
-            <Pressable
-              onPress={handleBack}
-              className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-            >
-              <ArrowLeft size={14} color="#262626" />
-            </Pressable>
+            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
             <View>
               <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans self-start">
                 {selectedRecording.sourceType === 'imported' ? 'IMPORTED AUDIO' : 'CHAPTER RECITATION'}
@@ -376,21 +371,8 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
               {isEditingSpeaker ? (
                 <View className="flex-row items-center gap-1.5 mt-0.5">
                   <AppTextInput value={speakerDraft} onChangeText={setSpeakerDraft} autoFocus className="flex-1 font-extrabold text-neutral-800 font-sans border-b border-neutral-300 py-0.5" />
-                  <Pressable
-                    onPress={() => {
-                      setIsEditingSpeaker(false);
-                      updateRecordingSpeaker(selectedRecording, speakerDraft);
-                    }}
-                    className="w-5 h-5 rounded-full bg-emerald-600 items-center justify-center"
-                  >
-                    <Check size={10} color="#FFFFFF" />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setIsEditingSpeaker(false)}
-                    className="w-5 h-5 rounded-full border border-neutral-300 items-center justify-center"
-                  >
-                    <X size={10} color="#737373" />
-                  </Pressable>
+                  <AppIconButton Icon={Check} diameter={20} iconSize={10} iconColor="#FFFFFF" onPress={() => { setIsEditingSpeaker(false); updateRecordingSpeaker(selectedRecording, speakerDraft); }} className="rounded-full bg-emerald-600" />
+                  <AppIconButton Icon={X} diameter={20} iconSize={10} iconColor="#737373" onPress={() => setIsEditingSpeaker(false)} className="rounded-full border border-neutral-300" />
                 </View>
               ) : (
                 <Pressable
@@ -523,16 +505,7 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
               download — while a studio render is still processing, whichever
               file we saved would be superseded minutes later. */}
           {offlineTarget && (
-            <Pressable
-              onPress={() =>
-                isDownloaded ? removeRecordingDownload(selectedRecording) : saveRecordingOffline(selectedRecording)
-              }
-              disabled={isDownloading}
-              className={`flex-row items-center px-3 py-1.5 rounded-full border ${
-                isDownloaded ? 'bg-neutral-100 border-neutral-200' : 'bg-white border-neutral-200'
-              } ${isDownloading ? 'opacity-50' : ''}`}
-              style={{ gap: 6 }}
-            >
+            <AppButton size="sm" onPress={() => isDownloaded ? removeRecordingDownload(selectedRecording) : saveRecordingOffline(selectedRecording) } disabled={isDownloading} className={`flex-row items-center rounded-full border ${ isDownloaded ? 'bg-neutral-100 border-neutral-200' : 'bg-white border-neutral-200' } ${isDownloading ? 'opacity-50' : ''}`} style={{ gap: 6 }}>
               {isDownloaded ? (
                 <Trash2 size={11} color="#737373" strokeWidth={2.5} />
               ) : (
@@ -541,7 +514,7 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
               <AppText variant="micro" className={`font-sans font-bold uppercase tracking-wider ${ isDownloaded ? 'text-neutral-500' : 'text-neutral-800' }`} >
                 {isDownloading ? 'Downloading…' : isDownloaded ? 'Remove Download' : 'Save Offline'}
               </AppText>
-            </Pressable>
+            </AppButton>
           )}
         </View>
 

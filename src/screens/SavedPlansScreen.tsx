@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, PulseView } from '../components/ui';
-import { AppText } from '../components/design';
+import { AppIconButton, AppText } from '../components/design';
 
 export default function SavedPlansScreen({ state }: { state: AppState }) {
   const { handleBack, handleCreateNewPlan, handleActivatePlan, handleDeletePlan, handleEditPlan, savedPlans } = state;
@@ -24,12 +24,7 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
       >
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
-          <Pressable
-            onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white shrink-0"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white shrink-0" />
           {/* flex-1, not intrinsic width: "Saved Memory Rhythms" at display
               size is wider than the screen minus the back button, and text in
               RN doesn't wrap unless its container is allowed to bound it. */}
@@ -117,16 +112,7 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                       </Pressable>
                     )}
                     {savedPlans.length > 1 && (
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          setDeletingPlanId(plan.id);
-                        }}
-                        className="w-6 h-6 rounded-full items-center justify-center"
-                        hitSlop={8}
-                      >
-                        <Trash2 size={13} color="#d4d4d4" />
-                      </Pressable>
+                      <AppIconButton Icon={Trash2} diameter={24} iconSize={13} iconColor="#d4d4d4" onPress={(e) => { e.stopPropagation(); setDeletingPlanId(plan.id); }} className="rounded-full" hitSlop={8} />
                     )}
                   </View>
                 </View>

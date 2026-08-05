@@ -62,7 +62,7 @@ import {
 import { BounceView, ChipRow, DiscreteSlider, FadeInView, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
 import MemoryGrid, { verseAnnotationKey } from './MemoryGrid';
-import { AppTextInput, AppText } from './design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from './design';
 
 interface PracticeModalsProps {
   type: 'listen' | 'learn';
@@ -1277,15 +1277,7 @@ function PracticeModalsInner({
           >
             {listenPlaying ? <Pause size={15} color="#ffffff" /> : <Play size={15} color="#ffffff" />}
           </Pressable>
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="w-9 h-9 rounded-full bg-white/15 items-center justify-center shrink-0"
-          >
-            <X size={15} color="#ffffff" />
-          </Pressable>
+          <AppIconButton Icon={X} diameter={36} iconSize={15} iconColor="#ffffff" onPress={(e) => { e.stopPropagation(); onClose(); }} className="rounded-full bg-white/15 shrink-0" />
         </Pressable>
       </View>
     );
@@ -1312,21 +1304,9 @@ function PracticeModalsInner({
               buttons. Available from every learn mode, since "I already did
               this off-app" isn't tied to any particular drill. */}
           {type === 'learn' && (
-            <Pressable
-              onPress={() => setShowManualLog(true)}
-              className="w-10 h-10 rounded-full border border-neutral-300 items-center justify-center shrink-0"
-              hitSlop={8}
-            >
-              <ClipboardCheck size={17} color="#262626" />
-            </Pressable>
+            <AppIconButton Icon={ClipboardCheck} diameter={40} iconSize={17} iconColor="#262626" onPress={() => setShowManualLog(true)} className="rounded-full border border-neutral-300 shrink-0" hitSlop={8} />
           )}
-          <Pressable
-            onPress={type === 'listen' ? () => setListenMinimized(true) : onClose}
-            className="w-10 h-10 rounded-full border border-neutral-300 items-center justify-center shrink-0"
-            hitSlop={8}
-          >
-            <X size={18} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={X} diameter={40} iconSize={18} iconColor="#262626" onPress={type === 'listen' ? () => setListenMinimized(true) : onClose} className="rounded-full border border-neutral-300 shrink-0" hitSlop={8} />
         </View>
       </View>
 
@@ -1345,19 +1325,19 @@ function PracticeModalsInner({
               </AppText>
             </View>
 
-            <Pressable onPress={() => submitManualLog('perfect')} className="w-full py-2.5 bg-emerald-600 rounded-xl items-center">
+            <AppButton size="md" onPress={() => submitManualLog('perfect')} className="w-full bg-emerald-600 rounded-xl items-center">
               <AppText variant="label" className="font-sans font-bold text-white">Perfect — no mistakes</AppText>
               <AppText variant="micro" className="text-emerald-100 font-sans mt-0.5">Counts as a review and toward mastery</AppText>
-            </Pressable>
+            </AppButton>
 
-            <Pressable onPress={() => submitManualLog('passed')} className="w-full py-2.5 bg-indigo-600 rounded-xl items-center">
+            <AppButton size="md" onPress={() => submitManualLog('passed')} className="w-full bg-indigo-600 rounded-xl items-center">
               <AppText variant="label" className="font-sans font-bold text-white">Got it, with a stumble</AppText>
               <AppText variant="micro" className="text-indigo-100 font-sans mt-0.5">Counts as a review only, no mastery touch</AppText>
-            </Pressable>
+            </AppButton>
 
-            <Pressable onPress={() => submitManualLog('practice')} className="w-full py-2 border border-dashed border-neutral-300 rounded-xl items-center">
+            <AppButton size="md" onPress={() => submitManualLog('practice')} className="w-full border border-dashed border-neutral-300 rounded-xl items-center">
               <AppText variant="caption" className="font-sans font-bold text-neutral-500">Needs more practice</AppText>
-            </Pressable>
+            </AppButton>
 
             <Pressable onPress={() => setShowManualLog(false)} className="w-full py-1.5 items-center">
               <AppText variant="caption" className="font-sans font-bold text-neutral-400">Cancel</AppText>
@@ -1504,17 +1484,10 @@ function PracticeModalsInner({
               <View className="bg-neutral-100 border-t border-neutral-200 px-3 py-2 flex-row justify-between items-center z-10">
                 <View className="flex-row items-center gap-2">
                   {playSource === 'selection' && selectionStart !== null ? (
-                    <Pressable
-                      onPress={() => {
-                        setSelectionStart(null);
-                        setSelectionEnd(null);
-                        setCurrentVerseIndex(0);
-                      }}
-                      className="flex-row items-center gap-1.5 bg-white border border-neutral-300 px-2.5 py-1 rounded-lg"
-                    >
+                    <AppButton size="sm" onPress={() => { setSelectionStart(null); setSelectionEnd(null); setCurrentVerseIndex(0); }} className="flex-row items-center gap-1.5 bg-white border border-neutral-300 rounded-lg">
                       <RefreshCw size={10} color="#262626" />
                       <AppText variant="micro" className="font-sans font-extrabold text-neutral-800">Reset Segment</AppText>
-                    </Pressable>
+                    </AppButton>
                   ) : (
                     <AppText variant="micro" className="font-sans font-bold text-neutral-400 uppercase tracking-wider">
                       {playSource === 'selection' ? 'Tap verse to select segment' : 'Playlist Auto-playback'}
@@ -1600,19 +1573,14 @@ function PracticeModalsInner({
 
                   {/* Main player controls row */}
                   <View className="flex-row gap-2.5 pb-1">
-                    <Pressable onPress={restartListen} className="flex-1 py-2.5 px-3 border-2 border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5">
+                    <AppButton size="md" onPress={restartListen} className="flex-1 border-2 border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5">
                       <RefreshCw size={12} color="#1A1A1A" />
                       <AppText variant="label" className="font-sans font-bold text-[#1A1A1A]">Restart</AppText>
-                    </Pressable>
-                    <Pressable
-                      onPress={toggleListenPlaying}
-                      className={`flex-[2] py-2.5 px-3 rounded-xl flex-row items-center justify-center gap-1.5 ${
-                        listenPlaying ? 'bg-neutral-900' : 'bg-emerald-600'
-                      }`}
-                    >
+                    </AppButton>
+                    <AppButton size="md" onPress={toggleListenPlaying} className={`flex-[2] rounded-xl flex-row items-center justify-center gap-1.5 ${ listenPlaying ? 'bg-neutral-900' : 'bg-emerald-600' }`}>
                       {listenPlaying ? <Pause size={12} color="#ffffff" /> : <Play size={12} color="#ffffff" />}
                       <AppText variant="label" className="font-sans font-bold text-white">{listenPlaying ? 'Pause Audio' : 'Start Looping'}</AppText>
-                    </Pressable>
+                    </AppButton>
                   </View>
                 </>
               )}
@@ -1646,16 +1614,12 @@ function PracticeModalsInner({
               {learnModes.map(({ id, label, Icon }) => {
                 const active = learnTab === id;
                 return (
-                  <Pressable
-                    key={id}
-                    onPress={() => switchLearnTab(id)}
-                    className={`py-1.5 px-2.5 rounded-lg flex-row items-center justify-center gap-1 ${active ? 'bg-[#1A1A1A]' : ''}`}
-                  >
+                  <AppButton size="sm" key={id} onPress={() => switchLearnTab(id)} className={` rounded-lg flex-row items-center justify-center gap-1 ${active ? 'bg-[#1A1A1A]' : ''}`}>
                     <Icon size={12} color={active ? '#ffffff' : '#737373'} />
                     <AppText variant="micro" className={`uppercase tracking-wider font-sans font-extrabold ${active ? 'text-white' : 'text-neutral-500'}`} numberOfLines={1} >
                       {label}
                     </AppText>
-                  </Pressable>
+                  </AppButton>
                 );
               })}
             </View>
@@ -1686,22 +1650,16 @@ function PracticeModalsInner({
                     )}
 
                     <View className="flex-row bg-neutral-100 p-0.5 rounded-lg mb-2 shrink-0">
-                      <Pressable
-                        onPress={() => setRecallDisplayMode('passage')}
-                        className={`flex-1 py-1 rounded-md items-center ${recallDisplayMode === 'passage' ? 'bg-white' : ''}`}
-                      >
+                      <AppButton size="sm" onPress={() => setRecallDisplayMode('passage')} className={`flex-1 rounded-md items-center ${recallDisplayMode === 'passage' ? 'bg-white' : ''}`}>
                         <AppText variant="micro" className={`font-sans font-extrabold uppercase tracking-wider ${recallDisplayMode === 'passage' ? 'text-neutral-900' : 'text-neutral-500'}`}>
                           Passage
                         </AppText>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => setRecallDisplayMode('memoryGrid')}
-                        className={`flex-1 py-1 rounded-md items-center ${recallDisplayMode === 'memoryGrid' ? 'bg-sky-600' : ''}`}
-                      >
+                      </AppButton>
+                      <AppButton size="sm" onPress={() => setRecallDisplayMode('memoryGrid')} className={`flex-1 rounded-md items-center ${recallDisplayMode === 'memoryGrid' ? 'bg-sky-600' : ''}`}>
                         <AppText variant="micro" className={`font-sans font-extrabold uppercase tracking-wider ${recallDisplayMode === 'memoryGrid' ? 'text-white' : 'text-neutral-500'}`}>
                           Memory Grid
                         </AppText>
-                      </Pressable>
+                      </AppButton>
                     </View>
 
                     {recallDisplayMode === 'memoryGrid' ? (
@@ -1918,22 +1876,16 @@ function PracticeModalsInner({
                         </AppText>
                       </View>
                       <View className="flex-row bg-neutral-200/70 p-0.5 rounded-lg">
-                        <Pressable
-                          onPress={() => switchHintMode('percent')}
-                          className={`flex-1 py-1 rounded-md items-center ${hintMode === 'percent' ? 'bg-white' : ''}`}
-                        >
+                        <AppButton size="sm" onPress={() => switchHintMode('percent')} className={`flex-1 rounded-md items-center ${hintMode === 'percent' ? 'bg-white' : ''}`}>
                           <AppText variant="micro" className={`font-sans font-extrabold ${hintMode === 'percent' ? 'text-neutral-900' : 'text-neutral-500'}`}>
                             % Hidden
                           </AppText>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => switchHintMode('firstLetter')}
-                          className={`flex-1 py-1 rounded-md items-center ${hintMode === 'firstLetter' ? 'bg-sky-600' : ''}`}
-                        >
+                        </AppButton>
+                        <AppButton size="sm" onPress={() => switchHintMode('firstLetter')} className={`flex-1 rounded-md items-center ${hintMode === 'firstLetter' ? 'bg-sky-600' : ''}`}>
                           <AppText variant="micro" className={`font-sans font-extrabold ${hintMode === 'firstLetter' ? 'text-white' : 'text-neutral-500'}`}>
                             First Letter
                           </AppText>
-                        </Pressable>
+                        </AppButton>
                       </View>
                       {hintMode === 'percent' && (
                         <DiscreteSlider
@@ -1958,41 +1910,29 @@ function PracticeModalsInner({
                         Memory Grid Display
                       </AppText>
                       <View className="flex-row bg-neutral-200/70 p-0.5 rounded-lg">
-                        <Pressable
-                          onPress={() => setGridHideMode('firstLetter')}
-                          className={`flex-1 py-1 rounded-md items-center ${gridHideMode === 'firstLetter' ? 'bg-white' : ''}`}
-                        >
+                        <AppButton size="sm" onPress={() => setGridHideMode('firstLetter')} className={`flex-1 rounded-md items-center ${gridHideMode === 'firstLetter' ? 'bg-white' : ''}`}>
                           <AppText variant="micro" className={`font-sans font-extrabold ${gridHideMode === 'firstLetter' ? 'text-neutral-900' : 'text-neutral-500'}`}>
                             First Letter
                           </AppText>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => setGridHideMode('blank')}
-                          className={`flex-1 py-1 rounded-md items-center ${gridHideMode === 'blank' ? 'bg-sky-600' : ''}`}
-                        >
+                        </AppButton>
+                        <AppButton size="sm" onPress={() => setGridHideMode('blank')} className={`flex-1 rounded-md items-center ${gridHideMode === 'blank' ? 'bg-sky-600' : ''}`}>
                           <AppText variant="micro" className={`font-sans font-extrabold ${gridHideMode === 'blank' ? 'text-white' : 'text-neutral-500'}`}>
                             Fully Hidden
                           </AppText>
-                        </Pressable>
+                        </AppButton>
                       </View>
                     </View>
                   )}
 
                   {/* Options */}
                   <View className="mt-2 flex-row gap-2.5">
-                    <Pressable
-                      onPress={() => {
-                        resetReciteGame();
-                        regenerateHiddenWords(activeLevel);
-                      }}
-                      className="flex-1 py-2 px-3 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5"
-                    >
+                    <AppButton size="md" onPress={() => { resetReciteGame(); regenerateHiddenWords(activeLevel); }} className="flex-1 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5">
                       <RefreshCw size={12} color="#525252" />
                       <AppText variant="label" className="font-sans font-bold text-neutral-600">Reset Passage</AppText>
-                    </Pressable>
-                    <Pressable onPress={handleReciteHint} className="flex-1 py-2 px-3 border-2 border-[#1A1A1A] rounded-xl items-center justify-center">
+                    </AppButton>
+                    <AppButton size="md" onPress={handleReciteHint} className="flex-1 border-2 border-[#1A1A1A] rounded-xl items-center justify-center">
                       <AppText variant="label" className="font-sans font-bold text-neutral-900">Reveal Word</AppText>
-                    </Pressable>
+                    </AppButton>
                   </View>
                 </View>
               ) : hintMode === 'percent' && hideLevel < 100 ? (
@@ -2018,16 +1958,10 @@ function PracticeModalsInner({
                       </View>
 
                       <View className="w-full gap-2">
-                        <Pressable
-                          onPress={() => {
-                            resetReciteGame();
-                            regenerateHiddenWords(hideLevel);
-                          }}
-                          className="w-full py-2.5 px-3 bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5"
-                        >
+                        <AppButton size="md" onPress={() => { resetReciteGame(); regenerateHiddenWords(hideLevel); }} className="w-full bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5">
                           <Shuffle size={14} color="#ffffff" />
                           <AppText variant="label" className="font-sans font-bold text-white">Practice Again (new words hidden)</AppText>
-                        </Pressable>
+                        </AppButton>
                         <Pressable
                           onPress={() => {
                             setHideLevel(100);
@@ -2092,30 +2026,18 @@ function PracticeModalsInner({
 
                       <View className="w-full gap-2">
                         {isMasteryEligible ? (
-                          <Pressable
-                            onPress={() => {
-                              onUpdateStatus(verses, 'memorized', drill, { perfect: true });
-                              handleGroupComplete();
-                            }}
-                            className="w-full py-2.5 px-3 bg-emerald-600 rounded-xl flex-row items-center justify-center gap-1.5"
-                          >
+                          <AppButton size="md" onPress={() => { onUpdateStatus(verses, 'memorized', drill, { perfect: true }); handleGroupComplete(); }} className="w-full bg-emerald-600 rounded-xl flex-row items-center justify-center gap-1.5">
                             <Check size={14} color="#ffffff" />
                             <AppText variant="label" className="font-sans font-bold text-white">Log Perfect Recall (counts toward mastery)</AppText>
-                          </Pressable>
+                          </AppButton>
                         ) : summary.passesReview ? (
                           <>
-                            <Pressable
-                              onPress={() => {
-                                onUpdateStatus(verses, 'memorized', drill, { perfect: false });
-                                handleGroupComplete();
-                              }}
-                              className={`w-full py-2.5 px-3 rounded-xl flex-row items-center justify-center gap-1.5 ${assisted ? 'bg-sky-600' : 'bg-indigo-600'}`}
-                            >
+                            <AppButton size="md" onPress={() => { onUpdateStatus(verses, 'memorized', drill, { perfect: false }); handleGroupComplete(); }} className={`w-full rounded-xl flex-row items-center justify-center gap-1.5 ${assisted ? 'bg-sky-600' : 'bg-indigo-600'}`}>
                               <Check size={14} color="#ffffff" />
                               <AppText variant="label" className="font-sans font-bold text-white">
                                 {assisted ? `Count as Review (First-Letter Assist)` : `Count as Review (${pct}% ≥ ${passPct}%)`}
                               </AppText>
-                            </Pressable>
+                            </AppButton>
                             <AppText variant="micro" className="text-center text-neutral-400 font-sans font-bold px-4">
                               {assisted
                                 ? 'With first-letter hints on, this counts as a review but never as a mastery touch. Switch to % Hidden, set to fully blind, for that.'
@@ -2123,15 +2045,9 @@ function PracticeModalsInner({
                             </AppText>
                           </>
                         ) : (
-                          <Pressable
-                            onPress={() => {
-                              onUpdateStatus(verses, 'learning', drill);
-                              handleGroupComplete();
-                            }}
-                            className="w-full py-2.5 px-3 bg-[#1A1A1A] rounded-xl items-center"
-                          >
+                          <AppButton size="md" onPress={() => { onUpdateStatus(verses, 'learning', drill); handleGroupComplete(); }} className="w-full bg-[#1A1A1A] rounded-xl items-center">
                             <AppText variant="label" className="font-sans font-bold text-white">Log as Needs Practice (below {passPct}%)</AppText>
-                          </Pressable>
+                          </AppButton>
                         )}
                         <Pressable onPress={resetReciteGame} className="w-full py-1 items-center">
                           <AppText variant="caption" className="text-neutral-500 font-bold">Practice Again</AppText>
@@ -2237,18 +2153,14 @@ function PracticeModalsInner({
                         </View>
                       ) : null}
                       <View className="flex-row gap-2">
-                        <Pressable onPress={resetJigsaw} className="flex-1 py-2 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5">
+                        <AppButton size="md" onPress={resetJigsaw} className="flex-1 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5">
                           <Undo2 size={13} color="#404040" />
                           <AppText variant="caption" className="font-sans font-bold text-neutral-700">Reshuffle</AppText>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => setJigsawChecked(true)}
-                          disabled={!allPlaced}
-                          className={`flex-1 py-2 rounded-xl flex-row items-center justify-center gap-1.5 ${allPlaced ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
-                        >
+                        </AppButton>
+                        <AppButton size="md" onPress={() => setJigsawChecked(true)} disabled={!allPlaced} className={`flex-1 rounded-xl flex-row items-center justify-center gap-1.5 ${allPlaced ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}>
                           <Check size={13} color={allPlaced ? '#ffffff' : '#a3a3a3'} />
                           <AppText variant="caption" className={`font-sans font-bold ${allPlaced ? 'text-white' : 'text-neutral-400'}`}>Check Order</AppText>
-                        </Pressable>
+                        </AppButton>
                       </View>
                     </View>
                   </View>
@@ -2284,14 +2196,14 @@ function PracticeModalsInner({
                       <AppText variant="caption" className="text-neutral-500 font-sans text-center leading-[18px]">
                         Build Up doesn't count toward review — the words were on screen and you graded yourself. Want to prove it cold?
                       </AppText>
-                      <Pressable onPress={handoffToRecall} className="w-full py-3 rounded-xl bg-[#1A1A1A] flex-row items-center justify-center gap-1.5">
+                      <AppButton size="lg" onPress={handoffToRecall} className="w-full rounded-xl bg-[#1A1A1A] flex-row items-center justify-center gap-1.5">
                         <Mic size={14} color="#ffffff" />
                         <AppText variant="label" className="font-sans font-bold text-white">Try it blind in Recall</AppText>
-                      </Pressable>
-                      <Pressable onPress={resetBuildUp} className="w-full py-2 rounded-xl border border-neutral-300 flex-row items-center justify-center gap-1.5">
+                      </AppButton>
+                      <AppButton size="md" onPress={resetBuildUp} className="w-full rounded-xl border border-neutral-300 flex-row items-center justify-center gap-1.5">
                         <RefreshCw size={13} color="#404040" />
                         <AppText variant="caption" className="font-sans font-bold text-neutral-700">Run it again</AppText>
-                      </Pressable>
+                      </AppButton>
                     </View>
                   );
                 }
@@ -2428,39 +2340,25 @@ function PracticeModalsInner({
                         })}
                       </View>
 
-                      <Pressable
-                        onPress={advanceBuildUp}
-                        className="w-full py-3 rounded-xl bg-[#1A1A1A] flex-row items-center justify-center gap-1.5"
-                      >
+                      <AppButton size="lg" onPress={advanceBuildUp} className="w-full rounded-xl bg-[#1A1A1A] flex-row items-center justify-center gap-1.5">
                         <AppText variant="label" className="font-sans font-bold text-white">{actionLabel}</AppText>
                         <ChevronRight size={15} color="#ffffff" />
-                      </Pressable>
+                      </AppButton>
 
                       <View className="flex-row gap-2">
-                        <Pressable
-                          onPress={stepBackBuildUp}
-                          disabled={buildStageIdx === 0 && buildRepIdx === 0}
-                          className={`flex-1 py-2 border rounded-xl flex-row items-center justify-center gap-1.5 ${
-                            buildStageIdx === 0 && buildRepIdx === 0 ? 'border-neutral-200' : 'border-neutral-300'
-                          }`}
-                        >
+                        <AppButton size="md" onPress={stepBackBuildUp} disabled={buildStageIdx === 0 && buildRepIdx === 0} className={`flex-1 border rounded-xl flex-row items-center justify-center gap-1.5 ${ buildStageIdx === 0 && buildRepIdx === 0 ? 'border-neutral-200' : 'border-neutral-300' }`}>
                           <Undo2 size={13} color={buildStageIdx === 0 && buildRepIdx === 0 ? '#d4d4d4' : '#404040'} />
                           <AppText variant="caption" className={`font-sans font-bold ${ buildStageIdx === 0 && buildRepIdx === 0 ? 'text-neutral-300' : 'text-neutral-700' }`} >
                             Back
                           </AppText>
-                        </Pressable>
+                        </AppButton>
                         {buildRep !== 'read' && (
-                          <Pressable
-                            onPress={() => setBuildPeek((p) => !p)}
-                            className={`flex-1 py-2 border rounded-xl flex-row items-center justify-center gap-1.5 ${
-                              buildPeek ? 'border-amber-400 bg-amber-50' : 'border-neutral-300'
-                            }`}
-                          >
+                          <AppButton size="md" onPress={() => setBuildPeek((p) => !p)} className={`flex-1 border rounded-xl flex-row items-center justify-center gap-1.5 ${ buildPeek ? 'border-amber-400 bg-amber-50' : 'border-neutral-300' }`}>
                             {buildPeek ? <EyeOff size={13} color="#b45309" /> : <Eye size={13} color="#404040" />}
                             <AppText variant="caption" className={`font-sans font-bold ${buildPeek ? 'text-amber-700' : 'text-neutral-700'}`}>
                               {buildPeek ? 'Hide' : 'Peek'}
                             </AppText>
-                          </Pressable>
+                          </AppButton>
                         )}
                       </View>
                     </View>
@@ -2582,32 +2480,19 @@ function PracticeModalsInner({
                         </View>
                       )}
                       <View className="flex-row gap-2">
-                        <Pressable
-                          onPress={() => {
-                            setScrambleSlots(round.phrases.map(() => null));
-                            setScrambleChecked(false);
-                          }}
-                          className="flex-1 py-2 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5"
-                        >
+                        <AppButton size="md" onPress={() => { setScrambleSlots(round.phrases.map(() => null)); setScrambleChecked(false); }} className="flex-1 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5">
                           <Undo2 size={13} color="#404040" />
                           <AppText variant="caption" className="font-sans font-bold text-neutral-700">Clear</AppText>
-                        </Pressable>
+                        </AppButton>
                         {solved && !isLastRound ? (
-                          <Pressable
-                            onPress={() => setScrambleIndex((i) => i + 1)}
-                            className="flex-1 py-2 rounded-xl bg-emerald-600 flex-row items-center justify-center gap-1.5"
-                          >
+                          <AppButton size="md" onPress={() => setScrambleIndex((i) => i + 1)} className="flex-1 rounded-xl bg-emerald-600 flex-row items-center justify-center gap-1.5">
                             <AppText variant="caption" className="font-sans font-bold text-white">Next Verse</AppText>
-                          </Pressable>
+                          </AppButton>
                         ) : (
-                          <Pressable
-                            onPress={() => setScrambleChecked(true)}
-                            disabled={!allPlaced}
-                            className={`flex-1 py-2 rounded-xl flex-row items-center justify-center gap-1.5 ${allPlaced ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
-                          >
+                          <AppButton size="md" onPress={() => setScrambleChecked(true)} disabled={!allPlaced} className={`flex-1 rounded-xl flex-row items-center justify-center gap-1.5 ${allPlaced ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}>
                             <Check size={13} color={allPlaced ? '#ffffff' : '#a3a3a3'} />
                             <AppText variant="caption" className={`font-sans font-bold ${allPlaced ? 'text-white' : 'text-neutral-400'}`}>Check</AppText>
-                          </Pressable>
+                          </AppButton>
                         )}
                       </View>
                     </View>
@@ -2719,22 +2604,15 @@ function PracticeModalsInner({
                         </View>
                       )}
                       <View className="flex-row gap-2">
-                        <Pressable
-                          onPress={() => resetSwap()}
-                          className="flex-1 py-2 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5"
-                        >
+                        <AppButton size="md" onPress={() => resetSwap()} className="flex-1 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5">
                           <Shuffle size={13} color="#404040" />
                           <AppText variant="caption" className="font-sans font-bold text-neutral-700">New Swaps</AppText>
-                        </Pressable>
+                        </AppButton>
                         {!swapSubmitted && (
-                          <Pressable
-                            onPress={() => setSwapSubmitted(true)}
-                            disabled={noDecoys}
-                            className={`flex-1 py-2 rounded-xl flex-row items-center justify-center gap-1.5 ${noDecoys ? 'bg-neutral-200' : 'bg-[#1A1A1A]'}`}
-                          >
+                          <AppButton size="md" onPress={() => setSwapSubmitted(true)} disabled={noDecoys} className={`flex-1 rounded-xl flex-row items-center justify-center gap-1.5 ${noDecoys ? 'bg-neutral-200' : 'bg-[#1A1A1A]'}`}>
                             <Check size={13} color={noDecoys ? '#a3a3a3' : '#ffffff'} />
                             <AppText variant="caption" className={`font-sans font-bold ${noDecoys ? 'text-neutral-400' : 'text-white'}`}>Check</AppText>
-                          </Pressable>
+                          </AppButton>
                         )}
                       </View>
                     </View>

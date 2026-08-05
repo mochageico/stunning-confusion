@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { ChipRow, FadeInView } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
-import { AppText } from '../components/design';
+import { AppIconButton, AppText } from '../components/design';
 
 const DATE_FILTER_OPTIONS = [
   { id: 'all', label: 'All Time' },
@@ -69,12 +69,7 @@ export default function FullHistoryScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
         {/* Header */}
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <Pressable
-            onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
           <View>
             <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
               HISTORY LOGS

@@ -9,7 +9,7 @@ import { ChipRow, FadeInView } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS } from '../data';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { AUDIO_CACHE_SUPPORTED, CACHE_CAP_CHOICES } from '../lib/audioCache';
-import { AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
 const formatMB = (bytes: number) => {
   const mb = bytes / (1024 * 1024);
@@ -131,12 +131,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 20 }}>
         {/* Header */}
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <Pressable
-            onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
-          >
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
           <AppText variant="title" className="font-serif font-black text-[#1A1A1A] leading-none">Settings</AppText>
         </View>
 
@@ -174,20 +169,14 @@ export default function SettingsScreen({ state }: { state: AppState }) {
             {RECORDING_VISIBILITY_OPTIONS.map((opt) => {
               const isSelected = (defaultRecordingVisibility || 'private') === opt.id;
               return (
-                <Pressable
-                  key={opt.id}
-                  onPress={() => updateDefaultRecordingVisibility(opt.id)}
-                  className={`flex-1 py-2 rounded-lg items-center border ${
-                    isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                  }`}
-                >
+                <AppButton size="md" key={opt.id} onPress={() => updateDefaultRecordingVisibility(opt.id)} className={`flex-1 rounded-lg items-center border ${ isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200' }`}>
                   <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                     {opt.label}
                   </AppText>
                   <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
                     {opt.desc}
                   </AppText>
-                </Pressable>
+                </AppButton>
               );
             })}
           </View>
@@ -207,20 +196,14 @@ export default function SettingsScreen({ state }: { state: AppState }) {
             {STUDIO_MODE_OPTIONS.map((opt) => {
               const isSelected = studioPlaybackEnabled === opt.enabled;
               return (
-                <Pressable
-                  key={opt.id}
-                  onPress={() => setStudioPlaybackEnabled(opt.enabled)}
-                  className={`flex-1 py-2 rounded-lg items-center border ${
-                    isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                  }`}
-                >
+                <AppButton size="md" key={opt.id} onPress={() => setStudioPlaybackEnabled(opt.enabled)} className={`flex-1 rounded-lg items-center border ${ isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200' }`}>
                   <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                     {opt.label}
                   </AppText>
                   <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
                     {opt.desc}
                   </AppText>
-                </Pressable>
+                </AppButton>
               );
             })}
           </View>
@@ -255,34 +238,19 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                 {CACHE_CAP_CHOICES.map((bytes) => {
                   const isSelected = audioCache.capBytes === bytes;
                   return (
-                    <Pressable
-                      key={bytes}
-                      onPress={() => setAudioCacheCap(bytes)}
-                      className={`flex-1 py-2 rounded-lg items-center border ${
-                        isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                      }`}
-                    >
+                    <AppButton size="md" key={bytes} onPress={() => setAudioCacheCap(bytes)} className={`flex-1 rounded-lg items-center border ${ isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200' }`}>
                       <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`} >
                         {formatMB(bytes)}
                       </AppText>
-                    </Pressable>
+                    </AppButton>
                   );
                 })}
               </View>
             </View>
 
-            <Pressable
-              onPress={() => {
-                if (audioCache.map.size === 0) {
-                  triggerToast('Nothing stored on this device yet.');
-                  return;
-                }
-                clearAudioDownloads();
-              }}
-              className="w-full py-2 rounded-lg items-center border border-neutral-200 bg-white"
-            >
+            <AppButton size="md" onPress={() => { if (audioCache.map.size === 0) { triggerToast('Nothing stored on this device yet.'); return; } clearAudioDownloads(); }} className="w-full rounded-lg items-center border border-neutral-200 bg-white">
               <AppText variant="caption" className="font-sans font-bold text-neutral-600">Clear Downloaded Audio</AppText>
-            </Pressable>
+            </AppButton>
           </View>
         )}
 
@@ -302,20 +270,14 @@ export default function SettingsScreen({ state }: { state: AppState }) {
               {VISIBILITY_OPTIONS.map((opt) => {
                 const isSelected = memoryPlanVisibility === opt.id;
                 return (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => updateMemoryPlanVisibility(opt.id)}
-                    className={`flex-1 py-2 rounded-lg items-center border ${
-                      isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                    }`}
-                  >
+                  <AppButton size="md" key={opt.id} onPress={() => updateMemoryPlanVisibility(opt.id)} className={`flex-1 rounded-lg items-center border ${ isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200' }`}>
                     <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                       {opt.label}
                     </AppText>
                     <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
                       {opt.desc}
                     </AppText>
-                  </Pressable>
+                  </AppButton>
                 );
               })}
             </View>
@@ -328,20 +290,14 @@ export default function SettingsScreen({ state }: { state: AppState }) {
               {VISIBILITY_OPTIONS.map((opt) => {
                 const isSelected = memoryQueueVisibility === opt.id;
                 return (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => updateMemoryQueueVisibility(opt.id)}
-                    className={`flex-1 py-2 rounded-lg items-center border ${
-                      isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
-                    }`}
-                  >
+                  <AppButton size="md" key={opt.id} onPress={() => updateMemoryQueueVisibility(opt.id)} className={`flex-1 rounded-lg items-center border ${ isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200' }`}>
                     <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                       {opt.label}
                     </AppText>
                     <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
                       {opt.desc}
                     </AppText>
-                  </Pressable>
+                  </AppButton>
                 );
               })}
             </View>
@@ -385,12 +341,9 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                 Nothing is due, nothing counts as missed, and friends won't see accountability nudges reach you while
                 you're away.
               </AppText>
-              <Pressable
-                onPress={resumeReviews}
-                className="w-full py-2.5 bg-amber-600 rounded-xl items-center"
-              >
+              <AppButton size="md" onPress={resumeReviews} className="w-full bg-amber-600 rounded-xl items-center">
                 <AppText variant="label" className="text-white font-sans font-bold ">Resume Now</AppText>
-              </Pressable>
+              </AppButton>
             </>
           ) : (
             <>
@@ -403,33 +356,17 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                 onChange={setPauseDuration}
                 options={PAUSE_DURATIONS.map((d) => ({ id: d.id, label: d.label }))}
               />
-              <Pressable
-                onPress={() => {
-                  const cfg = PAUSE_DURATIONS.find((d) => d.id === pauseDuration)!;
-                  const untilISO = cfg.days
-                    ? (() => {
-                        const d = new Date();
-                        d.setDate(d.getDate() + cfg.days!);
-                        return d.toISOString();
-                      })()
-                    : null;
-                  pauseReviews(untilISO);
-                }}
-                className="w-full py-2.5 bg-neutral-800 rounded-xl items-center"
-              >
+              <AppButton size="md" onPress={() => { const cfg = PAUSE_DURATIONS.find((d) => d.id === pauseDuration)!; const untilISO = cfg.days ? (() => { const d = new Date(); d.setDate(d.getDate() + cfg.days!); return d.toISOString(); })() : null; pauseReviews(untilISO); }} className="w-full bg-neutral-800 rounded-xl items-center">
                 <AppText variant="label" className="text-white font-sans font-bold ">Pause Reviews</AppText>
-              </Pressable>
+              </AppButton>
             </>
           )}
         </View>
 
         {/* GETTING STARTED */}
-        <Pressable
-          onPress={() => setShowOnboarding(true)}
-          className="w-full py-3 bg-neutral-50 border border-neutral-200 rounded-xl items-center"
-        >
+        <AppButton size="lg" onPress={() => setShowOnboarding(true)} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl items-center">
           <AppText variant="label" className="text-neutral-700 font-sans font-bold ">View Getting Started Guide 🚀</AppText>
-        </Pressable>
+        </AppButton>
 
         {/* ABOUT */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 4 }}>
@@ -440,24 +377,18 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         </View>
 
         {/* SIGN OUT */}
-        <Pressable
-          onPress={signOut}
-          className="w-full py-2.5 border border-neutral-300 rounded-xl items-center"
-        >
+        <AppButton size="md" onPress={signOut} className="w-full border border-neutral-300 rounded-xl items-center">
           <AppText variant="label" className="text-neutral-700 font-sans font-bold ">Sign Out</AppText>
-        </Pressable>
+        </AppButton>
 
         {/* DANGER ZONE */}
         <View className="bg-red-50 border border-red-200 rounded-xl p-4" style={{ gap: 10 }}>
           <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-red-700">Danger Zone</AppText>
 
           {!showDeleteConfirm ? (
-            <Pressable
-              onPress={() => setShowDeleteConfirm(true)}
-              className="w-full py-2.5 bg-white border border-red-300 rounded-xl items-center"
-            >
+            <AppButton size="md" onPress={() => setShowDeleteConfirm(true)} className="w-full bg-white border border-red-300 rounded-xl items-center">
               <AppText variant="label" className="text-red-600 font-sans font-bold ">Delete Account</AppText>
-            </Pressable>
+            </AppButton>
           ) : (
             <View style={{ gap: 8 }}>
               <AppText variant="caption" className="font-sans font-bold text-red-800">

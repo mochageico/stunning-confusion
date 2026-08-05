@@ -3,7 +3,7 @@ import { PanResponder, Pressable, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Eraser } from 'lucide-react-native';
 
-import { AppText } from './design';
+import { AppButton, AppText } from './design';
 
 // ============================================================================
 // DOODLE CANVAS -- deliberate backbone/v1, not a full drawing tool.
@@ -75,14 +75,10 @@ export default function DoodleCanvas({ strokes, onChange }: DoodleCanvasProps) {
           {liveStroke !== '' && <Path d={liveStroke} stroke="#1A1A1A" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />}
         </Svg>
       </View>
-      <Pressable
-        onPress={() => onChange([])}
-        disabled={strokes.length === 0}
-        className={`flex-row items-center justify-center gap-1.5 py-2 rounded-lg border ${strokes.length === 0 ? 'border-neutral-200' : 'border-neutral-300'}`}
-      >
+      <AppButton size="md" onPress={() => onChange([])} disabled={strokes.length === 0} className={`flex-row items-center justify-center gap-1.5 rounded-lg border ${strokes.length === 0 ? 'border-neutral-200' : 'border-neutral-300'}`}>
         <Eraser size={13} color={strokes.length === 0 ? '#d4d4d4' : '#525252'} />
         <AppText variant="caption" className={`font-sans font-bold ${strokes.length === 0 ? 'text-neutral-300' : 'text-neutral-600'}`}>Clear</AppText>
-      </Pressable>
+      </AppButton>
     </View>
   );
 }

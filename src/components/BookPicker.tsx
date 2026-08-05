@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { Check, ChevronDown, Search, X } from 'lucide-react-native';
 
 import { BOOKS } from '../data';
-import { AppTextInput, AppText } from './design';
+import { AppIconButton, AppTextInput, AppText } from './design';
 
 /**
  * Replaces the old "4 books in a row" chip pickers. Book names vary a lot in
@@ -76,12 +76,7 @@ export function BookPicker({
             {/* Header */}
             <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-neutral-100">
               <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">{title}</AppText>
-              <Pressable
-                onPress={() => setOpen(false)}
-                className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center"
-              >
-                <X size={14} color="#262626" />
-              </Pressable>
+              <AppIconButton Icon={X} diameter={28} iconSize={14} iconColor="#262626" onPress={() => setOpen(false)} className="rounded-full border border-neutral-300" />
             </View>
 
             {/* Search */}

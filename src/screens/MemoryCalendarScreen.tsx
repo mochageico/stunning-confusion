@@ -6,7 +6,7 @@ import { AppState } from '../state/useAppState';
 import { QueueItem } from '../types';
 import { getMemoryCalendarProjection, CalendarDayProjection, RetentionPhase } from '../lib/reviewCalendar';
 import { FadeInView } from '../components/ui';
-import { AppText } from '../components/design';
+import { AppIconButton, AppText } from '../components/design';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; // Sunday-first, matches Date.getDay()
 
@@ -191,9 +191,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 20 }}>
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
-          <Pressable onPress={handleBack} className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white">
-            <ArrowLeft size={14} color="#262626" />
-          </Pressable>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
           <View>
             <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">Memory Plan &amp; Queue</AppText>
             <AppText variant="title" className="font-serif font-black text-neutral-900 mt-0.5">Memory Calendar</AppText>
@@ -297,9 +295,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
                 </AppText>
                 {selectedDay?.data?.isSabbath && <AppText variant="caption" className="text-neutral-400 font-sans mt-0.5">Sabbath — nothing scheduled</AppText>}
               </View>
-              <Pressable onPress={() => setSelectedDayIdx(null)} className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center">
-                <X size={14} color="#262626" />
-              </Pressable>
+              <AppIconButton Icon={X} diameter={28} iconSize={14} iconColor="#262626" onPress={() => setSelectedDayIdx(null)} className="rounded-full border border-neutral-300" />
             </View>
 
             <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingTop: 12, paddingBottom: 24, gap: 16 }}>
