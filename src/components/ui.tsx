@@ -126,8 +126,12 @@ export function ChipRow<T extends string | number>({
   // NativeWind statically scans source text for class names — a computed/interpolated
   // class name like `basis-[${n}%]` never appears literally in the file, so it would
   // silently fail to generate any style at all.
+  // Wrapped rows center themselves rather than packing left: a trailing
+  // partial row hanging off the left edge reads as a layout bug, not as a
+  // deliberate group. Non-wrapping rows are unaffected (a single row of
+  // flex-1 chips already fills the width).
   return (
-    <View className={columns || wrap ? 'flex-row flex-wrap gap-1' : 'flex-row gap-1'}>
+    <View className={columns || wrap ? 'flex-row flex-wrap justify-center gap-1' : 'flex-row gap-1'}>
       {options.map((opt) => {
         const active = opt.id === value;
         return (

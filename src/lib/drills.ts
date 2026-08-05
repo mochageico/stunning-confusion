@@ -348,6 +348,254 @@ export const referenceAnswerMatches = (
   Number(guess.chapter) === answer.chapter &&
   Number(guess.verse) === answer.verse;
 
+// ============================================================================
+// 5. BUILD UP
+// ----------------------------------------------------------------------------
+// The add-on / snowball method: learn a verse a phrase at a time, where each
+// stage adds one new phrase to everything already stacked. The payoff is
+// structural -- a 5-bite verse gives you 5 passes over bite 1 and 1 over bite
+// 5, which is exactly the right distribution, because the opening of a verse
+// is the retrieval cue for all of it.
+//
+// Like every other drill in this file it is ungraded, and here the reason is
+// especially blunt: the text is on screen for the first of every three reps
+// and the user self-reports by tapping. The UI's answer is to hand off into a
+// real blind Recall run at the end rather than to pretend this one counts.
+// ============================================================================
+
+/**
+ * Words a phrase would rather start with than end on. Used to nudge a
+ * too-long clause's break point onto a natural hinge instead of guillotining
+ * it at whatever word the arithmetic landed on -- "that he gave / his only
+ * Son" is a worse bite pair than "that he gave his only Son".
+ *
+ * Deliberately a small hand list rather than a parser: English Bible
+ * translations are already punctuated for reading aloud, so punctuation does
+ * most of the work (see splitIntoBites) and this only has to rescue the
+ * long-clause minority.
+ */
+export const HINGE_WORDS = new Set([
+  'and', 'or', 'but', 'for', 'nor', 'yet', 'so',
+  'that', 'which', 'who', 'whom', 'whose', 'when', 'where', 'while', 'as',
+  'because', 'therefore', 'though', 'although', 'unless', 'until', 'since',
+  'if', 'then', 'thus', 'lest',
+  'of', 'in', 'on', 'to', 'unto', 'with', 'by', 'from', 'into', 'upon',
+  'through', 'against', 'before', 'after', 'according',
+]);
+
+export type BiteSize = 'short' | 'medium' | 'long';
+
+/** Words per bite, before punctuation and hinge-words have their say. */
+export const BITE_TARGET_WORDS: Record<BiteSize, number> = { short: 3, medium: 5, long: 8 };
+
+/**
+ * A bite this short isn't a thought, it's a fragment ("and", "of the"), so
+ * it gets merged into its neighbour rather than earning a stage of its own.
+ */
+const MIN_BITE_WORDS = 2;
+
+/** How far past the target a run may go before it's worth subdividing. */
+const OVERSHOOT = 1.6;
+
+const isHinge = (word: string): boolean => HINGE_WORDS.has(normalizeToken(word));
+
+/**
+ * True when this word closes a clause -- trailing quotes/brackets are skipped
+ * so `world,"` counts the same as `world,`.
+ */
+const endsClause = (word: string): boolean => /[,;:.!?—–]["'’”)\]]*$/.test(word);
+
+/**
+ * Splits one long run of words at hinge-preferred boundaries near the target
+ * length. Greedy rather than optimal: it walks forward, and at each cut point
+ * searches outward from the target position for a word a phrase would rather
+ * begin with. Optimal segmentation (minimise total deviation) is a nicer
+ * problem and a worse product -- it can move an early break to fix a late one,
+ * so adding a word to the end of a verse reshuffles its opening bites.
+ */
+const subdivideRun = (words: string[], target: number): string[][] => {
+  const maxRun = Math.round(target * OVERSHOOT);
+  if (words.length <= maxRun) return [words];
+
+  const out: string[][] = [];
+  let start = 0;
+  while (start < words.length) {
+    if (words.length - start <= maxRun) {
+      out.push(words.slice(start));
+      break;
+    }
+    const aim = start + target;
+    const inBounds = (c: number) => c > start && c < words.length;
+    // A bite must never END on a hinge -- "And we know that" trails off mid-
+    // thought, and it splits compounds ("so / that", "according / to") right
+    // down the middle. So a cut is only allowed where the word before it
+    // isn't itself a hinge.
+    const leavesCleanTail = (c: number) => !isHinge(words[c - 1]);
+
+    let cut = -1;
+    // Best: start the next bite ON a hinge, searching outward from the aim.
+    for (let d = 0; d <= 2 && cut < 0; d++) {
+      for (const c of [aim - d, aim + d]) {
+        if (inBounds(c) && isHinge(words[c]) && leavesCleanTail(c)) { cut = c; break; }
+      }
+    }
+    // Failing that, settle for merely not ending on one.
+    for (let d = 0; d <= 2 && cut < 0; d++) {
+      for (const c of [aim - d, aim + d]) {
+        if (inBounds(c) && leavesCleanTail(c)) { cut = c; break; }
+      }
+    }
+    if (cut < 0) cut = aim;
+
+    out.push(words.slice(start, cut));
+    start = cut;
+  }
+  return out;
+};
+
+/**
+ * Splits verse text into the bites Build up stacks, punctuation first.
+ *
+ * Three passes: cut at clause-closing punctuation, subdivide any clause still
+ * too long, then absorb stragglers too short to stand alone. A verse short
+ * enough to be one bite legitimately returns one bite -- that's a real answer,
+ * not a degenerate case, and the drill still runs its three reps over it.
+ */
+export const splitIntoBites = (text: string, size: BiteSize = 'medium'): string[] => {
+  const words = text.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length === 0) return [];
+
+  const target = BITE_TARGET_WORDS[size];
+
+  // Pass 1 -- clause boundaries.
+  const clauses: string[][] = [];
+  let current: string[] = [];
+  words.forEach((w) => {
+    current.push(w);
+    if (endsClause(w)) {
+      clauses.push(current);
+      current = [];
+    }
+  });
+  if (current.length > 0) clauses.push(current);
+
+  // Pass 2 -- break up anything still oversized.
+  const bites = clauses.flatMap((c) => subdivideRun(c, target));
+
+  // Pass 3 -- absorb fragments. Merging backwards keeps a trailing "of God"
+  // attached to the phrase it belongs to; only a leading fragment (nothing
+  // behind it) merges forwards instead.
+  const merged: string[][] = [];
+  bites.forEach((bite) => {
+    if (bite.length < MIN_BITE_WORDS && merged.length > 0) {
+      merged[merged.length - 1] = [...merged[merged.length - 1], ...bite];
+    } else {
+      merged.push(bite);
+    }
+  });
+  if (merged.length > 1 && merged[0].length < MIN_BITE_WORDS) {
+    merged[1] = [...merged[0], ...merged[1]];
+    merged.shift();
+  }
+
+  return merged.map((b) => b.join(' '));
+};
+
+export type BuildDirection = 'forward' | 'backward';
+
+export interface BuildUpSegment {
+  text: string;
+  /** The piece this stage just added -- the UI accents exactly one of these. */
+  isNew: boolean;
+}
+
+export interface BuildUpStage {
+  /**
+   * 'bite' while stacking phrases inside one verse; 'reassemble' during the
+   * final whole-verses pass that only exists for multi-verse groups.
+   */
+  phase: 'bite' | 'reassemble';
+  /** Index into the caller's verses array. During reassemble, the newest verse. */
+  verseIndex: number;
+  /** Everything in play, already in reading order regardless of direction. */
+  segments: BuildUpSegment[];
+  /** 1-based position within this verse's build (or within the reassemble pass). */
+  step: number;
+  stepCount: number;
+}
+
+/**
+ * Accumulates pieces one at a time, returning the growing set at each step.
+ *
+ * Backward chaining ('backward') builds from the last piece toward the first,
+ * so every rep *ends* on the material you've practised most and the verse gets
+ * easier as it lengthens rather than trailing off. Either way the returned
+ * segments are sorted back into reading order -- direction changes what gets
+ * added when, never what the user reads.
+ */
+const accumulate = (pieces: string[], direction: BuildDirection): BuildUpSegment[][] =>
+  pieces.map((_, step) => {
+    const indices: number[] = [];
+    for (let k = 0; k <= step; k++) {
+      indices.push(direction === 'forward' ? k : pieces.length - 1 - k);
+    }
+    const newest = direction === 'forward' ? step : pieces.length - 1 - step;
+    return indices
+      .sort((a, b) => a - b)
+      .map((i) => ({ text: pieces[i], isNew: i === newest }));
+  });
+
+/**
+ * The whole session as one flat list of stages, so the UI is an index and a
+ * rep counter rather than a nest of loops.
+ *
+ * Verse boundaries are kept: a verse builds to completion, the screen clears,
+ * and the next verse starts from its own first bite. A multi-verse group then
+ * earns a reassemble pass that runs the identical machine one level up, with
+ * whole verses as the pieces. A single verse gets no reassemble pass -- its
+ * last bite stage already *was* the whole verse.
+ */
+export const buildUpStages = (
+  verses: { text: string }[],
+  opts: { size?: BiteSize; direction?: BuildDirection } = {}
+): BuildUpStage[] => {
+  const { size = 'medium', direction = 'forward' } = opts;
+  const stages: BuildUpStage[] = [];
+
+  verses.forEach((v, verseIndex) => {
+    const bites = splitIntoBites(v.text, size);
+    if (bites.length === 0) return;
+    accumulate(bites, direction).forEach((segments, i, all) => {
+      stages.push({ phase: 'bite', verseIndex, segments, step: i + 1, stepCount: all.length });
+    });
+  });
+
+  if (verses.length > 1) {
+    const wholeVerses = verses.map((v) => v.text);
+    accumulate(wholeVerses, direction).forEach((segments, i, all) => {
+      const newestIndex = direction === 'forward' ? i : verses.length - 1 - i;
+      stages.push({
+        phase: 'reassemble',
+        verseIndex: newestIndex,
+        segments,
+        step: i + 1,
+        stepCount: all.length,
+      });
+    });
+  }
+
+  return stages;
+};
+
+/**
+ * Support levels, in the order a stage steps through them. These are the
+ * three reps: read it, say it off first letters, say it with nothing. The
+ * repetition and the fade are deliberately the same dial -- three reps of
+ * identical fully-visible text is parroting, not recall.
+ */
+export const BUILD_UP_REPS = ['read', 'hint', 'blind'] as const;
+export type BuildUpRep = (typeof BUILD_UP_REPS)[number];
+
 export const scoreSwapAttempt = (swapVerses: SwapVerse[], selected: Set<number>): SwapScore => {
   const allTokens = swapVerses.flatMap((v) => v.tokens);
   const decoys = allTokens.filter((t) => t.isDecoy);
