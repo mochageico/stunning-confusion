@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { RefreshCw, UserPlus, Users } from 'lucide-react-native';
+import { Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
@@ -10,7 +10,6 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
     user,
     setCommunitySubView,
     myCircles,
-    activeGroupId,
     openCircle,
     viewMemberProfileById,
     activityEvents,
@@ -32,28 +31,26 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
-        {/* Sub-view Navigation Controls */}
+        {/* Sub-view navigation. One label each: the old eyebrow-plus-title
+            pair ("Find Circle" over "Search Directory") said the same thing
+            twice at two sizes, which is what made this header feel inflated.
+            An eyebrow earns its place only when it adds information the
+            title doesn't. */}
         <View className="flex-row gap-2">
           <Pressable
             onPress={() => setCommunitySubView('find')}
             className="flex-1 border border-neutral-200 bg-neutral-50/50 p-2.5 rounded-xl flex-row items-center justify-between"
           >
-            <View>
-              <AppText variant="micro" className="font-bold text-indigo-600 uppercase font-sans">Find Circle</AppText>
-              <AppText variant="label" className="font-black text-neutral-800 leading-tight">Search Directory 🔍</AppText>
-            </View>
-            <Users size={14} color="#737373" />
+            <AppText variant="label" className="font-sans font-bold text-neutral-800">Find Circle</AppText>
+            <Search size={14} color="#737373" />
           </Pressable>
 
           <Pressable
             onPress={() => setCommunitySubView('create')}
             className="flex-1 border border-neutral-200 bg-neutral-50/50 p-2.5 rounded-xl flex-row items-center justify-between"
           >
-            <View>
-              <AppText variant="micro" className="font-bold text-emerald-600 uppercase font-sans">Start Group</AppText>
-              <AppText variant="label" className="font-black text-neutral-800 leading-tight">Create Circle ➕</AppText>
-            </View>
-            <Users size={14} color="#737373" />
+            <AppText variant="label" className="font-sans font-bold text-neutral-800">Create Circle</AppText>
+            <Plus size={14} color="#737373" />
           </Pressable>
         </View>
 
@@ -70,21 +67,20 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
             {myCircles.map((c) => {
               const role = c.ownerId === user?.uid ? 'Leader' : 'Member';
               return (
+                // The badge shows your role and nothing else. It used to flip
+                // to "Active Circle" for whichever circle you last opened,
+                // which described app state rather than the circle -- and it
+                // replaced the one genuinely useful fact (are you the leader
+                // here?) with something the user hadn't asked about.
                 <Pressable
                   key={c.id}
                   onPress={() => openCircle(c.id)}
-                  className="w-full bg-white border border-[#E5E5E5] rounded-2xl p-4 flex-row justify-between items-center shadow-xs"
+                  className="w-full bg-white border border-[#E5E5E5] rounded-2xl p-3 flex-row justify-between items-center shadow-xs"
                 >
                   <View className="gap-0.5 pr-3 flex-1">
                     <View className="flex-row items-center gap-1.5">
-                      <View
-                        className={`px-1.5 py-0.5 rounded ${
-                          c.id === activeGroupId ? 'bg-indigo-600' : 'bg-neutral-100 border border-neutral-200'
-                        }`}
-                      >
-                        <AppText variant="micro" className={`font-bold font-sans uppercase ${ c.id === activeGroupId ? 'text-white' : 'text-neutral-600' }`} >
-                          {c.id === activeGroupId ? 'Active Circle' : role}
-                        </AppText>
+                      <View className="px-1.5 py-0.5 rounded bg-neutral-100 border border-neutral-200">
+                        <AppText variant="micro" className="font-bold font-sans uppercase text-neutral-600">{role}</AppText>
                       </View>
                       <View
                         className={`px-1.5 py-0.5 rounded border ${
@@ -96,9 +92,9 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
                         </AppText>
                       </View>
                     </View>
-                    <AppText variant="label" className="font-sans font-black text-[#1A1A1A] leading-snug mt-1">{c.name}</AppText>
+                    <AppText variant="caption" className="font-sans font-black text-[#1A1A1A] leading-snug mt-1">{c.name}</AppText>
                   </View>
-                  <Users size={18} color="#1A1A1A" />
+                  <Users size={16} color="#1A1A1A" />
                 </Pressable>
               );
             })}

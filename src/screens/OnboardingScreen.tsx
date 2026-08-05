@@ -55,7 +55,6 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
         {/* Header */}
         <View className="flex-row items-center justify-between border-b border-neutral-100 pb-3">
           <View>
-            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">WELCOME</AppText>
             <AppText variant="title" className="font-serif font-black text-[#1A1A1A] leading-none mt-0.5">Getting Started</AppText>
           </View>
           <AppIconButton Icon={X} diameter={32} iconSize={14} iconColor="#262626" onPress={dismissOnboarding} className="rounded-full border border-neutral-200 bg-white" />

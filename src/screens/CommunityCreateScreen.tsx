@@ -32,9 +32,6 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
           <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={() => setCommunitySubView('home')} className="rounded-full border border-neutral-200 bg-white" />
           <View>
-            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans">
-              ADMINISTRATION
-            </AppText>
             <AppText variant="title" className="font-serif font-black text-neutral-900 leading-none mt-1">
               Create Scripture Circle
             </AppText>

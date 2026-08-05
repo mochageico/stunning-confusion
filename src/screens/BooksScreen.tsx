@@ -22,7 +22,6 @@ export default function BooksScreen({ state }: { state: AppState }) {
             <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white" />
           )}
           <View>
-            <AppText variant="micro" className="uppercase tracking-wider font-bold text-[#888] font-sans">BIBLE DIRECTORY</AppText>
             <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Select Book</AppText>
           </View>
         </View>

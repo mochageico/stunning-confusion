@@ -25,7 +25,6 @@ export default function MessagesScreen({ state }: { state: AppState }) {
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
           <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
           <View>
-            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">Messages</AppText>
             <AppText variant="title" className="font-serif font-bold text-neutral-900 leading-none mt-0.5">Direct Messages</AppText>
           </View>
         </View>

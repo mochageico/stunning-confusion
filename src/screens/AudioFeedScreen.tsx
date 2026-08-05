@@ -140,9 +140,6 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
         <View className="flex-row items-center gap-3 border-b border-[#E5E5E5] pb-1">
           <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white shadow-xs" />
           <View>
-            <AppText variant="micro" className="uppercase tracking-wider font-bold text-neutral-400 font-sans">
-              SCRIPTURE AUDIO LIBRARY
-            </AppText>
             <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Suggested Recordings</AppText>
           </View>
         </View>

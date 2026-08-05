@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
 import { AppState } from '../state/useAppState';
 import { recordingLabel } from '../lib/recordingLabel';
-import { AppButton, AppText } from '../components/design';
+import { AppButton, AppText, useScaledSpace } from '../components/design';
 
 export default function ProfileScreen({ state }: { state: AppState }) {
   const {
@@ -33,6 +33,8 @@ export default function ProfileScreen({ state }: { state: AppState }) {
     dismissAccountabilityNudge,
   } = state;
 
+  const space = useScaledSpace();
+
   // "Memorized" here means verses learned -- graduated out of the initial
   // Learning phase into spaced review (Daily/Weekly/Monthly) or fully
   // retained, not just the narrower retained-only memorizedCount.
@@ -60,7 +62,9 @@ export default function ProfileScreen({ state }: { state: AppState }) {
               <AppText variant="title" className="font-serif font-bold text-[#1A1A1A] leading-tight">
                 {user?.displayName || 'Friend'}
               </AppText>
-              <AppText variant="label" className="font-sans text-neutral-400 mt-0.5">Progress synced to your account</AppText>
+              {/* A sync status line, not a subtitle -- it was competing with
+                  the name at only one step smaller. */}
+              <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">Progress synced to your account</AppText>
             </View>
           </View>
 
@@ -121,27 +125,32 @@ export default function ProfileScreen({ state }: { state: AppState }) {
               <AppText variant="micro" className="font-sans font-bold underline text-neutral-500">View Full History</AppText>
             </Pressable>
           </View>
-          <View className="border border-[#E5E5E5] rounded-xl p-3 bg-white">
-            <View className="flex-row flex-wrap gap-1.5 justify-center">
-              {activityLast15Days.map((item, index) => {
-                const color =
-                  item.count === 0
-                    ? 'bg-[#F3F2F1] border-[#E5E5E5]'
-                    : item.count > 6
-                    ? 'bg-emerald-600 border-emerald-700'
-                    : 'bg-emerald-300 border-emerald-400';
-                const textColor = item.count === 0 ? 'text-neutral-500' : item.count > 6 ? 'text-white' : 'text-emerald-950';
-                return (
-                  <View
-                    key={index}
-                    style={{ width: '18%' }}
-                    className={`h-9 border rounded-md items-center justify-center font-mono ${color}`}
-                  >
-                    <AppText variant="micro" className={`font-bold ${textColor}`}>{item.day.split(' ')[1]}</AppText>
-                    <AppText variant="caption" className={`font-extrabold ${textColor}`}>{item.count > 0 ? `+${item.count}` : '0'}</AppText>
-                  </View>
-                );
-              })}
+          {/* One row of 15 plain squares.
+              This was 15 labelled boxes wrapping onto three rows, each box
+              carrying a day number AND a count -- 30 pieces of text for a
+              control whose entire job is "which days did I show up". A
+              contribution grid communicates through colour; labelling every
+              cell is what made it read as clutter rather than as a glance.
+              The dates that bound the range are stated once, underneath. */}
+          <View className="border border-[#E5E5E5] rounded-xl px-3 py-2.5 bg-white gap-1.5">
+            <View className="flex-row gap-1">
+              {activityLast15Days.map((item, index) => (
+                <View
+                  key={index}
+                  style={{ height: space(20) }}
+                  className={`flex-1 rounded-sm border ${
+                    item.count === 0
+                      ? 'bg-[#F3F2F1] border-[#E5E5E5]'
+                      : item.count > 6
+                        ? 'bg-emerald-600 border-emerald-700'
+                        : 'bg-emerald-300 border-emerald-400'
+                  }`}
+                />
+              ))}
+            </View>
+            <View className="flex-row justify-between">
+              <AppText variant="micro" className="font-sans text-neutral-400">{activityLast15Days[0]?.day}</AppText>
+              <AppText variant="micro" className="font-sans text-neutral-400">Today</AppText>
             </View>
           </View>
         </View>
