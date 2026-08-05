@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { auth } from '../firebase';
-import { ChipRow, FadeInView } from '../components/ui';
+import { ChipRow, FadeInView, HelpTooltip } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS } from '../data';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { AUDIO_CACHE_SUPPORTED, CACHE_CAP_CHOICES } from '../lib/audioCache';
@@ -20,17 +20,17 @@ const formatMB = (bytes: number) => {
 // Profile-sharing visibility choices, shared by the Memory Plan and Memory
 // Queue pickers below. 'friends' surfaces a snapshot on your member profile
 // for friends only; 'private' keeps it to yourself.
-const VISIBILITY_OPTIONS: Array<{ id: 'private' | 'friends'; label: string; desc: string }> = [
-  { id: 'private', label: 'Private', desc: 'Only you' },
-  { id: 'friends', label: 'Friends', desc: 'Your friends' },
+const VISIBILITY_OPTIONS: Array<{ id: 'private' | 'friends'; label: string }> = [
+  { id: 'private', label: 'Private' },
+  { id: 'friends', label: 'Friends' },
 ];
 
 // Studio mode is a playback preference, not a processing one — recordings are
 // always processed server-side; this only decides which version plays back.
 // Turning it off is therefore instant and non-destructive.
-const STUDIO_MODE_OPTIONS: Array<{ id: string; enabled: boolean; label: string; desc: string }> = [
-  { id: 'on', enabled: true, label: 'Studio', desc: 'Cleaned up' },
-  { id: 'off', enabled: false, label: 'Original', desc: 'As recorded' },
+const STUDIO_MODE_OPTIONS: Array<{ id: string; enabled: boolean; label: string }> = [
+  { id: 'on', enabled: true, label: 'Studio' },
+  { id: 'off', enabled: false, label: 'Original' },
 ];
 
 const PAUSE_DURATIONS: { id: '1w' | '2w' | '1m' | 'indefinite'; label: string; days: number | null }[] = [
@@ -173,9 +173,6 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                   <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                     {opt.label}
                   </AppText>
-                  <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
-                    {opt.desc}
-                  </AppText>
                 </AppButton>
               );
             })}
@@ -185,12 +182,10 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         {/* STUDIO MODE */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
           <View>
-            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Studio Mode</AppText>
-            <AppText variant="caption" className="text-neutral-400 font-sans mt-0.5">
-              Every recitation you record is cleaned up automatically — harsh "s" sounds softened, background
-              noise reduced, volume evened out. This just picks which version you hear. Your original take is
-              always kept, so you can switch back any time.
-            </AppText>
+            <View className="flex-row items-center">
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Studio Mode</AppText>
+              <HelpTooltip text="Every recitation you record is cleaned up automatically — harsh &quot;s&quot; sounds softened, background noise reduced, volume evened out. This just picks which version you hear. Your original take is always kept, so you can switch back any time." />
+            </View>
           </View>
           <View className="flex-row gap-2">
             {STUDIO_MODE_OPTIONS.map((opt) => {
@@ -199,9 +194,6 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                 <AppButton size="md" key={opt.id} onPress={() => setStudioPlaybackEnabled(opt.enabled)} className={`flex-1 rounded-lg items-center border ${ isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200' }`}>
                   <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                     {opt.label}
-                  </AppText>
-                  <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
-                    {opt.desc}
                   </AppText>
                 </AppButton>
               );
@@ -214,11 +206,10 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         {AUDIO_CACHE_SUPPORTED && (
           <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
             <View>
-              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Offline Audio</AppText>
-              <AppText variant="caption" className="text-neutral-400 font-sans mt-0.5">
-                Recitations you play are kept on this device so they don't re-download every time — saving data and
-                working without a signal. Recordings you save offline are never removed automatically.
-              </AppText>
+              <View className="flex-row items-center">
+                <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Offline Audio</AppText>
+                <HelpTooltip text="Recitations you play are kept on this device so they don't re-download every time — saving data and working without a signal. Recordings you save offline are never removed automatically." />
+              </View>
             </View>
 
             <View className="flex-row justify-between items-center bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
@@ -257,10 +248,10 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         {/* PROFILE SHARING */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 14 }}>
           <View>
-            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Profile Sharing</AppText>
-            <AppText variant="caption" className="text-neutral-400 font-sans mt-0.5">
-              Choose what friends can see when they open your profile. Private means only you can see it.
-            </AppText>
+            <View className="flex-row items-center">
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Profile Sharing</AppText>
+              <HelpTooltip text="Choose what friends can see when they open your profile. Private means only you can see it." />
+            </View>
           </View>
 
           {/* Memory Plan visibility */}
@@ -273,9 +264,6 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                   <AppButton size="md" key={opt.id} onPress={() => updateMemoryPlanVisibility(opt.id)} className={`flex-1 rounded-lg items-center border ${ isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200' }`}>
                     <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                       {opt.label}
-                    </AppText>
-                    <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
-                      {opt.desc}
                     </AppText>
                   </AppButton>
                 );
@@ -294,9 +282,6 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                     <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                       {opt.label}
                     </AppText>
-                    <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
-                      {opt.desc}
-                    </AppText>
                   </AppButton>
                 );
               })}
@@ -307,13 +292,12 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         {/* NOTIFICATIONS */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
           <View>
-            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
-              Accountability Notifications
-            </AppText>
-            <AppText variant="caption" className="text-neutral-400 font-sans mt-0.5">
-              Max accountability nudges you'll receive per day, combined across all friends. A sender is told clearly if
-              you've already hit this for today.
-            </AppText>
+            <View className="flex-row items-center">
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
+                Accountability Notifications
+              </AppText>
+              <HelpTooltip text="Max accountability nudges you'll receive per day, combined across all friends. A sender is told clearly if you've already hit this for today." />
+            </View>
           </View>
           <ChipRow
             value={accountabilityDailyCap}

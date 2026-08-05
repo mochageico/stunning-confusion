@@ -3,10 +3,14 @@ import { BibleBook, BibleTranslation } from './types';
 
 // Shared by the Save-Recording dialog (App.tsx) and SettingsScreen's default-
 // visibility picker, so both always offer the exact same 3 choices.
-export const RECORDING_VISIBILITY_OPTIONS: Array<{ id: 'private' | 'circle' | 'public'; label: string; desc: string }> = [
-  { id: 'private', label: 'Private', desc: 'Only you' },
-  { id: 'circle', label: 'Circle', desc: 'Your circles + friends' },
-  { id: 'public', label: 'Public', desc: 'Anyone signed in' },
+// The label is the whole control. These carried a `desc` restating them
+// ("Public" / "Anyone signed in"), which in a three-across row left each
+// description about 68pt of width -- "Anyone signed in" simply ran out of
+// the button. The words Private/Circle/Public already mean what they say.
+export const RECORDING_VISIBILITY_OPTIONS: Array<{ id: 'private' | 'circle' | 'public'; label: string }> = [
+  { id: 'private', label: 'Private' },
+  { id: 'circle', label: 'Circle' },
+  { id: 'public', label: 'Public' },
 ];
 
 // Fixed reaction set for DM + Circle chat messages (ReactionBar). Kept small

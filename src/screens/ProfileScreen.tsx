@@ -263,9 +263,13 @@ export default function ProfileScreen({ state }: { state: AppState }) {
                   }}
                   className="border border-neutral-200 rounded-xl p-2.5 bg-neutral-50/50 flex-row justify-between items-center"
                 >
+                  {/* Name only -- the description is free text of any length,
+                      and this list exists to get you into a circle, not to
+                      re-explain each one. */}
                   <View className="flex-1 pr-2">
-                    <AppText variant="label" className="font-sans font-bold text-neutral-800 leading-snug">{c.name}</AppText>
-                    <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">{c.description}</AppText>
+                    <AppText variant="caption" className="font-sans font-bold text-neutral-800 leading-snug" numberOfLines={1}>
+                      {c.name}
+                    </AppText>
                   </View>
                   <AppText variant="micro" className="font-bold font-sans bg-neutral-900 text-white px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                     {role}

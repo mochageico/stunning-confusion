@@ -238,12 +238,12 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
 
         {/* Playable Custom Audio Card */}
         <View className="border border-[#1A1A1A] rounded-xl p-3 bg-white gap-2.5">
+          {/* Empty state is one line then the action. The second sentence used
+              to say "or find one in the community library" directly above a
+              button that does exactly that. */}
           {!currentAudio ? (
             <View className="items-center py-2 gap-1.5">
-              <AppText variant="label" className="font-sans font-bold text-neutral-500">No recordings yet for this chapter</AppText>
-              <AppText variant="caption" className="font-sans text-neutral-400 text-center">
-                Record one from the Record tab, or find one in the community library.
-              </AppText>
+              <AppText variant="caption" className="font-sans text-neutral-500">No recordings yet for this chapter</AppText>
               <AppButton size="sm" onPress={() => { setFeedBookFilter(selectedBook || ''); setFeedChapterFilter(String(selectedChapter ?? '')); navigateTo('audioFeed'); triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`); }} className="mt-1 bg-[#1A1A1A] rounded-md flex-row items-center justify-center gap-1">
                 <Search size={11} color="#FFFFFF" />
                 <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wider">Find Recordings</AppText>
@@ -590,8 +590,12 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           </View>
           <View className="flex-row gap-1.5">
             <AppButton size="md" onPress={() => { addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), selectedTranslationId); setSelectedVerseNumbers([]); }} className="flex-1 items-center bg-emerald-600 rounded-lg">
+              {/* "Add to Queue" could not fit: four flex-1 buttons across a
+                  375pt screen leave each about 65pt of content width, so it
+                  was silently truncating. The bar only appears once verses
+                  are selected, which is the context "Add to" was carrying. */}
               <AppText variant="micro" className="text-white font-bold uppercase tracking-wide" numberOfLines={1}>
-                Add to Queue
+                Queue
               </AppText>
             </AppButton>
             <AppButton size="md" onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))} className="flex-1 items-center bg-[#1A1A1A] rounded-lg">

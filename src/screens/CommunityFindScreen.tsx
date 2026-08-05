@@ -97,24 +97,26 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
               filteredCircles.map((c) => {
                 const isAlreadyJoined = myCircles.some((mc) => mc.id === c.id);
                 return (
+                  // The description is deliberately not shown in the list.
+                  // It's free text of any length, so it set every row's
+                  // height and turned a scannable list into a wall. Tapping
+                  // the row opens the preview, which is where the full
+                  // description belongs.
                   <Pressable
                     key={c.id}
                     onPress={() => openCirclePreview(c)}
-                    className="border border-neutral-200 rounded-2xl p-4 bg-white gap-3 active:bg-neutral-50"
+                    className="border border-neutral-200 rounded-2xl p-3 bg-white gap-2.5 active:bg-neutral-50"
                   >
-                    <View className="flex-row justify-between items-start">
-                      <View className="flex-1 pr-2">
-                        <View className="flex-row items-center gap-1.5">
-                          <AppText variant="label" className="font-sans font-black text-neutral-900 leading-none">{c.name}</AppText>
-                          <View className="px-1.5 py-0.5 rounded border bg-emerald-50 border-emerald-100">
-                            <AppText variant="micro" className="font-bold font-sans uppercase text-emerald-700">Public</AppText>
-                          </View>
-                        </View>
-                        <AppText variant="caption" className="font-sans text-neutral-400 mt-1 leading-snug">{c.description}</AppText>
+                    <View className="flex-row items-center gap-1.5">
+                      <AppText variant="label" className="font-sans font-black text-neutral-900 leading-snug flex-1" numberOfLines={1}>
+                        {c.name}
+                      </AppText>
+                      <View className="px-1.5 py-0.5 rounded border bg-emerald-50 border-emerald-100 shrink-0">
+                        <AppText variant="micro" className="font-bold font-sans uppercase text-emerald-700">Public</AppText>
                       </View>
                     </View>
 
-                    <View className="flex-row justify-end items-center pt-2.5 border-t border-neutral-100">
+                    <View className="flex-row justify-end items-center pt-2 border-t border-neutral-100">
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();

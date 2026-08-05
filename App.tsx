@@ -54,6 +54,7 @@ import FindFriendsScreen from './src/screens/FindFriendsScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import DMThreadScreen from './src/screens/DMThreadScreen';
 import CircleChatScreen from './src/screens/CircleChatScreen';
+import { AppIconButton, AppText } from './src/components/design';
 
 // The original web app has no router — it's a hand-rolled state machine on
 // `currentTab` / `currentScreen`. This mirrors that structure 1:1 instead of
@@ -186,41 +187,41 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
       <FadeInView style={{ width: '100%', maxWidth: 320 }}>
         <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4">
           <View>
-            <Text className="text-base font-serif font-bold text-[#1A1A1A]">Save Recitation</Text>
-            <Text className="text-xs text-neutral-500 font-sans mt-1">
+            <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Save Recitation</AppText>
+            <AppText variant="label" className="text-neutral-500 font-sans mt-1">
               {isImport
                 ? 'Review the details of your tagged audio before saving and sharing.'
                 : 'Review the details of your recorded chapter before saving and sharing.'}
-            </Text>
+            </AppText>
           </View>
 
           <View className="gap-2.5 bg-[#F3F2F1] p-3 rounded-xl border border-[#E5E5E5]">
             <View className="flex-row justify-between">
-              <Text className="text-neutral-400 font-bold uppercase text-[9px] font-sans">Chapter:</Text>
-              <Text className="text-[#1A1A1A] font-bold font-sans text-xs">
+              <AppText variant="micro" className="text-neutral-400 font-bold uppercase font-sans">Chapter:</AppText>
+              <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">
                 {recordingBook} {recordingChapter}
-              </Text>
+              </AppText>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-neutral-400 font-bold uppercase text-[9px] font-sans">Translation:</Text>
-              <Text className="text-[#1A1A1A] font-bold font-sans text-xs">{recordingTranslation}</Text>
+              <AppText variant="micro" className="text-neutral-400 font-bold uppercase font-sans">Translation:</AppText>
+              <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">{recordingTranslation}</AppText>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-neutral-400 font-bold uppercase text-[9px] font-sans">Duration:</Text>
-              <Text className="text-[#1A1A1A] font-bold font-sans text-xs">{formatTime(durationSec)}</Text>
+              <AppText variant="micro" className="text-neutral-400 font-bold uppercase font-sans">Duration:</AppText>
+              <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">{formatTime(durationSec)}</AppText>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-neutral-400 font-bold uppercase text-[9px] font-sans">Scope:</Text>
-              <Text className="text-emerald-700 font-bold font-sans text-xs">
+              <AppText variant="micro" className="text-neutral-400 font-bold uppercase font-sans">Scope:</AppText>
+              <AppText variant="label" className="text-emerald-700 font-bold font-sans ">
                 {rangeLabel} {isImport ? 'Imported Recitation' : 'Recitation'}
-              </Text>
+              </AppText>
             </View>
           </View>
 
           <View className="gap-2">
-            <Text className="text-[9px] font-bold uppercase text-neutral-400 tracking-wider font-sans">
+            <AppText variant="micro" className="font-bold uppercase text-neutral-400 tracking-wider font-sans">
               Who can see this recitation?
-            </Text>
+            </AppText>
             <View className="flex-row gap-1.5">
               {RECORDING_VISIBILITY_OPTIONS.map((opt) => {
                 const isSelected = pickedRecordingVisibility === opt.id;
@@ -232,21 +233,18 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
                       isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-[#E5E5E5]'
                     }`}
                   >
-                    <Text className={`text-[10px] font-bold ${isSelected ? 'text-white' : 'text-neutral-700'}`}>
+                    <AppText variant="caption" className={`font-bold ${isSelected ? 'text-white' : 'text-neutral-700'}`}>
                       {opt.label}
-                    </Text>
-                    <Text className={`text-[8px] mt-0.5 ${isSelected ? 'text-white/70' : 'text-neutral-400'}`}>
-                      {opt.desc}
-                    </Text>
+                    </AppText>
                   </Pressable>
                 );
               })}
             </View>
             {defaultRecordingVisibility === null && (
-              <Text className="text-[9px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg p-2 leading-relaxed">
+              <AppText variant="micro" className="text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg p-2 leading-relaxed">
                 Whatever you pick here becomes your default for future recordings — you can still change it each time,
                 and eventually from Settings too.
-              </Text>
+              </AppText>
             )}
           </View>
 
@@ -258,10 +256,10 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
               }}
               className="flex-1 py-2.5 px-3 border border-[#E5E5E5] rounded-xl items-center bg-white"
             >
-              <Text className="text-xs text-neutral-500 font-bold">Discard</Text>
+              <AppText variant="label" className="text-neutral-500 font-bold">Discard</AppText>
             </Pressable>
             <Pressable onPress={saveRecordedAudio} className="flex-1 py-2.5 px-3 bg-[#1A1A1A] rounded-xl items-center">
-              <Text className="text-xs text-white font-bold">Confirm & Save</Text>
+              <AppText variant="label" className="text-white font-bold">Confirm & Save</AppText>
             </Pressable>
           </View>
         </View>
@@ -281,7 +279,7 @@ function ProgressModal({ state }: { state: AppState }) {
       <FadeInView style={{ width: '100%', maxWidth: 340 }}>
         <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4">
           <View className="flex-row items-center justify-between border-b border-neutral-200 pb-2">
-            <Text className="text-base font-serif font-bold text-[#1A1A1A]">My Scripture Memory Plan</Text>
+            <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">My Scripture Memory Plan</AppText>
             <Pressable onPress={() => setShowProgressModal(false)}>
               <X size={16} color="#a3a3a3" />
             </Pressable>
@@ -290,21 +288,21 @@ function ProgressModal({ state }: { state: AppState }) {
           <View className="gap-3.5 pt-1">
             <View className="flex-row gap-2">
               <View className="flex-1 border border-emerald-200 rounded-xl p-2 bg-emerald-50/50 items-center">
-                <Text className="text-base font-bold text-emerald-700">{memorizedCount}</Text>
-                <Text className="text-[9px] font-sans font-bold text-neutral-500">Memorized</Text>
+                <AppText variant="title" className="font-bold text-emerald-700">{memorizedCount}</AppText>
+                <AppText variant="micro" className="font-sans font-bold text-neutral-500">Memorized</AppText>
               </View>
               <View className="flex-1 border border-amber-200 rounded-xl p-2 bg-amber-50/50 items-center">
-                <Text className="text-base font-bold text-amber-600">{learningCount}</Text>
-                <Text className="text-[9px] font-sans font-bold text-neutral-500">Learning</Text>
+                <AppText variant="title" className="font-bold text-amber-600">{learningCount}</AppText>
+                <AppText variant="micro" className="font-sans font-bold text-neutral-500">Learning</AppText>
               </View>
               <View className="flex-1 border border-neutral-200 rounded-xl p-2 bg-neutral-50/50 items-center">
-                <Text className="text-base font-bold text-neutral-700">{untouchedCount}</Text>
-                <Text className="text-[9px] font-sans font-bold text-neutral-500">Untouched</Text>
+                <AppText variant="title" className="font-bold text-neutral-700">{untouchedCount}</AppText>
+                <AppText variant="micro" className="font-sans font-bold text-neutral-500">Untouched</AppText>
               </View>
             </View>
 
             <View className="gap-3 pt-1">
-              <Text className="text-[10px] font-bold text-neutral-400 tracking-wider uppercase">PROGRESS BY BOOK</Text>
+              <AppText variant="section" className="font-bold text-neutral-400 tracking-wider uppercase">PROGRESS BY BOOK</AppText>
               {books.map((bookName) => {
                 const bookVerses = verses.filter((v) => v.book === bookName);
                 const memBookCount = bookVerses.filter((v) => v.status === 'memorized').length;
@@ -312,10 +310,10 @@ function ProgressModal({ state }: { state: AppState }) {
                 return (
                   <View key={bookName} className="gap-1">
                     <View className="flex-row justify-between items-center">
-                      <Text className="text-neutral-800 font-serif text-xs font-bold">{bookName}</Text>
-                      <Text className="text-neutral-400 text-[10px] font-mono">
+                      <AppText variant="label" className="text-neutral-800 font-serif font-bold">{bookName}</AppText>
+                      <AppText variant="caption" className="text-neutral-400 font-mono">
                         {memBookCount}/{bookVerses.length} memorized
-                      </Text>
+                      </AppText>
                     </View>
                     <View className="w-full bg-neutral-100 h-2 rounded-full overflow-hidden border border-neutral-200">
                       <View className="bg-[#1A1A1A] h-full" style={{ width: `${ratio}%` }} />
@@ -339,11 +337,11 @@ function ProgressModal({ state }: { state: AppState }) {
             className="w-full py-2.5 px-4 bg-white border border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5"
           >
             <Sliders size={13} color="#1A1A1A" />
-            <Text className="text-[#1A1A1A] font-bold font-sans text-xs">Saved Memory Rhythms</Text>
+            <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">Saved Memory Rhythms</AppText>
           </Pressable>
 
           <Pressable onPress={() => setShowProgressModal(false)} className="w-full py-2.5 bg-neutral-200 rounded-xl items-center">
-            <Text className="text-[#1A1A1A] font-bold font-sans text-xs">Close Progress Dashboard</Text>
+            <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">Close Progress Dashboard</AppText>
           </Pressable>
         </View>
       </FadeInView>
@@ -389,10 +387,10 @@ function MissedReviewPromptModal({ state }: { state: AppState }) {
         <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4" style={{ maxHeight: '85%' }}>
           <View className="flex-row items-center justify-between border-b border-neutral-200 pb-2">
             <View className="flex-1 pr-2">
-              <Text className="text-base font-serif font-bold text-[#1A1A1A]">Missed Reviews</Text>
-              <Text className="text-[11px] text-neutral-500 font-sans mt-0.5">
+              <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Missed Reviews</AppText>
+              <AppText variant="caption" className="text-neutral-500 font-sans mt-0.5">
                 You missed reviews on {verseCount} verse{verseCount === 1 ? '' : 's'}. What should happen?
-              </Text>
+              </AppText>
             </View>
             <Pressable onPress={() => setShowMissedReviewPrompt(false)}>
               <X size={16} color="#a3a3a3" />
@@ -416,18 +414,18 @@ function MissedReviewPromptModal({ state }: { state: AppState }) {
                     >
                       {isSelected && <View className="w-1.5 h-1.5 bg-[#1A1A1A] rounded-full" />}
                     </View>
-                    <Text className="text-xs font-sans font-bold text-[#1A1A1A]">{choice.label}</Text>
+                    <AppText variant="label" className="font-sans font-bold text-[#1A1A1A]">{choice.label}</AppText>
                   </View>
-                  <Text className="text-[10px] text-neutral-500 font-sans mt-1 leading-relaxed pl-5.5">{choice.desc}</Text>
+                  <AppText variant="caption" className="text-neutral-500 font-sans mt-1 leading-relaxed pl-5.5">{choice.desc}</AppText>
                 </Pressable>
               );
             })}
           </View>
 
           <Pressable onPress={() => setCustomizing((v) => !v)}>
-            <Text className="text-[10px] font-sans font-bold text-indigo-600 uppercase tracking-wider">
+            <AppText variant="section" className="font-sans font-bold text-indigo-600 uppercase tracking-wider">
               {customizing ? 'Hide per-verse customization' : 'Customize per verse ->'}
-            </Text>
+            </AppText>
           </Pressable>
 
           {customizing && (
@@ -436,12 +434,12 @@ function MissedReviewPromptModal({ state }: { state: AppState }) {
                 const current = overrides[item.verseId] || bulkChoice;
                 return (
                   <View key={item.verseId} className="p-2.5 border-b border-neutral-100 last:border-b-0">
-                    <Text className="text-[11px] font-sans font-bold text-[#1A1A1A]">
+                    <AppText variant="caption" className="font-sans font-bold text-[#1A1A1A]">
                       {item.book} {item.chapter}:{item.verseNumber}
-                    </Text>
-                    <Text className="text-[9px] text-neutral-400 font-sans mb-1.5">
+                    </AppText>
+                    <AppText variant="micro" className="text-neutral-400 font-sans mb-1.5">
                       {missedCycles} cycle{missedCycles === 1 ? '' : 's'} missed -- {item.retentionPhase}
-                    </Text>
+                    </AppText>
                     <View className="flex-row gap-1.5">
                       {MISS_CHOICES.map((choice) => (
                         <Pressable
@@ -451,9 +449,9 @@ function MissedReviewPromptModal({ state }: { state: AppState }) {
                             current === choice.id ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-[#E5E5E5]'
                           }`}
                         >
-                          <Text className={`text-[9px] font-bold ${current === choice.id ? 'text-white' : 'text-neutral-500'}`}>
+                          <AppText variant="micro" className={`font-bold ${current === choice.id ? 'text-white' : 'text-neutral-500'}`}>
                             {choice.id === 'grace' ? 'Grace' : choice.id === 'escalate' ? 'Standard' : 'Reset'}
-                          </Text>
+                          </AppText>
                         </Pressable>
                       ))}
                     </View>
@@ -467,7 +465,7 @@ function MissedReviewPromptModal({ state }: { state: AppState }) {
             onPress={() => resolveMissedReviewChoice(bulkChoice, customizing ? overrides : undefined)}
             className="w-full py-2.5 px-4 bg-[#1A1A1A] rounded-xl items-center"
           >
-            <Text className="text-white font-bold font-sans text-xs">Apply</Text>
+            <AppText variant="label" className="text-white font-bold font-sans ">Apply</AppText>
           </Pressable>
         </View>
       </FadeInView>
@@ -498,23 +496,15 @@ function NowPlayingBar({ state }: { state: AppState }) {
         </View>
 
         <View className="flex-1" style={{ gap: 4 }}>
-          <Text numberOfLines={1} className="text-white font-sans font-bold text-xs">
+          <AppText variant="label" numberOfLines={1} className="text-white font-sans font-bold ">
             {nowPlayingRecording.book} {nowPlayingRecording.chapter}
-          </Text>
+          </AppText>
           <View className="w-full bg-white/20 h-1 rounded-full overflow-hidden">
             <View className="bg-white h-full" style={{ width: `${playingRecProgress}%` }} />
           </View>
         </View>
 
-        <Pressable
-          onPress={(e) => {
-            e.stopPropagation();
-            setPlayingRecordingId(null);
-          }}
-          className="w-8 h-8 rounded-full bg-white/15 items-center justify-center shrink-0"
-        >
-          <Pause size={13} color="#FFFFFF" />
-        </Pressable>
+        <AppIconButton Icon={Pause} diameter={32} iconSize={13} iconColor="#FFFFFF" onPress={(e) => { e.stopPropagation(); setPlayingRecordingId(null); }} className="rounded-full bg-white/15 shrink-0" />
       </Pressable>
     </FadeInView>
   );
@@ -561,12 +551,12 @@ function AppShell() {
             idea it's being visited as part of a guided step. */}
         {onboardingStepActive && (
           <View className="bg-indigo-50 border-b border-indigo-200 px-4 py-3">
-            <Text className="text-[8px] font-sans font-extrabold uppercase tracking-widest text-indigo-500">
+            <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-indigo-500">
               Step {onboardingStepIndex! + 1} of 4
-            </Text>
-            <Text className="text-[11px] font-sans text-indigo-900 leading-relaxed mt-0.5">
+            </AppText>
+            <AppText variant="caption" className="font-sans text-indigo-900 leading-relaxed mt-0.5">
               {ONBOARDING_STEP_INSTRUCTIONS[onboardingStepIndex!]}
-            </Text>
+            </AppText>
           </View>
         )}
         <View style={{ flex: 1 }}>
@@ -589,7 +579,7 @@ function AppShell() {
             onPress={state.returnToOnboardingGuide}
             className="h-16 bg-[#1A1A1A] px-6 flex-row items-center justify-center gap-2"
           >
-            <Text className="text-white font-sans font-bold text-xs uppercase tracking-wider">← Back to Guide</Text>
+            <AppText variant="label" className="text-white font-sans font-bold uppercase tracking-wider">← Back to Guide</AppText>
           </Pressable>
         ) : (
           <View className="h-16 bg-white border-t border-[#E5E5E5] px-6 flex-row items-center justify-between">
@@ -599,9 +589,9 @@ function AppShell() {
               return (
                 <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1.5">
                   <Icon size={22} color={isActive ? '#1A1A1A' : '#888888'} strokeWidth={isActive ? 2.5 : 2} />
-                  <Text className={`text-[10px] font-sans font-bold tracking-tight mt-1 ${isActive ? 'text-[#1A1A1A]' : 'text-[#888888]'}`}>
+                  <AppText variant="caption" className={`font-sans font-bold tracking-tight mt-1 ${isActive ? 'text-[#1A1A1A]' : 'text-[#888888]'}`}>
                     {tab.label}
-                  </Text>
+                  </AppText>
                 </Pressable>
               );
             })}
@@ -677,7 +667,7 @@ function ToastLayer({ state }: { state: AppState }) {
       <FadeInView>
         <View className="flex-row items-center gap-2 bg-neutral-900 border border-neutral-800 py-2.5 px-4 rounded-full">
           <Check size={12} color="#34d399" />
-          <Text className="text-white text-xs font-bold font-sans">{state.toastMessage}</Text>
+          <AppText variant="label" className="text-white font-bold font-sans">{state.toastMessage}</AppText>
         </View>
       </FadeInView>
     </View>
