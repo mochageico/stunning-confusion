@@ -164,7 +164,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         // underneath -- the bar itself no longer takes up real space in
         // the scroll flow (see below), so nothing pushes content up for it
         // automatically.
-        contentContainerStyle={{ gap: 16, paddingBottom: floatingBarShowing ? 168 : 20 }}
+        contentContainerStyle={{ gap: 12, paddingBottom: floatingBarShowing ? 160 : 16 }}
       >
         {/* Title Header with back */}
         <View className="flex-row items-center justify-between border-b border-[#E5E5E5] pb-2">
@@ -195,7 +195,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               onPress={toggleSelectAll}
               className="border border-[#1A1A1A] px-2 py-0.5 rounded"
             >
-              <AppText variant="caption" className="font-bold font-sans uppercase text-[#1A1A1A]">
+              <AppText variant="micro" className="font-bold font-sans uppercase text-[#1A1A1A]">
                 {selectedVerseNumbers.length === activeChapterVerses.length ? 'Deselect All' : 'Select All'}
               </AppText>
             </Pressable>
@@ -204,22 +204,16 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
 
         {/* Segmented Progress Bar */}
         <View className="gap-1.5">
+          {/* The three-swatch legend is gone. It spent six elements teaching
+              a colour code that the bar below, the verse dots, and every
+              other surface in the app already use consistently -- and it
+              re-taught it on every chapter you opened. A count is the thing
+              you actually wanted to know from a progress bar. */}
           <View className="flex-row justify-between items-center">
             <AppText variant="micro" className="font-sans font-bold text-[#888]">CHAPTER PROGRESS</AppText>
-            <View className="flex-row gap-2">
-              <View className="flex-row items-center gap-1">
-                <View className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                <AppText variant="micro" className="font-sans font-bold text-[#888]">Memorized</AppText>
-              </View>
-              <View className="flex-row items-center gap-1">
-                <View className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                <AppText variant="micro" className="font-sans font-bold text-[#888]">Learning</AppText>
-              </View>
-              <View className="flex-row items-center gap-1">
-                <View className="w-1.5 h-1.5 bg-neutral-200 rounded-full" />
-                <AppText variant="micro" className="font-sans font-bold text-[#888]">Untouched</AppText>
-              </View>
-            </View>
+            <AppText variant="micro" className="font-sans font-bold text-[#888]">
+              {activeChapterVerses.filter((v) => v.status === 'memorized').length} of {activeChapterVerses.length} memorized
+            </AppText>
           </View>
           {/* Horizontal split colored indicator based on verses */}
           <View className="flex-row h-3 w-full border border-[#1A1A1A] rounded-full overflow-hidden bg-[#F3F2F1]">
@@ -237,7 +231,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         </View>
 
         {/* Playable Custom Audio Card */}
-        <View className="border border-[#1A1A1A] rounded-xl p-3 bg-white gap-2.5">
+        <View className="border border-[#1A1A1A] rounded-xl p-2.5 bg-white gap-2">
           {/* Empty state is one line then the action. The second sentence used
               to say "or find one in the community library" directly above a
               button that does exactly that. */}

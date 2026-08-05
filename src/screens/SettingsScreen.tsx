@@ -128,7 +128,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 20 }}>
+      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-4 pb-10" contentContainerStyle={{ gap: 12 }}>
         {/* Header */}
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
           <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
@@ -136,7 +136,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         </View>
 
         {/* ACCOUNT */}
-        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 12 }}>
+        <View className="bg-white border border-[#E5E5E5] rounded-xl p-3.5" style={{ gap: 12 }}>
           <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Account</AppText>
 
           <View>
@@ -146,22 +146,18 @@ export default function SettingsScreen({ state }: { state: AppState }) {
 
           <View className="flex-row gap-2">
             <View className="flex-1">
-              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Email</AppText>
-              <AppText variant="label" className="font-sans text-neutral-600 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl">
-                {user.email || '—'}
-              </AppText>
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Email</AppText>
+              <AppText variant="caption" className="font-sans text-neutral-600 mt-0.5" numberOfLines={1}>{user.email || '—'}</AppText>
             </View>
             <View className="flex-1">
-              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Sign-In Method</AppText>
-              <AppText variant="label" className="font-sans text-neutral-600 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl">
-                {providerLabel}
-              </AppText>
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Signed in with</AppText>
+              <AppText variant="caption" className="font-sans text-neutral-600 mt-0.5" numberOfLines={1}>{providerLabel}</AppText>
             </View>
           </View>
         </View>
 
         {/* RECORDING DEFAULTS */}
-        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
+        <View className="bg-white border border-[#E5E5E5] rounded-xl p-3.5" style={{ gap: 10 }}>
           <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
             Default Recording Visibility
           </AppText>
@@ -180,7 +176,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         </View>
 
         {/* STUDIO MODE */}
-        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
+        <View className="bg-white border border-[#E5E5E5] rounded-xl p-3.5" style={{ gap: 10 }}>
           <View>
             <View className="flex-row items-center">
               <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Studio Mode</AppText>
@@ -204,7 +200,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         {/* OFFLINE AUDIO — native only. On web the browser's own HTTP cache
             handles this, so there is nothing here for the user to manage. */}
         {AUDIO_CACHE_SUPPORTED && (
-          <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
+          <View className="bg-white border border-[#E5E5E5] rounded-xl p-3.5" style={{ gap: 10 }}>
             <View>
               <View className="flex-row items-center">
                 <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Offline Audio</AppText>
@@ -246,7 +242,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         )}
 
         {/* PROFILE SHARING */}
-        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 14 }}>
+        <View className="bg-white border border-[#E5E5E5] rounded-xl p-3.5" style={{ gap: 14 }}>
           <View>
             <View className="flex-row items-center">
               <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Profile Sharing</AppText>
@@ -290,7 +286,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         </View>
 
         {/* NOTIFICATIONS */}
-        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
+        <View className="bg-white border border-[#E5E5E5] rounded-xl p-3.5" style={{ gap: 10 }}>
           <View>
             <View className="flex-row items-center">
               <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
@@ -353,7 +349,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         </AppButton>
 
         {/* ABOUT */}
-        <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 4 }}>
+        <View className="bg-white border border-[#E5E5E5] rounded-xl p-3.5" style={{ gap: 4 }}>
           <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">About</AppText>
           <AppText variant="label" className="font-sans text-neutral-600">
             Scripture Memory v{Constants.expoConfig?.version || '—'}
