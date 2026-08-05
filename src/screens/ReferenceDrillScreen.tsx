@@ -5,6 +5,7 @@ import { ArrowLeft, Check, RefreshCw, Target, X } from 'lucide-react-native';
 import { AppState, isReviewDue } from '../state/useAppState';
 import { ChipRow, FadeInView, NumericInput } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
+import { AppText } from '../components/design';
 import {
   buildReferenceRounds,
   formatReference,
@@ -185,24 +186,24 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
               <ArrowLeft size={14} color="#262626" />
             </Pressable>
             <View>
-              <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">Practice</Text>
-              <Text className="text-xl font-serif font-black text-neutral-900 mt-0.5">Reference Drill</Text>
+              <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">Practice</AppText>
+              <AppText variant="title" className="font-serif font-black text-neutral-900 mt-0.5">Reference Drill</AppText>
             </View>
           </View>
 
-          <Text className="text-[10px] text-neutral-400 leading-relaxed -mt-2">
+          <AppText variant="caption" className="text-neutral-400 leading-relaxed -mt-2">
             Quiz yourself on where your verses live. Pulls from everything you've started memorizing, whether or not it's due
             today — and it's practice only, so nothing here changes your review schedule.
-          </Text>
+          </AppText>
 
           {/* Range */}
           <View className="gap-2">
-            <Text className="text-[10px] font-sans font-extrabold uppercase tracking-wider text-neutral-400">Range</Text>
+            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">Range</AppText>
             <BookPicker value={book} onChange={setBook} allowAll allLabel="All my verses" title="Limit to a Book" />
             {!!book && (
               <View className="flex-row items-center gap-2">
                 <View className="flex-1">
-                  <Text className="text-[9px] font-sans font-bold text-neutral-400 mb-1">From chapter</Text>
+                  <AppText variant="micro" className="font-sans font-bold text-neutral-400 mb-1">From chapter</AppText>
                   <NumericInput
                     value={startChapter}
                     onChangeText={setStartChapter}
@@ -212,7 +213,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                   />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[9px] font-sans font-bold text-neutral-400 mb-1">To chapter</Text>
+                  <AppText variant="micro" className="font-sans font-bold text-neutral-400 mb-1">To chapter</AppText>
                   <NumericInput
                     value={endChapter}
                     onChangeText={setEndChapter}
@@ -229,7 +230,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             {singleChapter !== null && (
               <View className="flex-row items-center gap-2">
                 <View className="flex-1">
-                  <Text className="text-[9px] font-sans font-bold text-neutral-400 mb-1">From verse</Text>
+                  <AppText variant="micro" className="font-sans font-bold text-neutral-400 mb-1">From verse</AppText>
                   <NumericInput
                     value={startVerse}
                     onChangeText={setStartVerse}
@@ -239,7 +240,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                   />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[9px] font-sans font-bold text-neutral-400 mb-1">To verse</Text>
+                  <AppText variant="micro" className="font-sans font-bold text-neutral-400 mb-1">To verse</AppText>
                   <NumericInput
                     value={endVerse}
                     onChangeText={setEndVerse}
@@ -250,18 +251,18 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                 </View>
               </View>
             )}
-            <Text className={`text-[10px] font-sans font-bold ${canStart ? 'text-neutral-500' : 'text-amber-700'}`}>
+            <AppText variant="caption" className={`font-sans font-bold ${canStart ? 'text-neutral-500' : 'text-amber-700'}`}>
               {canStart
                 ? `${uniqueCount} ${uniqueCount === 1 ? 'verse' : 'verses'} available`
                 : 'No verses match those filters yet — memorize some first, or widen the range.'}
-            </Text>
+            </AppText>
           </View>
 
           {/* Review set */}
           <View className="gap-2">
-            <Text className="text-[10px] font-sans font-extrabold uppercase tracking-wider text-neutral-400">
+            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">
               Pull from
-            </Text>
+            </AppText>
             <ChipRow options={REVIEW_SETS} value={reviewSet} onChange={(s) => setReviewSet(s as ReviewSet)} wrap />
             <Pressable
               onPress={() => setDueTodayOnly((d) => !d)}
@@ -270,14 +271,12 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
               }`}
             >
               <View className="flex-1 pr-3">
-                <Text
-                  className={`text-[11px] font-sans font-extrabold ${dueTodayOnly ? 'text-white' : 'text-neutral-800'}`}
-                >
+                <AppText variant="caption" className={`font-sans font-extrabold ${dueTodayOnly ? 'text-white' : 'text-neutral-800'}`} >
                   Due today only
-                </Text>
-                <Text className={`text-[9px] font-sans leading-snug ${dueTodayOnly ? 'text-neutral-300' : 'text-neutral-500'}`}>
+                </AppText>
+                <AppText variant="micro" className={`font-sans leading-snug ${dueTodayOnly ? 'text-neutral-300' : 'text-neutral-500'}`}>
                   Narrow to verses whose review is actually due today. Still practice only — it won't clear them.
-                </Text>
+                </AppText>
               </View>
               <View
                 className={`w-5 h-5 rounded-full items-center justify-center ${
@@ -291,7 +290,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
 
           {/* Direction */}
           <View className="gap-2">
-            <Text className="text-[10px] font-sans font-extrabold uppercase tracking-wider text-neutral-400">Ask me</Text>
+            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">Ask me</AppText>
             <ChipRow
               options={[
                 { id: 'both' as const, label: 'Both ways' },
@@ -306,7 +305,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
 
           {/* Length */}
           <View className="gap-2">
-            <Text className="text-[10px] font-sans font-extrabold uppercase tracking-wider text-neutral-400">Questions</Text>
+            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">Questions</AppText>
             <ChipRow options={SESSION_LENGTHS} value={sessionLength} onChange={setSessionLength} />
           </View>
 
@@ -318,10 +317,10 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             }`}
           >
             <View className="flex-1 pr-3">
-              <Text className={`text-[11px] font-sans font-extrabold ${hardMode ? 'text-white' : 'text-neutral-800'}`}>Hard mode</Text>
-              <Text className={`text-[9px] font-sans leading-snug ${hardMode ? 'text-neutral-300' : 'text-neutral-500'}`}>
+              <AppText variant="caption" className={`font-sans font-extrabold ${hardMode ? 'text-white' : 'text-neutral-800'}`}>Hard mode</AppText>
+              <AppText variant="micro" className={`font-sans leading-snug ${hardMode ? 'text-neutral-300' : 'text-neutral-500'}`}>
                 No multiple choice — type the reference yourself, and recall verses from memory before revealing.
-              </Text>
+              </AppText>
             </View>
             <View className={`w-5 h-5 rounded-full items-center justify-center ${hardMode ? 'bg-white' : 'border border-neutral-300'}`}>
               {hardMode && <Check size={12} color="#171717" />}
@@ -334,7 +333,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             className={`w-full py-3 rounded-xl flex-row items-center justify-center gap-2 ${canStart ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
           >
             <Target size={15} color={canStart ? '#ffffff' : '#a3a3a3'} />
-            <Text className={`font-sans font-bold text-xs ${canStart ? 'text-white' : 'text-neutral-400'}`}>Start Drill</Text>
+            <AppText variant="label" className={`font-sans font-bold ${canStart ? 'text-white' : 'text-neutral-400'}`}>Start Drill</AppText>
           </Pressable>
         </ScrollView>
       </FadeInView>
@@ -353,25 +352,25 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             <View className="w-14 h-14 rounded-full border-2 border-[#1A1A1A] bg-neutral-100 items-center justify-center">
               <Target size={26} color="#171717" />
             </View>
-            <Text className="text-2xl font-serif font-black text-neutral-900">
+            <AppText variant="display" className="font-serif font-black text-neutral-900">
               {score} / {rounds.length}
-            </Text>
-            <Text className="text-xs font-sans font-bold text-neutral-500">{pct}% correct</Text>
-            <Text className="text-[10px] text-neutral-400 font-sans text-center px-6">
+            </AppText>
+            <AppText variant="label" className="font-sans font-bold text-neutral-500">{pct}% correct</AppText>
+            <AppText variant="caption" className="text-neutral-400 font-sans text-center px-6">
               Practice only — your review schedule is untouched.
-            </Text>
+            </AppText>
           </View>
 
           <View className="gap-2">
             <Pressable onPress={startSession} className="w-full py-3 bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-2">
               <RefreshCw size={14} color="#ffffff" />
-              <Text className="font-sans font-bold text-xs text-white">Run It Again</Text>
+              <AppText variant="label" className="font-sans font-bold text-white">Run It Again</AppText>
             </Pressable>
             <Pressable onPress={() => setPhase('setup')} className="w-full py-2.5 border border-neutral-300 rounded-xl items-center">
-              <Text className="font-sans font-bold text-[11px] text-neutral-700">Change Settings</Text>
+              <AppText variant="caption" className="font-sans font-bold text-neutral-700">Change Settings</AppText>
             </Pressable>
             <Pressable onPress={handleBack} className="w-full py-2 items-center">
-              <Text className="font-sans font-bold text-[11px] text-neutral-400">Done</Text>
+              <AppText variant="caption" className="font-sans font-bold text-neutral-400">Done</AppText>
             </Pressable>
           </View>
         </ScrollView>
@@ -393,12 +392,12 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
         {/* Header: progress + score + bail out */}
         <View className="flex-row items-center justify-between mb-4">
           <View>
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
               Question {roundIndex + 1} of {rounds.length}
-            </Text>
-            <Text className="text-sm font-serif font-black text-neutral-900">
+            </AppText>
+            <AppText variant="body" className="font-serif font-black text-neutral-900">
               Score {score}/{roundIndex + (answered ? 1 : 0)}
-            </Text>
+            </AppText>
           </View>
           <Pressable onPress={() => setPhase('done')} className="w-9 h-9 rounded-full border border-neutral-300 items-center justify-center" hitSlop={8}>
             <X size={16} color="#262626" />
@@ -408,9 +407,9 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
         <ScrollView className="flex-1" contentContainerStyle={{ gap: 14, paddingBottom: 12 }}>
           {currentRound.kind === 'verseToRef' ? (
             <>
-              <Text className="text-[10px] font-sans font-extrabold uppercase tracking-wider text-neutral-400">Where is this?</Text>
+              <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">Where is this?</AppText>
               <View className="border-2 border-[#1A1A1A] rounded-2xl p-4 bg-white">
-                <Text className="font-serif text-[15px] leading-relaxed text-neutral-800">{currentRound.answer.text}</Text>
+                <AppText variant="body" className="font-serif leading-relaxed text-neutral-800">{currentRound.answer.text}</AppText>
               </View>
 
               {hardMode ? (
@@ -457,13 +456,9 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                         freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'bg-[#1A1A1A]' : 'bg-neutral-200'
                       }`}
                     >
-                      <Text
-                        className={`font-sans font-bold text-xs ${
-                          freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'text-white' : 'text-neutral-400'
-                        }`}
-                      >
+                      <AppText variant="label" className={`font-sans font-bold ${ freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'text-white' : 'text-neutral-400' }`} >
                         Check Answer
-                      </Text>
+                      </AppText>
                     </Pressable>
                   )}
                 </View>
@@ -484,9 +479,9 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                               : 'border-neutral-300 bg-white'
                         }`}
                       >
-                        <Text className={`font-serif text-[13px] font-bold ${answered && isAnswer ? 'text-emerald-800' : 'text-neutral-800'}`}>
+                        <AppText variant="label" className={`font-serif font-bold ${answered && isAnswer ? 'text-emerald-800' : 'text-neutral-800'}`}>
                           {optRef}
-                        </Text>
+                        </AppText>
                       </Pressable>
                     );
                   })}
@@ -495,9 +490,9 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             </>
           ) : (
             <>
-              <Text className="text-[10px] font-sans font-extrabold uppercase tracking-wider text-neutral-400">What does this say?</Text>
+              <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">What does this say?</AppText>
               <View className="border-2 border-[#1A1A1A] rounded-2xl p-4 bg-white items-center">
-                <Text className="font-serif text-lg font-black text-neutral-900">{answerRef}</Text>
+                <AppText variant="title" className="font-serif font-black text-neutral-900">{answerRef}</AppText>
               </View>
 
               {hardMode ? (
@@ -505,22 +500,22 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                   {revealed ? (
                     <>
                       <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-3">
-                        <Text className="font-serif text-[14px] leading-relaxed text-neutral-800">{currentRound.answer.text}</Text>
+                        <AppText variant="body" className="font-serif leading-relaxed text-neutral-800">{currentRound.answer.text}</AppText>
                       </View>
                       {!answered && (
                         <View className="flex-row gap-2">
                           <Pressable onPress={() => recordResult(false)} className="flex-1 py-2.5 border border-neutral-300 rounded-xl items-center">
-                            <Text className="font-sans font-bold text-[11px] text-neutral-600">Missed it</Text>
+                            <AppText variant="caption" className="font-sans font-bold text-neutral-600">Missed it</AppText>
                           </Pressable>
                           <Pressable onPress={() => recordResult(true)} className="flex-1 py-2.5 bg-emerald-600 rounded-xl items-center">
-                            <Text className="font-sans font-bold text-[11px] text-white">I knew it</Text>
+                            <AppText variant="caption" className="font-sans font-bold text-white">I knew it</AppText>
                           </Pressable>
                         </View>
                       )}
                     </>
                   ) : (
                     <Pressable onPress={() => setRevealed(true)} className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center">
-                      <Text className="font-sans font-bold text-xs text-white">Recall it, then reveal</Text>
+                      <AppText variant="label" className="font-sans font-bold text-white">Recall it, then reveal</AppText>
                     </Pressable>
                   )}
                 </View>
@@ -541,12 +536,9 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                               : 'border-neutral-300 bg-white'
                         }`}
                       >
-                        <Text
-                          className={`font-serif text-[13px] leading-snug ${answered && isAnswer ? 'text-emerald-800' : 'text-neutral-700'}`}
-                          numberOfLines={3}
-                        >
+                        <AppText variant="label" className={`font-serif leading-snug ${answered && isAnswer ? 'text-emerald-800' : 'text-neutral-700'}`} numberOfLines={3} >
                           {opt.text}
-                        </Text>
+                        </AppText>
                       </Pressable>
                     );
                   })}
@@ -560,14 +552,14 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
         {answered && (
           <View className="shrink-0 gap-2 pt-2">
             <View className={`rounded-xl p-2.5 ${lastResult === 'right' ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
-              <Text className={`font-sans font-bold text-[11px] text-center ${lastResult === 'right' ? 'text-emerald-800' : 'text-red-800'}`}>
+              <AppText variant="caption" className={`font-sans font-bold text-center ${lastResult === 'right' ? 'text-emerald-800' : 'text-red-800'}`}>
                 {lastResult === 'right' ? 'Correct!' : `Not quite — that was ${answerRef}.`}
-              </Text>
+              </AppText>
             </View>
             <Pressable onPress={advance} className="w-full py-3 bg-[#1A1A1A] rounded-xl items-center">
-              <Text className="font-sans font-bold text-xs text-white">
+              <AppText variant="label" className="font-sans font-bold text-white">
                 {roundIndex >= rounds.length - 1 ? 'See Score' : 'Next Question'}
-              </Text>
+              </AppText>
             </Pressable>
           </View>
         )}

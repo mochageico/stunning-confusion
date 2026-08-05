@@ -5,6 +5,7 @@ import { ArrowLeft, Bell, MessageCircle, Trophy, UserMinus, UserPlus, X } from '
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { ChallengeCreateSheet } from '../components/ChallengeCard';
+import { AppText } from '../components/design';
 
 export default function MemberProfileScreen({ state }: { state: AppState }) {
   const {
@@ -89,24 +90,24 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
             <ArrowLeft size={14} color="#262626" />
           </Pressable>
           <View>
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
               MEMBER PROFILE
-            </Text>
-            <Text className="text-base font-serif font-bold text-neutral-900 leading-none mt-0.5">
+            </AppText>
+            <AppText variant="title" className="font-serif font-bold text-neutral-900 leading-none mt-0.5">
               {selectedUserProfile.name}
-            </Text>
+            </AppText>
           </View>
         </View>
 
         {/* User Identity Header */}
         <View className="flex-row items-center gap-3.5 bg-neutral-50/50 p-3 rounded-2xl border border-neutral-200">
           <View className="w-12 h-12 rounded-full border-2 border-neutral-900 bg-emerald-50 items-center justify-center shrink-0">
-            <Text className="font-serif font-black text-lg text-emerald-950">{selectedUserProfile.avatar}</Text>
+            <AppText variant="title" className="font-serif font-black text-emerald-950">{selectedUserProfile.avatar}</AppText>
           </View>
           <View>
-            <Text className="text-sm font-sans font-black text-neutral-900 leading-tight">
+            <AppText variant="body" className="font-sans font-black text-neutral-900 leading-tight">
               {selectedUserProfile.name}
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -117,7 +118,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
               className="flex-1 flex-row items-center justify-center gap-1.5 py-2 bg-[#1A1A1A] rounded-xl"
             >
               <MessageCircle size={12} color="#FFFFFF" />
-              <Text className="text-white font-sans font-bold text-[10px] uppercase tracking-wide">Message</Text>
+              <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wide">Message</AppText>
             </Pressable>
             {isFriend && (
               <Pressable
@@ -132,9 +133,9 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                 className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-xl ${canNudge ? 'bg-amber-600' : 'bg-neutral-200'}`}
               >
                 <Bell size={12} color={canNudge ? '#FFFFFF' : '#a3a3a3'} />
-                <Text className={`font-sans font-bold text-[10px] uppercase tracking-wide ${canNudge ? 'text-white' : 'text-neutral-400'}`}>
+                <AppText variant="section" className={`font-sans font-bold uppercase tracking-wide ${canNudge ? 'text-white' : 'text-neutral-400'}`}>
                   Nudge
-                </Text>
+                </AppText>
               </Pressable>
             )}
             {isFriend && (
@@ -143,7 +144,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                 className="flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-xl bg-amber-50 border border-amber-200"
               >
                 <Trophy size={12} color="#b45309" />
-                <Text className="font-sans font-bold text-[10px] uppercase tracking-wide text-amber-800">Challenge</Text>
+                <AppText variant="section" className="font-sans font-bold uppercase tracking-wide text-amber-800">Challenge</AppText>
               </Pressable>
             )}
           </View>
@@ -155,21 +156,21 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
           <View>
             {incomingFromThem ? (
               <View className="border border-emerald-200 bg-emerald-50 rounded-xl p-3" style={{ gap: 8 }}>
-                <Text className="text-[10px] font-sans text-emerald-800">
+                <AppText variant="caption" className="font-sans text-emerald-800">
                   {selectedUserProfile.name} sent you a friend request.
-                </Text>
+                </AppText>
                 <View className="flex-row gap-2">
                   <Pressable
                     onPress={() => acceptFriendRequest(incomingFromThem)}
                     className="flex-1 bg-emerald-600 py-2 rounded-lg items-center"
                   >
-                    <Text className="text-white text-[9px] font-bold uppercase tracking-wide">Accept</Text>
+                    <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Accept</AppText>
                   </Pressable>
                   <Pressable
                     onPress={() => declineFriendRequest(incomingFromThem)}
                     className="flex-1 bg-white border border-neutral-300 py-2 rounded-lg items-center"
                   >
-                    <Text className="text-neutral-600 text-[9px] font-bold uppercase tracking-wide">Decline</Text>
+                    <AppText variant="micro" className="text-neutral-600 font-bold uppercase tracking-wide">Decline</AppText>
                   </Pressable>
                 </View>
               </View>
@@ -178,9 +179,9 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                 onPress={() => cancelFriendRequest(outgoingToThem)}
                 className="flex-row items-center justify-center gap-1.5 py-2 rounded-xl bg-neutral-100 border border-neutral-200"
               >
-                <Text className="text-neutral-600 font-sans font-bold text-[10px] uppercase tracking-wide">
+                <AppText variant="section" className="text-neutral-600 font-sans font-bold uppercase tracking-wide">
                   Request Sent — Cancel
-                </Text>
+                </AppText>
               </Pressable>
             ) : (
               <Pressable
@@ -188,7 +189,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                 className="flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl bg-indigo-600"
               >
                 <UserPlus size={12} color="#FFFFFF" />
-                <Text className="text-white font-sans font-bold text-[10px] uppercase tracking-wide">Add Friend</Text>
+                <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wide">Add Friend</AppText>
               </Pressable>
             )}
           </View>
@@ -212,47 +213,47 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
             className="flex-row items-center justify-center gap-1.5 py-2"
           >
             <UserMinus size={12} color="#dc2626" />
-            <Text className="text-red-600 font-sans font-bold text-[10px] uppercase tracking-wide">Remove Friend</Text>
+            <AppText variant="section" className="text-red-600 font-sans font-bold uppercase tracking-wide">Remove Friend</AppText>
           </Pressable>
         )}
 
         {/* Calculated Metrics cards */}
         <View className="flex-row gap-2">
           <View className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 items-center" style={{ gap: 2 }}>
-            <Text className="text-xs font-bold text-neutral-900 font-mono">
+            <AppText variant="label" className="font-bold text-neutral-900 font-mono">
               {selectedUserProfile.stats?.memorized || 0}
-            </Text>
-            <Text className="text-[7.5px] font-bold text-neutral-400 uppercase tracking-wide">MEMORIZED</Text>
+            </AppText>
+            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">MEMORIZED</AppText>
           </View>
 
           <View className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 items-center" style={{ gap: 2 }}>
-            <Text className="text-xs font-bold text-amber-600 font-mono">
+            <AppText variant="label" className="font-bold text-amber-600 font-mono">
               {selectedUserProfile.stats?.learning || 0}
-            </Text>
-            <Text className="text-[7.5px] font-bold text-neutral-400 uppercase tracking-wide">LEARNING</Text>
+            </AppText>
+            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">LEARNING</AppText>
           </View>
 
           <View className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 items-center" style={{ gap: 2 }}>
-            <Text className="text-xs font-bold text-emerald-600 font-mono">
+            <AppText variant="label" className="font-bold text-emerald-600 font-mono">
               {selectedUserProfile.stats?.streak || 0}
-            </Text>
-            <Text className="text-[7.5px] font-bold text-neutral-400 uppercase tracking-wide">STREAK</Text>
+            </AppText>
+            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">STREAK</AppText>
           </View>
         </View>
 
         {/* Shared Memory Plan (friends only) */}
         {sharedPlan && (
           <View style={{ gap: 6 }}>
-            <Text className="text-[9px] font-bold text-neutral-400 tracking-wider font-sans uppercase">MEMORY PLAN</Text>
+            <AppText variant="micro" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">MEMORY PLAN</AppText>
             <View className="border border-[#E5E5E5] rounded-xl p-3.5 bg-white gap-3 shadow-sm">
               <View className="flex-row justify-between items-start">
                 <View className="flex-1 pr-2">
-                  <Text className="text-xs font-sans font-black text-[#1A1A1A] leading-tight">
+                  <AppText variant="label" className="font-sans font-black text-[#1A1A1A] leading-tight">
                     {sharedPlan.name || 'Memory Plan'}
-                  </Text>
-                  <Text className="text-[9px] font-sans text-neutral-500 mt-0.5">
+                  </AppText>
+                  <AppText variant="micro" className="font-sans text-neutral-500 mt-0.5">
                     {selectedUserProfile.name}'s retention method
-                  </Text>
+                  </AppText>
                 </View>
               </View>
 
@@ -263,20 +264,20 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                   schedule, which it did, and shouldn't have. */}
               <View className="flex-row gap-2 py-1.5 border-y border-dashed border-neutral-100">
                 <View className="flex-1">
-                  <Text className="text-[8px] text-neutral-500 uppercase">Phases</Text>
-                  <Text className="text-[10px] font-sans font-bold text-neutral-800">
+                  <AppText variant="micro" className="text-neutral-500 uppercase">Phases</AppText>
+                  <AppText variant="caption" className="font-sans font-bold text-neutral-800">
                     {sharedPlan.dailyPhaseWeeks ?? '—'}-{sharedPlan.weeklyPhaseMonths ?? '—'}-{sharedPlan.monthlyPhaseYears ?? '—'}
-                  </Text>
+                  </AppText>
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[8px] text-neutral-500 uppercase">Touches</Text>
-                  <Text className="text-[10px] font-sans font-bold text-neutral-800">{sharedPlan.masteryTouches ?? '—'}</Text>
+                  <AppText variant="micro" className="text-neutral-500 uppercase">Touches</AppText>
+                  <AppText variant="caption" className="font-sans font-bold text-neutral-800">{sharedPlan.masteryTouches ?? '—'}</AppText>
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[8px] text-neutral-500 uppercase">Misses</Text>
-                  <Text className="text-[10px] font-sans font-bold text-neutral-800 capitalize">
+                  <AppText variant="micro" className="text-neutral-500 uppercase">Misses</AppText>
+                  <AppText variant="caption" className="font-sans font-bold text-neutral-800 capitalize">
                     {sharedPlan.missPolicy ?? '—'}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
 
@@ -284,11 +285,11 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                 onPress={() => saveFriendMemoryPlan(sharedPlan, selectedUserProfile.name)}
                 className="bg-[#1A1A1A] rounded-md py-2 items-center"
               >
-                <Text className="text-white text-[10px] font-bold uppercase tracking-wider">Save Memory Plan</Text>
+                <AppText variant="section" className="text-white font-bold uppercase tracking-wider">Save Memory Plan</AppText>
               </Pressable>
-              <Text className="text-[8px] font-sans text-neutral-500 text-center leading-relaxed">
+              <AppText variant="micro" className="font-sans text-neutral-500 text-center leading-relaxed">
                 Saves their retention method. Your own schedule and pace stay as they are.
-              </Text>
+              </AppText>
             </View>
           </View>
         )}
@@ -296,14 +297,14 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
         {/* Shared Memory Queue (friends only) */}
         {queueVisible && (
           <View style={{ gap: 6 }}>
-            <Text className="text-[9px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+            <AppText variant="micro" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
               MEMORY QUEUE ({groupedQueue.length})
-            </Text>
+            </AppText>
             {groupedQueue.length === 0 ? (
               <View className="border border-dashed border-neutral-200 rounded-xl p-4 items-center">
-                <Text className="text-[10px] text-neutral-400 font-sans text-center">
+                <AppText variant="caption" className="text-neutral-400 font-sans text-center">
                   {selectedUserProfile.name} hasn't added any verses yet.
-                </Text>
+                </AppText>
               </View>
             ) : (
               <View style={{ gap: 6 }}>
@@ -322,14 +323,14 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                       className="border border-neutral-200 rounded-xl p-2.5 bg-neutral-50/40 flex-row justify-between items-center"
                     >
                       <View>
-                        <Text className="text-xs font-sans font-bold text-neutral-800 leading-tight">
+                        <AppText variant="label" className="font-sans font-bold text-neutral-800 leading-tight">
                           {g.book} {g.chapter}
-                        </Text>
-                        <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
+                        </AppText>
+                        <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">
                           {g.count} verse{g.count === 1 ? '' : 's'}
-                        </Text>
+                        </AppText>
                       </View>
-                      <Text className={`text-[8px] font-bold uppercase tracking-wide ${badgeColor}`}>{badgeLabel}</Text>
+                      <AppText variant="micro" className={`font-bold uppercase tracking-wide ${badgeColor}`}>{badgeLabel}</AppText>
                     </View>
                   );
                 })}
@@ -340,14 +341,14 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
 
         {/* Communities Spot */}
         <View style={{ gap: 6 }}>
-          <Text className="text-[9px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+          <AppText variant="micro" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
             COMMUNITIES ({selectedUserProfile.communities?.length || 0})
-          </Text>
+          </AppText>
           <View style={{ gap: 6 }}>
             {(selectedUserProfile.communities || []).map((cName: string) => (
               <View key={cName} className="border border-neutral-200 rounded-xl p-2.5 bg-neutral-50/40">
-                <Text className="text-xs font-sans font-bold text-neutral-800 leading-tight">{cName}</Text>
-                <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">Active Scripture Circle Member</Text>
+                <AppText variant="label" className="font-sans font-bold text-neutral-800 leading-tight">{cName}</AppText>
+                <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">Active Scripture Circle Member</AppText>
               </View>
             ))}
           </View>
@@ -360,10 +361,10 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
             <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4">
               <View className="flex-row items-start justify-between">
                 <View style={{ flex: 1 }}>
-                  <Text className="text-base font-serif font-bold text-[#1A1A1A]">Nudge {selectedUserProfile.name}</Text>
-                  <Text className="text-xs text-neutral-500 font-sans mt-1">
+                  <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Nudge {selectedUserProfile.name}</AppText>
+                  <AppText variant="label" className="text-neutral-500 font-sans mt-1">
                     Send a quick accountability message. You can nudge each friend once per day.
-                  </Text>
+                  </AppText>
                 </View>
                 <Pressable onPress={() => setShowNudgeCompose(false)} hitSlop={8}>
                   <X size={18} color="#a3a3a3" />
@@ -389,7 +390,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                 }}
                 className="bg-amber-600 rounded-xl py-2.5 items-center"
               >
-                <Text className="text-white font-sans font-bold text-xs">Send Nudge</Text>
+                <AppText variant="label" className="text-white font-sans font-bold ">Send Nudge</AppText>
               </Pressable>
             </View>
           </FadeInView>
@@ -401,18 +402,18 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
           <FadeInView style={{ width: '100%', maxWidth: 320 }}>
             <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4">
               <View>
-                <Text className="text-base font-serif font-bold text-[#1A1A1A]">Remove {selectedUserProfile.name}?</Text>
-                <Text className="text-xs text-neutral-500 font-sans mt-1">
+                <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Remove {selectedUserProfile.name}?</AppText>
+                <AppText variant="label" className="text-neutral-500 font-sans mt-1">
                   You'll stop seeing each other's activity and won't be able to nudge each other. They can send a new
                   friend request later if you change your mind.
-                </Text>
+                </AppText>
               </View>
               <View className="flex-row gap-2.5">
                 <Pressable
                   onPress={() => setShowRemoveFriendConfirm(false)}
                   className="flex-1 py-2.5 border border-neutral-300 rounded-xl items-center"
                 >
-                  <Text className="text-neutral-600 font-sans font-bold text-xs">Cancel</Text>
+                  <AppText variant="label" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
                 </Pressable>
                 <Pressable
                   onPress={async () => {
@@ -426,7 +427,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                   }}
                   className="flex-1 py-2.5 bg-red-600 rounded-xl items-center"
                 >
-                  <Text className="text-white font-sans font-bold text-xs">Remove</Text>
+                  <AppText variant="label" className="text-white font-sans font-bold ">Remove</AppText>
                 </Pressable>
               </View>
             </View>

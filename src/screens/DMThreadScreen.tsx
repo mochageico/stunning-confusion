@@ -7,6 +7,7 @@ import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
 import { ReactionBar } from '../components/ReactionBar';
 import { ChallengeCard, ChallengeCreateSheet } from '../components/ChallengeCard';
+import { AppText } from '../components/design';
 
 export default function DMThreadScreen({ state }: { state: AppState }) {
   const {
@@ -66,7 +67,7 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
             <ArrowLeft size={14} color="#262626" />
           </Pressable>
           <AvatarCircle name={activeDMThread.otherName} photoUri={activeDMThread.otherAvatarUrl || null} size={30} />
-          <Text className="text-sm font-serif font-bold text-neutral-900">{activeDMThread.otherName}</Text>
+          <AppText variant="body" className="font-serif font-bold text-neutral-900">{activeDMThread.otherName}</AppText>
         </View>
 
         {/* No status filter: declined/cancelled challenges render as a compact
@@ -95,11 +96,11 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
           {loadingActiveDMMessages ? (
-            <Text className="text-xs text-neutral-400 font-sans text-center mt-4">Loading…</Text>
+            <AppText variant="label" className="text-neutral-400 font-sans text-center mt-4">Loading…</AppText>
           ) : activeDMMessages.length === 0 ? (
-            <Text className="text-xs text-neutral-400 font-sans text-center mt-4">
+            <AppText variant="label" className="text-neutral-400 font-sans text-center mt-4">
               No messages yet. Say hello 👋
-            </Text>
+            </AppText>
           ) : (
             activeDMMessages.map((msg) => {
               const isMine = msg.fromUid === user?.uid;
@@ -111,7 +112,7 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
                         isMine ? 'bg-[#1A1A1A] rounded-br-sm' : 'bg-neutral-100 rounded-bl-sm'
                       }`}
                     >
-                      <Text className={`text-xs font-sans ${isMine ? 'text-white' : 'text-neutral-800'}`}>{msg.text}</Text>
+                      <AppText variant="label" className={`font-sans ${isMine ? 'text-white' : 'text-neutral-800'}`}>{msg.text}</AppText>
                     </View>
                   </View>
                   <ReactionBar
@@ -160,14 +161,14 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
           >
             <View className="flex-row items-center gap-1.5">
               <Lock size={12} color="#b45309" />
-              <Text className="text-[10px] font-sans font-bold text-amber-800 uppercase tracking-wide">
+              <AppText variant="section" className="font-sans font-bold text-amber-800 uppercase tracking-wide">
                 Read-only conversation
-              </Text>
+              </AppText>
             </View>
-            <Text className="text-[10px] text-amber-700/90 font-sans leading-relaxed">
+            <AppText variant="caption" className="text-amber-700/90 font-sans leading-relaxed">
               You and {activeDMThread.otherName} are no longer friends or sharing a community, so new messages are
               disabled. History is kept. Send a friend request to keep the conversation going.
-            </Text>
+            </AppText>
             <Pressable
               onPress={() => !requestAlreadySent && sendFriendRequest(activeDMThread.otherUid, activeDMThread.otherName)}
               disabled={requestAlreadySent}
@@ -176,9 +177,9 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
               }`}
             >
               <UserPlus size={12} color={requestAlreadySent ? '#737373' : '#FFFFFF'} />
-              <Text className={`text-[10px] font-sans font-bold uppercase tracking-wide ${requestAlreadySent ? 'text-neutral-500' : 'text-white'}`}>
+              <AppText variant="section" className={`font-sans font-bold uppercase tracking-wide ${requestAlreadySent ? 'text-neutral-500' : 'text-white'}`}>
                 {requestAlreadySent ? 'Friend Request Sent' : 'Send Friend Request'}
-              </Text>
+              </AppText>
             </Pressable>
           </View>
         )}

@@ -9,6 +9,7 @@ import { ChipRow, FadeInView } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS } from '../data';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { AUDIO_CACHE_SUPPORTED, CACHE_CAP_CHOICES } from '../lib/audioCache';
+import { AppText } from '../components/design';
 
 const formatMB = (bytes: number) => {
   const mb = bytes / (1024 * 1024);
@@ -119,7 +120,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     return (
       <FadeInView style={{ flex: 1 }}>
         <View className="flex-1 items-center justify-center p-5">
-          <Text className="text-xs text-neutral-400 font-sans text-center">Sign in to access Settings.</Text>
+          <AppText variant="label" className="text-neutral-400 font-sans text-center">Sign in to access Settings.</AppText>
         </View>
       </FadeInView>
     );
@@ -136,15 +137,15 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           >
             <ArrowLeft size={14} color="#262626" />
           </Pressable>
-          <Text className="text-lg font-serif font-black text-[#1A1A1A] leading-none">Settings</Text>
+          <AppText variant="title" className="font-serif font-black text-[#1A1A1A] leading-none">Settings</AppText>
         </View>
 
         {/* ACCOUNT */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 12 }}>
-          <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Account</Text>
+          <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Account</AppText>
 
           <View>
-            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Display Name</Text>
+            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Display Name</AppText>
             <TextInput
               defaultValue={user.displayName || ''}
               onEndEditing={(e) => {
@@ -158,25 +159,25 @@ export default function SettingsScreen({ state }: { state: AppState }) {
 
           <View className="flex-row gap-2">
             <View className="flex-1">
-              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Email</Text>
-              <Text className="text-xs font-sans text-neutral-600 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl">
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Email</AppText>
+              <AppText variant="label" className="font-sans text-neutral-600 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl">
                 {user.email || '—'}
-              </Text>
+              </AppText>
             </View>
             <View className="flex-1">
-              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Sign-In Method</Text>
-              <Text className="text-xs font-sans text-neutral-600 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl">
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Sign-In Method</AppText>
+              <AppText variant="label" className="font-sans text-neutral-600 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl">
                 {providerLabel}
-              </Text>
+              </AppText>
             </View>
           </View>
         </View>
 
         {/* RECORDING DEFAULTS */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
-          <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">
+          <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
             Default Recording Visibility
-          </Text>
+          </AppText>
           <View className="flex-row gap-2">
             {RECORDING_VISIBILITY_OPTIONS.map((opt) => {
               const isSelected = (defaultRecordingVisibility || 'private') === opt.id;
@@ -188,12 +189,12 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                     isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
                   }`}
                 >
-                  <Text className={`text-[10px] font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
+                  <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                     {opt.label}
-                  </Text>
-                  <Text className={`text-[8px] font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
+                  </AppText>
+                  <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
                     {opt.desc}
-                  </Text>
+                  </AppText>
                 </Pressable>
               );
             })}
@@ -203,12 +204,12 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         {/* STUDIO MODE */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
           <View>
-            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Studio Mode</Text>
-            <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">
+            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Studio Mode</AppText>
+            <AppText variant="caption" className="text-neutral-400 font-sans mt-0.5">
               Every recitation you record is cleaned up automatically — harsh "s" sounds softened, background
               noise reduced, volume evened out. This just picks which version you hear. Your original take is
               always kept, so you can switch back any time.
-            </Text>
+            </AppText>
           </View>
           <View className="flex-row gap-2">
             {STUDIO_MODE_OPTIONS.map((opt) => {
@@ -221,12 +222,12 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                     isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
                   }`}
                 >
-                  <Text className={`text-[10px] font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
+                  <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                     {opt.label}
-                  </Text>
-                  <Text className={`text-[8px] font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
+                  </AppText>
+                  <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
                     {opt.desc}
-                  </Text>
+                  </AppText>
                 </Pressable>
               );
             })}
@@ -238,26 +239,26 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         {AUDIO_CACHE_SUPPORTED && (
           <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
             <View>
-              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Offline Audio</Text>
-              <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Offline Audio</AppText>
+              <AppText variant="caption" className="text-neutral-400 font-sans mt-0.5">
                 Recitations you play are kept on this device so they don't re-download every time — saving data and
                 working without a signal. Recordings you save offline are never removed automatically.
-              </Text>
+              </AppText>
             </View>
 
             <View className="flex-row justify-between items-center bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
-              <Text className="text-[10px] font-sans text-neutral-600">
+              <AppText variant="caption" className="font-sans text-neutral-600">
                 {audioCache.map.size} recording{audioCache.map.size === 1 ? '' : 's'} on this device
-              </Text>
-              <Text className="text-[10px] font-mono font-bold text-neutral-700">
+              </AppText>
+              <AppText variant="caption" className="font-mono font-bold text-neutral-700">
                 {formatMB(audioCache.totalBytes)} / {formatMB(audioCache.capBytes)}
-              </Text>
+              </AppText>
             </View>
 
             <View>
-              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400 mb-1">
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">
                 Storage Limit
-              </Text>
+              </AppText>
               <View className="flex-row gap-2">
                 {CACHE_CAP_CHOICES.map((bytes) => {
                   const isSelected = audioCache.capBytes === bytes;
@@ -269,11 +270,9 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                         isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
                       }`}
                     >
-                      <Text
-                        className={`text-[10px] font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}
-                      >
+                      <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`} >
                         {formatMB(bytes)}
-                      </Text>
+                      </AppText>
                     </Pressable>
                   );
                 })}
@@ -290,7 +289,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
               }}
               className="w-full py-2 rounded-lg items-center border border-neutral-200 bg-white"
             >
-              <Text className="text-[10px] font-sans font-bold text-neutral-600">Clear Downloaded Audio</Text>
+              <AppText variant="caption" className="font-sans font-bold text-neutral-600">Clear Downloaded Audio</AppText>
             </Pressable>
           </View>
         )}
@@ -298,15 +297,15 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         {/* PROFILE SHARING */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 14 }}>
           <View>
-            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Profile Sharing</Text>
-            <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">
+            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Profile Sharing</AppText>
+            <AppText variant="caption" className="text-neutral-400 font-sans mt-0.5">
               Choose what friends can see when they open your profile. Private means only you can see it.
-            </Text>
+            </AppText>
           </View>
 
           {/* Memory Plan visibility */}
           <View style={{ gap: 6 }}>
-            <Text className="text-[10px] font-sans font-bold text-neutral-700">Memory Plan</Text>
+            <AppText variant="caption" className="font-sans font-bold text-neutral-700">Memory Plan</AppText>
             <View className="flex-row gap-2">
               {VISIBILITY_OPTIONS.map((opt) => {
                 const isSelected = memoryPlanVisibility === opt.id;
@@ -318,12 +317,12 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                       isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
                     }`}
                   >
-                    <Text className={`text-[10px] font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
+                    <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                       {opt.label}
-                    </Text>
-                    <Text className={`text-[8px] font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
+                    </AppText>
+                    <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
                       {opt.desc}
-                    </Text>
+                    </AppText>
                   </Pressable>
                 );
               })}
@@ -332,7 +331,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
 
           {/* Memory Queue visibility */}
           <View style={{ gap: 6 }}>
-            <Text className="text-[10px] font-sans font-bold text-neutral-700">Memory Queue</Text>
+            <AppText variant="caption" className="font-sans font-bold text-neutral-700">Memory Queue</AppText>
             <View className="flex-row gap-2">
               {VISIBILITY_OPTIONS.map((opt) => {
                 const isSelected = memoryQueueVisibility === opt.id;
@@ -344,12 +343,12 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                       isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
                     }`}
                   >
-                    <Text className={`text-[10px] font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
+                    <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
                       {opt.label}
-                    </Text>
-                    <Text className={`text-[8px] font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
+                    </AppText>
+                    <AppText variant="micro" className={`font-sans ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
                       {opt.desc}
-                    </Text>
+                    </AppText>
                   </Pressable>
                 );
               })}
@@ -360,13 +359,13 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         {/* NOTIFICATIONS */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
           <View>
-            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">
+            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
               Accountability Notifications
-            </Text>
-            <Text className="text-[10px] text-neutral-400 font-sans mt-0.5">
+            </AppText>
+            <AppText variant="caption" className="text-neutral-400 font-sans mt-0.5">
               Max accountability nudges you'll receive per day, combined across all friends. A sender is told clearly if
               you've already hit this for today.
-            </Text>
+            </AppText>
           </View>
           <ChipRow
             value={accountabilityDailyCap}
@@ -382,31 +381,31 @@ export default function SettingsScreen({ state }: { state: AppState }) {
 
         {/* PAUSE REVIEWS */}
         <View className={`border rounded-xl p-4 ${pausedAt ? 'bg-amber-50 border-amber-200' : 'bg-white border-[#E5E5E5]'}`} style={{ gap: 10 }}>
-          <Text className={`text-[9px] font-extrabold uppercase tracking-wider ${pausedAt ? 'text-amber-700' : 'text-neutral-400'}`}>
+          <AppText variant="micro" className={`font-extrabold uppercase tracking-wider ${pausedAt ? 'text-amber-700' : 'text-neutral-400'}`}>
             Pause Reviews
-          </Text>
+          </AppText>
 
           {pausedAt ? (
             <>
-              <Text className="text-[11px] text-amber-900 font-sans leading-relaxed">
+              <AppText variant="caption" className="text-amber-900 font-sans leading-relaxed">
                 Paused since {new Date(pausedAt).toLocaleDateString()}
                 {pausedUntil ? ` -- planned return ${new Date(pausedUntil).toLocaleDateString()}` : ' -- resume manually whenever you\'re ready'}.
                 Nothing is due, nothing counts as missed, and friends won't see accountability nudges reach you while
                 you're away.
-              </Text>
+              </AppText>
               <Pressable
                 onPress={resumeReviews}
                 className="w-full py-2.5 bg-amber-600 rounded-xl items-center"
               >
-                <Text className="text-white font-sans font-bold text-xs">Resume Now</Text>
+                <AppText variant="label" className="text-white font-sans font-bold ">Resume Now</AppText>
               </Pressable>
             </>
           ) : (
             <>
-              <Text className="text-[10px] text-neutral-400 font-sans leading-relaxed">
+              <AppText variant="caption" className="text-neutral-400 font-sans leading-relaxed">
                 Going on a trip, or know you won't have your phone for a while? Pausing freezes your whole queue --
                 nothing becomes due, and no reviews count as missed, until you resume.
-              </Text>
+              </AppText>
               <ChipRow
                 value={pauseDuration}
                 onChange={setPauseDuration}
@@ -426,7 +425,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                 }}
                 className="w-full py-2.5 bg-neutral-800 rounded-xl items-center"
               >
-                <Text className="text-white font-sans font-bold text-xs">Pause Reviews</Text>
+                <AppText variant="label" className="text-white font-sans font-bold ">Pause Reviews</AppText>
               </Pressable>
             </>
           )}
@@ -437,15 +436,15 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           onPress={() => setShowOnboarding(true)}
           className="w-full py-3 bg-neutral-50 border border-neutral-200 rounded-xl items-center"
         >
-          <Text className="text-neutral-700 font-sans font-bold text-xs">View Getting Started Guide 🚀</Text>
+          <AppText variant="label" className="text-neutral-700 font-sans font-bold ">View Getting Started Guide 🚀</AppText>
         </Pressable>
 
         {/* ABOUT */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 4 }}>
-          <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">About</Text>
-          <Text className="text-xs font-sans text-neutral-600">
+          <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">About</AppText>
+          <AppText variant="label" className="font-sans text-neutral-600">
             Scripture Memory v{Constants.expoConfig?.version || '—'}
-          </Text>
+          </AppText>
         </View>
 
         {/* SIGN OUT */}
@@ -453,27 +452,27 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           onPress={signOut}
           className="w-full py-2.5 border border-neutral-300 rounded-xl items-center"
         >
-          <Text className="text-neutral-700 font-sans font-bold text-xs">Sign Out</Text>
+          <AppText variant="label" className="text-neutral-700 font-sans font-bold ">Sign Out</AppText>
         </Pressable>
 
         {/* DANGER ZONE */}
         <View className="bg-red-50 border border-red-200 rounded-xl p-4" style={{ gap: 10 }}>
-          <Text className="text-[9px] font-extrabold uppercase tracking-wider text-red-700">Danger Zone</Text>
+          <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-red-700">Danger Zone</AppText>
 
           {!showDeleteConfirm ? (
             <Pressable
               onPress={() => setShowDeleteConfirm(true)}
               className="w-full py-2.5 bg-white border border-red-300 rounded-xl items-center"
             >
-              <Text className="text-red-600 font-sans font-bold text-xs">Delete Account</Text>
+              <AppText variant="label" className="text-red-600 font-sans font-bold ">Delete Account</AppText>
             </Pressable>
           ) : (
             <View style={{ gap: 8 }}>
-              <Text className="text-[11px] font-sans font-bold text-red-800">
+              <AppText variant="caption" className="font-sans font-bold text-red-800">
                 This permanently deletes your account and all your data — verses, memory queue, recordings, and
                 circle memberships. This can't be undone.
-              </Text>
-              <Text className="text-[9px] font-sans text-red-700/80">Type DELETE to confirm:</Text>
+              </AppText>
+              <AppText variant="micro" className="font-sans text-red-700/80">Type DELETE to confirm:</AppText>
               <TextInput
                 value={deleteConfirmText}
                 onChangeText={setDeleteConfirmText}
@@ -483,7 +482,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
               />
               {needsReauth && !isGoogleUser && (
                 <>
-                  <Text className="text-[9px] font-sans text-red-700/80">Confirm your password:</Text>
+                  <AppText variant="micro" className="font-sans text-red-700/80">Confirm your password:</AppText>
                   <TextInput
                     value={deletePassword}
                     onChangeText={setDeletePassword}
@@ -498,7 +497,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                   onPress={resetDeleteFlow}
                   className="px-3 py-1.5 border border-neutral-300 rounded-lg bg-white"
                 >
-                  <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                  <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
                 </Pressable>
                 <Pressable
                   onPress={handleDeleteAccount}
@@ -509,9 +508,9 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                       : 'bg-red-600'
                   }`}
                 >
-                  <Text className="text-white font-sans font-bold text-[10px]">
+                  <AppText variant="caption" className="text-white font-sans font-bold ">
                     {deleting ? 'Deleting…' : needsReauth ? 'Confirm & Delete' : 'Delete My Account'}
-                  </Text>
+                  </AppText>
                 </Pressable>
               </View>
             </View>

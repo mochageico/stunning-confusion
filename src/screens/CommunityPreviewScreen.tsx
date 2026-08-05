@@ -3,6 +3,7 @@ import { ArrowLeft, Globe, Lock } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
+import { AppText } from '../components/design';
 
 // Read-only "profile page" for a community someone isn't a member of yet --
 // same hero layout as CommunityGroupDetailScreen's header, but with none of
@@ -27,23 +28,23 @@ export default function CommunityPreviewScreen({ state }: { state: AppState }) {
           </Pressable>
           <View className="flex-row items-center gap-1 bg-neutral-100 px-2.5 py-1 rounded-full">
             {previewCircle.isPublic ? <Globe size={10} color="#525252" /> : <Lock size={10} color="#525252" />}
-            <Text className="text-[9px] font-sans font-bold text-neutral-600 uppercase tracking-wide">
+            <AppText variant="micro" className="font-sans font-bold text-neutral-600 uppercase tracking-wide">
               {previewCircle.isPublic ? 'Public Circle' : 'Private Circle'}
-            </Text>
+            </AppText>
           </View>
         </View>
 
         <View className="border-b border-[#E5E5E5] pb-5" style={{ gap: 8 }}>
-          <Text className="text-[10px] uppercase tracking-widest font-extrabold text-neutral-400 font-sans">
+          <AppText variant="section" className="uppercase tracking-widest font-extrabold text-neutral-400 font-sans">
             Scripture Circle
-          </Text>
-          <Text className="text-[26px] leading-tight font-serif font-black text-[#1A1A1A]">{previewCircle.name}</Text>
-          <Text className="text-sm text-neutral-600 leading-relaxed font-sans">
+          </AppText>
+          <AppText variant="display" className="leading-tight font-serif font-black text-[#1A1A1A]">{previewCircle.name}</AppText>
+          <AppText variant="body" className="text-neutral-600 leading-relaxed font-sans">
             {previewCircle.description || 'No description yet.'}
-          </Text>
+          </AppText>
           <View className="pt-2">
-            <Text className="text-[8px] text-neutral-400 uppercase tracking-wider">Owner / Sponsor</Text>
-            <Text className="font-semibold text-neutral-700 text-[11px] font-sans mt-0.5">{previewCircle.ownerName}</Text>
+            <AppText variant="micro" className="text-neutral-400 uppercase tracking-wider">Owner / Sponsor</AppText>
+            <AppText variant="caption" className="font-semibold text-neutral-700 font-sans mt-0.5">{previewCircle.ownerName}</AppText>
           </View>
         </View>
 
@@ -53,15 +54,15 @@ export default function CommunityPreviewScreen({ state }: { state: AppState }) {
             isAlreadyJoined ? 'bg-neutral-100 border border-neutral-300' : 'bg-[#1A1A1A]'
           }`}
         >
-          <Text className={`text-xs font-bold uppercase tracking-wider ${isAlreadyJoined ? 'text-neutral-700' : 'text-white'}`}>
+          <AppText variant="label" className={`font-bold uppercase tracking-wider ${isAlreadyJoined ? 'text-neutral-700' : 'text-white'}`}>
             {isAlreadyJoined ? 'View Dashboard' : 'Join Circle'}
-          </Text>
+          </AppText>
         </Pressable>
 
         {!isAlreadyJoined && (
-          <Text className="text-[10px] text-neutral-400 font-sans text-center -mt-2">
+          <AppText variant="caption" className="text-neutral-400 font-sans text-center -mt-2">
             {user ? "You'll be added as a member right away." : 'Sign in to join this circle.'}
-          </Text>
+          </AppText>
         )}
       </ScrollView>
     </FadeInView>

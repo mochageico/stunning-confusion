@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { REACTION_EMOJIS } from '../data';
 import { MessageReaction } from '../types';
+import { AppText } from './design';
 
 // Shared by DMThreadScreen and CircleChatScreen -- renders under a message
 // bubble. Grouped pills (one per emoji actually used, with a count) plus a
@@ -34,7 +35,7 @@ export function ReactionBar({
           onPress={() => setPickerOpen(true)}
           className="w-5 h-5 rounded-full border border-neutral-200 items-center justify-center bg-white"
         >
-          <Text className="text-[10px] text-neutral-400">+</Text>
+          <AppText variant="caption" className="text-neutral-400">+</AppText>
         </Pressable>
       </View>
     );
@@ -52,10 +53,10 @@ export function ReactionBar({
               mine ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-neutral-50 border-neutral-200'
             }`}
           >
-            <Text className="text-[10px]">{emoji}</Text>
-            <Text className={`text-[8px] font-sans font-bold ${mine ? 'text-white' : 'text-neutral-500'}`}>
+            <AppText variant="caption">{emoji}</AppText>
+            <AppText variant="micro" className={`font-sans font-bold ${mine ? 'text-white' : 'text-neutral-500'}`}>
               {reactors.length}
-            </Text>
+            </AppText>
           </Pressable>
         );
       })}
@@ -63,7 +64,7 @@ export function ReactionBar({
         onPress={() => setPickerOpen((v) => !v)}
         className="w-5 h-5 rounded-full border border-neutral-200 items-center justify-center bg-white"
       >
-        <Text className="text-[10px] text-neutral-400">+</Text>
+        <AppText variant="caption" className="text-neutral-400">+</AppText>
       </Pressable>
       {pickerOpen && (
         <View className="flex-row items-center gap-2 bg-white border border-neutral-200 rounded-full px-2.5 py-1">
@@ -75,7 +76,7 @@ export function ReactionBar({
                 setPickerOpen(false);
               }}
             >
-              <Text className="text-sm">{emoji}</Text>
+              <AppText variant="body">{emoji}</AppText>
             </Pressable>
           ))}
         </View>

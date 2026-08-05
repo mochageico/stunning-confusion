@@ -3,6 +3,7 @@ import { ArrowLeft, MessageCircle } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView } from '../components/ui';
+import { AppText } from '../components/design';
 
 function timeAgo(iso: string): string {
   if (!iso) return '';
@@ -29,21 +30,21 @@ export default function MessagesScreen({ state }: { state: AppState }) {
             <ArrowLeft size={14} color="#262626" />
           </Pressable>
           <View>
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">Messages</Text>
-            <Text className="text-base font-serif font-bold text-neutral-900 leading-none mt-0.5">Direct Messages</Text>
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">Messages</AppText>
+            <AppText variant="title" className="font-serif font-bold text-neutral-900 leading-none mt-0.5">Direct Messages</AppText>
           </View>
         </View>
 
         {!user ? (
-          <Text className="text-xs text-neutral-400 font-sans px-1">Sign in to message friends.</Text>
+          <AppText variant="label" className="text-neutral-400 font-sans px-1">Sign in to message friends.</AppText>
         ) : loadingDmThreads ? (
-          <Text className="text-xs text-neutral-400 font-sans px-1">Loading conversations…</Text>
+          <AppText variant="label" className="text-neutral-400 font-sans px-1">Loading conversations…</AppText>
         ) : dmThreads.length === 0 ? (
           <View className="p-6 border border-dashed border-neutral-200 rounded-2xl items-center" style={{ gap: 4 }}>
             <MessageCircle size={20} color="#a3a3a3" />
-            <Text className="text-center text-xs text-neutral-400 font-sans mt-1">
+            <AppText variant="label" className="text-center text-neutral-400 font-sans mt-1">
               No conversations yet. Message a friend from their profile to start one.
-            </Text>
+            </AppText>
           </View>
         ) : (
           <View style={{ gap: 8 }}>
@@ -60,18 +61,18 @@ export default function MessagesScreen({ state }: { state: AppState }) {
                   <View className="flex-1">
                     <View className="flex-row items-center justify-between">
                       <View className="flex-row items-center gap-1">
-                        <Text className="text-xs font-sans font-bold text-neutral-800">{thread.otherName}</Text>
-                        {hasChallenge && <Text className="text-[10px]">🏆</Text>}
+                        <AppText variant="label" className="font-sans font-bold text-neutral-800">{thread.otherName}</AppText>
+                        {hasChallenge && <AppText variant="caption">🏆</AppText>}
                       </View>
-                      <Text className="text-[9px] text-neutral-400 font-sans">{timeAgo(thread.lastMessageAt)}</Text>
+                      <AppText variant="micro" className="text-neutral-400 font-sans">{timeAgo(thread.lastMessageAt)}</AppText>
                     </View>
-                    <Text className="text-[10px] text-neutral-500 font-sans mt-0.5" numberOfLines={1} ellipsizeMode="tail">
+                    <AppText variant="caption" className="text-neutral-500 font-sans mt-0.5" numberOfLines={1} ellipsizeMode="tail">
                       {thread.lastMessage || 'Say hello 👋'}
-                    </Text>
+                    </AppText>
                     {!isFriend && (
-                      <Text className="text-[8px] text-amber-600 font-sans font-bold uppercase tracking-wide mt-1">
+                      <AppText variant="micro" className="text-amber-600 font-sans font-bold uppercase tracking-wide mt-1">
                         May be read-only
-                      </Text>
+                      </AppText>
                     )}
                   </View>
                 </Pressable>

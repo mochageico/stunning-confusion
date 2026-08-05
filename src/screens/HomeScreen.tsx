@@ -545,7 +545,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
               # of verses
             </AppText>
             <View style={{ flex: 1, maxWidth: 150 }}>
-              <Dropdown options={LOOKAHEAD_OPTIONS} value={primingLookahead} onChange={setPrimingLookahead} title="Priming Window Size" />
+              <Dropdown options={LOOKAHEAD_OPTIONS} value={primingLookahead} onChange={setPrimingLookahead} title="Priming Window Size" compact />
             </View>
           </View>
 
@@ -574,9 +574,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
         </CollapsibleCard>
 
         {/* Primary action, promoted out of the old card footer to full width.
-            Edit Queue becomes a quieter link beneath it rather than an equal
-            half -- two long labels sharing a row is exactly the pattern that
-            breaks at larger text sizes. */}
+            The "Edit Memory Verse Queue" link that used to sit under it is
+            gone -- the queue is one tap away through Memory Desk in the grid
+            below, and Home doesn't need a second door to it. */}
         <View style={{ gap: 8 }}>
           <Pressable
             onPress={() => {
@@ -595,15 +595,6 @@ export default function HomeScreen({ state }: { state: AppState }) {
               Listen to Today's Scripture
             </AppText>
           </Pressable>
-          <Pressable
-            onPress={() => navigateTo('activePlan')}
-            className="w-full items-center justify-center"
-            style={{ minHeight: MIN_TOUCH }}
-          >
-            <AppText variant="caption" className="text-neutral-500 font-sans font-bold underline">
-              Edit Memory Verse Queue
-            </AppText>
-          </Pressable>
         </View>
 
         {/* FEATURES GRID -- 2x2 at minHeight, replacing 3-across at a fixed
@@ -615,7 +606,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
             <FeatureTile onPress={() => navigateTo('memoryDesk')} Icon={FolderOpen} label="Memory Desk" />
           </View>
           <View className="flex-row" style={{ gap: 12 }}>
-            <FeatureTile onPress={() => navigateTo('books')} Icon={BookMarked} label="Verse Search / Bible" primary />
+            <FeatureTile onPress={() => navigateTo('books')} Icon={BookMarked} label="Verse Search / Bible" />
             <FeatureTile onPress={() => navigateTo('referenceDrill')} Icon={Target} label="Reference Drill (practice)" />
           </View>
         </View>

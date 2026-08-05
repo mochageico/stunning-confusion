@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
 import { AppState } from '../state/useAppState';
 import { recordingLabel } from '../lib/recordingLabel';
+import { AppText } from '../components/design';
 
 export default function ProfileScreen({ state }: { state: AppState }) {
   const {
@@ -56,10 +57,10 @@ export default function ProfileScreen({ state }: { state: AppState }) {
           <View className="flex-row items-center gap-3">
             <AvatarCircle photoUri={user?.photoURL} name={user?.displayName || 'Friend'} size={48} />
             <View>
-              <Text className="text-lg font-serif font-bold text-[#1A1A1A] leading-tight">
+              <AppText variant="title" className="font-serif font-bold text-[#1A1A1A] leading-tight">
                 {user?.displayName || 'Friend'}
-              </Text>
-              <Text className="text-xs font-sans text-neutral-400 mt-0.5">Progress synced to your account</Text>
+              </AppText>
+              <AppText variant="label" className="font-sans text-neutral-400 mt-0.5">Progress synced to your account</AppText>
             </View>
           </View>
 
@@ -80,7 +81,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
               onPress={handleSignOut}
               className="px-2.5 py-1.5 border border-red-200 bg-red-50/50 rounded-lg"
             >
-              <Text className="text-red-600 font-sans font-bold text-[9px] uppercase tracking-wide">Sign Out</Text>
+              <AppText variant="micro" className="text-red-600 font-sans font-bold uppercase tracking-wide">Sign Out</AppText>
             </Pressable>
           </View>
         </View>
@@ -88,18 +89,18 @@ export default function ProfileScreen({ state }: { state: AppState }) {
         {/* Calculated Metrics cards (High Contrast) */}
         <View className="flex-row gap-2.5">
           <View className="flex-1 bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-2.5 items-center gap-0.5">
-            <Text className="text-[14px] font-bold text-[#1A1A1A] font-mono">{versesLearnedCount}</Text>
-            <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-wide">memorized</Text>
+            <AppText variant="body" className="font-bold text-[#1A1A1A] font-mono">{versesLearnedCount}</AppText>
+            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">memorized</AppText>
           </View>
 
           <View className="flex-1 bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-2.5 items-center gap-0.5">
-            <Text className="text-[14px] font-bold text-amber-600 font-mono">{learningCount}</Text>
-            <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-wide">learning</Text>
+            <AppText variant="body" className="font-bold text-amber-600 font-mono">{learningCount}</AppText>
+            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">learning</AppText>
           </View>
 
           <View className="flex-1 bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-2.5 items-center gap-0.5">
-            <Text className="text-[14px] font-bold text-emerald-600 font-mono">{memoryStreak}</Text>
-            <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-wide">memory streak</Text>
+            <AppText variant="body" className="font-bold text-emerald-600 font-mono">{memoryStreak}</AppText>
+            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">memory streak</AppText>
           </View>
         </View>
 
@@ -107,20 +108,20 @@ export default function ProfileScreen({ state }: { state: AppState }) {
           onPress={() => navigateTo('dashboard')}
           className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center justify-center"
         >
-          <Text className="text-white font-sans font-bold text-xs">View Full Dashboard 📊</Text>
+          <AppText variant="label" className="text-white font-sans font-bold ">View Full Dashboard 📊</AppText>
         </Pressable>
 
         {/* GitHub-style visual memory grid representation */}
         <View className="gap-1.5">
           <View className="flex-row items-center justify-between px-1">
             <View className="flex-row items-center">
-              <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+              <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
                 PAST 15 DAYS ACTIVITY
-              </Text>
+              </AppText>
               <HelpTooltip text="One square per day. A square fills in on days you banked a mastery touch on a verse you're learning — darker green means more touches that day. Spaced reviews aren't counted here." />
             </View>
             <Pressable onPress={() => navigateTo('fullHistory')}>
-              <Text className="text-[9px] font-sans font-bold underline text-neutral-500">View Full History</Text>
+              <AppText variant="micro" className="font-sans font-bold underline text-neutral-500">View Full History</AppText>
             </Pressable>
           </View>
           <View className="border border-[#E5E5E5] rounded-xl p-3 bg-white">
@@ -139,8 +140,8 @@ export default function ProfileScreen({ state }: { state: AppState }) {
                     style={{ width: '18%' }}
                     className={`h-9 border rounded-md items-center justify-center font-mono ${color}`}
                   >
-                    <Text className={`text-[8px] font-bold ${textColor}`}>{item.day.split(' ')[1]}</Text>
-                    <Text className={`text-[10px] font-extrabold ${textColor}`}>{item.count > 0 ? `+${item.count}` : '0'}</Text>
+                    <AppText variant="micro" className={`font-bold ${textColor}`}>{item.day.split(' ')[1]}</AppText>
+                    <AppText variant="caption" className={`font-extrabold ${textColor}`}>{item.count > 0 ? `+${item.count}` : '0'}</AppText>
                   </View>
                 );
               })}
@@ -155,9 +156,9 @@ export default function ProfileScreen({ state }: { state: AppState }) {
         {receivedAccountabilityNudges.length > 0 && (
           <View className="gap-1.5">
             <View className="flex-row items-center px-1">
-              <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+              <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
                 Notifications ({receivedAccountabilityNudges.filter((n) => !n.read).length} new)
-              </Text>
+              </AppText>
             </View>
             <View className="gap-1.5">
               {receivedAccountabilityNudges.map((n) => (
@@ -172,8 +173,8 @@ export default function ProfileScreen({ state }: { state: AppState }) {
                     <Bell size={12} color="#b45309" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text className="text-[10px] font-bold text-neutral-800">{n.fromName}</Text>
-                    <Text className="text-[10px] text-neutral-600 font-sans mt-0.5">{n.message}</Text>
+                    <AppText variant="caption" className="font-bold text-neutral-800">{n.fromName}</AppText>
+                    <AppText variant="caption" className="text-neutral-600 font-sans mt-0.5">{n.message}</AppText>
                   </View>
                   <Pressable onPress={() => dismissAccountabilityNudge(n.id)} hitSlop={8}>
                     <X size={14} color="#a3a3a3" />
@@ -189,27 +190,27 @@ export default function ProfileScreen({ state }: { state: AppState }) {
         <View className="gap-1.5">
           <View className="flex-row items-center justify-between px-1">
             <View className="flex-row items-center">
-              <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+              <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
                 FRIENDS ({friends.length})
-              </Text>
+              </AppText>
               <HelpTooltip text="People who accepted your friend request, or whose request you accepted. Friends stay friends even if you leave a circle together." />
             </View>
             <Pressable
               onPress={() => navigateTo('findFriends')}
               className="bg-[#1A1A1A] px-2 py-1 rounded relative"
             >
-              <Text className="text-[9px] text-white font-sans font-bold uppercase tracking-wider">Find Friends +</Text>
+              <AppText variant="micro" className="text-white font-sans font-bold uppercase tracking-wider">Find Friends +</AppText>
               {incomingFriendRequests.length > 0 && (
                 <View className="absolute -top-1.5 -right-1.5 bg-red-600 w-4 h-4 rounded-full items-center justify-center border border-white">
-                  <Text className="text-white text-[8px] font-black">{incomingFriendRequests.length}</Text>
+                  <AppText variant="micro" className="text-white font-black">{incomingFriendRequests.length}</AppText>
                 </View>
               )}
             </Pressable>
           </View>
           {friends.length === 0 ? (
-            <Text className="text-[10px] text-neutral-400 font-sans italic px-1">
+            <AppText variant="caption" className="text-neutral-400 font-sans italic px-1">
               No friends yet — search for people to add above.
-            </Text>
+            </AppText>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 6 }}>
               {friends.map((f) => {
@@ -220,11 +221,11 @@ export default function ProfileScreen({ state }: { state: AppState }) {
                     className="flex-row items-center gap-2 border border-neutral-200 rounded-xl p-2 bg-white shrink-0"
                   >
                     <View className="w-7 h-7 rounded-full border border-neutral-300 bg-indigo-50 items-center justify-center">
-                      <Text className="font-serif font-black text-[10px]">{f.displayName.charAt(0).toUpperCase()}</Text>
+                      <AppText variant="caption" className="font-serif font-black ">{f.displayName.charAt(0).toUpperCase()}</AppText>
                     </View>
                     <View>
-                      <Text className="text-[10px] font-bold text-neutral-800 leading-none">{f.displayName}</Text>
-                      <Text className="text-[8px] font-sans text-neutral-400 leading-none mt-0.5">View Profile</Text>
+                      <AppText variant="caption" className="font-bold text-neutral-800 leading-none">{f.displayName}</AppText>
+                      <AppText variant="micro" className="font-sans text-neutral-400 leading-none mt-0.5">View Profile</AppText>
                     </View>
                   </Pressable>
                 );
@@ -237,9 +238,9 @@ export default function ProfileScreen({ state }: { state: AppState }) {
         <View className="gap-1.5">
           <View className="flex-row items-center justify-between px-1">
             <View className="flex-row items-center">
-              <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+              <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
                 COMMUNITIES ({myCircles.length})
-              </Text>
+              </AppText>
               <HelpTooltip text="The scripture circles you belong to. Tap one to open it." />
             </View>
           </View>
@@ -257,12 +258,12 @@ export default function ProfileScreen({ state }: { state: AppState }) {
                   className="border border-neutral-200 rounded-xl p-2.5 bg-neutral-50/50 flex-row justify-between items-center"
                 >
                   <View className="flex-1 pr-2">
-                    <Text className="text-xs font-sans font-bold text-neutral-800 leading-snug">{c.name}</Text>
-                    <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">{c.description}</Text>
+                    <AppText variant="label" className="font-sans font-bold text-neutral-800 leading-snug">{c.name}</AppText>
+                    <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">{c.description}</AppText>
                   </View>
-                  <Text className="text-[7.5px] font-bold font-sans bg-neutral-900 text-white px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                  <AppText variant="micro" className="font-bold font-sans bg-neutral-900 text-white px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                     {role}
-                  </Text>
+                  </AppText>
                 </Pressable>
               );
             })}
@@ -272,9 +273,9 @@ export default function ProfileScreen({ state }: { state: AppState }) {
         {/* LIST OF SAVED VOICE RECORDINGS */}
         <View className="gap-2">
           <View className="flex-row items-center px-1">
-            <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
               RECORDED CHAPTERS ({userRecordings.length})
-            </Text>
+            </AppText>
             <HelpTooltip text="Recitations you've recorded or imported. Tap one to play it back or adjust where each verse starts." />
           </View>
 
@@ -282,7 +283,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
             <ScrollView contentContainerStyle={{ gap: 8 }}>
               {userRecordings.length === 0 ? (
                 <View className="items-center p-4 bg-[#F3F2F1]/55 rounded-xl border border-dashed border-[#E5E5E5]">
-                  <Text className="text-xs text-[#888]">No recorded chapters yet. Tap Record tab to make one!</Text>
+                  <AppText variant="label" className="text-[#888]">No recorded chapters yet. Tap Record tab to make one!</AppText>
                 </View>
               ) : (
                 userRecordings.map((rec) => {
@@ -299,16 +300,16 @@ export default function ProfileScreen({ state }: { state: AppState }) {
                       <View className="flex-row items-center justify-between">
                         <View className="flex-1 pr-2">
                           <View className="flex-row items-center gap-1.5">
-                            <Text className="text-xs font-black text-[#1A1A1A] leading-tight">
+                            <AppText variant="label" className="font-black text-[#1A1A1A] leading-tight">
                               {recordingLabel(rec)}
-                            </Text>
-                            <Text className="text-[8px] bg-neutral-100 text-neutral-600 font-sans border border-neutral-200 px-1.5 py-0.5 rounded font-normal uppercase">
+                            </AppText>
+                            <AppText variant="micro" className="bg-neutral-100 text-neutral-600 font-sans border border-neutral-200 px-1.5 py-0.5 rounded font-normal uppercase">
                               View Sync
-                            </Text>
+                            </AppText>
                           </View>
-                          <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
+                          <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">
                             {rec.date} • {rec.translation} • {rec.duration} seconds
-                          </Text>
+                          </AppText>
                         </View>
                         <Pressable
                           onPress={(e) => {

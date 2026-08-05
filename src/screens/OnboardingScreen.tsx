@@ -3,6 +3,7 @@ import { Check, Lock, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
+import { AppText } from '../components/design';
 
 export default function OnboardingScreen({ state }: { state: AppState }) {
   const {
@@ -54,8 +55,8 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
         {/* Header */}
         <View className="flex-row items-center justify-between border-b border-neutral-100 pb-3">
           <View>
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">WELCOME</Text>
-            <Text className="text-lg font-serif font-black text-[#1A1A1A] leading-none mt-0.5">Getting Started</Text>
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">WELCOME</AppText>
+            <AppText variant="title" className="font-serif font-black text-[#1A1A1A] leading-none mt-0.5">Getting Started</AppText>
           </View>
           <Pressable
             onPress={dismissOnboarding}
@@ -67,21 +68,21 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
 
         {allComplete ? (
           <View className="border border-emerald-200 bg-emerald-50 rounded-xl p-5 items-center" style={{ gap: 8 }}>
-            <Text className="text-2xl">🎉</Text>
-            <Text className="text-sm font-serif font-black text-emerald-800">You're all set!</Text>
-            <Text className="text-[11px] text-emerald-700 text-center leading-relaxed font-sans">
+            <AppText variant="display">🎉</AppText>
+            <AppText variant="body" className="font-serif font-black text-emerald-800">You're all set!</AppText>
+            <AppText variant="caption" className="text-emerald-700 text-center leading-relaxed font-sans">
               You've tried everything in this guide. Come back anytime from Settings.
-            </Text>
+            </AppText>
             <Pressable onPress={dismissOnboarding} className="bg-emerald-600 px-5 py-2.5 rounded-lg mt-1">
-              <Text className="text-white font-sans font-bold text-xs uppercase tracking-wider">Done</Text>
+              <AppText variant="label" className="text-white font-sans font-bold uppercase tracking-wider">Done</AppText>
             </Pressable>
           </View>
         ) : (
-          <Text className="text-xs text-neutral-600 leading-relaxed font-sans">
+          <AppText variant="label" className="text-neutral-600 leading-relaxed font-sans">
             Four things to try, one at a time — each unlocks once you've finished the one before it. Every step takes
             you to the real screen; while you're there, look for the "Back to Guide" bar at the bottom to come back
             here.
-          </Text>
+          </AppText>
         )}
 
         {/* STEPS */}
@@ -112,29 +113,25 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
                       ) : isLocked ? (
                         <Lock size={10} color="#a3a3a3" />
                       ) : (
-                        <Text className="text-[10px] font-black text-neutral-400">{i + 1}</Text>
+                        <AppText variant="caption" className="font-black text-neutral-400">{i + 1}</AppText>
                       )}
                     </View>
-                    <Text className={`text-sm font-serif font-black flex-1 ${isLocked ? 'text-neutral-400' : 'text-[#1A1A1A]'}`}>
+                    <AppText variant="body" className={`font-serif font-black flex-1 ${isLocked ? 'text-neutral-400' : 'text-[#1A1A1A]'}`}>
                       {step.title}
-                    </Text>
+                    </AppText>
                   </View>
                 </View>
-                <Text className={`text-[11px] leading-relaxed font-sans ${isLocked ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                <AppText variant="caption" className={`leading-relaxed font-sans ${isLocked ? 'text-neutral-400' : 'text-neutral-600'}`}>
                   {isLocked ? `Complete "${steps[i - 1].title}" first to unlock this step.` : step.description}
-                </Text>
+                </AppText>
                 {!isLocked && (
                   <Pressable
                     onPress={() => startOnboardingStep(i, step.onPress)}
                     className={`self-start px-3.5 py-2 rounded-lg ${isComplete ? 'bg-white border border-neutral-300' : 'bg-[#1A1A1A]'}`}
                   >
-                    <Text
-                      className={`font-sans font-bold text-[10px] uppercase tracking-wider ${
-                        isComplete ? 'text-neutral-600' : 'text-white'
-                      }`}
-                    >
+                    <AppText variant="section" className={`font-sans font-bold uppercase tracking-wider ${ isComplete ? 'text-neutral-600' : 'text-white' }`} >
                       {isComplete ? 'Review Again' : step.buttonLabel}
-                    </Text>
+                    </AppText>
                   </Pressable>
                 )}
               </View>
@@ -143,7 +140,7 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
         </View>
 
         <Pressable onPress={dismissOnboarding} className="w-full py-2.5 items-center">
-          <Text className="text-neutral-400 font-sans font-bold text-[11px] underline">Skip for now</Text>
+          <AppText variant="caption" className="text-neutral-400 font-sans font-bold underline">Skip for now</AppText>
         </Pressable>
       </ScrollView>
     </FadeInView>

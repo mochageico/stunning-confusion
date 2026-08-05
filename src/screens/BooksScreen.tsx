@@ -3,6 +3,7 @@ import { ScrollView, View, Text, Pressable, TextInput } from 'react-native';
 import { ArrowLeft, ChevronRight, Search, X } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
+import { AppText } from '../components/design';
 
 export default function BooksScreen({ state }: { state: AppState }) {
   const { BOOKS, handleBack, navigateTo } = state;
@@ -26,8 +27,8 @@ export default function BooksScreen({ state }: { state: AppState }) {
             </Pressable>
           )}
           <View>
-            <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">BIBLE DIRECTORY</Text>
-            <Text className="text-xl font-serif font-bold text-[#1A1A1A]">Select Book</Text>
+            <AppText variant="micro" className="uppercase tracking-wider font-bold text-[#888] font-sans">BIBLE DIRECTORY</AppText>
+            <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Select Book</AppText>
           </View>
         </View>
 
@@ -55,9 +56,9 @@ export default function BooksScreen({ state }: { state: AppState }) {
           {/* Old Testament */}
           {otBooks.length > 0 && (
             <View className="gap-2">
-              <Text className="text-[10px] font-bold text-[#888] tracking-widest font-sans border-b border-[#E5E5E5] pb-1">
+              <AppText variant="caption" className="font-bold text-[#888] tracking-widest font-sans border-b border-[#E5E5E5] pb-1">
                 OLD TESTAMENT
-              </Text>
+              </AppText>
               <View className="divide-y divide-neutral-100 border border-[#E5E5E5] rounded-xl overflow-hidden bg-white">
                 {otBooks.map((book) => (
                   <Pressable
@@ -65,7 +66,7 @@ export default function BooksScreen({ state }: { state: AppState }) {
                     onPress={() => navigateTo('chapters', book.name)}
                     className="w-full px-4 py-3 flex-row items-center justify-between"
                   >
-                    <Text className="font-serif font-medium text-base text-[#1A1A1A]">{book.name}</Text>
+                    <AppText variant="title" className="font-serif font-medium text-[#1A1A1A]">{book.name}</AppText>
                     <ChevronRight size={16} color="#888888" />
                   </Pressable>
                 ))}
@@ -76,9 +77,9 @@ export default function BooksScreen({ state }: { state: AppState }) {
           {/* New Testament */}
           {ntBooks.length > 0 && (
             <View className="gap-2">
-              <Text className="text-[10px] font-bold text-[#888] tracking-widest font-sans border-b border-[#E5E5E5] pb-1">
+              <AppText variant="caption" className="font-bold text-[#888] tracking-widest font-sans border-b border-[#E5E5E5] pb-1">
                 NEW TESTAMENT
-              </Text>
+              </AppText>
               <View className="divide-y divide-neutral-100 border border-[#E5E5E5] rounded-xl overflow-hidden bg-white">
                 {ntBooks.map((book) => (
                   <Pressable
@@ -86,7 +87,7 @@ export default function BooksScreen({ state }: { state: AppState }) {
                     onPress={() => navigateTo('chapters', book.name)}
                     className="w-full px-4 py-3 flex-row items-center justify-between"
                   >
-                    <Text className="font-serif font-medium text-base text-[#1A1A1A]">{book.name}</Text>
+                    <AppText variant="title" className="font-serif font-medium text-[#1A1A1A]">{book.name}</AppText>
                     <ChevronRight size={16} color="#888888" />
                   </Pressable>
                 ))}
@@ -95,7 +96,7 @@ export default function BooksScreen({ state }: { state: AppState }) {
           )}
 
           {otBooks.length === 0 && ntBooks.length === 0 && (
-            <Text className="text-center text-xs text-neutral-400 py-6">No books match "{query}".</Text>
+            <AppText variant="label" className="text-center text-neutral-400 py-6">No books match "{query}".</AppText>
           )}
         </View>
       </ScrollView>

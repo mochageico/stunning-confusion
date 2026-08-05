@@ -3,6 +3,8 @@ import { PanResponder, Pressable, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Eraser } from 'lucide-react-native';
 
+import { AppText } from './design';
+
 // ============================================================================
 // DOODLE CANVAS -- deliberate backbone/v1, not a full drawing tool.
 // ----------------------------------------------------------------------------
@@ -79,7 +81,7 @@ export default function DoodleCanvas({ strokes, onChange }: DoodleCanvasProps) {
         className={`flex-row items-center justify-center gap-1.5 py-2 rounded-lg border ${strokes.length === 0 ? 'border-neutral-200' : 'border-neutral-300'}`}
       >
         <Eraser size={13} color={strokes.length === 0 ? '#d4d4d4' : '#525252'} />
-        <Text className={`text-xs font-sans font-bold ${strokes.length === 0 ? 'text-neutral-300' : 'text-neutral-600'}`}>Clear</Text>
+        <AppText variant="caption" className={`font-sans font-bold ${strokes.length === 0 ? 'text-neutral-300' : 'text-neutral-600'}`}>Clear</AppText>
       </Pressable>
     </View>
   );

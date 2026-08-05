@@ -6,6 +6,7 @@ import { ArrowLeft, Send } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
 import { ReactionBar } from '../components/ReactionBar';
+import { AppText } from '../components/design';
 
 export default function CircleChatScreen({ state }: { state: AppState }) {
   const {
@@ -53,8 +54,8 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
             <ArrowLeft size={14} color="#262626" />
           </Pressable>
           <View>
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">Group Chat</Text>
-            <Text className="text-sm font-serif font-bold text-neutral-900 leading-none mt-0.5">{activeCircle.name}</Text>
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">Group Chat</AppText>
+            <AppText variant="body" className="font-serif font-bold text-neutral-900 leading-none mt-0.5">{activeCircle.name}</AppText>
           </View>
         </View>
 
@@ -66,11 +67,11 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
           {loadingActiveCircleMessages ? (
-            <Text className="text-xs text-neutral-400 font-sans text-center mt-4">Loading…</Text>
+            <AppText variant="label" className="text-neutral-400 font-sans text-center mt-4">Loading…</AppText>
           ) : activeCircleMessages.length === 0 ? (
-            <Text className="text-xs text-neutral-400 font-sans text-center mt-4">
+            <AppText variant="label" className="text-neutral-400 font-sans text-center mt-4">
               No messages yet. Kick off the conversation 👋
-            </Text>
+            </AppText>
           ) : (
             activeCircleMessages.map((msg) => {
               const isMine = msg.fromUid === user?.uid;
@@ -79,8 +80,8 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
                   <View className={`flex-row gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
                     <AvatarCircle name={msg.fromName} photoUri={msg.fromAvatarUrl || null} size={24} />
                     <View className={`max-w-[74%] px-3 py-2 rounded-2xl ${isMine ? 'bg-[#1A1A1A] rounded-br-sm' : 'bg-neutral-100 rounded-bl-sm'}`}>
-                      {!isMine && <Text className="text-[8px] font-sans font-bold text-neutral-500 mb-0.5">{msg.fromName}</Text>}
-                      <Text className={`text-xs font-sans ${isMine ? 'text-white' : 'text-neutral-800'}`}>{msg.text}</Text>
+                      {!isMine && <AppText variant="micro" className="font-sans font-bold text-neutral-500 mb-0.5">{msg.fromName}</AppText>}
+                      <AppText variant="label" className={`font-sans ${isMine ? 'text-white' : 'text-neutral-800'}`}>{msg.text}</AppText>
                     </View>
                   </View>
                   <ReactionBar

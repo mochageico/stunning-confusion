@@ -6,6 +6,7 @@ import { FadeInView, useKeyboardHeight } from '../components/ui';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { useEmailAuth } from '../state/useEmailAuth';
 import { AppState } from '../state/useAppState';
+import { AppText } from '../components/design';
 
 // Shown instead of the whole tabbed app whenever there's no signed-in user --
 // sign-in/sign-up now happens here, up front, rather than being buried in the
@@ -80,10 +81,10 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
           <View className="w-14 h-14 rounded-2xl bg-[#1A1A1A] items-center justify-center">
             <BookOpen size={26} color="#FFFFFF" />
           </View>
-          <Text className="text-2xl font-serif font-black text-[#1A1A1A] text-center">Scripture Memory</Text>
-          <Text className="text-xs font-sans text-neutral-500 text-center leading-relaxed max-w-[280px]">
+          <AppText variant="display" className="font-serif font-black text-[#1A1A1A] text-center">Scripture Memory</AppText>
+          <AppText variant="label" className="font-sans text-neutral-500 text-center leading-relaxed max-w-[280px]">
             Sign in or create an account to start memorizing scripture and syncing your progress.
-          </Text>
+          </AppText>
         </View>
 
         <View style={{ gap: 12 }}>
@@ -92,15 +93,15 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
             disabled={submitting}
             className="w-full py-3 border-2 border-[#1A1A1A] rounded-xl items-center"
           >
-            <Text className="text-[#1A1A1A] font-sans font-bold text-xs uppercase tracking-wider">
+            <AppText variant="label" className="text-[#1A1A1A] font-sans font-bold uppercase tracking-wider">
               Continue with Google
-            </Text>
+            </AppText>
           </Pressable>
 
           <Pressable onPress={() => setShowEmailAuth(!showEmailAuth)}>
-            <Text className="text-[11px] font-sans font-bold underline text-neutral-500 text-center">
+            <AppText variant="caption" className="font-sans font-bold underline text-neutral-500 text-center">
               {showEmailAuth ? 'Hide email sign-in' : 'Or use email instead'}
-            </Text>
+            </AppText>
           </Pressable>
 
           {showEmailAuth && (
@@ -113,9 +114,9 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
                       authMode === 'signIn' ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
                     }`}
                   >
-                    <Text className={`text-[10px] font-sans font-bold uppercase ${authMode === 'signIn' ? 'text-white' : 'text-neutral-500'}`}>
+                    <AppText variant="caption" className={`font-sans font-bold uppercase ${authMode === 'signIn' ? 'text-white' : 'text-neutral-500'}`}>
                       Sign In
-                    </Text>
+                    </AppText>
                   </Pressable>
                   <Pressable
                     onPress={() => setAuthMode('signUp')}
@@ -123,9 +124,9 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
                       authMode === 'signUp' ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
                     }`}
                   >
-                    <Text className={`text-[10px] font-sans font-bold uppercase ${authMode === 'signUp' ? 'text-white' : 'text-neutral-500'}`}>
+                    <AppText variant="caption" className={`font-sans font-bold uppercase ${authMode === 'signUp' ? 'text-white' : 'text-neutral-500'}`}>
                       Create Account
-                    </Text>
+                    </AppText>
                   </Pressable>
                 </View>
 
@@ -158,9 +159,9 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
                   disabled={submitting}
                   className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center"
                 >
-                  <Text className="text-white font-sans font-bold text-[11px] uppercase tracking-wider">
+                  <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wider">
                     {authMode === 'signUp' ? 'Create Account' : 'Sign In'}
-                  </Text>
+                  </AppText>
                 </Pressable>
 
                 {/* Sign-in only -- meaningless while creating an account.
@@ -168,9 +169,9 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
                     than adding a second address input. */}
                 {authMode === 'signIn' && (
                   <Pressable onPress={handleForgotPassword} disabled={submitting} className="items-center pt-0.5">
-                    <Text className="text-[10px] font-sans font-bold underline text-neutral-500">
+                    <AppText variant="caption" className="font-sans font-bold underline text-neutral-500">
                       Forgot your password?
-                    </Text>
+                    </AppText>
                   </Pressable>
                 )}
               </View>

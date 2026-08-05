@@ -4,6 +4,7 @@ import { Highlighter, Pencil, X } from 'lucide-react-native';
 
 import { firstLetterLine, firstLetterOnly } from '../lib/recitation';
 import DoodleCanvas from './DoodleCanvas';
+import { AppText } from './design';
 
 // ============================================================================
 // MEMORY GRID
@@ -109,12 +110,12 @@ export default function MemoryGrid({
           <View key={key} style={{ width: widthPct }} className={`rounded-xl border relative ${boxClass}`}>
             {isSelected && !isActive && (
               <View className="absolute -top-1.5 -right-1.5 bg-black w-3.5 h-3.5 rounded-full items-center justify-center border border-white z-10">
-                <Text className="text-white text-[8px] font-black">✓</Text>
+                <AppText variant="micro" className="text-white font-black">✓</AppText>
               </View>
             )}
             <View className="flex-row items-center justify-between px-2 pt-1.5">
               <View className={`px-1 rounded ${isActive ? 'bg-white/20' : 'bg-neutral-100'}`}>
-                <Text className={`text-[8px] font-mono font-extrabold ${isActive ? 'text-white' : 'text-neutral-500'}`}>{v.verse}</Text>
+                <AppText variant="micro" className={`font-mono font-extrabold ${isActive ? 'text-white' : 'text-neutral-500'}`}>{v.verse}</AppText>
               </View>
               <View className="flex-row items-center gap-2">
                 {onToggleHighlight && (
@@ -148,7 +149,7 @@ export default function MemoryGrid({
                   })}
                 </View>
               ) : (
-                <Text className={`font-mono text-[11px] leading-tight flex-row flex-wrap ${isActive ? 'text-white' : 'text-neutral-800'}`}>
+                <AppText variant="caption" className={`font-mono leading-tight flex-row flex-wrap ${isActive ? 'text-white' : 'text-neutral-800'}`}>
                   {words.map((w, wi) => {
                     const grade = grades?.[wi];
                     const gradeColor =
@@ -167,7 +168,7 @@ export default function MemoryGrid({
                       </Text>
                     );
                   })}
-                </Text>
+                </AppText>
               )}
             </Pressable>
           </View>
@@ -186,15 +187,15 @@ export default function MemoryGrid({
                   <X size={18} color="#262626" />
                 </Pressable>
               </View>
-              <Text className="text-[11px] font-mono text-neutral-400" numberOfLines={2}>
+              <AppText variant="caption" className="font-mono text-neutral-400" numberOfLines={2}>
                 {firstLetterLine(doodleOpenVerse.text)}
-              </Text>
+              </AppText>
               <DoodleCanvas
                 strokes={doodles?.[doodleOpenKey!] || []}
                 onChange={(strokes) => onSaveDoodle(doodleOpenKey!, doodleOpenVerse, strokes)}
               />
               <Pressable onPress={() => setDoodleOpenKey(null)} className="py-2.5 bg-[#1A1A1A] rounded-xl items-center">
-                <Text className="text-white text-xs font-sans font-bold">Done</Text>
+                <AppText variant="label" className="text-white font-sans font-bold">Done</AppText>
               </Pressable>
             </View>
           </View>

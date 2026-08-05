@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { ChipRow, FadeInView } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
+import { AppText } from '../components/design';
 
 const DATE_FILTER_OPTIONS = [
   { id: 'all', label: 'All Time' },
@@ -75,21 +76,21 @@ export default function FullHistoryScreen({ state }: { state: AppState }) {
             <ArrowLeft size={14} color="#262626" />
           </Pressable>
           <View>
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
               HISTORY LOGS
-            </Text>
-            <Text className="text-base font-serif font-bold text-neutral-900 leading-none mt-0.5">
+            </AppText>
+            <AppText variant="title" className="font-serif font-bold text-neutral-900 leading-none mt-0.5">
               Full Memorization History
-            </Text>
+            </AppText>
           </View>
         </View>
 
         {/* Filters Box */}
         <View className="border border-neutral-200 rounded-2xl p-3 bg-neutral-50/50" style={{ gap: 10 }}>
           <View>
-            <Text className="text-[8.5px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wider mb-1">
               Filter by Scripture
-            </Text>
+            </AppText>
             <BookPicker
               value={bookFilter}
               allowAll
@@ -102,9 +103,9 @@ export default function FullHistoryScreen({ state }: { state: AppState }) {
           </View>
 
           <View>
-            <Text className="text-[8.5px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wider mb-1">
               Filter by Date Range
-            </Text>
+            </AppText>
             <ChipRow
               options={DATE_FILTER_OPTIONS}
               value={dateFilter}
@@ -119,17 +120,17 @@ export default function FullHistoryScreen({ state }: { state: AppState }) {
 
         {/* Filtered Timeline List */}
         <View style={{ gap: 10 }}>
-          <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+          <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
             TIMELINE LOGS
-          </Text>
+          </AppText>
 
           <View className="border border-neutral-200 rounded-2xl p-4 bg-white shadow-xs">
             {filteredItems.length === 0 ? (
-              <Text className="text-xs text-neutral-400 italic text-center py-4">
+              <AppText variant="label" className="text-neutral-400 italic text-center py-4">
                 {timelineItems.length === 0
                   ? "You haven't started memorizing any verses yet."
                   : 'No history matches these filters.'}
-              </Text>
+              </AppText>
             ) : (
               <View className="relative pl-5 border-l border-neutral-200" style={{ gap: 18 }}>
                 {filteredItems.map((item, idx) => (
@@ -138,8 +139,8 @@ export default function FullHistoryScreen({ state }: { state: AppState }) {
                       className="absolute w-2 h-2 rounded-full bg-emerald-500"
                       style={{ left: -25, top: 6 }}
                     />
-                    <Text className="text-xs font-sans font-bold text-neutral-800">{item.title}</Text>
-                    <Text className="text-[10px] text-neutral-400 leading-snug mt-0.5">{item.subtitle}</Text>
+                    <AppText variant="label" className="font-sans font-bold text-neutral-800">{item.title}</AppText>
+                    <AppText variant="caption" className="text-neutral-400 leading-snug mt-0.5">{item.subtitle}</AppText>
                   </View>
                 ))}
               </View>

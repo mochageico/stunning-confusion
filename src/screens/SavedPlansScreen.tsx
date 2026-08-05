@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, PulseView } from '../components/ui';
+import { AppText } from '../components/design';
 
 export default function SavedPlansScreen({ state }: { state: AppState }) {
   const { handleBack, handleCreateNewPlan, handleActivatePlan, handleDeletePlan, handleEditPlan, savedPlans } = state;
@@ -25,20 +26,23 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
         <View className="flex-row items-center gap-3">
           <Pressable
             onPress={handleBack}
-            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white"
+            className="w-8 h-8 rounded-full border border-neutral-200 items-center justify-center bg-white shrink-0"
           >
             <ArrowLeft size={14} color="#262626" />
           </Pressable>
-          <View>
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
-              Pacing Configurations
-            </Text>
-            <Text className="text-lg font-serif font-bold text-[#1A1A1A] mt-0.5">
-              Saved Plans
-            </Text>
-            <Text className="text-[10px] text-neutral-400 leading-none mt-1">
-              Select a plan to activate or edit.
-            </Text>
+          {/* flex-1, not intrinsic width: "Saved Memory Rhythms" at display
+              size is wider than the screen minus the back button, and text in
+              RN doesn't wrap unless its container is allowed to bound it. */}
+          <View className="flex-1">
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-600 font-sans">
+              Retention Settings
+            </AppText>
+            <AppText variant="display" className="font-serif font-bold text-[#1A1A1A] mt-0.5">
+              Saved Memory Rhythms
+            </AppText>
+            <AppText variant="caption" className="text-neutral-600 font-sans mt-1">
+              Tap one to make it active, or Edit to change how it works.
+            </AppText>
           </View>
         </View>
 
@@ -50,19 +54,19 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
           <View className="w-8 h-8 rounded-full bg-neutral-100 items-center justify-center">
             <Plus size={16} color="#737373" />
           </View>
-          <Text className="text-xs font-sans font-extrabold text-neutral-800">
-            Create New Plan
-          </Text>
-          <Text className="text-[10px] text-neutral-400 text-center">
-            Configure custom pacing, learn days, and review caps
-          </Text>
+          <AppText variant="label" className="font-sans font-extrabold text-neutral-800">
+            Create New Rhythm
+          </AppText>
+          <AppText variant="caption" className="text-neutral-600 font-sans text-center">
+            Set how long a verse stays in each phase, and what happens when you miss one
+          </AppText>
         </Pressable>
 
         {/* List of Saved Plans */}
         <View className="gap-3">
-          <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
-            MY PLANS ({savedPlans.length})
-          </Text>
+          <AppText variant="section" className="font-bold text-neutral-600 tracking-wider font-sans uppercase">
+            MY RHYTHMS ({savedPlans.length})
+          </AppText>
 
           <View className="gap-3">
             {savedPlans.map((plan) => (
@@ -81,34 +85,34 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                           <View className="w-2 h-2 bg-emerald-500 rounded-full" />
                         </PulseView>
                       )}
-                      <Text className="text-xs font-sans font-extrabold text-neutral-900 leading-tight">
+                      <AppText variant="label" className="font-sans font-extrabold text-neutral-900 leading-tight">
                         {plan.name}
-                      </Text>
+                      </AppText>
                     </View>
                     {/* Retention, not pacing. Every plan used to be labelled
                         by its learning days and verses-per-day, which is
                         precisely what no longer varies between plans -- and
                         was why three visibly different "plans" all behaved
                         identically once you started using them. */}
-                    <Text className="text-[10px] font-sans text-neutral-500">
+                    <AppText variant="caption" className="font-sans text-neutral-500">
                       {plan.dailyPhaseWeeks}-{plan.weeklyPhaseMonths}-{plan.monthlyPhaseYears} · {plan.masteryTouches} touches
                       {plan.isBuiltIn ? ' · built-in' : ''}
-                    </Text>
+                    </AppText>
                   </View>
 
                   <View className="flex-row items-center gap-3">
                     {plan.isActive ? (
                       <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full flex-row items-center gap-1 border border-emerald-500/20">
-                        <Text className="text-[8px] font-sans font-bold text-emerald-700 uppercase tracking-wider">
+                        <AppText variant="micro" className="font-sans font-bold text-emerald-700 uppercase tracking-wider">
                           Active
-                        </Text>
+                        </AppText>
                       </View>
                     ) : (
                       <Pressable
                         onPress={() => handleEditPlan(plan)}
                         className="flex-row items-center gap-0.5"
                       >
-                        <Text className="text-[9px] font-sans font-extrabold text-neutral-400">Edit</Text>
+                        <AppText variant="micro" className="font-sans font-extrabold text-neutral-400">Edit</AppText>
                         <ChevronRight size={10} color="#a3a3a3" />
                       </Pressable>
                     )}
@@ -133,7 +137,7 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                       onPress={() => handleEditPlan(plan)}
                       className="flex-row items-center gap-0.5"
                     >
-                      <Text className="text-[9px] font-sans font-extrabold text-neutral-500">Edit Settings</Text>
+                      <AppText variant="micro" className="font-sans font-extrabold text-neutral-500">Edit Settings</AppText>
                       <ChevronRight size={10} color="#737373" />
                     </Pressable>
                   </View>
@@ -141,10 +145,10 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
 
                 {deletingPlanId === plan.id && (
                   <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
-                    <Text className="text-[11px] font-sans font-bold text-red-800">Delete "{plan.name}"?</Text>
-                    <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
+                    <AppText variant="caption" className="font-sans font-bold text-red-800">Delete "{plan.name}"?</AppText>
+                    <AppText variant="micro" className="font-sans text-red-700/80 leading-relaxed">
                       This permanently removes this plan. It can't be undone.
-                    </Text>
+                    </AppText>
                     <View className="flex-row gap-2 justify-end pt-1">
                       <Pressable
                         onPress={(e) => {
@@ -153,7 +157,7 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                         }}
                         className="px-3 py-1.5 border border-neutral-300 rounded-lg bg-white"
                       >
-                        <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                        <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
                       </Pressable>
                       <Pressable
                         onPress={(e) => {
@@ -163,7 +167,7 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                         }}
                         className="px-3 py-1.5 bg-red-600 rounded-lg"
                       >
-                        <Text className="text-white font-sans font-bold text-[10px]">Yes, Delete</Text>
+                        <AppText variant="caption" className="text-white font-sans font-bold ">Yes, Delete</AppText>
                       </Pressable>
                     </View>
                   </View>

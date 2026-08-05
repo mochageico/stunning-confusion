@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, HelpTooltip } from '../components/ui';
+import { AppText } from '../components/design';
 
 export default function CommunityCreateScreen({ state }: { state: AppState }) {
   const {
@@ -36,12 +37,12 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
             <ArrowLeft size={14} color="#262626" />
           </Pressable>
           <View>
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans">
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans">
               ADMINISTRATION
-            </Text>
-            <Text className="text-base font-serif font-black text-neutral-900 leading-none mt-1">
+            </AppText>
+            <AppText variant="title" className="font-serif font-black text-neutral-900 leading-none mt-1">
               Create Scripture Circle
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -49,7 +50,7 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
         <View className="gap-4">
           {/* Group Name */}
           <View className="gap-1">
-            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Circle Name</Text>
+            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Circle Name</AppText>
             <TextInput
               value={createGroupName}
               onChangeText={setCreateGroupName}
@@ -60,9 +61,9 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
 
           {/* Short Description */}
           <View className="gap-1">
-            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">
+            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
               Short Description
-            </Text>
+            </AppText>
             <TextInput
               value={createGroupDesc}
               onChangeText={setCreateGroupDesc}
@@ -77,9 +78,9 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
           {/* Privacy Flag */}
           <View className="gap-1">
             <View className="flex-row items-center">
-              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
                 Privacy Setting
-              </Text>
+              </AppText>
               <HelpTooltip text="Public circles show up in the directory and anyone can join them straight away. Private circles are hidden — people can only join with the invite code you share with them." />
             </View>
             <View className="flex-row gap-2 mt-1">
@@ -89,8 +90,8 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
                   createGroupPrivacy === 'public' ? 'bg-white border-neutral-900' : 'bg-neutral-50 border-neutral-200'
                 }`}
               >
-                <Text className="text-xs font-black leading-none">🔓 Public Circle</Text>
-                <Text className="text-[8px] font-medium text-neutral-400 mt-1">Open to everyone</Text>
+                <AppText variant="label" className="font-black leading-none">🔓 Public Circle</AppText>
+                <AppText variant="micro" className="font-medium text-neutral-400 mt-1">Open to everyone</AppText>
               </Pressable>
 
               <Pressable
@@ -99,15 +100,15 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
                   createGroupPrivacy === 'private' ? 'bg-white border-neutral-900' : 'bg-neutral-50 border-neutral-200'
                 }`}
               >
-                <Text className="text-xs font-black leading-none">🔒 Private Circle</Text>
-                <Text className="text-[8px] font-medium text-neutral-400 mt-1">Requires code/approval</Text>
+                <AppText variant="label" className="font-black leading-none">🔒 Private Circle</AppText>
+                <AppText variant="micro" className="font-medium text-neutral-400 mt-1">Requires code/approval</AppText>
               </Pressable>
             </View>
           </View>
 
           {/* Create Action */}
           <Pressable onPress={handleCreateCircle} className="w-full py-3 bg-[#1A1A1A] rounded-xl items-center shadow-md">
-            <Text className="text-white text-xs font-black uppercase tracking-wider">Create Scripture Circle 🛡️</Text>
+            <AppText variant="label" className="text-white font-black uppercase tracking-wider">Create Scripture Circle 🛡️</AppText>
           </Pressable>
         </View>
       </ScrollView>

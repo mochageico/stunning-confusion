@@ -3,6 +3,7 @@ import { ArrowLeft, Check, UserPlus, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
+import { AppText } from '../components/design';
 
 export default function FindFriendsScreen({ state }: { state: AppState }) {
   const {
@@ -34,12 +35,12 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
             <ArrowLeft size={14} color="#262626" />
           </Pressable>
           <View>
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans">
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans">
               FIND FRIENDS
-            </Text>
-            <Text className="text-base font-serif font-black text-neutral-900 leading-none mt-1">
+            </AppText>
+            <AppText variant="title" className="font-serif font-black text-neutral-900 leading-none mt-1">
               Search People
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -48,9 +49,9 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
             on offer was a bare name and two buttons. */}
         {incomingFriendRequests.length > 0 && (
           <View className="gap-2">
-            <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
               INCOMING REQUESTS ({incomingFriendRequests.length})
-            </Text>
+            </AppText>
             <View className="gap-2">
               {incomingFriendRequests.map((req) => (
                 <View
@@ -58,8 +59,8 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                   className="border border-neutral-200 rounded-xl p-3 bg-white flex-row items-center justify-between"
                 >
                   <Pressable className="flex-1 pr-2" onPress={() => viewMemberProfileById(req.fromUid)}>
-                    <Text className="text-xs font-sans font-bold text-neutral-800">{req.fromName}</Text>
-                    <Text className="text-[9px] font-sans text-neutral-400">Wants to be friends — tap to view</Text>
+                    <AppText variant="label" className="font-sans font-bold text-neutral-800">{req.fromName}</AppText>
+                    <AppText variant="micro" className="font-sans text-neutral-400">Wants to be friends — tap to view</AppText>
                   </Pressable>
                   <View className="flex-row gap-1.5">
                     <Pressable
@@ -88,9 +89,9 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
             by search. */}
         {outgoingFriendRequests.length > 0 && (
           <View className="gap-2">
-            <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
               SENT REQUESTS ({outgoingFriendRequests.length})
-            </Text>
+            </AppText>
             <View className="gap-2">
               {outgoingFriendRequests.map((req) => (
                 <View
@@ -98,14 +99,14 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                   className="border border-neutral-200 rounded-xl p-3 bg-neutral-50 flex-row items-center justify-between"
                 >
                   <Pressable className="flex-1 pr-2" onPress={() => viewMemberProfileById(req.toUid)}>
-                    <Text className="text-xs font-sans font-bold text-neutral-700">{req.toName}</Text>
-                    <Text className="text-[9px] font-sans text-neutral-400">Waiting for them to accept</Text>
+                    <AppText variant="label" className="font-sans font-bold text-neutral-700">{req.toName}</AppText>
+                    <AppText variant="micro" className="font-sans text-neutral-400">Waiting for them to accept</AppText>
                   </Pressable>
                   <Pressable
                     onPress={() => cancelFriendRequest(req)}
                     className="bg-white border border-neutral-300 px-2.5 py-1 rounded-lg"
                   >
-                    <Text className="text-[9px] font-bold uppercase tracking-wider text-neutral-600">Cancel</Text>
+                    <AppText variant="micro" className="font-bold uppercase tracking-wider text-neutral-600">Cancel</AppText>
                   </Pressable>
                 </View>
               ))}
@@ -115,9 +116,9 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
 
         {/* Search box */}
         <View className="gap-2">
-          <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+          <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
             SEARCH BY NAME OR EMAIL
-          </Text>
+          </AppText>
           <View className="flex-row gap-2">
             <TextInput
               value={userSearchQuery}
@@ -131,7 +132,7 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
               onPress={() => searchUsers(userSearchQuery)}
               className="px-4 py-2 bg-[#1A1A1A] rounded-xl items-center justify-center"
             >
-              <Text className="text-white text-xs font-bold">Search</Text>
+              <AppText variant="label" className="text-white font-bold">Search</AppText>
             </Pressable>
           </View>
         </View>
@@ -140,13 +141,13 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
         <View className="gap-2">
           {searchingUsers ? (
             <View className="py-4 items-center">
-              <Text className="text-xs text-neutral-400 font-sans">Searching...</Text>
+              <AppText variant="label" className="text-neutral-400 font-sans">Searching...</AppText>
             </View>
           ) : userSearchResults.length === 0 ? (
             <View className="items-center p-6 border border-dashed border-neutral-200 rounded-2xl">
-              <Text className="text-xs text-neutral-400 text-center">
+              <AppText variant="label" className="text-neutral-400 text-center">
                 Search by exact email, or the start of someone's name.
-              </Text>
+              </AppText>
             </View>
           ) : (
             userSearchResults.map((person) => {
@@ -159,13 +160,13 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                   className="border border-neutral-200 rounded-xl p-3 bg-white flex-row items-center justify-between"
                 >
                   <Pressable className="flex-1 pr-2" onPress={() => viewMemberProfileById(person.uid)}>
-                    <Text className="text-xs font-sans font-bold text-neutral-800">{person.displayName}</Text>
-                    {!!person.email && <Text className="text-[9px] font-sans text-neutral-400">{person.email}</Text>}
+                    <AppText variant="label" className="font-sans font-bold text-neutral-800">{person.displayName}</AppText>
+                    {!!person.email && <AppText variant="micro" className="font-sans text-neutral-400">{person.email}</AppText>}
                   </Pressable>
 
                   {isFriend ? (
                     <View className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
-                      <Text className="text-[9px] font-bold uppercase tracking-wider text-emerald-700">Friends</Text>
+                      <AppText variant="micro" className="font-bold uppercase tracking-wider text-emerald-700">Friends</AppText>
                     </View>
                   ) : incoming ? (
                     <View className="flex-row gap-1.5">
@@ -187,9 +188,9 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                       onPress={() => cancelFriendRequest(outgoing)}
                       className="bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-lg"
                     >
-                      <Text className="text-[9px] font-bold uppercase tracking-wider text-neutral-600">
+                      <AppText variant="micro" className="font-bold uppercase tracking-wider text-neutral-600">
                         Request Sent — Cancel
-                      </Text>
+                      </AppText>
                     </Pressable>
                   ) : (
                     <Pressable
@@ -197,7 +198,7 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                       className="bg-[#1A1A1A] px-2.5 py-1 rounded-lg flex-row items-center gap-1"
                     >
                       <UserPlus size={11} color="#FFFFFF" />
-                      <Text className="text-[9px] font-bold uppercase tracking-wider text-white">Add Friend</Text>
+                      <AppText variant="micro" className="font-bold uppercase tracking-wider text-white">Add Friend</AppText>
                     </Pressable>
                   )}
                 </View>

@@ -8,6 +8,7 @@ import { BookPicker } from '../components/BookPicker';
 import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 import { useChapterText } from '../state/useScripture';
 import { GroupPlanMembership } from '../types';
+import { AppText } from '../components/design';
 
 // Plain language, and ordered by how most people actually want it: joining a
 // group thing usually means you want the group's verses to lead. The old
@@ -121,19 +122,19 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
             <ArrowLeft size={14} color="#262626" />
           </Pressable>
           <View className="flex-1">
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-neutral-400 font-sans">GROUP PLAN</Text>
-            <Text className="text-base font-serif font-bold text-[#1A1A1A]" numberOfLines={1}>
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">GROUP PLAN</AppText>
+            <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]" numberOfLines={1}>
               {plan.name}
-            </Text>
+            </AppText>
           </View>
           {isManager && (
             <Pressable
               onPress={() => setIsEditing(!isEditing)}
               className={`px-2.5 py-1.5 rounded-lg border ${isEditing ? 'bg-neutral-900 border-neutral-900' : 'bg-white border-neutral-300'}`}
             >
-              <Text className={`text-[10px] font-sans font-bold ${isEditing ? 'text-white' : 'text-neutral-700'}`}>
+              <AppText variant="caption" className={`font-sans font-bold ${isEditing ? 'text-white' : 'text-neutral-700'}`}>
                 {isEditing ? 'Done' : 'Edit'}
-              </Text>
+              </AppText>
             </Pressable>
           )}
         </View>
@@ -143,7 +144,7 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
           {isEditing ? (
             <>
               <View>
-                <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Plan Title</Text>
+                <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Plan Title</AppText>
                 <TextInput
                   defaultValue={plan.name}
                   onEndEditing={(e) => {
@@ -154,7 +155,7 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                 />
               </View>
               <View>
-                <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Description</Text>
+                <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Description</AppText>
                 <TextInput
                   defaultValue={plan.description}
                   onEndEditing={(e) => {
@@ -170,12 +171,12 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
             </>
           ) : (
             <>
-              <Text className="text-xs text-neutral-700 leading-relaxed font-sans">
+              <AppText variant="label" className="text-neutral-700 leading-relaxed font-sans">
                 {plan.description || 'No description yet.'}
-              </Text>
-              <Text className="text-[9px] font-sans text-neutral-400">
+              </AppText>
+              <AppText variant="micro" className="font-sans text-neutral-400">
                 Managed by <Text className="font-semibold text-[#1A1A1A]">{plan.managerName || 'Leader'}</Text>
-              </Text>
+              </AppText>
             </>
           )}
         </View>
@@ -183,7 +184,7 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
         {/* PACE */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
           <View className="flex-row items-center">
-            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Pace</Text>
+            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Pace</AppText>
             <HelpTooltip text="How many new verses per week this plan feeds joined members. Each member's own daily capacity and priority setting decide how that pace actually blends with their individual queue." />
           </View>
           {isManager ? (
@@ -194,34 +195,34 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                 max={20}
                 onChange={(n) => updateGroupPlan(plan.circleId, plan.planId, { versesPerWeek: n })}
               />
-              <Text className="text-[10px] font-sans font-bold text-neutral-600">{plan.versesPerWeek} verses / week</Text>
+              <AppText variant="caption" className="font-sans font-bold text-neutral-600">{plan.versesPerWeek} verses / week</AppText>
             </View>
           ) : (
-            <Text className="text-sm font-serif font-bold text-neutral-800">{plan.versesPerWeek} verses / week</Text>
+            <AppText variant="body" className="font-serif font-bold text-neutral-800">{plan.versesPerWeek} verses / week</AppText>
           )}
         </View>
 
         {/* VERSE QUEUE */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
           <View className="flex-row justify-between items-center">
-            <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">
+            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
               Verse Queue ({plan.verseIds.length})
-            </Text>
+            </AppText>
             {isManager && (
               <Pressable
                 onPress={() => setShowAddVerses(!showAddVerses)}
                 className="bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-lg flex-row items-center gap-1"
               >
                 <Plus size={10} color="#4338ca" />
-                <Text className="text-[9px] font-bold text-indigo-600">{showAddVerses ? 'Hide' : 'Add Verses'}</Text>
+                <AppText variant="micro" className="font-bold text-indigo-600">{showAddVerses ? 'Hide' : 'Add Verses'}</AppText>
               </Pressable>
             )}
           </View>
 
           {plan.verseIds.length === 0 && (
-            <Text className="text-xs text-neutral-400 font-sans">
+            <AppText variant="label" className="text-neutral-400 font-sans">
               No verses yet. {isManager && 'Add a small range to get started — a few verses at a time, not a whole book.'}
-            </Text>
+            </AppText>
           )}
 
           {showAddVerses && isManager && (
@@ -229,11 +230,11 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
               <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-3" style={{ gap: 8 }}>
                 <View className="flex-row gap-2">
                   <View className="flex-1">
-                    <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Book</Text>
+                    <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Book</AppText>
                     <BookPicker value={addBook} onChange={setAddBook} />
                   </View>
                   <View style={{ width: 70 }}>
-                    <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Chapter</Text>
+                    <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Chapter</AppText>
                     <NumericInput
                       value={addChapter}
                       onChangeText={setAddChapter}
@@ -243,7 +244,7 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                 </View>
                 <View className="flex-row gap-2 items-end">
                   <View className="flex-1">
-                    <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Start Verse</Text>
+                    <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Start Verse</AppText>
                     <NumericInput
                       value={addStartVerse}
                       onChangeText={setAddStartVerse}
@@ -252,9 +253,9 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                   </View>
                   <View className="flex-1">
                     <View className="flex-row items-center justify-between mb-0.5">
-                      <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest">End Verse</Text>
+                      <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-widest">End Verse</AppText>
                       {addChapterData && (
-                        <Text className="text-[8px] font-mono text-neutral-400">max {addChapterData.verseCount}</Text>
+                        <AppText variant="micro" className="font-mono text-neutral-400">max {addChapterData.verseCount}</AppText>
                       )}
                     </View>
                     <NumericInput
@@ -264,7 +265,7 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                     />
                   </View>
                   <Pressable onPress={handleAddVerses} className="bg-[#1A1A1A] px-3 py-1.5 rounded-lg">
-                    <Text className="text-white text-[10px] font-bold uppercase">Add</Text>
+                    <AppText variant="caption" className="text-white font-bold uppercase">Add</AppText>
                   </Pressable>
                 </View>
               </View>
@@ -278,13 +279,13 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                   key={g.key}
                   className="flex-row items-center justify-between px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg"
                 >
-                  <Text className="text-xs font-serif font-black text-[#1A1A1A]">
+                  <AppText variant="label" className="font-serif font-black text-[#1A1A1A]">
                     {g.book} {g.chapter}:{g.verses.length > 1 ? `${g.verses[0]}-${g.verses[g.verses.length - 1]}` : g.verses[0]}
-                  </Text>
+                  </AppText>
                   {g.verses.length > 1 && (
-                    <Text className="text-[8px] px-1.5 py-0.5 rounded-full font-sans font-bold bg-neutral-100 text-neutral-600 border border-neutral-200">
+                    <AppText variant="micro" className="px-1.5 py-0.5 rounded-full font-sans font-bold bg-neutral-100 text-neutral-600 border border-neutral-200">
                       {g.verses.length} verses
-                    </Text>
+                    </AppText>
                   )}
                 </View>
               ))}
@@ -296,7 +297,7 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-4" style={{ gap: 10 }}>
           {membership ? (
             <>
-              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Verse Priority</Text>
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Verse Priority</AppText>
               <View style={{ gap: 6 }}>
                 {PRIORITY_OPTIONS.map((opt) => {
                   const active = opt.id === membership.priority;
@@ -307,10 +308,10 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                       className={`px-3 py-2.5 rounded-xl border-2 ${active ? 'border-[#1A1A1A] bg-[#FBF9F6]' : 'border-neutral-200 bg-white'}`}
                       style={{ gap: 2 }}
                     >
-                      <Text className={`text-[11px] font-sans font-bold ${active ? 'text-[#1A1A1A]' : 'text-neutral-700'}`}>
+                      <AppText variant="caption" className={`font-sans font-bold ${active ? 'text-[#1A1A1A]' : 'text-neutral-700'}`}>
                         {opt.label}
-                      </Text>
-                      <Text className="text-[9px] text-neutral-500 font-sans leading-tight">{opt.description}</Text>
+                      </AppText>
+                      <AppText variant="micro" className="text-neutral-500 font-sans leading-tight">{opt.description}</AppText>
                     </Pressable>
                   );
                 })}
@@ -319,7 +320,7 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                 onPress={() => leaveGroupPlan(plan.planId)}
                 className="w-full py-2 mt-1 bg-red-50 border border-red-200 rounded-xl items-center"
               >
-                <Text className="text-red-600 font-sans font-bold text-[11px]">Leave Plan</Text>
+                <AppText variant="caption" className="text-red-600 font-sans font-bold ">Leave Plan</AppText>
               </Pressable>
             </>
           ) : (
@@ -327,9 +328,9 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
               {/* The priority choice is made HERE, at join, rather than being
                   hardcoded and only changeable afterwards on a screen most
                   members never come back to. */}
-              <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
                 How should these verses fit in?
-              </Text>
+              </AppText>
               <View style={{ gap: 6 }}>
                 {PRIORITY_OPTIONS.map((opt) => {
                   const active = opt.id === joinPriority;
@@ -343,22 +344,22 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                       className={`px-3 py-2.5 rounded-xl border-2 ${active ? 'border-[#1A1A1A] bg-[#FBF9F6]' : 'border-neutral-200 bg-white'}`}
                       style={{ gap: 2 }}
                     >
-                      <Text className={`text-[11px] font-sans font-bold ${active ? 'text-[#1A1A1A]' : 'text-neutral-700'}`}>
+                      <AppText variant="caption" className={`font-sans font-bold ${active ? 'text-[#1A1A1A]' : 'text-neutral-700'}`}>
                         {opt.label}
-                      </Text>
-                      <Text className="text-[9px] text-neutral-500 font-sans leading-tight">{opt.description}</Text>
+                      </AppText>
+                      <AppText variant="micro" className="text-neutral-500 font-sans leading-tight">{opt.description}</AppText>
                     </Pressable>
                   );
                 })}
               </View>
-              <Text className="text-[9px] text-neutral-500 font-sans leading-tight">
+              <AppText variant="micro" className="text-neutral-500 font-sans leading-tight">
                 You can change this any time. It decides which verses win when there isn't room for everything.
-              </Text>
+              </AppText>
               <Pressable
                 onPress={() => joinGroupPlan(plan, joinPriority)}
                 className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center"
               >
-                <Text className="text-white font-sans font-bold text-xs">Join Plan</Text>
+                <AppText variant="label" className="text-white font-sans font-bold ">Join Plan</AppText>
               </Pressable>
             </>
           )}

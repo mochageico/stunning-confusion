@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, HelpTooltip } from '../components/ui';
+import { AppText } from '../components/design';
 
 export default function CommunityFindScreen({ state }: { state: AppState }) {
   const {
@@ -47,21 +48,21 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
             </Pressable>
           )}
           <View>
-            <Text className="text-[9px] uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans">
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-sans">
               DISCOVER CIRCLES
-            </Text>
-            <Text className="text-base font-serif font-black text-neutral-900 leading-none mt-1">
+            </AppText>
+            <AppText variant="title" className="font-serif font-black text-neutral-900 leading-none mt-1">
               Find a Community
-            </Text>
+            </AppText>
           </View>
         </View>
 
         {/* Join via Code */}
         <View className="border border-neutral-200 rounded-2xl p-4 bg-neutral-50/50 gap-3">
           <View className="flex-row items-center">
-            <Text className="text-xs font-sans font-extrabold text-neutral-800 uppercase tracking-wider">
+            <AppText variant="label" className="font-sans font-extrabold text-neutral-800 uppercase tracking-wider">
               Join Private Circle via Invite Code
-            </Text>
+            </AppText>
             <HelpTooltip text="Private circles don't show up in the directory. If someone shared a code with you, enter it here to join theirs." />
           </View>
 
@@ -74,16 +75,16 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
               className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded-xl text-xs font-bold uppercase tracking-wider"
             />
             <Pressable onPress={() => joinCircleByCode(inviteCodeInput)} className="px-4 py-2 bg-[#1A1A1A] rounded-xl items-center justify-center">
-              <Text className="text-white text-xs font-bold">Join Circle</Text>
+              <AppText variant="label" className="text-white font-bold">Join Circle</AppText>
             </Pressable>
           </View>
         </View>
 
         {/* Search & Filters matrix */}
         <View className="gap-3">
-          <Text className="text-[10px] font-bold text-neutral-400 tracking-wider font-sans uppercase">
+          <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
             SEARCH PUBLIC DIRECTORY
-          </Text>
+          </AppText>
 
           <View className="gap-2">
             {/* Text query */}
@@ -99,17 +100,17 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
         {/* Live Filter Results */}
         <View className="gap-2">
           <View className="flex-row justify-between items-center px-1">
-            <Text className="text-[9px] font-black text-neutral-400 uppercase">
+            <AppText variant="micro" className="font-black text-neutral-400 uppercase">
               {loadingPublicCircles ? 'LOADING...' : `FOUND ${filteredCircles.length} COMMUNITIES`}
-            </Text>
+            </AppText>
           </View>
 
           <View className="gap-2">
             {!loadingPublicCircles && filteredCircles.length === 0 ? (
               <View className="items-center p-6 border border-dashed border-neutral-200 rounded-2xl">
-                <Text className="text-xs text-neutral-400 text-center">
+                <AppText variant="label" className="text-neutral-400 text-center">
                   No matching scripture circles found. Try clearing filters!
-                </Text>
+                </AppText>
               </View>
             ) : (
               filteredCircles.map((c) => {
@@ -123,12 +124,12 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
                     <View className="flex-row justify-between items-start">
                       <View className="flex-1 pr-2">
                         <View className="flex-row items-center gap-1.5">
-                          <Text className="text-xs font-sans font-black text-neutral-900 leading-none">{c.name}</Text>
+                          <AppText variant="label" className="font-sans font-black text-neutral-900 leading-none">{c.name}</AppText>
                           <View className="px-1.5 py-0.5 rounded border bg-emerald-50 border-emerald-100">
-                            <Text className="text-[7px] font-bold font-sans uppercase text-emerald-700">Public</Text>
+                            <AppText variant="micro" className="font-bold font-sans uppercase text-emerald-700">Public</AppText>
                           </View>
                         </View>
-                        <Text className="text-[10px] font-sans text-neutral-400 mt-1 leading-snug">{c.description}</Text>
+                        <AppText variant="caption" className="font-sans text-neutral-400 mt-1 leading-snug">{c.description}</AppText>
                       </View>
                     </View>
 
@@ -140,9 +141,9 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
                         }}
                         className={`px-4 py-2.5 rounded-xl shadow-sm ${isAlreadyJoined ? 'bg-neutral-100 border border-neutral-300' : 'bg-[#1A1A1A]'}`}
                       >
-                        <Text className={`text-[10px] font-bold uppercase tracking-wider ${isAlreadyJoined ? 'text-neutral-700' : 'text-white'}`}>
+                        <AppText variant="section" className={`font-bold uppercase tracking-wider ${isAlreadyJoined ? 'text-neutral-700' : 'text-white'}`}>
                           {isAlreadyJoined ? 'View Dashboard' : 'Join Circle'}
-                        </Text>
+                        </AppText>
                       </Pressable>
                     </View>
                   </Pressable>

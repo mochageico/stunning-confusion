@@ -1,15 +1,16 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { ArrowLeft, Check, TrendingUp } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { ChipRow, FadeInView, HelpTooltip, StepperRow } from '../components/ui';
+import { FadeInView, StepperRow } from '../components/ui';
 import { MissPolicySection } from '../components/MissPolicySection';
 import {
   AppText,
   CollapsibleCard,
   MIN_TOUCH,
   OptionCards,
+  RangeCaption,
+  SettingRow,
   useFontScale,
   useScaledSpace,
   type OptionCardItem,
@@ -22,14 +23,9 @@ import {
 // DEFAULT_PLANS in data.ts.
 
 type RigorKey = 'light' | 'standard' | 'deep';
-
-// The three retention tiers, and the only preset system left on this screen.
-// Touches: Light and Standard both graduate at 3, Deep at 4.
-const RIGOR_OPTIONS: OptionCardItem<RigorKey>[] = [
-  { id: 'light', title: 'Light', desc: '5-4-3 phases, 3 touches to graduate. Quicker to finish, less durable.' },
-  { id: 'standard', title: 'Standard', desc: '7-6-5 phases, 3 touches to graduate. The default balance.' },
-  { id: 'deep', title: 'Deep', desc: '9-8-7 phases, 4 touches to graduate. Slowest, and the stickiest.' },
-];
+/** What the retention cards can be set to. 'custom' is a real, selectable
+ *  choice now, not just a state the plan silently fell into. */
+type RetentionChoice = RigorKey | 'custom';
 
 const RIGOR_TIERS: { key: RigorKey; label: string; weeks: number; months: number; years: number; touches: number }[] = [
   { key: 'light', label: 'Light', weeks: 5, months: 4, years: 3, touches: 3 },
@@ -37,10 +33,23 @@ const RIGOR_TIERS: { key: RigorKey; label: string; weeks: number; months: number
   { key: 'deep', label: 'Deep', weeks: 9, months: 8, years: 7, touches: 4 },
 ];
 
+// The three presets, plus Custom. Custom used to be invisible here: a plan
+// that had been fine-tuned still rendered with Standard checked (the value
+// was mapped 'custom' -> 'standard' on the way in), so the cards actively
+// lied about what the plan was doing. Its description is built from the live
+// numbers rather than hardcoded, since that IS what Custom means.
+const rigorOptions = (
+  summary: string
+): OptionCardItem<RetentionChoice>[] => [
+  { id: 'light', title: 'Light', desc: '5-4-3 phases, 3 touches to graduate. Quicker to finish, less durable.' },
+  { id: 'standard', title: 'Standard', desc: '7-6-5 phases, 3 touches to graduate. The default balance.' },
+  { id: 'deep', title: 'Deep', desc: '9-8-7 phases, 4 touches to graduate. Slowest, and the stickiest.' },
+  { id: 'custom', title: 'Custom', desc: `${summary}. Your own numbers — set them under Fine-tune retention below.` },
+];
+
 export default function PlanDesignerScreen({ state }: { state: AppState }) {
   const {
     handleBack,
-    navigateTo,
     triggerToast,
     masteryTouches,
     setMasteryTouches,
@@ -80,9 +89,33 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     triggerToast(`Retention set to ${cfg.label} (${cfg.weeks}-${cfg.months}-${cfg.years}, ${cfg.touches} touches). 🎯`);
   };
 
+  const chooseRetention = (choice: RetentionChoice) => {
+    if (choice === 'custom') {
+      // Deliberately changes no numbers. Picking Custom is a statement that
+      // the plan is yours to tune, not a preset of its own -- so it keeps
+      // whatever tier you were on as the starting point to edit from.
+      setRetentionRigor('custom');
+      triggerToast('Retention set to Custom — fine-tune the numbers below. 🎛️');
+      return;
+    }
+    applyRigorPreset(choice);
+  };
+
+  // Every hand-edit below moves the plan off its preset. Light/Standard/Deep
+  // are exact number sets, so the moment one of those numbers changes, the
+  // card claiming to be checked is no longer telling the truth. Touches and
+  // Reviews already did this; the three phase lengths -- the settings the
+  // tiers are actually NAMED for -- did not, so editing 7-6-5 into 9-8-7 by
+  // hand left the plan still labelled Standard.
+  const tune = <V,>(setter: (value: V) => void) => (value: V) => {
+    setter(value);
+    setRetentionRigor('custom');
+  };
+
   const totalRigorDays = dailyPhaseWeeks * 7 + weeklyPhaseMonths * 30 + monthlyPhaseYears * 365;
   const totalRigorLabel =
     totalRigorDays >= 365 ? `${(totalRigorDays / 365).toFixed(1)} years` : `${Math.round(totalRigorDays)} days`;
+  const rigorSummary = `${dailyPhaseWeeks}-${weeklyPhaseMonths}-${monthlyPhaseYears} phases, ${masteryTouches} touches to graduate`;
 
   // Copy-on-write: the shipped Standard plan is the baseline every account
   // starts from, so it can't be edited in place. Renaming is what turns an
@@ -91,7 +124,8 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
   const canSave = !isEditingBuiltInPlan || nameChangedFromBuiltIn;
 
   const space = useScaledSpace();
-  const iconSize = Math.round(14 * useFontScale());
+  const scale = useFontScale();
+  const iconSize = Math.round(14 * scale);
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -103,20 +137,24 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           {state.onboardingStepInProgress === null && (
             <Pressable
               onPress={handleBack}
-              className="w-8 h-8 rounded-full border border-[#E5E5E5] items-center justify-center bg-white"
+              className="w-8 h-8 rounded-full border border-[#E5E5E5] items-center justify-center bg-white shrink-0"
             >
               <ArrowLeft size={15} color="#1A1A1A" />
             </Pressable>
           )}
-          <View>
-            <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Settings</Text>
-            <Text className="text-xl font-serif font-bold text-[#1A1A1A]">Memory Plan</Text>
+          <View className="flex-1">
+            <AppText variant="section" className="uppercase tracking-wider font-bold text-neutral-700 font-sans">
+              Settings
+            </AppText>
+            <AppText variant="display" className="font-serif font-bold text-[#1A1A1A]">
+              Memory Plan
+            </AppText>
           </View>
         </View>
-        <Text className="text-xs text-neutral-500 font-sans -mt-1 leading-relaxed">
+        <AppText variant="body" className="text-neutral-700 font-sans -mt-1">
           How a verse graduates, and what happens when you miss one. Your schedule and speed live on the Memory Queue
           screen, under Your Rhythm.
-        </Text>
+        </AppText>
 
         {/* The Basic/Advanced toggle was removed along with the pacing
             sections. It existed to hide the tuning knobs from a newer user
@@ -140,26 +178,36 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
 
         {/* Plan Name. An unnamed plan is indistinguishable from any other in
             Saved Plans/Community, and renaming is what forks the built-in. */}
-        <View style={{ gap: 6 }}>
-          <Text className="text-[9px] uppercase tracking-wider font-bold text-[#888] font-sans">Plan Name</Text>
+        <View style={{ gap: space(6) }}>
+          <AppText variant="section" className="uppercase tracking-wider font-bold text-neutral-700 font-sans">
+            Plan Name
+          </AppText>
+          {/* The name is the one thing on this screen you write rather than
+              pick, and it was set in 12pt -- smaller than the labels around
+              it. Sized off the scale directly (not a className) so it grows
+              with the OS font setting like every AppText does. */}
           <TextInput
             placeholder="My Custom Scripture Plan"
+            placeholderTextColor="#a3a3a3"
             value={customPlanName}
             onChangeText={setCustomPlanName}
-            className="w-full px-3 py-2.5 text-xs border-2 border-[#1A1A1A] rounded-xl font-sans bg-white text-[#1A1A1A]"
+            allowFontScaling={false}
+            className="w-full border-2 border-[#1A1A1A] rounded-xl font-sans font-bold bg-white text-[#1A1A1A]"
+            style={{
+              fontSize: 16 * scale,
+              minHeight: MIN_TOUCH,
+              paddingHorizontal: space(12),
+              paddingVertical: space(10),
+            }}
           />
         </View>
 
         {/* Retention tier -- the primary choice on this screen. */}
-        <View style={{ gap: 8 }}>
-          <AppText variant="micro" className="uppercase tracking-wider font-bold text-[#888] font-sans">
+        <View style={{ gap: space(8) }}>
+          <AppText variant="section" className="uppercase tracking-wider font-bold text-neutral-700 font-sans">
             Retention
           </AppText>
-          <OptionCards
-            options={RIGOR_OPTIONS}
-            value={(retentionRigor === 'custom' ? 'standard' : retentionRigor) as RigorKey}
-            onChange={applyRigorPreset}
-          />
+          <OptionCards options={rigorOptions(rigorSummary)} value={retentionRigor} onChange={chooseRetention} />
         </View>
 
         {/* Fine-tuning: the exact phase lengths and mastery gates behind the
@@ -172,102 +220,51 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           summary={`${dailyPhaseWeeks}-${weeklyPhaseMonths}-${monthlyPhaseYears} · ${masteryTouches} touches`}
           defaultCollapsed
         >
-          <Text className="text-[10px] text-neutral-500 font-sans leading-relaxed">
+          <AppText variant="caption" className="text-neutral-700 font-sans">
             How long a verse stays in Daily, then Weekly, then Monthly review before it's retained for good. Higher
-            numbers mean deeper, more permanent memorization.
-          </Text>
+            numbers mean deeper, more permanent memorization. Changing anything here moves the plan to Custom.
+          </AppText>
 
-          <View style={{ gap: 16 }}>
-            <View style={{ gap: 16 }}>
-              {/* Daily Phase Length */}
-              <View style={{ gap: 6 }}>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Daily Phase Length</Text>
-                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                    {dailyPhaseWeeks} weeks
-                  </Text>
-                </View>
-                <StepperRow min={3} max={14} value={dailyPhaseWeeks} onChange={setDailyPhaseWeeks} />
-                <View className="flex-row justify-between">
-                  <Text className="text-[8px] text-neutral-400 font-mono">3 weeks</Text>
-                  <Text className="text-[8px] text-neutral-400 font-mono">14 weeks</Text>
-                </View>
-              </View>
+          <View style={{ gap: space(16) }}>
+            {/* Daily Phase Length */}
+            <View style={{ gap: space(6) }}>
+              <SettingRow label="Daily Phase Length" value={`${dailyPhaseWeeks} weeks`} />
+              <StepperRow min={3} max={14} value={dailyPhaseWeeks} onChange={tune(setDailyPhaseWeeks)} />
+              <RangeCaption min="3 weeks" max="14 weeks" />
+            </View>
 
-              {/* Weekly Phase Length */}
-              <View style={{ gap: 6 }}>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Weekly Phase Length</Text>
-                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                    {weeklyPhaseMonths} months
-                  </Text>
-                </View>
-                <StepperRow min={2} max={12} value={weeklyPhaseMonths} onChange={setWeeklyPhaseMonths} />
-                <View className="flex-row justify-between">
-                  <Text className="text-[8px] text-neutral-400 font-mono">2 months</Text>
-                  <Text className="text-[8px] text-neutral-400 font-mono">12 months</Text>
-                </View>
-              </View>
+            {/* Weekly Phase Length */}
+            <View style={{ gap: space(6) }}>
+              <SettingRow label="Weekly Phase Length" value={`${weeklyPhaseMonths} months`} />
+              <StepperRow min={2} max={12} value={weeklyPhaseMonths} onChange={tune(setWeeklyPhaseMonths)} />
+              <RangeCaption min="2 months" max="12 months" />
+            </View>
 
-              {/* Monthly Phase Length */}
-              <View style={{ gap: 6 }}>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Monthly Phase Length</Text>
-                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                    {monthlyPhaseYears} years
-                  </Text>
-                </View>
-                <StepperRow min={1} max={10} value={monthlyPhaseYears} onChange={setMonthlyPhaseYears} />
-                <View className="flex-row justify-between">
-                  <Text className="text-[8px] text-neutral-400 font-mono">1 year</Text>
-                  <Text className="text-[8px] text-neutral-400 font-mono">10 years</Text>
-                </View>
-              </View>
+            {/* Monthly Phase Length */}
+            <View style={{ gap: space(6) }}>
+              <SettingRow label="Monthly Phase Length" value={`${monthlyPhaseYears} years`} />
+              <StepperRow min={1} max={10} value={monthlyPhaseYears} onChange={tune(setMonthlyPhaseYears)} />
+              <RangeCaption min="1 year" max="10 years" />
+            </View>
 
-              {/* Mastery gates. These moved here from the deleted "Pacing &
-                  Limits" section -- they were never pacing: they decide when
-                  a verse graduates, which is retention. */}
-              <View style={{ gap: 6 }} className="pt-2 border-t border-[#F3F2F1]">
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Touches to Graduate</Text>
-                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                    {masteryTouches}
-                  </Text>
-                </View>
-                <StepperRow
-                  min={1}
-                  max={6}
-                  value={masteryTouches}
-                  onChange={(v) => {
-                    setMasteryTouches(v);
-                    setRetentionRigor('custom');
-                  }}
-                />
-              </View>
+            {/* Mastery gates. These moved here from the deleted "Pacing &
+                Limits" section -- they were never pacing: they decide when
+                a verse graduates, which is retention. */}
+            <View style={{ gap: space(6) }} className="pt-2 border-t border-[#F3F2F1]">
+              <SettingRow label="Touches to Graduate" value={masteryTouches} />
+              <StepperRow min={1} max={6} value={masteryTouches} onChange={tune(setMasteryTouches)} />
+            </View>
 
-              <View style={{ gap: 6 }}>
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-xs font-sans font-bold text-[#1A1A1A]">Reviews Required per Cycle</Text>
-                  <Text className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-xs text-[#1A1A1A]">
-                    {reviewsRequired}
-                  </Text>
-                </View>
-                <StepperRow
-                  min={1}
-                  max={5}
-                  value={reviewsRequired}
-                  onChange={(v) => {
-                    setReviewsRequired(v);
-                    setRetentionRigor('custom');
-                  }}
-                />
-              </View>
+            <View style={{ gap: space(6) }}>
+              <SettingRow label="Reviews Required per Cycle" value={reviewsRequired} />
+              <StepperRow min={1} max={5} value={reviewsRequired} onChange={tune(setReviewsRequired)} />
             </View>
           </View>
 
-          <Text className="text-[10px] text-neutral-500 font-sans pt-2 border-t border-[#F3F2F1] leading-relaxed">
-            At this rigor, a verse is fully retained for good after about <Text className="font-bold text-[#1A1A1A]">{totalRigorLabel}</Text>.
-          </Text>
+          <AppText variant="caption" className="text-neutral-700 font-sans pt-2 border-t border-[#F3F2F1]">
+            At this rigor, a verse is fully retained for good after about{' '}
+            <AppText variant="caption" className="font-sans font-bold text-[#1A1A1A]">{totalRigorLabel}</AppText>.
+          </AppText>
         </CollapsibleCard>
 
         {/* Missed Review Handling. Extracted into its own component so the

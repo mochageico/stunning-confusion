@@ -18,7 +18,8 @@ import {
 import { AppState } from '../state/useAppState';
 import { Circle } from '../types';
 import { AvatarCircle, FadeInView, ProgressBar } from '../components/ui';
-import { ChallengeCreateSheet } from '../components/ChallengeCard';
+import { ChallengeCreateInline } from '../components/ChallengeCard';
+import { AppText } from '../components/design';
 
 export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
   const {
@@ -66,7 +67,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     countRangeProgress,
   } = state;
 
-  const [showChallengeSheet, setShowChallengeSheet] = useState(false);
+  const [showCreateChallengeForm, setShowCreateChallengeForm] = useState(false);
   // Which challenge's inline delete-confirm card is open (only one at a time).
   const [confirmDeleteChallengeId, setConfirmDeleteChallengeId] = useState<string | null>(null);
 
@@ -124,7 +125,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     return (
       <FadeInView style={{ flex: 1 }}>
         <View className="flex-1 items-center justify-center">
-          <Text className="text-xs text-neutral-400 font-sans">Loading circle…</Text>
+          <AppText variant="label" className="text-neutral-400 font-sans">Loading circle…</AppText>
         </View>
       </FadeInView>
     );
@@ -141,9 +142,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             </Pressable>
             <View className="flex-row items-center gap-1 bg-neutral-100 px-2.5 py-1 rounded-full">
               {activeCircle.isPublic ? <Globe size={10} color="#525252" /> : <Lock size={10} color="#525252" />}
-              <Text className="text-[9px] font-sans font-bold text-neutral-600 uppercase tracking-wide">
+              <AppText variant="micro" className="font-sans font-bold text-neutral-600 uppercase tracking-wide">
                 {activeCircle.isPublic ? 'Public Circle' : 'Private Circle'}
-              </Text>
+              </AppText>
             </View>
           </View>
 
@@ -153,7 +154,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
               className="px-3.5 py-2.5 rounded-xl border border-neutral-300 bg-white flex-row items-center gap-2 shadow-sm"
             >
               <MessageCircle size={14} color="#404040" />
-              <Text className="text-[11px] font-sans font-bold text-neutral-700">Group Chat</Text>
+              <AppText variant="caption" className="font-sans font-bold text-neutral-700">Group Chat</AppText>
             </Pressable>
 
             {/* Settings Button for Leader/Admin */}
@@ -165,9 +166,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
               }`}
             >
               <Sliders size={14} color={isEditingCircleSettings ? '#FFFFFF' : '#404040'} />
-              <Text className={`text-[11px] font-sans font-bold ${isEditingCircleSettings ? 'text-white' : 'text-neutral-700'}`}>
+              <AppText variant="caption" className={`font-sans font-bold ${isEditingCircleSettings ? 'text-white' : 'text-neutral-700'}`}>
                 {isEditingCircleSettings ? 'Close Settings' : 'Circle Settings'}
-              </Text>
+              </AppText>
             </Pressable>
             )}
           </View>
@@ -176,26 +177,26 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         {/* Hero: name + description, replaces the old small header title and
             the separate "About" card below with one bigger, clearer block. */}
         <View className="border-b border-[#E5E5E5] pb-5" style={{ gap: 8 }}>
-          <Text className="text-[10px] uppercase tracking-widest font-extrabold text-neutral-400 font-sans">
+          <AppText variant="section" className="uppercase tracking-widest font-extrabold text-neutral-400 font-sans">
             Scripture Circle
-          </Text>
-          <Text className="text-[26px] leading-tight font-serif font-black text-[#1A1A1A]">{activeCircle.name}</Text>
-          <Text className="text-sm text-neutral-600 leading-relaxed font-sans">
+          </AppText>
+          <AppText variant="display" className="leading-tight font-serif font-black text-[#1A1A1A]">{activeCircle.name}</AppText>
+          <AppText variant="body" className="text-neutral-600 leading-relaxed font-sans">
             {activeCircle.description || 'No description yet.'}
-          </Text>
+          </AppText>
           <View className="flex-row gap-6 pt-2 items-end">
             <View>
-              <Text className="text-[8px] text-neutral-400 uppercase tracking-wider">Owner / Sponsor</Text>
-              <Text className="font-semibold text-neutral-700 text-[11px] font-sans mt-0.5">{activeCircle.ownerName}</Text>
+              <AppText variant="micro" className="text-neutral-400 uppercase tracking-wider">Owner / Sponsor</AppText>
+              <AppText variant="caption" className="font-semibold text-neutral-700 font-sans mt-0.5">{activeCircle.ownerName}</AppText>
             </View>
             <View>
-              <Text className="text-[8px] text-neutral-400 uppercase tracking-wider">Your Circle Access</Text>
-              <Text className="font-bold text-neutral-800 text-[11px] font-sans mt-0.5">{isLeaderOrAdmin ? 'Leader' : 'Member'}</Text>
+              <AppText variant="micro" className="text-neutral-400 uppercase tracking-wider">Your Circle Access</AppText>
+              <AppText variant="caption" className="font-bold text-neutral-800 font-sans mt-0.5">{isLeaderOrAdmin ? 'Leader' : 'Member'}</AppText>
             </View>
             <Pressable onPress={() => setShowMembersModal(true)}>
-              <Text className="text-[8px] text-neutral-400 uppercase tracking-wider">
+              <AppText variant="micro" className="text-neutral-400 uppercase tracking-wider">
                 Members ({activeCircleMembers.length})
-              </Text>
+              </AppText>
               <View className="flex-row items-center mt-1.5">
                 {activeCircleMembers.slice(0, 4).map((member, idx) => (
                   <View key={member.uid} style={{ marginLeft: idx === 0 ? 0 : -10, zIndex: 4 - idx }}>
@@ -203,7 +204,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                   </View>
                 ))}
                 {activeCircleMembers.length === 0 && (
-                  <Text className="text-[10px] text-neutral-400 font-sans">No members yet</Text>
+                  <AppText variant="caption" className="text-neutral-400 font-sans">No members yet</AppText>
                 )}
               </View>
             </Pressable>
@@ -217,14 +218,14 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
               <View className="flex-row justify-between items-center pb-2 border-b border-neutral-200">
                 <View className="flex-row items-center gap-1.5">
                   <Sliders size={12} color="#4f46e5" />
-                  <Text className="text-xs font-black font-sans text-neutral-800 uppercase tracking-wider">Leader Circle Customization</Text>
+                  <AppText variant="label" className="font-black font-sans text-neutral-800 uppercase tracking-wider">Leader Circle Customization</AppText>
                 </View>
-                <Text className="text-[8px] uppercase tracking-widest font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">ADMIN</Text>
+                <AppText variant="micro" className="uppercase tracking-widest font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">ADMIN</AppText>
               </View>
 
               <View style={{ gap: 12 }}>
                 <View>
-                  <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Circle Display Name</Text>
+                  <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Circle Display Name</AppText>
                   <TextInput
                     defaultValue={activeCircle.name}
                     onEndEditing={(e) => {
@@ -240,7 +241,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                 </View>
 
                 <View>
-                  <Text className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Description / Goal</Text>
+                  <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Description / Goal</AppText>
                   <TextInput
                     defaultValue={activeCircle.description}
                     onEndEditing={(e) => {
@@ -260,8 +261,8 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
 
                 <View className="flex-row justify-between items-center py-2 bg-white px-3 border border-neutral-200 rounded-xl">
                   <View>
-                    <Text className="text-[10px] font-bold text-neutral-800">Circle Privacy Mode</Text>
-                    <Text className="text-[9px] text-neutral-400 font-sans">Public directory vs private invite-only code</Text>
+                    <AppText variant="caption" className="font-bold text-neutral-800">Circle Privacy Mode</AppText>
+                    <AppText variant="micro" className="text-neutral-400 font-sans">Public directory vs private invite-only code</AppText>
                   </View>
                   <Pressable
                     onPress={() => {
@@ -273,13 +274,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                       activeCircle.isPublic ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'
                     }`}
                   >
-                    <Text
-                      className={`text-[9px] font-bold font-sans uppercase tracking-wider ${
-                        activeCircle.isPublic ? 'text-emerald-700' : 'text-amber-700'
-                      }`}
-                    >
+                    <AppText variant="micro" className={`font-bold font-sans uppercase tracking-wider ${ activeCircle.isPublic ? 'text-emerald-700' : 'text-amber-700' }`} >
                       {activeCircle.isPublic ? '🌐 Public Directory' : '🔒 Private Code'}
-                    </Text>
+                    </AppText>
                   </Pressable>
                 </View>
               </View>
@@ -290,9 +287,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         {/* GROUP PLANS PANEL */}
         <View style={{ gap: 12 }}>
           <View className="flex-row justify-between items-center px-1">
-            <Text className="text-xs font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
+            <AppText variant="label" className="font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
               Group Plans ({activeCircleGroupPlans.length})
-            </Text>
+            </AppText>
 
             {/* Add Group Plan Button (Leaders/Mentors only) */}
             {isLeaderOrAdmin && (
@@ -305,7 +302,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                 className="bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-lg flex-row items-center gap-1"
               >
                 <Plus size={10} color="#4338ca" />
-                <Text className="text-[9px] font-bold text-indigo-600">{showCreatePlanForm ? 'Hide Form' : 'New Plan'}</Text>
+                <AppText variant="micro" className="font-bold text-indigo-600">
+                  {showCreatePlanForm ? 'Hide Form' : 'New Group Plan'}
+                </AppText>
               </Pressable>
             )}
           </View>
@@ -317,13 +316,13 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             <FadeInView>
               <View className="bg-[#1A1A1A] border border-neutral-900 rounded-xl p-4" style={{ gap: 12 }}>
                 <View className="flex-row justify-between items-center border-b border-neutral-800 pb-1.5">
-                  <Text className="text-[10px] font-black uppercase tracking-wider text-neutral-300">New Group Plan</Text>
-                  <Text className="text-[7px] bg-indigo-600 text-white px-2 py-0.5 rounded uppercase font-black">SPONSOR</Text>
+                  <AppText variant="section" className="font-black uppercase tracking-wider text-neutral-300">New Group Plan</AppText>
+                  <AppText variant="micro" className="bg-indigo-600 text-white px-2 py-0.5 rounded uppercase font-black">SPONSOR</AppText>
                 </View>
 
                 <View style={{ gap: 8 }}>
                   <View>
-                    <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Plan Title</Text>
+                    <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Plan Title</AppText>
                     <TextInput
                       value={newPlanName}
                       onChangeText={setNewPlanName}
@@ -334,7 +333,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                   </View>
 
                   <View>
-                    <Text className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 font-sans">Description</Text>
+                    <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-widest mb-0.5 font-sans">Description</AppText>
                     <TextInput
                       value={newPlanDesc}
                       onChangeText={setNewPlanDesc}
@@ -353,10 +352,10 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                       onPress={() => setShowCreatePlanForm(false)}
                       className="bg-neutral-800 border border-neutral-800 px-3 py-1.5 rounded-lg"
                     >
-                      <Text className="text-neutral-400 text-[9px] font-bold uppercase">Cancel</Text>
+                      <AppText variant="micro" className="text-neutral-400 font-bold uppercase">Cancel</AppText>
                     </Pressable>
                     <Pressable onPress={handleCreatePlan} className="bg-indigo-600 px-4 py-1.5 rounded-lg">
-                      <Text className="text-white font-bold text-[9px] uppercase tracking-wider">Create Plan</Text>
+                      <AppText variant="micro" className="text-white font-bold uppercase tracking-wider">Create Plan</AppText>
                     </Pressable>
                   </View>
                 </View>
@@ -368,9 +367,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           <View style={{ gap: 12 }}>
             {activeCircleGroupPlans.length === 0 ? (
               <View className="p-6 border border-dashed border-neutral-200 rounded-2xl items-center">
-                <Text className="text-center text-xs text-neutral-400 font-sans">
+                <AppText variant="label" className="text-center text-neutral-400 font-sans">
                   No Group Plans created for this circle yet. {isLeaderOrAdmin && 'Create one above!'}
-                </Text>
+                </AppText>
               </View>
             ) : (
               activeCircleGroupPlans.map((plan) => {
@@ -385,16 +384,16 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                   >
                     <View className="flex-row justify-between items-start">
                       <View className="flex-1 pr-2">
-                        <Text className="text-xs font-sans font-black text-[#1A1A1A] leading-tight">{plan.name}</Text>
-                        <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
+                        <AppText variant="label" className="font-sans font-black text-[#1A1A1A] leading-tight">{plan.name}</AppText>
+                        <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">
                           Managed by <Text className="font-semibold text-[#1A1A1A]">{plan.managerName || 'Leader'}</Text>
-                        </Text>
+                        </AppText>
                       </View>
                       <View className="flex-row items-center gap-1">
                         {isJoined && (
-                          <Text className="text-[8px] bg-emerald-50 border border-emerald-200 text-emerald-700 font-sans font-bold px-1.5 py-0.5 rounded uppercase">
+                          <AppText variant="micro" className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-sans font-bold px-1.5 py-0.5 rounded uppercase">
                             Joined
-                          </Text>
+                          </AppText>
                         )}
                         {isLeaderOrAdmin && (
                           <Pressable
@@ -410,16 +409,16 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                       </View>
                     </View>
 
-                    {plan.description && <Text className="text-[10px] text-neutral-500 font-sans leading-normal">{plan.description}</Text>}
+                    {plan.description && <AppText variant="caption" className="text-neutral-500 font-sans leading-normal">{plan.description}</AppText>}
 
                     <View className="flex-row py-1.5 border-y border-dashed border-neutral-100 gap-2">
                       <View className="flex-1">
-                        <Text className="text-[8px] text-neutral-400 uppercase">Pace</Text>
-                        <Text className="font-bold text-neutral-800 text-[10px] font-sans">{plan.versesPerWeek} verses/wk</Text>
+                        <AppText variant="micro" className="text-neutral-400 uppercase">Pace</AppText>
+                        <AppText variant="caption" className="font-bold text-neutral-800 font-sans">{plan.versesPerWeek} verses/wk</AppText>
                       </View>
                       <View className="flex-1">
-                        <Text className="text-[8px] text-neutral-400 uppercase">Verses in Plan</Text>
-                        <Text className="font-bold text-neutral-800 text-[10px] font-sans">{plan.verseIds.length}</Text>
+                        <AppText variant="micro" className="text-neutral-400 uppercase">Verses in Plan</AppText>
+                        <AppText variant="caption" className="font-bold text-neutral-800 font-sans">{plan.verseIds.length}</AppText>
                       </View>
                     </View>
                   </Pressable>
@@ -436,24 +435,41 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             verses in weekly. */}
         <View style={{ gap: 12 }}>
           <View className="flex-row justify-between items-center px-1">
-            <Text className="text-xs font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
+            <AppText variant="label" className="font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
               Challenges ({activeCircleChallenges.length})
-            </Text>
+            </AppText>
             <Pressable
-              onPress={() => setShowChallengeSheet(true)}
+              onPress={() => setShowCreateChallengeForm(!showCreateChallengeForm)}
               className="bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg flex-row items-center gap-1"
             >
               <Trophy size={10} color="#b45309" />
-              <Text className="text-[9px] font-bold text-amber-700">New Challenge</Text>
+              <AppText variant="micro" className="font-bold text-amber-700">
+                {showCreateChallengeForm ? 'Hide Form' : 'New Challenge'}
+              </AppText>
             </Pressable>
           </View>
+
+          {/* Expands in place, exactly like the New Group Plan form above --
+              it used to slide a sheet up over the whole page to collect a
+              book, a chapter and two optional verse numbers. */}
+          {showCreateChallengeForm && activeCircle && (
+            <FadeInView>
+              <ChallengeCreateInline
+                onCancel={() => setShowCreateChallengeForm(false)}
+                onSubmit={(range) => {
+                  createGroupChallenge(activeCircle.id, `${range.book} ${range.startChapter}`, range);
+                  setShowCreateChallengeForm(false);
+                }}
+              />
+            </FadeInView>
+          )}
 
           <View style={{ gap: 12 }}>
             {activeCircleChallenges.length === 0 ? (
               <View className="p-6 border border-dashed border-neutral-200 rounded-2xl items-center">
-                <Text className="text-center text-xs text-neutral-400 font-sans">
+                <AppText variant="label" className="text-center text-neutral-400 font-sans">
                   No challenges yet. Any member can start one.
-                </Text>
+                </AppText>
               </View>
             ) : (
               activeCircleChallenges.map((challenge) => {
@@ -474,25 +490,25 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                   >
                     <View className="flex-row justify-between items-start">
                       <View className="flex-1 pr-2">
-                        <Text className="text-xs font-sans font-black text-[#1A1A1A] leading-tight">{challenge.title}</Text>
-                        <Text className="text-[9px] font-sans text-neutral-400 mt-0.5">
+                        <AppText variant="label" className="font-sans font-black text-[#1A1A1A] leading-tight">{challenge.title}</AppText>
+                        <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">
                           {reference} • by {challenge.createdByName}
-                        </Text>
+                        </AppText>
                       </View>
                       {challenge.status === 'completed' && (
-                        <Text className="text-[8px] bg-neutral-100 border border-neutral-200 text-neutral-500 font-sans font-bold px-1.5 py-0.5 rounded uppercase">
+                        <AppText variant="micro" className="bg-neutral-100 border border-neutral-200 text-neutral-500 font-sans font-bold px-1.5 py-0.5 rounded uppercase">
                           Ended
-                        </Text>
+                        </AppText>
                       )}
                     </View>
 
                     {membership ? (
                       <View style={{ gap: 3 }}>
                         <View className="flex-row justify-between">
-                          <Text className="text-[9px] font-sans font-bold text-neutral-700">Your progress</Text>
-                          <Text className="text-[9px] font-mono text-neutral-500">
+                          <AppText variant="micro" className="font-sans font-bold text-neutral-700">Your progress</AppText>
+                          <AppText variant="micro" className="font-mono text-neutral-500">
                             {myProgress}/{challenge.totalVerses}
-                          </Text>
+                          </AppText>
                         </View>
                         <ProgressBar percent={(myProgress / Math.max(1, challenge.totalVerses)) * 100} />
                       </View>
@@ -505,7 +521,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                           }}
                           className="bg-[#1A1A1A] py-2 rounded-lg items-center"
                         >
-                          <Text className="text-white text-[9px] font-bold uppercase tracking-wide">Join Challenge</Text>
+                          <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Join Challenge</AppText>
                         </Pressable>
                       )
                     )}
@@ -523,7 +539,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                             endGroupChallenge(challenge, 'completed');
                           }}
                         >
-                          <Text className="text-[9px] font-sans font-bold text-neutral-400 uppercase tracking-wide">End Challenge</Text>
+                          <AppText variant="micro" className="font-sans font-bold text-neutral-400 uppercase tracking-wide">End Challenge</AppText>
                         </Pressable>
                       ) : (
                         <View />
@@ -537,7 +553,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                               leaveGroupChallenge(challenge);
                             }}
                           >
-                            <Text className="text-[9px] font-sans font-bold text-neutral-400 uppercase tracking-wide">Leave</Text>
+                            <AppText variant="micro" className="font-sans font-bold text-neutral-400 uppercase tracking-wide">Leave</AppText>
                           </Pressable>
                         )}
                         {isCreator && (
@@ -557,10 +573,10 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
 
                     {confirmDeleteChallengeId === challenge.id && (
                       <View className="border border-neutral-200 bg-neutral-50 rounded-lg p-2.5" style={{ gap: 8 }}>
-                        <Text className="text-[10px] font-sans text-neutral-600 leading-snug">
+                        <AppText variant="caption" className="font-sans text-neutral-600 leading-snug">
                           Delete "{challenge.title}" for the whole circle? Everyone keeps the verses already in their
                           queue — only the race and its leaderboard go away.
-                        </Text>
+                        </AppText>
                         <View className="flex-row gap-2">
                           <Pressable
                             onPress={(e) => {
@@ -569,7 +585,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                             }}
                             className="flex-1 bg-white border border-neutral-300 py-2 rounded-lg items-center"
                           >
-                            <Text className="text-neutral-600 text-[9px] font-bold uppercase tracking-wide">Keep</Text>
+                            <AppText variant="micro" className="text-neutral-600 font-bold uppercase tracking-wide">Keep</AppText>
                           </Pressable>
                           <Pressable
                             onPress={(e) => {
@@ -579,7 +595,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                             }}
                             className="flex-1 bg-red-600 py-2 rounded-lg items-center"
                           >
-                            <Text className="text-white text-[9px] font-bold uppercase tracking-wide">Delete</Text>
+                            <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Delete</AppText>
                           </Pressable>
                         </View>
                       </View>
@@ -596,29 +612,29 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             name, they have to join themselves via this code/link. */}
         <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-4" style={{ gap: 16 }}>
           <View>
-            <Text className="text-[8px] bg-indigo-100 text-indigo-700 font-sans font-black px-2 py-0.5 rounded-full uppercase tracking-wider self-start">
+            <AppText variant="micro" className="bg-indigo-100 text-indigo-700 font-sans font-black px-2 py-0.5 rounded-full uppercase tracking-wider self-start">
               Invite & Join Gateway
-            </Text>
+            </AppText>
             <View className="flex-row items-center gap-1.5 mt-1.5">
               <LinkIcon size={12} color="#4f46e5" />
-              <Text className="text-xs font-black font-sans text-neutral-800 uppercase tracking-wider">Add Members</Text>
+              <AppText variant="label" className="font-black font-sans text-neutral-800 uppercase tracking-wider">Add Members</AppText>
             </View>
-            <Text className="text-[10px] text-neutral-400 leading-relaxed font-sans mt-0.5">
+            <AppText variant="caption" className="text-neutral-400 leading-relaxed font-sans mt-0.5">
               Share this code or link — anyone with it can join this circle themselves from the Find Circle screen.
-            </Text>
+            </AppText>
           </View>
 
           {/* Code and Link Box */}
           <View style={{ gap: 8 }}>
             <View className="flex-row gap-2">
               <View className="flex-1 bg-white border border-dashed border-neutral-300 rounded-lg p-2 items-center justify-center">
-                <Text className="text-[7px] text-neutral-400 uppercase font-sans font-black">Invite Code</Text>
-                <Text className="text-xs font-mono font-black text-neutral-800 tracking-widest uppercase">{activeCircle.inviteCode}</Text>
+                <AppText variant="micro" className="text-neutral-400 uppercase font-sans font-black">Invite Code</AppText>
+                <AppText variant="label" className="font-mono font-black text-neutral-800 tracking-widest uppercase">{activeCircle.inviteCode}</AppText>
               </View>
               <View className="flex-[2] bg-white border border-neutral-200 rounded-lg p-2 justify-center">
-                <Text className="text-[9px] font-mono text-neutral-500" numberOfLines={1} ellipsizeMode="tail">
+                <AppText variant="micro" className="font-mono text-neutral-500" numberOfLines={1} ellipsizeMode="tail">
                   {shareUrl}
-                </Text>
+                </AppText>
               </View>
             </View>
 
@@ -631,7 +647,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                 className="flex-1 py-1.5 bg-white border border-neutral-300 rounded-lg flex-row items-center justify-center gap-1.5"
               >
                 <Share2 size={11} color="#262626" />
-                <Text className="text-neutral-800 font-sans font-bold text-[10px]">Copy Share Link</Text>
+                <AppText variant="caption" className="text-neutral-800 font-sans font-bold ">Copy Share Link</AppText>
               </Pressable>
             </View>
           </View>
@@ -640,27 +656,27 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         {/* LEAVE OR DISBAND ACTIONS */}
         {showLeaveDisbandConfirm ? (
           <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
-            <Text className="text-[11px] font-sans font-bold text-red-800">Disband this circle?</Text>
-            <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
+            <AppText variant="caption" className="font-sans font-bold text-red-800">Disband this circle?</AppText>
+            <AppText variant="micro" className="font-sans text-red-700/80 leading-relaxed">
               "{activeCircle.name}" and its shared plans will be permanently deleted for everyone. This can't be undone.
-            </Text>
+            </AppText>
             <View className="flex-row gap-2 justify-end pt-1">
               <Pressable
                 onPress={() => setShowLeaveDisbandConfirm(false)}
                 className="px-3 py-1.5 border border-neutral-300 rounded-lg bg-white"
               >
-                <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
               </Pressable>
               <Pressable onPress={confirmDisband} className="px-3 py-1.5 bg-red-600 rounded-lg">
-                <Text className="text-white font-sans font-bold text-[10px]">Yes, Disband</Text>
+                <AppText variant="caption" className="text-white font-sans font-bold ">Yes, Disband</AppText>
               </Pressable>
             </View>
           </View>
         ) : (
           <Pressable onPress={handleLeaveOrDisband} className="w-full py-2.5 bg-red-50 border border-red-200 rounded-xl items-center justify-center">
-            <Text className="text-red-600 font-sans font-bold text-xs text-center">
+            <AppText variant="label" className="text-red-600 font-sans font-bold text-center">
               {isLeaderOrAdmin ? 'Disband & Delete Scripture Circle' : 'Leave Circle'}
-            </Text>
+            </AppText>
           </Pressable>
         )}
       </ScrollView>
@@ -670,9 +686,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         <View className="flex-1 bg-black/60 justify-end">
           <View className="bg-white rounded-t-3xl" style={{ height: '70%' }}>
             <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-neutral-100">
-              <Text className="text-base font-serif font-bold text-[#1A1A1A]">
+              <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">
                 Members ({activeCircleMembers.length})
-              </Text>
+              </AppText>
               <Pressable
                 onPress={() => setShowMembersModal(false)}
                 className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center"
@@ -695,14 +711,10 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                   >
                     <View className="flex-row items-center gap-2.5 flex-1 pr-2">
                       <AvatarCircle name={member.displayName} photoUri={member.avatarUrl} size={32} />
-                      <Text
-                        className={`text-xs font-sans font-bold flex-1 ${isSelf ? 'text-indigo-800 font-extrabold' : 'text-neutral-700'}`}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                      >
+                      <AppText variant="label" className={`font-sans font-bold flex-1 ${isSelf ? 'text-indigo-800 font-extrabold' : 'text-neutral-700'}`} numberOfLines={1} ellipsizeMode="tail" >
                         {isSelf ? `${member.displayName} (Me)` : member.displayName}
                         {member.role === 'leader' ? ' 👑' : ''}
-                      </Text>
+                      </AppText>
                     </View>
 
                     {/* Kick/Remove Option for Leaders */}
@@ -714,7 +726,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                         }}
                         className="w-6 h-6 items-center justify-center rounded-full"
                       >
-                        <Text className="text-red-500 font-bold text-xs">×</Text>
+                        <AppText variant="label" className="text-red-500 font-bold ">×</AppText>
                       </Pressable>
                     )}
                   </Pressable>
@@ -731,7 +743,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         <View className="flex-1 bg-black/60 justify-end">
           <View className="bg-white rounded-t-3xl" style={{ height: '70%' }}>
             <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-neutral-100">
-              <Text className="text-base font-serif font-bold text-[#1A1A1A]">🏆 Leaderboard</Text>
+              <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">🏆 Leaderboard</AppText>
               <Pressable
                 onPress={closeChallengeLeaderboard}
                 className="w-7 h-7 rounded-full border border-neutral-300 items-center justify-center"
@@ -741,9 +753,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             </View>
 
             {loadingChallengeLeaderboard ? (
-              <Text className="text-xs text-neutral-400 font-sans text-center mt-6">Loading…</Text>
+              <AppText variant="label" className="text-neutral-400 font-sans text-center mt-6">Loading…</AppText>
             ) : openChallengeLeaderboard.length === 0 ? (
-              <Text className="text-xs text-neutral-400 font-sans text-center mt-6">No one has joined yet.</Text>
+              <AppText variant="label" className="text-neutral-400 font-sans text-center mt-6">No one has joined yet.</AppText>
             ) : (
               <ScrollView contentContainerStyle={{ padding: 20, gap: 8 }}>
                 {openChallengeLeaderboard.map((participant, idx) => {
@@ -755,18 +767,18 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                       key={participant.uid}
                       className="flex-row items-center gap-2.5 bg-neutral-50 px-3 py-2.5 rounded-xl border border-neutral-100 mb-2"
                     >
-                      <Text className="text-[10px] font-mono font-bold text-neutral-400 w-4">{idx + 1}</Text>
+                      <AppText variant="caption" className="font-mono font-bold text-neutral-400 w-4">{idx + 1}</AppText>
                       <AvatarCircle name={participant.name} photoUri={participant.avatarUrl} size={28} />
                       <View className="flex-1" style={{ gap: 3 }}>
-                        <Text className={`text-xs font-sans font-bold ${isSelf ? 'text-indigo-800' : 'text-neutral-700'}`}>
+                        <AppText variant="label" className={`font-sans font-bold ${isSelf ? 'text-indigo-800' : 'text-neutral-700'}`}>
                           {isSelf ? `${participant.name} (Me)` : participant.name}
                           {participant.progress >= total ? ' 🏁' : ''}
-                        </Text>
+                        </AppText>
                         <ProgressBar percent={(participant.progress / total) * 100} />
                       </View>
-                      <Text className="text-[9px] font-mono text-neutral-500">
+                      <AppText variant="micro" className="font-mono text-neutral-500">
                         {participant.progress}/{total}
-                      </Text>
+                      </AppText>
                     </View>
                   );
                 })}
@@ -776,17 +788,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         </View>
       </Modal>
 
-      {activeCircle && (
-        <ChallengeCreateSheet
-          visible={showChallengeSheet}
-          title="New Challenge"
-          onClose={() => setShowChallengeSheet(false)}
-          onSubmit={(range) => {
-            createGroupChallenge(activeCircle.id, `${range.book} ${range.startChapter}`, range);
-            setShowChallengeSheet(false);
-          }}
-        />
-      )}
     </FadeInView>
   );
 }

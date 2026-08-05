@@ -11,6 +11,7 @@ import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { printMemoryGrid } from '../lib/printMemoryGrid';
 import { Recording } from '../types';
 import { BIBLE_TRANSLATIONS } from '../data';
+import { AppText } from '../components/design';
 
 const OVERRIDE_PHASE_OPTIONS: { id: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; label: string }[] = [
   { id: 'learning', label: 'Learning' },
@@ -174,9 +175,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             >
               <ArrowLeft size={14} color="#1A1A1A" />
             </Pressable>
-            <Text className="text-lg font-serif font-extrabold text-[#1A1A1A]">
+            <AppText variant="title" className="font-serif font-extrabold text-[#1A1A1A]">
               {selectedBook} {selectedChapter}
-            </Text>
+            </AppText>
           </View>
 
           <View className="flex-row items-center gap-2">
@@ -199,9 +200,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               onPress={toggleSelectAll}
               className="border border-[#1A1A1A] px-2 py-0.5 rounded"
             >
-              <Text className="text-[10px] font-bold font-sans uppercase text-[#1A1A1A]">
+              <AppText variant="caption" className="font-bold font-sans uppercase text-[#1A1A1A]">
                 {selectedVerseNumbers.length === activeChapterVerses.length ? 'Deselect All' : 'Select All'}
-              </Text>
+              </AppText>
             </Pressable>
           </View>
         </View>
@@ -209,19 +210,19 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         {/* Segmented Progress Bar */}
         <View className="gap-1.5">
           <View className="flex-row justify-between items-center">
-            <Text className="text-[9px] font-sans font-bold text-[#888]">CHAPTER PROGRESS</Text>
+            <AppText variant="micro" className="font-sans font-bold text-[#888]">CHAPTER PROGRESS</AppText>
             <View className="flex-row gap-2">
               <View className="flex-row items-center gap-1">
                 <View className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                <Text className="text-[9px] font-sans font-bold text-[#888]">Memorized</Text>
+                <AppText variant="micro" className="font-sans font-bold text-[#888]">Memorized</AppText>
               </View>
               <View className="flex-row items-center gap-1">
                 <View className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                <Text className="text-[9px] font-sans font-bold text-[#888]">Learning</Text>
+                <AppText variant="micro" className="font-sans font-bold text-[#888]">Learning</AppText>
               </View>
               <View className="flex-row items-center gap-1">
                 <View className="w-1.5 h-1.5 bg-neutral-200 rounded-full" />
-                <Text className="text-[9px] font-sans font-bold text-[#888]">Untouched</Text>
+                <AppText variant="micro" className="font-sans font-bold text-[#888]">Untouched</AppText>
               </View>
             </View>
           </View>
@@ -244,10 +245,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         <View className="border border-[#1A1A1A] rounded-xl p-3 bg-white gap-2.5">
           {!currentAudio ? (
             <View className="items-center py-2 gap-1.5">
-              <Text className="text-xs font-sans font-bold text-neutral-500">No recordings yet for this chapter</Text>
-              <Text className="text-[10px] font-sans text-neutral-400 text-center">
+              <AppText variant="label" className="font-sans font-bold text-neutral-500">No recordings yet for this chapter</AppText>
+              <AppText variant="caption" className="font-sans text-neutral-400 text-center">
                 Record one from the Record tab, or find one in the community library.
-              </Text>
+              </AppText>
               <Pressable
                 onPress={() => {
                   setFeedBookFilter(selectedBook || '');
@@ -258,7 +259,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 className="mt-1 py-1.5 px-3 bg-[#1A1A1A] rounded-md flex-row items-center justify-center gap-1"
               >
                 <Search size={11} color="#FFFFFF" />
-                <Text className="text-white font-sans font-bold text-[10px] uppercase tracking-wider">Find Recordings</Text>
+                <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wider">Find Recordings</AppText>
               </Pressable>
             </View>
           ) : (
@@ -285,19 +286,19 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   )}
                 </Pressable>
                 <View>
-                  <Text className="text-xs font-bold font-sans text-[#1A1A1A]" numberOfLines={1} style={{ maxWidth: 170 }}>
+                  <AppText variant="label" className="font-bold font-sans text-[#1A1A1A]" numberOfLines={1} style={{ maxWidth: 170 }}>
                     {currentAudio.title}
-                  </Text>
-                  <Text className="text-[10px] font-sans text-neutral-400">
+                  </AppText>
+                  <AppText variant="caption" className="font-sans text-neutral-400">
                     Narrator: {currentAudio.user} • {currentAudio.translation}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
               <Pressable
                 onPress={() => setShowAudioSelector(!showAudioSelector)}
                 className="flex-row items-center gap-0.5"
               >
-                <Text className="text-[10px] font-bold font-sans underline text-neutral-600">Change</Text>
+                <AppText variant="caption" className="font-bold font-sans underline text-neutral-600">Change</AppText>
                 <ChevronDown size={11} color="#525252" style={{ transform: [{ rotate: showAudioSelector ? '180deg' : '0deg' }] }} />
               </Pressable>
             </View>
@@ -309,10 +310,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   <View className="bg-[#1A1A1A] h-full" style={{ width: `${playingRecProgress}%` }} />
                 </View>
                 <View className="flex-row justify-between">
-                  <Text className="text-[8px] font-mono font-semibold text-neutral-400">
+                  <AppText variant="micro" className="font-mono font-semibold text-neutral-400">
                     {formatTime(Math.round((playingRecProgress / 100) * currentAudio.duration))}
-                  </Text>
-                  <Text className="text-[8px] font-mono font-semibold text-neutral-400">{formatTime(currentAudio.duration)}</Text>
+                  </AppText>
+                  <AppText variant="micro" className="font-mono font-semibold text-neutral-400">{formatTime(currentAudio.duration)}</AppText>
                 </View>
               </View>
             )}
@@ -325,9 +326,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 (a handful of recordings per chapter at most). */}
             {showAudioSelector && (
               <View className="bg-[#F3F2F1] rounded-lg p-2.5 border border-[#E5E5E5] gap-2">
-                <Text className="text-[9px] font-bold uppercase text-neutral-400 tracking-wider">
+                <AppText variant="micro" className="font-bold uppercase text-neutral-400 tracking-wider">
                   Recordings — press and hold to reorder. The top one plays by default.
-                </Text>
+                </AppText>
                 <DraggableFlatList
                   data={optionsList}
                   scrollEnabled={false}
@@ -355,12 +356,12 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                           <GripVertical size={13} color="#a3a3a3" />
                         </Pressable>
                         <View className="flex-1" style={{ maxWidth: 175 }}>
-                          <Text className="font-bold text-[10px] text-[#1A1A1A]" numberOfLines={1}>
+                          <AppText variant="caption" className="font-bold text-[#1A1A1A]" numberOfLines={1}>
                             {opt.title}
-                          </Text>
-                          <Text className="text-[8px] text-neutral-400 font-sans">
+                          </AppText>
+                          <AppText variant="micro" className="text-neutral-400 font-sans">
                             {opt.user} • {opt.translation}
-                          </Text>
+                          </AppText>
                         </View>
                         {isSelected && <Check size={11} color="#1A1A1A" />}
                       </Pressable>
@@ -382,17 +383,13 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                       ) : (
                         <Download size={11} color="#1A1A1A" />
                       )}
-                      <Text
-                        className={`font-sans font-bold text-[10px] uppercase tracking-wider ${
-                          notYetDownloaded.length === 0 ? 'text-neutral-500' : 'text-[#1A1A1A]'
-                        }`}
-                      >
+                      <AppText variant="section" className={`font-sans font-bold uppercase tracking-wider ${ notYetDownloaded.length === 0 ? 'text-neutral-500' : 'text-[#1A1A1A]' }`} >
                         {chapterDownloadBusy
                           ? 'Downloading…'
                           : notYetDownloaded.length === 0
                             ? 'Saved Offline'
                             : `Save ${notYetDownloaded.length} Offline`}
-                      </Text>
+                      </AppText>
                     </Pressable>
                   )}
                   <Pressable
@@ -406,9 +403,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     className="w-full py-1.5 bg-[#1A1A1A] rounded-md flex-row items-center justify-center gap-1"
                   >
                     <Search size={11} color="#FFFFFF" />
-                    <Text className="text-white font-sans font-bold text-[10px] uppercase tracking-wider">
+                    <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wider">
                       Find More Recordings
-                    </Text>
+                    </AppText>
                   </Pressable>
                 </View>
               </View>
@@ -419,7 +416,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
 
         {/* Grid / List / Memory Grid view Toggle */}
         <View className="bg-[#F3F2F1] p-1.5 border border-[#E5E5E5] rounded-xl gap-1.5">
-          <Text className="text-xs font-sans font-bold text-neutral-600 pl-1">Verse Layout</Text>
+          <AppText variant="label" className="font-sans font-bold text-neutral-600 pl-1">Verse Layout</AppText>
           <ChipRow
             value={chapterViewMode}
             onChange={setChapterViewMode}
@@ -435,16 +432,16 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         <View>
           {activeChapterTextLoading && activeChapterVerses.length === 0 ? (
             <View className="py-10 items-center">
-              <Text className="text-xs font-sans text-neutral-400">Loading {selectedBook} {selectedChapter}…</Text>
+              <AppText variant="label" className="font-sans text-neutral-400">Loading {selectedBook} {selectedChapter}…</AppText>
             </View>
           ) : activeChapterTextError ? (
             <View className="py-10 items-center gap-1">
-              <Text className="text-xs font-sans font-bold text-red-500">Couldn't load this chapter.</Text>
-              <Text className="text-[10px] font-sans text-neutral-400">{activeChapterTextError}</Text>
+              <AppText variant="label" className="font-sans font-bold text-red-500">Couldn't load this chapter.</AppText>
+              <AppText variant="caption" className="font-sans text-neutral-400">{activeChapterTextError}</AppText>
             </View>
           ) : activeChapterVerses.length === 0 ? (
             <View className="py-10 items-center">
-              <Text className="text-xs font-sans text-neutral-400">No text available for {selectedBook} {selectedChapter} yet.</Text>
+              <AppText variant="label" className="font-sans text-neutral-400">No text available for {selectedBook} {selectedChapter} yet.</AppText>
             </View>
           ) : chapterViewMode === 'list' ? (
             /* LIST VIEW */
@@ -466,16 +463,16 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                       {/* Dot Status indicator */}
                       <View className={`w-2 h-2 rounded-full mt-1.5 ${dotColor}`} />
                       <View className="flex-1" style={{ paddingRight: 48 }}>
-                        <Text className="font-serif text-sm leading-relaxed text-[#1A1A1A]">
-                          <Text className="font-sans text-xs font-bold text-neutral-400">v{v.verse} </Text>
+                        <AppText variant="body" className="font-serif leading-relaxed text-[#1A1A1A]">
+                          <AppText variant="caption" className="font-sans font-bold text-neutral-400">v{v.verse} </AppText>
                           {v.text}
-                        </Text>
+                        </AppText>
                       </View>
                     </View>
                     {/* Due status badge */}
                     {v.dueDate && (
                       <View className="absolute top-2.5 right-2.5 bg-[#F3F2F1] border border-[#E5E5E5] px-1.5 py-0.5 rounded">
-                        <Text className="text-[8px] font-sans font-bold text-neutral-400">{v.dueDate}</Text>
+                        <AppText variant="micro" className="font-sans font-bold text-neutral-400">{v.dueDate}</AppText>
                       </View>
                     )}
                   </Pressable>
@@ -502,24 +499,24 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     }`}
                   >
                     <View className="flex-row justify-between items-center">
-                      <Text className="text-[9px] font-sans font-extrabold text-[#1A1A1A]">v{v.verse}</Text>
+                      <AppText variant="micro" className="font-sans font-extrabold text-[#1A1A1A]">v{v.verse}</AppText>
                       {v.status === 'memorized' && (
                         <View className="bg-emerald-500/10 px-1 rounded">
-                          <Text className="text-[7px] font-mono font-bold text-emerald-700 uppercase">MEM</Text>
+                          <AppText variant="micro" className="font-mono font-bold text-emerald-700 uppercase">MEM</AppText>
                         </View>
                       )}
                       {v.status === 'learning' && (
                         <View className="bg-amber-500/15 px-1 rounded">
-                          <Text className="text-[7px] font-mono font-bold text-amber-700 uppercase">LRN</Text>
+                          <AppText variant="micro" className="font-mono font-bold text-amber-700 uppercase">LRN</AppText>
                         </View>
                       )}
                     </View>
-                    <Text className="font-serif italic text-[8.5px] leading-tight text-neutral-500 mt-1" numberOfLines={2}>
+                    <AppText variant="micro" className="font-serif italic leading-tight text-neutral-500 mt-1" numberOfLines={2}>
                       {textSnippet}
-                    </Text>
+                    </AppText>
                     {isSelected && (
                       <View className="absolute -top-1 -right-1 bg-black w-3.5 h-3.5 rounded-full items-center justify-center border border-white">
-                        <Text className="text-white text-[8px] font-black">✓</Text>
+                        <AppText variant="micro" className="text-white font-black">✓</AppText>
                       </View>
                     )}
                   </Pressable>
@@ -537,17 +534,17 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     onPress={() => setMemoryGridColumns(2)}
                     className={`px-3 py-1 rounded-md ${memoryGridColumns === 2 ? 'bg-white' : ''}`}
                   >
-                    <Text className={`text-[10px] font-sans font-extrabold ${memoryGridColumns === 2 ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                    <AppText variant="caption" className={`font-sans font-extrabold ${memoryGridColumns === 2 ? 'text-neutral-900' : 'text-neutral-500'}`}>
                       2 Columns
-                    </Text>
+                    </AppText>
                   </Pressable>
                   <Pressable
                     onPress={() => setMemoryGridColumns(4)}
                     className={`px-3 py-1 rounded-md ${memoryGridColumns === 4 ? 'bg-white' : ''}`}
                   >
-                    <Text className={`text-[10px] font-sans font-extrabold ${memoryGridColumns === 4 ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                    <AppText variant="caption" className={`font-sans font-extrabold ${memoryGridColumns === 4 ? 'text-neutral-900' : 'text-neutral-500'}`}>
                       4 Columns
-                    </Text>
+                    </AppText>
                   </Pressable>
                 </View>
                 <Pressable
@@ -565,7 +562,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   className="flex-row items-center gap-1.5 bg-[#1A1A1A] px-3 py-1.5 rounded-lg"
                 >
                   <Printer size={12} color="#ffffff" />
-                  <Text className="text-[10px] font-sans font-extrabold text-white">Printable PDF</Text>
+                  <AppText variant="caption" className="font-sans font-extrabold text-white">Printable PDF</AppText>
                 </Pressable>
               </View>
               <MemoryGrid
@@ -596,9 +593,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         {/* Copyright/attribution notice -- only shown for translations that
             require one (public-domain translations like KJV/WEB have none). */}
         {activeChapterVerses.length > 0 && activeTranslation.copyright && (
-          <Text className="text-[8px] font-sans text-neutral-400 leading-tight text-center px-2">
+          <AppText variant="micro" className="font-sans text-neutral-400 leading-tight text-center px-2">
             {activeTranslation.copyright}
-          </Text>
+          </AppText>
         )}
 
       </ScrollView>
@@ -617,10 +614,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         >
           <View className="flex-row items-center justify-between pl-1">
             <View>
-              <Text className="text-[9px] font-bold text-neutral-400 uppercase font-sans">SELECTED</Text>
-              <Text className="text-xs font-extrabold font-sans text-[#1A1A1A]">
+              <AppText variant="micro" className="font-bold text-neutral-400 uppercase font-sans">SELECTED</AppText>
+              <AppText variant="label" className="font-extrabold font-sans text-[#1A1A1A]">
                 {selectedVerseNumbers.length} {selectedVerseNumbers.length === 1 ? 'Verse' : 'Verses'}
-              </Text>
+              </AppText>
             </View>
             <Pressable
               onPress={() => {
@@ -629,7 +626,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               }}
               className="px-2 py-1"
             >
-              <Text className="text-[10px] font-bold font-sans text-neutral-400">Clear</Text>
+              <AppText variant="caption" className="font-bold font-sans text-neutral-400">Clear</AppText>
             </Pressable>
           </View>
           <View className="flex-row gap-1.5">
@@ -640,21 +637,21 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               }}
               className="flex-1 py-2 items-center bg-emerald-600 rounded-lg"
             >
-              <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide" numberOfLines={1}>
+              <AppText variant="micro" className="text-white font-bold uppercase tracking-wide" numberOfLines={1}>
                 Add to Queue
-              </Text>
+              </AppText>
             </Pressable>
             <Pressable
               onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
               className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
             >
-              <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Listen</Text>
+              <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Listen</AppText>
             </Pressable>
             <Pressable
               onPress={() => startPractice('learn', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))}
               className="flex-1 py-2 items-center bg-[#1A1A1A] rounded-lg"
             >
-              <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Learn</Text>
+              <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Learn</AppText>
             </Pressable>
             <Pressable
               onPress={() => setShowStatusOverride((s) => !s)}
@@ -663,7 +660,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               }`}
             >
               <SlidersHorizontal size={10} color="#FFFFFF" />
-              <Text className="text-white text-[9.5px] font-bold uppercase tracking-wide">Status</Text>
+              <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Status</AppText>
             </Pressable>
           </View>
 
@@ -674,17 +671,17 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             <FadeInView>
               <View className="bg-indigo-50/60 border border-indigo-200 rounded-xl p-3 mt-1" style={{ gap: 10 }}>
                 <View className="flex-row items-center justify-between">
-                  <Text className="text-[9px] font-bold text-indigo-900 uppercase tracking-wide font-sans">
+                  <AppText variant="micro" className="font-bold text-indigo-900 uppercase tracking-wide font-sans">
                     Set Memory Status
-                  </Text>
+                  </AppText>
                   <Pressable onPress={() => setShowStatusOverride(false)}>
                     <X size={13} color="#4338ca" />
                   </Pressable>
                 </View>
-                <Text className="text-[9px] text-indigo-800/80 font-sans leading-relaxed -mt-1">
+                <AppText variant="micro" className="text-indigo-800/80 font-sans leading-relaxed -mt-1">
                   Already know these from memory? Place them directly in the right phase instead of starting over from
                   Learning.
-                </Text>
+                </AppText>
 
                 <View style={{ gap: 4 }}>
                   <ChipRow
@@ -701,9 +698,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
 
                 {(overridePhase === 'weekly' || overridePhase === 'monthly') && (
                   <View style={{ gap: 4 }}>
-                    <Text className="text-[8px] font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
+                    <AppText variant="micro" className="font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
                       Land review cycle on (optional) — tap again to clear
-                    </Text>
+                    </AppText>
                     <ChipRow
                       wrap
                       value={overrideWeekday ?? ''}
@@ -716,12 +713,12 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 {(overridePhase === 'daily' || overridePhase === 'weekly' || overridePhase === 'monthly') && (
                   <View style={{ gap: 4 }}>
                     <View className="flex-row items-center justify-between">
-                      <Text className="text-[8px] font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
+                      <AppText variant="micro" className="font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
                         How far into this phase?
-                      </Text>
-                      <Text className="text-[9px] font-mono font-bold text-indigo-900">
+                      </AppText>
+                      <AppText variant="micro" className="font-mono font-bold text-indigo-900">
                         {overrideProgressPercent >= 100 ? 'Graduates next review' : `${overrideProgressUnit} (${overrideProgressCount}/${overrideProgressMax})`}
-                      </Text>
+                      </AppText>
                     </View>
                     <DiscreteSlider
                       value={overrideProgressPercent}
@@ -751,7 +748,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   }}
                   className="w-full py-2 items-center bg-indigo-700 rounded-lg"
                 >
-                  <Text className="text-white text-[10px] font-bold uppercase tracking-wide">Apply Override</Text>
+                  <AppText variant="section" className="text-white font-bold uppercase tracking-wide">Apply Override</AppText>
                 </Pressable>
               </View>
             </FadeInView>
