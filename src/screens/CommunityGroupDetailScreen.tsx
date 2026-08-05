@@ -101,6 +101,10 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
 
   const [showLeaveDisbandConfirm, setShowLeaveDisbandConfirm] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
+  // The invite code + share link used to sit permanently in the page. It's a
+  // once-in-a-while action, so it now lives behind the share button in the
+  // header rather than taking up a card on every visit.
+  const [showInvite, setShowInvite] = useState(false);
 
   const handleLeaveOrDisband = () => {
     if (!activeCircle) return;
@@ -141,46 +145,64 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             <View className="flex-row items-center gap-1 bg-neutral-100 px-2.5 py-1 rounded-full">
               {activeCircle.isPublic ? <Globe size={10} color="#525252" /> : <Lock size={10} color="#525252" />}
               <AppText variant="micro" className="font-sans font-bold text-neutral-600 uppercase tracking-wide">
-                {activeCircle.isPublic ? 'Public Circle' : 'Private Circle'}
+                {activeCircle.isPublic ? 'Public' : 'Private'}
               </AppText>
             </View>
           </View>
 
-          <View className="flex-row items-center gap-2.5">
-            <AppButton size="md" onPress={() => openCircleChat(activeCircle.id)} className="rounded-xl border border-neutral-300 bg-white flex-row items-center gap-2 shadow-sm">
-              <MessageCircle size={14} color="#404040" />
-              <AppText variant="caption" className="font-sans font-bold text-neutral-700">Group Chat</AppText>
-            </AppButton>
-
-            {/* Settings Button for Leader/Admin */}
+          {/* Icon-only. As labelled buttons these two ran past the edge of a
+              375pt row that also holds a back button and a privacy badge --
+              and "Group Chat" next to a speech bubble was saying it twice. */}
+          <View className="flex-row items-center gap-2">
+            <AppIconButton
+              Icon={MessageCircle}
+              diameter={32}
+              iconSize={15}
+              iconColor="#404040"
+              onPress={() => openCircleChat(activeCircle.id)}
+              accessibilityLabel="Group chat"
+              className="rounded-full border border-neutral-300 bg-white"
+            />
             {isLeaderOrAdmin && (
-            <AppButton size="md" onPress={() => setIsEditingCircleSettings(!isEditingCircleSettings)} className={` rounded-xl border flex-row items-center gap-2 shadow-sm ${ isEditingCircleSettings ? 'bg-neutral-900 border-neutral-900' : 'bg-white border-neutral-300' }`}>
-              <Sliders size={14} color={isEditingCircleSettings ? '#FFFFFF' : '#404040'} />
-              <AppText variant="caption" className={`font-sans font-bold ${isEditingCircleSettings ? 'text-white' : 'text-neutral-700'}`}>
-                {isEditingCircleSettings ? 'Close Settings' : 'Circle Settings'}
-              </AppText>
-            </AppButton>
+              <AppIconButton
+                Icon={Sliders}
+                diameter={32}
+                iconSize={15}
+                iconColor={isEditingCircleSettings ? '#FFFFFF' : '#404040'}
+                onPress={() => setIsEditingCircleSettings(!isEditingCircleSettings)}
+                accessibilityLabel={isEditingCircleSettings ? 'Close circle settings' : 'Circle settings'}
+                className={`rounded-full border ${isEditingCircleSettings ? 'bg-neutral-900 border-neutral-900' : 'bg-white border-neutral-300'}`}
+              />
             )}
+            <AppIconButton
+              Icon={Share2}
+              diameter={32}
+              iconSize={15}
+              iconColor={showInvite ? '#FFFFFF' : '#404040'}
+              onPress={() => setShowInvite((v) => !v)}
+              accessibilityLabel="Share invite"
+              className={`rounded-full border ${showInvite ? 'bg-neutral-900 border-neutral-900' : 'bg-white border-neutral-300'}`}
+            />
           </View>
         </View>
 
-        {/* Hero: name + description, replaces the old small header title and
-            the separate "About" card below with one bigger, clearer block. */}
-        <View className="border-b border-[#E5E5E5] pb-5" style={{ gap: 8 }}>
-          <AppText variant="section" className="uppercase tracking-widest font-extrabold text-neutral-400 font-sans">
-            Scripture Circle
-          </AppText>
-          <AppText variant="display" className="leading-tight font-serif font-black text-[#1A1A1A]">{activeCircle.name}</AppText>
-          <AppText variant="body" className="text-neutral-600 leading-relaxed font-sans">
-            {activeCircle.description || 'No description yet.'}
-          </AppText>
-          <View className="flex-row gap-6 pt-2 items-end">
+        {/* Hero: name + description. The "Scripture Circle" eyebrow above the
+            name is gone -- you just tapped a circle to get here, so the label
+            was restating the screen you are already on. */}
+        <View className="border-b border-[#E5E5E5] pb-4" style={{ gap: 6 }}>
+          <AppText variant="title" className="leading-tight font-serif font-black text-[#1A1A1A]">{activeCircle.name}</AppText>
+          {!!activeCircle.description && (
+            <AppText variant="caption" className="text-neutral-600 leading-relaxed font-sans">
+              {activeCircle.description}
+            </AppText>
+          )}
+          <View className="flex-row gap-5 pt-1 items-end">
             <View>
-              <AppText variant="micro" className="text-neutral-400 uppercase tracking-wider">Owner / Sponsor</AppText>
+              <AppText variant="micro" className="text-neutral-400 uppercase tracking-wider">Owner</AppText>
               <AppText variant="caption" className="font-semibold text-neutral-700 font-sans mt-0.5">{activeCircle.ownerName}</AppText>
             </View>
             <View>
-              <AppText variant="micro" className="text-neutral-400 uppercase tracking-wider">Your Circle Access</AppText>
+              <AppText variant="micro" className="text-neutral-400 uppercase tracking-wider">Role</AppText>
               <AppText variant="caption" className="font-bold text-neutral-800 font-sans mt-0.5">{isLeaderOrAdmin ? 'Leader' : 'Member'}</AppText>
             </View>
             <Pressable onPress={() => setShowMembersModal(true)}>
@@ -224,10 +246,13 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                   <AppTextInput defaultValue={activeCircle.description} onEndEditing={(e) => { const val = e.nativeEvent.text.trim(); if (val !== activeCircle.description) { updateActiveCircle({ description: val }); triggerToast('Updated description goal! ✏️'); } }} multiline numberOfLines={2} textAlignVertical="top" className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-neutral-700 font-sans" placeholder="E.g. A community focused on scripture memory." />
                 </View>
 
-                <View className="flex-row justify-between items-center py-2 bg-white px-3 border border-neutral-200 rounded-xl">
-                  <View>
-                    <AppText variant="caption" className="font-bold text-neutral-800">Circle Privacy Mode</AppText>
-                    <AppText variant="micro" className="text-neutral-400 font-sans">Public directory vs private invite-only code</AppText>
+                <View className="flex-row justify-between items-center gap-3 py-2 bg-white px-3 border border-neutral-200 rounded-xl">
+                  {/* The button is one word now. "Public Directory" in
+                      tracked uppercase could not fit beside a two-line label
+                      on a 375pt row, so it ran off the card. */}
+                  <View className="flex-1">
+                    <AppText variant="caption" className="font-bold text-neutral-800">Privacy</AppText>
+                    <AppText variant="micro" className="text-neutral-400 font-sans">Listed in the directory, or invite-only</AppText>
                   </View>
                   <Pressable
                     onPress={() => {
@@ -235,12 +260,12 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                       updateActiveCircle({ isPublic: nextPub });
                       triggerToast(nextPub ? 'Circle is now Public! 🌐' : 'Circle is now Private (Invite Only)! 🔒');
                     }}
-                    className={`px-3 py-1.5 rounded-lg border ${
+                    className={`shrink-0 px-3 py-1.5 rounded-lg border ${
                       activeCircle.isPublic ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'
                     }`}
                   >
-                    <AppText variant="micro" className={`font-bold font-sans uppercase tracking-wider ${ activeCircle.isPublic ? 'text-emerald-700' : 'text-amber-700' }`} >
-                      {activeCircle.isPublic ? '🌐 Public Directory' : '🔒 Private Code'}
+                    <AppText variant="micro" numberOfLines={1} className={`font-bold font-sans uppercase tracking-wider ${ activeCircle.isPublic ? 'text-emerald-700' : 'text-amber-700' }`} >
+                      {activeCircle.isPublic ? 'Public' : 'Private'}
                     </AppText>
                   </Pressable>
                 </View>
@@ -309,9 +334,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           {/* List of the circle's Group Plans -- each tap opens its own landing page */}
           <View style={{ gap: 12 }}>
             {activeCircleGroupPlans.length === 0 ? (
-              <View className="p-6 border border-dashed border-neutral-200 rounded-2xl items-center">
-                <AppText variant="label" className="text-center text-neutral-400 font-sans">
-                  No Group Plans created for this circle yet. {isLeaderOrAdmin && 'Create one above!'}
+              <View className="p-4 border border-dashed border-neutral-200 rounded-2xl items-center">
+                <AppText variant="micro" className="text-center text-neutral-400 font-sans">
+                  No group plans yet. {isLeaderOrAdmin && 'Create one above.'}
                 </AppText>
               </View>
             ) : (
@@ -531,19 +556,14 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         {/* PORTABLE SHARE & JOIN GATEWAY — the only real way to add members;
             you can't unilaterally enroll another real account by typing their
             name, they have to join themselves via this code/link. */}
-        <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-4" style={{ gap: 16 }}>
-          <View>
-            <AppText variant="micro" className="bg-indigo-100 text-indigo-700 font-sans font-black px-2 py-0.5 rounded-full uppercase tracking-wider self-start">
-              Invite & Join Gateway
-            </AppText>
-            <View className="flex-row items-center gap-1.5 mt-1.5">
-              <LinkIcon size={12} color="#4f46e5" />
-              <AppText variant="label" className="font-black font-sans text-neutral-800 uppercase tracking-wider">Add Members</AppText>
-            </View>
-            <AppText variant="caption" className="text-neutral-400 leading-relaxed font-sans mt-0.5">
-              Share this code or link — anyone with it can join this circle themselves from the Find Circle screen.
-            </AppText>
-          </View>
+        {showInvite && (
+        <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-3.5" style={{ gap: 10 }}>
+          {/* Three stacked labels ("Invite & Join Gateway" / "Add Members" /
+              a sentence) all said the same thing. The share button that opens
+              this panel already establishes what it is. */}
+          <AppText variant="caption" className="text-neutral-500 leading-relaxed font-sans">
+            Anyone with this code or link can join from the Find Circle screen.
+          </AppText>
 
           {/* Code and Link Box */}
           <View style={{ gap: 8 }}>
@@ -567,6 +587,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
             </View>
           </View>
         </View>
+        )}
 
         {/* LEAVE OR DISBAND ACTIONS */}
         {showLeaveDisbandConfirm ? (

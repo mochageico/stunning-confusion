@@ -132,12 +132,12 @@ export default function ProfileScreen({ state }: { state: AppState }) {
               contribution grid communicates through colour; labelling every
               cell is what made it read as clutter rather than as a glance.
               The dates that bound the range are stated once, underneath. */}
-          <View className="border border-[#E5E5E5] rounded-xl px-3 py-2.5 bg-white gap-1.5">
+          <View className="border border-[#E5E5E5] rounded-xl px-2.5 py-2 bg-white gap-1">
             <View className="flex-row gap-1">
               {activityLast15Days.map((item, index) => (
                 <View
                   key={index}
-                  style={{ height: space(20) }}
+                  style={{ height: space(14) }}
                   className={`flex-1 rounded-sm border ${
                     item.count === 0
                       ? 'bg-[#F3F2F1] border-[#E5E5E5]'
@@ -261,7 +261,7 @@ export default function ProfileScreen({ state }: { state: AppState }) {
                     openCircle(c.id);
                     triggerToast(`Viewing ${c.name} Circle! 🛡️`);
                   }}
-                  className="border border-neutral-200 rounded-xl p-2.5 bg-neutral-50/50 flex-row justify-between items-center"
+                  className="border border-neutral-200 rounded-xl px-2.5 py-2 bg-neutral-50/50 flex-row justify-between items-center"
                 >
                   {/* Name only -- the description is free text of any length,
                       and this list exists to get you into a circle, not to

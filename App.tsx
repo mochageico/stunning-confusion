@@ -582,14 +582,17 @@ function AppShell() {
             <AppText variant="label" className="text-white font-sans font-bold uppercase tracking-wider">← Back to Guide</AppText>
           </Pressable>
         ) : (
-          <View className="h-16 bg-white border-t border-[#E5E5E5] px-6 flex-row items-center justify-between">
+          // 56pt rather than 64: the bar sits on top of the home-indicator
+          // inset already added by SafeAreaView, so the old height pushed it
+          // noticeably far up the screen.
+          <View className="h-14 bg-white border-t border-[#E5E5E5] px-6 flex-row items-center justify-between">
             {TABS.map((tab) => {
               const isActive = state.currentTab === tab.id;
               const Icon = tab.Icon;
               return (
-                <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1.5">
-                  <Icon size={22} color={isActive ? '#1A1A1A' : '#888888'} strokeWidth={isActive ? 2.5 : 2} />
-                  <AppText variant="caption" className={`font-sans font-bold tracking-tight mt-1 ${isActive ? 'text-[#1A1A1A]' : 'text-[#888888]'}`}>
+                <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1">
+                  <Icon size={20} color={isActive ? '#1A1A1A' : '#888888'} strokeWidth={isActive ? 2.5 : 2} />
+                  <AppText variant="micro" className={`font-sans font-bold tracking-tight mt-0.5 ${isActive ? 'text-[#1A1A1A]' : 'text-[#888888]'}`}>
                     {tab.label}
                   </AppText>
                 </Pressable>
