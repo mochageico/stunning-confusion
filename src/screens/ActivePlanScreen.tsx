@@ -538,12 +538,12 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             method) without letting you edit the plan from here, which is the
             two-editors-one-state problem the split exists to remove. */}
         <Pressable
-          onPress={() => navigateTo('planDesigner')}
+          onPress={() => navigateTo('savedPlans')}
           className="flex-row items-center border-t border-neutral-200"
           style={{ paddingTop: space(14), gap: space(8), minHeight: 44 }}
         >
           <AppText variant="micro" className="font-sans text-neutral-600 flex-1">
-            Retention: {activePlan ? activePlan.name : 'no plan'} — change in Plan & Pacing
+            Retention: {activePlan ? activePlan.name : 'no rhythm'} — change in Saved Memory Rhythms
           </AppText>
           <ChevronRight size={14} color="#737373" />
         </Pressable>

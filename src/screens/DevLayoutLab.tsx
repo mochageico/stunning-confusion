@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import { AppText, CollapsibleCard, FontScaleOverrideProvider } from '../components/design';
+import { Dropdown } from '../components/Dropdown';
 import { MissPolicySection, type MissPolicy } from '../components/MissPolicySection';
 import { RhythmEditor } from '../components/RhythmEditor';
 import { QueueSources } from '../components/QueueSources';
@@ -64,6 +65,11 @@ export default function DevLayoutLab() {
               <SpecimenLabel text="CollapsibleCard — open as many as you like" />
               <FontScaleOverrideProvider scale={scale}>
                 <CollapseSpecimen scale={scale} />
+              </FontScaleOverrideProvider>
+
+              <SpecimenLabel text="Dropdown — anchored menu, short + long list" />
+              <FontScaleOverrideProvider scale={scale}>
+                <LiveDropdowns />
               </FontScaleOverrideProvider>
 
               <SpecimenLabel text="Memory Desk — whole screen" />
@@ -147,6 +153,44 @@ function LiveQueueSources() {
         previewFromIndividual={['c']}
         onChangePriority={(_, p) => setPriority(p)}
       />
+    </View>
+  );
+}
+
+/**
+ * Two Dropdowns side by side: a short list (no search) and a long one (search
+ * appears past 10 options). The menu is anchored to its trigger, so the thing
+ * to check here is that it lands under the button in the column it belongs to
+ * -- not centred, not clipped by the column edge -- and that a trigger low in
+ * the scroll flips the menu upward instead of opening into nothing.
+ */
+function LiveDropdowns() {
+  const [short, setShort] = useState('verses');
+  const [long, setLong] = useState('3');
+  return (
+    <View className="flex-row" style={{ gap: 8 }}>
+      <View className="flex-1">
+        <Dropdown
+          value={short}
+          onChange={setShort}
+          options={[
+            { id: 'verses', label: 'Verse List' },
+            { id: 'memoryGrid', label: 'Memory Grid' },
+          ]}
+          title="Display"
+          placeholder="View"
+          staticLabel
+          searchable={false}
+        />
+      </View>
+      <View className="flex-1">
+        <Dropdown
+          value={long}
+          onChange={setLong}
+          options={Array.from({ length: 28 }, (_, i) => ({ id: String(i + 1), label: `Chapter ${i + 1}` }))}
+          title="Select a Chapter"
+        />
+      </View>
     </View>
   );
 }

@@ -326,15 +326,20 @@ function ProgressModal({ state }: { state: AppState }) {
             </View>
           </View>
 
+          {/* Saved Memory Rhythms, not the designer directly. The designer has
+              to be told which rhythm it's editing -- a bare navigateTo left
+              editingPlanId null, and Save then took the create-new branch,
+              minting a duplicate. Going through the list is now the one door
+              into it (see MemoryDeskScreen). */}
           <Pressable
             onPress={() => {
               setShowProgressModal(false);
-              navigateTo('planDesigner');
+              navigateTo('savedPlans');
             }}
             className="w-full py-2.5 px-4 bg-white border border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5"
           >
             <Sliders size={13} color="#1A1A1A" />
-            <Text className="text-[#1A1A1A] font-bold font-sans text-xs">Design Memory Plan</Text>
+            <Text className="text-[#1A1A1A] font-bold font-sans text-xs">Saved Memory Rhythms</Text>
           </Pressable>
 
           <Pressable onPress={() => setShowProgressModal(false)} className="w-full py-2.5 bg-neutral-200 rounded-xl items-center">
@@ -593,7 +598,7 @@ function AppShell() {
               const Icon = tab.Icon;
               return (
                 <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1.5">
-                  <Icon size={18} color={isActive ? '#1A1A1A' : '#888888'} strokeWidth={isActive ? 2.5 : 2} />
+                  <Icon size={22} color={isActive ? '#1A1A1A' : '#888888'} strokeWidth={isActive ? 2.5 : 2} />
                   <Text className={`text-[10px] font-sans font-bold tracking-tight mt-1 ${isActive ? 'text-[#1A1A1A]' : 'text-[#888888]'}`}>
                     {tab.label}
                   </Text>

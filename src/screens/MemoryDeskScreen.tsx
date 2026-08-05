@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, View } from 'react-native';
-import { ArrowLeft, CalendarDays, ChevronRight, FolderOpen, History, ListOrdered, SlidersHorizontal } from 'lucide-react-native';
+import { ArrowLeft, CalendarDays, ChevronRight, FolderOpen, History, ListOrdered } from 'lucide-react-native';
 
 import { AppState, ScreenName } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
@@ -72,7 +72,7 @@ function DeskRow({
 }
 
 export default function MemoryDeskScreen({ state }: { state: AppState }) {
-  const { handleBack, navigateTo, memoryQueue, savedPlans, isReviewDue, openActivePlanDesigner, learningDays, newVersesPace } = state;
+  const { handleBack, navigateTo, memoryQueue, savedPlans, isReviewDue, learningDays, newVersesPace } = state;
   const space = useScaledSpace();
   const scale = useFontScale();
 
@@ -123,27 +123,25 @@ export default function MemoryDeskScreen({ state }: { state: AppState }) {
             detail={`${queuedCount} queued · ${newVersesPace}/day, ${learningDays.length} days`}
             onPress={go('activePlan')}
           />
-          {/* openActivePlanDesigner, not go('planDesigner'): the designer has
-              to be told which plan it's editing. A bare navigateTo left
-              editingPlanId null on a fresh launch, and Save then took the
-              create-new branch -- minting a duplicate plan with the same name
-              and deactivating the real one. */}
-          <DeskRow
-            Icon={SlidersHorizontal}
-            label="Memory Plan"
-            detail={activePlanName ?? 'No active plan'}
-            onPress={openActivePlanDesigner}
-          />
           <DeskRow
             Icon={CalendarDays}
             label="Memory Calendar"
             detail={dueTodayCount === 1 ? '1 due today' : `${dueTodayCount} due today`}
             onPress={go('memoryCalendar')}
           />
+          {/* The one door to the designer. There used to be a "Memory Plan"
+              row here too, opening the ACTIVE rhythm's designer directly --
+              two rows leading to the same editor, one of which silently
+              picked which rhythm you were editing for you. Now you pick from
+              the list first, then edit, so the designer always knows what it
+              has open. (That mattered beyond tidiness: navigating in without
+              an editingPlanId made Save take the create-new branch and mint a
+              duplicate.) The active rhythm's name rides along on this row so
+              the desk still tells you where things stand at a glance. */}
           <DeskRow
             Icon={FolderOpen}
-            label="Saved Plans"
-            detail={savedPlans.length === 1 ? '1 plan' : `${savedPlans.length} plans`}
+            label="Saved Memory Rhythms"
+            detail={activePlanName ? `${activePlanName} · ${savedPlans.length}` : `${savedPlans.length} saved`}
             onPress={go('savedPlans')}
           />
           <DeskRow

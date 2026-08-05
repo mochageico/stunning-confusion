@@ -274,7 +274,7 @@ export function CollapsibleCard({
             {title}
           </AppText>
           {summary ? (
-            <AppText variant="micro" className={`font-mono text-neutral-500 ${stacked ? '' : 'shrink-0'}`}>
+            <AppText variant="micro" className={`font-mono font-bold text-neutral-600 ${stacked ? '' : 'shrink-0'}`}>
               {summary}
             </AppText>
           ) : null}
@@ -345,7 +345,7 @@ export function SettingRow({
           {label}
         </AppText>
         {hint ? (
-          <AppText variant="micro" className="font-sans text-neutral-500">
+          <AppText variant="micro" className="font-sans text-neutral-600">
             {hint}
           </AppText>
         ) : null}
@@ -364,14 +364,20 @@ export function SettingRow({
   );
 }
 
-/** The min/max captions under a stepper track. */
+/**
+ * The min/max captions under a stepper track.
+ *
+ * neutral-600, not neutral-400: these are 11pt mono at the bottom of the
+ * contrast range, and 400-weight grey on white is the first thing to
+ * disappear on a phone outdoors or for anyone whose eyes aren't 25.
+ */
 export function RangeCaption({ min, max }: { min: string; max: string }) {
   return (
     <View className="flex-row justify-between" style={{ gap: 8 }}>
-      <AppText variant="micro" className="text-neutral-400 font-mono shrink">
+      <AppText variant="micro" className="text-neutral-600 font-mono shrink">
         {min}
       </AppText>
-      <AppText variant="micro" className="text-neutral-400 font-mono shrink text-right">
+      <AppText variant="micro" className="text-neutral-600 font-mono shrink text-right">
         {max}
       </AppText>
     </View>
@@ -536,7 +542,7 @@ function OptionList<T extends string>({ options, value, onChange, space, checkSi
                 {opt.title}
               </AppText>
               {opt.desc ? (
-                <AppText variant="caption" className="font-sans text-neutral-500">
+                <AppText variant="caption" className="font-sans text-neutral-600">
                   {opt.desc}
                 </AppText>
               ) : null}
@@ -581,7 +587,7 @@ export function ToggleRow({
           {label}
         </AppText>
         {hint ? (
-          <AppText variant="micro" className="font-sans text-neutral-500">
+          <AppText variant="micro" className="font-sans text-neutral-600">
             {hint}
           </AppText>
         ) : null}

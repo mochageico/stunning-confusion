@@ -109,7 +109,7 @@ export function MissPolicySection({
       title="Missed Review Handling"
       summary={currentTitle}
     >
-      <AppText variant="caption" className="font-sans text-neutral-500">
+      <AppText variant="caption" className="font-sans text-neutral-600">
         What happens when reviews come due and you're not around — vacations, busy weeks, sick days.
       </AppText>
 
