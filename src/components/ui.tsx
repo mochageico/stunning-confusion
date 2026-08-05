@@ -64,7 +64,7 @@ export function HelpTooltip({ text }: { text: string }) {
         onPress={() => setShow(true)}
         className="w-4 h-4 rounded-full border border-neutral-300 items-center justify-center bg-white/95 ml-1.5 shrink-0"
       >
-        <Text className="text-[9px] font-sans font-black text-neutral-400">?</Text>
+        <AppText variant="micro" className="font-sans font-black text-neutral-400">?</AppText>
       </Pressable>
       <Modal visible={show} transparent animationType="none" onRequestClose={() => setShow(false)}>
         {/* RN-Web's Modal wraps children in a container that defaults to
@@ -83,7 +83,7 @@ export function HelpTooltip({ text }: { text: string }) {
           {/* Swallows the tap so it doesn't also bubble to the backdrop
               Pressable above and immediately dismiss itself. */}
           <Pressable onPress={() => {}} className="w-full bg-white border border-neutral-300 rounded-xl p-3.5 shadow-lg" style={{ maxWidth: 320 }}>
-            <Text className="text-xs leading-relaxed font-sans font-normal text-neutral-800 text-left">{text}</Text>
+            <AppText variant="label" className="leading-relaxed font-sans font-normal text-neutral-800 text-left">{text}</AppText>
           </Pressable>
         </Pressable>
       </Modal>
@@ -143,12 +143,9 @@ export function ChipRow<T extends string | number>({
               active ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
             }`}
           >
-            <Text
-              className={`text-[9.5px] font-bold text-center ${active ? 'text-white' : 'text-neutral-600'}`}
-              numberOfLines={1}
-            >
+            <AppText variant="micro" className={`font-bold text-center ${active ? 'text-white' : 'text-neutral-600'}`} numberOfLines={1} >
               {opt.label}
-            </Text>
+            </AppText>
           </Pressable>
         );
       })}
@@ -341,9 +338,9 @@ export function DiscreteSlider<T extends string | number>({
       </Pressable>
       <View className="flex-row justify-between px-0.5">
         {options.map((opt) => (
-          <Text key={String(opt.id)} className="text-[9px] font-mono font-bold text-neutral-400">
+          <AppText variant="micro" key={String(opt.id)} className="font-mono font-bold text-neutral-400">
             {opt.label}
-          </Text>
+          </AppText>
         ))}
       </View>
     </View>
@@ -452,7 +449,7 @@ export function NumericKeyboardAccessory({ nativeID = NUMERIC_ACCESSORY_ID }: { 
     <InputAccessoryView nativeID={nativeID}>
       <View className="bg-neutral-100 border-t border-neutral-300 flex-row justify-end px-2 py-1.5">
         <Pressable onPress={() => Keyboard.dismiss()} hitSlop={10} className="px-4 py-1.5">
-          <Text className="text-[15px] font-sans font-bold text-[#1A1A1A]">Done</Text>
+          <AppText variant="body" className="font-sans font-bold text-[#1A1A1A]">Done</AppText>
         </Pressable>
       </View>
     </InputAccessoryView>

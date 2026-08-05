@@ -119,9 +119,9 @@ function DueReviewRow({
   return (
     <View className={`flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border-l-4 ${t.border} border border-neutral-200 shadow-3xs`}>
       <Pressable onPress={onOpenChapter} className="flex-1 mr-2">
-        <Text className={`text-xs font-serif font-black ${t.label}`} numberOfLines={1}>
+        <AppText variant="label" className={`font-serif font-black ${t.label}`} numberOfLines={1}>
           {group.label}
-        </Text>
+        </AppText>
       </Pressable>
       <View className="flex-row gap-1">
         {/* Manual log -- for a review genuinely done off-app, without having
@@ -134,10 +134,10 @@ function DueReviewRow({
           <ClipboardCheck size={11} color="#525252" />
         </Pressable>
         <Pressable onPress={onListen} className={`bg-white border ${t.outline} px-2 h-5 items-center justify-center rounded`}>
-          <Text className={`${t.outlineText} text-[9px] font-bold`}>Listen</Text>
+          <AppText variant="micro" className={`${t.outlineText} font-bold`}>Listen</AppText>
         </Pressable>
         <Pressable onPress={onReview} className={`${t.solid} px-2 h-5 items-center justify-center rounded`}>
-          <Text className="text-white text-[9px] font-bold">Review</Text>
+          <AppText variant="micro" className="text-white font-bold">Review</AppText>
         </Pressable>
       </View>
     </View>
@@ -314,19 +314,19 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
           {showPullShieldConfirm && (
             <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-3" style={{ gap: 8 }}>
-              <Text className="text-[11px] font-sans font-bold text-indigo-900">
+              <AppText variant="caption" className="font-sans font-bold text-indigo-900">
                 🛡️ Review Shield is on — pull new verses anyway?
-              </Text>
-              <Text className="text-[9px] font-sans text-indigo-800/80 leading-relaxed">
+              </AppText>
+              <AppText variant="micro" className="font-sans text-indigo-800/80 leading-relaxed">
                 Today's review time ({estMinutes}m) already meets or exceeds your {maxReviewCap}m daily limit.
                 Pulling more now adds on top of that, on purpose.
-              </Text>
+              </AppText>
               <View className="flex-row gap-2 justify-end pt-1">
                 <Pressable
                   onPress={() => setShowPullShieldConfirm(false)}
                   className="px-3 py-1.5 border border-neutral-300 rounded-lg"
                 >
-                  <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                  <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
                 </Pressable>
                 <Pressable
                   onPress={() => {
@@ -335,7 +335,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                   }}
                   className="px-3 py-1.5 bg-indigo-600 rounded-lg"
                 >
-                  <Text className="text-white font-sans font-bold text-[10px]">Yes, Pull Anyway</Text>
+                  <AppText variant="caption" className="text-white font-sans font-bold ">Yes, Pull Anyway</AppText>
                 </Pressable>
               </View>
             </View>
@@ -351,20 +351,20 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 >
                   <View className="flex-row justify-between items-center">
                     <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
-                      <Text className="text-xs font-serif font-bold text-[#1A1A1A]">{group.label}</Text>
+                      <AppText variant="label" className="font-serif font-bold text-[#1A1A1A]">{group.label}</AppText>
                     </Pressable>
                     <View className="flex-row gap-1">
                       <Pressable
                         onPress={() => handleGroupPractice('listen', group.items)}
                         className="bg-white border border-neutral-300 px-2 h-5 items-center justify-center rounded"
                       >
-                        <Text className="text-neutral-700 text-[9px] font-bold">Listen</Text>
+                        <AppText variant="micro" className="text-neutral-700 font-bold">Listen</AppText>
                       </Pressable>
                       <Pressable
                         onPress={() => handleGroupPractice('learn', group.items)}
                         className="bg-[#1A1A1A] px-2 h-5 items-center justify-center rounded"
                       >
-                        <Text className="text-white text-[9px] font-bold">Learn</Text>
+                        <AppText variant="micro" className="text-white font-bold">Learn</AppText>
                       </Pressable>
                     </View>
                   </View>
@@ -381,7 +381,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                             isBankedAwaitingReview ? 'bg-neutral-100 border-neutral-200 opacity-60' : 'bg-white border-neutral-100'
                           }`}
                         >
-                          <Text className="text-[9.5px] font-sans font-bold text-neutral-500">v{item.verseNumber}</Text>
+                          <AppText variant="micro" className="font-sans font-bold text-neutral-500">v{item.verseNumber}</AppText>
                           <View className="flex-row gap-0.5">
                             {Array.from({ length: masteryTouches }).map((_, i) => (
                               <View
@@ -392,9 +392,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
                               />
                             ))}
                           </View>
-                          <Text className="text-[8px] font-mono font-black text-neutral-400">
+                          <AppText variant="micro" className="font-mono font-black text-neutral-400">
                             {touchesCount}/{masteryTouches}
-                          </Text>
+                          </AppText>
                           {isBankedAwaitingReview && (
                             <HelpTooltip text="This verse has all its touches. Retention comes first, so it moves into spaced review on its own as soon as today's due reviews are done." />
                           )}
@@ -406,7 +406,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
               ))}
             </View>
           ) : (
-            <Text className="text-xs text-neutral-400 italic pl-1">No verses currently in learning phase.</Text>
+            <AppText variant="label" className="text-neutral-400 italic pl-1">No verses currently in learning phase.</AppText>
           )}
         </CollapsibleCard>
 
@@ -431,19 +431,19 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
           {showResetConfirm && (
             <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
-              <Text className="text-[11px] font-sans font-bold text-red-800">
+              <AppText variant="caption" className="font-sans font-bold text-red-800">
                 Are you sure you want to reset reviews for today?
-              </Text>
-              <Text className="text-[9px] font-sans text-red-700/80 leading-relaxed">
+              </AppText>
+              <AppText variant="micro" className="font-sans text-red-700/80 leading-relaxed">
                 This undoes any reviews you already finished today — only verses you reviewed today go back to
                 due. Nothing you reviewed on an earlier day is affected.
-              </Text>
+              </AppText>
               <View className="flex-row gap-2 justify-end pt-1">
                 <Pressable
                   onPress={() => setShowResetConfirm(false)}
                   className="px-3 py-1.5 border border-neutral-300 rounded-lg"
                 >
-                  <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                  <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
                 </Pressable>
                 <Pressable
                   onPress={() => {
@@ -452,7 +452,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                   }}
                   className="px-3 py-1.5 bg-red-600 rounded-lg"
                 >
-                  <Text className="text-white font-sans font-bold text-[10px]">Yes, Reset</Text>
+                  <AppText variant="caption" className="text-white font-sans font-bold ">Yes, Reset</AppText>
                 </Pressable>
               </View>
             </View>
@@ -463,27 +463,27 @@ export default function HomeScreen({ state }: { state: AppState }) {
           {manualLogGroup && (
             <View className="bg-neutral-50 border border-neutral-300 rounded-xl p-3" style={{ gap: 8 }}>
               <View>
-                <Text className="text-[11px] font-sans font-bold text-neutral-800">Log {manualLogGroup.label} manually</Text>
-                <Text className="text-[9px] font-sans text-neutral-500 leading-relaxed">
+                <AppText variant="caption" className="font-sans font-bold text-neutral-800">Log {manualLogGroup.label} manually</AppText>
+                <AppText variant="micro" className="font-sans text-neutral-500 leading-relaxed">
                   For a review you actually did somewhere else — out loud in the car, from a card, anywhere but here.
-                </Text>
+                </AppText>
               </View>
               <View style={{ gap: 6 }}>
                 <Pressable onPress={() => submitManualLog('perfect')} className="w-full py-2 bg-emerald-600 rounded-lg items-center">
-                  <Text className="text-white font-sans font-bold text-[10px]">Perfect — no mistakes</Text>
+                  <AppText variant="caption" className="text-white font-sans font-bold ">Perfect — no mistakes</AppText>
                 </Pressable>
                 <Pressable onPress={() => submitManualLog('passed')} className="w-full py-2 bg-indigo-600 rounded-lg items-center">
-                  <Text className="text-white font-sans font-bold text-[10px]">Got it, with a stumble</Text>
+                  <AppText variant="caption" className="text-white font-sans font-bold ">Got it, with a stumble</AppText>
                 </Pressable>
                 <View className="flex-row gap-2">
                   <Pressable
                     onPress={() => submitManualLog('practice')}
                     className="flex-1 py-1.5 border border-dashed border-neutral-300 rounded-lg items-center"
                   >
-                    <Text className="text-neutral-500 font-sans font-bold text-[10px]">Needs practice</Text>
+                    <AppText variant="caption" className="text-neutral-500 font-sans font-bold ">Needs practice</AppText>
                   </Pressable>
                   <Pressable onPress={() => setManualLogGroup(null)} className="flex-1 py-1.5 border border-neutral-300 rounded-lg items-center">
-                    <Text className="text-neutral-600 font-sans font-bold text-[10px]">Cancel</Text>
+                    <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
                   </Pressable>
                 </View>
               </View>
@@ -496,9 +496,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 onPress={handleReviewAllDue}
                 className="w-full py-2.5 bg-[#1A1A1A] rounded-xl items-center justify-center"
               >
-                <Text className="text-white font-sans font-bold text-xs">
+                <AppText variant="label" className="text-white font-sans font-bold ">
                   Review All Due ({dueReviewItems.length} {dueReviewItems.length === 1 ? 'verse' : 'verses'})
-                </Text>
+                </AppText>
               </Pressable>
 
               {/* Daily / Weekly / Monthly review groups, in that order --
@@ -528,7 +528,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
               )}
             </View>
           ) : (
-            <Text className="text-xs text-neutral-400 italic pl-1">No reviews due today! Keeping up nicely! 🎉</Text>
+            <AppText variant="label" className="text-neutral-400 italic pl-1">No reviews due today! Keeping up nicely! 🎉</AppText>
           )}
         </CollapsibleCard>
 
@@ -557,19 +557,19 @@ export default function HomeScreen({ state }: { state: AppState }) {
                   className="flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border border-neutral-200"
                 >
                   <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
-                    <Text className="text-xs font-serif font-bold text-[#1A1A1A]">{group.label}</Text>
+                    <AppText variant="label" className="font-serif font-bold text-[#1A1A1A]">{group.label}</AppText>
                   </Pressable>
                   <Pressable
                     onPress={() => handleGroupPractice('listen', group.items)}
                     className="bg-neutral-100 px-3 py-1 rounded-lg"
                   >
-                    <Text className="text-[#1A1A1A] font-sans font-bold text-[10px]">Listen</Text>
+                    <AppText variant="caption" className="text-[#1A1A1A] font-sans font-bold ">Listen</AppText>
                   </Pressable>
                 </View>
               ))}
             </View>
           ) : (
-            <Text className="text-xs text-neutral-400 italic pl-1">No queued verses remaining to prime!</Text>
+            <AppText variant="label" className="text-neutral-400 italic pl-1">No queued verses remaining to prime!</AppText>
           )}
         </CollapsibleCard>
 
