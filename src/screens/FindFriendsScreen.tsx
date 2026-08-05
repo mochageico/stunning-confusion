@@ -1,9 +1,9 @@
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft, Check, UserPlus, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 export default function FindFriendsScreen({ state }: { state: AppState }) {
   const {
@@ -120,14 +120,7 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
             SEARCH BY NAME OR EMAIL
           </AppText>
           <View className="flex-row gap-2">
-            <TextInput
-              value={userSearchQuery}
-              onChangeText={setUserSearchQuery}
-              onSubmitEditing={() => searchUsers(userSearchQuery)}
-              placeholder="e.g. Jane or jane@example.com"
-              autoCapitalize="none"
-              className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded-xl text-xs"
-            />
+            <AppTextInput value={userSearchQuery} onChangeText={setUserSearchQuery} onSubmitEditing={() => searchUsers(userSearchQuery)} placeholder="e.g. Jane or jane@example.com" autoCapitalize="none" className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded-xl" />
             <Pressable
               onPress={() => searchUsers(userSearchQuery)}
               className="px-4 py-2 bg-[#1A1A1A] rounded-xl items-center justify-center"

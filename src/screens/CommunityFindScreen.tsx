@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, HelpTooltip } from '../components/ui';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 export default function CommunityFindScreen({ state }: { state: AppState }) {
   const {
@@ -67,13 +67,7 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
           </View>
 
           <View className="flex-row gap-2">
-            <TextInput
-              value={inviteCodeInput}
-              onChangeText={setInviteCodeInput}
-              placeholder="e.g. A1B2C3"
-              autoCapitalize="characters"
-              className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded-xl text-xs font-bold uppercase tracking-wider"
-            />
+            <AppTextInput value={inviteCodeInput} onChangeText={setInviteCodeInput} placeholder="e.g. A1B2C3" autoCapitalize="characters" className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded-xl font-bold uppercase tracking-wider" />
             <Pressable onPress={() => joinCircleByCode(inviteCodeInput)} className="px-4 py-2 bg-[#1A1A1A] rounded-xl items-center justify-center">
               <AppText variant="label" className="text-white font-bold">Join Circle</AppText>
             </Pressable>
@@ -88,12 +82,7 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
 
           <View className="gap-2">
             {/* Text query */}
-            <TextInput
-              value={findSearchQuery}
-              onChangeText={setFindSearchQuery}
-              placeholder="Search by circle name or description..."
-              className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs"
-            />
+            <AppTextInput value={findSearchQuery} onChangeText={setFindSearchQuery} placeholder="Search by circle name or description..." className="w-full px-3 py-2 border border-neutral-300 rounded-xl" />
           </View>
         </View>
 

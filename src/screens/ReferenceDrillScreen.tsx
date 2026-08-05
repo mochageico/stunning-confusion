@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft, Check, RefreshCw, Target, X } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
 import { ChipRow, FadeInView, NumericInput } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 import {
   buildReferenceRounds,
   formatReference,
@@ -420,16 +420,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                       names case/whitespace-insensitively. It also keeps the
                       answer path free of react-native's Modal, which does not
                       currently overlay on web anywhere in this app. */}
-                  <TextInput
-                    value={freeGuess.book}
-                    onChangeText={(t) => setFreeGuess((g) => ({ ...g, book: t }))}
-                    placeholder="Book (e.g. Romans)"
-                    placeholderTextColor="#a3a3a3"
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                    editable={!answered}
-                    className="bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A]"
-                  />
+                  <AppTextInput value={freeGuess.book} onChangeText={(t) => setFreeGuess((g) => ({ ...g, book: t }))} placeholder="Book (e.g. Romans)" placeholderTextColor="#a3a3a3" autoCapitalize="words" autoCorrect={false} editable={!answered} className="bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-[#1A1A1A]" />
                   <View className="flex-row gap-2">
                     <NumericInput
                       value={freeGuess.chapter}

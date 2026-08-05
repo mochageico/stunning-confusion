@@ -6,7 +6,7 @@ import { AppState } from '../state/useAppState';
 import { QueueItem, VerseState } from '../types';
 import { FadeInView, HelpTooltip } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
-import { AppText, CollapsibleCard, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
+import { AppButton, AppText, CollapsibleCard, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
 
 /**
  * One tile in the feature grid. Was three across at a fixed `h-24` plus a
@@ -123,22 +123,28 @@ function DueReviewRow({
           {group.label}
         </AppText>
       </Pressable>
+      {/* All three are `sm`: secondary actions inside a row that is itself
+          tappable, so they carry hitSlop rather than a 44pt frame. They were
+          pinned at h-5 (20pt), which clipped their labels outright at 1.5x. */}
       <View className="flex-row gap-1">
         {/* Manual log -- for a review genuinely done off-app, without having
             to open the practice overlay just to record it. */}
-        <Pressable
+        <AppButton
+          size="sm"
           onPress={onManualLog}
-          className="bg-white border border-neutral-200 px-1.5 h-5 items-center justify-center rounded"
-          hitSlop={4}
-        >
-          <ClipboardCheck size={11} color="#525252" />
-        </Pressable>
-        <Pressable onPress={onListen} className={`bg-white border ${t.outline} px-2 h-5 items-center justify-center rounded`}>
-          <AppText variant="micro" className={`${t.outlineText} font-bold`}>Listen</AppText>
-        </Pressable>
-        <Pressable onPress={onReview} className={`${t.solid} px-2 h-5 items-center justify-center rounded`}>
-          <AppText variant="micro" className="text-white font-bold">Review</AppText>
-        </Pressable>
+          Icon={ClipboardCheck}
+          iconColor="#525252"
+          className="bg-white border border-neutral-200 rounded"
+          style={{ paddingHorizontal: 8 }}
+        />
+        <AppButton
+          size="sm"
+          onPress={onListen}
+          label="Listen"
+          className={`bg-white border ${t.outline} rounded`}
+          textClassName={t.outlineText}
+        />
+        <AppButton size="sm" onPress={onReview} label="Review" className={`${t.solid} rounded`} textClassName="text-white" />
       </View>
     </View>
   );

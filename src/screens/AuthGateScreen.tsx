@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { BookOpen } from 'lucide-react-native';
 
 import { FadeInView, useKeyboardHeight } from '../components/ui';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { useEmailAuth } from '../state/useEmailAuth';
 import { AppState } from '../state/useAppState';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 // Shown instead of the whole tabbed app whenever there's no signed-in user --
 // sign-in/sign-up now happens here, up front, rather than being buried in the
@@ -131,28 +131,10 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
                 </View>
 
                 {authMode === 'signUp' && (
-                  <TextInput
-                    value={displayNameInput}
-                    onChangeText={setDisplayNameInput}
-                    placeholder="Display name"
-                    className="w-full px-3 py-2.5 bg-white border border-neutral-300 rounded-xl text-xs"
-                  />
+                  <AppTextInput value={displayNameInput} onChangeText={setDisplayNameInput} placeholder="Display name" className="w-full px-3 py-2.5 bg-white border border-neutral-300 rounded-xl" />
                 )}
-                <TextInput
-                  value={emailInput}
-                  onChangeText={setEmailInput}
-                  placeholder="Email"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  className="w-full px-3 py-2.5 bg-white border border-neutral-300 rounded-xl text-xs"
-                />
-                <TextInput
-                  value={passwordInput}
-                  onChangeText={setPasswordInput}
-                  placeholder="Password"
-                  secureTextEntry
-                  className="w-full px-3 py-2.5 bg-white border border-neutral-300 rounded-xl text-xs"
-                />
+                <AppTextInput value={emailInput} onChangeText={setEmailInput} placeholder="Email" autoCapitalize="none" keyboardType="email-address" className="w-full px-3 py-2.5 bg-white border border-neutral-300 rounded-xl" />
+                <AppTextInput value={passwordInput} onChangeText={setPasswordInput} placeholder="Password" secureTextEntry className="w-full px-3 py-2.5 bg-white border border-neutral-300 rounded-xl" />
 
                 <Pressable
                   onPress={handleEmailAuthSubmit}

@@ -1,10 +1,10 @@
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { ArrowLeft, Check, TrendingUp } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, StepperRow } from '../components/ui';
 import { MissPolicySection } from '../components/MissPolicySection';
-import {
+import { AppTextInput,
   AppText,
   CollapsibleCard,
   MIN_TOUCH,
@@ -186,7 +186,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               pick, and it was set in 12pt -- smaller than the labels around
               it. Sized off the scale directly (not a className) so it grows
               with the OS font setting like every AppText does. */}
-          <TextInput
+          <AppTextInput
             placeholder="My Custom Scripture Plan"
             placeholderTextColor="#a3a3a3"
             value={customPlanName}
@@ -198,8 +198,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               minHeight: MIN_TOUCH,
               paddingHorizontal: space(12),
               paddingVertical: space(10),
-            }}
-          />
+            }} />
         </View>
 
         {/* Retention tier -- the primary choice on this screen. */}

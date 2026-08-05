@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useSyncExternalStore } from 'react';
-import { Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react-native';
 
@@ -120,6 +121,45 @@ export function AppText({
   );
 }
 
+/**
+ * The same scaling contract for text entry. `AppText` can't be used here --
+ * `TextInput` is a different component, not a `Text` with an `editable` prop --
+ * which is why inputs were the one thing left on raw `text-xs` after the type
+ * migration.
+ *
+ * Defaults to `label` because that's what the migration turned `text-xs` into,
+ * and 31 of the app's inputs were `text-xs`. The 15 that carried no size class
+ * at all were rendering at the platform default, which differed per platform;
+ * they now match everything else.
+ *
+ * The lineHeight asymmetry is deliberate and is the whole reason this isn't a
+ * two-line wrapper: an explicit lineHeight on a SINGLE-LINE TextInput
+ * mis-centres the text vertically and clips descenders on Android, so it is
+ * applied only when `multiline` is set -- where it genuinely helps, because
+ * that's the case that actually wraps.
+ */
+export function AppTextInput({
+  variant = 'label',
+  className,
+  style,
+  ...rest
+}: React.ComponentProps<typeof TextInput> & { variant?: TypeVariant }) {
+  const scale = useFontScale();
+  const { fontSize, lineHeight } = TYPE[variant];
+  return (
+    <TextInput
+      allowFontScaling={false}
+      className={className}
+      style={[
+        { fontSize: fontSize * scale },
+        rest.multiline ? { lineHeight: lineHeight * scale } : null,
+        style,
+      ]}
+      {...rest}
+    />
+  );
+}
+
 // ============================================================
 // Scaled space
 //
@@ -137,6 +177,96 @@ export function useScaledSpace() {
  * control containing scaled text still grows past it.
  */
 export const MIN_TOUCH = 44;
+
+// ============================================================
+// Buttons
+//
+// Three sizes, because the app had eleven: py-0.5 / 1 / 1.5 / 2 / 2.5 / 3 /
+// 3.5 plus fixed h-5 / h-7 / h-8 / h-9 / h-12, chosen ad hoc per call site.
+//
+// The fixed heights were the actual bug, not just the inconsistency. `h-8` on
+// a button containing text breaks rule 3 at the top of this file: at 1.5x the
+// label has nowhere to grow, so it clips -- the same failure as the original
+// SE card leakage, in a smaller box. Every size below is a minHeight.
+//
+// `sm` sits deliberately below MIN_TOUCH. It is for a secondary affordance
+// inside an already-tappable row (the Listen/Review pills on a due-review
+// row), where a 44pt control would dominate the row it belongs to. Those get
+// `hitSlop` instead, which is the honest fix for a small target: the visual
+// stays small, the tappable area doesn't.
+// ============================================================
+export type ButtonSize = 'sm' | 'md' | 'lg';
+
+export const BUTTON_SIZE: Record<
+  ButtonSize,
+  { minHeight: number; py: number; px: number; gap: number; type: TypeVariant; icon: number; hitSlop: number }
+> = {
+  /** Inline pills and row actions. Below MIN_TOUCH by design -- see above. */
+  sm: { minHeight: 28, py: 4, px: 10, gap: 4, type: 'micro', icon: 12, hitSlop: 8 },
+  /** The default. Toolbar buttons, sheet actions, anything standalone. */
+  md: { minHeight: MIN_TOUCH, py: 8, px: 14, gap: 6, type: 'label', icon: 15, hitSlop: 0 },
+  /** Full-width primary actions -- the one obvious thing to do on a screen. */
+  lg: { minHeight: 52, py: 12, px: 18, gap: 8, type: 'label', icon: 17, hitSlop: 0 },
+};
+
+/**
+ * A button that grows with its text instead of clipping it.
+ *
+ * Colour stays in `className` rather than becoming a `variant` prop: the app
+ * themes buttons per context (emerald/blue/amber due-review rows, red destructive
+ * actions, the near-black primary), and enumerating those here would mean
+ * touching this file every time a screen wants a new accent. This owns
+ * geometry and type; Tailwind keeps owning colour.
+ */
+export function AppButton({
+  size = 'md',
+  label,
+  Icon,
+  className = '',
+  textClassName = '',
+  iconColor = '#FFFFFF',
+  style,
+  children,
+  ...rest
+}: Omit<React.ComponentProps<typeof Pressable>, 'style' | 'children'> & {
+  // Pressable allows a state callback for both of these; this doesn't. A
+  // button whose geometry depends on press state would defeat the point of a
+  // fixed set of sizes, and no call site in the app does it.
+  style?: ViewStyle;
+  children?: React.ReactNode;
+  size?: ButtonSize;
+  label?: string;
+  Icon?: React.ComponentType<{ size?: number; color?: string }>;
+  textClassName?: string;
+  iconColor?: string;
+}) {
+  const scale = useFontScale();
+  const s = BUTTON_SIZE[size];
+  return (
+    <Pressable
+      className={`flex-row items-center justify-center ${className}`}
+      hitSlop={s.hitSlop || undefined}
+      style={[
+        {
+          minHeight: Math.round(s.minHeight * scale),
+          paddingVertical: Math.round(s.py * scale),
+          paddingHorizontal: Math.round(s.px * scale),
+          gap: Math.round(s.gap * scale),
+        },
+        style,
+      ]}
+      {...rest}
+    >
+      {Icon ? <Icon size={Math.round(s.icon * scale)} color={iconColor} /> : null}
+      {label ? (
+        <AppText variant={s.type} className={`font-sans font-bold ${textClassName}`} numberOfLines={1}>
+          {label}
+        </AppText>
+      ) : null}
+      {children}
+    </Pressable>
+  );
+}
 
 // ============================================================
 // Card — the bordered white panel used for every settings section.

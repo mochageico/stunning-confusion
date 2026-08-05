@@ -1,8 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
+import { Modal, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { Check, ChevronDown, Search } from 'lucide-react-native';
 
-import { AppText, MIN_TOUCH, useFontScale, useScaledSpace } from './design';
+import { AppTextInput, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from './design';
 
 /**
  * Generic single-select dropdown: a trigger button showing the current value,
@@ -181,7 +181,7 @@ export function Dropdown<T extends string | number>({
                   </View>
                   {/* No autoFocus: the software keyboard would cover the very
                       rows this menu just opened to show. */}
-                  <TextInput
+                  <AppTextInput
                     value={query}
                     onChangeText={setQuery}
                     placeholder="Search..."
@@ -193,8 +193,7 @@ export function Dropdown<T extends string | number>({
                       paddingVertical: space(6),
                       paddingLeft: space(28),
                       paddingRight: space(8),
-                    }}
-                  />
+                    }} />
                 </View>
               </View>
             )}

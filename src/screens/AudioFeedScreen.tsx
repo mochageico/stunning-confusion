@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft, BookOpen, Check, Pause, Play, Plus, Search, Volume2, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
@@ -7,7 +7,7 @@ import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
 import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 // Helper to assign background/text colors to known users (mirrors original web app).
 const getAvatarStyle = (user: string = '') => {
@@ -157,13 +157,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
           <View className="absolute left-3 z-10">
             <Search size={16} color="#a3a3a3" />
           </View>
-          <TextInput
-            value={audioSearchQuery}
-            onChangeText={setAudioSearchQuery}
-            placeholder="Search by book, verses, or reciter..."
-            placeholderTextColor="#a3a3a3"
-            className="w-full bg-[#F3F2F1] border border-[#E5E5E5] rounded-xl py-2 pl-9 pr-8 text-xs text-[#1A1A1A]"
-          />
+          <AppTextInput value={audioSearchQuery} onChangeText={setAudioSearchQuery} placeholder="Search by book, verses, or reciter..." placeholderTextColor="#a3a3a3" className="w-full bg-[#F3F2F1] border border-[#E5E5E5] rounded-xl py-2 pl-9 pr-8 text-[#1A1A1A]" />
           {!!audioSearchQuery && (
             <Pressable onPress={() => setAudioSearchQuery('')} className="absolute right-3">
               <X size={14} color="#a3a3a3" />

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {
   ArrowLeft,
@@ -19,7 +19,7 @@ import { AppState } from '../state/useAppState';
 import { Circle } from '../types';
 import { AvatarCircle, FadeInView, ProgressBar } from '../components/ui';
 import { ChallengeCreateInline } from '../components/ChallengeCard';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
   const {
@@ -226,37 +226,12 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
               <View style={{ gap: 12 }}>
                 <View>
                   <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Circle Display Name</AppText>
-                  <TextInput
-                    defaultValue={activeCircle.name}
-                    onEndEditing={(e) => {
-                      const val = e.nativeEvent.text.trim();
-                      if (val && val !== activeCircle.name) {
-                        updateActiveCircle({ name: val });
-                        triggerToast('Updated Circle Name! 🏷️');
-                      }
-                    }}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-xs font-bold text-neutral-800"
-                    placeholder="Group Name"
-                  />
+                  <AppTextInput defaultValue={activeCircle.name} onEndEditing={(e) => { const val = e.nativeEvent.text.trim(); if (val && val !== activeCircle.name) { updateActiveCircle({ name: val }); triggerToast('Updated Circle Name! 🏷️'); } }} className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl font-bold text-neutral-800" placeholder="Group Name" />
                 </View>
 
                 <View>
                   <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Description / Goal</AppText>
-                  <TextInput
-                    defaultValue={activeCircle.description}
-                    onEndEditing={(e) => {
-                      const val = e.nativeEvent.text.trim();
-                      if (val !== activeCircle.description) {
-                        updateActiveCircle({ description: val });
-                        triggerToast('Updated description goal! ✏️');
-                      }
-                    }}
-                    multiline
-                    numberOfLines={2}
-                    textAlignVertical="top"
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-xs text-neutral-700 font-sans"
-                    placeholder="E.g. A community focused on scripture memory."
-                  />
+                  <AppTextInput defaultValue={activeCircle.description} onEndEditing={(e) => { const val = e.nativeEvent.text.trim(); if (val !== activeCircle.description) { updateActiveCircle({ description: val }); triggerToast('Updated description goal! ✏️'); } }} multiline numberOfLines={2} textAlignVertical="top" className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-neutral-700 font-sans" placeholder="E.g. A community focused on scripture memory." />
                 </View>
 
                 <View className="flex-row justify-between items-center py-2 bg-white px-3 border border-neutral-200 rounded-xl">
@@ -323,27 +298,12 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                 <View style={{ gap: 8 }}>
                   <View>
                     <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Plan Title</AppText>
-                    <TextInput
-                      value={newPlanName}
-                      onChangeText={setNewPlanName}
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-sans"
-                      placeholder="E.g. Wednesday Night Romans Study"
-                      placeholderTextColor="#737373"
-                    />
+                    <AppTextInput value={newPlanName} onChangeText={setNewPlanName} className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-white font-sans" placeholder="E.g. Wednesday Night Romans Study" placeholderTextColor="#737373" />
                   </View>
 
                   <View>
                     <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-widest mb-0.5 font-sans">Description</AppText>
-                    <TextInput
-                      value={newPlanDesc}
-                      onChangeText={setNewPlanDesc}
-                      multiline
-                      numberOfLines={2}
-                      textAlignVertical="top"
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-sans"
-                      placeholder="What is this plan for, and who's it for?"
-                      placeholderTextColor="#737373"
-                    />
+                    <AppTextInput value={newPlanDesc} onChangeText={setNewPlanDesc} multiline numberOfLines={2} textAlignVertical="top" className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-white font-sans" placeholder="What is this plan for, and who's it for?" placeholderTextColor="#737373" />
                   </View>
 
                   {/* Actions */}

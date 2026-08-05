@@ -1,9 +1,9 @@
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, HelpTooltip } from '../components/ui';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 export default function CommunityCreateScreen({ state }: { state: AppState }) {
   const {
@@ -51,12 +51,7 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
           {/* Group Name */}
           <View className="gap-1">
             <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Circle Name</AppText>
-            <TextInput
-              value={createGroupName}
-              onChangeText={setCreateGroupName}
-              placeholder="e.g. Wednesday Night Romans Fellowship"
-              className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-bold"
-            />
+            <AppTextInput value={createGroupName} onChangeText={setCreateGroupName} placeholder="e.g. Wednesday Night Romans Fellowship" className="w-full px-3 py-2 border border-neutral-300 rounded-xl font-bold" />
           </View>
 
           {/* Short Description */}
@@ -64,15 +59,7 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
             <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
               Short Description
             </AppText>
-            <TextInput
-              value={createGroupDesc}
-              onChangeText={setCreateGroupDesc}
-              placeholder="Who is this circle for, and what are you working through together?"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs"
-            />
+            <AppTextInput value={createGroupDesc} onChangeText={setCreateGroupDesc} placeholder="Who is this circle for, and what are you working through together?" multiline numberOfLines={3} textAlignVertical="top" className="w-full px-3 py-2 border border-neutral-300 rounded-xl" />
           </View>
 
           {/* Privacy Flag */}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
@@ -62,7 +62,7 @@ import {
 import { BounceView, ChipRow, DiscreteSlider, FadeInView, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
 import MemoryGrid, { verseAnnotationKey } from './MemoryGrid';
-import { AppText } from './design';
+import { AppTextInput, AppText } from './design';
 
 interface PracticeModalsProps {
   type: 'listen' | 'learn';
@@ -1848,13 +1848,7 @@ function PracticeModalsInner({
                       </View>
 
                       <View className="flex-row items-center gap-2">
-                        <TextInput
-                          value={typedInput}
-                          onChangeText={handleReciteTypeChar}
-                          placeholder={showStrikeResetAlert ? 'Resetting...' : 'Type first letter of each word (nearby keys count)...'}
-                          className="flex-1 bg-neutral-50 border border-neutral-300 rounded-xl py-2 px-3 text-center font-sans font-semibold text-xs text-neutral-900"
-                          editable={!showStrikeResetAlert}
-                        />
+                        <AppTextInput value={typedInput} onChangeText={handleReciteTypeChar} placeholder={showStrikeResetAlert ? 'Resetting...' : 'Type first letter of each word (nearby keys count)...'} className="flex-1 bg-neutral-50 border border-neutral-300 rounded-xl py-2 px-3 text-center font-sans font-semibold text-neutral-900" editable={!showStrikeResetAlert} />
                         {speechAvailable && (
                           <Pressable
                             onPress={() => (isListeningSpeak ? stopListening() : startListening())}

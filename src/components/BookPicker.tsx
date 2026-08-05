@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { Check, ChevronDown, Search, X } from 'lucide-react-native';
 
 import { BOOKS } from '../data';
-import { AppText } from './design';
+import { AppTextInput, AppText } from './design';
 
 /**
  * Replaces the old "4 books in a row" chip pickers. Book names vary a lot in
@@ -90,14 +90,7 @@ export function BookPicker({
                 <View className="absolute left-3 z-10">
                   <Search size={14} color="#a3a3a3" />
                 </View>
-                <TextInput
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder="Search books..."
-                  placeholderTextColor="#a3a3a3"
-                  autoFocus
-                  className="w-full bg-neutral-50 border border-neutral-200 rounded-xl py-2 pl-9 pr-3 text-xs text-[#1A1A1A]"
-                />
+                <AppTextInput value={query} onChangeText={setQuery} placeholder="Search books..." placeholderTextColor="#a3a3a3" autoFocus className="w-full bg-neutral-50 border border-neutral-200 rounded-xl py-2 pl-9 pr-3 text-[#1A1A1A]" />
               </View>
             </View>
 

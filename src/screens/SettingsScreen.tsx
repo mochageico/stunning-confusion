@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import Constants from 'expo-constants';
 import { ArrowLeft } from 'lucide-react-native';
 
@@ -9,7 +9,7 @@ import { ChipRow, FadeInView } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS } from '../data';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { AUDIO_CACHE_SUPPORTED, CACHE_CAP_CHOICES } from '../lib/audioCache';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 const formatMB = (bytes: number) => {
   const mb = bytes / (1024 * 1024);
@@ -146,15 +146,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
 
           <View>
             <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Display Name</AppText>
-            <TextInput
-              defaultValue={user.displayName || ''}
-              onEndEditing={(e) => {
-                const val = e.nativeEvent.text.trim();
-                if (val && val !== user.displayName) updateDisplayName(val);
-              }}
-              className="w-full px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-bold text-neutral-800"
-              placeholder="Your name"
-            />
+            <AppTextInput defaultValue={user.displayName || ''} onEndEditing={(e) => { const val = e.nativeEvent.text.trim(); if (val && val !== user.displayName) updateDisplayName(val); }} className="w-full px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-xl font-bold text-neutral-800" placeholder="Your name" />
           </View>
 
           <View className="flex-row gap-2">
@@ -473,23 +465,11 @@ export default function SettingsScreen({ state }: { state: AppState }) {
                 circle memberships. This can't be undone.
               </AppText>
               <AppText variant="micro" className="font-sans text-red-700/80">Type DELETE to confirm:</AppText>
-              <TextInput
-                value={deleteConfirmText}
-                onChangeText={setDeleteConfirmText}
-                autoCapitalize="characters"
-                placeholder="DELETE"
-                className="w-full px-3 py-2 bg-white border border-red-300 rounded-xl text-xs font-bold text-red-900"
-              />
+              <AppTextInput value={deleteConfirmText} onChangeText={setDeleteConfirmText} autoCapitalize="characters" placeholder="DELETE" className="w-full px-3 py-2 bg-white border border-red-300 rounded-xl font-bold text-red-900" />
               {needsReauth && !isGoogleUser && (
                 <>
                   <AppText variant="micro" className="font-sans text-red-700/80">Confirm your password:</AppText>
-                  <TextInput
-                    value={deletePassword}
-                    onChangeText={setDeletePassword}
-                    secureTextEntry
-                    placeholder="Password"
-                    className="w-full px-3 py-2 bg-white border border-red-300 rounded-xl text-xs text-red-900"
-                  />
+                  <AppTextInput value={deletePassword} onChangeText={setDeletePassword} secureTextEntry placeholder="Password" className="w-full px-3 py-2 bg-white border border-red-300 rounded-xl text-red-900" />
                 </>
               )}
               <View className="flex-row gap-2 justify-end pt-1">

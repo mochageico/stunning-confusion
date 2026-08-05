@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft, Plus } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
@@ -8,7 +8,7 @@ import { BookPicker } from '../components/BookPicker';
 import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 import { useChapterText } from '../state/useScripture';
 import { GroupPlanMembership } from '../types';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 // Plain language, and ordered by how most people actually want it: joining a
 // group thing usually means you want the group's verses to lead. The old
@@ -145,28 +145,11 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
             <>
               <View>
                 <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Plan Title</AppText>
-                <TextInput
-                  defaultValue={plan.name}
-                  onEndEditing={(e) => {
-                    const val = e.nativeEvent.text.trim();
-                    if (val && val !== plan.name) updateGroupPlan(plan.circleId, plan.planId, { name: val });
-                  }}
-                  className="w-full px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-bold text-neutral-800"
-                />
+                <AppTextInput defaultValue={plan.name} onEndEditing={(e) => { const val = e.nativeEvent.text.trim(); if (val && val !== plan.name) updateGroupPlan(plan.circleId, plan.planId, { name: val }); }} className="w-full px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-xl font-bold text-neutral-800" />
               </View>
               <View>
                 <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400 mb-1">Description</AppText>
-                <TextInput
-                  defaultValue={plan.description}
-                  onEndEditing={(e) => {
-                    const val = e.nativeEvent.text.trim();
-                    if (val !== plan.description) updateGroupPlan(plan.circleId, plan.planId, { description: val });
-                  }}
-                  multiline
-                  numberOfLines={2}
-                  textAlignVertical="top"
-                  className="w-full px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs text-neutral-700 font-sans"
-                />
+                <AppTextInput defaultValue={plan.description} onEndEditing={(e) => { const val = e.nativeEvent.text.trim(); if (val !== plan.description) updateGroupPlan(plan.circleId, plan.planId, { description: val }); }} multiline numberOfLines={2} textAlignVertical="top" className="w-full px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-neutral-700 font-sans" />
               </View>
             </>
           ) : (

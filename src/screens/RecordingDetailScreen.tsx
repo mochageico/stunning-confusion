@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { PanResponder, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { PanResponder, Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft, Check, Download, Pause, Pencil, Play, Trash2, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
@@ -9,7 +9,7 @@ import { BIBLE_TRANSLATIONS } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
 import { cacheableTarget } from '../lib/audioCache';
 import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/studioAudio';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 // Derived from the single source of truth (data.ts) instead of its own
 // separately-hardcoded lookup -- previously listed NIV/NKJV/NLT despite zero
@@ -375,12 +375,7 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
               <AppText variant="micro" className="uppercase tracking-wider text-neutral-400 font-bold font-sans">Speaker</AppText>
               {isEditingSpeaker ? (
                 <View className="flex-row items-center gap-1.5 mt-0.5">
-                  <TextInput
-                    value={speakerDraft}
-                    onChangeText={setSpeakerDraft}
-                    autoFocus
-                    className="flex-1 font-extrabold text-neutral-800 text-xs font-sans border-b border-neutral-300 py-0.5"
-                  />
+                  <AppTextInput value={speakerDraft} onChangeText={setSpeakerDraft} autoFocus className="flex-1 font-extrabold text-neutral-800 font-sans border-b border-neutral-300 py-0.5" />
                   <Pressable
                     onPress={() => {
                       setIsEditingSpeaker(false);

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ScrollView, View, Text, Pressable, TextInput } from 'react-native';
+import { ScrollView, View, Text, Pressable } from 'react-native';
 import { ArrowLeft, ChevronRight, Search, X } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 export default function BooksScreen({ state }: { state: AppState }) {
   const { BOOKS, handleBack, navigateTo } = state;
@@ -37,13 +37,7 @@ export default function BooksScreen({ state }: { state: AppState }) {
           <View className="absolute left-3 z-10">
             <Search size={16} color="#a3a3a3" />
           </View>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search books..."
-            placeholderTextColor="#a3a3a3"
-            className="w-full bg-[#F3F2F1] border border-[#E5E5E5] rounded-xl py-2 pl-9 pr-8 text-xs text-[#1A1A1A]"
-          />
+          <AppTextInput value={query} onChangeText={setQuery} placeholder="Search books..." placeholderTextColor="#a3a3a3" className="w-full bg-[#F3F2F1] border border-[#E5E5E5] rounded-xl py-2 pl-9 pr-8 text-[#1A1A1A]" />
           {!!query && (
             <Pressable onPress={() => setQuery('')} className="absolute right-3">
               <X size={14} color="#a3a3a3" />

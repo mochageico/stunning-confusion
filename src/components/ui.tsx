@@ -1,21 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  Easing,
-  Image,
-  InputAccessoryView,
-  Keyboard,
-  Modal,
-  PanResponder,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  TextInputProps,
-  View,
-} from 'react-native';
+import { Animated, Easing, Image, InputAccessoryView, Keyboard, Modal, PanResponder, Platform, Pressable, Text, TextInputProps, View } from 'react-native';
 
-import { AppText, useScaledSpace } from './design';
+import { AppTextInput, AppText, useScaledSpace } from './design';
 
 // ============================================================
 // useKeyboardHeight — manual native keyboard-height tracking, used instead
@@ -456,18 +442,17 @@ export function NumericKeyboardAccessory({ nativeID = NUMERIC_ACCESSORY_ID }: { 
   );
 }
 
-// Drop-in replacement for a numeric <TextInput>. Props spread last so a
+// Drop-in replacement for a numeric <AppTextInput>. Props spread last so a
 // caller can still override keyboardType (e.g. 'decimal-pad').
 export function NumericInput({
   accessoryID = NUMERIC_ACCESSORY_ID,
   ...props
 }: TextInputProps & { accessoryID?: string }) {
   return (
-    <TextInput
+    <AppTextInput
       keyboardType="number-pad"
       inputAccessoryViewID={Platform.OS === 'ios' ? accessoryID : undefined}
-      {...props}
-    />
+      {...props} />
   );
 }
 

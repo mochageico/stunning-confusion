@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft, Bell, MessageCircle, Trophy, UserMinus, UserPlus, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { ChallengeCreateSheet } from '../components/ChallengeCard';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 export default function MemberProfileScreen({ state }: { state: AppState }) {
   const {
@@ -370,16 +370,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
                   <X size={18} color="#a3a3a3" />
                 </Pressable>
               </View>
-              <TextInput
-                value={nudgeMessage}
-                onChangeText={setNudgeMessage}
-                placeholder="Hey! Have you reviewed your verses today?"
-                placeholderTextColor="#a3a3a3"
-                multiline
-                autoFocus
-                className="border border-neutral-300 rounded-xl p-3 text-sm font-sans text-neutral-900 min-h-[80px]"
-                style={{ textAlignVertical: 'top' }}
-              />
+              <AppTextInput variant="body" value={nudgeMessage} onChangeText={setNudgeMessage} placeholder="Hey! Have you reviewed your verses today?" placeholderTextColor="#a3a3a3" multiline autoFocus className="border border-neutral-300 rounded-xl p-3 font-sans text-neutral-900 min-h-[80px]" style={{ textAlignVertical: 'top' }} />
               <Pressable
                 onPress={async () => {
                   setShowNudgeCompose(false);

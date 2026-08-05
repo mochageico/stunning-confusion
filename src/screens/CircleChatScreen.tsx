@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Send } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
 import { ReactionBar } from '../components/ReactionBar';
-import { AppText } from '../components/design';
+import { AppTextInput, AppText } from '../components/design';
 
 export default function CircleChatScreen({ state }: { state: AppState }) {
   const {
@@ -100,14 +100,7 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
           className="flex-row items-center gap-2 px-3 pt-3 border-t border-neutral-100 bg-white"
           style={{ paddingBottom: Math.max(bottomPad, 12) }}
         >
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Message the circle…"
-            placeholderTextColor="#a3a3a3"
-            multiline
-            className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 text-xs text-neutral-800 font-sans max-h-24"
-          />
+          <AppTextInput value={draft} onChangeText={setDraft} placeholder="Message the circle…" placeholderTextColor="#a3a3a3" multiline className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 text-neutral-800 font-sans max-h-24" />
           <Pressable
             onPress={handleSend}
             disabled={!draft.trim()}
