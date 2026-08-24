@@ -4,4 +4,9 @@
 kjv.json
 web.xml
 *.usfx.xml
+# eBible.org names its USFX downloads with an underscore (engbsb_usfx.xml),
+# which the pattern above does NOT match -- that one is 17MB.
+*_usfx.xml
+*.zip
 *serviceAccountKey*.json
+*-firebase-adminsdk-*.json
