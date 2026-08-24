@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 import { firstLetterOnly } from './recitation';
-import { ESV_COPYRIGHT_NOTICE } from '../data';
+import { copyrightFor } from '../data';
 
 // ============================================================================
 // PRINTABLE MEMORY GRID
@@ -22,7 +22,7 @@ export interface PrintableVerse {
   text: string;
 }
 
-function buildGridHtml(verses: PrintableVerse[], reference: string): string {
+function buildGridHtml(verses: PrintableVerse[], reference: string, translationId: string): string {
   const boxes = verses
     .map((v) => {
       const words = v.text
@@ -33,6 +33,11 @@ function buildGridHtml(verses: PrintableVerse[], reference: string): string {
       return `<div class="box"><div class="vnum">${v.verse}</div><div class="letters">${words}</div></div>`;
     })
     .join('\n');
+
+  // Public-domain translations require no notice, so the block is omitted
+  // entirely rather than rendered empty -- this used to hardcode Crossway's
+  // ESV notice onto every grid, which was wrong for a BSB or WEB export.
+  const copyright = copyrightFor(translationId);
 
   return `<!DOCTYPE html>
 <html>
@@ -57,13 +62,17 @@ function buildGridHtml(verses: PrintableVerse[], reference: string): string {
   <h1>${reference}</h1>
   <div class="subtitle">Memory Grid</div>
   <div class="grid">${boxes}</div>
-  <div class="copyright">${ESV_COPYRIGHT_NOTICE}</div>
+  ${copyright ? `<div class="copyright">${copyright}</div>` : ''}
 </body>
 </html>`;
 }
 
-export async function printMemoryGrid(verses: PrintableVerse[], reference: string): Promise<void> {
-  const html = buildGridHtml(verses, reference);
+export async function printMemoryGrid(
+  verses: PrintableVerse[],
+  reference: string,
+  translationId: string
+): Promise<void> {
+  const html = buildGridHtml(verses, reference, translationId);
 
   if (Platform.OS === 'web') {
     const win = window.open('', '_blank');

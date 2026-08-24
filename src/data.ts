@@ -1,5 +1,5 @@
 import { VerseState, Recording, MemoryPlan, Rhythm } from './types';
-import { BibleBook, BibleTranslation } from './types';
+import { BibleBook, BibleTranslation, TranslationCapabilities } from './types';
 
 // Shared by the Save-Recording dialog (App.tsx) and SettingsScreen's default-
 // visibility picker, so both always offer the exact same 3 choices.
@@ -99,12 +99,41 @@ export const BOOKS = {
   nt: NT_BOOKS,
 };
 
-// The only translation imported into Firestore so far (see scripts/import-bible/).
-export const DEFAULT_TRANSLATION_ID = 'ESV';
+// The translation a brand-new user starts on, and the one every hardcoded
+// verse-fetch path in useAppState falls back to.
+//
+// This is the Berean Standard Bible, NOT the ESV, and that is a licensing
+// decision rather than an editorial one. Crossway gates the ESV licence behind
+// roughly twelve months of a live app with a real userbase -- a condition only
+// shipping can satisfy, which the app cannot do while it is built around a
+// translation it may not carry. The BSB was placed in the public domain on
+// 30 April 2023: modern English in much the same register as the ESV or CSB,
+// with no licence to obtain, no attribution to render, and no restriction on
+// offline storage, printing, or audio. It means the product is never hostage
+// to a rights holder.
+export const DEFAULT_TRANSLATION_ID = 'BSB';
+
+// Capability preset for a translation nobody owns -- everything permitted,
+// cached forever. Shared by every entry below, since all of them are public
+// domain today. A licensed translation would spell its own restrictions out
+// inline rather than reuse this.
+const UNRESTRICTED: TranslationCapabilities = {
+  persistText: true,
+  cacheTtlMs: null,
+  print: true,
+  publishAudio: true,
+};
+
+// api.bible's terms for licensed text, kept here so the numbers are written
+// down at the point of use rather than living only in a plan document:
+// cache cleared at least every 14 days, under 500 consecutive verses held,
+// FUMS reported on every read, 5,000 queries/day.
+// https://scripture.api.bible/license
+export const API_BIBLE_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 // Crossway's required attribution text for apps displaying ESV® text via their API
 // (see scripts/import-bible/adapters/esv.js and https://api.esv.org/docs/).
-export const ESV_COPYRIGHT_NOTICE =
+const ESV_COPYRIGHT_NOTICE =
   'Scripture quotations are from the ESV® Bible (The Holy Bible, English Standard Version®), copyright © 2001 by Crossway, a publishing ministry of Good News Publishers. Used by permission. All rights reserved.';
 
 // Single source of truth for which translations actually have real text
@@ -112,13 +141,96 @@ export const ESV_COPYRIGHT_NOTICE =
 // RecordingDetailScreen used to keep their own separate hardcoded lists,
 // which had already drifted (one included a stray 'NASB' code the other
 // didn't, and both listed NIV/NKJV/NLT despite zero data ever being
-// imported for them). KJV and WEB are public domain in the US -- no
-// permission needed, unlike ESV.
+// imported for them).
+//
+// Order matters: ChapterLandingScreen falls back to BIBLE_TRANSLATIONS[0]
+// when the selected id doesn't resolve, so the default belongs first.
 export const BIBLE_TRANSLATIONS: BibleTranslation[] = [
-  { id: 'ESV', name: 'English Standard Version', copyright: ESV_COPYRIGHT_NOTICE, isPublicDomain: false },
-  { id: 'KJV', name: 'King James Version', isPublicDomain: true },
-  { id: 'WEB', name: 'World English Bible', isPublicDomain: true },
+  {
+    id: 'BSB',
+    name: 'Berean Standard Bible',
+    isPublicDomain: true,
+    source: 'firestore',
+    capabilities: UNRESTRICTED,
+  },
+  {
+    id: 'WEB',
+    name: 'World English Bible',
+    isPublicDomain: true,
+    source: 'firestore',
+    capabilities: UNRESTRICTED,
+  },
+  {
+    id: 'KJV',
+    name: 'King James Version',
+    isPublicDomain: true,
+    source: 'firestore',
+    capabilities: UNRESTRICTED,
+  },
+  // Kept listed because its text is already imported into Firestore and older
+  // queue items reference it, so the app must still be able to name and render
+  // it. NOT shippable until Crossway grants a licence -- see
+  // capabilityWarningsFor() below for what turning a licensed translation on
+  // actually costs.
+  {
+    id: 'ESV',
+    name: 'English Standard Version',
+    copyright: ESV_COPYRIGHT_NOTICE,
+    isPublicDomain: false,
+    source: 'firestore',
+    capabilities: {
+      persistText: false,
+      cacheTtlMs: API_BIBLE_CACHE_TTL_MS,
+      print: false,
+      publishAudio: false,
+    },
+  },
 ];
+
+export const getTranslation = (id: string): BibleTranslation | undefined =>
+  BIBLE_TRANSLATIONS.find((t) => t.id === id);
+
+/**
+ * Attribution text for one translation, or null when none is required.
+ *
+ * Replaces a directly-imported ESV_COPYRIGHT_NOTICE constant, which stamped
+ * Crossway's notice onto every printed memory grid regardless of which
+ * translation the grid was built from -- wrong in both directions once more
+ * than one translation exists.
+ */
+export const copyrightFor = (translationId: string): string | null =>
+  getTranslation(translationId)?.copyright ?? null;
+
+/**
+ * The work that switching a licensed translation on would require.
+ *
+ * Deliberately a reporting function, not a guard: the app does not currently
+ * gate any feature on capabilities, and every shipped translation is public
+ * domain, so this returns [] in practice. It exists so the cost is discoverable
+ * from the code the day an ESV or CSB licence lands, instead of being
+ * rediscovered by reading a contract.
+ */
+export const capabilityWarningsFor = (translationId: string): string[] => {
+  const t = getTranslation(translationId);
+  if (!t) return [];
+  const warnings: string[] = [];
+  if (!t.capabilities.persistText) {
+    warnings.push(
+      'Verse text must not be stored in user documents — queue items currently denormalise it (useAppState addVersesToQueue). Store the reference and hydrate at render.'
+    );
+  }
+  if (t.capabilities.cacheTtlMs !== null) {
+    warnings.push(`On-device cache must expire after ${Math.round(t.capabilities.cacheTtlMs / 86400000)} days.`);
+  }
+  if (!t.capabilities.print) warnings.push('Printable memory grids are not permitted for this translation.');
+  if (!t.capabilities.publishAudio) {
+    warnings.push('Audio recitations may not be published to a public feed — a separate right from displaying the text.');
+  }
+  if (!t.isPublicDomain) {
+    warnings.push('firestore.rules exposes translations/** to signed-out readers; licensed text must not be world-readable.');
+  }
+  return warnings;
+};
 
 // Flat list in canonical (Genesis → Revelation) order, handy for pickers/lookups.
 export const ALL_BIBLE_BOOKS: BibleBook[] = [...OT_BOOKS, ...NT_BOOKS];

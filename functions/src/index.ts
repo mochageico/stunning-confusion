@@ -12,6 +12,11 @@ import { getStorage } from 'firebase-admin/storage';
 import { onObjectFinalized } from 'firebase-functions/v2/storage';
 import { logger } from 'firebase-functions';
 
+// The api.bible proxy lives in its own module -- it shares nothing with the
+// audio pipeline in this file beyond the Firebase app, and inlining it here
+// would bury it in 700 lines of ffmpeg argument construction.
+export { fetchApiBibleChapter } from './apiBible';
+
 const app = initializeApp();
 
 // The app does NOT use the (default) Firestore database — see

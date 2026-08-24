@@ -39,11 +39,32 @@ $env:GOOGLE_APPLICATION_CREDENTIALS = "C:\path\to\serviceAccountKey.json"  # Pow
    quick to inspect). The verse-splitting logic in `adapters/esv.js` hasn't been verified
    against a live response — check the output looks right before running the full import.
 
-### `localFile` — public-domain translations (KJV, WEB)
+### `localFile` — public-domain translations (BSB, KJV, WEB)
 `bible-api.com`'s own terms say not to bulk-download an entire Bible through its live API,
 so this adapter reads from a local dataset file instead — two real formats supported,
 auto-detected by file extension, **both verified against real downloaded data** (Genesis 1 =
 31 verses, Psalms 119 = 176 verses, spot-checked verse text) before being relied on:
+
+**BSB** — USFX XML from eBible.org. **This is the app's default translation**
+(`DEFAULT_TRANSLATION_ID` in `src/data.ts`), so this is the one import the app can't
+run without. The Berean Standard Bible was placed in the public domain on 30 April
+2023 — no licence, no attribution, no restrictions:
+
+```bash
+curl -sL -o bsb.zip https://ebible.org/Scriptures/engbsb_usfx.zip
+unzip bsb.zip -d bsb
+export LOCAL_BIBLE_JSON_PATH=/path/to/bsb/engbsb_usfx.xml
+export LOCAL_BIBLE_TRANSLATION_ID=BSB
+export LOCAL_BIBLE_TRANSLATION_NAME="Berean Standard Bible"
+node run.js --adapter localFile
+```
+
+Verified against the real download before being relied on: 66 books, 1,189 chapters,
+31,086 verses, Genesis 1 = 31, Psalms 119 = 176, John 3:16 spot-checked. The count is
+31,086 rather than the KJV's 31,102 because the BSB follows the critical text and
+omits sixteen disputed verses (Matthew 17:21, Mark 9:44/46, John 5:4, Acts 8:37 and
+others). **Verse numbers therefore have real gaps** — anything that assumes a chapter
+runs 1..n consecutively is wrong, here and in most modern translations.
 
 **KJV** — scrollmapper's JSON (`.json`, book names use "I/II/III <Book>" and "Revelation of
 John", normalized automatically):

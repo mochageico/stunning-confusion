@@ -55,12 +55,19 @@ function parseUsfxXml(xml) {
     const chapters = {};
     // Splitting on the chapter marker turns the stream into alternating
     // [ignored front matter, chapterNum, content, chapterNum, content, ...].
-    const chapterParts = bookContent.split(/<c id="(\d+)"\s*\/>/);
+    // `[^>]*` rather than `\s*` before the self-close: publishers vary in what
+    // else they hang on these markers. The WEB's markers are bare (`<v id="1"/>`),
+    // but the BSB's carry a canonical reference (`<v id="1" bcv="GEN.1.1" />`),
+    // and a `\s*`-only pattern silently matches nothing there -- the split
+    // returns the chapter as one unsplit blob and the book imports with zero
+    // verses rather than failing loudly. Attribute values can't contain '>',
+    // so `[^>]*` stays anchored to this one tag.
+    const chapterParts = bookContent.split(/<c id="(\d+)"[^>]*\/>/);
     for (let i = 1; i < chapterParts.length; i += 2) {
       const chapterNum = chapterParts[i];
       const chapterContent = chapterParts[i + 1] || '';
       const verses = {};
-      const verseParts = chapterContent.split(/<v id="(\d+)"\s*\/>/);
+      const verseParts = chapterContent.split(/<v id="(\d+)"[^>]*\/>/);
       for (let j = 1; j < verseParts.length; j += 2) {
         const verseNum = verseParts[j];
         let verseText = verseParts[j + 1] || '';

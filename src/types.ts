@@ -14,11 +14,45 @@ export interface BibleBook {
   chapters: number; // total chapter count in this book
 }
 
+/**
+ * What a translation's licence actually permits, recorded per translation.
+ *
+ * NOTHING IN THE APP ENFORCES THIS YET -- it is deliberately descriptive, not
+ * prescriptive. Every translation currently shipped is public domain, so every
+ * flag below is `true`/`null` and the app behaves exactly as it always has.
+ * The block exists so that the day a licensed translation is switched on
+ * (ESV, CSB), the rules it comes with are already written down next to it
+ * rather than having to be rediscovered from a contract.
+ *
+ * See `capabilityWarningsFor()` in `data.ts` for what would need to change.
+ */
+export interface TranslationCapabilities {
+  /** May verse text be denormalised into user documents in Firestore? */
+  persistText: boolean;
+  /** How long a fetched chapter may sit in the on-device cache. null = forever. */
+  cacheTtlMs: number | null;
+  /** May full passages be exported to a printable PDF? */
+  print: boolean;
+  /** May audio recitations of this text be published to a public feed? */
+  publishAudio: boolean;
+}
+
 export interface BibleTranslation {
   id: string; // short code, e.g. 'ESV', 'WEB'
   name: string; // full name, e.g. 'English Standard Version'
   copyright?: string; // required attribution text, when the translation is not public domain
   isPublicDomain: boolean;
+  /**
+   * Where `fetchChapterText` gets this translation's text.
+   * - 'firestore' — bulk-imported ahead of time by scripts/import-bible, read
+   *   straight out of translations/{id}/books/{bookId}/chapters/{n}.
+   * - 'apiBible'  — fetched on demand through the fetchApiBibleChapter Cloud
+   *   Function, which holds the API key and does the FUMS reporting.
+   */
+  source: 'firestore' | 'apiBible';
+  /** api.bible's own UUID for this Bible. Required when source is 'apiBible'. */
+  apiBibleId?: string;
+  capabilities: TranslationCapabilities;
 }
 
 export interface ChapterText {

@@ -160,7 +160,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         className="flex-1 bg-white"
         contentContainerClassName="p-5"
         // Extra bottom padding whenever the floating selection bar is
-        // showing, so the last verses and the ESV copyright notice can
+        // showing, so the last verses and the copyright notice can
         // still fully scroll into view above it rather than being hidden
         // underneath -- the bar itself no longer takes up real space in
         // the scroll flow (see below), so nothing pushes content up for it
@@ -518,7 +518,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     </AppText>
                   </Pressable>
                 </View>
-                <AppButton size="sm" onPress={() => printMemoryGrid( activeChapterVerses.map((v) => ({ book: selectedBook || '', chapter: selectedChapter || 0, verse: v.verse, text: v.text, })), `${selectedBook} ${selectedChapter}` ) } className="flex-row items-center gap-1.5 bg-[#1A1A1A] rounded-lg">
+                <AppButton size="sm" onPress={() => printMemoryGrid( activeChapterVerses.map((v) => ({ book: selectedBook || '', chapter: selectedChapter || 0, verse: v.verse, text: v.text, })), `${selectedBook} ${selectedChapter}`, activeTranslation.id ) } className="flex-row items-center gap-1.5 bg-[#1A1A1A] rounded-lg">
                   <Printer size={12} color="#ffffff" />
                   <AppText variant="caption" className="font-sans font-extrabold text-white">Printable PDF</AppText>
                 </AppButton>
@@ -564,7 +564,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           all the way down. Rendered as an absolutely-positioned sibling of
           the ScrollView rather than inside its content flow; the matching
           extra paddingBottom on the ScrollView above keeps the last verses
-          and the ESV copyright notice from ever being hidden underneath it. */}
+          and the copyright notice from ever being hidden underneath it. */}
       {floatingBarShowing && (
         <View
           className="absolute left-4 right-4 bg-white border-2 border-[#1A1A1A] rounded-xl p-3 shadow-lg"

@@ -1017,7 +1017,7 @@ export function useAppState() {
   const [verseTapTimestamps, setVerseTapTimestamps] = useState<Record<number, number>>({});
   const [recordingBook, setRecordingBook] = useState('Romans');
   const [recordingChapter, setRecordingChapter] = useState(8);
-  const [recordingTranslation, setRecordingTranslation] = useState('ESV');
+  const [recordingTranslation, setRecordingTranslation] = useState(DEFAULT_TRANSLATION_ID);
   // Verse-range picker for partial-chapter recording/tagging — null means
   // "not yet initialized for this chapter" and is treated as the full
   // chapter's bounds everywhere it's read (see recordingSelectedVerses below).
@@ -1097,7 +1097,7 @@ export function useAppState() {
   const [activeFeedFilter, setActiveFeedFilter] = useState<'global' | 'group' | 'friends'>('global');
   const [feedBookFilter, setFeedBookFilter] = useState<string>('');
   const [feedChapterFilter, setFeedChapterFilter] = useState<string>('');
-  // A BIBLE_TRANSLATIONS id ('ESV'/'KJV'/'WEB'), or '' for all. Matched
+  // A BIBLE_TRANSLATIONS id ('BSB'/'WEB'/'KJV'/'ESV'), or '' for all. Matched
   // case-insensitively against Recording.translation, which older recordings
   // may hold as a display name rather than an id -- see AudioFeedScreen.
   const [feedTranslationFilter, setFeedTranslationFilter] = useState<string>('');
@@ -3775,7 +3775,7 @@ export function useAppState() {
       // Same for the memory queue — a brand-new account starts with nothing
       // queued, rather than the demo Genesis/Psalms/John/Romans set already
       // partway "learned". Real content now comes from the Add Verses flow
-      // or joining a circle's group plan, both backed by real ESV text.
+      // or joining a circle's group plan, both backed by real imported text.
       if (qSnap && qSnap.empty) {
         updateMemoryQueue(() => []);
         prevSyncedQueueIdsRef.current = new Set();
