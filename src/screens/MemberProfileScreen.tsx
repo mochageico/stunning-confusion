@@ -17,7 +17,6 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
     canSendAccountabilityNudge,
     sendAccountabilityNudge,
     removeFriend,
-    saveFriendMemoryPlan,
     triggerToast,
     sendChallenge,
     incomingFriendRequests,
@@ -44,11 +43,13 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
   const incomingFromThem = incomingFriendRequests.find((r) => r.fromUid === selectedUserProfile.uid);
   const outgoingToThem = outgoingFriendRequests.find((r) => r.toUid === selectedUserProfile.uid);
 
-  // Friend-visible sharing: a memory plan and/or memory queue this member chose
-  // to show friends (Settings → Profile Sharing). Only surfaced when the viewer
-  // is actually a friend AND the owner opted in, so the snapshots are present.
-  const sharedPlan =
-    isFriend && selectedUserProfile.memoryPlanVisibility === 'friends' ? selectedUserProfile.sharedMemoryPlan : null;
+  // Friend-visible sharing: the verse list this member chose to show friends
+  // (Settings → Profile Sharing). Only surfaced when the viewer is actually a
+  // friend AND the owner opted in, so the snapshot is present.
+  //
+  // Their Review Settings are deliberately NOT shown or adoptable here -- that
+  // whole sharing surface was removed; a retention method is a personal
+  // calibration, not something to hand around.
   const queueVisible =
     isFriend &&
     selectedUserProfile.memoryQueueVisibility === 'friends' &&
@@ -208,61 +209,11 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
-        {/* Shared Memory Plan (friends only) */}
-        {sharedPlan && (
-          <View style={{ gap: 6 }}>
-            <AppText variant="micro" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">MEMORY PLAN</AppText>
-            <View className="border border-[#E5E5E5] rounded-xl p-3.5 bg-white gap-3 shadow-sm">
-              <View className="flex-row justify-between items-start">
-                <View className="flex-1 pr-2">
-                  <AppText variant="label" className="font-sans font-black text-[#1A1A1A] leading-tight">
-                    {sharedPlan.name || 'Memory Plan'}
-                  </AppText>
-                  <AppText variant="micro" className="font-sans text-neutral-500 mt-0.5">
-                    {selectedUserProfile.name}'s retention method
-                  </AppText>
-                </View>
-              </View>
-
-              {/* Retention only. This used to show their pace, daily cap and
-                  learning days -- none of which transfer when you save the
-                  plan any more, because those are your own Rhythm. Showing
-                  them here implied adopting the plan would change your
-                  schedule, which it did, and shouldn't have. */}
-              <View className="flex-row gap-2 py-1.5 border-y border-dashed border-neutral-100">
-                <View className="flex-1">
-                  <AppText variant="micro" className="text-neutral-500 uppercase">Phases</AppText>
-                  <AppText variant="caption" className="font-sans font-bold text-neutral-800">
-                    {sharedPlan.dailyPhaseWeeks ?? '—'}-{sharedPlan.weeklyPhaseMonths ?? '—'}-{sharedPlan.monthlyPhaseYears ?? '—'}
-                  </AppText>
-                </View>
-                <View className="flex-1">
-                  <AppText variant="micro" className="text-neutral-500 uppercase">Touches</AppText>
-                  <AppText variant="caption" className="font-sans font-bold text-neutral-800">{sharedPlan.masteryTouches ?? '—'}</AppText>
-                </View>
-                <View className="flex-1">
-                  <AppText variant="micro" className="text-neutral-500 uppercase">Misses</AppText>
-                  <AppText variant="caption" className="font-sans font-bold text-neutral-800 capitalize">
-                    {sharedPlan.missPolicy ?? '—'}
-                  </AppText>
-                </View>
-              </View>
-
-              <AppButton size="md" onPress={() => saveFriendMemoryPlan(sharedPlan, selectedUserProfile.name)} className="bg-[#1A1A1A] rounded-md items-center">
-                <AppText variant="section" className="text-white font-bold uppercase tracking-wider">Save Memory Plan</AppText>
-              </AppButton>
-              <AppText variant="micro" className="font-sans text-neutral-500 text-center leading-relaxed">
-                Saves their retention method. Your own schedule and pace stay as they are.
-              </AppText>
-            </View>
-          </View>
-        )}
-
-        {/* Shared Memory Queue (friends only) */}
+        {/* Their verses (friends only) */}
         {queueVisible && (
           <View style={{ gap: 6 }}>
             <AppText variant="micro" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
-              MEMORY QUEUE ({groupedQueue.length})
+              THEIR VERSES ({groupedQueue.length})
             </AppText>
             {groupedQueue.length === 0 ? (
               <View className="border border-dashed border-neutral-200 rounded-xl p-4 items-center">

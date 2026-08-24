@@ -11,6 +11,52 @@ import { AppIconButton, AppText } from '../components/design';
 const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100, 365];
 const MEMORIZED_MILESTONES = [5, 10, 25, 50, 100, 250, 500];
 
+// A retained set can run to hundreds of verses; rendering every chip into a
+// horizontal ScrollView would cost more than anyone scrolls through. Show a
+// generous prefix and count the rest.
+const MAX_CHIPS_PER_ROW = 60;
+
+// A whole memorized chapter is 20-odd chips saying almost the same thing.
+// Collapse each book+chapter into one chip, with its verse numbers folded
+// into runs: "Ephesians 1:1-23", "Psalm 23:1-3, 6". Groups keep the order
+// they first appear in the queue; duplicate references across translations
+// collapse into one, since the chip shows a reference, not a text.
+function summarizeReferences(items: { book: string; chapter: number; verseNumber: number }[]) {
+  const groups: { key: string; book: string; chapter: number; verses: Set<number> }[] = [];
+  const byKey = new Map<string, (typeof groups)[number]>();
+
+  for (const item of items) {
+    const key = `${item.book}|${item.chapter}`;
+    let group = byKey.get(key);
+    if (!group) {
+      group = { key, book: item.book, chapter: item.chapter, verses: new Set<number>() };
+      byKey.set(key, group);
+      groups.push(group);
+    }
+    group.verses.add(item.verseNumber);
+  }
+
+  return groups.map((group) => {
+    const verses = [...group.verses].sort((a, b) => a - b);
+    const runs: string[] = [];
+    let start = verses[0];
+    let prev = verses[0];
+
+    for (let i = 1; i <= verses.length; i += 1) {
+      const current = verses[i];
+      if (current === prev + 1) {
+        prev = current;
+        continue;
+      }
+      runs.push(start === prev ? `${start}` : `${start}-${prev}`);
+      start = current;
+      prev = current;
+    }
+
+    return { key: group.key, label: `${group.book} ${group.chapter}:${runs.join(', ')}` };
+  });
+}
+
 function formatStudyTime(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -20,13 +66,64 @@ function formatStudyTime(totalSeconds: number): string {
 }
 
 export default function DashboardScreen({ state }: { state: AppState }) {
-  const { handleBack, memoryQueue, memorizedCount, learningCount, memoryStreak, totalStudySeconds, activityLast90Days } = state;
+  const { handleBack, navigateTo, memoryQueue, memorizedCount, learningCount, memoryStreak, totalStudySeconds, activityLast90Days } = state;
 
   const totalReviewsCompleted = memoryQueue.reduce((sum, item) => sum + (item.totalSuccessfulReviews || 0), 0);
 
-  const dailyCount = memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'daily').length;
-  const weeklyCount = memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'weekly').length;
-  const monthlyCount = memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'monthly').length;
+  // Each retention row now carries the verses themselves, not just a tally --
+  // the count answers "how many?" and the horizontal strip beside it answers
+  // "which ones?" without leaving the screen.
+  const retentionRows = [
+    {
+      key: 'learning',
+      label: 'Learning',
+      accent: 'border-l-violet-500',
+      countColor: 'text-violet-600',
+      chip: 'bg-violet-50 border-violet-200',
+      chipText: 'text-violet-700',
+      items: memoryQueue.filter((item) => item.status === 'learning'),
+    },
+    {
+      key: 'daily',
+      label: 'Daily',
+      accent: 'border-l-emerald-500',
+      countColor: 'text-emerald-600',
+      chip: 'bg-emerald-50 border-emerald-200',
+      chipText: 'text-emerald-700',
+      items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'daily'),
+    },
+    {
+      key: 'weekly',
+      label: 'Weekly',
+      accent: 'border-l-blue-500',
+      countColor: 'text-blue-600',
+      chip: 'bg-blue-50 border-blue-200',
+      chipText: 'text-blue-700',
+      items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'weekly'),
+    },
+    {
+      key: 'monthly',
+      label: 'Monthly',
+      accent: 'border-l-amber-500',
+      countColor: 'text-amber-600',
+      chip: 'bg-amber-50 border-amber-200',
+      chipText: 'text-amber-700',
+      items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'monthly'),
+    },
+    {
+      key: 'completed',
+      label: 'Completed',
+      accent: 'border-l-teal-500',
+      countColor: 'text-teal-600',
+      chip: 'bg-teal-50 border-teal-200',
+      chipText: 'text-teal-700',
+      items: memoryQueue.filter((item) => item.status === 'retained'),
+    },
+  ];
+
+  const dailyCount = retentionRows[1].items.length;
+  const weeklyCount = retentionRows[2].items.length;
+  const monthlyCount = retentionRows[3].items.length;
 
   // "Verses Memorized" means verses learned -- anything that's graduated out
   // of the initial Learning phase into spaced review (any of Daily/Weekly/
@@ -42,7 +139,9 @@ export default function DashboardScreen({ state }: { state: AppState }) {
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
           <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
           <View>
-            <AppText variant="title" className="font-serif font-black text-[#1A1A1A] leading-none mt-0.5">Progress Dashboard</AppText>
+            {/* "Progress Dashboard" was jargon standing in front of a plain
+                idea. This screen is the answer to "how am I doing?". */}
+            <AppText variant="title" className="font-serif font-black text-[#1A1A1A] leading-none mt-0.5">My Progress</AppText>
           </View>
         </View>
 
@@ -81,35 +180,66 @@ export default function DashboardScreen({ state }: { state: AppState }) {
             <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">Retention Breakdown</AppText>
             <HelpTooltip text="Where your memorized verses sit in the spaced-repetition cycle. Daily/Weekly/Monthly recur on that cadence; Completed verses have graduated out and no longer recur." />
           </View>
-          <View className="flex-row gap-2">
-            <View className="flex-1 border-l-4 border-l-violet-500 bg-white border border-neutral-200 rounded-lg p-2.5 items-center">
-              <AppText variant="title" className="font-black text-violet-600 font-mono">{learningCount}</AppText>
-              <AppText variant="micro" className="font-bold text-neutral-400 uppercase">Learning</AppText>
-            </View>
-            <View className="flex-1 border-l-4 border-l-emerald-500 bg-white border border-neutral-200 rounded-lg p-2.5 items-center">
-              <AppText variant="title" className="font-black text-emerald-600 font-mono">{dailyCount}</AppText>
-              <AppText variant="micro" className="font-bold text-neutral-400 uppercase">Daily</AppText>
-            </View>
-            <View className="flex-1 border-l-4 border-l-blue-500 bg-white border border-neutral-200 rounded-lg p-2.5 items-center">
-              <AppText variant="title" className="font-black text-blue-600 font-mono">{weeklyCount}</AppText>
-              <AppText variant="micro" className="font-bold text-neutral-400 uppercase">Weekly</AppText>
-            </View>
-            <View className="flex-1 border-l-4 border-l-amber-500 bg-white border border-neutral-200 rounded-lg p-2.5 items-center">
-              <AppText variant="title" className="font-black text-amber-600 font-mono">{monthlyCount}</AppText>
-              <AppText variant="micro" className="font-bold text-neutral-400 uppercase">Monthly</AppText>
-            </View>
-            <View className="flex-1 border-l-4 border-l-teal-500 bg-white border border-neutral-200 rounded-lg p-2.5 items-center">
-              <AppText variant="title" className="font-black text-teal-600 font-mono">{memorizedCount}</AppText>
-              <AppText variant="micro" className="font-bold text-neutral-400 uppercase">Completed</AppText>
-            </View>
+          {/* One row per phase, stacked -- five columns squeezed the numbers
+              into a strip too narrow to say anything else. Vertical rows leave
+              room beside each count for the verses that make it up, scrolled
+              horizontally. */}
+          <View style={{ gap: 6 }}>
+            {retentionRows.map((row) => {
+              const references = summarizeReferences(row.items);
+              const shown = references.slice(0, MAX_CHIPS_PER_ROW);
+              const overflow = references.length - shown.length;
+              return (
+                <View
+                  key={row.key}
+                  className={`flex-row items-stretch border-l-4 ${row.accent} bg-white border border-neutral-200 rounded-lg overflow-hidden`}
+                >
+                  <View className="px-2.5 py-2.5 items-center justify-center" style={{ minWidth: 82, flexShrink: 0 }}>
+                    <AppText variant="title" className={`font-black font-mono ${row.countColor}`}>{row.items.length}</AppText>
+                    <AppText variant="micro" className="font-bold text-neutral-400 uppercase">{row.label}</AppText>
+                  </View>
+                  <View className="flex-1 border-l border-neutral-100 justify-center">
+                    {row.items.length === 0 ? (
+                      <AppText variant="micro" className="font-sans text-neutral-300 px-3">No verses here yet</AppText>
+                    ) : (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ gap: 6, paddingHorizontal: 10, paddingVertical: 10, alignItems: 'center' }}
+                      >
+                        {shown.map((reference) => (
+                          <View key={reference.key} className={`px-2 py-1 rounded-md border ${row.chip}`}>
+                            <AppText variant="micro" className={`font-mono font-bold ${row.chipText}`}>
+                              {reference.label}
+                            </AppText>
+                          </View>
+                        ))}
+                        {overflow > 0 && (
+                          <AppText variant="micro" className="font-sans font-bold text-neutral-400 px-1">+{overflow} more</AppText>
+                        )}
+                      </ScrollView>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
           </View>
         </View>
 
-        {/* 90-DAY ACTIVITY HEATMAP */}
+        {/* 90-DAY ACTIVITY HEATMAP. Profile carried its own 15-day strip of
+            the same data, above the button that led here -- a worse view of a
+            thing this screen already shows better. Deleted there; its "View
+            Full History" link came along, since that's the only place it was
+            reachable from besides the Memory Desk. */}
         <View style={{ gap: 8 }}>
-          <View className="flex-row items-center px-1">
-            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">Past 90 Days</AppText>
-            <HelpTooltip text="One square per day. A square fills in on days you banked a mastery touch on a verse you're learning — darker green means more touches that day. Spaced reviews aren't counted here." />
+          <View className="flex-row items-center justify-between px-1">
+            <View className="flex-row items-center flex-1">
+              <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">Past 90 Days</AppText>
+              <HelpTooltip text="One square per day. A square fills in on days you banked a mastery touch on a verse you're learning — darker green means more touches that day. Spaced reviews aren't counted here." />
+            </View>
+            <Pressable onPress={() => navigateTo('fullHistory')} hitSlop={8} className="shrink-0">
+              <AppText variant="micro" className="font-sans font-bold underline text-neutral-500">View Full History</AppText>
+            </Pressable>
           </View>
           <View className="border border-[#E5E5E5] rounded-xl p-2.5 bg-white">
             <View className="flex-row flex-wrap gap-[3px] justify-center">

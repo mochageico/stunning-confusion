@@ -1,12 +1,13 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, ArrowUp, ArrowDown, CalendarDays, ChevronRight, Plus, X, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, ChevronRight, GripVertical, Plus, X, Trash2 } from 'lucide-react-native';
+import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import { useState } from 'react';
 
 import { AppState, buildVerseId } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
 import { FadeInView, NumericInput, useClampedNumberField } from '../components/ui';
-import { AppButton, AppIconButton, AppText, CollapsibleCard, useScaledSpace } from '../components/design';
+import { AppButton, AppIconButton, AppText, CollapsibleCard, useFontScale, useScaledSpace } from '../components/design';
 import { RhythmEditor } from '../components/RhythmEditor';
 import { QueueSources } from '../components/QueueSources';
 import { BookPicker } from '../components/BookPicker';
@@ -93,9 +94,13 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     setGroupPlanPriority,
     getNextPullPreview,
     removeQueueItems,
+    addVerseRangeToQueue,
   } = state;
 
   const space = useScaledSpace();
+  // A section title with a description plus an action button is the row that
+  // breaks first on this screen; past 1.3x the button moves below the text.
+  const headerStacked = useFontScale() >= 1.3;
 
   const [isAddingVerses, setIsAddingVerses] = useState(false);
 
@@ -125,7 +130,25 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   // browsable in Full History ("Fully memorized — reached long-term
   // retention"). Only queued/learning verses -- the ones actually being
   // actively managed -- show.
-  const grouped = groupQueueItems(memoryQueue.filter((item) => item.status === 'queued' || item.status === 'learning'));
+  // Sorted by orderIndex BEFORE grouping, because orderIndex is the real
+  // source of truth for queue position -- not the array's own order.
+  //
+  // This is what made reordering appear to do nothing. `memoryQueue` is sorted
+  // by orderIndex exactly once, when it loads (see loadUserData); every
+  // reorder after that goes through reorderQueueGroups, which rewrites
+  // orderIndex values but deliberately maps over the queue in place, so the
+  // ARRAY order never changes. Grouping straight off the array therefore
+  // rebuilt the identical list, and the row visibly snapped back to where it
+  // started the moment the drag was released.
+  //
+  // Sorting here makes what's rendered a pure function of orderIndex, so any
+  // future path that sets orderIndex shows up correctly without having to also
+  // remember to reshuffle the array.
+  const grouped = groupQueueItems(
+    [...memoryQueue]
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .filter((item) => item.status === 'queued' || item.status === 'learning')
+  );
 
   // Rhythm is user-level and commits live, so there is no target plan to
   // diff against and no dirty state -- both of which this screen used to
@@ -173,17 +196,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     updateMemoryQueue((prev) => reorderQueueGroups(prev, grouped, from, to));
   };
 
-  const moveGroupUp = (idx: number) => {
-    if (idx === 0) return;
-    reorderGroups(idx, idx - 1);
-    triggerToast('Moved consecutive group up.');
-  };
-
-  const moveGroupDown = (idx: number) => {
-    if (idx === grouped.length - 1) return;
-    reorderGroups(idx, idx + 1);
-    triggerToast('Moved consecutive group down.');
-  };
+  // moveGroupUp/moveGroupDown were deleted with the per-row arrow buttons --
+  // the list is drag-ordered now. Both were thin wrappers over reorderGroups,
+  // which is still the single path every reorder goes through.
 
   // The 7-day Memory Load Forecast used to live here. It moved to the Memory
   // Calendar, which already projects the same days and can name the actual
@@ -199,15 +214,18 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           <View className="flex-row items-center gap-3">
             <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
             <View>
-              <AppText variant="title" className="font-serif font-black text-neutral-900 mt-0.5">Memory Queue</AppText>
+              <AppText variant="title" className="font-serif font-black text-neutral-900 mt-0.5">My Verses</AppText>
             </View>
           </View>
         </View>
 
-        {/* YOUR RHYTHM -- user-level pacing, commits live. */}
+        {/* MY SCHEDULE -- user-level pacing, commits live. Called "Rhythm"
+            before, which collided head-on with Saved Plans calling its
+            retention presets "Rhythms" too: one word, two unrelated meanings,
+            one screen apart. */}
         <CollapsibleCard
           storageKey="queue.rhythm"
-          title="Your Rhythm"
+          title="My Schedule"
           summary={`${learningDays.length} days · ${newVersesPace}/day · ${maxReviewCap} min`}
         >
           <RhythmEditor rhythm={rhythm} onChange={updateRhythm} />
@@ -234,12 +252,26 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 
         {/* MEMORY QUEUE SECTION */}
         <View style={{ gap: 12 }}>
-          <View className="flex-row justify-between items-center">
-            <View>
-              <AppText variant="body" className="font-serif font-black text-[#1A1A1A]">Memory Queue</AppText>
-              <AppText variant="caption" className="text-neutral-400 mt-0.5">Reorder, customize, and add individual or group scriptures.</AppText>
+          {/* The title block needs flex-1 and the button shrink-0: without
+              them the description text sets the row's width, and the Add
+              Verses button was pushed partly off the right edge. Past 1.3x
+              they stack instead, since a two-line title plus a button simply
+              doesn't fit one row at large text sizes. */}
+          <View
+            className={headerStacked ? '' : 'flex-row justify-between items-center'}
+            style={{ gap: space(headerStacked ? 10 : 12) }}
+          >
+            <View className={headerStacked ? '' : 'flex-1'}>
+              <AppText variant="body" className="font-serif font-black text-[#1A1A1A]">Memory Verse Queue</AppText>
+              <AppText variant="caption" className="text-neutral-400 mt-0.5">
+                Verses you've chosen, in the order you'll learn them. Press and hold a verse to drag it somewhere else.
+              </AppText>
             </View>
-            <AppButton size="sm" onPress={() => setShowAddQueueItemModal(!showAddQueueItemModal)} className="bg-[#1A1A1A] rounded-xl flex-row items-center gap-1">
+            <AppButton
+              size="sm"
+              onPress={() => setShowAddQueueItemModal(!showAddQueueItemModal)}
+              className={`bg-[#1A1A1A] rounded-xl flex-row items-center gap-1 ${headerStacked ? 'self-start' : 'shrink-0'}`}
+            >
               <Plus size={12} color="#ffffff" />
               <AppText variant="label" className="font-sans font-bold text-white">Add Verses</AppText>
             </AppButton>
@@ -250,7 +282,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             <FadeInView>
               <View className="border-2 border-[#1A1A1A] rounded-2xl p-4 bg-white text-left" style={{ gap: 16 }}>
                 <View className="flex-row justify-between items-center pb-2 border-b border-neutral-100">
-                  <AppText variant="label" className="font-sans font-black text-[#1A1A1A] uppercase tracking-wider">Add Verse to Queue</AppText>
+                  <AppText variant="label" className="font-sans font-black text-[#1A1A1A] uppercase tracking-wider">Add Verses</AppText>
                   <Pressable onPress={() => setShowAddQueueItemModal(false)}>
                     <X size={14} color="#a3a3a3" />
                   </Pressable>
@@ -302,78 +334,35 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                   <Pressable
                     disabled={isAddingVerses}
                     onPress={async () => {
-                      const bookId = getBookByName(selectedAddBook)?.id;
-                      if (!bookId) {
-                        triggerToast(`Unrecognized book: ${selectedAddBook}`);
-                        return;
-                      }
-
                       const start = Math.min(selectedAddVerse, selectedAddEndVerse);
                       const end = Math.max(selectedAddVerse, selectedAddEndVerse);
-                      const targetVerseNumbers = Array.from({ length: end - start + 1 }, (_, i) => start + i);
-
-                      const alreadyQueued = targetVerseNumbers.filter((vNum) =>
-                        memoryQueue.some(
-                          (item) => item.verseId === buildVerseId(DEFAULT_TRANSLATION_ID, bookId, selectedAddChapter, vNum)
-                        )
-                      );
-                      const toAdd = targetVerseNumbers.filter((vNum) => !alreadyQueued.includes(vNum));
-
-                      if (toAdd.length === 0) {
-                        triggerToast(`${selectedAddBook} ${selectedAddChapter}:${start}-${end} is already in your queue!`);
-                        return;
-                      }
 
                       setIsAddingVerses(true);
-                      const chapterData = await fetchChapterText(DEFAULT_TRANSLATION_ID, bookId, selectedAddChapter);
+                      const result = await addVerseRangeToQueue(selectedAddBook, selectedAddChapter, start, end);
                       setIsAddingVerses(false);
 
-                      if (!chapterData) {
-                        triggerToast(`Couldn't find ${selectedAddBook} ${selectedAddChapter} in the scripture library yet.`);
+                      if (result.error) {
+                        triggerToast(result.error);
+                        return;
+                      }
+                      if (result.added === 0) {
+                        triggerToast(`${selectedAddBook} ${selectedAddChapter}:${start}-${end} is already on your list!`);
                         return;
                       }
 
-                      const foundVerseNumbers = toAdd.filter((vNum) => chapterData.verses[String(vNum)]);
-                      const missingCount = toAdd.length - foundVerseNumbers.length;
-
-                      if (foundVerseNumbers.length === 0) {
-                        triggerToast(`No verse text found for ${selectedAddBook} ${selectedAddChapter}:${start}-${end}.`);
-                        return;
-                      }
-
-                      const newItems: QueueItem[] = foundVerseNumbers.map((vNum, i) => ({
-                        verseId: buildVerseId(DEFAULT_TRANSLATION_ID, bookId, selectedAddChapter, vNum),
-                        translationId: DEFAULT_TRANSLATION_ID,
-                        book: selectedAddBook,
-                        chapter: selectedAddChapter,
-                        verseNumber: vNum,
-                        text: chapterData.verses[String(vNum)],
-                        orderIndex: memoryQueue.length + i,
-                        status: 'queued',
-                        origin: 'individual',
-                        retentionPhase: 'none',
-                        dateStarted: null,
-                        lastReviewDate: null,
-                        nextReviewDueDate: null,
-                        currentStreakCount: 0,
-                        totalSuccessfulReviews: 0,
-                        gracePeriodUsedToday: false,
-                      }));
-
-                      updateMemoryQueue((prev) => [...prev, ...newItems]);
                       setShowAddQueueItemModal(false);
                       const skippedNotes = [
-                        alreadyQueued.length > 0 ? `${alreadyQueued.length} already queued` : null,
-                        missingCount > 0 ? `${missingCount} had no text available` : null,
+                        result.alreadyThere > 0 ? `${result.alreadyThere} already on your list` : null,
+                        result.missingText > 0 ? `${result.missingText} had no text available` : null,
                       ].filter(Boolean);
                       const skippedNote = skippedNotes.length > 0 ? ` (${skippedNotes.join(', ')}, skipped)` : '';
                       triggerToast(
-                        `Added ${selectedAddBook} ${selectedAddChapter}:${start}${end > start ? `-${end}` : ''} to your Memory Queue!${skippedNote}`
+                        `Added ${selectedAddBook} ${selectedAddChapter}:${start}${end > start ? `-${end}` : ''} to your verses!${skippedNote}`
                       );
                     }}
                     className={`px-4 py-2 bg-[#1A1A1A] rounded-xl ${isAddingVerses ? 'opacity-50' : ''}`}
                   >
-                    <AppText variant="label" className="text-white font-sans font-bold ">{isAddingVerses ? 'Adding…' : 'Add to Queue'}</AppText>
+                    <AppText variant="label" className="text-white font-sans font-bold ">{isAddingVerses ? 'Adding…' : 'Add these verses'}</AppText>
                   </Pressable>
                 </View>
               </View>
@@ -398,37 +387,56 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                 Memory Queue is currently empty. Add verses above.
               </AppText>
             ) : (
-              grouped.map((group, idx) => {
-                const isGroup = group.origin === 'group';
-                const hasMultiple = group.verses.length > 1;
-                const versesStr = hasMultiple
-                  ? `${group.verses[0]}-${group.verses[group.verses.length - 1]}`
-                  : `${group.verses[0]}`;
+              // Real drag-to-reorder, replacing a column of up/down arrow
+              // buttons per row. The description above claimed "drag to
+              // reorder" while the only way to move anything was tapping an
+              // arrow repeatedly.
+              //
+              // scrollEnabled={false} because this always nests inside the
+              // screen's own ScrollView -- same reason and same pattern as
+              // the recording list in ChapterLandingScreen, which is where
+              // DraggableFlatList is already proven in this app.
+              //
+              // onDragEnd uses `from`/`to` rather than the reordered `data`
+              // array: reorderGroups permutes orderIndex among the VISIBLE
+              // items only and maps over the full queue, so reviewing and
+              // retained verses are carried through untouched. Rebuilding
+              // the queue from `data` would drop every verse this filtered
+              // list doesn't show -- the exact bug the comment on
+              // reorderGroups above exists to warn about.
+              <DraggableFlatList
+                data={grouped}
+                scrollEnabled={false}
+                keyExtractor={(group) => group.id || `${group.book}_${group.chapter}_${group.verses[0]}`}
+                contentContainerStyle={{ gap: 8 }}
+                onDragEnd={({ from, to }) => {
+                  if (from === to) return;
+                  reorderGroups(from, to);
+                  triggerToast('Reordered.');
+                }}
+                renderItem={({ item: group, drag, isActive }: RenderItemParams<GroupedQueueItem>) => {
+                  const isGroup = group.origin === 'group';
+                  const hasMultiple = group.verses.length > 1;
+                  const versesStr = hasMultiple
+                    ? `${group.verses[0]}-${group.verses[group.verses.length - 1]}`
+                    : `${group.verses[0]}`;
 
-                return (
-                  <View
-                    key={group.id || `${group.book}_${group.chapter}_${versesStr}`}
+                  return (
+                  <Pressable
+                    onLongPress={drag}
+                    delayLongPress={250}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${group.book} ${group.chapter}:${versesStr}. Press and hold to reorder.`}
                     className={`flex-row items-center justify-between p-4 bg-white border rounded-xl border-l-4 ${
                       isGroup ? 'border-l-indigo-500 border-indigo-200' : 'border-l-orange-500 border-orange-200'
-                    }`}
+                    } ${isActive ? 'border-indigo-400 opacity-90' : ''}`}
                   >
                     <View className="flex-row items-center gap-3.5 flex-1">
-                      {/* Up & Down Reorder Buttons */}
-                      <View className="gap-1">
-                        <Pressable
-                          onPress={() => moveGroupUp(idx)}
-                          disabled={idx === 0}
-                          className={`p-1 rounded ${idx === 0 ? 'opacity-20' : ''}`}
-                        >
-                          <ArrowUp size={12} color="#737373" />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => moveGroupDown(idx)}
-                          disabled={idx === grouped.length - 1}
-                          className={`p-1 rounded ${idx === grouped.length - 1 ? 'opacity-20' : ''}`}
-                        >
-                          <ArrowDown size={12} color="#737373" />
-                        </Pressable>
+                      {/* Drag affordance. The whole row is the drag target
+                          (a small handle is a hard thing to hit), but the
+                          grip is what makes that discoverable. */}
+                      <View className="shrink-0">
+                        <GripVertical size={16} color={isActive ? '#6366f1' : '#a3a3a3'} />
                       </View>
 
                       {/* Reference details */}
@@ -476,39 +484,25 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                           // Firestore now requires recorded intent, so this is
                           // the only route that actually removes documents.
                           removeQueueItems(group.items.map((item) => item.verseId));
-                          triggerToast('Removed consecutive group from Memory Queue.');
+                          triggerToast('Removed those verses from your list.');
                         }}
                         className="p-1 rounded"
                       >
                         <Trash2 size={13} color="#d4d4d4" />
                       </Pressable>
                     </View>
-                  </View>
-                );
-              })
+                  </Pressable>
+                  );
+                }}
+              />
             )}
           </View>
         </View>
 
-        {/* MEMORY CALENDAR ENTRY -- its own prominent card, not a small button
-            tucked next to the forecast, since it's the real day-by-day view of
-            everything the forecast below only summarizes in aggregate. */}
-        <Pressable
-          onPress={() => navigateTo('memoryCalendar')}
-          className="rounded-3xl p-5 bg-[#1A1A1A] flex-row items-center"
-          style={{ gap: 14 }}
-        >
-          <View className="w-14 h-14 rounded-2xl bg-violet-500 items-center justify-center shrink-0">
-            <CalendarDays size={26} color="#ffffff" />
-          </View>
-          <View className="flex-1">
-            <AppText variant="title" className="text-white font-serif font-black ">Memory Calendar</AppText>
-            <AppText variant="caption" className="text-neutral-300 font-sans mt-0.5 leading-relaxed">
-              See every verse coming up, day by day -- Daily, Weekly, and Monthly reviews projected forward.
-            </AppText>
-          </View>
-          <ChevronRight size={22} color="#ffffff" />
-        </Pressable>
+        {/* The Memory Calendar card was removed from this screen. It's reached
+            from My Memory Work, which is the menu that owns every destination
+            of that kind -- a second, larger door to it here made this page
+            look like the hub rather than one of the things the hub leads to. */}
 
         {/* RETENTION FOOTER -- read-only. Keeps the two halves of the split
             visibly connected (this page owns pacing, the designer owns the
@@ -520,7 +514,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           style={{ paddingTop: space(14), gap: space(8), minHeight: 44 }}
         >
           <AppText variant="micro" className="font-sans text-neutral-600 flex-1">
-            Retention: {activePlan ? activePlan.name : 'no rhythm'} — change in Saved Memory Rhythms
+            Review Settings: {activePlan ? activePlan.name : 'none chosen'} — tap to change
           </AppText>
           <ChevronRight size={14} color="#737373" />
         </Pressable>

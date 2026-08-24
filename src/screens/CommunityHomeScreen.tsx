@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react-native';
+import { MessageCircle, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
@@ -106,11 +106,25 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
             surfaced here too since Community is where people look for
             other people. */}
         <View className="gap-1.5">
-          <View className="flex-row items-center justify-between px-1">
-            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
+          <View className="flex-row items-center justify-between px-1 gap-2">
+            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase flex-1">
               FRIENDS ({friends.length})
             </AppText>
-            <Pressable onPress={() => navigateTo('findFriends')} className="bg-[#1A1A1A] px-2.5 py-1.5 rounded-lg relative flex-row items-center gap-1">
+            {/* Direct messages. This was a lone envelope button in the Profile
+                header -- Profile is where you go to look at yourself, not at
+                other people, and it was the only door into the DM inbox. DMs
+                are 1:1 with the people in this very list, so the entry point
+                sits on it. */}
+            <Pressable
+              onPress={() => navigateTo('messages')}
+              accessibilityRole="button"
+              accessibilityLabel="Messages"
+              hitSlop={8}
+              className="border border-neutral-300 rounded-lg px-2 py-1.5 shrink-0"
+            >
+              <MessageCircle size={14} color="#404040" />
+            </Pressable>
+            <Pressable onPress={() => navigateTo('findFriends')} className="bg-[#1A1A1A] px-2.5 py-1.5 rounded-lg relative flex-row items-center gap-1 shrink-0">
               <UserPlus size={11} color="#FFFFFF" />
               <AppText variant="micro" className="text-white font-sans font-bold uppercase tracking-wider">Find Friends</AppText>
               {incomingFriendRequests.length > 0 && (

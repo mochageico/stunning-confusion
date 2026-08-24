@@ -1,6 +1,6 @@
 import './global.css';
 import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
@@ -35,6 +35,7 @@ import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
+import TourScreen from './src/screens/TourScreen';
 import AuthGateScreen from './src/screens/AuthGateScreen';
 import DevLayoutLab from './src/screens/DevLayoutLab';
 
@@ -68,22 +69,18 @@ function CommunityScreen({ state }: { state: AppState }) {
 }
 
 const TABS = [
-  { id: 'home' as const, label: 'Home', Icon: HomeIcon },
+  // "Today", not "Home": the tab's job is to answer "what do I do right now",
+  // and naming it after that job is one less thing to figure out.
+  { id: 'home' as const, label: 'Today', Icon: HomeIcon },
   { id: 'community' as const, label: 'Community', Icon: Users },
   { id: 'record' as const, label: 'Record', Icon: Mic },
   { id: 'profile' as const, label: 'Profile', Icon: User },
 ];
 
-// Concrete, actionable copy for whichever Getting-Started step the user is
-// currently "out doing" -- shown in a persistent banner (below) alongside
-// the Back-to-Guide bar replacing the tab row, so a first-time user always
-// has an explanation of exactly what to tap next, not just a destination.
-const ONBOARDING_STEP_INSTRUCTIONS = [
-  'This is your Plan Designer — the pacing, learning days, and retention settings that drive everything else. Tap "Back to Guide" below when you\'re ready to continue.',
-  'Pick a book, then a chapter. Tap verses to select them, then tap "Add to Queue" in the bar that appears at the bottom.',
-  'Tap "Pull New Verses" to bring today\'s verses into Learning phase, then tap "Learn" on a verse group to start practicing.',
-  'Browse public circles below, or enter an invite code, then tap to join one.',
-];
+// ONBOARDING_STEP_INSTRUCTIONS was deleted here. It supplied per-step copy for
+// a banner shown while the user was "out doing" one step of the old
+// Getting-Started walkthrough. Both the banner and the walkthrough are gone --
+// see the note at the top of OnboardingScreen.tsx for why.
 
 function Screens({ state }: { state: AppState }) {
   if (state.currentScreen === 'recordingDetail' && state.selectedRecording) {
@@ -341,7 +338,7 @@ function ProgressModal({ state }: { state: AppState }) {
           </Pressable>
 
           <Pressable onPress={() => setShowProgressModal(false)} className="w-full py-2.5 bg-neutral-200 rounded-xl items-center">
-            <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">Close Progress Dashboard</AppText>
+            <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">Close</AppText>
           </Pressable>
         </View>
       </FadeInView>
@@ -512,8 +509,6 @@ function NowPlayingBar({ state }: { state: AppState }) {
 
 function AppShell() {
   const state = useAppState();
-  const onboardingStepIndex = state.onboardingStepInProgress;
-  const onboardingStepActive = onboardingStepIndex !== null;
   // Chat screens go full-screen (no tab bar / now-playing bar below them) --
   // partly for a standard chat-app feel, but mainly so KeyboardAvoidingView's
   // bottom edge is the true physical screen bottom instead of sitting above
@@ -545,20 +540,6 @@ function AppShell() {
     <View style={{ flex: 1 }} className="bg-white">
       <StatusBar style="dark" />
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-        {/* While a Getting-Started step is active, this banner sits above
-            whatever real screen the user navigated to -- explains exactly
-            what to do there, since the destination screen itself has no
-            idea it's being visited as part of a guided step. */}
-        {onboardingStepActive && (
-          <View className="bg-indigo-50 border-b border-indigo-200 px-4 py-3">
-            <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-indigo-500">
-              Step {onboardingStepIndex! + 1} of 4
-            </AppText>
-            <AppText variant="caption" className="font-sans text-indigo-900 leading-relaxed mt-0.5">
-              {ONBOARDING_STEP_INSTRUCTIONS[onboardingStepIndex!]}
-            </AppText>
-          </View>
-        )}
         <View style={{ flex: 1 }}>
           <Screens state={state} />
         </View>
@@ -567,39 +548,30 @@ function AppShell() {
       {!chatScreenActive && (
       <SafeAreaView edges={['bottom', 'left', 'right']}>
         <NowPlayingBar state={state} />
-        {onboardingStepActive ? (
-          // Replaces the whole tab row -- deliberately the ONLY way out of
-          // wherever this step sent the user, so a first-time user can't
-          // tap Community/Record/Profile mid-step and get lost. The step
-          // itself already navigated to the right tab/screen; any further
-          // in-screen navigation the step needs (e.g. Books -> Chapters ->
-          // ChapterLanding) still works normally since that's not gated by
-          // this bar.
-          <Pressable
-            onPress={state.returnToOnboardingGuide}
-            className="h-16 bg-[#1A1A1A] px-6 flex-row items-center justify-center gap-2"
-          >
-            <AppText variant="label" className="text-white font-sans font-bold uppercase tracking-wider">← Back to Guide</AppText>
-          </Pressable>
-        ) : (
-          // 56pt rather than 64: the bar sits on top of the home-indicator
-          // inset already added by SafeAreaView, so the old height pushed it
-          // noticeably far up the screen.
-          <View className="h-14 bg-white border-t border-[#E5E5E5] px-6 flex-row items-center justify-between">
-            {TABS.map((tab) => {
-              const isActive = state.currentTab === tab.id;
-              const Icon = tab.Icon;
-              return (
-                <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1">
-                  <Icon size={20} color={isActive ? '#1A1A1A' : '#888888'} strokeWidth={isActive ? 2.5 : 2} />
-                  <AppText variant="micro" className={`font-sans font-bold tracking-tight mt-0.5 ${isActive ? 'text-[#1A1A1A]' : 'text-[#888888]'}`}>
-                    {tab.label}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
+        {/* The tab bar is now always the tab bar. It used to be swapped out
+            for a single "Back to Guide" button whenever a Getting-Started
+            step was running, to stop a first-time user wandering off
+            mid-step -- but that made the guide something you were trapped
+            inside rather than something you used, and the guide it belonged
+            to no longer exists.
+
+            56pt rather than 64: the bar sits on top of the home-indicator
+            inset already added by SafeAreaView, so the old height pushed it
+            noticeably far up the screen. */}
+        <View className="h-14 bg-white border-t border-[#E5E5E5] px-6 flex-row items-center justify-between">
+          {TABS.map((tab) => {
+            const isActive = state.currentTab === tab.id;
+            const Icon = tab.Icon;
+            return (
+              <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1">
+                <Icon size={20} color={isActive ? '#1A1A1A' : '#888888'} strokeWidth={isActive ? 2.5 : 2} />
+                <AppText variant="micro" className={`font-sans font-bold tracking-tight mt-0.5 ${isActive ? 'text-[#1A1A1A]' : 'text-[#888888]'}`}>
+                  {tab.label}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
       </SafeAreaView>
       )}
 
@@ -630,6 +602,16 @@ function AppShell() {
           verseDoodles={state.verseDoodles}
           onSaveVerseDoodle={state.saveVerseDoodle}
           memoryGridColumns={state.memoryGridColumns}
+          chapterPhotos={state.chapterPhotos}
+          photoCache={state.photoCache}
+          onCacheChapterPhoto={state.cacheChapterPhoto}
+          // Camera rather than a source chooser: the placeholder only appears
+          // for a chapter you are listening to right now, and the useful move
+          // in that moment is photographing the Bible in front of you. The
+          // library route stays on Chapter Landing.
+          onAddChapterPhoto={(book, chapter) => {
+            void state.addChapterPhoto(book, chapter, 'camera');
+          }}
         />
       )}
 
@@ -637,14 +619,26 @@ function AppShell() {
       {state.showProgressModal && <ProgressModal state={state} />}
       {state.showMissedReviewPrompt && <MissedReviewPromptModal state={state} />}
 
-      {/* First-run "Getting Started" checklist -- same full-screen-overlay
-          convention as the practice modal above, sitting above the tab
-          router rather than going through currentScreen routing, so it
-          shows regardless of whatever screen/tab was active when it fires. */}
+      {/* First-run setup -- same full-screen-overlay convention as the
+          practice modal above, sitting above the tab router rather than
+          going through currentScreen routing, so it shows regardless of
+          whatever screen/tab was active when it fires. */}
       {state.showOnboarding && (
         <View className="absolute inset-0 bg-white z-50">
           <SafeAreaView style={{ flex: 1 }}>
             <OnboardingScreen state={state} />
+          </SafeAreaView>
+        </View>
+      )}
+
+      {/* "Show me around" -- opened on demand from Settings or from Today's
+          empty state, never automatically. Rendered after setup so that if
+          both are somehow open, setup (the one with unanswered questions)
+          isn't buried underneath it. */}
+      {state.showTour && (
+        <View className="absolute inset-0 bg-white z-50">
+          <SafeAreaView style={{ flex: 1 }}>
+            <TourScreen state={state} />
           </SafeAreaView>
         </View>
       )}
@@ -688,6 +682,33 @@ export default function App() {
     PlayfairDisplay_600SemiBold,
     PlayfairDisplay_700Bold,
   });
+
+  // app.config.js sets orientation: 'default' rather than 'portrait' so the
+  // photo viewer can unlock landscape at runtime -- iOS refuses to rotate
+  // beyond the app-level mask, so that mask has to be widened at BUILD time or
+  // never at all. Widening it also un-pins Android, where the plugin's
+  // initialOrientation prop does nothing (it is an iOS Info.plist mod). This
+  // pins it back, so the app stays portrait everywhere exactly as before.
+  // Anything that wants rotation unlocks explicitly and re-locks on the way out.
+  React.useEffect(() => {
+    if (Platform.OS === 'web') return;
+    try {
+      // REQUIRED LAZILY, never imported at the top of this file.
+      // expo-screen-orientation calls requireNativeModule() at module scope, so a
+      // static import THROWS during startup on any binary built before the module
+      // was added -- including every dev client and TestFlight build that predates
+      // it. That takes the whole app down instantly instead of degrading. Keeping
+      // the require in here means an older binary just skips the lock.
+      const ScreenOrientation =
+        require('expo-screen-orientation') as typeof import('expo-screen-orientation');
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {
+        // Non-fatal -- a device that refuses the lock still renders fine.
+      });
+    } catch {
+      // Older binary without the native module. Harmless: those builds predate the
+      // orientation: 'default' switch, so their Info.plist still pins portrait.
+    }
+  }, []);
 
   if (!fontsLoaded) {
     return <View style={{ flex: 1, backgroundColor: '#ffffff' }} />;

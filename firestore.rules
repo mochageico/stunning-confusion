@@ -58,6 +58,17 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
+    // Photos of the user's own physical Bible pages, attached to a chapter.
+    // Owner-only, and unlike recordings above there is NO shared counterpart
+    // collection anywhere -- these are never shareable. A page photo
+    // reproduces a copyrighted translation and routinely carries handwriting,
+    // marginalia, and family-register names, so the sharing path is absent by
+    // design rather than merely switched off. Adding one is a product
+    // decision, not a rules tweak.
+    match /users/{userId}/chapterPhotos/{photoId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // Denormalized, read-only-to-others copy of a recording once its owner
     // sets sharedVisibility to 'circle' or 'public'. Firestore rules can't
     // cheaply check "is this reader a co-member of ANY of the owner's
@@ -75,11 +86,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
     }
 
-    // Shared plans collection for community memory plans
-    match /sharedPlans/{planId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
+    // The /sharedPlans collection was removed along with the whole
+    // retention-sharing feature (publish/browse/join someone else's Review
+    // Settings). No rule is left for it deliberately: with no match block,
+    // the default deny applies, so any leftover client or stale doc can
+    // neither be read nor written.
 
     // Real, mutual, persistent friend connections — independent of circle
     // membership (unlike circleFriends, which is just live-recomputed

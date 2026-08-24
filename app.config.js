@@ -26,7 +26,14 @@ module.exports = {
     name: appName,
     slug: 'scripture-memory',
     version: '1.0.0',
-    orientation: 'portrait',
+    // 'default', NOT 'portrait' -- deliberately. On iOS the app-level
+    // supported-orientation mask is a hard outer bound: a view controller can
+    // narrow it but never exceed it, so 'portrait' here would make
+    // ScreenOrientation.unlockAsync() a no-op forever. The app is still
+    // portrait-locked in practice -- expo-screen-orientation's
+    // initialOrientation below pins it at launch -- but the photo viewer can
+    // now unlock landscape at runtime without another native build.
+    orientation: 'default',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
     scheme: 'scripturememory',
@@ -40,10 +47,12 @@ module.exports = {
       supportsTablet: true,
       bundleIdentifier,
       googleServicesFile: './GoogleService-Info.plist',
+      // NSPhotoLibraryUsageDescription/NSCameraUsageDescription are NOT set
+      // here -- the expo-image-picker plugin below owns both strings. A raw
+      // infoPlist entry would win over the plugin's, so keeping them in one
+      // place stops the two from silently drifting apart.
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
-        NSPhotoLibraryUsageDescription:
-          'Scripture Memory does not access your photo library. This permission is requested by a library dependency but is unused.',
       },
     },
     android: {
@@ -55,7 +64,10 @@ module.exports = {
         monochromeImage: './assets/android-icon-monochrome.png',
       },
       predictiveBackGestureEnabled: false,
-      permissions: ['android.permission.RECORD_AUDIO', 'android.permission.MODIFY_AUDIO_SETTINGS'],
+      // CAMERA is for photographing a physical Bible page directly. Picking an
+      // existing photo needs no permission on Android 13+ (expo-image-picker
+      // goes through the system photo picker, which grants per-image access).
+      permissions: ['android.permission.RECORD_AUDIO', 'android.permission.MODIFY_AUDIO_SETTINGS', 'android.permission.CAMERA'],
     },
     web: {
       favicon: './assets/favicon.png',
@@ -67,11 +79,25 @@ module.exports = {
       'expo-audio',
       'expo-status-bar',
       'expo-asset',
+      'expo-image',
+      // Pins the app to portrait at launch, restoring the behaviour that
+      // orientation: 'default' above gives up. Both halves are required: the
+      // config allows rotation, this forbids it until something asks.
+      ['expo-screen-orientation', { initialOrientation: 'PORTRAIT' }],
       [
         'expo-speech-recognition',
         {
           microphonePermission: 'Scripture Memory uses your microphone to grade spoken recitation practice.',
           speechRecognitionPermission: 'Scripture Memory uses speech recognition to check your spoken recitation against the verse.',
+        },
+      ],
+      [
+        'expo-image-picker',
+        {
+          photosPermission:
+            'Scripture Memory lets you attach photos of your own Bible pages to a chapter, so you can see the page you memorized from while you listen.',
+          cameraPermission:
+            'Scripture Memory uses your camera to photograph your Bible pages, so you can see the page you memorized from while you listen.',
         },
       ],
       [

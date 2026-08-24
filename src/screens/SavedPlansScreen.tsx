@@ -25,18 +25,18 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
           <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white shrink-0" />
-          {/* flex-1, not intrinsic width: "Saved Memory Rhythms" at display
-              size is wider than the screen minus the back button, and text in
-              RN doesn't wrap unless its container is allowed to bound it. */}
+          {/* flex-1, not intrinsic width: a display-size title is wider than
+              the screen minus the back button, and text in RN doesn't wrap
+              unless its container is allowed to bound it. */}
           <View className="flex-1">
             <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-600 font-sans">
-              Retention Settings
+              How deeply verses stick
             </AppText>
             <AppText variant="display" className="font-serif font-bold text-[#1A1A1A] mt-0.5">
-              Saved Memory Rhythms
+              Review Settings
             </AppText>
             <AppText variant="caption" className="text-neutral-600 font-sans mt-1">
-              Tap one to make it active, or Edit to change how it works.
+              How long a verse keeps coming back before it's yours for good. Tap one to use it, or Edit to change it.
             </AppText>
           </View>
         </View>
@@ -50,17 +50,17 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
             <Plus size={16} color="#737373" />
           </View>
           <AppText variant="label" className="font-sans font-extrabold text-neutral-800">
-            Create New Rhythm
+            Create New Settings
           </AppText>
           <AppText variant="caption" className="text-neutral-600 font-sans text-center">
-            Set how long a verse stays in each phase, and what happens when you miss one
+            Set how long a verse keeps coming back, and what happens when you miss one
           </AppText>
         </Pressable>
 
         {/* List of Saved Plans */}
         <View className="gap-3">
           <AppText variant="section" className="font-bold text-neutral-600 tracking-wider font-sans uppercase">
-            MY RHYTHMS ({savedPlans.length})
+            SAVED ({savedPlans.length})
           </AppText>
 
           <View className="gap-3">
@@ -84,13 +84,17 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                         {plan.name}
                       </AppText>
                     </View>
-                    {/* Retention, not pacing. Every plan used to be labelled
-                        by its learning days and verses-per-day, which is
-                        precisely what no longer varies between plans -- and
-                        was why three visibly different "plans" all behaved
-                        identically once you started using them. */}
+                    {/* Retention, not pacing. Every preset used to be
+                        labelled by its learning days and verses-per-day,
+                        which is precisely what no longer varies between them
+                        -- and was why three visibly different "plans" all
+                        behaved identically once you started using them.
+                        Spelled out in words rather than "7-6-5 · 3 touches",
+                        which meant nothing without already knowing the
+                        engine. */}
                     <AppText variant="caption" className="font-sans text-neutral-500">
-                      {plan.dailyPhaseWeeks}-{plan.weeklyPhaseMonths}-{plan.monthlyPhaseYears} · {plan.masteryTouches} touches
+                      Daily for {plan.dailyPhaseWeeks} weeks, weekly for {plan.weeklyPhaseMonths} months, monthly for{' '}
+                      {plan.monthlyPhaseYears} {plan.monthlyPhaseYears === 1 ? 'year' : 'years'}
                       {plan.isBuiltIn ? ' · built-in' : ''}
                     </AppText>
                   </View>

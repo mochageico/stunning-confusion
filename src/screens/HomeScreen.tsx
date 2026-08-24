@@ -18,28 +18,21 @@ function FeatureTile({
   onPress,
   Icon,
   label,
-  primary,
 }: {
   onPress: () => void;
   Icon: React.ComponentType<{ size?: number; color?: string }>;
   label: string;
-  primary?: boolean;
 }) {
   const scale = useFontScale();
   const space = useScaledSpace();
   return (
     <Pressable
       onPress={onPress}
-      className={`flex-1 rounded-xl bg-white items-center justify-center shadow-sm ${
-        primary ? 'border-2 border-[#1A1A1A]' : 'border border-[#E5E5E5]'
-      }`}
+      className="flex-1 rounded-xl bg-white items-center justify-center shadow-sm border border-[#E5E5E5]"
       style={{ minHeight: Math.round(76 * scale), padding: space(10), gap: space(6) }}
     >
       <Icon size={Math.round(18 * scale)} color="#1A1A1A" />
-      <AppText
-        variant="caption"
-        className={`font-sans text-center ${primary ? 'font-extrabold text-[#1A1A1A]' : 'font-bold text-[#444]'}`}
-      >
+      <AppText variant="caption" className="font-sans text-center font-bold text-[#444]">
         {label}
       </AppText>
     </Pressable>
@@ -173,6 +166,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     isReviewDue,
     pausedAt,
     pausedUntil,
+    setShowTour,
   } = state;
 
   // While paused (Settings -> Pause Reviews), nothing should read as "due" --
@@ -295,15 +289,57 @@ export default function HomeScreen({ state }: { state: AppState }) {
           </AppText>
         </View>
 
+        {/* START HERE -- Home's own empty state, and the real replacement for
+            the old dismissable Getting-Started overlay.
+
+            Two things make it better than an overlay: it's contextual (it
+            appears exactly when there's nothing to do and says the one thing
+            worth doing), and it retires itself the moment the queue is
+            non-empty, so it never has to be dismissed and can never be
+            dismissed by mistake. Before this, a brand-new user who closed the
+            checklist landed on three collapsed cards reading "No verses
+            currently in learning phase" with nothing telling them what to
+            do next. */}
+        {memoryQueue.length === 0 && (
+          <View
+            className="rounded-xl border-2 border-[#1A1A1A] bg-[#FBF9F6]"
+            style={{ padding: space(16), gap: space(10) }}
+          >
+            <AppText variant="body" className="font-serif font-black text-[#1A1A1A]">
+              Start here
+            </AppText>
+            <AppText variant="label" className="font-sans text-neutral-700 leading-relaxed">
+              You haven't picked any verses yet. Choose a few you'd like to know by heart — the app takes care of when
+              you see them after that.
+            </AppText>
+            <Pressable
+              onPress={() => navigateTo('books')}
+              accessibilityRole="button"
+              className="w-full rounded-xl bg-[#1A1A1A] flex-row items-center justify-center"
+              style={{ minHeight: MIN_TOUCH, paddingVertical: space(12), gap: space(6) }}
+            >
+              <BookMarked size={iconSize} color="#FFFFFF" />
+              <AppText variant="label" className="text-white font-sans font-bold">
+                Choose my first verses
+              </AppText>
+            </Pressable>
+            <Pressable onPress={() => setShowTour(true)} className="w-full items-center" style={{ paddingVertical: space(4) }}>
+              <AppText variant="caption" className="text-neutral-500 font-sans font-bold underline">
+                Show me around first
+              </AppText>
+            </Pressable>
+          </View>
+        )}
+
         <CollapsibleCard
           storageKey="home.learning"
-          title="Learning phase"
+          title="Learning now"
           summary={`${learningItems.length} verses`}
           defaultCollapsed={learningItems.length === 0}
         >
           <View className="flex-row items-center" style={{ gap: space(6) }}>
             <HelpTooltip
-              text={`Verses you're actively learning. Each one needs ${masteryTouches} perfect recalls, at least an hour apart, before it graduates into spaced review.`}
+              text={`The verses you're working on right now. Each one needs ${masteryTouches} perfect recalls, at least an hour apart, before the app counts it as learned and starts bringing it back on a schedule.`}
             />
             {memoryQueue.some((item) => item.status === 'queued') && (
               <Pressable
@@ -312,7 +348,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 style={{ minHeight: space(28), paddingHorizontal: space(8), paddingVertical: space(4) }}
               >
                 <AppText variant="micro" className="text-white font-sans font-extrabold">
-                  Pull New Verses
+                  Pull Next Verses
                 </AppText>
               </Pressable>
             )}
@@ -321,11 +357,11 @@ export default function HomeScreen({ state }: { state: AppState }) {
           {showPullShieldConfirm && (
             <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-3" style={{ gap: 8 }}>
               <AppText variant="caption" className="font-sans font-bold text-indigo-900">
-                🛡️ Review Shield is on — pull new verses anyway?
+                🛡️ Start more verses anyway?
               </AppText>
               <AppText variant="micro" className="font-sans text-indigo-800/80 leading-relaxed">
-                Today's review time ({estMinutes}m) already meets or exceeds your {maxReviewCap}m daily limit.
-                Pulling more now adds on top of that, on purpose.
+                Today already has about {estMinutes} minutes of review, which meets the {maxReviewCap}-minute limit you
+                set. Starting more verses now adds to that on purpose.
               </AppText>
               <View className="flex-row gap-2 justify-end pt-1">
                 <Pressable
@@ -341,7 +377,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                   }}
                   className="px-3 py-1.5 bg-indigo-600 rounded-lg"
                 >
-                  <AppText variant="caption" className="text-white font-sans font-bold ">Yes, Pull Anyway</AppText>
+                  <AppText variant="caption" className="text-white font-sans font-bold ">Yes, start them</AppText>
                 </Pressable>
               </View>
             </View>
@@ -412,18 +448,18 @@ export default function HomeScreen({ state }: { state: AppState }) {
               ))}
             </View>
           ) : (
-            <AppText variant="label" className="text-neutral-400 italic pl-1">No verses currently in learning phase.</AppText>
+            <AppText variant="label" className="text-neutral-400 italic pl-1">Nothing being learned right now.</AppText>
           )}
         </CollapsibleCard>
 
         <CollapsibleCard
           storageKey="home.reviews"
-          title="Due reviews"
+          title="Review"
           summary={`${dueReviewItems.length} due`}
           defaultCollapsed={dueReviewItems.length === 0}
         >
           <View className="flex-row items-center" style={{ gap: space(6) }}>
-            <HelpTooltip text="Verses you've already learned, coming back around on schedule. Each one cycles daily for a while, then weekly, then monthly, before it's retained for good." />
+            <HelpTooltip text="Verses you've already learned, back for a quick check so you don't forget them. Each one comes back every day for a while, then once a week, then once a month — and then it stops." />
             <Pressable
               onPress={() => setShowResetConfirm(true)}
               className="bg-red-50 border border-red-200 rounded flex-row items-center justify-center"
@@ -534,18 +570,19 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
         <CollapsibleCard
           storageKey="home.priming"
-          title="Memory priming"
-          summary={`${queuedLookahead.length} queued`}
+          title="Coming up next"
+          summary={`${queuedLookahead.length} waiting`}
           defaultCollapsed={queuedLookahead.length === 0}
         >
           {/* The section title and count now live on the collapsible header
               above; this row keeps only the window-size control. */}
           <View className="flex-row items-center" style={{ gap: space(6) }}>
+            <HelpTooltip text="Verses you've picked but haven't started yet. Listening to them ahead of time makes them easier when their turn comes." />
             <AppText variant="micro" className="font-sans font-bold text-neutral-500 shrink-0">
-              # of verses
+              Show
             </AppText>
             <View style={{ flex: 1, maxWidth: 150 }}>
-              <Dropdown options={LOOKAHEAD_OPTIONS} value={primingLookahead} onChange={setPrimingLookahead} title="Priming Window Size" compact />
+              <Dropdown options={LOOKAHEAD_OPTIONS} value={primingLookahead} onChange={setPrimingLookahead} title="How many to show" compact />
             </View>
           </View>
 
@@ -569,7 +606,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
               ))}
             </View>
           ) : (
-            <AppText variant="label" className="text-neutral-400 italic pl-1">No queued verses remaining to prime!</AppText>
+            <AppText variant="label" className="text-neutral-400 italic pl-1">Nothing waiting — add more verses when you're ready.</AppText>
           )}
         </CollapsibleCard>
 
@@ -599,15 +636,20 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
         {/* FEATURES GRID -- 2x2 at minHeight, replacing 3-across at a fixed
             h-24 plus a stranded h-14 row. There are exactly four features, so
-            two columns is simply the right shape for them. */}
+            two columns is simply the right shape for them.
+
+            All four are visually equal (no `primary` tile). These are four
+            destinations of the same kind, and the one genuinely primary
+            action for a new user -- choosing their first verses -- already
+            has a full-width button in the empty state above. */}
         <View style={{ gap: 12 }}>
           <View className="flex-row" style={{ gap: 12 }}>
-            <FeatureTile onPress={() => navigateTo('audioFeed')} Icon={Volume2} label="Find Audio Recordings" />
-            <FeatureTile onPress={() => navigateTo('memoryDesk')} Icon={FolderOpen} label="Memory Desk" />
+            <FeatureTile onPress={() => navigateTo('books')} Icon={BookMarked} label="Verse Finder" />
+            <FeatureTile onPress={() => navigateTo('memoryDesk')} Icon={FolderOpen} label="My Memory Work" />
           </View>
           <View className="flex-row" style={{ gap: 12 }}>
-            <FeatureTile onPress={() => navigateTo('books')} Icon={BookMarked} label="Verse Search / Bible" />
-            <FeatureTile onPress={() => navigateTo('referenceDrill')} Icon={Target} label="Reference Drill (practice)" />
+            <FeatureTile onPress={() => navigateTo('audioFeed')} Icon={Volume2} label="Find Recordings" />
+            <FeatureTile onPress={() => navigateTo('referenceDrill')} Icon={Target} label="Reference Practice" />
           </View>
         </View>
       </ScrollView>

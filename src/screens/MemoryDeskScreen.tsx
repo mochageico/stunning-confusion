@@ -105,7 +105,7 @@ export default function MemoryDeskScreen({ state }: { state: AppState }) {
               Your scripture
             </AppText>
             <AppText variant="display" className="font-serif font-bold text-[#1A1A1A]">
-              Memory Desk
+              My Memory Work
             </AppText>
           </View>
         </View>
@@ -115,12 +115,13 @@ export default function MemoryDeskScreen({ state }: { state: AppState }) {
         </AppText>
 
         <View style={{ gap: space(8) }}>
-          {/* Queue owns Rhythm now, so its detail line says what your week
-              looks like, not just how many verses are sitting there. */}
+          {/* My Verses owns the schedule dials, so its detail line says what
+              your week looks like, not just how many verses are sitting
+              there. */}
           <DeskRow
             Icon={ListOrdered}
-            label="Memory Queue & Rhythm"
-            detail={`${queuedCount} queued · ${newVersesPace}/day, ${learningDays.length} days`}
+            label="My Verses & Schedule"
+            detail={`${queuedCount} waiting · ${newVersesPace}/day, ${learningDays.length} days`}
             onPress={go('activePlan')}
           />
           <DeskRow
@@ -129,19 +130,19 @@ export default function MemoryDeskScreen({ state }: { state: AppState }) {
             detail={dueTodayCount === 1 ? '1 due today' : `${dueTodayCount} due today`}
             onPress={go('memoryCalendar')}
           />
-          {/* The one door to the designer. There used to be a "Memory Plan"
-              row here too, opening the ACTIVE rhythm's designer directly --
+          {/* The one door to the Review Settings editor. There used to be a
+              second row here opening the ACTIVE preset's editor directly --
               two rows leading to the same editor, one of which silently
-              picked which rhythm you were editing for you. Now you pick from
-              the list first, then edit, so the designer always knows what it
+              picked which preset you were editing for you. Now you pick from
+              the list first, then edit, so the editor always knows what it
               has open. (That mattered beyond tidiness: navigating in without
               an editingPlanId made Save take the create-new branch and mint a
-              duplicate.) The active rhythm's name rides along on this row so
+              duplicate.) The active preset's name rides along on this row so
               the desk still tells you where things stand at a glance. */}
           <DeskRow
             Icon={FolderOpen}
-            label="Saved Memory Rhythms"
-            detail={activePlanName ? `${activePlanName} · ${savedPlans.length}` : `${savedPlans.length} saved`}
+            label="Review Settings"
+            detail={activePlanName ? `${activePlanName} · ${savedPlans.length} saved` : `${savedPlans.length} saved`}
             onPress={go('savedPlans')}
           />
           <DeskRow

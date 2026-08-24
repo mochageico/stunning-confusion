@@ -53,11 +53,10 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     audioCache,
     setAudioCacheCap,
     clearAudioDownloads,
-    memoryPlanVisibility,
     memoryQueueVisibility,
-    updateMemoryPlanVisibility,
     updateMemoryQueueVisibility,
     setShowOnboarding,
+    setShowTour,
     signOut,
     deleteAccount,
     accountabilityDailyCap,
@@ -250,26 +249,11 @@ export default function SettingsScreen({ state }: { state: AppState }) {
             </View>
           </View>
 
-          {/* Memory Plan visibility */}
+          {/* Verse-list visibility. There is deliberately no matching control
+              for Review Settings -- sharing your retention method was removed
+              entirely, so there's nothing to make visible. */}
           <View style={{ gap: 6 }}>
-            <AppText variant="caption" className="font-sans font-bold text-neutral-700">Memory Plan</AppText>
-            <View className="flex-row gap-2">
-              {VISIBILITY_OPTIONS.map((opt) => {
-                const isSelected = memoryPlanVisibility === opt.id;
-                return (
-                  <AppButton size="md" key={opt.id} onPress={() => updateMemoryPlanVisibility(opt.id)} className={`flex-1 rounded-lg items-center border ${ isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200' }`}>
-                    <AppText variant="caption" className={`font-sans font-bold ${isSelected ? 'text-white' : 'text-neutral-600'}`}>
-                      {opt.label}
-                    </AppText>
-                  </AppButton>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Memory Queue visibility */}
-          <View style={{ gap: 6 }}>
-            <AppText variant="caption" className="font-sans font-bold text-neutral-700">Memory Queue</AppText>
+            <AppText variant="caption" className="font-sans font-bold text-neutral-700">My Verses</AppText>
             <View className="flex-row gap-2">
               {VISIBILITY_OPTIONS.map((opt) => {
                 const isSelected = memoryQueueVisibility === opt.id;
@@ -343,10 +327,20 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           )}
         </View>
 
-        {/* GETTING STARTED */}
-        <AppButton size="lg" onPress={() => setShowOnboarding(true)} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl items-center">
-          <AppText variant="label" className="text-neutral-700 font-sans font-bold ">View Getting Started Guide 🚀</AppText>
-        </AppButton>
+        {/* HELP -- two separate doors on purpose. "Show me around" explains
+            what's where and answers the questions people actually ask; setup
+            re-opens the three questions that configure the app. Conflating
+            them is what made the old single "Getting Started Guide" entry
+            unclear about whether tapping it would change anything. */}
+        <View className="bg-white border border-[#E5E5E5] rounded-xl p-3.5" style={{ gap: 10 }}>
+          <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Help</AppText>
+          <AppButton size="lg" onPress={() => setShowTour(true)} className="w-full bg-[#1A1A1A] rounded-xl items-center">
+            <AppText variant="label" className="text-white font-sans font-bold">Show me around</AppText>
+          </AppButton>
+          <AppButton size="md" onPress={() => setShowOnboarding(true)} className="w-full bg-neutral-50 border border-neutral-200 rounded-xl items-center">
+            <AppText variant="label" className="text-neutral-700 font-sans font-bold">Run setup again</AppText>
+          </AppButton>
+        </View>
 
         {/* ABOUT */}
         <View className="bg-white border border-[#E5E5E5] rounded-xl p-3.5" style={{ gap: 4 }}>

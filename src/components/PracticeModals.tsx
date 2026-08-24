@@ -6,6 +6,7 @@ import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-au
 import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
 import {
   Check,
+  ChevronDown,
   ChevronRight,
   ChevronUp,
   ClipboardCheck,
@@ -30,7 +31,7 @@ import {
   X,
 } from 'lucide-react-native';
 
-import { VerseState, QueueItem, Recording } from '../types';
+import { VerseState, QueueItem, Recording, ChapterPhoto } from '../types';
 import { resolveChapterAudio, isReviewDue } from '../state/useAppState';
 import {
   classifyFirstLetterAttempt,
@@ -59,10 +60,15 @@ import {
   ScrambleRound,
   SwapVerse,
 } from '../lib/drills';
-import { BounceView, ChipRow, DiscreteSlider, FadeInView, SpinView, WaveBars } from './ui';
+import { BounceView, ChipRow, FadeInView, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
 import MemoryGrid, { verseAnnotationKey } from './MemoryGrid';
-import { AppButton, AppIconButton, AppTextInput, AppText } from './design';
+import ListenPhotoView from './ListenPhotoView';
+import { chapterPhotoKey, sortChapterPhotos } from '../lib/chapterPhotos';
+import { AppButton, AppIconButton, AppTextInput, AppText, useCollapsed } from './design';
+
+/** Stable identity, so a missing photoCache prop cannot retrigger renders. */
+const EMPTY_PHOTO_CACHE: ReadonlyMap<string, string> = new Map();
 
 interface PracticeModalsProps {
   type: 'listen' | 'learn';
@@ -122,6 +128,61 @@ interface PracticeModalsProps {
   verseDoodles?: Record<string, string[]>;
   onSaveVerseDoodle?: (key: string, strokes: string[]) => void;
   memoryGridColumns?: 2 | 4;
+  // Bible page photos. Listen shows the page a verse lives on as a third
+  // Display option, following playback across whatever chapters the session
+  // happens to span (see ListenPhotoView).
+  chapterPhotos?: ChapterPhoto[];
+  photoCache?: ReadonlyMap<string, string>;
+  onCacheChapterPhoto?: (photo: ChapterPhoto) => void;
+  onAddChapterPhoto?: (book: string, chapter: number) => void;
+}
+
+// ============================================================
+// DrillSetting — the collapsed-by-default strip the Recall
+// screen's knobs live in. Mid-recall you want the passage, not
+// three panels of controls, so each one folds down to a single
+// line that still states where it stands ("Restart after ·
+// 5 mistakes"); tapping it opens the options. Open/closed
+// persists per key through the same store CollapsibleCard uses,
+// so someone who fiddles with a knob every session keeps it open.
+// ============================================================
+function DrillSetting({
+  storageKey,
+  label,
+  value,
+  valueClassName = 'text-neutral-500',
+  children,
+}: {
+  storageKey: string;
+  label: string;
+  /** Current setting, shown on the header so a folded strip still reads. */
+  value: string;
+  valueClassName?: string;
+  children: React.ReactNode;
+}) {
+  const [collapsed, setCollapsed] = useCollapsed(storageKey, true);
+  const Chevron = collapsed ? ChevronDown : ChevronUp;
+
+  return (
+    <View className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl px-2.5 py-2 gap-1.5">
+      <Pressable
+        onPress={() => setCollapsed(!collapsed)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: !collapsed }}
+        hitSlop={6}
+        className="flex-row items-center gap-2"
+      >
+        <AppText variant="micro" className="font-sans font-extrabold text-neutral-400 tracking-wider uppercase shrink-0">
+          {label}
+        </AppText>
+        <AppText variant="micro" className={`font-mono font-bold flex-1 text-right ${valueClassName}`} numberOfLines={1}>
+          {value}
+        </AppText>
+        <Chevron size={13} color="#a3a3a3" />
+      </Pressable>
+      {!collapsed && children}
+    </View>
+  );
 }
 
 // Guard wrapper: the early "nothing to practice" return must happen OUTSIDE
@@ -159,6 +220,10 @@ function PracticeModalsInner({
   onSaveVerseDoodle,
   memoryGridColumns = 4,
   setPlayingRecordingId,
+  chapterPhotos,
+  photoCache,
+  onCacheChapterPhoto,
+  onAddChapterPhoto,
 }: PracticeModalsProps) {
   const handleGroupComplete = onAdvance ?? onClose;
   // ==========================================
@@ -169,7 +234,7 @@ function PracticeModalsInner({
   // "Verse by Verse" (existing card list) vs "Memory Grid" -- purely a
   // display choice, doesn't affect playback state at all. Tapping a grid
   // box calls the exact same handleVerseClick used by the card list.
-  const [listenViewMode, setListenViewMode] = useState<'verses' | 'memoryGrid'>('verses');
+  const [listenViewMode, setListenViewMode] = useState<'verses' | 'memoryGrid' | 'photo'>('verses');
 
   // Segment selection states — indices into activePlayVerses (verse
   // granularity; word-level selection was removed, see Listen mode below).
@@ -293,6 +358,35 @@ function PracticeModalsInner({
   );
   const hasAnyAudio = playableIndices.length > 0;
   const currentSegment = playableSegments[currentVerseIndex] ?? null;
+
+  // ---- Bible page photos ------------------------------------------------
+  // Resolution is (CHAPTER, verse) -> photo, not verse -> photo. A Listen
+  // session launched from Home routinely spans several chapters, so this has to
+  // re-resolve against whichever chapter the current verse actually belongs to
+  // -- otherwise the page on screen quietly stops matching the audio.
+  const photoVerse = currentSegment?.verseObj ?? activePlayVerses[currentVerseIndex] ?? null;
+  const photoChapterKey = photoVerse ? chapterPhotoKey(photoVerse.book, photoVerse.chapter) : null;
+  const photosForCurrentChapter = useMemo(
+    () =>
+      photoChapterKey && chapterPhotos
+        ? sortChapterPhotos(chapterPhotos.filter((photo) => photo.chapterKey === photoChapterKey))
+        : [],
+    [chapterPhotos, photoChapterKey]
+  );
+  // The Display option appears when ANY chapter in the session has a photo, not
+  // only when the current one does. Otherwise a mixed queue hides the option for
+  // the whole session because one chapter in it happens to lack a page.
+  const sessionHasPhotos = useMemo(() => {
+    if (!chapterPhotos?.length) return false;
+    const keys = new Set(activePlayVerses.map((v) => chapterPhotoKey(v.book, v.chapter)));
+    return chapterPhotos.some((photo) => keys.has(photo.chapterKey));
+  }, [chapterPhotos, activePlayVerses]);
+
+  // Deleting the session's last photo elsewhere would otherwise strand the user
+  // on a Display mode whose option no longer exists in the dropdown.
+  useEffect(() => {
+    if (listenViewMode === 'photo' && !sessionHasPhotos) setListenViewMode('verses');
+  }, [listenViewMode, sessionHasPhotos]);
 
   // Real audio player for whichever recording covers the current verse.
   // Swapping to a different chapter's recording (or none) just means this
@@ -789,13 +883,6 @@ function PracticeModalsInner({
   const [buildSize, setBuildSize] = useState<BiteSize>('medium');
   const [buildDirection, setBuildDirection] = useState<BuildDirection>('forward');
 
-  // Debug aid for tuning speech recognition -- shows the exact raw transcript
-  // the speech engine produced (not just the graded/matched result), so it
-  // can be screenshotted alongside the grading colors. Off by default (a
-  // practice screen for daily use has no reason to show this); persists once
-  // turned on since a tuning session usually runs several takes in a row.
-  const [showRawTranscript, setShowRawTranscript] = useState(false);
-
   const [hiddenWordIndices, setHiddenWordIndices] = useState<Set<number>>(
     () => new Set(reciteWordObjects.map((_, i) => i))
   );
@@ -849,7 +936,6 @@ function PracticeModalsInner({
         if (saved.strikeLimit === 'unlimited' || typeof saved.strikeLimit === 'number') setStrikeLimit(saved.strikeLimit);
         if (saved.recallDisplayMode === 'passage' || saved.recallDisplayMode === 'memoryGrid') setRecallDisplayMode(saved.recallDisplayMode);
         if (saved.gridHideMode === 'firstLetter' || saved.gridHideMode === 'blank') setGridHideMode(saved.gridHideMode);
-        if (typeof saved.showRawTranscript === 'boolean') setShowRawTranscript(saved.showRawTranscript);
         if (saved.buildSize === 'short' || saved.buildSize === 'medium' || saved.buildSize === 'long') setBuildSize(saved.buildSize);
         if (saved.buildDirection === 'forward' || saved.buildDirection === 'backward') setBuildDirection(saved.buildDirection);
         const loadedLevel = saved.hintMode === 'firstLetter' ? saved.firstLetterLevel : saved.hideLevel;
@@ -870,12 +956,11 @@ function PracticeModalsInner({
         strikeLimit,
         recallDisplayMode,
         gridHideMode,
-        showRawTranscript,
         buildSize,
         buildDirection,
       })
     ).catch(() => {});
-  }, [hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode, gridHideMode, showRawTranscript, buildSize, buildDirection]);
+  }, [hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode, gridHideMode, buildSize, buildDirection]);
 
   // A chained review session (see advanceReviewSession in useAppState.ts)
   // swaps `verses` in place on the SAME mounted PracticeModals instance --
@@ -1363,8 +1448,9 @@ function PracticeModalsInner({
                   value={listenViewMode}
                   onChange={setListenViewMode}
                   options={[
-                    { id: 'verses', label: 'Verse List' },
-                    { id: 'memoryGrid', label: 'Memory Grid' },
+                    { id: 'verses' as const, label: 'Verse List' },
+                    { id: 'memoryGrid' as const, label: 'Memory Grid' },
+                    ...(sessionHasPhotos ? [{ id: 'photo' as const, label: 'Bible Photo' }] : []),
                   ]}
                   title="Display"
                   placeholder="View"
@@ -1413,6 +1499,10 @@ function PracticeModalsInner({
             {/* Verse Highlight Box — verse-by-verse, not word-by-word: the
                 only real timing data this app has is per verse. */}
             <View className="bg-neutral-50 border border-neutral-200 rounded-2xl flex-1 mb-3 overflow-hidden">
+              {/* Content area. The photo layer is absolute within THIS box
+                  rather than the panel, so it covers the two scroll views
+                  without also covering the footer bar below them. */}
+              <View className="flex-1">
               {listenViewMode === 'memoryGrid' ? (
                 <ScrollView className="flex-1 p-3" contentContainerStyle={{ paddingBottom: 12 }}>
                   <MemoryGrid
@@ -1470,6 +1560,32 @@ function PracticeModalsInner({
                 })}
               </ScrollView>
               )}
+
+              {/* PHOTO LAYER -- mounted for the whole session and hidden with
+                  opacity, never swapped in and out alongside the other two
+                  views. Conditionally mounting a large decoded bitmap inside
+                  this live modal is the exact shape of the iOS Fabric
+                  shadow-tree deadlock this project has already hit once. */}
+              {sessionHasPhotos && (
+                <View
+                  className="absolute inset-0 bg-neutral-50"
+                  style={{ opacity: listenViewMode === 'photo' ? 1 : 0 }}
+                  pointerEvents={listenViewMode === 'photo' ? 'auto' : 'none'}
+                >
+                  <ListenPhotoView
+                    photos={photosForCurrentChapter}
+                    chapterLabel={photoVerse ? `${photoVerse.book} ${photoVerse.chapter}` : ''}
+                    verse={photoVerse?.verse ?? null}
+                    photoCache={photoCache ?? EMPTY_PHOTO_CACHE}
+                    onCache={(photo) => onCacheChapterPhoto?.(photo)}
+                    onAddPhoto={() =>
+                      photoVerse && onAddChapterPhoto?.(photoVerse.book, photoVerse.chapter)
+                    }
+                    visible={listenViewMode === 'photo'}
+                  />
+                </View>
+              )}
+              </View>
 
               {/* Selection Mode Instructions overlay */}
               {playSource === 'selection' && (
@@ -1643,7 +1759,7 @@ function PracticeModalsInner({
                           </SpinView>
                           <AppText variant="body" className="font-sans font-extrabold text-red-900">Verse Restarting!</AppText>
                           <AppText variant="caption" className="text-red-700/85 font-medium px-4 text-center">
-                            You reached the strike limit. Let's try this verse again from the beginning!
+                            That's {strikeLimit} mistakes on this verse. Let's take it again from the beginning!
                           </AppText>
                         </View>
                       </FadeInView>
@@ -1792,17 +1908,10 @@ function PracticeModalsInner({
                       <View className="flex-row justify-between items-center px-1">
                         <View className="flex-row items-center gap-2">
                           {strikeLimit !== 'unlimited' && (
-                            <AppText variant="caption" className="text-red-500 font-medium">Verse errors: {verseStrikes}/{strikeLimit}</AppText>
+                            <AppText variant="caption" className="text-red-500 font-medium">{verseStrikes} of {strikeLimit} mistakes</AppText>
                           )}
                         </View>
-                        <View className="flex-row items-center gap-2">
-                          <AppText variant="caption" className="text-neutral-400 font-bold">{recitePointer} of {reciteWordObjects.length} words</AppText>
-                          {speechAvailable && (
-                            <Pressable hitSlop={8} onPress={() => setShowRawTranscript((v) => !v)}>
-                              {showRawTranscript ? <Eye size={12} color="#6366f1" /> : <EyeOff size={12} color="#c7c7c7" />}
-                            </Pressable>
-                          )}
-                        </View>
+                        <AppText variant="caption" className="text-neutral-400 font-bold">{recitePointer} of {reciteWordObjects.length} words</AppText>
                       </View>
 
                       <View className="flex-row items-center gap-2">
@@ -1821,28 +1930,21 @@ function PracticeModalsInner({
                           <WaveBars active count={16} />
                         </View>
                       )}
-                      {/* Raw transcript debug view -- exactly what the speech
-                          engine produced, before any grading/matching. Stays
-                          visible after stopping (doesn't clear until a new
-                          attempt) so a finished take can be screenshotted. */}
-                      {showRawTranscript && speakTranscript !== '' && (
-                        <View className="bg-indigo-50 border border-indigo-100 rounded-lg p-2 gap-0.5">
-                          <AppText variant="micro" className="font-sans font-extrabold text-indigo-400 uppercase tracking-wider">Raw Transcript</AppText>
-                          <AppText variant="caption" className="font-mono text-indigo-900 leading-snug">{speakTranscript}</AppText>
-                        </View>
-                      )}
                     </View>
                   </View>
 
-                  {/* Accuracy Settings Bar */}
-                  <View className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-1.5">
-                    <View className="flex-row justify-between items-center px-1">
-                      <AppText variant="micro" className="font-sans font-extrabold text-neutral-400 tracking-wider uppercase">Strike Reset Limit (Accuracy Assist)</AppText>
-                      <AppText variant="micro" className="font-mono font-bold text-neutral-500">
-                        {strikeLimit === 'unlimited' ? 'No Reset' : `${strikeLimit} Max Strikes`}
-                      </AppText>
-                    </View>
-                    <DiscreteSlider
+                  {/* How many wrong words before the verse starts over. Named
+                      for what it does rather than "Strike Reset Limit
+                      (Accuracy Assist)", which described the mechanism twice
+                      and the effect never. Chips, not a slider: four stops is
+                      too few to be worth dragging for, and every stop is
+                      already one tap away. */}
+                  <DrillSetting
+                    storageKey="recall.restart"
+                    label="Restart verse after"
+                    value={strikeLimit === 'unlimited' ? 'Never' : `${strikeLimit} mistakes`}
+                  >
+                    <ChipRow
                       value={strikeLimit === 'unlimited' ? 'unlimited' : strikeLimit}
                       onChange={(id) => {
                         const limit = id === 'unlimited' ? 'unlimited' : Number(id);
@@ -1851,10 +1953,13 @@ function PracticeModalsInner({
                       }}
                       options={[3, 5, 10, 'unlimited'].map((limit) => ({
                         id: limit as number | 'unlimited',
-                        label: limit === 'unlimited' ? 'Off' : `${limit} errors`,
+                        label: limit === 'unlimited' ? 'Never' : `${limit}`,
                       }))}
                     />
-                  </View>
+                    <AppText variant="micro" className="text-neutral-400 font-sans leading-[15px]">
+                      Miss this many words in one verse and it starts over from the top.
+                    </AppText>
+                  </DrillSetting>
 
                   {/* How many words get hidden this attempt -- changing it or
                       resetting always re-rolls a fresh random subset.
@@ -1864,17 +1969,18 @@ function PracticeModalsInner({
                       %-hidden has no meaning against the grid, which is
                       always first-letter (or now, always blank). */}
                   {recallDisplayMode === 'passage' && (
-                    <View className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-1.5">
-                      <View className="flex-row justify-between items-center px-1">
-                        <AppText variant="micro" className="font-sans font-extrabold text-neutral-400 tracking-wider uppercase">
-                          {hintMode === 'firstLetter' ? 'First Letter Hints' : 'Words Hidden'}
-                        </AppText>
-                        <AppText variant="micro" className={`font-mono font-bold ${hintMode === 'firstLetter' ? 'text-sky-600' : 'text-neutral-500'}`}>
-                          {activeLevel}% hidden
-                          {hintMode === 'percent' && activeLevel < 100 ? ' -- practice only' : ''}
-                          {hintMode === 'firstLetter' ? ' -- review, not mastery' : ''}
-                        </AppText>
-                      </View>
+                    <DrillSetting
+                      storageKey="recall.hiding"
+                      label="Words hidden"
+                      valueClassName={hintMode === 'firstLetter' ? 'text-sky-600' : 'text-neutral-500'}
+                      value={
+                        hintMode === 'firstLetter'
+                          ? 'First letter · review only'
+                          : activeLevel === 100
+                            ? 'Blind'
+                            : `${activeLevel}% · practice only`
+                      }
+                    >
                       <View className="flex-row bg-neutral-200/70 p-0.5 rounded-lg">
                         <AppButton size="sm" onPress={() => switchHintMode('percent')} className={`flex-1 rounded-md items-center ${hintMode === 'percent' ? 'bg-white' : ''}`}>
                           <AppText variant="micro" className={`font-sans font-extrabold ${hintMode === 'percent' ? 'text-neutral-900' : 'text-neutral-500'}`}>
@@ -1888,7 +1994,7 @@ function PracticeModalsInner({
                         </AppButton>
                       </View>
                       {hintMode === 'percent' && (
-                        <DiscreteSlider
+                        <ChipRow
                           value={activeLevel}
                           onChange={(level) => {
                             setActiveLevel(level);
@@ -1898,17 +2004,19 @@ function PracticeModalsInner({
                           options={[0, 25, 50, 75, 100].map((level) => ({ id: level, label: level === 100 ? 'Blind' : `${level}%` }))}
                         />
                       )}
-                    </View>
+                    </DrillSetting>
                   )}
 
                   {/* Memory Grid's own hide setting -- no slider, since the
                       grid is either showing first letters or not; there's no
                       in-between percentage to speak of. */}
                   {recallDisplayMode === 'memoryGrid' && (
-                    <View className="mt-2.5 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 gap-1.5">
-                      <AppText variant="micro" className="font-sans font-extrabold text-neutral-400 tracking-wider uppercase px-1">
-                        Memory Grid Display
-                      </AppText>
+                    <DrillSetting
+                      storageKey="recall.grid"
+                      label="Grid shows"
+                      valueClassName={gridHideMode === 'blank' ? 'text-sky-600' : 'text-neutral-500'}
+                      value={gridHideMode === 'blank' ? 'Nothing' : 'First letters'}
+                    >
                       <View className="flex-row bg-neutral-200/70 p-0.5 rounded-lg">
                         <AppButton size="sm" onPress={() => setGridHideMode('firstLetter')} className={`flex-1 rounded-md items-center ${gridHideMode === 'firstLetter' ? 'bg-white' : ''}`}>
                           <AppText variant="micro" className={`font-sans font-extrabold ${gridHideMode === 'firstLetter' ? 'text-neutral-900' : 'text-neutral-500'}`}>
@@ -1921,7 +2029,7 @@ function PracticeModalsInner({
                           </AppText>
                         </AppButton>
                       </View>
-                    </View>
+                    </DrillSetting>
                   )}
 
                   {/* Options */}
@@ -2587,7 +2695,11 @@ function PracticeModalsInner({
                           </AppText>
                         </View>
                       ) : (
-                        <View className="flex-row items-center justify-between bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
+                        // Label ABOVE the chips -- ChipRow's default chips are
+                        // flex-1, so next to a label in a justify-between row
+                        // they size against the leftovers and squash to
+                        // slivers (same fix as the Build-up settings).
+                        <View className="bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 gap-1">
                           <AppText variant="caption" className="font-sans font-bold text-neutral-600">Swaps per verse</AppText>
                           <ChipRow
                             options={[

@@ -1,10 +1,10 @@
-import { Bell, MessageCircle, Pause, Play, Settings as SettingsIcon, X } from 'lucide-react-native';
+import React from 'react';
+import { Bell, ChevronRight, Settings as SettingsIcon, X } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
 import { AppState } from '../state/useAppState';
-import { recordingLabel } from '../lib/recordingLabel';
-import { AppButton, AppText, useScaledSpace } from '../components/design';
+import { AppText, useFontScale, useScaledSpace } from '../components/design';
 
 export default function ProfileScreen({ state }: { state: AppState }) {
   const {
@@ -12,7 +12,6 @@ export default function ProfileScreen({ state }: { state: AppState }) {
     triggerToast,
     memoryQueue,
     learningCount,
-    activityLast15Days,
     memoryStreak,
     viewMemberProfileById,
     myCircles,
@@ -20,19 +19,13 @@ export default function ProfileScreen({ state }: { state: AppState }) {
     incomingFriendRequests,
     openCircle,
     setCurrentTab,
-    userRecordings,
-    playingRecordingId,
-    setPlayingRecordingId,
-    playingRecProgress,
-    setPlayingRecProgress,
-    setSelectedRecording,
     navigateTo,
-    signOut,
     receivedAccountabilityNudges,
     markAccountabilityNudgeRead,
     dismissAccountabilityNudge,
   } = state;
 
+  const scale = useFontScale();
   const space = useScaledSpace();
 
   // "Memorized" here means verses learned -- graduated out of the initial
@@ -42,118 +35,84 @@ export default function ProfileScreen({ state }: { state: AppState }) {
     (item) => item.status === 'reviewing' || item.status === 'retained'
   ).length;
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      triggerToast('Signed out from Cloud backup.');
-    } catch (error) {
-      console.error('Sign out error:', error);
-    }
-  };
+  const stats = [
+    { label: 'Memorized', value: versesLearnedCount, tone: 'text-[#1A1A1A]' },
+    { label: 'Learning', value: learningCount, tone: 'text-amber-600' },
+    // One word each. "Day streak" was the only two-word label and it wrapped
+    // at 1.5x, which pushed its number off the baseline the other two shared.
+    { label: 'Streak', value: memoryStreak, tone: 'text-emerald-600' },
+  ];
 
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
-        {/* Header row */}
+        {/* Header row. One control: Settings. Sign Out lives in Settings and
+            nowhere else (it's a once-a-year action that was sitting in the
+            same visual weight class as everything you actually do here), and
+            Messages moved to Community, where the people are. */}
         <View className="flex-row items-center justify-between pb-3 border-b border-[#E5E5E5]">
-          <View className="flex-row items-center gap-3">
+          <View className="flex-row items-center gap-3 flex-1 pr-2">
             <AvatarCircle photoUri={user?.photoURL} name={user?.displayName || 'Friend'} size={48} />
-            <View>
-              <AppText variant="title" className="font-serif font-bold text-[#1A1A1A] leading-tight">
-                {user?.displayName || 'Friend'}
-              </AppText>
-              {/* A sync status line, not a subtitle -- it was competing with
-                  the name at only one step smaller. */}
-              <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">Progress synced to your account</AppText>
-            </View>
+            {/* Name alone. The line under it said "Progress synced to your
+                account" -- a reassurance nobody asked for, printed under every
+                visit forever. */}
+            <AppText variant="title" className="font-serif font-bold text-[#1A1A1A] leading-tight flex-1">
+              {user?.displayName || 'Friend'}
+            </AppText>
           </View>
 
-          <View className="flex-row items-center gap-2">
-            <Pressable
-              onPress={() => navigateTo('messages')}
-              className="w-8 h-8 items-center justify-center border border-neutral-200 rounded-lg bg-white"
-            >
-              <MessageCircle size={14} color="#404040" />
-            </Pressable>
-            <Pressable
-              onPress={() => navigateTo('settings')}
-              className="w-8 h-8 items-center justify-center border border-neutral-200 rounded-lg bg-white"
-            >
-              <SettingsIcon size={14} color="#404040" />
-            </Pressable>
-            <Pressable
-              onPress={handleSignOut}
-              className="px-2.5 py-1.5 border border-red-200 bg-red-50/50 rounded-lg"
-            >
-              <AppText variant="micro" className="text-red-600 font-sans font-bold uppercase tracking-wide">Sign Out</AppText>
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => navigateTo('settings')}
+            hitSlop={8}
+            className="w-8 h-8 items-center justify-center border border-neutral-200 rounded-lg bg-white shrink-0"
+          >
+            <SettingsIcon size={14} color="#404040" />
+          </Pressable>
         </View>
 
-        {/* Calculated Metrics cards (High Contrast) */}
-        <View className="flex-row gap-2.5">
-          <View className="flex-1 bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-2.5 items-center gap-0.5">
-            <AppText variant="body" className="font-bold text-[#1A1A1A] font-mono">{versesLearnedCount}</AppText>
-            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">memorized</AppText>
+        {/* MY PROGRESS — the three headline numbers and the way into the full
+            breakdown, as ONE object. It was three separate bordered tiles with
+            a big black button underneath repeating the same intent; the tiles
+            now sit in a single card whose footer IS the button, and the whole
+            card is tappable. */}
+        <Pressable
+          onPress={() => navigateTo('dashboard')}
+          accessibilityRole="button"
+          accessibilityLabel="View my full progress"
+          className="border border-[#E5E5E5] rounded-2xl bg-white overflow-hidden"
+        >
+          <View className="flex-row items-stretch" style={{ paddingVertical: space(14) }}>
+            {stats.map((stat, index) => (
+              <React.Fragment key={stat.label}>
+                {index > 0 && <View className="w-px bg-[#E5E5E5]" style={{ marginVertical: space(2) }} />}
+                {/* Top-aligned, not centred: a label that wraps should grow
+                    downward, never nudge its number off the line the other
+                    two numbers sit on. */}
+                <View className="flex-1 items-center justify-start px-1" style={{ gap: space(3) }}>
+                  <AppText variant="display" className={`font-mono font-black ${stat.tone}`}>
+                    {stat.value}
+                  </AppText>
+                  <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-neutral-400 text-center">
+                    {stat.label}
+                  </AppText>
+                </View>
+              </React.Fragment>
+            ))}
           </View>
 
-          <View className="flex-1 bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-2.5 items-center gap-0.5">
-            <AppText variant="body" className="font-bold text-amber-600 font-mono">{learningCount}</AppText>
-            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">learning</AppText>
-          </View>
-
-          <View className="flex-1 bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-2.5 items-center gap-0.5">
-            <AppText variant="body" className="font-bold text-emerald-600 font-mono">{memoryStreak}</AppText>
-            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">memory streak</AppText>
-          </View>
-        </View>
-
-        <AppButton size="md" onPress={() => navigateTo('dashboard')} className="w-full bg-[#1A1A1A] rounded-xl items-center justify-center">
-          <AppText variant="label" className="text-white font-sans font-bold ">View Full Dashboard 📊</AppText>
-        </AppButton>
-
-        {/* GitHub-style visual memory grid representation */}
-        <View className="gap-1.5">
-          <View className="flex-row items-center justify-between px-1">
-            <View className="flex-row items-center">
-              <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
-                PAST 15 DAYS ACTIVITY
-              </AppText>
-              <HelpTooltip text="One square per day. A square fills in on days you banked a mastery touch on a verse you're learning — darker green means more touches that day. Spaced reviews aren't counted here." />
-            </View>
-            <Pressable onPress={() => navigateTo('fullHistory')}>
-              <AppText variant="micro" className="font-sans font-bold underline text-neutral-500">View Full History</AppText>
-            </Pressable>
-          </View>
-          {/* One row of 15 plain squares.
-              This was 15 labelled boxes wrapping onto three rows, each box
-              carrying a day number AND a count -- 30 pieces of text for a
-              control whose entire job is "which days did I show up". A
-              contribution grid communicates through colour; labelling every
-              cell is what made it read as clutter rather than as a glance.
-              The dates that bound the range are stated once, underneath. */}
-          <View className="border border-[#E5E5E5] rounded-xl px-2.5 py-2 bg-white gap-1">
-            <View className="flex-row gap-1">
-              {activityLast15Days.map((item, index) => (
-                <View
-                  key={index}
-                  style={{ height: space(14) }}
-                  className={`flex-1 rounded-sm border ${
-                    item.count === 0
-                      ? 'bg-[#F3F2F1] border-[#E5E5E5]'
-                      : item.count > 6
-                        ? 'bg-emerald-600 border-emerald-700'
-                        : 'bg-emerald-300 border-emerald-400'
-                  }`}
-                />
-              ))}
-            </View>
-            <View className="flex-row justify-between">
-              <AppText variant="micro" className="font-sans text-neutral-400">{activityLast15Days[0]?.day}</AppText>
-              <AppText variant="micro" className="font-sans text-neutral-400">Today</AppText>
+          <View
+            className="flex-row items-center justify-between border-t border-[#E5E5E5] bg-[#FBF9F6]"
+            style={{ paddingHorizontal: space(12), paddingVertical: space(10), gap: space(8) }}
+          >
+            <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-neutral-500 flex-1">
+              My Progress
+            </AppText>
+            <View className="flex-row items-center shrink-0" style={{ gap: space(3) }}>
+              <AppText variant="micro" className="font-sans font-bold text-[#1A1A1A]">See details</AppText>
+              <ChevronRight size={Math.round(13 * scale)} color="#1A1A1A" />
             </View>
           </View>
-        </View>
+        </Pressable>
 
         {/* NOTIFICATIONS — accountability nudges received from friends.
             Minimal v1: a flat recent list, tap to mark read, X to dismiss.
@@ -280,83 +239,10 @@ export default function ProfileScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
-        {/* LIST OF SAVED VOICE RECORDINGS */}
-        <View className="gap-2">
-          <View className="flex-row items-center px-1">
-            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
-              RECORDED CHAPTERS ({userRecordings.length})
-            </AppText>
-            <HelpTooltip text="Recitations you've recorded or imported. Tap one to play it back or adjust where each verse starts." />
-          </View>
-
-          <View style={{ maxHeight: 190 }}>
-            <ScrollView contentContainerStyle={{ gap: 8 }}>
-              {userRecordings.length === 0 ? (
-                <View className="items-center p-4 bg-[#F3F2F1]/55 rounded-xl border border-dashed border-[#E5E5E5]">
-                  <AppText variant="label" className="text-[#888]">No recorded chapters yet. Tap Record tab to make one!</AppText>
-                </View>
-              ) : (
-                userRecordings.map((rec) => {
-                  const isPlaying = playingRecordingId === rec.id;
-                  return (
-                    <Pressable
-                      key={rec.id}
-                      onPress={() => {
-                        setSelectedRecording(rec);
-                        navigateTo('recordingDetail');
-                      }}
-                      className="border border-[#E5E5E5] rounded-xl p-3 bg-white gap-2"
-                    >
-                      <View className="flex-row items-center justify-between">
-                        <View className="flex-1 pr-2">
-                          <View className="flex-row items-center gap-1.5">
-                            <AppText variant="label" className="font-black text-[#1A1A1A] leading-tight">
-                              {recordingLabel(rec)}
-                            </AppText>
-                            <AppText variant="micro" className="bg-neutral-100 text-neutral-600 font-sans border border-neutral-200 px-1.5 py-0.5 rounded font-normal uppercase">
-                              View Sync
-                            </AppText>
-                          </View>
-                          <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">
-                            {rec.date} • {rec.translation} • {rec.duration} seconds
-                          </AppText>
-                        </View>
-                        <Pressable
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            if (isPlaying) {
-                              setPlayingRecordingId(null);
-                            } else {
-                              setPlayingRecordingId(rec.id);
-                              setPlayingRecProgress(0);
-                              triggerToast(`Playing ${rec.book} ${rec.chapter}...`);
-                            }
-                          }}
-                          className={`w-7 h-7 rounded-full items-center justify-center shrink-0 ${
-                            isPlaying ? 'bg-[#1A1A1A]' : 'border border-[#1A1A1A]'
-                          }`}
-                        >
-                          {isPlaying ? (
-                            <Pause size={12} color="#FFFFFF" />
-                          ) : (
-                            <Play size={12} color="#1A1A1A" style={{ marginLeft: 2 }} />
-                          )}
-                        </Pressable>
-                      </View>
-
-                      {/* Playback bar indicator */}
-                      {isPlaying && (
-                        <View className="w-full bg-neutral-100 h-1.5 rounded-full overflow-hidden">
-                          <View className="bg-[#1A1A1A] h-full" style={{ width: `${playingRecProgress}%` }} />
-                        </View>
-                      )}
-                    </Pressable>
-                  );
-                })
-              )}
-            </ScrollView>
-          </View>
-        </View>
+        {/* RECORDED CHAPTERS used to sit here, duplicating the "Prior
+            Recordings" list that already lives on the Record tab -- right
+            where you make them, and where you'd look for them. One list, one
+            home. */}
       </ScrollView>
     </FadeInView>
   );

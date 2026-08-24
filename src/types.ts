@@ -475,3 +475,41 @@ export interface UserProfile {
   // in useAppState.ts.
   accountabilityDailyCap?: number;
 }
+
+/**
+ * A photo of the physical Bible page(s) a chapter lives on — a visual anchor
+ * for the text being memorized.
+ *
+ * Private to the owner, always. Unlike Recording there is deliberately no
+ * shared/denormalized counterpart: a page photo reproduces a copyrighted
+ * translation and routinely carries handwriting, marginalia, and family
+ * register names, so the sharing path is absent rather than merely switched
+ * off. See the chapterPhotos blocks in firestore.rules and storage.rules.
+ */
+export interface ChapterPhoto {
+  id: string;
+  /** `${book}_${chapter}` — the same key ChapterLandingScreen already builds. */
+  chapterKey: string;
+  /** Position within this chapter's gallery, ascending. */
+  order: number;
+  /**
+   * Which verses this page covers. Both undefined == untagged, which reads as
+   * "the whole chapter" and makes the photo sit out Listen's auto-flip rather
+   * than fight it. Tagging is optional on purpose — forcing a range picker on
+   * every add turns a five-second action into a chore.
+   */
+  verseStart?: number;
+  verseEnd?: number;
+  storagePath: string;
+  thumbPath: string;
+  url: string;
+  thumbUrl: string;
+  /**
+   * Dimensions of the STORED (post-downscale) image, not the camera original.
+   * Persisted so a thumbnail strip or the Listen panel can reserve the right
+   * box before the bytes arrive — without them every photo pops the layout as
+   * it decodes, which in Listen happens mid-session.
+   */
+  width: number;
+  height: number;
+}

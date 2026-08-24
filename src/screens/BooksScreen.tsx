@@ -18,9 +18,7 @@ export default function BooksScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
-          {state.onboardingStepInProgress === null && (
-            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white" />
-          )}
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white" />
           <View>
             <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Select Book</AppText>
           </View>

@@ -39,9 +39,7 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
         {/* Header with back */}
         <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          {state.onboardingStepInProgress === null && (
-            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={() => setCommunitySubView('home')} className="rounded-full border border-neutral-200 bg-white" />
-          )}
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={() => setCommunitySubView('home')} className="rounded-full border border-neutral-200 bg-white" />
           <View>
             <AppText variant="title" className="font-serif font-black text-neutral-900 leading-none mt-1">
               Find a Community

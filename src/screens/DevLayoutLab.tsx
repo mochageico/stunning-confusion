@@ -279,7 +279,6 @@ function useMockPlanState() {
     setCustomPlanName: set('customPlanName'),
     isEditingBuiltInPlan: false,
     navigateTo: noop,
-    onboardingStepInProgress: null,
     handleBack: noop,
     handleSavePlan: noop,
     triggerToast: noop,

@@ -43,3 +43,6 @@ yarn-error.*
 
 # Claude Code local session state (not project-relevant)
 .claude/scheduled_tasks.lock
+
+# Editor settings (machine-local, not project-relevant)
+.vscode/

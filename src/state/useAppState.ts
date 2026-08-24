@@ -7,6 +7,7 @@ import {
   arrayUnion,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -35,6 +36,23 @@ import {
   removeCachedAudio,
   setCacheCapBytes,
 } from '../lib/audioCache';
+import type { PhotoCacheMap } from '../lib/photoCache';
+import {
+  cachePhoto,
+  clearPhotoCache,
+  emptyPhotoCacheMap,
+  initPhotoCache,
+  releasePhotoCache,
+  removeCachedPhotos,
+} from '../lib/photoCache';
+import {
+  chapterPhotoKey,
+  chapterPhotoPaths,
+  MAX_PHOTOS_PER_CHAPTER,
+  pickChapterPhoto,
+  sortChapterPhotos,
+  type PhotoSource,
+} from '../lib/chapterPhotos';
 import {
   deleteUser,
   EmailAuthProvider,
@@ -71,6 +89,7 @@ import {
   ActivityEvent,
   ChatMessage,
   Challenge,
+  ChapterPhoto,
   Circle,
   CircleMember,
   DMThread,
@@ -739,6 +758,208 @@ export function useAppState() {
     };
   }, [user?.uid]);
 
+  // ---------------------------------------------------------------------
+  // Bible page photos
+  // ---------------------------------------------------------------------
+  // Photos of the user's own physical Bible, attached to a chapter and used as
+  // a visual anchor. Private to the owner with no sharing path anywhere -- see
+  // the chapterPhotos blocks in firestore.rules / storage.rules for why.
+  const [chapterPhotos, setChapterPhotos] = useState<ChapterPhoto[]>([]);
+  const [photoCache, setPhotoCache] = useState<PhotoCacheMap>(emptyPhotoCacheMap);
+
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) {
+      releasePhotoCache();
+      setPhotoCache(emptyPhotoCacheMap());
+      setChapterPhotos([]);
+      return;
+    }
+    let cancelled = false;
+    initPhotoCache(uid)
+      .then((map) => {
+        if (!cancelled) setPhotoCache(map);
+      })
+      .catch((err) => console.error('Failed to load photo cache:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
+
+  const photosForChapter = (book: string, chapter: number): ChapterPhoto[] =>
+    sortChapterPhotos(
+      chapterPhotos.filter((photo) => photo.chapterKey === chapterPhotoKey(book, chapter))
+    );
+
+  /** Pulls a photo onto disk so it survives going offline mid-session. */
+  const cacheChapterPhoto = async (photo: ChapterPhoto) => {
+    const next = await cachePhoto(photo.storagePath, photo.url);
+    if (next) setPhotoCache(next);
+  };
+
+  const uploadPhotoFile = async (path: string, localUri: string): Promise<string> => {
+    const fileRef = storageRef(storage, path);
+    // Same wire-protocol constraint as recordings: uploads MUST go through
+    // uploadBytesResumable and through the patched `storage` instance from
+    // firebase.ts, or @firebase/storage takes its one-shot multipart path and
+    // RN's Blob constructor rejects the ArrayBuffer body. See the
+    // _shouldDoResumable patch there for the full story.
+    const response = await fetch(localUri);
+    const arrayBuffer = await response.arrayBuffer();
+    await uploadBytesResumable(fileRef, arrayBuffer, { contentType: 'image/jpeg' });
+    return getDownloadURL(fileRef);
+  };
+
+  const addChapterPhoto = async (
+    book: string,
+    chapter: number,
+    source: PhotoSource
+  ): Promise<boolean> => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return false;
+
+    const existing = photosForChapter(book, chapter);
+    if (existing.length >= MAX_PHOTOS_PER_CHAPTER) {
+      triggerToast(`Up to ${MAX_PHOTOS_PER_CHAPTER} photos per chapter.`);
+      return false;
+    }
+
+    let prepared;
+    try {
+      const picked = await pickChapterPhoto(source);
+      if (picked.status === 'cancelled') return false;
+      if (picked.status === 'denied') {
+        triggerToast(
+          source === 'camera'
+            ? 'Camera access is turned off for Scripture Memory.'
+            : 'Photo access is turned off for Scripture Memory.'
+        );
+        return false;
+      }
+      prepared = picked.photo;
+    } catch (err) {
+      console.error('Failed to prepare chapter photo:', err);
+      triggerToast('Could not read that photo.');
+      return false;
+    }
+
+    const id = `photo_${Date.now()}`;
+    const { storagePath, thumbPath } = chapterPhotoPaths(uid, id);
+
+    try {
+      // BLOBS FIRST, THEN THE DOC -- the opposite order to persistRecording,
+      // and for the opposite reason. Recordings write the doc first because
+      // uploading is what fires the processStudioAudio trigger, so there is a
+      // race to lose. Nothing watches this prefix, so the only real failure
+      // mode here is a gallery row pointing at bytes that never arrived. One
+      // doc write at the end publishes a photo that is already fully there.
+      const url = await uploadPhotoFile(storagePath, prepared.uri);
+      const thumbUrl = await uploadPhotoFile(thumbPath, prepared.thumbUri);
+
+      const photo: ChapterPhoto = {
+        id,
+        chapterKey: chapterPhotoKey(book, chapter),
+        order: existing.length ? Math.max(...existing.map((p) => p.order)) + 1 : 0,
+        storagePath,
+        thumbPath,
+        url,
+        thumbUrl,
+        width: prepared.width,
+        height: prepared.height,
+      };
+
+      await setDoc(
+        doc(db, 'users', uid, 'chapterPhotos', id),
+        stripUndefined({ ...photo, createdAt: serverTimestamp() })
+      );
+      setChapterPhotos((prev) => [...prev, photo]);
+      void cacheChapterPhoto(photo);
+      return true;
+    } catch (err) {
+      // Roll the blobs back. Without this a failed add leaves Storage objects
+      // that no document references, so nothing will ever delete them and they
+      // bill forever.
+      await Promise.all([
+        deleteObject(storageRef(storage, storagePath)).catch(() => {}),
+        deleteObject(storageRef(storage, thumbPath)).catch(() => {}),
+      ]);
+      handleFirestoreError(err, OperationType.CREATE, `users/${uid}/chapterPhotos/${id}`);
+      return false;
+    }
+  };
+
+  const deleteChapterPhoto = async (photo: ChapterPhoto) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    try {
+      await deleteDoc(doc(db, 'users', uid, 'chapterPhotos', photo.id));
+      // Two blobs per photo -- deleting only the full image silently leaks the
+      // thumbnail on every delete.
+      await Promise.all([
+        deleteObject(storageRef(storage, photo.storagePath)).catch((err) =>
+          console.error('Failed to delete photo file:', err)
+        ),
+        deleteObject(storageRef(storage, photo.thumbPath)).catch((err) =>
+          console.error('Failed to delete photo thumbnail:', err)
+        ),
+      ]);
+      // Third copy: on-device. Without this the local file outlives the photo
+      // entirely, invisible in the app and never reclaimed.
+      const nextCache = await removeCachedPhotos([photo.storagePath, photo.thumbPath]);
+      if (nextCache) setPhotoCache(nextCache);
+      setChapterPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `users/${uid}/chapterPhotos/${photo.id}`);
+    }
+  };
+
+  /** Pass null for verseStart to clear the tag and return the photo to untagged. */
+  const setChapterPhotoVerseRange = async (
+    photo: ChapterPhoto,
+    verseStart: number | null,
+    verseEnd: number | null
+  ) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const start = verseStart ?? undefined;
+    // A start with no end is a single verse; a reversed pair is a slip rather
+    // than an empty range, so it gets straightened instead of stored.
+    const end = start == null ? undefined : Math.max(start, verseEnd ?? start);
+    try {
+      await updateDoc(doc(db, 'users', uid, 'chapterPhotos', photo.id), {
+        verseStart: start ?? deleteField(),
+        verseEnd: end ?? deleteField(),
+      });
+      setChapterPhotos((prev) =>
+        prev.map((p) => (p.id === photo.id ? { ...p, verseStart: start, verseEnd: end } : p))
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/chapterPhotos/${photo.id}`);
+    }
+  };
+
+  const reorderChapterPhotos = async (orderedIds: string[]) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    // Optimistic: reordering is a drag gesture, and waiting on a round trip
+    // before the tiles settle reads as the drag having failed.
+    setChapterPhotos((prev) =>
+      prev.map((p) => {
+        const index = orderedIds.indexOf(p.id);
+        return index === -1 ? p : { ...p, order: index };
+      })
+    );
+    try {
+      const batch = writeBatch(db);
+      orderedIds.forEach((photoId, index) => {
+        batch.update(doc(db, 'users', uid, 'chapterPhotos', photoId), { order: index });
+      });
+      await batch.commit();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/chapterPhotos`);
+    }
+  };
+
   // Whether RecordingDetailScreen's verse-sync timeline is in edit mode.
   // The draft marker positions themselves live as local component state in
   // that screen (derived fresh from selectedRecording.verseTimestamps each
@@ -835,35 +1056,38 @@ export function useAppState() {
   );
   const [typedRecordingName, setTypedRecordingName] = useState('');
 
-  // Profile-sharing visibility: whether this user's active memory plan and
-  // their memory queue are shown to friends on their member profile. Both
-  // default to 'private' (only you). When set to 'friends', a denormalized
-  // snapshot (sharedMemoryPlan / sharedMemoryQueue) is written onto the
-  // profiles/{uid} doc so friends can read it without access to this user's
-  // private memoryPlans/memoryQueue — kept fresh by the debounced profile
-  // sync effect below, and cleared back to null when flipped to 'private'.
-  const [memoryPlanVisibility, setMemoryPlanVisibility] = useState<'private' | 'friends'>('private');
+  // Profile-sharing visibility: whether this user's verse list is shown to
+  // friends on their member profile. Defaults to 'private' (only you). When
+  // set to 'friends', a denormalized snapshot (sharedMemoryQueue) is written
+  // onto the profiles/{uid} doc so friends can read it without access to this
+  // user's private memoryQueue — kept fresh by the debounced profile sync
+  // effect below, and cleared back to null when flipped to 'private'.
+  //
+  // There is deliberately no equivalent for Review Settings: sharing your
+  // retention method was removed outright (see the note above the group-plan
+  // handlers), so `memoryPlanVisibility` and its snapshot are gone.
   const [memoryQueueVisibility, setMemoryQueueVisibility] = useState<'private' | 'friends'>('private');
 
-  // First-run "Getting Started" checklist overlay -- shown automatically
-  // whenever the loaded/created profile's onboardingCompleted field isn't
-  // true (loadUserData sets this), and re-openable anytime from Settings.
+  // First-run SETUP overlay -- shown automatically whenever the loaded/created
+  // profile's onboardingCompleted field isn't true (loadUserData sets this),
+  // and re-openable anytime from Settings.
+  //
+  // This replaced a four-step "Getting Started" checklist that walked the user
+  // out to real screens one at a time, locking each step behind the previous
+  // one and swapping the tab bar for a "Back to Guide" bar so they couldn't
+  // wander off. Three things were wrong with it: it taught NAVIGATION rather
+  // than the idea (never once explaining what the app actually does), its
+  // first stop was the retention editor -- the single most jargon-dense screen
+  // in the app -- and it was a tour, so finishing it left the user with a
+  // still-empty app and nothing configured.
+  //
+  // The replacement asks three questions and ACTS on the answers, so a user
+  // who finishes it has verses queued and a schedule set. Nothing is locked
+  // and every card is skippable.
   const [showOnboarding, setShowOnboarding] = useState(false);
-  // Which step (0-3) the user is currently OUT doing in the real app, if
-  // any -- non-null means the checklist overlay is hidden, the bottom tab
-  // bar is replaced with a single "Back to Guide" bar (App.tsx), and a
-  // per-step instruction banner is shown, so a user mid-step can't wander
-  // off into unrelated parts of the app and get lost. Set by
-  // startOnboardingStep, cleared by returnToOnboardingGuide.
-  const [onboardingStepInProgress, setOnboardingStepInProgress] = useState<number | null>(null);
-  // Step 1 ("Your Memory Plan") is purely informational -- there's no real
-  // state to derive completion from the way the other 3 steps have real
-  // queue/touch/circle data. Session-local (not persisted): true once the
-  // user has actually stepped into it once via startOnboardingStep.
-  const [onboardingStep1Acknowledged, setOnboardingStep1Acknowledged] = useState(false);
-  // Guards the completion-nudge toast (below) from firing more than once
-  // per step per session.
-  const onboardingNudgedStepsRef = useRef<Set<number>>(new Set());
+  // The optional "Show me around" tour, reachable from Settings at any time.
+  // Deliberately separate from setup: setup configures, the tour explains.
+  const [showTour, setShowTour] = useState(false);
 
   // Real shared-recordings feed, seeded with illustrative sample entries
   // (other people's recordings, e.g. "Sarah Miller") until the real feed loads.
@@ -1126,11 +1350,9 @@ export function useAppState() {
   // View Interactive Other Profiles
   const [selectedUserProfile, setSelectedUserProfile] = useState<any | null>(null);
 
-  // Shared Community Plans States
-  const [sharedPlans, setSharedPlans] = useState<any[]>([]);
-  const [loadingSharedPlans, setLoadingSharedPlans] = useState(false);
-  const [customPlanName, setCustomPlanName] = useState('My Custom Plan');
-  const [shareWithCommunity, setShareWithCommunity] = useState(false);
+  // The name of the Review Settings currently open in the editor. Naming is
+  // what forks a built-in preset into your own copy -- see handleSavePlan.
+  const [customPlanName, setCustomPlanName] = useState('My Review Settings');
 
   // Multi-Plan States
   const [savedPlans, setSavedPlans] = useState<MemoryPlan[]>(DEFAULT_PLANS);
@@ -2850,11 +3072,9 @@ export function useAppState() {
         },
         communities: sharedCircleNames,
         // Friend-visible sharing (surfaced in MemberProfileScreen only when the
-        // viewer is actually a friend). Snapshots are null unless the owner set
-        // the matching visibility to 'friends' in Settings.
-        memoryPlanVisibility: data.memoryPlanVisibility === 'friends' ? 'friends' : 'private',
+        // viewer is actually a friend). The snapshot is null unless the owner
+        // set this visibility to 'friends' in Settings.
         memoryQueueVisibility: data.memoryQueueVisibility === 'friends' ? 'friends' : 'private',
-        sharedMemoryPlan: data.sharedMemoryPlan || null,
         sharedMemoryQueue: data.sharedMemoryQueue || null,
       });
       navigateTo('memberProfile');
@@ -2865,118 +3085,20 @@ export function useAppState() {
   };
 
   // ==========================================
-  // SHARED / GROUP MEMORY PLAN HANDLERS
+  // GROUP PLAN HANDLERS
   // ==========================================
-  const loadSharedPlans = async () => {
-    setLoadingSharedPlans(true);
-    try {
-      const q = query(collection(db, 'sharedPlans'), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const plans: any[] = [];
-      querySnapshot.forEach((docSnap) => {
-        plans.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setSharedPlans(plans);
-    } catch (err) {
-      console.error('Error loading shared plans:', err);
-      setSharedPlans([]);
-      triggerToast("Couldn't load community pacing plans right now.");
-    } finally {
-      setLoadingSharedPlans(false);
-    }
-  };
-
-  const joinSharedPlan = async (plan: any) => {
-    try {
-      // Normalize the loosely-typed shared-plan doc into a full MemoryPlan
-      // once, then reuse it for both the designer sync and the Firestore
-      // write, so defaults can't drift between the two.
-      const adopted: MemoryPlan = {
-        ...normalizeAdoptedPlan(plan),
-        id: 'shared-' + (plan.id || Date.now()),
-        name: plan.name || 'Custom Plan',
-      };
-      syncDesignerFromPlan(adopted);
-
-      if (auth.currentUser) {
-        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        // merge: true — this doc also holds savedPlans and activeGroupPlanId;
-        // a plain setDoc here silently erased both of them.
-        await setDoc(
-          planRef,
-          {
-            ...planTopLevelFields(adopted),
-            updatedAt: new Date(),
-          },
-          { merge: true }
-        );
-
-        if (plan.id && !plan.id.startsWith('mock-')) {
-          try {
-            const planDocRef = doc(db, 'sharedPlans', plan.id);
-            await setDoc(
-              planDocRef,
-              {
-                ...plan,
-                downloadsCount: (plan.downloadsCount || 0) + 1,
-              },
-              { merge: true }
-            );
-          } catch (e) {
-            console.warn('Could not update downloads count:', e);
-          }
-        }
-      }
-
-      triggerToast(`Successfully joined "${plan.name}"! 🎯`);
-      loadSharedPlans();
-    } catch (err) {
-      console.error('Error joining shared plan:', err);
-      triggerToast('Failed to join this memory plan.');
-    }
-  };
-
-  // Adopt a friend's shared memory plan (from their member profile) as one of
-  // your own saved plans and make it active. Same adoption shape as
-  // joinSharedPlan, but sourced from a profile's sharedMemoryPlan snapshot --
-  // no community sharedPlans collection involved, so nothing to increment or
-  // reload here.
-  const saveFriendMemoryPlan = async (plan: any, fromName?: string) => {
-    if (!plan) {
-      triggerToast('This plan is no longer available.');
-      return;
-    }
-    try {
-      const adopted: MemoryPlan = {
-        ...normalizeAdoptedPlan(plan),
-        id: 'friend-' + Date.now(),
-        name: plan.name || `${fromName ? fromName + "'s" : 'Saved'} Plan`,
-      };
-      syncDesignerFromPlan(adopted);
-
-      // Add to savedPlans (deactivating the others), mirroring publishSharedPlan.
-      const updatedPlans = [...savedPlans.map((p) => ({ ...p, isActive: false })), adopted];
-      setSavedPlans(updatedPlans);
-
-      if (auth.currentUser) {
-        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(
-          planRef,
-          {
-            savedPlans: updatedPlans,
-            ...planTopLevelFields(adopted),
-            updatedAt: new Date(),
-          },
-          { merge: true }
-        );
-      }
-
-      triggerToast(`Saved "${adopted.name}" to your plans! 🎯`);
-    } catch (err) {
-      console.error('Error saving friend memory plan:', err);
-      triggerToast('Failed to save this memory plan.');
-    }
-  };
+  // Review Settings are deliberately NOT shareable. There used to be two ways
+  // to hand your retention method to someone else -- a public `sharedPlans`
+  // collection (browse/join/publish) and a friends-only snapshot on your
+  // profile -- and both were removed on purpose: a set of phase lengths and
+  // miss rules is a personal calibration, not content worth a distribution
+  // system, and every surface it touched (Community browse, profile
+  // visibility settings, adoption toasts) cost a new user more confusion than
+  // the feature was ever worth. Anyone who wants to compare notes with a
+  // friend can screenshot the screen.
+  //
+  // GroupPlan (below) is a different thing entirely and stays: it's a circle's
+  // curated LIST OF VERSES plus a target pace, not a retention method.
 
   // Fetches real verse text for whichever of `verseIds` aren't already in
   // the member's own queue and appends them as 'queued', tagged to this
@@ -3382,91 +3504,10 @@ export function useAppState() {
   // plan/rhythm split removes -- rhythm now commits live via updateRhythm and
   // targets the user, so there is nothing to "save to a plan" any more.
 
-  const publishSharedPlan = async () => {
-    if (!customPlanName.trim()) {
-      triggerToast('Please provide a name for your custom plan.');
-      return;
-    }
-    try {
-      // Retention method only. Publishing used to ship the author's learning
-      // days, pace and review cap along with it, so adopting a plan silently
-      // rewrote the adopter's whole schedule -- someone else's Tuesday
-      // availability is not part of their memorization method.
-      const sharedRetentionFields = {
-        retentionRigor,
-        dailyPhaseWeeks,
-        weeklyPhaseMonths,
-        monthlyPhaseYears,
-        masteryTouches,
-        reviewsRequired,
-        missPolicy,
-        missPolicyAskEveryTime,
-        graceCount,
-        refresherDailyDays,
-        refresherWeeklyWeeks,
-      };
-
-      const planPayload = {
-        name: customPlanName,
-        ...sharedRetentionFields,
-        creatorName: user?.displayName || 'Anonymous Disciple',
-        creatorId: user?.uid || 'anonymous',
-        createdAt: new Date().toISOString(),
-        downloadsCount: 0,
-      };
-
-      if (auth.currentUser) {
-        const sharedColRef = collection(db, 'sharedPlans');
-        await addDoc(sharedColRef, planPayload);
-
-        // Also save/update inside savedPlans array!
-        let updatedPlans = [...savedPlans];
-        const publishTarget = savedPlans.find((p) => p.id === editingPlanId);
-        if (publishTarget && !publishTarget.isBuiltIn) {
-          updatedPlans = updatedPlans.map((p) =>
-            p.id === editingPlanId
-              ? { ...p, name: customPlanName, ...sharedRetentionFields, updatedAt: new Date().toISOString() }
-              : p
-          );
-        } else {
-          const newPlan: MemoryPlan = {
-            id: 'plan-' + Date.now(),
-            name: customPlanName,
-            ...sharedRetentionFields,
-            isActive: true,
-            updatedAt: new Date().toISOString(),
-          };
-          updatedPlans = updatedPlans.map((p) => ({ ...p, isActive: false }));
-          updatedPlans.push(newPlan);
-        }
-
-        const activePlan = updatedPlans.find((p) => p.isActive) || updatedPlans[0];
-        setSavedPlans(updatedPlans);
-        setEditingPlanId(null);
-
-        const planRef = doc(db, 'memoryPlans', auth.currentUser.uid);
-        await setDoc(
-          planRef,
-          {
-            savedPlans: updatedPlans,
-            ...planTopLevelFields(activePlan),
-            updatedAt: new Date(),
-          },
-          { merge: true }
-        );
-
-        triggerToast(`"${customPlanName}" published to Scripture Circles! 🚀`);
-      } else {
-        triggerToast(`Plan "${customPlanName}" saved locally! Sign in to publish. 🎯`);
-      }
-
-      loadSharedPlans();
-      navigateTo('savedPlans');
-    } catch (e) {
-      console.error('Error publishing plan:', e);
-      triggerToast('Failed to publish memory plan.');
-    }
-  };
+  // publishSharedPlan was deleted here along with the rest of the
+  // retention-sharing surface -- see the note above the group-plan handlers.
+  // handleSavePlan is the only way a set of Review Settings is written now,
+  // and it writes to your own savedPlans and nowhere else.
 
   // Reload the activity feed whenever the signed-in user or their real
   // circleFriends/friends lists change (sign-in/out, joining a new circle,
@@ -3509,7 +3550,6 @@ export function useAppState() {
 
       if (profileSnap && profileSnap.exists()) {
         setDefaultRecordingVisibility(profileSnap.data().defaultRecordingVisibility || null);
-        setMemoryPlanVisibility(profileSnap.data().memoryPlanVisibility === 'friends' ? 'friends' : 'private');
         setMemoryQueueVisibility(profileSnap.data().memoryQueueVisibility === 'friends' ? 'friends' : 'private');
         setTotalStudySeconds(profileSnap.data().totalStudySeconds || 0);
         setAccountabilityDailyCapState(profileSnap.data().accountabilityDailyCap ?? ACCOUNTABILITY_DEFAULT_DAILY_CAP);
@@ -3826,6 +3866,16 @@ export function useAppState() {
         handleFirestoreError(e, OperationType.GET, `users/${currentUser.uid}/recordings`);
       }
 
+      // 5. Bible page photos (private to this user)
+      try {
+        const photosSnap = await getDocs(
+          query(collection(db, 'users', currentUser.uid, 'chapterPhotos'), orderBy('order', 'asc'))
+        );
+        setChapterPhotos(photosSnap.docs.map((docSnap) => docSnap.data() as ChapterPhoto));
+      } catch (e) {
+        handleFirestoreError(e, OperationType.GET, `users/${currentUser.uid}/chapterPhotos`);
+      }
+
       triggerToast('Cloud profile and scripture data synchronized! ☁️');
     } catch (err) {
       console.error('Error in loadUserData master catch block:', err);
@@ -3917,7 +3967,6 @@ export function useAppState() {
         setMyCircles([]);
         setCircleFriends([]);
         setDefaultRecordingVisibility(null);
-        setMemoryPlanVisibility('private');
         setMemoryQueueVisibility('private');
         setAccountabilityDailyCapState(ACCOUNTABILITY_DEFAULT_DAILY_CAP);
         setAccountabilitySentLog({});
@@ -3977,15 +4026,6 @@ export function useAppState() {
     }
   };
 
-  // Compact, friend-readable snapshot of the currently active memory plan --
-  // just the shareable pacing fields (reuses planTopLevelFields, the same set
-  // joinSharedPlan/saveFriendMemoryPlan adopt from). Returns null when there's
-  // no active plan yet.
-  const buildSharedPlanSnapshot = () => {
-    const activePlan = savedPlans.find((p) => p.isActive) || savedPlans[0];
-    return activePlan ? planTopLevelFields(activePlan) : null;
-  };
-
   // Compact, friend-readable snapshot of the memory queue -- just enough for a
   // friend's profile to show what references someone is working on and their
   // status, without exposing full verse text or private scheduling state.
@@ -3998,31 +4038,10 @@ export function useAppState() {
       orderIndex: item.orderIndex,
     }));
 
-  // Settings toggle: show/hide this user's active memory plan on their member
-  // profile for friends. Writes the visibility flag + (when 'friends') a fresh
+  // Settings toggle: show/hide this user's verse list on their member profile
+  // for friends. Writes the visibility flag + (when 'friends') a fresh
   // snapshot; clears the snapshot back to null when set to 'private'. The
   // debounced profile-sync effect keeps the snapshot current afterward.
-  const updateMemoryPlanVisibility = async (vis: 'private' | 'friends') => {
-    setMemoryPlanVisibility(vis);
-    if (!auth.currentUser) return;
-    try {
-      await setDoc(
-        doc(db, 'profiles', auth.currentUser.uid),
-        {
-          memoryPlanVisibility: vis,
-          sharedMemoryPlan: vis === 'friends' ? buildSharedPlanSnapshot() : null,
-        },
-        { merge: true }
-      );
-      triggerToast(vis === 'friends' ? 'Memory plan is now visible to friends. 👀' : 'Memory plan is now private. 🔒');
-    } catch (err) {
-      console.error('Failed to update memory plan visibility:', err);
-      triggerToast('Failed to update memory plan visibility.');
-    }
-  };
-
-  // Settings toggle: show/hide this user's memory queue on their member profile
-  // for friends. Same write/clear shape as updateMemoryPlanVisibility.
   const updateMemoryQueueVisibility = async (vis: 'private' | 'friends') => {
     setMemoryQueueVisibility(vis);
     if (!auth.currentUser) return;
@@ -4035,16 +4054,19 @@ export function useAppState() {
         },
         { merge: true }
       );
-      triggerToast(vis === 'friends' ? 'Memory queue is now visible to friends. 👀' : 'Memory queue is now private. 🔒');
+      triggerToast(vis === 'friends' ? 'Your verses are now visible to friends. 👀' : 'Your verses are now private. 🔒');
     } catch (err) {
       console.error('Failed to update memory queue visibility:', err);
       triggerToast('Failed to update memory queue visibility.');
     }
   };
 
+  // Closes setup and records that it's been seen, so it doesn't reappear on
+  // the next launch. Called both by "Skip" and by finishing the last card --
+  // there is no partial-completion state to track, because each card commits
+  // its own answer as it's answered rather than at the end.
   const dismissOnboarding = async () => {
     setShowOnboarding(false);
-    setOnboardingStepInProgress(null);
     if (!auth.currentUser) return;
     try {
       await setDoc(doc(db, 'profiles', auth.currentUser.uid), { onboardingCompleted: true }, { merge: true });
@@ -4052,47 +4074,6 @@ export function useAppState() {
       console.error('Failed to persist onboarding completion:', err);
     }
   };
-
-  // Derived completion for each of the 4 Getting-Started steps -- real state
-  // where one exists (queued verses / a practiced touch / a joined circle),
-  // step 1 is the one exception (purely informational, nothing to derive).
-  // Steps are gated on this array in order: OnboardingScreen only lets step
-  // N be started once onboardingStepComplete[N-1] is true.
-  const onboardingStepComplete: [boolean, boolean, boolean, boolean] = [
-    onboardingStep1Acknowledged,
-    memoryQueue.length > 0,
-    memoryQueue.some((item) => (item.touchLogs?.length || 0) > 0),
-    myCircles.length > 0,
-  ];
-
-  // Hides the checklist, marks this step "in progress" (App.tsx swaps the
-  // tab bar for a single "Back to Guide" bar and shows a per-step
-  // instruction banner while this is set), then runs the real navigation
-  // for that step.
-  const startOnboardingStep = (index: number, navigateAction: () => void) => {
-    if (index === 0) setOnboardingStep1Acknowledged(true);
-    setShowOnboarding(false);
-    setOnboardingStepInProgress(index);
-    navigateAction();
-  };
-
-  const returnToOnboardingGuide = () => {
-    setOnboardingStepInProgress(null);
-    setShowOnboarding(true);
-  };
-
-  // One-time-per-step toast when the step the user is currently "out doing"
-  // genuinely completes (real data changed), so they know to head back
-  // instead of wondering whether they're done.
-  useEffect(() => {
-    if (onboardingStepInProgress === null) return;
-    const idx = onboardingStepInProgress;
-    if (onboardingStepComplete[idx] && !onboardingNudgedStepsRef.current.has(idx)) {
-      onboardingNudgedStepsRef.current.add(idx);
-      triggerToast('Nice work! Tap "Back to Guide" to continue. ✅');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onboardingStepInProgress, memoryQueue, myCircles]);
 
   // Permanently deletes the signed-in account: every memoryQueue/verses/
   // recordings doc (+ their Storage audio files), the memoryPlans doc, this
@@ -4166,6 +4147,7 @@ export function useAppState() {
       // come. Deleting the account should not leave its recitations readable
       // on disk for whoever signs in next.
       setAudioCache(await clearAudioCache());
+      setPhotoCache(await clearPhotoCache());
 
       await deleteUser(auth.currentUser);
       return { ok: true };
@@ -4958,15 +4940,80 @@ export function useAppState() {
     });
 
     if (newItems.length === 0) {
-      triggerToast(skipped > 0 ? 'Those verses are already in your Memory Queue.' : 'No verses to add.');
+      triggerToast(skipped > 0 ? "Those verses are already on your list." : 'No verses to add.');
       return;
     }
 
     updateMemoryQueue((prev) => [...prev, ...newItems]);
-    const skippedNote = skipped > 0 ? ` (${skipped} already in queue, skipped)` : '';
+    const skippedNote = skipped > 0 ? ` (${skipped} already on your list, skipped)` : '';
     triggerToast(
-      `Added ${newItems.length} ${newItems.length === 1 ? 'verse' : 'verses'} to your Memory Queue!${skippedNote} 📖`
+      `Added ${newItems.length} ${newItems.length === 1 ? 'verse' : 'verses'} to your list!${skippedNote} 📖`
     );
+  };
+
+  // Adds a book/chapter/verse RANGE, fetching the real chapter text first.
+  // Differs from addVersesToQueue above, which takes verses whose text the
+  // caller already has (a chapter the user is looking at); this one is for
+  // callers that only know a reference -- the setup flow and the "Add Verses"
+  // form on My Verses, which had this exact body inlined into its onPress.
+  //
+  // Returns a result rather than toasting, because its two callers report
+  // differently: the form shows a toast, setup shows an inline confirmation
+  // on the card itself.
+  const addVerseRangeToQueue = async (
+    book: string,
+    chapter: number,
+    startVerse: number,
+    endVerse: number
+  ): Promise<{ added: number; alreadyThere: number; missingText: number; error?: string }> => {
+    const empty = { added: 0, alreadyThere: 0, missingText: 0 };
+    const bookId = getBookByName(book)?.id;
+    if (!bookId) return { ...empty, error: `Unrecognized book: ${book}` };
+
+    const start = Math.min(startVerse, endVerse);
+    const end = Math.max(startVerse, endVerse);
+    const targets = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+
+    // Read through the ref, not the render-time `memoryQueue` snapshot --
+    // same reason every other queue mutation does (see updateMemoryQueue).
+    const existingIds = new Set(memoryQueueRef.current.map((q) => q.verseId));
+    const toAdd = targets.filter(
+      (v) => !existingIds.has(buildVerseId(DEFAULT_TRANSLATION_ID, bookId, chapter, v))
+    );
+    const alreadyThere = targets.length - toAdd.length;
+    if (toAdd.length === 0) return { ...empty, alreadyThere };
+
+    const chapterData = await fetchChapterText(DEFAULT_TRANSLATION_ID, bookId, chapter);
+    if (!chapterData) {
+      return { ...empty, alreadyThere, error: `Couldn't find ${book} ${chapter} in the scripture library yet.` };
+    }
+
+    const found = toAdd.filter((v) => chapterData.verses[String(v)]);
+    if (found.length === 0) {
+      return { ...empty, alreadyThere, missingText: toAdd.length, error: `No verse text found for ${book} ${chapter}.` };
+    }
+
+    const newItems: QueueItem[] = found.map((v, i) => ({
+      verseId: buildVerseId(DEFAULT_TRANSLATION_ID, bookId, chapter, v),
+      translationId: DEFAULT_TRANSLATION_ID,
+      book,
+      chapter,
+      verseNumber: v,
+      text: chapterData.verses[String(v)],
+      orderIndex: memoryQueueRef.current.length + i,
+      status: 'queued',
+      origin: 'individual',
+      retentionPhase: 'none',
+      dateStarted: null,
+      lastReviewDate: null,
+      nextReviewDueDate: null,
+      currentStreakCount: 0,
+      totalSuccessfulReviews: 0,
+      gracePeriodUsedToday: false,
+    }));
+
+    updateMemoryQueue((prev) => [...prev, ...newItems]);
+    return { added: newItems.length, alreadyThere, missingText: toAdd.length - found.length };
   };
 
   // Manually places a set of verses at a specific point in the memory-
@@ -5800,7 +5847,6 @@ export function useAppState() {
         streakDays: memoryStreak,
       };
       if (memoryQueueVisibility === 'friends') payload.sharedMemoryQueue = buildSharedQueueSnapshot();
-      if (memoryPlanVisibility === 'friends') payload.sharedMemoryPlan = buildSharedPlanSnapshot();
       updateDoc(doc(db, 'profiles', uid), payload).catch((err) =>
         console.error('Failed to sync profile stats:', err)
       );
@@ -5810,7 +5856,7 @@ export function useAppState() {
       if (profileStatsSyncTimerRef.current) clearTimeout(profileStatsSyncTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [publicMemorizedCount, learningCount, memoryStreak, user, memoryQueue, savedPlans, memoryQueueVisibility, memoryPlanVisibility]);
+  }, [publicMemorizedCount, learningCount, memoryStreak, user, memoryQueue, savedPlans, memoryQueueVisibility]);
 
   // Real chapter text for whichever book/chapter the user is currently browsing,
   // fetched from Firestore's scripture library (falls back to empty until loaded).
@@ -6659,15 +6705,15 @@ export function useAppState() {
     isRecordingFullChapterRange,
     selectedRecordingChapterTextData,
     userRecordings, setUserRecordings,
+    chapterPhotos,
+    photoCache,
+    photosForChapter,
     saveRecordingDialog, setSaveRecordingDialog,
     pendingRecordingSource,
     defaultRecordingVisibility,
     updateDefaultRecordingVisibility,
-    memoryPlanVisibility,
     memoryQueueVisibility,
-    updateMemoryPlanVisibility,
     updateMemoryQueueVisibility,
-    saveFriendMemoryPlan,
     pickedRecordingVisibility, setPickedRecordingVisibility,
     typedRecordingName, setTypedRecordingName,
     // import-audio tagging flow
@@ -6755,10 +6801,7 @@ export function useAppState() {
     seekRecordingBy,
     seekRecordingToTime,
     selectedUserProfile, setSelectedUserProfile,
-    sharedPlans, setSharedPlans,
-    loadingSharedPlans, setLoadingSharedPlans,
     customPlanName, setCustomPlanName,
-    shareWithCommunity, setShareWithCommunity,
     savedPlans, setSavedPlans,
     editingPlanId, setEditingPlanId,
 
@@ -6775,11 +6818,8 @@ export function useAppState() {
 
     // first-run onboarding
     showOnboarding, setShowOnboarding,
+    showTour, setShowTour,
     dismissOnboarding,
-    onboardingStepInProgress,
-    onboardingStepComplete,
-    startOnboardingStep,
-    returnToOnboardingGuide,
 
     // toast
     triggerToast,
@@ -6807,9 +6847,8 @@ export function useAppState() {
     setGroupPlanPriority,
     clearGroupPlanMembershipsForCircle,
 
-    // shared plan handlers (personal-settings templates, separate concept from Group Plans)
-    loadSharedPlans,
-    joinSharedPlan,
+    // Review Settings handlers (your own saved presets -- not shareable, and a
+    // separate concept from Group Plans)
     handleActivatePlan,
     handleDeletePlan,
     handleEditPlan,
@@ -6817,7 +6856,6 @@ export function useAppState() {
     isEditingBuiltInPlan,
     handleCreateNewPlan,
     handleSavePlan,
-    publishSharedPlan,
     loadUserData,
 
     // formatting helpers
@@ -6835,6 +6873,7 @@ export function useAppState() {
     triggerDailyPull,
     promoteToLearning,
     addVersesToQueue,
+    addVerseRangeToQueue,
     overrideVerseMemoryStatus,
     handleReviewCompleted,
     triggerMockDueReviews,
@@ -6876,6 +6915,11 @@ export function useAppState() {
     saveVerseSyncOffsets,
     updateRecordingSpeaker,
     reorderChapterRecordings,
+    addChapterPhoto,
+    deleteChapterPhoto,
+    setChapterPhotoVerseRange,
+    reorderChapterPhotos,
+    cacheChapterPhoto,
     buildVerseTimestamps,
   };
 }

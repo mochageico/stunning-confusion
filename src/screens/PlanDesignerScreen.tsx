@@ -38,13 +38,17 @@ const RIGOR_TIERS: { key: RigorKey; label: string; weeks: number; months: number
 // was mapped 'custom' -> 'standard' on the way in), so the cards actively
 // lied about what the plan was doing. Its description is built from the live
 // numbers rather than hardcoded, since that IS what Custom means.
+// Descriptions are in plain English on purpose. These used to read "5-4-3
+// phases, 3 touches to graduate" -- perfectly precise, and meaningless unless
+// you already knew what a phase and a touch were, which is exactly the
+// knowledge a first-time reader doesn't have.
 const rigorOptions = (
   summary: string
 ): OptionCardItem<RetentionChoice>[] => [
-  { id: 'light', title: 'Light', desc: '5-4-3 phases, 3 touches to graduate. Quicker to finish, less durable.' },
-  { id: 'standard', title: 'Standard', desc: '7-6-5 phases, 3 touches to graduate. The default balance.' },
-  { id: 'deep', title: 'Deep', desc: '9-8-7 phases, 4 touches to graduate. Slowest, and the stickiest.' },
-  { id: 'custom', title: 'Custom', desc: `${summary}. Your own numbers — set them under Fine-tune retention below.` },
+  { id: 'light', title: 'Light', desc: 'Verses come back for about 3 years, then stop. Least work, and the easiest to forget later.' },
+  { id: 'standard', title: 'Standard', desc: 'Verses come back for about 5 years, then stop. A good balance for most people.' },
+  { id: 'deep', title: 'Deep', desc: 'Verses come back for about 7 years, then stop. The most work, and the hardest to forget.' },
+  { id: 'custom', title: 'Custom', desc: `${summary}. Your own numbers — set them under "Change the details" below.` },
 ];
 
 export default function PlanDesignerScreen({ state }: { state: AppState }) {
@@ -115,7 +119,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
   const totalRigorDays = dailyPhaseWeeks * 7 + weeklyPhaseMonths * 30 + monthlyPhaseYears * 365;
   const totalRigorLabel =
     totalRigorDays >= 365 ? `${(totalRigorDays / 365).toFixed(1)} years` : `${Math.round(totalRigorDays)} days`;
-  const rigorSummary = `${dailyPhaseWeeks}-${weeklyPhaseMonths}-${monthlyPhaseYears} phases, ${masteryTouches} touches to graduate`;
+  const rigorSummary = `Daily for ${dailyPhaseWeeks} weeks, weekly for ${weeklyPhaseMonths} months, monthly for ${monthlyPhaseYears} ${monthlyPhaseYears === 1 ? 'year' : 'years'}`;
 
   // Copy-on-write: the shipped Standard plan is the baseline every account
   // starts from, so it can't be edited in place. Renaming is what turns an
@@ -134,21 +138,23 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-4" contentContainerStyle={{ gap: 16 }}>
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
-          {state.onboardingStepInProgress === null && (
-            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white shrink-0" />
-          )}
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white shrink-0" />
           <View className="flex-1">
+            {/* Names the set being edited rather than repeating "Review
+                Settings", which is the title of the LIST screen you arrive
+                from -- two screens with an identical header gave no signal
+                that Edit had gone anywhere. */}
             <AppText variant="section" className="uppercase tracking-wider font-bold text-neutral-700 font-sans">
-              Settings
+              Review settings
             </AppText>
             <AppText variant="display" className="font-serif font-bold text-[#1A1A1A]">
-              Memory Plan
+              {customPlanName.trim() || 'New settings'}
             </AppText>
           </View>
         </View>
         <AppText variant="body" className="text-neutral-700 font-sans -mt-1">
-          How a verse graduates, and what happens when you miss one. Your schedule and speed live on the Memory Queue
-          screen, under Your Rhythm.
+          How long a verse keeps coming back before it's yours for good, and what happens when you miss one. How many
+          days a week you memorize is a separate thing — that's on My Verses, under My Schedule.
         </AppText>
 
         {/* The Basic/Advanced toggle was removed along with the pacing
@@ -162,27 +168,27 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
         {isEditingBuiltInPlan && (
           <View className="rounded-xl border-2 border-amber-300 bg-amber-50" style={{ padding: space(12), gap: space(4) }}>
             <AppText variant="label" className="font-sans font-bold text-amber-900">
-              Standard is the built-in plan
+              Standard is the built-in one
             </AppText>
             <AppText variant="micro" className="font-sans text-amber-800 leading-relaxed">
-              Give it a new name below to make your own copy. Standard itself stays as it is, so you can always come
-              back to it.
+              Give it a new name below to make your own copy. Standard itself stays exactly as it is, so you can always
+              come back to it.
             </AppText>
           </View>
         )}
 
-        {/* Plan Name. An unnamed plan is indistinguishable from any other in
-            Saved Plans/Community, and renaming is what forks the built-in. */}
+        {/* The name. Unnamed settings are indistinguishable from any other set
+            in the saved list, and naming is what forks the built-in. */}
         <View style={{ gap: space(6) }}>
           <AppText variant="section" className="uppercase tracking-wider font-bold text-neutral-700 font-sans">
-            Plan Name
+            Name
           </AppText>
           {/* The name is the one thing on this screen you write rather than
               pick, and it was set in 12pt -- smaller than the labels around
               it. Sized off the scale directly (not a className) so it grows
               with the OS font setting like every AppText does. */}
           <AppTextInput
-            placeholder="My Custom Scripture Plan"
+            placeholder="e.g. My Settings"
             placeholderTextColor="#a3a3a3"
             value={customPlanName}
             onChangeText={setCustomPlanName}
@@ -199,7 +205,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
         {/* Retention tier -- the primary choice on this screen. */}
         <View style={{ gap: space(8) }}>
           <AppText variant="section" className="uppercase tracking-wider font-bold text-neutral-700 font-sans">
-            Retention
+            How long verses keep coming back
           </AppText>
           <OptionCards options={rigorOptions(rigorSummary)} value={retentionRigor} onChange={chooseRetention} />
         </View>
@@ -210,33 +216,34 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             to 'custom'. */}
         <CollapsibleCard
           storageKey="planDesigner.retentionRigor"
-          title="Fine-tune retention"
-          summary={`${dailyPhaseWeeks}-${weeklyPhaseMonths}-${monthlyPhaseYears} · ${masteryTouches} touches`}
+          title="Change the details"
+          summary={`${dailyPhaseWeeks} wks · ${weeklyPhaseMonths} mo · ${monthlyPhaseYears} yr`}
           defaultCollapsed
         >
           <AppText variant="caption" className="text-neutral-700 font-sans">
-            How long a verse stays in Daily, then Weekly, then Monthly review before it's retained for good. Higher
-            numbers mean deeper, more permanent memorization. Changing anything here moves the plan to Custom.
+            After you learn a verse, it comes back every day for a while, then once a week, then once a month — and
+            then it stops, because you know it. These set how long each of those stretches lasts. Bigger numbers mean
+            more practice and a verse that's harder to forget. Changing anything here makes these settings Custom.
           </AppText>
 
           <View style={{ gap: space(16) }}>
             {/* Daily Phase Length */}
             <View style={{ gap: space(6) }}>
-              <SettingRow label="Daily Phase Length" value={`${dailyPhaseWeeks} weeks`} />
+              <SettingRow label="Comes back daily for" value={`${dailyPhaseWeeks} weeks`} />
               <StepperRow min={3} max={14} value={dailyPhaseWeeks} onChange={tune(setDailyPhaseWeeks)} />
               <RangeCaption min="3 weeks" max="14 weeks" />
             </View>
 
             {/* Weekly Phase Length */}
             <View style={{ gap: space(6) }}>
-              <SettingRow label="Weekly Phase Length" value={`${weeklyPhaseMonths} months`} />
+              <SettingRow label="Then weekly for" value={`${weeklyPhaseMonths} months`} />
               <StepperRow min={2} max={12} value={weeklyPhaseMonths} onChange={tune(setWeeklyPhaseMonths)} />
               <RangeCaption min="2 months" max="12 months" />
             </View>
 
             {/* Monthly Phase Length */}
             <View style={{ gap: space(6) }}>
-              <SettingRow label="Monthly Phase Length" value={`${monthlyPhaseYears} years`} />
+              <SettingRow label="Then monthly for" value={`${monthlyPhaseYears} years`} />
               <StepperRow min={1} max={10} value={monthlyPhaseYears} onChange={tune(setMonthlyPhaseYears)} />
               <RangeCaption min="1 year" max="10 years" />
             </View>
@@ -245,18 +252,18 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
                 Limits" section -- they were never pacing: they decide when
                 a verse graduates, which is retention. */}
             <View style={{ gap: space(6) }} className="pt-2 border-t border-[#F3F2F1]">
-              <SettingRow label="Touches to Graduate" value={masteryTouches} />
+              <SettingRow label="Perfect recalls before a verse counts as learned" value={masteryTouches} />
               <StepperRow min={1} max={6} value={masteryTouches} onChange={tune(setMasteryTouches)} />
             </View>
 
             <View style={{ gap: space(6) }}>
-              <SettingRow label="Reviews Required per Cycle" value={reviewsRequired} />
+              <SettingRow label="Times to review it each time it comes back" value={reviewsRequired} />
               <StepperRow min={1} max={5} value={reviewsRequired} onChange={tune(setReviewsRequired)} />
             </View>
           </View>
 
           <AppText variant="caption" className="text-neutral-700 font-sans pt-2 border-t border-[#F3F2F1]">
-            At this rigor, a verse is fully retained for good after about{' '}
+            With these numbers, a verse stops coming back after about{' '}
             <AppText variant="caption" className="font-sans font-bold text-[#1A1A1A]">{totalRigorLabel}</AppText>.
           </AppText>
         </CollapsibleCard>
@@ -304,15 +311,14 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             <TrendingUp size={iconSize} color="#1A1A1A" />
           </View>
           <AppText variant="micro" className="font-sans text-neutral-600 flex-1">
-            {dailyPhaseWeeks}-{weeklyPhaseMonths}-{monthlyPhaseYears} · {masteryTouches} touches · retained after about{' '}
-            {totalRigorLabel}
+            Verses stop coming back after about {totalRigorLabel}
           </AppText>
         </View>
 
         <Pressable
           onPress={() => {
             if (!canSave) {
-              triggerToast('Give your plan a new name first — Standard is the built-in one.');
+              triggerToast('Give these settings a new name first — Standard is the built-in one.');
               return;
             }
             handleSavePlan();
@@ -325,7 +331,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
         >
           <Check size={iconSize} color="#FFFFFF" />
           <AppText variant="label" className="text-white font-sans font-bold uppercase tracking-widest">
-            {isEditingBuiltInPlan ? 'Save as My Plan' : 'Save Plan'}
+            {isEditingBuiltInPlan ? 'Save as my own' : 'Save'}
           </AppText>
         </Pressable>
       </View>

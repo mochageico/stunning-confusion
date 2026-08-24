@@ -8,12 +8,24 @@ import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
 import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
-import { AppButton, AppText } from '../components/design';
+import { AppButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 
 // Derived from the single source of truth (data.ts) instead of its own
 // hardcoded list -- previously listed NIV/NKJV/NLT despite zero real text
 // ever being imported for them (see scripts/import-bible/).
 const TRANSLATION_OPTIONS = BIBLE_TRANSLATIONS.map((t) => ({ id: t.id, label: t.id }));
+
+// The two things this screen can be doing. Declared once so the segmented
+// control below is a map rather than two near-identical hand-written buttons
+// that drifted apart (they had different icon sizes and label casing).
+// One word each, not "Record Live" / "Import Audio": the heading right above
+// this already spells out which mode you're in, and at 1.5x the longer pair no
+// longer fit on one line each -- one segment wrapped and the other didn't,
+// which is worse than either.
+const SUB_MODES = [
+  { id: 'record' as const, label: 'Record', Icon: Mic },
+  { id: 'import' as const, label: 'Import', Icon: Upload },
+];
 
 export default function RecordScreen({ state }: { state: AppState }) {
   const {
@@ -62,6 +74,13 @@ export default function RecordScreen({ state }: { state: AppState }) {
     playingRecProgress,
     setPlayingRecProgress,
   } = state;
+
+  const scale = useFontScale();
+  const space = useScaledSpace();
+  // Same breakpoint the design system uses everywhere else (SettingRow,
+  // CollapsibleCard): past 1.3x, controls that shared a row stop sharing it
+  // rather than squeezing each other down to nothing.
+  const stacked = scale >= 1.3;
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   // Live recording and import tagging are mutually exclusive activities, so
@@ -127,53 +146,78 @@ export default function RecordScreen({ state }: { state: AppState }) {
           )}
         </View>
 
-        {/* Record vs Import sub-mode tabs */}
-        <View className="flex-row bg-neutral-100 p-1 rounded-xl border border-neutral-200">
-          <AppButton size="sm" onPress={() => setSubMode('record')} disabled={isRecording} className={`flex-1 rounded-lg flex-row items-center justify-center gap-1.5 ${ subMode === 'record' ? 'bg-[#1A1A1A]' : '' } ${isRecording ? 'opacity-60' : ''}`}>
-            <Mic size={12} color={subMode === 'record' ? '#ffffff' : '#737373'} />
-            <AppText variant="section" className={`uppercase tracking-wider font-sans font-extrabold ${ subMode === 'record' ? 'text-white' : 'text-neutral-500' }`} >
-              Record Live
-            </AppText>
-          </AppButton>
-          <AppButton size="sm" onPress={() => setSubMode('import')} disabled={isRecording} className={`flex-1 rounded-lg flex-row items-center justify-center gap-1.5 ${ subMode === 'import' ? 'bg-[#1A1A1A]' : '' } ${isRecording ? 'opacity-60' : ''}`}>
-            <Upload size={12} color={subMode === 'import' ? '#ffffff' : '#737373'} />
-            <AppText variant="section" className={`uppercase tracking-wider font-sans font-extrabold ${ subMode === 'import' ? 'text-white' : 'text-neutral-500' }`} >
-              Import Audio
-            </AppText>
-          </AppButton>
+        {/* Record vs Import sub-mode tabs. Sentence case at `label` size, not
+            uppercase-extrabold-tracked `section`: three emphasis treatments
+            stacked on a two-item switch is what made the top of this screen
+            shout. The dark fill already says which one is active. */}
+        <View className="flex-row bg-neutral-100 border border-neutral-200 rounded-xl" style={{ padding: space(3), gap: space(3) }}>
+          {SUB_MODES.map(({ id, label, Icon }) => {
+            const active = subMode === id;
+            return (
+              <AppButton
+                key={id}
+                size="sm"
+                onPress={() => setSubMode(id)}
+                disabled={isRecording}
+                className={`flex-1 rounded-lg ${active ? 'bg-[#1A1A1A]' : ''} ${isRecording ? 'opacity-60' : ''}`}
+                // `sm`'s 10pt side padding is dead weight on a flex-1 segment
+                // -- it centres itself anyway -- and at 1.5x it was the
+                // difference between "Import audio" fitting on one line and
+                // wrapping to two while its neighbour stayed on one.
+                style={{ minHeight: space(36), paddingHorizontal: space(6) }}
+              >
+                <Icon size={Math.round(13 * scale)} color={active ? '#FFFFFF' : '#737373'} />
+                <AppText variant="label" className={`font-sans font-bold ${active ? 'text-white' : 'text-neutral-500'}`}>
+                  {label}
+                </AppText>
+              </AppButton>
+            );
+          })}
         </View>
 
-        {/* What are you recording/tagging? — book + chapter + translation,
-            all in one row now: book box sized to its content instead of
-            flex-1, chapter # right beside it, translation taking the rest
-            of the row (previously its own full-width row below). */}
-        <View style={{ gap: 8 }}>
-          <AppText variant="micro" className="font-extrabold uppercase text-neutral-400 font-sans tracking-wider">
-            {subMode === 'record' ? 'WHAT ARE YOU RECORDING?' : 'WHAT IS THIS AUDIO?'}
+        {/* WHAT YOU'RE RECORDING — reference and verse range in ONE panel.
+            These were two separately-headed sections stacked on top of each
+            other ("WHAT ARE YOU RECORDING?" then "VERSE RANGE"), five bordered
+            boxes floating on white with no shared container, plus a "Select
+            All" link parked off on its own line. They answer a single
+            question -- which passage is this -- so they read as one thing now:
+            one heading, one card, a hairline between reference and range. */}
+        <View
+          className="border border-[#E5E5E5] rounded-2xl bg-[#FBF9F6]"
+          style={{ padding: space(12), gap: space(10), opacity: isRecording ? 0.55 : 1 }}
+        >
+          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-neutral-500">
+            {subMode === 'record' ? "What you're reciting" : 'What this audio is'}
           </AppText>
-          <View className="flex-row gap-2" style={{ opacity: isRecording ? 0.5 : 1 }}>
-            <View style={{ width: 130 }}>
-              <BookPicker
-                value={recordingBook}
-                onChange={(book) => {
-                  if (isRecording) return;
-                  setRecordingBook(book);
-                  setRecordingChapter(1);
-                }}
-              />
+
+          <View className={stacked ? '' : 'flex-row'} style={{ gap: space(8) }}>
+            <View className={stacked ? 'flex-row' : 'flex-1 flex-row'} style={{ gap: space(8) }}>
+              <View className="flex-1">
+                <BookPicker
+                  value={recordingBook}
+                  onChange={(book) => {
+                    if (isRecording) return;
+                    setRecordingBook(book);
+                    setRecordingChapter(1);
+                  }}
+                />
+              </View>
+              <View style={{ width: space(72) }}>
+                <Dropdown
+                  value={recordingChapter}
+                  options={chapterOptions}
+                  title="Select a Chapter"
+                  onChange={(ch) => {
+                    if (isRecording) return;
+                    setRecordingChapter(Number(ch));
+                  }}
+                />
+              </View>
             </View>
-            <View style={{ width: 64 }}>
-              <Dropdown
-                value={recordingChapter}
-                options={chapterOptions}
-                title="Select a Chapter"
-                onChange={(ch) => {
-                  if (isRecording) return;
-                  setRecordingChapter(Number(ch));
-                }}
-              />
-            </View>
-            <View className="flex-1">
+            {/* Translation labels are three letters, so it takes a fixed slot
+                rather than flex-1 -- it used to eat every pixel the book name
+                didn't. Full width only once the row stops fitting. */}
+            <View style={stacked ? undefined : { width: space(88) }}>
               <Dropdown
                 value={recordingTranslation}
                 options={TRANSLATION_OPTIONS}
@@ -185,66 +229,75 @@ export default function RecordScreen({ state }: { state: AppState }) {
               />
             </View>
           </View>
-        </View>
 
-        {/* Verse range — plain typed numbers, like the "Add Verses" box on
-            the Group Plan screen, instead of scrolling two long dropdowns. */}
-        <View className="gap-1">
-          <View className="flex-row items-center justify-between">
-            <AppText variant="micro" className="font-extrabold uppercase text-neutral-400 font-sans tracking-wider">
-              VERSE RANGE
+          <View className="border-t border-[#E5E5E5]" />
+
+          {/* Verse range — plain typed numbers, like the "Add Verses" box on
+              the Group Plan screen, instead of scrolling two long dropdowns.
+              The trailing slot carries the chapter's verse count either way:
+              as a plain "of 31" when the whole chapter is already selected,
+              and as the tappable way back to it when it isn't. */}
+          <View className={stacked ? '' : 'flex-row items-center'} style={{ gap: space(8) }}>
+            <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-neutral-500 shrink-0">
+              Verses
             </AppText>
-            {!isRecordingFullChapterRange && (
-              <Pressable
-                onPress={() => {
-                  if (isRecording) return;
-                  setRecordingRangeStart(null);
-                  setRecordingRangeEnd(null);
-                }}
-                disabled={isRecording}
-              >
-                <AppText variant="micro" className="font-bold font-sans underline text-indigo-600">Select All</AppText>
-              </Pressable>
-            )}
-          </View>
-          <View className="flex-row gap-2 items-center" style={{ opacity: isRecording ? 0.5 : 1 }}>
-            <View className="flex-1">
-              <NumericInput
-                value={startText}
-                editable={!isRecording}
-                onChangeText={(text) => {
-                  setStartText(text);
-                  const num = parseInt(text, 10);
-                  if (Number.isNaN(num)) return;
-                  const clamped = Math.max(1, Math.min(num, recordingChapterVerses.length || num));
-                  setRecordingRangeStart(clamped);
-                  if (clamped > rangeEndValue) setRecordingRangeEnd(clamped);
-                }}
-                onBlur={() => setStartText(String(rangeStartValue))}
-                className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-2 py-2.5 text-xs text-center font-bold"
-              />
+            <View className={stacked ? 'flex-row items-center' : 'flex-1 flex-row items-center'} style={{ gap: space(8) }}>
+              <View className="flex-1">
+                <NumericInput
+                  value={startText}
+                  editable={!isRecording}
+                  onChangeText={(text) => {
+                    setStartText(text);
+                    const num = parseInt(text, 10);
+                    if (Number.isNaN(num)) return;
+                    const clamped = Math.max(1, Math.min(num, recordingChapterVerses.length || num));
+                    setRecordingRangeStart(clamped);
+                    if (clamped > rangeEndValue) setRecordingRangeEnd(clamped);
+                  }}
+                  onBlur={() => setStartText(String(rangeStartValue))}
+                  className="w-full bg-white border border-neutral-300 rounded-lg text-center font-bold text-[#1A1A1A]"
+                  style={{ paddingVertical: space(9), paddingHorizontal: space(8) }}
+                />
+              </View>
+              <AppText variant="micro" className="text-neutral-400 font-sans shrink-0">to</AppText>
+              <View className="flex-1">
+                <NumericInput
+                  value={endText}
+                  editable={!isRecording}
+                  onChangeText={(text) => {
+                    setEndText(text);
+                    const num = parseInt(text, 10);
+                    if (Number.isNaN(num)) return;
+                    const clamped = Math.max(rangeStartValue, Math.min(num, recordingChapterVerses.length || num));
+                    setRecordingRangeEnd(clamped);
+                  }}
+                  onBlur={() => setEndText(String(rangeEndValue))}
+                  className="w-full bg-white border border-neutral-300 rounded-lg text-center font-bold text-[#1A1A1A]"
+                  style={{ paddingVertical: space(9), paddingHorizontal: space(8) }}
+                />
+              </View>
+              {recordingChapterVerses.length > 0 &&
+                (isRecordingFullChapterRange ? (
+                  <AppText variant="micro" className="font-sans text-neutral-400 shrink-0">
+                    of {recordingChapterVerses.length}
+                  </AppText>
+                ) : (
+                  <Pressable
+                    onPress={() => {
+                      if (isRecording) return;
+                      setRecordingRangeStart(null);
+                      setRecordingRangeEnd(null);
+                    }}
+                    disabled={isRecording}
+                    hitSlop={8}
+                    className="shrink-0"
+                  >
+                    <AppText variant="micro" className="font-sans font-bold text-indigo-600">
+                      All {recordingChapterVerses.length}
+                    </AppText>
+                  </Pressable>
+                ))}
             </View>
-            <AppText variant="label" className="font-bold text-neutral-400">to</AppText>
-            <View className="flex-1">
-              <NumericInput
-                value={endText}
-                editable={!isRecording}
-                onChangeText={(text) => {
-                  setEndText(text);
-                  const num = parseInt(text, 10);
-                  if (Number.isNaN(num)) return;
-                  const clamped = Math.max(rangeStartValue, Math.min(num, recordingChapterVerses.length || num));
-                  setRecordingRangeEnd(clamped);
-                }}
-                onBlur={() => setEndText(String(rangeEndValue))}
-                className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-2 py-2.5 text-xs text-center font-bold"
-              />
-            </View>
-            {recordingChapterVerses.length > 0 && (
-              <AppText variant="micro" className="font-mono text-neutral-400 shrink-0">
-                max {recordingChapterVerses.length}
-              </AppText>
-            )}
           </View>
         </View>
 
@@ -557,7 +610,11 @@ export default function RecordScreen({ state }: { state: AppState }) {
                     <View className="flex-row items-center justify-between">
                       <View className="flex-1 pr-2">
                         <View className="flex-row items-center gap-1.5">
-                          <AppText variant="label" className="font-black text-[#1A1A1A] leading-tight">
+                          {/* Medium, not black. Every row in this list is a
+                              chapter name, so the weight distinguished nothing
+                              -- it just made a quiet list of past work read as
+                              a wall of headlines. */}
+                          <AppText variant="label" className="font-sans font-medium text-[#1A1A1A] leading-tight">
                             {recordingLabel(rec)}
                           </AppText>
                           {rec.sourceType === 'imported' && (

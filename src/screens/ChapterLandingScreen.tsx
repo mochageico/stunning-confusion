@@ -7,6 +7,7 @@ import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { cacheableTarget } from '../lib/audioCache';
 import { ChipRow, DiscreteSlider, FadeInView } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
+import ChapterPhotoStrip from '../components/ChapterPhotoStrip';
 import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { printMemoryGrid } from '../lib/printMemoryGrid';
 import { Recording } from '../types';
@@ -380,6 +381,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           )}
         </View>
 
+        {/* Photos of the user's own Bible pages for this chapter. Renders a
+            single muted line when there are none -- see ChapterPhotoStrip. */}
+        <ChapterPhotoStrip state={state} book={selectedBook || ''} chapter={selectedChapter ?? 0} />
+
         {/* Grid / List / Memory Grid view Toggle */}
         <View className="bg-[#F3F2F1] p-1.5 border border-[#E5E5E5] rounded-xl gap-1.5">
           <AppText variant="label" className="font-sans font-bold text-neutral-600 pl-1">Verse Layout</AppText>
@@ -584,12 +589,13 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           </View>
           <View className="flex-row gap-1.5">
             <AppButton size="md" onPress={() => { addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), selectedTranslationId); setSelectedVerseNumbers([]); }} className="flex-1 items-center bg-emerald-600 rounded-lg">
-              {/* "Add to Queue" could not fit: four flex-1 buttons across a
-                  375pt screen leave each about 65pt of content width, so it
-                  was silently truncating. The bar only appears once verses
-                  are selected, which is the context "Add to" was carrying. */}
+              {/* One word only: four flex-1 buttons across a 375pt screen
+                  leave each about 65pt of content width, so anything longer
+                  silently truncates. The bar only appears once verses are
+                  selected, which supplies the missing object -- "Add" reads
+                  as "add these". */}
               <AppText variant="micro" className="text-white font-bold uppercase tracking-wide" numberOfLines={1}>
-                Queue
+                Add
               </AppText>
             </AppButton>
             <AppButton size="md" onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))} className="flex-1 items-center bg-[#1A1A1A] rounded-lg">
@@ -619,8 +625,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   </Pressable>
                 </View>
                 <AppText variant="micro" className="text-indigo-800/80 font-sans leading-relaxed -mt-1">
-                  Already know these from memory? Place them directly in the right phase instead of starting over from
-                  Learning.
+                  Already know these by heart? Tell the app, and it will start reviewing them at the right interval
+                  instead of making you learn them from scratch.
                 </AppText>
 
                 <View style={{ gap: 4 }}>

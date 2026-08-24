@@ -22,6 +22,14 @@ import { QueueItem } from '../types';
  * that view is carried through untouched. The reordered items reuse the
  * orderIndex slots they already occupied, so nothing outside the visible set
  * shifts position.
+ *
+ * This MOVES (remove-then-insert); it does not swap the two positions. The
+ * difference is invisible for an adjacent move and wrong for any other: the
+ * screen used to offer only up/down arrow buttons, where from and to always
+ * differ by one and a swap is indistinguishable from a move. Now that the
+ * list is drag-ordered, dragging the first group to the third position must
+ * leave the groups it passed in their existing relative order -- a swap would
+ * additionally reverse them.
  */
 export function reorderQueueGroups(
   queue: QueueItem[],
@@ -34,9 +42,8 @@ export function reorderQueueGroups(
   }
 
   const reordered = [...visibleGroups];
-  const temp = reordered[from];
-  reordered[from] = reordered[to];
-  reordered[to] = temp;
+  const [moved] = reordered.splice(from, 1);
+  reordered.splice(to, 0, moved);
 
   const orderedVisibleIds = reordered.flatMap((g) => g.items.map((item) => item.verseId));
   const visibleIdSet = new Set(orderedVisibleIds);
