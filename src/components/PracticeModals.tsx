@@ -458,8 +458,21 @@ function PracticeModalsInner({
   // own player rather than reusing the app-wide "now playing" system: Listen
   // mode auto-advances across verses (and can switch recordings on its own),
   // which shouldn't hijack whatever the floating mini-bar is doing elsewhere.
+  // updateInterval matters more here than anywhere else in the app. Every
+  // verse boundary is detected by watching status.currentTime cross the
+  // tagged endSec, so the boundary can only ever be noticed on a status tick
+  // -- at expo-audio's 500ms default that means overshooting the end of a
+  // verse by up to half a second. For ordinary playback that's invisible (the
+  // audio flows straight into the next verse anyway), but when a verse is
+  // looping -- a selected segment, or repeats-per-verse -- the overshoot is
+  // the beginning of the NEXT verse, audibly played before the loop snaps
+  // back. Measured in the browser at the default: 295ms mean, 411ms worst.
+  // 100ms trades a handful of extra renders per second for a boundary that
+  // lands where the user expects, and gives the progress bar a smoother tick
+  // as a side effect.
   const listenPlayer = useAudioPlayer(
-    resolvePlaybackUrl(currentSegment?.recording, studioPlaybackEnabled, audioCacheMap)
+    resolvePlaybackUrl(currentSegment?.recording, studioPlaybackEnabled, audioCacheMap),
+    { updateInterval: 100 }
   );
   const listenPlayerStatus = useAudioPlayerStatus(listenPlayer);
 
@@ -563,8 +576,18 @@ function PracticeModalsInner({
   // behind currentTime is harmless against a LATER segment's endSec -- only
   // seeking backward exposes it.
   const seekedToCurrentSegmentRef = useRef(false);
+  // Set while a repeats-per-verse replay has seeked back to this same
+  // segment's start and we're still waiting for the status to catch up. It is
+  // NOT enough to re-arm on seekTo's promise: resolving the seek does not mean
+  // the next status tick reflects the new position, and a stale reading still
+  // sitting past endSec reads as "this pass finished too" -- which would burn
+  // every remaining repeat in one go. seekedToCurrentSegmentRef can't cover
+  // this on its own because, unlike a verse change, currentVerseIndex never
+  // changes here.
+  const repeatSeekPendingRef = useRef(false);
   useEffect(() => {
     seekedToCurrentSegmentRef.current = false;
+    repeatSeekPendingRef.current = false;
     setVerseRepeatsDone(0);
   }, [currentVerseIndex]);
 
@@ -607,6 +630,24 @@ function PracticeModalsInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listenSpeed, listenPlayerStatus.isLoaded, currentSegment?.recording?.id]);
 
+  // Play the CURRENT segment again from its own start.
+  //
+  // Every other jump in this component happens by changing currentVerseIndex
+  // and letting the seek effect above react to it. That machinery is useless
+  // whenever the target is the verse we are already on -- setting state to the
+  // value it already holds re-renders nothing, so no effect re-runs, nothing
+  // seeks, and the playhead just carries on into the following verses. Two
+  // paths need exactly that: repeats-per-verse, and a playlist loop whose
+  // range is a single verse (a one-verse selected segment).
+  const replayCurrentSegment = (startSec: number, resume: boolean) => {
+    seekedToCurrentSegmentRef.current = false;
+    repeatSeekPendingRef.current = true;
+    listenPlayer.seekTo(startSec).then(() => {
+      seekedToCurrentSegmentRef.current = true;
+      if (resume) listenPlayer.play();
+    });
+  };
+
   // Detects reaching the end of the current verse's segment and advances --
   // to the next verse, possibly switching recordings, or loops/stops at the
   // end of the (possibly selection-restricted) range.
@@ -618,7 +659,26 @@ function PracticeModalsInner({
     // own start, in case the status object hasn't caught up to the seek yet.
     if (!seekedToCurrentSegmentRef.current) return;
     if (listenPlayerStatus.currentTime < currentSegment.startSec - 0.5) return;
-    if (listenPlayerStatus.currentTime < currentSegment.endSec - 0.05 && !listenPlayerStatus.didJustFinish) return;
+
+    const segmentSpan = Math.max(0.01, currentSegment.endSec - currentSegment.startSec);
+    if (repeatSeekPendingRef.current) {
+      // Nothing about this segment can be trusted until the status reports the
+      // playhead genuinely back near its start (see repeatSeekPendingRef).
+      if (listenPlayerStatus.currentTime <= currentSegment.startSec + Math.min(0.5, segmentSpan / 2)) {
+        repeatSeekPendingRef.current = false;
+      }
+      return;
+    }
+
+    const reachedEnd = listenPlayerStatus.currentTime >= currentSegment.endSec - 0.05;
+    // didJustFinish is the safety net for a player that stops a hair short of
+    // the tagged end. Honour it only when the playhead is genuinely deep into
+    // this segment -- a finish flag left over from the previous pass, arriving
+    // just after a repeat seeked back to the start, is not another finish.
+    const finishedShort =
+      listenPlayerStatus.didJustFinish &&
+      listenPlayerStatus.currentTime > currentSegment.startSec + Math.min(0.25, segmentSpan / 2);
+    if (!reachedEnd && !finishedShort) return;
 
     // Repeats-per-verse: replay THIS verse from its own start instead of
     // moving on, until it has played the requested number of times. Clearing
@@ -628,11 +688,7 @@ function PracticeModalsInner({
     // for on a backward loop.
     if (verseRepeatsDone < repeatsPerVerse - 1) {
       setVerseRepeatsDone((done) => done + 1);
-      seekedToCurrentSegmentRef.current = false;
-      listenPlayer.seekTo(currentSegment.startSec).then(() => {
-        seekedToCurrentSegmentRef.current = true;
-        if (listenPlaying) listenPlayer.play();
-      });
+      replayCurrentSegment(currentSegment.startSec, listenPlaying);
       return;
     }
 
@@ -640,7 +696,14 @@ function PracticeModalsInner({
     if (next !== null) {
       setCurrentVerseIndex(next);
     } else if (repeatMode === 'playlist') {
-      setCurrentVerseIndex(firstPlayableIndexInRange());
+      const first = firstPlayableIndexInRange();
+      setVerseRepeatsDone(0);
+      if (first === currentVerseIndex) {
+        // Looping a range that is only this verse -- see replayCurrentSegment.
+        replayCurrentSegment(currentSegment.startSec, listenPlaying);
+      } else {
+        setCurrentVerseIndex(first);
+      }
     } else {
       setListenPlaying(false);
       listenPlayer.pause();
@@ -650,8 +713,19 @@ function PracticeModalsInner({
 
   const restartListen = () => {
     setListenPlaying(false);
-    setCurrentVerseIndex(firstPlayableIndexInRange());
+    const first = firstPlayableIndexInRange();
     setVerseRepeatsDone(0);
+    repeatSeekPendingRef.current = false;
+    if (first === currentVerseIndex) {
+      // Already on the first verse in range, so the index doesn't change and
+      // nothing else will seek (see replayCurrentSegment). resume is false
+      // because restartListen never pauses the underlying player -- only the
+      // React flag -- so the audio is still rolling and only needs moving.
+      const segment = playableSegments[first];
+      if (segment?.recording) replayCurrentSegment(segment.startSec, false);
+    } else {
+      setCurrentVerseIndex(first);
+    }
     setTimeout(() => setListenPlaying(true), 150);
   };
 
