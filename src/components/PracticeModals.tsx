@@ -17,6 +17,7 @@ import {
   ListOrdered,
   Mic,
   MicOff,
+  MoveVertical,
   Pause,
   Play,
   Puzzle,
@@ -60,7 +61,7 @@ import {
   ScrambleRound,
   SwapVerse,
 } from '../lib/drills';
-import { BounceView, ChipRow, FadeInView, SpinView, WaveBars } from './ui';
+import { BounceView, ChipRow, FadeInView, HelpTooltip, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
 import MemoryGrid, { verseAnnotationKey } from './MemoryGrid';
 import ListenPhotoView from './ListenPhotoView';
@@ -322,6 +323,27 @@ function PracticeModalsInner({
   const [listenSpeed, setListenSpeed] = useState(1.0);
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
   const [repeatMode, setRepeatMode] = useState<'off' | 'playlist'>('playlist'); // default to loop playlist
+  // How many times each verse plays before playback moves on -- 15, 15, 15,
+  // then 16, 16, 16. A separate axis from repeatMode above, which only
+  // decides what happens once the whole list has played through. Session-
+  // local like listenSpeed: every Listen session opens back at 1x, so nobody
+  // ever wonders why a verse is repeating itself.
+  const [repeatsPerVerse, setRepeatsPerVerse] = useState(1);
+  const [verseRepeatsDone, setVerseRepeatsDone] = useState(0);
+
+  // Auto-follow: the reading pane scrolls itself so the verse being played
+  // stays on screen. On by default; scrolling by hand DURING playback turns
+  // it off (the user is deliberately reading somewhere else), and only the
+  // Follow button turns it back on.
+  const [autoFollow, setAutoFollow] = useState(true);
+  const verseListRef = useRef<ScrollView>(null);
+  // Geometry is read on demand with .measureLayout(), NOT collected from
+  // onLayout: onLayout does not fire on this app's Views (the same finding
+  // already recorded on the range slider in ui.tsx), so an offsets map filled
+  // in by onLayout stays empty forever and Follow silently never scrolls.
+  // Verified in the browser: it did exactly that.
+  const verseContentRef = useRef<View>(null);
+  const verseCardRefs = useRef<Record<number, View | null>>({});
   // Minimizing (Listen mode's X button) keeps this whole component mounted
   // -- and with it, the real listenPlayer instance and the auto-advance
   // effect below -- so audio genuinely keeps playing/looping while the user
@@ -387,6 +409,47 @@ function PracticeModalsInner({
   useEffect(() => {
     if (listenViewMode === 'photo' && !sessionHasPhotos) setListenViewMode('verses');
   }, [listenViewMode, sessionHasPhotos]);
+
+  // Keep the playing verse on screen. Only the card list is followed: the
+  // memory grid is compact enough not to need it, and the photo view doesn't
+  // scroll by verse at all. Re-arming Follow re-runs this too, so the button
+  // immediately brings you back to whatever is playing.
+  //
+  // measureLayout against the content wrapper gives the card's offset INSIDE
+  // the scrollable content -- exactly the number scrollTo wants, with no need
+  // to track the current scroll position. The rAF retry mirrors ui.tsx's
+  // slider: for a frame or two after a view switch or a playlist change there
+  // is nothing laid out to measure yet.
+  useEffect(() => {
+    if (type !== 'listen' || !autoFollow || listenViewMode !== 'verses') return;
+    let frame = 0;
+    let cancelled = false;
+    const attempt = (triesLeft: number) => {
+      if (cancelled) return;
+      const retry = () => {
+        if (triesLeft > 0) frame = requestAnimationFrame(() => attempt(triesLeft - 1));
+      };
+      const card = verseCardRefs.current[currentVerseIndex];
+      const content = verseContentRef.current;
+      if (!card || !content) {
+        retry();
+        return;
+      }
+      card.measureLayout(
+        content as never,
+        (_x, y) => {
+          if (!cancelled) verseListRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+        },
+        () => retry()
+      );
+    };
+    attempt(20);
+    return () => {
+      cancelled = true;
+      if (frame) cancelAnimationFrame(frame);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, autoFollow, listenViewMode, currentVerseIndex]);
 
   // Real audio player for whichever recording covers the current verse.
   // Swapping to a different chapter's recording (or none) just means this
@@ -502,6 +565,7 @@ function PracticeModalsInner({
   const seekedToCurrentSegmentRef = useRef(false);
   useEffect(() => {
     seekedToCurrentSegmentRef.current = false;
+    setVerseRepeatsDone(0);
   }, [currentVerseIndex]);
 
   // Once the (possibly just-swapped) player has finished loading this verse's
@@ -555,6 +619,23 @@ function PracticeModalsInner({
     if (!seekedToCurrentSegmentRef.current) return;
     if (listenPlayerStatus.currentTime < currentSegment.startSec - 0.5) return;
     if (listenPlayerStatus.currentTime < currentSegment.endSec - 0.05 && !listenPlayerStatus.didJustFinish) return;
+
+    // Repeats-per-verse: replay THIS verse from its own start instead of
+    // moving on, until it has played the requested number of times. Clearing
+    // seekedToCurrentSegmentRef before the seek is what stops the next status
+    // tick from firing this again and stacking up seeks while the first is
+    // still in flight -- the same stale-currentTime hazard that ref exists
+    // for on a backward loop.
+    if (verseRepeatsDone < repeatsPerVerse - 1) {
+      setVerseRepeatsDone((done) => done + 1);
+      seekedToCurrentSegmentRef.current = false;
+      listenPlayer.seekTo(currentSegment.startSec).then(() => {
+        seekedToCurrentSegmentRef.current = true;
+        if (listenPlaying) listenPlayer.play();
+      });
+      return;
+    }
+
     const next = findNextPlayableIndex(currentVerseIndex);
     if (next !== null) {
       setCurrentVerseIndex(next);
@@ -570,6 +651,7 @@ function PracticeModalsInner({
   const restartListen = () => {
     setListenPlaying(false);
     setCurrentVerseIndex(firstPlayableIndexInRange());
+    setVerseRepeatsDone(0);
     setTimeout(() => setListenPlaying(true), 150);
   };
 
@@ -1287,7 +1369,8 @@ function PracticeModalsInner({
   // Tapping a verse in the reading pane either jumps playback straight to it
   // (normal playlist modes), or -- in Selection mode -- marks the start/end
   // of the loop range, exactly like the old word-tap mechanic but at verse
-  // granularity.
+  // granularity. Tapping the SAME verse twice is a one-verse loop: end ===
+  // start is just the shortest valid range, not a special case.
   const handleVerseClick = (index: number) => {
     if (playSource !== 'selection') {
       setCurrentVerseIndex(index);
@@ -1300,9 +1383,12 @@ function PracticeModalsInner({
       setCurrentVerseIndex(index);
     } else {
       if (index < selectionStart) {
+        // Tapped back above the start -- treat it as re-placing the start
+        // rather than as an impossible backwards range.
         setSelectionStart(index);
         setCurrentVerseIndex(index);
       } else {
+        // Includes index === selectionStart: closes a single-verse segment.
         setSelectionEnd(index);
       }
     }
@@ -1321,6 +1407,18 @@ function PracticeModalsInner({
   }
   const overallListenProgressPercent =
     activePlayVerses.length > 0 ? ((currentVerseIndex + listenSegmentFraction) / activePlayVerses.length) * 100 : 0;
+
+  // Footer wording for the current selection -- computed out here, not inline
+  // in the JSX, so TypeScript keeps the narrowing on selectionStart/End.
+  let segmentStatusLabel: string | null = null;
+  if (playSource === 'selection' && selectionStart !== null) {
+    if (selectionEnd === null) {
+      segmentStatusLabel = 'Tap end verse';
+    } else {
+      const count = selectionEnd - selectionStart + 1;
+      segmentStatusLabel = count === 1 ? 'Looping 1 verse' : `Looping ${count} verses`;
+    }
+  }
 
   // Minimized Listen mode: a small persistent bar instead of the full
   // overlay, positioned above the tab bar (its height, 64px, is hardcoded
@@ -1517,12 +1615,33 @@ function PracticeModalsInner({
                   />
                 </ScrollView>
               ) : (
-              <ScrollView className="flex-1 p-4" contentContainerStyle={{ gap: 10, paddingBottom: 12 }}>
+              <ScrollView
+                ref={verseListRef}
+                className="flex-1 p-4"
+                contentContainerStyle={{ paddingBottom: 12 }}
+                onScrollBeginDrag={() => {
+                  // Only a real finger-drag lands here -- a programmatic
+                  // scrollTo doesn't -- and only while audio is actually
+                  // playing: scrolling a paused list to read ahead shouldn't
+                  // quietly disarm Follow.
+                  if (listenPlaying) setAutoFollow(false);
+                }}
+              >
+                {/* One wrapper around every card, so measureLayout has a
+                    stable content-relative origin to measure against. The gap
+                    lives here rather than on contentContainerStyle for the
+                    same reason. */}
+                <View ref={verseContentRef} collapsable={false} style={{ gap: 10 }}>
                 {activePlayVerses.map((verseObj, index) => {
                   const segment = playableSegments[index];
                   const hasAudio = !!segment.recording;
                   const isActive = index === currentVerseIndex && listenPlaying;
                   const isRead = index < currentVerseIndex;
+                  // Amber = a start is placed and the segment is still open
+                  // (we're waiting on an end verse); green = the segment is
+                  // closed and is what will actually loop. Two colours, so
+                  // "half-selected" never looks like a finished selection.
+                  const segmentClosed = playSource === 'selection' && selectionStart !== null && selectionEnd !== null;
                   const inSelectionRange =
                     playSource === 'selection' &&
                     selectionStart !== null &&
@@ -1532,18 +1651,35 @@ function PracticeModalsInner({
                   if (isActive) {
                     cardClassName += 'bg-[#1A1A1A] border-[#1A1A1A]';
                   } else if (playSource === 'selection' && selectionStart !== null) {
-                    cardClassName += inSelectionRange ? 'bg-amber-100 border-amber-200' : 'bg-white border-neutral-200 opacity-40';
+                    if (!inSelectionRange) {
+                      cardClassName += 'bg-white border-neutral-200 opacity-40';
+                    } else {
+                      cardClassName += segmentClosed ? 'bg-emerald-100 border-emerald-300' : 'bg-amber-100 border-amber-300';
+                    }
                   } else if (isRead) {
                     cardClassName += 'bg-neutral-200/40 border-neutral-200';
                   } else {
                     cardClassName += 'bg-white border-neutral-200';
                   }
 
-                  const refClassName = isActive ? 'text-white/70' : inSelectionRange ? 'text-amber-800' : 'text-neutral-400';
+                  const refClassName = isActive
+                    ? 'text-white/70'
+                    : inSelectionRange
+                      ? segmentClosed
+                        ? 'text-emerald-800'
+                        : 'text-amber-800'
+                      : 'text-neutral-400';
                   const textClassName = isActive ? 'text-white' : !hasAudio ? 'text-neutral-400' : 'text-neutral-800';
 
                   return (
-                    <Pressable key={`${verseObj.book}-${verseObj.chapter}-${verseObj.verse}`} onPress={() => handleVerseClick(index)} className={cardClassName}>
+                    <Pressable
+                      key={`${verseObj.book}-${verseObj.chapter}-${verseObj.verse}`}
+                      onPress={() => handleVerseClick(index)}
+                      ref={(el) => {
+                        verseCardRefs.current[index] = el as unknown as View | null;
+                      }}
+                      className={cardClassName}
+                    >
                       <View className="flex-row items-center justify-between mb-0.5">
                         <AppText variant="micro" className={`font-sans font-extrabold uppercase tracking-wide ${refClassName}`}>
                           {verseObj.book} {verseObj.chapter}:{verseObj.verse}
@@ -1558,6 +1694,7 @@ function PracticeModalsInner({
                     </Pressable>
                   );
                 })}
+                </View>
               </ScrollView>
               )}
 
@@ -1587,32 +1724,51 @@ function PracticeModalsInner({
               )}
               </View>
 
-              {/* Selection Mode Instructions overlay */}
-              {playSource === 'selection' && (
-                <View className="absolute top-2 right-2 bg-amber-500/10 px-2 py-1 rounded border border-amber-200 z-10" pointerEvents="none">
-                  <AppText variant="micro" className="font-sans font-bold text-amber-800">
-                    {selectionStart === null ? 'Tap verse to set start' : selectionEnd === null ? 'Tap verse to set end' : 'Segment active'}
-                  </AppText>
-                </View>
-              )}
-
-              {/* Static Segment control and Audio wave indicator footer bar */}
-              <View className="bg-neutral-100 border-t border-neutral-200 px-3 py-2 flex-row justify-between items-center z-10">
-                <View className="flex-row items-center gap-2">
+              {/* Segment status, Follow toggle, audio wave indicator. The old
+                  floating "Tap verse to set start" corner chip is gone -- it
+                  said the same thing this bar already says. */}
+              <View className="bg-neutral-100 border-t border-neutral-200 px-3 py-2 flex-row justify-between items-center gap-2 z-10">
+                <View className="flex-row items-center gap-2 flex-1">
                   {playSource === 'selection' && selectionStart !== null ? (
-                    <AppButton size="sm" onPress={() => { setSelectionStart(null); setSelectionEnd(null); setCurrentVerseIndex(0); }} className="flex-row items-center gap-1.5 bg-white border border-neutral-300 rounded-lg">
-                      <RefreshCw size={10} color="#262626" />
-                      <AppText variant="micro" className="font-sans font-extrabold text-neutral-800">Reset Segment</AppText>
-                    </AppButton>
+                    <>
+                      <AppButton size="sm" onPress={() => { setSelectionStart(null); setSelectionEnd(null); setCurrentVerseIndex(0); }} className="flex-row items-center gap-1.5 bg-white border border-neutral-300 rounded-lg shrink-0">
+                        <RefreshCw size={10} color="#262626" />
+                        <AppText variant="micro" className="font-sans font-extrabold text-neutral-800">Reset</AppText>
+                      </AppButton>
+                      {/* Matches the card colours: amber while the segment is
+                          still open, green once it is closed and looping. */}
+                      <AppText
+                        variant="micro"
+                        numberOfLines={1}
+                        className={`font-sans font-extrabold uppercase tracking-wider flex-1 ${selectionEnd === null ? 'text-amber-700' : 'text-emerald-700'}`}
+                      >
+                        {segmentStatusLabel}
+                      </AppText>
+                    </>
                   ) : (
-                    <AppText variant="micro" className="font-sans font-bold text-neutral-400 uppercase tracking-wider">
+                    <AppText variant="micro" numberOfLines={1} className="font-sans font-bold text-neutral-400 uppercase tracking-wider flex-1">
                       {playSource === 'selection' ? 'Tap verse to select segment' : 'Playlist Auto-playback'}
                     </AppText>
                   )}
                 </View>
 
-                <View className="bg-white border border-neutral-200 px-2 py-1 rounded-lg">
-                  <WaveBars active={listenPlaying} count={5} />
+                <View className="flex-row items-center gap-1.5 shrink-0">
+                  {/* Follow -- scrolls the list to keep the playing verse on
+                      screen. Only offered for the card list, the one view that
+                      can actually run the verse off-screen. */}
+                  {listenViewMode === 'verses' && (
+                    <AppButton
+                      size="sm"
+                      onPress={() => setAutoFollow((on) => !on)}
+                      className={`flex-row items-center gap-1 rounded-lg border ${autoFollow ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-300'}`}
+                    >
+                      <MoveVertical size={10} color={autoFollow ? '#ffffff' : '#737373'} />
+                      <AppText variant="micro" className={`font-sans font-extrabold ${autoFollow ? 'text-white' : 'text-neutral-500'}`}>Follow</AppText>
+                    </AppButton>
+                  )}
+                  <View className="bg-white border border-neutral-200 px-2 py-1 rounded-lg">
+                    <WaveBars active={listenPlaying} count={5} />
+                  </View>
                 </View>
               </View>
             </View>
@@ -1654,11 +1810,29 @@ function PracticeModalsInner({
                       </View>
                     </View>
 
-                    {/* 2. Audio Repeat Control */}
+                    {/* 2. Audio Repeat Control -- two independent axes in one
+                        card: how many times each VERSE plays before moving on,
+                        and what happens at the END of the list. */}
                     <View className="flex-1 justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 gap-1">
                       <View className="flex-row items-center gap-1">
                         <Repeat size={10} color="#737373" />
-                        <AppText variant="micro" className="font-sans font-bold text-neutral-500 uppercase tracking-wider">Repeat Setting</AppText>
+                        <AppText variant="micro" className="font-sans font-bold text-neutral-500 uppercase tracking-wider">Repeat</AppText>
+                        <HelpTooltip text="The number sets how many times each verse plays before moving on — at 3× you hear verse 15 three times, then verse 16 three times, and so on. Off / Loop is separate: it decides what happens once the whole list has played through." />
+                      </View>
+                      <View className="flex-row items-center justify-between bg-white px-2 py-1 rounded-lg border border-neutral-200">
+                        <Pressable
+                          onPress={() => setRepeatsPerVerse((r) => Math.max(1, r - 1))}
+                          className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
+                        >
+                          <AppText variant="label" className="font-black text-neutral-800">-</AppText>
+                        </Pressable>
+                        <AppText variant="label" numberOfLines={1} className="font-mono font-bold text-neutral-900">{repeatsPerVerse}× each</AppText>
+                        <Pressable
+                          onPress={() => setRepeatsPerVerse((r) => Math.min(5, r + 1))}
+                          className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
+                        >
+                          <AppText variant="label" className="font-black text-neutral-800">+</AppText>
+                        </Pressable>
                       </View>
                       <ChipRow
                         value={repeatMode}
@@ -1679,6 +1853,7 @@ function PracticeModalsInner({
                       <AppText variant="micro" className="font-bold text-neutral-400 font-mono">START</AppText>
                       <AppText variant="micro" className="font-bold text-neutral-400 font-mono">
                         Verse {currentVerseIndex + 1} of {activePlayVerses.length}
+                        {repeatsPerVerse > 1 ? ` · ${verseRepeatsDone + 1}/${repeatsPerVerse}` : ''}
                       </AppText>
                       <AppText variant="micro" className="font-bold text-neutral-400 font-mono">END</AppText>
                     </View>
