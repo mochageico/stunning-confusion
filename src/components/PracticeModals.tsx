@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, type AudioPlayer, type AudioStatus } from 'expo-audio';
 import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
 import {
   Check,
@@ -70,6 +70,60 @@ import { AppButton, AppIconButton, AppTextInput, AppText, useCollapsed } from '.
 
 /** Stable identity, so a missing photoCache prop cannot retrigger renders. */
 const EMPTY_PHOTO_CACHE: ReadonlyMap<string, string> = new Map();
+
+/**
+ * The Listen progress bar, and the ONLY thing in this file allowed to
+ * subscribe to the playhead.
+ *
+ * useAudioPlayerStatus is useEvent under the hood: it parks the whole status
+ * object -- currentTime included -- in React state, so whichever component
+ * calls it re-renders on every status tick. Called up in PracticeModalsInner
+ * that meant re-rendering the entire Listen screen, verse list and all, many
+ * times a second, purely to move this one bar. The work saturated the JS
+ * thread, which delayed the verse-boundary check, which is what made
+ * playback drift seconds behind the audio.
+ *
+ * Isolated down here, a tick re-renders four Views and nothing else.
+ */
+const ListenProgress = React.memo(function ListenProgress({
+  player,
+  startSec,
+  endSec,
+  verseIndex,
+  verseCount,
+  repeatsPerVerse,
+  verseRepeatsDone,
+}: {
+  player: AudioPlayer;
+  startSec: number | null;
+  endSec: number | null;
+  verseIndex: number;
+  verseCount: number;
+  repeatsPerVerse: number;
+  verseRepeatsDone: number;
+}) {
+  const status = useAudioPlayerStatus(player);
+  // Position within the current verse's own segment, so the bar advances
+  // smoothly between verses instead of jumping a whole verse at a time.
+  let segmentFraction = 0;
+  if (startSec !== null && endSec !== null) {
+    const span = Math.max(0.01, endSec - startSec);
+    segmentFraction = Math.max(0, Math.min(1, (status.currentTime - startSec) / span));
+  }
+  const percent = verseCount > 0 ? ((verseIndex + segmentFraction) / verseCount) * 100 : 0;
+
+  return (
+    <View className="gap-1">
+      <View className="w-full bg-neutral-200 h-1 rounded-full overflow-hidden">
+        <View className="bg-[#1A1A1A] h-full" style={{ width: `${percent}%` }} />
+      </View>
+      <AppText variant="micro" numberOfLines={1} className="font-bold text-neutral-400 font-mono text-center">
+        Verse {verseIndex + 1} of {verseCount}
+        {repeatsPerVerse > 1 ? ` · pass ${verseRepeatsDone + 1} of ${repeatsPerVerse}` : ''}
+      </AppText>
+    </View>
+  );
+});
 
 /**
  * Listen-mode playback speeds. Discrete stops rather than the old ±0.2
@@ -482,15 +536,44 @@ function PracticeModalsInner({
   // audio flows straight into the next verse anyway), but when a verse is
   // looping -- a selected segment, or repeats-per-verse -- the overshoot is
   // the beginning of the NEXT verse, audibly played before the loop snaps
-  // back. Measured in the browser at the default: 295ms mean, 411ms worst.
-  // 100ms trades a handful of extra renders per second for a boundary that
-  // lands where the user expects, and gives the progress bar a smoother tick
-  // as a side effect.
+  // back. 100ms puts the boundary where the user expects it.
+  //
+  // This rate is only affordable because nothing in this component re-renders
+  // on a tick any more -- see ListenProgress and the subscription below.
   const listenPlayer = useAudioPlayer(
     resolvePlaybackUrl(currentSegment?.recording, studioPlaybackEnabled, audioCacheMap),
     { updateInterval: 100 }
   );
-  const listenPlayerStatus = useAudioPlayerStatus(listenPlayer);
+
+  // Deliberately NOT useAudioPlayerStatus. That hook stores the whole status
+  // in React state, so calling it here re-rendered this entire component --
+  // the full verse list included -- ten times a second, just to move a
+  // progress bar. Verse boundaries were then detected inside an effect that
+  // only ran as part of those renders, so once the JS thread fell behind,
+  // detection fell behind with it: verse 2's audio played for seconds while
+  // the screen still showed verse 1, then the advance finally landed, the
+  // seek below saw a playhead far past verse 2's start and yanked it
+  // backwards -- restarting a verse that was already halfway through.
+  //
+  // Boundary detection now runs in the player's own event callback, off the
+  // render path entirely, and cannot be delayed by rendering at all. Only
+  // isLoaded reaches React state, and only when it actually changes.
+  const [listenLoaded, setListenLoaded] = useState(false);
+  // Reassigned after every render (below) so this long-lived listener always
+  // runs against current state without needing to be re-subscribed.
+  const onStatusTickRef = useRef<(status: AudioStatus) => void>(() => {});
+
+  useEffect(() => {
+    setListenLoaded(listenPlayer.currentStatus?.isLoaded ?? false);
+    const subscription = listenPlayer.addListener('playbackStatusUpdate', (status) => {
+      // Returning the identical value makes React bail out without
+      // re-rendering, so this costs nothing on the ticks where nothing
+      // changed -- which is all but two of them.
+      setListenLoaded((was) => (was === status.isLoaded ? was : status.isLoaded));
+      onStatusTickRef.current(status);
+    });
+    return () => subscription.remove();
+  }, [listenPlayer]);
 
   // Report playback state up so useAppState knows not to swap any player's
   // source while Listen is mid-recitation, and ask for whatever recording is
@@ -626,9 +709,17 @@ function PracticeModalsInner({
   // already begun. A genuine jump (switching recordings, looping back to the
   // start, restarting, manually selecting a verse) still seeks normally.
   useEffect(() => {
-    if (type !== 'listen' || !currentSegment?.recording || !listenPlayerStatus.isLoaded) return;
-    const alreadyThere = Math.abs(listenPlayerStatus.currentTime - currentSegment.startSec) < 0.35;
-    if (alreadyThere) {
+    if (type !== 'listen' || !currentSegment?.recording || !listenLoaded) return;
+    // "Already there" means anywhere INSIDE this verse, not just within a
+    // fraction of a second of its start. If the playhead is already somewhere
+    // in the segment we just switched to, the audio is by definition already
+    // playing the right verse and seeking could only interrupt it -- most
+    // destructively by restarting a verse the listener is halfway through.
+    // A genuine jump (different recording, looping back, restarting, tapping
+    // a verse) leaves the playhead outside the target and still seeks.
+    const playhead = listenPlayer.currentStatus?.currentTime ?? 0;
+    const alreadyInsideSegment = playhead >= currentSegment.startSec - 0.35 && playhead < currentSegment.endSec;
+    if (alreadyInsideSegment) {
       seekedToCurrentSegmentRef.current = true;
       return;
     }
@@ -637,14 +728,14 @@ function PracticeModalsInner({
       if (listenPlaying) listenPlayer.play();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, currentVerseIndex, currentSegment?.recording?.id, listenPlayerStatus.isLoaded]);
+  }, [type, currentVerseIndex, currentSegment?.recording?.id, listenLoaded]);
 
   // Keep the real playback rate in sync with the speed control, including
   // right after a recording (re)loads.
   useEffect(() => {
-    if (listenPlayerStatus.isLoaded) listenPlayer.setPlaybackRate(listenSpeed, 'high');
+    if (listenLoaded) listenPlayer.setPlaybackRate(listenSpeed, 'high');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listenSpeed, listenPlayerStatus.isLoaded, currentSegment?.recording?.id]);
+  }, [listenSpeed, listenLoaded, currentSegment?.recording?.id]);
 
   // Play the CURRENT segment again from its own start.
   //
@@ -667,33 +758,38 @@ function PracticeModalsInner({
   // Detects reaching the end of the current verse's segment and advances --
   // to the next verse, possibly switching recordings, or loops/stops at the
   // end of the (possibly selection-restricted) range.
-  useEffect(() => {
+  //
+  // Runs from the player's status callback, NOT from a render effect, so it
+  // stays on time no matter how busy React is (see the subscription above).
+  // It is redefined on every render and stashed in the ref below, which is
+  // what keeps the state it closes over current.
+  const handleStatusTick = (status: AudioStatus) => {
     if (type !== 'listen' || !listenPlaying || !currentSegment?.recording) return;
     // Don't trust currentTime until we've confirmed the seek to THIS verse's
     // start actually landed (see seekedToCurrentSegmentRef above) -- and even
     // then, ignore a reading that's still suspiciously behind this segment's
     // own start, in case the status object hasn't caught up to the seek yet.
     if (!seekedToCurrentSegmentRef.current) return;
-    if (listenPlayerStatus.currentTime < currentSegment.startSec - 0.5) return;
+    if (status.currentTime < currentSegment.startSec - 0.5) return;
 
     const segmentSpan = Math.max(0.01, currentSegment.endSec - currentSegment.startSec);
     if (repeatSeekPendingRef.current) {
       // Nothing about this segment can be trusted until the status reports the
       // playhead genuinely back near its start (see repeatSeekPendingRef).
-      if (listenPlayerStatus.currentTime <= currentSegment.startSec + Math.min(0.5, segmentSpan / 2)) {
+      if (status.currentTime <= currentSegment.startSec + Math.min(0.5, segmentSpan / 2)) {
         repeatSeekPendingRef.current = false;
       }
       return;
     }
 
-    const reachedEnd = listenPlayerStatus.currentTime >= currentSegment.endSec - 0.05;
+    const reachedEnd = status.currentTime >= currentSegment.endSec - 0.05;
     // didJustFinish is the safety net for a player that stops a hair short of
     // the tagged end. Honour it only when the playhead is genuinely deep into
     // this segment -- a finish flag left over from the previous pass, arriving
     // just after a repeat seeked back to the start, is not another finish.
     const finishedShort =
-      listenPlayerStatus.didJustFinish &&
-      listenPlayerStatus.currentTime > currentSegment.startSec + Math.min(0.25, segmentSpan / 2);
+      status.didJustFinish &&
+      status.currentTime > currentSegment.startSec + Math.min(0.25, segmentSpan / 2);
     if (!reachedEnd && !finishedShort) return;
 
     // Repeats-per-verse: replay THIS verse from its own start instead of
@@ -708,9 +804,21 @@ function PracticeModalsInner({
       return;
     }
 
+    // Disarm before handing over to the verse-change effects. Ticks arrive on
+    // the player's own schedule now, so another one can land before React has
+    // committed the new currentVerseIndex -- at which point this callback is
+    // still the previous render's closure, still pointed at the verse we just
+    // decided to leave. Clearing the ref here makes that tick a no-op instead
+    // of a second decision about a verse that is already behind us; the seek
+    // effect re-arms it once the new verse is cued.
+    const leaveCurrentVerse = (index: number) => {
+      seekedToCurrentSegmentRef.current = false;
+      setCurrentVerseIndex(index);
+    };
+
     const next = findNextPlayableIndex(currentVerseIndex);
     if (next !== null) {
-      setCurrentVerseIndex(next);
+      leaveCurrentVerse(next);
     } else if (repeatMode === 'playlist') {
       const first = firstPlayableIndexInRange();
       setVerseRepeatsDone(0);
@@ -718,14 +826,19 @@ function PracticeModalsInner({
         // Looping a range that is only this verse -- see replayCurrentSegment.
         replayCurrentSegment(currentSegment.startSec, listenPlaying);
       } else {
-        setCurrentVerseIndex(first);
+        leaveCurrentVerse(first);
       }
     } else {
       setListenPlaying(false);
       listenPlayer.pause();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listenPlayerStatus.currentTime, listenPlayerStatus.didJustFinish, listenPlaying, type]);
+  };
+
+  // No dependency array: the listener must always hold THIS render's closure,
+  // or it would advance using stale verse/repeat/selection state.
+  useEffect(() => {
+    onStatusTickRef.current = handleStatusTick;
+  });
 
   const restartListen = () => {
     setListenPlaying(false);
@@ -756,7 +869,7 @@ function PracticeModalsInner({
         setCurrentVerseIndex(firstPlayableIndexInRange());
       }
       setListenPlaying(true);
-      if (listenPlayerStatus.isLoaded) listenPlayer.play();
+      if (listenLoaded) listenPlayer.play();
     }
   };
 
@@ -1484,20 +1597,6 @@ function PracticeModalsInner({
     }
   };
 
-  // Overall progress across the whole playlist, smoothly advancing using the
-  // real playhead within the current verse's segment (0 when there's no
-  // segment to play at all). Computed here, not inline in the JSX below, so
-  // TypeScript can actually narrow currentSegment.recording -> non-null
-  // startSec/endSec (a ternary buried in a template literal doesn't narrow
-  // the same way).
-  let listenSegmentFraction = 0;
-  if (currentSegment && currentSegment.recording) {
-    const span = Math.max(0.01, currentSegment.endSec - currentSegment.startSec);
-    listenSegmentFraction = Math.max(0, Math.min(1, (listenPlayerStatus.currentTime - currentSegment.startSec) / span));
-  }
-  const overallListenProgressPercent =
-    activePlayVerses.length > 0 ? ((currentVerseIndex + listenSegmentFraction) / activePlayVerses.length) * 100 : 0;
-
   // Footer wording for the current selection -- computed out here, not inline
   // in the JSX, so TypeScript keeps the narrowing on selectionStart/End.
   let segmentStatusLabel: string | null = null;
@@ -1964,15 +2063,15 @@ function PracticeModalsInner({
                       start and its end, and they cost a whole line to say so.
                       What's left is the one caption carrying information,
                       centred under the bar. */}
-                  <View className="gap-1">
-                    <View className="w-full bg-neutral-200 h-1 rounded-full overflow-hidden">
-                      <View className="bg-[#1A1A1A] h-full" style={{ width: `${overallListenProgressPercent}%` }} />
-                    </View>
-                    <AppText variant="micro" numberOfLines={1} className="font-bold text-neutral-400 font-mono text-center">
-                      Verse {currentVerseIndex + 1} of {activePlayVerses.length}
-                      {repeatsPerVerse > 1 ? ` · pass ${verseRepeatsDone + 1} of ${repeatsPerVerse}` : ''}
-                    </AppText>
-                  </View>
+                  <ListenProgress
+                    player={listenPlayer}
+                    startSec={currentSegment?.startSec ?? null}
+                    endSec={currentSegment?.endSec ?? null}
+                    verseIndex={currentVerseIndex}
+                    verseCount={activePlayVerses.length}
+                    repeatsPerVerse={repeatsPerVerse}
+                    verseRepeatsDone={verseRepeatsDone}
+                  />
 
                   {/* Transport. Restart drops to an icon circle -- it's the
                       secondary action and its label was buying a third of the
