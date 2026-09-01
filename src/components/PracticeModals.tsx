@@ -61,7 +61,7 @@ import {
   ScrambleRound,
   SwapVerse,
 } from '../lib/drills';
-import { BounceView, ChipRow, FadeInView, HelpTooltip, SpinView, WaveBars } from './ui';
+import { BounceView, ChipRow, FadeInView, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
 import MemoryGrid, { verseAnnotationKey } from './MemoryGrid';
 import ListenPhotoView from './ListenPhotoView';
@@ -70,6 +70,16 @@ import { AppButton, AppIconButton, AppTextInput, AppText, useCollapsed } from '.
 
 /** Stable identity, so a missing photoCache prop cannot retrigger renders. */
 const EMPTY_PHOTO_CACHE: ReadonlyMap<string, string> = new Map();
+
+/**
+ * Listen-mode playback speeds. Discrete stops rather than the old ±0.2
+ * stepper: picking one is a single tap instead of up to eight, and every
+ * value here is one somebody would actually choose. 0.6/0.8 for learning a
+ * hard verse, 1.2 and up for review passes.
+ */
+const LISTEN_SPEEDS = [0.6, 0.8, 1.0, 1.2, 1.5, 2.0];
+/** Times each verse can repeat before playback moves on. */
+const LISTEN_REPEATS = [1, 2, 3, 4, 5];
 
 interface PracticeModalsProps {
   type: 'listen' | 'learn';
@@ -330,6 +340,12 @@ function PracticeModalsInner({
   // ever wonders why a verse is repeating itself.
   const [repeatsPerVerse, setRepeatsPerVerse] = useState(1);
   const [verseRepeatsDone, setVerseRepeatsDone] = useState(0);
+  // Which settings pill has its choices expanded beneath it, if any. Speed
+  // and repeats are the only two with more than an on/off to say; the
+  // end-of-list pill just toggles. Only one opens at a time because they
+  // share one row of space -- not because the others are being hidden from
+  // you: whatever is set is always readable on the pill itself.
+  const [openSetting, setOpenSetting] = useState<'speed' | 'repeats' | null>(null);
 
   // Auto-follow: the reading pane scrolls itself so the verse being played
   // stays on screen. On by default; scrolling by hand DURING playback turns
@@ -1798,10 +1814,15 @@ function PracticeModalsInner({
               )}
               </View>
 
-              {/* Segment status, Follow toggle, audio wave indicator. The old
-                  floating "Tap verse to set start" corner chip is gone -- it
-                  said the same thing this bar already says. */}
-              <View className="bg-neutral-100 border-t border-neutral-200 px-3 py-2 flex-row justify-between items-center gap-2 z-10">
+              {/* Segment status and the Follow toggle. The old floating "Tap
+                  verse to set start" corner chip is gone -- it said the same
+                  thing this bar already says -- and so is the animated wave
+                  indicator that used to sit on the right: it was decoration
+                  competing with real controls, and the play button already
+                  says whether audio is running. A hairline instead of a
+                  filled grey bar, so this reads as the bottom edge of the
+                  verse list rather than a fourth stacked band of chrome. */}
+              <View className="border-t border-neutral-200 px-3 py-2 flex-row justify-between items-center gap-2 z-10">
                 <View className="flex-row items-center gap-2 flex-1">
                   {playSource === 'selection' && selectionStart !== null ? (
                     <>
@@ -1826,29 +1847,26 @@ function PracticeModalsInner({
                   )}
                 </View>
 
-                <View className="flex-row items-center gap-1.5 shrink-0">
-                  {/* Follow -- scrolls the list to keep the playing verse on
-                      screen. Only offered for the card list, the one view that
-                      can actually run the verse off-screen. */}
-                  {listenViewMode === 'verses' && (
-                    <AppButton
-                      size="sm"
-                      onPress={() => setAutoFollow((on) => !on)}
-                      className={`flex-row items-center gap-1 rounded-lg border ${autoFollow ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-300'}`}
-                    >
-                      <MoveVertical size={10} color={autoFollow ? '#ffffff' : '#737373'} />
-                      <AppText variant="micro" className={`font-sans font-extrabold ${autoFollow ? 'text-white' : 'text-neutral-500'}`}>Follow</AppText>
-                    </AppButton>
-                  )}
-                  <View className="bg-white border border-neutral-200 px-2 py-1 rounded-lg">
-                    <WaveBars active={listenPlaying} count={5} />
-                  </View>
-                </View>
+                {/* Follow -- scrolls the list to keep the playing verse on
+                    screen. Only offered for the card list, the one view that
+                    can actually run the verse off-screen. */}
+                {listenViewMode === 'verses' && (
+                  <AppButton
+                    size="sm"
+                    onPress={() => setAutoFollow((on) => !on)}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: autoFollow }}
+                    className={`flex-row items-center gap-1 rounded-full border shrink-0 ${autoFollow ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-300'}`}
+                  >
+                    <MoveVertical size={10} color={autoFollow ? '#ffffff' : '#737373'} />
+                    <AppText variant="micro" className={`font-sans font-extrabold ${autoFollow ? 'text-white' : 'text-neutral-500'}`}>Follow</AppText>
+                  </AppButton>
+                )}
               </View>
             </View>
 
             {/* Custom Control and Audio Looping Panel */}
-            <View className="gap-3.5 bg-white pt-2">
+            <View className="gap-3 bg-white pt-2">
               {!hasAnyAudio ? (
                 <View className="items-center gap-1.5 py-4 bg-neutral-50 rounded-xl border border-dashed border-neutral-300">
                   <AppText variant="label" className="font-sans font-bold text-neutral-600">No audio recorded for these verses yet</AppText>
@@ -1859,92 +1877,126 @@ function PracticeModalsInner({
                 </View>
               ) : (
                 <>
-                  {/* Adjusters: Speed (.25 steps) and Repeat mode */}
-                  <View className="flex-row gap-2">
-                    {/* 1. Playback Speed Selector */}
-                    <View className="flex-1 justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 gap-1">
-                      <View className="flex-row items-center gap-1">
-                        <Sliders size={10} color="#737373" />
-                        <AppText variant="micro" className="font-sans font-bold text-neutral-500 uppercase tracking-wider">Speed (±0.2)</AppText>
-                      </View>
-                      <View className="flex-row items-center justify-between bg-white px-2 py-1 rounded-lg border border-neutral-200">
-                        <Pressable
-                          onPress={() => setListenSpeed((s) => Math.max(0.4, Number((s - 0.2).toFixed(1))))}
-                          className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
-                        >
-                          <AppText variant="label" className="font-black text-neutral-800">-</AppText>
-                        </Pressable>
-                        <AppText variant="label" className="font-mono font-bold text-neutral-900">{listenSpeed.toFixed(1)}x</AppText>
-                        <Pressable
-                          onPress={() => setListenSpeed((s) => Math.min(2.0, Number((s + 0.2).toFixed(1))))}
-                          className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
-                        >
-                          <AppText variant="label" className="font-black text-neutral-800">+</AppText>
-                        </Pressable>
-                      </View>
-                    </View>
+                  {/* Settings pills. These replaced two bordered cards, each
+                      holding a bordered inner pill, each holding bordered 20pt
+                      -/+ buttons -- three nested border tones stacked, with
+                      nothing reading as more important than anything else.
+                      Worse, those -/+ buttons were fixed at w-5 h-5: no
+                      useFontScale, well under MIN_TOUCH, and at 1.5x text
+                      scale the glyph outgrew the box around it.
 
-                    {/* 2. Audio Repeat Control -- two independent axes in one
-                        card: how many times each VERSE plays before moving on,
-                        and what happens at the END of the list. */}
-                    <View className="flex-1 justify-center bg-neutral-50 p-2.5 rounded-xl border border-neutral-200 gap-1">
-                      <View className="flex-row items-center gap-1">
-                        <Repeat size={10} color="#737373" />
-                        <AppText variant="micro" className="font-sans font-bold text-neutral-500 uppercase tracking-wider">Repeat</AppText>
-                        <HelpTooltip text="The number sets how many times each verse plays before moving on — at 3× you hear verse 15 three times, then verse 16 three times, and so on. Off / Loop is separate: it decides what happens once the whole list has played through." />
+                      Now each setting is one pill showing its current value,
+                      and tapping it expands the choices directly above the row
+                      -- still on this screen, never behind a sheet. Only one
+                      expands at a time because they share the row's space, but
+                      nothing is hidden by that: every pill states its own
+                      value whether or not it's open. */}
+                  <View className="gap-1.5">
+                    {openSetting !== null && (
+                      <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-2 gap-1.5">
+                        <AppText variant="micro" className="font-sans font-bold text-neutral-500 uppercase tracking-wider">
+                          {openSetting === 'speed' ? 'Playback speed' : 'Times each verse plays before moving on'}
+                        </AppText>
+                        {openSetting === 'speed' ? (
+                          <ChipRow
+                            value={listenSpeed}
+                            onChange={(v) => { setListenSpeed(Number(v)); setOpenSetting(null); }}
+                            options={LISTEN_SPEEDS.map((s) => ({ id: s, label: `${s.toFixed(1)}×` }))}
+                          />
+                        ) : (
+                          <ChipRow
+                            value={repeatsPerVerse}
+                            onChange={(v) => { setRepeatsPerVerse(Number(v)); setOpenSetting(null); }}
+                            options={LISTEN_REPEATS.map((n) => ({ id: n, label: `${n}×` }))}
+                          />
+                        )}
                       </View>
-                      <View className="flex-row items-center justify-between bg-white px-2 py-1 rounded-lg border border-neutral-200">
-                        <Pressable
-                          onPress={() => setRepeatsPerVerse((r) => Math.max(1, r - 1))}
-                          className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
-                        >
-                          <AppText variant="label" className="font-black text-neutral-800">-</AppText>
-                        </Pressable>
-                        <AppText variant="label" numberOfLines={1} className="font-mono font-bold text-neutral-900">{repeatsPerVerse}× each</AppText>
-                        <Pressable
-                          onPress={() => setRepeatsPerVerse((r) => Math.min(5, r + 1))}
-                          className="w-5 h-5 bg-neutral-100 border border-neutral-300 rounded items-center justify-center"
-                        >
-                          <AppText variant="label" className="font-black text-neutral-800">+</AppText>
-                        </Pressable>
-                      </View>
-                      <ChipRow
-                        value={repeatMode}
-                        onChange={(id) => setRepeatMode(id)}
-                        options={[
-                          { id: 'off', label: 'Off' },
-                          { id: 'playlist', label: 'Loop' },
-                        ]}
-                      />
+                    )}
+
+                    <View className="flex-row gap-1.5">
+                      <AppButton
+                        size="sm"
+                        onPress={() => setOpenSetting((cur) => (cur === 'speed' ? null : 'speed'))}
+                        className={`flex-row items-center justify-center gap-1 flex-1 rounded-full border ${openSetting === 'speed' ? 'bg-neutral-100 border-neutral-400' : 'bg-white border-neutral-300'}`}
+                      >
+                        {/* An icon rather than the word "speed": spelled out,
+                            this pill clipped to "1.0x s..." at 1.5x font
+                            scale. The expander names it in full once open. */}
+                        <Sliders size={10} color="#737373" />
+                        <AppText variant="micro" numberOfLines={1} className="font-mono font-bold text-neutral-800">
+                          {listenSpeed.toFixed(1)}×
+                        </AppText>
+                      </AppButton>
+
+                      <AppButton
+                        size="sm"
+                        onPress={() => setOpenSetting((cur) => (cur === 'repeats' ? null : 'repeats'))}
+                        className={`flex-1 rounded-full border ${openSetting === 'repeats' ? 'bg-neutral-100 border-neutral-400' : 'bg-white border-neutral-300'}`}
+                      >
+                        <AppText variant="micro" numberOfLines={1} className="font-mono font-bold text-neutral-800">
+                          {repeatsPerVerse}× each
+                        </AppText>
+                      </AppButton>
+
+                      {/* End-of-list behaviour -- a plain toggle, so it needs no
+                          expander of its own. */}
+                      <AppButton
+                        size="sm"
+                        onPress={() => setRepeatMode((m) => (m === 'playlist' ? 'off' : 'playlist'))}
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: repeatMode === 'playlist' }}
+                        className={`flex-row items-center gap-1 rounded-full border shrink-0 ${repeatMode === 'playlist' ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-300'}`}
+                      >
+                        <Repeat size={10} color={repeatMode === 'playlist' ? '#ffffff' : '#737373'} />
+                        <AppText variant="micro" numberOfLines={1} className={`font-sans font-extrabold ${repeatMode === 'playlist' ? 'text-white' : 'text-neutral-500'}`}>
+                          {repeatMode === 'playlist' ? 'Loop' : 'Off'}
+                        </AppText>
+                      </AppButton>
                     </View>
                   </View>
 
                   {/* Progress bar — overall position across the playlist,
                       smoothly advancing using the real playhead within the
-                      current verse's segment. */}
-                  <View className="gap-0.5">
-                    <View className="flex-row justify-between px-1">
-                      <AppText variant="micro" className="font-bold text-neutral-400 font-mono">START</AppText>
-                      <AppText variant="micro" className="font-bold text-neutral-400 font-mono">
-                        Verse {currentVerseIndex + 1} of {activePlayVerses.length}
-                        {repeatsPerVerse > 1 ? ` · ${verseRepeatsDone + 1}/${repeatsPerVerse}` : ''}
-                      </AppText>
-                      <AppText variant="micro" className="font-bold text-neutral-400 font-mono">END</AppText>
-                    </View>
-                    <View className="w-full bg-neutral-200 h-1.5 rounded-full overflow-hidden">
+                      current verse's segment.
+
+                      The START and END captions that used to flank the counter
+                      are gone: the ends of a progress bar are already its
+                      start and its end, and they cost a whole line to say so.
+                      What's left is the one caption carrying information,
+                      centred under the bar. */}
+                  <View className="gap-1">
+                    <View className="w-full bg-neutral-200 h-1 rounded-full overflow-hidden">
                       <View className="bg-[#1A1A1A] h-full" style={{ width: `${overallListenProgressPercent}%` }} />
                     </View>
+                    <AppText variant="micro" numberOfLines={1} className="font-bold text-neutral-400 font-mono text-center">
+                      Verse {currentVerseIndex + 1} of {activePlayVerses.length}
+                      {repeatsPerVerse > 1 ? ` · pass ${verseRepeatsDone + 1} of ${repeatsPerVerse}` : ''}
+                    </AppText>
                   </View>
 
-                  {/* Main player controls row */}
-                  <View className="flex-row gap-2.5 pb-1">
-                    <AppButton size="md" onPress={restartListen} className="flex-1 border-2 border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5">
-                      <RefreshCw size={12} color="#1A1A1A" />
-                      <AppText variant="label" className="font-sans font-bold text-[#1A1A1A]">Restart</AppText>
-                    </AppButton>
-                    <AppButton size="md" onPress={toggleListenPlaying} className={`flex-[2] rounded-xl flex-row items-center justify-center gap-1.5 ${ listenPlaying ? 'bg-neutral-900' : 'bg-emerald-600' }`}>
-                      {listenPlaying ? <Pause size={12} color="#ffffff" /> : <Play size={12} color="#ffffff" />}
-                      <AppText variant="label" className="font-sans font-bold text-white">{listenPlaying ? 'Pause Audio' : 'Start Looping'}</AppText>
+                  {/* Transport. Restart drops to an icon circle -- it's the
+                      secondary action and its label was buying a third of the
+                      row -- which hands that width to the one control that
+                      gets pressed constantly. AppIconButton scales the circle
+                      with the font setting and makes up any shortfall against
+                      MIN_TOUCH with hitSlop, so shrinking it visually doesn't
+                      shrink the tap target.
+
+                      The play label is "Play", not the old "Start Looping":
+                      that was only ever true when the repeat pill was on. */}
+                  <View className="flex-row items-center gap-2.5 pb-1">
+                    <AppIconButton
+                      Icon={RefreshCw}
+                      diameter={44}
+                      iconSize={16}
+                      iconColor="#1A1A1A"
+                      onPress={restartListen}
+                      accessibilityLabel="Restart from the first verse"
+                      className="rounded-full border-2 border-[#1A1A1A] shrink-0"
+                    />
+                    <AppButton size="lg" onPress={toggleListenPlaying} className={`flex-1 rounded-xl flex-row items-center justify-center gap-1.5 ${ listenPlaying ? 'bg-neutral-900' : 'bg-emerald-600' }`}>
+                      {listenPlaying ? <Pause size={14} color="#ffffff" /> : <Play size={14} color="#ffffff" />}
+                      <AppText variant="label" className="font-sans font-bold text-white">{listenPlaying ? 'Pause' : 'Play'}</AppText>
                     </AppButton>
                   </View>
                 </>
