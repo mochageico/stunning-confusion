@@ -456,7 +456,10 @@ function PracticeModalsInner({
   // session launched from Home routinely spans several chapters, so this has to
   // re-resolve against whichever chapter the current verse actually belongs to
   // -- otherwise the page on screen quietly stops matching the audio.
-  const photoVerse = currentSegment?.verseObj ?? activePlayVerses[currentVerseIndex] ?? null;
+  // The verse playback is actually on. Named for what it is rather than for
+  // the photo layer, because the lock screen needs exactly the same thing.
+  const nowPlayingVerse = currentSegment?.verseObj ?? activePlayVerses[currentVerseIndex] ?? null;
+  const photoVerse = nowPlayingVerse;
   const photoChapterKey = photoVerse ? chapterPhotoKey(photoVerse.book, photoVerse.chapter) : null;
   const photosForCurrentChapter = useMemo(
     () =>
@@ -575,6 +578,59 @@ function PracticeModalsInner({
     return () => subscription.remove();
   }, [listenPlayer]);
 
+  // ---- Lock screen / Control Centre ------------------------------------
+  // What the OS shows while the phone is locked: the verse being spoken, and
+  // underneath it whichever recording is being played.
+  const lockScreenMetadata = useMemo(
+    () => ({
+      title: nowPlayingVerse
+        ? `${nowPlayingVerse.book} ${nowPlayingVerse.chapter}:${nowPlayingVerse.verse}`
+        : referenceText,
+      artist: currentSegment?.recording?.title ?? 'Scripture Memory',
+      albumTitle: referenceText,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nowPlayingVerse?.book, nowPlayingVerse?.chapter, nowPlayingVerse?.verse, currentSegment?.recording?.title, referenceText]
+  );
+
+  // Claim the controls the first time this session actually plays -- not the
+  // moment Listen opens, which would park a silent "now playing" card on the
+  // lock screen for someone who is only reading.
+  //
+  // Claiming is per PLAYER, and useAudioPlayer builds a new one whenever the
+  // source changes, so a session spanning two chapters has to re-claim on the
+  // swap; hence tracking which player holds it rather than a bare boolean.
+  //
+  // Deliberately never released on pause: releasing it would take the
+  // controls away at exactly the moment the user needs them to press play
+  // again. Only unmount clears it.
+  const lockScreenPlayerRef = useRef<AudioPlayer | null>(null);
+  useEffect(() => {
+    if (type !== 'listen' || !listenPlaying || !listenLoaded) return;
+    if (lockScreenPlayerRef.current === listenPlayer) {
+      listenPlayer.updateLockScreenMetadata(lockScreenMetadata);
+      return;
+    }
+    lockScreenPlayerRef.current = listenPlayer;
+    // Seek buttons stay off: they would move the playhead ten seconds at a
+    // time with no regard for verse boundaries. The scrub bar is left on, and
+    // handleStatusTick below follows it to whichever verse it lands in.
+    listenPlayer.setActiveForLockScreen(true, lockScreenMetadata, {
+      showSeekForward: false,
+      showSeekBackward: false,
+    });
+  }, [type, listenPlaying, listenLoaded, listenPlayer, lockScreenMetadata]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        lockScreenPlayerRef.current?.clearLockScreenControls();
+      } catch {
+        // already released
+      }
+    };
+  }, []);
+
   // Report playback state up so useAppState knows not to swap any player's
   // source while Listen is mid-recitation, and ask for whatever recording is
   // playing to be cached. Both are no-ops after the first time for a given
@@ -605,9 +661,32 @@ function PracticeModalsInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Audio session for Listen playback. Both of the additions here are load-
+  // bearing for locked-screen listening, not preferences:
+  //
+  // - shouldPlayInBackground is what keeps audio running once the app leaves
+  //   the foreground at all. The native side of it is already in place --
+  //   expo-audio's config plugin defaults enableBackgroundPlayback to true,
+  //   so the build already carries UIBackgroundModes: ['audio'] and Android's
+  //   mediaPlayback foreground service.
+  // - interruptionMode must be 'doNotMix' or the OS may decline to hand this
+  //   player the lock screen controls at all (expo-audio's own requirement
+  //   for setActiveForLockScreen). It also means starting a Listen session
+  //   now stops whatever else was playing, rather than talking over it --
+  //   which is the right behaviour for a recitation you are trying to follow.
+  //
+  // NOTE: the audio session is global, and useAppState resets it to a
+  // foreground-only mode after recording/importing. Those paths all stop
+  // Listen first (the one-source-at-a-time effect below), so they can't strip
+  // background mode from a session that is still playing.
   useEffect(() => {
     if (listenPlaying) {
-      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
+        interruptionMode: 'doNotMix',
+      }).catch(() => {});
     }
   }, [listenPlaying]);
 
@@ -684,6 +763,14 @@ function PracticeModalsInner({
   // this on its own because, unlike a verse change, currentVerseIndex never
   // changes here.
   const repeatSeekPendingRef = useRef(false);
+  // When this component last commanded the player itself. The remote-transport
+  // sync in handleStatusTick ignores disagreements newer than this, so our own
+  // in-flight play/pause/seek is never mistaken for someone pressing a button
+  // on their headphones.
+  const lastTransportCommandRef = useRef(0);
+  const markTransportCommand = () => {
+    lastTransportCommandRef.current = Date.now();
+  };
   useEffect(() => {
     seekedToCurrentSegmentRef.current = false;
     repeatSeekPendingRef.current = false;
@@ -723,8 +810,10 @@ function PracticeModalsInner({
       seekedToCurrentSegmentRef.current = true;
       return;
     }
+    markTransportCommand();
     listenPlayer.seekTo(currentSegment.startSec).then(() => {
       seekedToCurrentSegmentRef.current = true;
+      markTransportCommand();
       if (listenPlaying) listenPlayer.play();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -749,8 +838,10 @@ function PracticeModalsInner({
   const replayCurrentSegment = (startSec: number, resume: boolean) => {
     seekedToCurrentSegmentRef.current = false;
     repeatSeekPendingRef.current = true;
+    markTransportCommand();
     listenPlayer.seekTo(startSec).then(() => {
       seekedToCurrentSegmentRef.current = true;
+      markTransportCommand();
       if (resume) listenPlayer.play();
     });
   };
@@ -764,13 +855,44 @@ function PracticeModalsInner({
   // It is redefined on every render and stashed in the ref below, which is
   // what keeps the state it closes over current.
   const handleStatusTick = (status: AudioStatus) => {
-    if (type !== 'listen' || !listenPlaying || !currentSegment?.recording) return;
+    if (type !== 'listen') return;
+
+    // Transport pressed from outside the app -- one squeeze of an AirPod, the
+    // lock screen, a car stereo. Those commands are handled natively, against
+    // the player directly, so React never hears about them and the on-screen
+    // button would otherwise keep claiming the opposite of the truth. The
+    // player's own reported state is the authority here; adopt it.
+    //
+    // Guarded three ways so this never fights a transition we started
+    // ourselves: not while the player is still loading or buffering (we
+    // legitimately intend to play before it can), and not within a moment of
+    // our own play/pause/seek, which takes a beat to show up in the status.
+    if (
+      status.isLoaded &&
+      !status.isBuffering &&
+      status.playing !== listenPlaying &&
+      Date.now() - lastTransportCommandRef.current > 800
+    ) {
+      setListenPlaying(status.playing);
+      return;
+    }
+
+    if (!listenPlaying || !currentSegment?.recording) return;
     // Don't trust currentTime until we've confirmed the seek to THIS verse's
-    // start actually landed (see seekedToCurrentSegmentRef above) -- and even
-    // then, ignore a reading that's still suspiciously behind this segment's
-    // own start, in case the status object hasn't caught up to the seek yet.
+    // start actually landed (see seekedToCurrentSegmentRef above).
     if (!seekedToCurrentSegmentRef.current) return;
-    if (status.currentTime < currentSegment.startSec - 0.5) return;
+
+    // Disarm before handing over to the verse-change effects. Ticks arrive on
+    // the player's own schedule now, so another one can land before React has
+    // committed the new currentVerseIndex -- at which point this callback is
+    // still the previous render's closure, still pointed at the verse we just
+    // decided to leave. Clearing the ref here makes that tick a no-op instead
+    // of a second decision about a verse that is already behind us; the seek
+    // effect re-arms it once the new verse is cued.
+    const leaveCurrentVerse = (index: number) => {
+      seekedToCurrentSegmentRef.current = false;
+      setCurrentVerseIndex(index);
+    };
 
     const segmentSpan = Math.max(0.01, currentSegment.endSec - currentSegment.startSec);
     if (repeatSeekPendingRef.current) {
@@ -781,6 +903,37 @@ function PracticeModalsInner({
       }
       return;
     }
+
+    // The playhead is somewhere this component did not put it: the lock
+    // screen's scrub bar was dragged. Follow it to whichever verse now owns
+    // that position rather than fighting it -- without this, dragging the
+    // scrubber leaves the highlight stranded on the old verse, and the next
+    // boundary check seeks the audio back to it.
+    //
+    // The 1.5s margin keeps a genuine drag distinct from a status reading
+    // that is merely a little stale right after one of our own seeks; an
+    // ordinary verse boundary is noticed within about a tick of crossing it.
+    const activeRecordingId = currentSegment.recording.id;
+    const scrubbedAway =
+      status.currentTime < currentSegment.startSec - 1.5 || status.currentTime >= currentSegment.endSec + 1.5;
+    if (scrubbedAway) {
+      const landedOn = playableSegments.findIndex(
+        (segment) =>
+          segment.recording?.id === activeRecordingId &&
+          segment.startSec !== null &&
+          segment.endSec !== null &&
+          status.currentTime >= segment.startSec &&
+          status.currentTime < segment.endSec
+      );
+      if (landedOn >= 0 && landedOn !== currentVerseIndex) {
+        leaveCurrentVerse(landedOn);
+        return;
+      }
+    }
+
+    // A reading still behind this segment's start, but not far enough to be a
+    // deliberate jump -- the status simply hasn't caught up to a seek yet.
+    if (status.currentTime < currentSegment.startSec - 0.5) return;
 
     const reachedEnd = status.currentTime >= currentSegment.endSec - 0.05;
     // didJustFinish is the safety net for a player that stops a hair short of
@@ -804,18 +957,6 @@ function PracticeModalsInner({
       return;
     }
 
-    // Disarm before handing over to the verse-change effects. Ticks arrive on
-    // the player's own schedule now, so another one can land before React has
-    // committed the new currentVerseIndex -- at which point this callback is
-    // still the previous render's closure, still pointed at the verse we just
-    // decided to leave. Clearing the ref here makes that tick a no-op instead
-    // of a second decision about a verse that is already behind us; the seek
-    // effect re-arms it once the new verse is cued.
-    const leaveCurrentVerse = (index: number) => {
-      seekedToCurrentSegmentRef.current = false;
-      setCurrentVerseIndex(index);
-    };
-
     const next = findNextPlayableIndex(currentVerseIndex);
     if (next !== null) {
       leaveCurrentVerse(next);
@@ -829,6 +970,7 @@ function PracticeModalsInner({
         leaveCurrentVerse(first);
       }
     } else {
+      markTransportCommand();
       setListenPlaying(false);
       listenPlayer.pause();
     }
@@ -841,6 +983,7 @@ function PracticeModalsInner({
   });
 
   const restartListen = () => {
+    markTransportCommand();
     setListenPlaying(false);
     const first = firstPlayableIndexInRange();
     setVerseRepeatsDone(0);
@@ -859,6 +1002,7 @@ function PracticeModalsInner({
   };
 
   const toggleListenPlaying = () => {
+    markTransportCommand();
     if (listenPlaying) {
       listenPlayer.pause();
       setListenPlaying(false);
