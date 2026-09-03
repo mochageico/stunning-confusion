@@ -808,6 +808,20 @@ function PracticeModalsInner({
     const alreadyInsideSegment = playhead >= currentSegment.startSec - 0.35 && playhead < currentSegment.endSec;
     if (alreadyInsideSegment) {
       seekedToCurrentSegmentRef.current = true;
+      // ...but "no seek needed" is not the same as "already playing", and the
+      // difference is a whole chapter. Crossing into a new one swaps the
+      // recording, and useAudioPlayer answers a new source by building a new
+      // player -- which arrives loaded, parked at 0, and paused. A chapter's
+      // first verse starts at 0 too, so the playhead is legitimately inside
+      // the target segment and this shortcut is taken. Returning here would
+      // leave that new recording sitting silently at its start forever, since
+      // the only play() on this path is the one inside the seek below.
+      // Playback simply stopped at every chapter boundary.
+      const playing = listenPlayer.currentStatus?.playing ?? false;
+      if (listenPlaying && !playing) {
+        markTransportCommand();
+        listenPlayer.play();
+      }
       return;
     }
     markTransportCommand();
@@ -863,11 +877,24 @@ function PracticeModalsInner({
     // button would otherwise keep claiming the opposite of the truth. The
     // player's own reported state is the authority here; adopt it.
     //
-    // Guarded three ways so this never fights a transition we started
-    // ourselves: not while the player is still loading or buffering (we
-    // legitimately intend to play before it can), and not within a moment of
-    // our own play/pause/seek, which takes a beat to show up in the status.
+    // Guarded four ways so this never fights a transition we started
+    // ourselves: not before the current verse has actually been cued, not
+    // while the player is still loading or buffering (we legitimately intend
+    // to play before it can), and not within a moment of our own
+    // play/pause/seek, which takes a beat to show up in the status.
+    //
+    // That first guard is what makes crossing into a new CHAPTER survive.
+    // A new chapter is a new recording, so the player reloads, and a freshly
+    // loaded source sits there paused until the seek effect cues it and hits
+    // play. The tick announcing isLoaded arrives from the player's own
+    // callback, synchronously, before React has re-rendered -- so the seek
+    // effect has not run yet, nothing has marked a transport command, and
+    // this saw a loaded, not-playing player under a listenPlaying intent of
+    // true. It read that as "they pressed pause" and stopped playback at
+    // every chapter boundary. seekedToCurrentSegmentRef is false for exactly
+    // that window and true once the verse is genuinely cued.
     if (
+      seekedToCurrentSegmentRef.current &&
       status.isLoaded &&
       !status.isBuffering &&
       status.playing !== listenPlaying &&
