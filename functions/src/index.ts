@@ -15,7 +15,7 @@ import { logger } from 'firebase-functions';
 // The api.bible proxy lives in its own module -- it shares nothing with the
 // audio pipeline in this file beyond the Firebase app, and inlining it here
 // would bury it in 700 lines of ffmpeg argument construction.
-export { fetchApiBibleChapter } from './apiBible';
+export { fetchApiBibleChapter, purgeApiBibleCache } from './apiBible';
 
 const app = initializeApp();
 

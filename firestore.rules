@@ -353,5 +353,26 @@ service cloud.firestore {
       }
     }
 
+    // api.bible's shared chapter cache and its monthly call counter.
+    //
+    // Denied to clients on BOTH operations, deliberately and explicitly. The
+    // global default-deny at the top of this file already covers these paths,
+    // so these blocks change no behaviour — they exist so the intent is
+    // written down where someone would look before adding an allow rule.
+    //
+    // apiBibleCache holds LICENSED scripture text (CSB/NIV/NLT), which unlike
+    // the public-domain text in translations/** above must never be
+    // world-readable: the licence permits caching it on our servers, not
+    // republishing it through an open endpoint. Only the fetchApiBibleChapter
+    // Cloud Function touches these, and it runs with admin credentials that
+    // bypass these rules entirely.
+    match /apiBibleCache/{cacheId} {
+      allow read, write: if false;
+    }
+
+    match /apiBibleUsage/{monthId} {
+      allow read, write: if false;
+    }
+
   }
 }
