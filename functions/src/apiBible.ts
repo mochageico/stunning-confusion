@@ -154,11 +154,11 @@ async function reportFums(token: string, deviceId?: string, sessionId?: string, 
  * Acts 8:37 and others), so the parsed number is kept as given rather than
  * inferred from position.
  *
- * UNVERIFIED AGAINST A LIVE RESPONSE. Written against api.bible's documented
- * output format; nobody has yet run it on a real one. The logic is exercised
- * for gaps, leading front matter and empty input, but check a real chapter
- * before trusting this in anger -- same caveat the ESV adapter carries in
- * scripts/import-bible/README.md.
+ * Verified against a live CSB response (Obadiah 1): 21 verses, numbered 1-21
+ * with no gaps and no empty text, matching the `verseCount` the API reports
+ * alongside the content. Leading whitespace before `[1]` is discarded rather
+ * than becoming a phantom verse, and the newlines api.bible uses for poetic
+ * line breaks collapse into single spaces.
  */
 export function parseVerses(content: string): Record<string, string> {
   const verses: Record<string, string> = {};
@@ -245,9 +245,14 @@ export const fetchApiBibleChapter = onCall(
       throw new HttpsError('unavailable', 'Could not reach the scripture service. Try again in a moment.');
     }
 
+    // The FUMS token is `meta.fumsToken`, NOT `meta.fumsId`. This was wrong
+    // when first written and failed silently in the worst way: the optional
+    // chain simply never matched, so reportFums() was never called and usage
+    // went unreported with nothing in the logs to say so. Verified against a
+    // live response before this comment was written.
     const body = (await res.json()) as {
-      data?: { content?: string };
-      meta?: { fumsId?: string };
+      data?: { content?: string; verseCount?: number };
+      meta?: { fumsToken?: string };
     };
 
     const content = body.data?.content ?? '';
@@ -258,8 +263,13 @@ export const fetchApiBibleChapter = onCall(
       throw new HttpsError('internal', 'Scripture came back in an unexpected format.');
     }
 
-    if (body.meta?.fumsId) {
-      await reportFums(body.meta.fumsId, deviceId, sessionId, request.auth.uid);
+    // A missing token is logged rather than shrugged off: FUMS reporting is a
+    // licence obligation, so "we never had anything to report" needs to be
+    // visible if it ever becomes the norm again.
+    if (body.meta?.fumsToken) {
+      await reportFums(body.meta.fumsToken, deviceId, sessionId, request.auth.uid);
+    } else {
+      logger.warn('api.bible response carried no fumsToken', { bookId, chapter });
     }
 
     // ── 4. Populate the cache for everyone else ──────────────────────────────

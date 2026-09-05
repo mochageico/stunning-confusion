@@ -126,10 +126,33 @@ const UNRESTRICTED: TranslationCapabilities = {
 
 // api.bible's terms for licensed text, kept here so the numbers are written
 // down at the point of use rather than living only in a plan document:
-// cache cleared at least every 14 days, under 500 consecutive verses held,
-// FUMS reported on every read, 5,000 queries/day.
+// cache cleared at least every 14 days, at most 500 consecutive verses per
+// request, FUMS reported on every fetch, and 5,000 calls per MONTH on the free
+// Starter plan (150,000 on the paid tier). The monthly budget is why the Cloud
+// Function caches chapters server-side and shares them across all users --
+// see functions/src/apiBible.ts.
 // https://scripture.api.bible/license
 export const API_BIBLE_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+
+// What every licensed (non-public-domain) translation is limited to.
+//
+// Pulled out because all three api.bible translations share it exactly, and
+// because the day one of them differs, the difference should be visible as an
+// override rather than buried in a copy-pasted block.
+//
+// `print` and `publishAudio` are the conservative reading rather than a quoted
+// restriction: printing a first-letter-only memory grid is a heavy enough
+// transformation that it may well be fine, and recitation audio is only ever
+// shared privately or to a circle in this app. Neither is currently enforced
+// (see TranslationCapabilities), so this costs nothing today -- it just means
+// capabilityWarningsFor() surfaces both as things to confirm with the
+// publisher before a licensed translation ships.
+const LICENSED_CAPABILITIES: TranslationCapabilities = {
+  persistText: false,
+  cacheTtlMs: API_BIBLE_CACHE_TTL_MS,
+  print: false,
+  publishAudio: false,
+};
 
 // Crossway's required attribution text for apps displaying ESV® text via their API
 // (see scripts/import-bible/adapters/esv.js and https://api.esv.org/docs/).
@@ -166,6 +189,53 @@ export const BIBLE_TRANSLATIONS: BibleTranslation[] = [
     isPublicDomain: true,
     source: 'firestore',
     capabilities: UNRESTRICTED,
+  },
+  // ── Licensed, via api.bible ────────────────────────────────────────────────
+  // The three copyrighted Bibles the free Starter plan allows. Unlike the ESV,
+  // these needed no publisher negotiation and no track record: api.bible's
+  // non-commercial agreement covers them outright, on the condition that this
+  // app is never monetised (no ads, fees, freemium, or upsells -- donation
+  // links are permitted but revocable).
+  //
+  // The NIV in particular is available ONLY non-commercially; no paid tier
+  // offers it at any price. Monetising the app would mean removing it.
+  //
+  // Copyright strings are the publishers' own, read from each Bible's
+  // `copyright` field on the api.bible API rather than transcribed by hand --
+  // attribution has to be exact, and these are the authoritative versions.
+  // The ids are api.bible's UUIDs; list them again any time with
+  // `node scripts/list-api-bibles.cjs --english`.
+  {
+    id: 'CSB',
+    name: 'Christian Standard Bible',
+    copyright: '© 2017 Holman Bible Publishers',
+    isPublicDomain: false,
+    source: 'apiBible',
+    apiBibleId: 'a556c5305ee15c3f-01',
+    capabilities: LICENSED_CAPABILITIES,
+  },
+  {
+    id: 'NIV',
+    name: 'New International Version',
+    copyright:
+      'The Holy Bible, New International Version® NIV® Copyright © 1973, 1978, 1984, 2011 by Biblica, Inc.® Used by Permission of Biblica, Inc.® All rights reserved worldwide.',
+    isPublicDomain: false,
+    source: 'apiBible',
+    // api.bible calls this one NIV11 (the 2011 revision); the app keeps the
+    // familiar 'NIV' as its own id, since that is what users call it and what
+    // older recordings already store in Recording.translation.
+    apiBibleId: '78a9f6124f344018-01',
+    capabilities: LICENSED_CAPABILITIES,
+  },
+  {
+    id: 'NLT',
+    name: 'New Living Translation',
+    copyright:
+      'Holy Bible, New Living Translation, copyright © 1996, 2004, 2015 by Tyndale House Foundation. All rights reserved. Used by permission of Tyndale House Publishers, Carol Stream, Illinois 60188. All rights reserved.',
+    isPublicDomain: false,
+    source: 'apiBible',
+    apiBibleId: 'd6e14a625393b4da-01',
+    capabilities: LICENSED_CAPABILITIES,
   },
   // Kept listed because its text is already imported into Firestore and older
   // queue items reference it, so the app must still be able to name and render
