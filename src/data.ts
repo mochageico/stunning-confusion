@@ -214,17 +214,56 @@ export const BIBLE_TRANSLATIONS: BibleTranslation[] = [
     apiBibleId: 'a556c5305ee15c3f-01',
     capabilities: LICENSED_CAPABILITIES,
   },
+  // NIV IS DELIBERATELY ABSENT. It was here (api.bible id
+  // 78a9f6124f344018-01, listed there as NIV11) and was removed on purpose, so
+  // that adding it back is a decision rather than an oversight.
+  //
+  // Biblica's licence states: "Rights granted herein do not allow ORGANIZATION
+  // to alter or otherwise modify the CONTENT, or to produce works derivative to
+  // the CONTENT except as provided in Section III" -- and Section III grants
+  // only display and distribution rights, expressly reserving everything else.
+  // It also requires that "All footnotes to the TRANSLATIONS text must be
+  // included along with the TRANSLATIONS text and accessible to the end-user."
+  //
+  // Every memorization drill this app is built on -- first-letter grids, word
+  // scrambles, blanked words, spot-the-swap -- is an alteration or a derivative
+  // work. So the licence, as written, withholds precisely the app's purpose.
+  // Comparable memorization apps clearly do hold NIV licences covering these
+  // features, so this is very likely a matter of asking rather than a settled
+  // no; the fast-track agreement simply is not the instrument that grants it.
+  //
+  // Restore this entry only once Biblica has confirmed in writing that the
+  // drills are permitted. Its slot on the free plan went to the NASB below.
+  // The Lockman Foundation's licence is the most workable of the licensed set
+  // for this app: unlike Biblica's, it says nothing prohibiting alteration or
+  // derivative works, and it expressly allows the text to be "accessible by
+  // REQUESTER's mobile application either by live data connection or download
+  // to the user's device" -- i.e. offline. That is what makes the memorization
+  // drills defensible here in a way they are not for the NIV.
+  //
+  // Its conditions, all of which this entry or the proxy already satisfies:
+  //   - completely free, no third-party advertising;
+  //   - bulk downloading of the whole Bible must be "difficult or impractical"
+  //     (the proxy fetches one chapter per call and offers no export);
+  //   - a conspicuous, clickable link to lockman.org beside the notice;
+  //   - an annual report to Lockman each February of distribution numbers.
+  //
+  // App id 'NASB' is the 2020 revision. api.bible labels the 1995 edition
+  // 'NASB' and the 2020 one 'NASB20', so do NOT assume the ids line up; if the
+  // 1995 edition is ever added, give it 'NASB95' rather than renaming this one
+  // -- queue item ids are translation-prefixed, so a rename orphans saved work.
   {
-    id: 'NIV',
-    name: 'New International Version',
+    id: 'NASB',
+    name: 'New American Standard Bible (2020)',
+    // Lockman's own required wording for "selected verses or partial books",
+    // which is what this app shows. A different, longer notice applies to a
+    // whole Bible or a complete book; see their licence if that ever changes.
     copyright:
-      'The Holy Bible, New International Version® NIV® Copyright © 1973, 1978, 1984, 2011 by Biblica, Inc.® Used by Permission of Biblica, Inc.® All rights reserved worldwide.',
+      'Scripture quotations from the New American Standard Bible® NASB 2020 Copyright © 1960, 1971, 1977, 1995, 2020 by The Lockman Foundation. All rights reserved. Used by permission.',
+    copyrightUrl: 'https://www.lockman.org',
     isPublicDomain: false,
     source: 'apiBible',
-    // api.bible calls this one NIV11 (the 2011 revision); the app keeps the
-    // familiar 'NIV' as its own id, since that is what users call it and what
-    // older recordings already store in Recording.translation.
-    apiBibleId: '78a9f6124f344018-01',
+    apiBibleId: 'a761ca71e0b3ddcf-01',
     capabilities: LICENSED_CAPABILITIES,
   },
   {
@@ -270,6 +309,14 @@ export const getTranslation = (id: string): BibleTranslation | undefined =>
  */
 export const copyrightFor = (translationId: string): string | null =>
   getTranslation(translationId)?.copyright ?? null;
+
+/**
+ * Publisher URL that must accompany the notice, or null when the licence
+ * requires no link. See BibleTranslation.copyrightUrl -- this is a licence
+ * condition for the NASB, not a courtesy.
+ */
+export const copyrightUrlFor = (translationId: string): string | null =>
+  getTranslation(translationId)?.copyrightUrl ?? null;
 
 /**
  * The work that switching a licensed translation on would require.

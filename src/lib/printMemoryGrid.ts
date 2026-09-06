@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 import { firstLetterOnly } from './recitation';
-import { copyrightFor } from '../data';
+import { copyrightFor, copyrightUrlFor } from '../data';
 
 // ============================================================================
 // PRINTABLE MEMORY GRID
@@ -38,6 +38,11 @@ function buildGridHtml(verses: PrintableVerse[], reference: string, translationI
   // entirely rather than rendered empty -- this used to hardcode Crossway's
   // ESV notice onto every grid, which was wrong for a BSB or WEB export.
   const copyright = copyrightFor(translationId);
+  // Printed sheets carry the notice too -- Lockman's licence asks for it "in a
+  // conspicuous place" in the licensed work, and a printout handed to someone
+  // else is exactly where attribution matters most. The URL is spelled out
+  // rather than hyperlinked because paper cannot be clicked.
+  const copyrightUrl = copyrightUrlFor(translationId);
 
   return `<!DOCTYPE html>
 <html>
@@ -62,7 +67,7 @@ function buildGridHtml(verses: PrintableVerse[], reference: string, translationI
   <h1>${reference}</h1>
   <div class="subtitle">Memory Grid</div>
   <div class="grid">${boxes}</div>
-  ${copyright ? `<div class="copyright">${copyright}</div>` : ''}
+  ${copyright ? `<div class="copyright">${copyright}${copyrightUrl ? ` ${copyrightUrl}` : ''}</div>` : ''}
 </body>
 </html>`;
 }

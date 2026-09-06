@@ -41,6 +41,15 @@ export interface BibleTranslation {
   id: string; // short code, e.g. 'ESV', 'WEB'
   name: string; // full name, e.g. 'English Standard Version'
   copyright?: string; // required attribution text, when the translation is not public domain
+  /**
+   * Publisher URL the attribution must link to, when the licence requires a
+   * link rather than just a notice. The Lockman Foundation's licence is
+   * explicit: "A clickable link to LOCKMAN's web site home page, this copyright
+   * notice, and other such notices as LOCKMAN may from time to time designate,
+   * must be placed in a conspicuous place." A plain-text notice does not
+   * satisfy that, so this is a compliance field, not decoration.
+   */
+  copyrightUrl?: string;
   isPublicDomain: boolean;
   /**
    * Where `fetchChapterText` gets this translation's text.

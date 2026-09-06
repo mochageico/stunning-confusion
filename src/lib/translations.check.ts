@@ -12,6 +12,7 @@ import {
   DEFAULT_TRANSLATION_ID,
   capabilityWarningsFor,
   copyrightFor,
+  copyrightUrlFor,
   getTranslation,
 } from '../data';
 
@@ -60,6 +61,33 @@ check('non-public-domain translations all carry a copyright notice',
   BIBLE_TRANSLATIONS.filter((t) => !t.isPublicDomain && !t.copyright).map((t) => t.id)
 );
 check('an unknown translation id yields no notice rather than throwing', copyrightFor('NOPE') === null);
+
+// ── Attribution links ───────────────────────────────────────────────────────
+// The NASB's licence requires a clickable link to lockman.org beside the
+// notice. Losing it is a licence breach that nothing else would surface.
+check('the NASB carries its required lockman.org link', copyrightUrlFor('NASB') === 'https://www.lockman.org', {
+  actual: copyrightUrlFor('NASB'),
+});
+check(
+  'no translation declares a link without a notice to attach it to',
+  BIBLE_TRANSLATIONS.every((t) => !t.copyrightUrl || !!t.copyright),
+  BIBLE_TRANSLATIONS.filter((t) => t.copyrightUrl && !t.copyright).map((t) => t.id)
+);
+check(
+  'every attribution link is a real https URL',
+  BIBLE_TRANSLATIONS.every((t) => !t.copyrightUrl || /^https:\/\/\S+$/.test(t.copyrightUrl)),
+  BIBLE_TRANSLATIONS.filter((t) => t.copyrightUrl && !/^https:\/\/\S+$/.test(t.copyrightUrl)).map((t) => t.id)
+);
+
+// ── NIV stays out until Biblica says otherwise ──────────────────────────────
+// Biblica's licence forbids altering the text or producing derivative works,
+// which is what every drill in this app does. Re-adding it must be a deliberate
+// decision, so this fails loudly if it reappears.
+check(
+  'NIV is absent pending written permission from Biblica',
+  getTranslation('NIV') === undefined,
+  'NIV was re-added -- confirm Biblica has permitted first-letter, blanked-word and scramble drills before removing this check.'
+);
 
 // ── Source wiring ───────────────────────────────────────────────────────────
 // A translation fetched from api.bible without its Bible id is a runtime

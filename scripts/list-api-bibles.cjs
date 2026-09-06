@@ -7,21 +7,30 @@
 //
 // Reads only. Costs one API call against your monthly allowance.
 //
-// Usage (PowerShell):
-//   $env:API_BIBLE_KEY = "your-key-here"; node scripts/list-api-bibles.cjs
+// Usage -- identical in Command Prompt, PowerShell and bash:
+//   node scripts/list-api-bibles.cjs --key=YOUR_KEY --english
 //
-// Usage (bash):
-//   API_BIBLE_KEY=your-key-here node scripts/list-api-bibles.cjs
+// The key can also come from an API_BIBLE_KEY environment variable, but --key
+// is the reason this flag exists: setting an env var needs different syntax in
+// every shell (`set` in cmd, `$env:` in PowerShell, `VAR=x cmd` in bash), and
+// getting it wrong fails in confusing ways -- cmd in particular folds a
+// trailing space into the value and silently corrupts the key.
 //
 // Add --english to hide the couple of thousand non-English Bibles ABS also
-// exposes, which otherwise bury the three you care about.
+// exposes, which otherwise bury the ones you care about.
 
-const key = process.env.API_BIBLE_KEY;
+const keyArg = process.argv.find((a) => a.startsWith('--key='));
+// Trimmed because a key pasted from a dashboard very often brings whitespace
+// or a stray quote with it, and the resulting 401 looks like a bad key.
+const key = (keyArg ? keyArg.slice('--key='.length) : process.env.API_BIBLE_KEY || '')
+  .trim()
+  .replace(/^["']|["']$/g, '');
+
 if (!key) {
   console.error(
-    'API_BIBLE_KEY is not set.\n' +
-      '  PowerShell:  $env:API_BIBLE_KEY = "your-key"; node scripts/list-api-bibles.cjs\n' +
-      '  bash:        API_BIBLE_KEY=your-key node scripts/list-api-bibles.cjs'
+    'No API key given.\n\n' +
+      '  node scripts/list-api-bibles.cjs --key=YOUR_KEY --english\n\n' +
+      'Find your key at https://api.bible under your application.'
   );
   process.exit(1);
 }

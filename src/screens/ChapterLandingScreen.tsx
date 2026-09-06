@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { ArrowLeft, Check, ChevronDown, Download, GripVertical, Pause, Play, Printer, Search, SlidersHorizontal, X } from 'lucide-react-native';
 
@@ -549,11 +549,30 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         </View>
 
         {/* Copyright/attribution notice -- only shown for translations that
-            require one (public-domain translations like KJV/WEB have none). */}
+            require one (public-domain translations like BSB/KJV/WEB have none).
+
+            The publisher link is not decoration: Lockman's licence requires "a
+            clickable link to LOCKMAN's web site home page... placed in a
+            conspicuous place", so for the NASB a plain-text notice would not
+            satisfy the terms. Rendered as a real Pressable rather than styled
+            text so it is actually tappable. */}
         {activeChapterVerses.length > 0 && activeTranslation.copyright && (
-          <AppText variant="micro" className="font-sans text-neutral-400 leading-tight text-center px-2">
-            {activeTranslation.copyright}
-          </AppText>
+          <View className="px-2 gap-0.5">
+            <AppText variant="micro" className="font-sans text-neutral-400 leading-tight text-center">
+              {activeTranslation.copyright}
+            </AppText>
+            {activeTranslation.copyrightUrl && (
+              <Pressable
+                onPress={() => Linking.openURL(activeTranslation.copyrightUrl!)}
+                accessibilityRole="link"
+                hitSlop={8}
+              >
+                <AppText variant="micro" className="font-sans text-neutral-500 underline leading-tight text-center">
+                  {activeTranslation.copyrightUrl.replace(/^https?:\/\//, '')}
+                </AppText>
+              </Pressable>
+            )}
+          </View>
         )}
 
       </ScrollView>
