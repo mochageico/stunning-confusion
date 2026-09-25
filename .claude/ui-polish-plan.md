@@ -202,7 +202,51 @@ this whole file, then do only your job.
   dark mode later is a switch rather than a project (ui-overhaul bucket 1).
   Proof: the demo preview in each accent, plus a phone check that switching
   recolors the whole app instantly.
-- **F3 · Building blocks** (L). ScreenHeader (back, title, optional eyebrow /
+- **F3 · Building blocks** (L) — DONE 2026-09-25, not yet committed.
+  What was built:
+  - **`src/components/blocks.tsx` (new):** ScreenHeader (iPhone large
+    title; back link = accent chevron + `backLabel`; `eyebrow`, `subtitle`,
+    `actions`; `inline` for chat/tool screens), SectionHeader (sentence case,
+    optional "See all" link), GroupedList + ListRow (inset dividers via
+    context, icon / title / subtitle / value / chevron or any accessory,
+    `destructive`; value moves under the title at 1.3×), SegmentedControl
+    (fill tray, raised segment with a thin edge instead of a shadow; widths
+    follow the labels; labels wrap, never cut), Badge (neutral / accent /
+    success / warning / danger), Avatar (accent tint + initial, `ring` for
+    stacks), EmptyState, Dialog (`placement` center | sheet, always a real
+    Modal, body scrolls under a height cap, `actions` pinned below it).
+  - **`design.tsx`:** AppButton `variant` primary / secondary / quiet /
+    destructive (semibold, sentence case, dims when disabled);
+    AppIconButton `variant` outline / filled / bare (always round);
+    ChoiceCard + RadioMark (the one "pick one with an explanation"
+    pattern); Switch (51×31, white knob, accent track). Without `variant`,
+    buttons keep their old className-driven look, so call sites move over
+    in their S job.
+  - **Restyled in place (every screen that uses them changed):** Card and
+    CollapsibleCard (1px line, radius 14, no shadow, sentence-case
+    semibold title, grey summary), CardHeader, SettingRow (plain grey
+    value, no badge), OptionCards (built from ChoiceCard), ToggleRow (uses
+    Switch), StepperRow (round outline −/+ in the accent), DiscreteSlider
+    thumb, ChipRow (no wrap/columns → SegmentedControl; wrap/columns →
+    pills), Dropdown (field or `compact` pill, accent check), HelpTooltip
+    (lucide help icon, opens a Dialog), AvatarCircle (now Avatar).
+  - **`src/lib/format.ts`:** `formatDate` (short / long / relative),
+    `formatTimeAgo`, `formatDuration` (clock / words / short). Swapped in for
+    the local helpers in RecordingDetail, CommunityHome, FullHistory and
+    useAppState's `formatTime` ("05:12" is now "5:12").
+  - **Gallery:** `/?s=blocks` shows every block in every state (works with
+    `ios=1`, `accent=`, `scale=`). Use it as the reference in S jobs.
+  - **Proof:** `.shots/before-f3*` vs `.shots/after-f3*` (+ `overflow.txt`
+    in the se15 folders), `.shots/f3/blocks*.jpg`. At 1.5× on SE the ChipRow
+    cut-offs (Settings, Full History, Chapter Landing "Memory Grid") are
+    gone; no new overflow. tsc clean; check:layout still only the 4 old
+    photo-viewer errors.
+  - **Not done here, for the S jobs:** adopting ScreenHeader / GroupedList /
+    AppButton variants / Dialog on the screens themselves (the 23 back-arrow
+    headers, 10 `absolute inset-0` overlays and 11 Modals are unchanged);
+    the friend/member avatars that don't use AvatarCircle (S7/S8); the raw
+    "312 seconds" and date strings (S6).
+  Original brief: ScreenHeader (back, title, optional eyebrow /
   subtitle / actions), SectionHeader, GroupedList + ListRow, SegmentedControl,
   ChoiceCard (one "pick one" pattern), Badge, AppButton variants (primary /
   secondary / quiet / destructive; sentence case), IconButton (round only),
@@ -251,7 +295,17 @@ Optional quick-win session before everything: the 7 Bugs below.
 
 Tags: Bug / Font / Style / Copy / UX.
 
-**S1 — Today** (`HomeScreen.tsx`)
+**S1 — Today** (`HomeScreen.tsx`) — DONE 2026-09-25, not yet committed (built
+before F4, so the tab bar is still the old one). ScreenHeader (date eyebrow,
+sans greeting, "About N min today"); sections keep CollapsibleCard (new
+`accessory` prop holds the "?" beside the title; summary no longer Courier);
+rows are hairline-divided TodayRows with quiet Listen + secondary Learn/Review;
+due reviews grouped under "● Daily · 2" headings (dot + label); touch dots in
+accent, no "2/3"; "Start next verses" as a secondary button at the section's
+end; Reset moved to a quiet link at the end of Review; all three confirms
+(start anyway, reset, manual log) are Dialogs; "Show 30" is a compact pill;
+the four tiles are a "More" GroupedList; first run shows only Start here +
+More. Shots: `.shots/s1/`.
 - Font: header = tracked date + serif greeting + Courier "ABOUT 5 MIN TODAY".
 - Style: section CollapsibleCards are thick black boxes w/ tall empty headers,
   uppercase titles, Courier counts.
