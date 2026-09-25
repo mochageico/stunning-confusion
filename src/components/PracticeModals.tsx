@@ -899,6 +899,14 @@ function PracticeModalsInner({
   const handleStatusTick = (status: AudioStatus) => {
     if (type !== 'listen') return;
 
+    // The player has run off the end of the file and stopped itself. That is
+    // what always happens on a chapter's LAST verse: its endSec is the
+    // recording's duration rounded to a whole second (buildVerseTimestamps),
+    // which usually lands a fraction PAST the real end, so the ordinary
+    // endSec check below can never be met -- the audio stops first.
+    const atEndOfFile =
+      status.didJustFinish || (status.duration > 0 && status.currentTime >= status.duration - 0.15);
+
     // Transport pressed from outside the app -- one squeeze of an AirPod, the
     // lock screen, a car stereo. Those commands are handled natively, against
     // the player directly, so React never hears about them and the on-screen
@@ -921,11 +929,18 @@ function PracticeModalsInner({
     // true. It read that as "they pressed pause" and stopped playback at
     // every chapter boundary. seekedToCurrentSegmentRef is false for exactly
     // that window and true once the verse is genuinely cued.
+    //
+    // Reaching the end of the file is the other stop nobody pressed. Without
+    // excluding it, finishing a chapter's last verse read as "they paused" and
+    // returned before the advance/loop logic below ever ran -- so a Listen
+    // session stopped dead after any set ending on a chapter's last verse, and
+    // a whole-chapter loop never looped.
     if (
       seekedToCurrentSegmentRef.current &&
       status.isLoaded &&
       !status.isBuffering &&
       status.playing !== listenPlaying &&
+      !(atEndOfFile && !status.playing) &&
       Date.now() - lastTransportCommandRef.current > 800
     ) {
       setListenPlaying(status.playing);
@@ -991,12 +1006,13 @@ function PracticeModalsInner({
     if (status.currentTime < currentSegment.startSec - 0.5) return;
 
     const reachedEnd = status.currentTime >= currentSegment.endSec - 0.05;
-    // didJustFinish is the safety net for a player that stops a hair short of
-    // the tagged end. Honour it only when the playhead is genuinely deep into
-    // this segment -- a finish flag left over from the previous pass, arriving
-    // just after a repeat seeked back to the start, is not another finish.
+    // End of file is the safety net for a player that stops a hair short of
+    // the tagged end (see atEndOfFile). Honour it only when the playhead is
+    // genuinely deep into this segment -- a finish flag left over from the
+    // previous pass, arriving just after a repeat seeked back to the start, is
+    // not another finish.
     const finishedShort =
-      status.didJustFinish &&
+      atEndOfFile &&
       status.currentTime > currentSegment.startSec + Math.min(0.25, segmentSpan / 2);
     if (!reachedEnd && !finishedShort) return;
 
