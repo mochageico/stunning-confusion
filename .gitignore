@@ -46,3 +46,6 @@ yarn-error.*
 
 # Editor settings (machine-local, not project-relevant)
 .vscode/
+
+# Screenshots from `npm run shots` (local review only)
+.shots/

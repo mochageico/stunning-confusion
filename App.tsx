@@ -56,6 +56,7 @@ import MessagesScreen from './src/screens/MessagesScreen';
 import DMThreadScreen from './src/screens/DMThreadScreen';
 import CircleChatScreen from './src/screens/CircleChatScreen';
 import { AppIconButton, AppText } from './src/components/design';
+import { useDemoState } from './src/dev/DemoHarness';
 
 // The original web app has no router — it's a hand-rolled state machine on
 // `currentTab` / `currentScreen`. This mirrors that structure 1:1 instead of
@@ -508,7 +509,10 @@ function NowPlayingBar({ state }: { state: AppState }) {
 }
 
 function AppShell() {
-  const state = useAppState();
+  // Demo mode (sample data, no sign-in) for checking UI work -- a no-op unless
+  // the web preview URL carries ?s=<screen>, and never in a production build.
+  // See src/dev/DemoHarness.tsx.
+  const state = useDemoState(useAppState());
   // Chat screens go full-screen (no tab bar / now-playing bar below them) --
   // partly for a standard chat-app feel, but mainly so KeyboardAvoidingView's
   // bottom edge is the true physical screen bottom instead of sitting above

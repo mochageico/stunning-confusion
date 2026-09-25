@@ -56,7 +56,10 @@
     "check:calendar": "node scripts/run-calendar-check.cjs",
     "check:queue": "node scripts/run-queue-check.cjs",
     "check:buildup": "node scripts/run-buildup-check.cjs",
-    "check:translations": "node scripts/run-translations-check.cjs"
+    "check:translations": "node scripts/run-translations-check.cjs",
+    "shots": "node scripts/capture-screens.cjs",
+    "scan:fonts": "node scripts/scan-fonts.cjs",
+    "scan:copy": "node scripts/scan-copy.cjs"
   },
   "private": true
 }
