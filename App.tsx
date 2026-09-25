@@ -4,13 +4,7 @@ import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
-import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
-import {
-  PlayfairDisplay_400Regular,
-  PlayfairDisplay_500Medium,
-  PlayfairDisplay_600SemiBold,
-  PlayfairDisplay_700Bold,
-} from '@expo-google-fonts/playfair-display';
+import { useFonts } from 'expo-font';
 import { Check, Home as HomeIcon, Mic, Pause, Sliders, User, Users, X } from 'lucide-react-native';
 
 import { AppState, useAppState } from './src/state/useAppState';
@@ -55,7 +49,7 @@ import FindFriendsScreen from './src/screens/FindFriendsScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import DMThreadScreen from './src/screens/DMThreadScreen';
 import CircleChatScreen from './src/screens/CircleChatScreen';
-import { AppIconButton, AppText } from './src/components/design';
+import { APP_FONTS, AppIconButton, AppText } from './src/components/design';
 import { useDemoState } from './src/dev/DemoHarness';
 
 // The original web app has no router — it's a hand-rolled state machine on
@@ -676,16 +670,7 @@ function ToastLayer({ state }: { state: AppState }) {
 }
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-    PlayfairDisplay_400Regular,
-    PlayfairDisplay_500Medium,
-    PlayfairDisplay_600SemiBold,
-    PlayfairDisplay_700Bold,
-  });
+  const [fontsLoaded] = useFonts(APP_FONTS);
 
   // app.config.js sets orientation: 'default' rather than 'portrait' so the
   // photo viewer can unlock landscape at runtime -- iOS refuses to rotate

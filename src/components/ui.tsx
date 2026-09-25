@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, InputAccessoryView, Keyboard, Modal, PanResponder, Platform, Pressable, Text, TextInputProps, View } from 'react-native';
+import { Animated, Easing, Image, InputAccessoryView, Keyboard, Modal, PanResponder, Platform, Pressable, TextInputProps, View } from 'react-native';
 
 import { AppTextInput, AppText, useScaledSpace } from './design';
 
@@ -361,9 +361,10 @@ export function AvatarCircle({
       style={{ width: size, height: size, borderRadius: size / 2 }}
       className="border-2 border-[#1A1A1A] bg-[#F3F2F1] items-center justify-center"
     >
-      <Text className="font-serif font-bold text-[#1A1A1A]" style={{ fontSize: size * 0.4 }}>
+      {/* Sized to the circle, not the OS text setting: the circle doesn't grow. */}
+      <AppText variant="inherit" className="font-serif font-bold text-[#1A1A1A]" style={{ fontSize: size * 0.4 }}>
         {initial}
-      </Text>
+      </AppText>
     </View>
   );
 }

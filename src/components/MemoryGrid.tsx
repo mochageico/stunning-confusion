@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
 import { Highlighter, Pencil, X } from 'lucide-react-native';
 
 import { firstLetterLine, firstLetterOnly } from '../lib/recitation';
@@ -163,9 +163,9 @@ export default function MemoryGrid({
                               ? '#ffffff'
                               : undefined;
                     return (
-                      <Text key={wi} style={gradeColor ? { color: gradeColor } : undefined}>
+                      <AppText variant="inherit" key={wi} style={gradeColor ? { color: gradeColor } : undefined}>
                         {firstLetterOnly(w)}{' '}
-                      </Text>
+                      </AppText>
                     );
                   })}
                 </AppText>
@@ -180,9 +180,9 @@ export default function MemoryGrid({
           <View className="flex-1 bg-black/60 items-center justify-center p-6">
             <View className="bg-white rounded-2xl p-4 gap-3 w-full max-w-[320px]">
               <View className="flex-row items-center justify-between">
-                <Text className="font-serif font-bold text-neutral-900">
+                <AppText className="font-serif font-bold text-neutral-900">
                   {doodleOpenVerse.book} {doodleOpenVerse.chapter}:{doodleOpenVerse.verse}
-                </Text>
+                </AppText>
                 <Pressable hitSlop={8} onPress={() => setDoodleOpenKey(null)}>
                   <X size={18} color="#262626" />
                 </Pressable>

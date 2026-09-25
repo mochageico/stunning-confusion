@@ -19,7 +19,8 @@
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
 // modalLearn, modalListen, modalSave, modalProgress, modalMissed.
 // Extra params: ios=1 reproduces iPhone font rendering in the browser (no
-// synthesized bold, Courier New for font-mono); empty=1 skips the seeded queue.
+// synthesized bold, so a weight that isn't a real loaded face shows as the
+// Regular it is on the phone); empty=1 skips the seeded queue.
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
@@ -246,8 +247,7 @@ function injectIosFontEmulation() {
   if (injected || Platform.OS !== 'web' || typeof document === 'undefined') return;
   injected = true;
   const el = document.createElement('style');
-  el.textContent = `* { font-synthesis: none !important; }
-.font-mono, .font-mono * { font-family: "Courier New", Courier, monospace !important; }`;
+  el.textContent = '* { font-synthesis: none !important; }';
   document.head.appendChild(el);
 }
 

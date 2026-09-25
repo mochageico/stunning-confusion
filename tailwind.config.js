@@ -8,9 +8,14 @@ module.exports = {
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
+      // NativeWind keeps only the first name, and a weight class can't change
+      // the face on iOS. AppText/AppTextInput pick the real face from the
+      // classes (design.tsx, "Font faces"); these are only the fallback for
+      // anything that isn't one of them. mono is Inter, not Courier.
       fontFamily: {
-        sans: ['Inter_400Regular', 'Inter_500Medium', 'Inter_600SemiBold', 'Inter_700Bold'],
-        serif: ['PlayfairDisplay_400Regular', 'PlayfairDisplay_500Medium', 'PlayfairDisplay_600SemiBold', 'PlayfairDisplay_700Bold'],
+        sans: ['Inter_400Regular'],
+        serif: ['Literata_400Regular'],
+        mono: ['Inter_400Regular'],
       },
       keyframes: {
         fadeIn: {

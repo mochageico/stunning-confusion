@@ -1,6 +1,20 @@
-import React, { createContext, useContext, useSyncExternalStore } from 'react';
+import React, { createContext, useContext, useMemo, useSyncExternalStore } from 'react';
 import { Pressable, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import type { ViewStyle } from 'react-native';
+import type { TextStyle, ViewStyle } from 'react-native';
+import {
+  Inter_400Regular,
+  Inter_400Regular_Italic,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+import {
+  Literata_400Regular,
+  Literata_400Regular_Italic,
+  Literata_500Medium,
+  Literata_600SemiBold,
+  Literata_700Bold,
+} from '@expo-google-fonts/literata';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react-native';
 
@@ -95,10 +109,143 @@ export const TYPE = {
 
 export type TypeVariant = keyof typeof TYPE;
 
+// ============================================================
+// Font faces
+//
+// On iOS a weight class does nothing to a custom font. expo-font registers
+// `Inter_400Regular` as a family with exactly one face, so `fontWeight: 'bold'`
+// picks the closest weight from a one-item list -- Regular. Android and web
+// fake a bold instead. Either way the weight has to come from the font FILE.
+//
+// So AppText / AppTextInput read the family, weight and italic tokens out of
+// `className`, pick the real face, and set it in `style` (style beats
+// className). fontWeight/fontStyle go back to 'normal' so nothing can fake a
+// second bold or slant on top of a face that already has it.
+//
+//   font-sans / none -> Inter
+//   font-serif       -> Literata, lining digits (so chapter and calendar
+//                       numbers sit on the baseline instead of bouncing)
+//   font-mono        -> Inter with tabular digits. Courier is retired; the
+//                       class now means "numbers that line up".
+//
+// Only the faces in APP_FONTS exist. extrabold/black map to Bold, light/thin
+// to Regular, and italic always uses the 400 italic face.
+// ============================================================
+
+/** Every face the app loads. App.tsx hands this straight to useFonts. */
+export const APP_FONTS = {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_400Regular_Italic,
+  Literata_400Regular,
+  Literata_500Medium,
+  Literata_600SemiBold,
+  Literata_700Bold,
+  Literata_400Regular_Italic,
+};
+
+type FontFamilyRole = 'sans' | 'serif' | 'mono';
+type FontWeightStep = 400 | 500 | 600 | 700;
+interface FontSpec {
+  family: FontFamilyRole;
+  weight: FontWeightStep;
+  italic: boolean;
+}
+
+// When a className carries two family tokens (a few conditional strings do),
+// the one later in Tailwind's generated stylesheet wins, not the one later in
+// the string. The ranks copy that order so the face matches what the class
+// used to mean.
+const FAMILY_TOKENS: Record<string, { family: FontFamilyRole; rank: number }> = {
+  'font-sans': { family: 'sans', rank: 0 },
+  'font-serif': { family: 'serif', rank: 1 },
+  'font-mono': { family: 'mono', rank: 2 },
+};
+const WEIGHT_TOKENS: Record<string, { weight: FontWeightStep; rank: number }> = {
+  'font-thin': { weight: 400, rank: 0 },
+  'font-extralight': { weight: 400, rank: 1 },
+  'font-light': { weight: 400, rank: 2 },
+  'font-normal': { weight: 400, rank: 3 },
+  'font-medium': { weight: 500, rank: 4 },
+  'font-semibold': { weight: 600, rank: 5 },
+  'font-bold': { weight: 700, rank: 6 },
+  'font-extrabold': { weight: 700, rank: 7 },
+  'font-black': { weight: 700, rank: 8 },
+};
+const WEIGHT_SUFFIX: Record<FontWeightStep, string> = {
+  400: '400Regular',
+  500: '500Medium',
+  600: '600SemiBold',
+  700: '700Bold',
+};
+
+const parsedFontTokens = new Map<string, Partial<FontSpec>>();
+
+/** The font tokens a className sets itself. Cached: className strings repeat. */
+function parseFontTokens(className: string | undefined): Partial<FontSpec> {
+  if (!className) return {};
+  const cached = parsedFontTokens.get(className);
+  if (cached) return cached;
+  const spec: Partial<FontSpec> = {};
+  let familyRank = -1;
+  let weightRank = -1;
+  for (const token of className.split(/\s+/)) {
+    const fam = FAMILY_TOKENS[token];
+    if (fam && fam.rank > familyRank) {
+      spec.family = fam.family;
+      familyRank = fam.rank;
+    }
+    const w = WEIGHT_TOKENS[token];
+    if (w && w.rank > weightRank) {
+      spec.weight = w.weight;
+      weightRank = w.rank;
+    }
+    // `not-italic` follows `italic` in the stylesheet, so it wins a tie.
+    if (token === 'italic' && spec.italic === undefined) spec.italic = true;
+    if (token === 'not-italic') spec.italic = false;
+  }
+  parsedFontTokens.set(className, spec);
+  return spec;
+}
+
+/**
+ * What a nested AppText inherits. RN text inherits font attributes from its
+ * parent Text, so a bold word inside a serif verse should stay serif. Because
+ * the face is now one explicit fontFamily, that inheritance has to be done
+ * here -- a nested AppText fills whatever tokens it lacks from its parent.
+ */
+const InheritedFont = createContext<FontSpec | null>(null);
+
+function resolveFont(className: string | undefined, parent: FontSpec | null): FontSpec {
+  const own = parseFontTokens(className);
+  return {
+    family: own.family ?? parent?.family ?? 'sans',
+    weight: own.weight ?? parent?.weight ?? 400,
+    italic: own.italic ?? parent?.italic ?? false,
+  };
+}
+
+function fontStyleFor({ family, weight, italic }: FontSpec): TextStyle {
+  const base = family === 'serif' ? 'Literata' : 'Inter';
+  return {
+    fontFamily: italic ? `${base}_400Regular_Italic` : `${base}_${WEIGHT_SUFFIX[weight]}`,
+    fontWeight: 'normal',
+    fontStyle: 'normal',
+    ...(family === 'mono' ? { fontVariant: ['tabular-nums'] } : family === 'serif' ? { fontVariant: ['lining-nums'] } : null),
+  };
+}
+
 /**
  * Text with the scaling contract applied. Pass colour, weight, and font family
- * through `className` exactly as before -- this owns only fontSize/lineHeight,
- * so it drops into existing NativeWind styling without a rewrite.
+ * through `className` as before: the family/weight/italic classes are turned
+ * into the real font face (see "Font faces" above), everything else passes
+ * through untouched.
+ *
+ * `variant="inherit"` sets no size. Use it for a word or phrase nested inside
+ * another AppText that should match its paragraph (graded words in Recall, a
+ * bold name in a sentence), or for text sized by its own `style`.
  */
 export function AppText({
   variant = 'body',
@@ -106,23 +253,29 @@ export function AppText({
   style,
   children,
   ...rest
-}: React.ComponentProps<typeof Text> & { variant?: TypeVariant }) {
+}: React.ComponentProps<typeof Text> & { variant?: TypeVariant | 'inherit' }) {
   const scale = useFontScale();
-  const { fontSize, lineHeight } = TYPE[variant];
-  return (
-    <Text
-      allowFontScaling={false}
-      className={className}
-      style={[{ fontSize: fontSize * scale, lineHeight: lineHeight * scale }, style]}
-      {...rest}
-    >
+  const parentFont = useContext(InheritedFont);
+  const font = resolveFont(className, parentFont);
+  const { family, weight, italic } = font;
+  const inherited = useMemo<FontSpec>(() => ({ family, weight, italic }), [family, weight, italic]);
+  const size =
+    variant === 'inherit'
+      ? null
+      : { fontSize: TYPE[variant].fontSize * scale, lineHeight: TYPE[variant].lineHeight * scale };
+  const text = (
+    <Text allowFontScaling={false} className={className} style={[fontStyleFor(font), size, style]} {...rest}>
       {children}
     </Text>
   );
+  // Plain strings have no nested AppText to inherit anything.
+  if (typeof children === 'string' || typeof children === 'number') return text;
+  return <InheritedFont.Provider value={inherited}>{text}</InheritedFont.Provider>;
 }
 
 /**
- * The same scaling contract for text entry. `AppText` can't be used here --
+ * The same scaling contract, and the same className -> font face mapping, for
+ * text entry. `AppText` can't be used here --
  * `TextInput` is a different component, not a `Text` with an `editable` prop --
  * which is why inputs were the one thing left on raw `text-xs` after the type
  * migration.
@@ -151,6 +304,7 @@ export function AppTextInput({
       allowFontScaling={false}
       className={className}
       style={[
+        fontStyleFor(resolveFont(className, null)),
         { fontSize: fontSize * scale },
         rest.multiline ? { lineHeight: lineHeight * scale } : null,
         style,

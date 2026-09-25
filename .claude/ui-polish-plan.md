@@ -118,7 +118,16 @@ this whole file, then do only your job.
   `npm run shots -- --all` (or specific queries; see the header of
   `scripts/capture-screens.cjs`) → `.shots/` (gitignored). Before/after:
   `--out=.shots/before`. Inventories: `npm run scan:fonts`, `npm run scan:copy`.
-- **F1 · Fonts that render** (S–M). In `AppText`/`AppTextInput`
+- **F1 · Fonts that render** — DONE 2026-09-25 (uncommitted until the user
+  reviews). What was built: `design.tsx` "Font faces" section — `APP_FONTS`
+  (the one list `useFonts` loads: Inter 400/500/600/700 + 400 italic,
+  Literata 400/500/600/700 + 400 italic), className → face resolver, and an
+  `InheritedFont` context so a nested AppText keeps its parent's family/weight
+  like RN text inheritance did. New `variant="inherit"` = no size (nested
+  spans, AvatarCircle's circle-sized initial). All 16 raw `<Text>` outside
+  `DevLayoutLab` converted. `tailwind.config.js` sans/mono → Inter, serif →
+  Literata; Playfair package removed; `ios=1` no longer forces Courier.
+  Original brief: In `AppText`/`AppTextInput`
   (`src/components/design.tsx`): resolve family from className tokens
   (`font-serif` → serif, `font-mono` → Inter + `fontVariant:['tabular-nums']`,
   none/`font-sans` → Inter) and weight tokens → the real file

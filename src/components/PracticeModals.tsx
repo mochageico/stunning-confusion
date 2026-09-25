@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, type AudioPlayer, type AudioStatus } from 'expo-audio';
@@ -2397,13 +2397,13 @@ function PracticeModalsInner({
                                     // no reliable automatic fix, so this is
                                     // the manual escape valve.
                                     return (
-                                      <Text
+                                      <AppText variant="inherit"
                                         key={idx}
                                         className={`font-serif font-semibold ${gradeClass}`}
                                         onPress={outcome === 'missed' ? () => overrideWordAsCorrect(g) : undefined}
                                       >
                                         {w}{' '}
-                                      </Text>
+                                      </AppText>
                                     );
                                   }
 
@@ -2412,9 +2412,9 @@ function PracticeModalsInner({
                                     // dash) -- not part of the recite pointer,
                                     // just render it plainly.
                                     return (
-                                      <Text key={idx} className="font-serif text-neutral-800">
+                                      <AppText variant="inherit" key={idx} className="font-serif text-neutral-800">
                                         {w}{' '}
-                                      </Text>
+                                      </AppText>
                                     );
                                   }
 
@@ -2424,12 +2424,12 @@ function PracticeModalsInner({
                                     // still has to be typed/spoken to advance,
                                     // but isn't a blind guess.
                                     return (
-                                      <Text
+                                      <AppText variant="inherit"
                                         key={idx}
                                         className={`font-serif rounded px-1 ${isCurrent ? 'bg-amber-50 text-neutral-600' : 'text-neutral-400'}`}
                                       >
                                         {w}{' '}
-                                      </Text>
+                                      </AppText>
                                     );
                                   }
 
@@ -2440,26 +2440,26 @@ function PracticeModalsInner({
                                     // since this run can only ever count as
                                     // a review, never mastery.
                                     return (
-                                      <Text
+                                      <AppText variant="inherit"
                                         key={idx}
                                         className={`font-serif rounded px-1 font-mono font-bold ${
                                           isCurrent ? 'bg-sky-100 text-sky-700' : 'bg-sky-50 text-sky-400'
                                         }`}
                                       >
                                         {maskExceptFirstLetter(w)}{' '}
-                                      </Text>
+                                      </AppText>
                                     );
                                   }
 
                                   return (
-                                    <Text
+                                    <AppText variant="inherit"
                                       key={idx}
                                       className={`font-serif rounded px-1 font-mono font-bold ${
                                         isCurrent ? 'bg-amber-50 text-neutral-500' : 'bg-neutral-50 text-neutral-300'
                                       }`}
                                     >
                                       {maskLetters(w)}{' '}
-                                    </Text>
+                                    </AppText>
                                   );
                                 })}
                               </AppText>
@@ -2992,10 +2992,10 @@ function PracticeModalsInner({
                       <View className="border-2 border-[#1A1A1A] bg-white rounded-2xl p-4">
                         <AppText variant="title" className="font-serif leading-[30px]">
                           {stage.segments.map((seg, i) => (
-                            <Text key={i} className={seg.isNew ? 'text-amber-600' : 'text-neutral-900'}>
+                            <AppText variant="inherit" key={i} className={seg.isNew ? 'text-amber-600' : 'text-neutral-900'}>
                               {maskBuildSegment(seg.text)}
                               {i < stage.segments.length - 1 ? ' ' : ''}
-                            </Text>
+                            </AppText>
                           ))}
                         </AppText>
                       </View>
@@ -3217,7 +3217,7 @@ function PracticeModalsInner({
                                 cls = 'text-indigo-700 font-bold underline';
                               }
                               return (
-                                <Text
+                                <AppText variant="inherit"
                                   key={tok.index}
                                   onPress={
                                     swapSubmitted
@@ -3233,7 +3233,7 @@ function PracticeModalsInner({
                                   className={`font-serif ${cls}`}
                                 >
                                   {tok.display}{' '}
-                                </Text>
+                                </AppText>
                               );
                             })}
                           </AppText>
@@ -3249,7 +3249,7 @@ function PracticeModalsInner({
                               .filter((t) => t.isDecoy)
                               .map((t) => (
                                 <AppText variant="label" key={t.index} className="font-serif text-neutral-600">
-                                  <Text className="text-red-600 line-through">{t.display}</Text> → <Text className="text-emerald-700 font-bold">{t.original}</Text>
+                                  <AppText variant="inherit" className="text-red-600 line-through">{t.display}</AppText> → <AppText variant="inherit" className="text-emerald-700 font-bold">{t.original}</AppText>
                                 </AppText>
                               ))
                           )}

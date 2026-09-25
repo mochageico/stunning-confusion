@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { MessageCircle, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
@@ -190,23 +190,23 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
                     />
                     <View className="gap-0.5 flex-1">
                       <AppText variant="label" className="font-sans text-neutral-700 leading-relaxed">
-                        <Text onPress={() => viewMemberProfileById(event.uid)} className="font-black text-black">
+                        <AppText variant="inherit" onPress={() => viewMemberProfileById(event.uid)} className="font-black text-black">
                           {event.uid === user?.uid ? 'You' : event.authorName}
-                        </Text>{' '}
+                        </AppText>{' '}
                         {event.type === 'chapter' ? (
                           <>
                             completed memorizing the entire chapter of{' '}
-                            <Text className="font-bold text-neutral-900">
+                            <AppText variant="inherit" className="font-bold text-neutral-900">
                               {event.book} {event.chapter}
-                            </Text>{' '}
+                            </AppText>{' '}
                             ({event.verseCount} verses)! 👑
                           </>
                         ) : (
                           <>
                             completed memorizing{' '}
-                            <Text className="font-bold text-neutral-900">
+                            <AppText variant="inherit" className="font-bold text-neutral-900">
                               {event.book} {event.chapter}:{event.verse}
-                            </Text>
+                            </AppText>
                             .
                           </>
                         )}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {
   ArrowLeft,
@@ -354,7 +354,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                       <View className="flex-1 pr-2">
                         <AppText variant="label" className="font-sans font-black text-[#1A1A1A] leading-tight">{plan.name}</AppText>
                         <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">
-                          Managed by <Text className="font-semibold text-[#1A1A1A]">{plan.managerName || 'Leader'}</Text>
+                          Managed by <AppText variant="inherit" className="font-semibold text-[#1A1A1A]">{plan.managerName || 'Leader'}</AppText>
                         </AppText>
                       </View>
                       <View className="flex-row items-center gap-1">

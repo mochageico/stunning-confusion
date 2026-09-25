@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { ArrowLeft, Plus } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
@@ -153,7 +153,7 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                 {plan.description || 'No description yet.'}
               </AppText>
               <AppText variant="micro" className="font-sans text-neutral-400">
-                Managed by <Text className="font-semibold text-[#1A1A1A]">{plan.managerName || 'Leader'}</Text>
+                Managed by <AppText variant="inherit" className="font-semibold text-[#1A1A1A]">{plan.managerName || 'Leader'}</AppText>
               </AppText>
             </>
           )}
