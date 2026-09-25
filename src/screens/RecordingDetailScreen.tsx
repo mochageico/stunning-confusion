@@ -12,6 +12,7 @@ import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/stud
 import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
 import { useThemeColors } from '../components/theme';
+import { formatDuration } from '../lib/format';
 // Derived from the single source of truth (data.ts) instead of its own
 // separately-hardcoded lookup -- previously listed NIV/NKJV/NLT despite zero
 // real text ever being imported for them, and had already drifted from
@@ -32,12 +33,7 @@ const WAVEFORM_HEIGHTS = [
   12, 20, 24, 32, 16, 8, 12,
 ];
 
-const formatSec = (sec: number) => {
-  const s = Math.max(0, Math.round(sec));
-  const mins = Math.floor(s / 60);
-  const secs = s % 60;
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-};
+const formatSec = (sec: number) => formatDuration(sec, 'clock');
 
 // Draggable pin on the timeline for one verse's start marker. Bounds/callbacks
 // are threaded through refs (updated every render, read inside the

@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, InputAccessoryView, Keyboard, Modal, PanResponder, Platform, Pressable, TextInputProps, View } from 'react-native';
+import { Animated, Easing, InputAccessoryView, Keyboard, PanResponder, Platform, Pressable, TextInputProps, View } from 'react-native';
 
-import { AppTextInput, AppText, useScaledSpace } from './design';
+import { CircleHelp, Minus, Plus } from 'lucide-react-native';
+
+import { AppIconButton, AppTextInput, AppText, useFontScale, useScaledSpace } from './design';
+import { Avatar, Dialog, SegmentedControl } from './blocks';
+import { useThemeColors } from './theme';
 
 // ============================================================
 // useKeyboardHeight — manual native keyboard-height tracking, used instead
@@ -44,35 +48,24 @@ export function useKeyboardHeight(): number {
 // ============================================================
 export function HelpTooltip({ text }: { text: string }) {
   const [show, setShow] = useState(false);
+  const palette = useThemeColors();
+  const scale = useFontScale();
   return (
     <>
+      {/* A plain help icon in ink-3 (job F3), no bubble. hitSlop brings the
+          small glyph up to a comfortable tap target. */}
       <Pressable
         onPress={() => setShow(true)}
-        className="w-4 h-4 rounded-full border border-line-strong items-center justify-center bg-on-accent/95 ml-1.5 shrink-0"
+        accessibilityRole="button"
+        accessibilityLabel="More info"
+        hitSlop={14}
+        className="ml-1.5 shrink-0 active:opacity-60"
       >
-        <AppText variant="micro" className="font-sans font-black text-ink-3">?</AppText>
+        <CircleHelp size={Math.round(16 * scale)} color={palette.ink3} strokeWidth={2} />
       </Pressable>
-      <Modal visible={show} transparent animationType="none" onRequestClose={() => setShow(false)}>
-        {/* RN-Web's Modal wraps children in a container that defaults to
-            pointerEvents:'none' (so an off-screen/zero-size modal region
-            never blocks the page under it) -- a plain flex-1 child doesn't
-            reliably fill that container on web, so a tap outside the bubble
-            landed on the page behind the modal instead of this backdrop.
-            Pinning all four edges explicitly, with pointerEvents="auto" set
-            directly, guarantees this actually captures the dismiss tap. */}
-        <Pressable
-          onPress={() => setShow(false)}
-          pointerEvents="auto"
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-          className="bg-black/40 items-center justify-center p-8"
-        >
-          {/* Swallows the tap so it doesn't also bubble to the backdrop
-              Pressable above and immediately dismiss itself. */}
-          <Pressable onPress={() => {}} className="w-full bg-surface border border-line-strong rounded-xl p-3.5 shadow-lg" style={{ maxWidth: 320 }}>
-            <AppText variant="label" className="leading-relaxed font-sans font-normal text-ink text-left">{text}</AppText>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <Dialog visible={show} onClose={() => setShow(false)}>
+        <AppText variant="body" className="font-sans text-ink">{text}</AppText>
+      </Dialog>
     </>
   );
 }
@@ -108,30 +101,50 @@ export function ChipRow<T extends string | number>({
    */
   wrap?: boolean;
 }) {
+  const space = useScaledSpace();
+  // Without `wrap` or `columns`, the options divide one row evenly: that is a
+  // segmented control, so it is drawn as one (job F3). Labels wrap to two
+  // lines there instead of being cut off ("Last 30 D...").
+  if (!columns && !wrap) return <SegmentedControl options={options} value={value} onChange={onChange} />;
+
   // NOTE: column width uses an inline `style` (not a NativeWind className) because
   // NativeWind statically scans source text for class names — a computed/interpolated
   // class name like `basis-[${n}%]` never appears literally in the file, so it would
   // silently fail to generate any style at all.
   // Wrapped rows center themselves rather than packing left: a trailing
   // partial row hanging off the left edge reads as a layout bug, not as a
-  // deliberate group. Non-wrapping rows are unaffected (a single row of
-  // flex-1 chips already fills the width).
+  // deliberate group.
   return (
-    <View className={columns || wrap ? 'flex-row flex-wrap justify-center gap-1' : 'flex-row gap-1'}>
+    <View className="flex-row flex-wrap justify-center" style={{ gap: columns ? 0 : 6, rowGap: 6 }}>
       {options.map((opt) => {
         const active = opt.id === value;
+        const chip = (
+          <View
+            className={`rounded-full border items-center justify-center ${
+              active ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'
+            }`}
+            style={{ paddingHorizontal: space(12), paddingVertical: space(5), minWidth: space(36) }}
+          >
+            <AppText
+              variant="caption"
+              className={`font-sans text-center ${active ? 'font-semibold text-accent' : 'font-medium text-ink-2'}`}
+              numberOfLines={1}
+            >
+              {opt.label}
+            </AppText>
+          </View>
+        );
         return (
           <Pressable
             key={String(opt.id)}
             onPress={() => onChange(opt.id)}
-            style={columns ? { width: `${100 / columns}%`, padding: 2 } : wrap ? { minWidth: 30 } : undefined}
-            className={`py-1 rounded-lg border ${wrap ? 'px-2.5' : 'px-2'} ${columns || wrap ? '' : 'flex-1'} ${
-              active ? 'bg-accent border-accent' : 'bg-surface border-line'
-            }`}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: active }}
+            aria-checked={active}
+            className="active:opacity-70"
+            style={columns ? { width: `${100 / columns}%`, paddingHorizontal: 3 } : undefined}
           >
-            <AppText variant="micro" className={`font-bold text-center ${active ? 'text-on-accent' : 'text-ink-2'}`} numberOfLines={1} >
-              {opt.label}
-            </AppText>
+            {chip}
           </Pressable>
         );
       })}
@@ -173,39 +186,33 @@ export function StepperRow({
   // minHeight, not height: the -/+ glyphs are text, so the row has to be able
   // to grow when the OS font scale does. hitSlop keeps the tap target
   // comfortable without inflating the visual button.
+  const palette = useThemeColors();
   const space = useScaledSpace();
-  const button = space(28);
+  // Round outline buttons with the accent -/+ (job F3). AppIconButton scales
+  // the circle with the text setting and pads the tap target to 44pt.
   return (
-    <View className="flex-row items-center" style={{ minHeight: space(32), gap: space(10) }}>
-      <Pressable
-        onPress={() => setClamped(snapped - step)}
+    <View className="flex-row items-center" style={{ minHeight: space(36), gap: space(10) }}>
+      <AppIconButton
+        Icon={Minus}
+        variant="outline"
+        diameter={34}
+        iconColor={palette.accent}
         disabled={atMin}
-        hitSlop={8}
-        className={`rounded-lg border items-center justify-center ${
-          atMin ? 'bg-surface-2 border-line' : 'bg-surface border-line-strong'
-        }`}
-        style={{ width: button, height: button }}
-      >
-        <AppText variant="label" className={`font-black ${atMin ? 'text-ink-3' : 'text-ink'}`}>
-          −
-        </AppText>
-      </Pressable>
+        onPress={() => setClamped(snapped - step)}
+        accessibilityLabel="Decrease"
+      />
       <View className="flex-1 bg-fill h-1.5 rounded-full overflow-hidden">
         <View className="bg-accent h-full rounded-full" style={{ width: `${percent}%` }} />
       </View>
-      <Pressable
-        onPress={() => setClamped(snapped + step)}
+      <AppIconButton
+        Icon={Plus}
+        variant="outline"
+        diameter={34}
+        iconColor={palette.accent}
         disabled={atMax}
-        hitSlop={8}
-        className={`rounded-lg border items-center justify-center ${
-          atMax ? 'bg-surface-2 border-line' : 'bg-surface border-line-strong'
-        }`}
-        style={{ width: button, height: button }}
-      >
-        <AppText variant="label" className={`font-black ${atMax ? 'text-ink-3' : 'text-ink'}`}>
-          +
-        </AppText>
-      </Pressable>
+        onPress={() => setClamped(snapped + step)}
+        accessibilityLabel="Increase"
+      />
     </View>
   );
 }
@@ -317,14 +324,15 @@ export function DiscreteSlider<T extends string | number>({
           </View>
           <View
             {...panResponder.panHandlers}
-            className="absolute w-6 h-6 rounded-full bg-surface border-2 border-ink shadow"
+            // White knob with a fixed shadow, like the iPhone's slider thumb.
+            className="absolute w-6 h-6 rounded-full bg-white border border-line shadow-sm"
             style={{ left: `${percent}%`, marginLeft: -12 }}
           />
         </View>
       </Pressable>
       <View className="flex-row justify-between px-0.5">
         {options.map((opt) => (
-          <AppText variant="micro" key={String(opt.id)} className="font-mono font-bold text-ink-3">
+          <AppText variant="micro" key={String(opt.id)} className="font-mono font-medium text-ink-3">
             {opt.label}
           </AppText>
         ))}
@@ -337,36 +345,10 @@ export function DiscreteSlider<T extends string | number>({
 // AvatarCircle — letter-avatar or photo, used across profile,
 // community, and recording-attribution UI.
 // ============================================================
-export function AvatarCircle({
-  name,
-  photoUri,
-  size = 44,
-}: {
-  name?: string | null;
-  photoUri?: string | null;
-  size?: number;
-}) {
-  if (photoUri) {
-    return (
-      <Image
-        source={{ uri: photoUri }}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        className="border-2 border-ink"
-      />
-    );
-  }
-  const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
-  return (
-    <View
-      style={{ width: size, height: size, borderRadius: size / 2 }}
-      className="border-2 border-ink bg-surface-2 items-center justify-center"
-    >
-      {/* Sized to the circle, not the OS text setting: the circle doesn't grow. */}
-      <AppText variant="inherit" className="font-serif font-bold text-ink" style={{ fontSize: size * 0.4 }}>
-        {initial}
-      </AppText>
-    </View>
-  );
+export function AvatarCircle(props: { name?: string | null; photoUri?: string | null; size?: number }) {
+  // Kept as a name so existing call sites don't change; the look is Avatar's
+  // (blocks.tsx): accent tint and initial, no thick black ring.
+  return <Avatar size={44} {...props} />;
 }
 
 // ============================================================

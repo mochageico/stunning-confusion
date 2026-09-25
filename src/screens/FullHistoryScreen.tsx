@@ -8,6 +8,7 @@ import { BookPicker } from '../components/BookPicker';
 import { AppIconButton, AppText } from '../components/design';
 
 import { useThemeColors } from '../components/theme';
+import { formatDate } from '../lib/format';
 const DATE_FILTER_OPTIONS = [
   { id: 'all', label: 'All Time' },
   { id: '7', label: 'Last 7 Days' },
@@ -15,8 +16,6 @@ const DATE_FILTER_OPTIONS = [
   { id: '90', label: 'Last 90 Days' },
 ];
 
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
 type HistoryEntry = { title: string; subtitle: string; book: string; date: string };
 

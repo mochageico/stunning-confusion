@@ -50,7 +50,8 @@ import MessagesScreen from './src/screens/MessagesScreen';
 import DMThreadScreen from './src/screens/DMThreadScreen';
 import CircleChatScreen from './src/screens/CircleChatScreen';
 import { APP_FONTS, AppIconButton, AppText, FontScaleOverrideProvider } from './src/components/design';
-import { DEMO_ACCENT, DEMO_FONT_SCALE, useDemoState } from './src/dev/DemoHarness';
+import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
+import BlocksGallery from './src/dev/BlocksGallery';
 import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent } from './src/components/theme';
 
 import { useThemeColors } from './src/components/theme';
@@ -730,8 +731,10 @@ export default function App() {
             </SafeAreaView>
           ) : DEMO_FONT_SCALE ? (
             <FontScaleOverrideProvider scale={DEMO_FONT_SCALE}>
-              <AppShell />
+              {DEMO_SCREEN === 'blocks' ? <BlocksGallery /> : <AppShell />}
             </FontScaleOverrideProvider>
+          ) : DEMO_SCREEN === 'blocks' ? (
+            <BlocksGallery />
           ) : (
             <AppShell />
           )}

@@ -59,7 +59,7 @@ export function Dropdown<T extends string | number>({
    * stable and short. Off by default (trigger shows the selected option, a
    * real value-picker) to match every other use of this component. */
   staticLabel?: boolean;
-  /** Shrinks the TRIGGER's text one step (label -> micro) for a dropdown that
+  /** Draws the trigger as a small pill (caption text) for a dropdown that
    * sits inline beside a micro-sized label, where the default size makes the
    * control shout over the thing naming it. The menu's own options are
    * deliberately NOT shrunk -- the menu has room, and a pick list is where
@@ -134,18 +134,27 @@ export function Dropdown<T extends string | number>({
         accessibilityRole="button"
         accessibilityLabel={title}
         accessibilityState={{ expanded: open }}
-        className="flex-row items-center justify-between bg-surface border border-line-strong rounded-xl"
-        style={{ minHeight: MIN_TOUCH, paddingHorizontal: space(12), paddingVertical: space(8), gap: space(6) }}
+        // compact is the small pill that sits beside a title (the chapter
+        // page's "BSB"); the default is a full field like a text input.
+        className={`flex-row items-center justify-between bg-surface border border-line-strong active:bg-surface-2 ${
+          compact ? 'rounded-full' : 'rounded-btn'
+        }`}
+        style={{
+          minHeight: compact ? undefined : MIN_TOUCH,
+          paddingHorizontal: space(compact ? 11 : 12),
+          paddingVertical: space(compact ? 5 : 8),
+          gap: space(4),
+        }}
       >
         <AppText
-          variant={compact ? 'micro' : 'label'}
-          className={`font-sans font-bold flex-1 ${selected || staticLabel ? 'text-ink' : 'text-ink-3'}`}
+          variant={compact ? 'caption' : 'label'}
+          className={`font-sans ${compact ? 'font-semibold' : ''} flex-1 ${selected || staticLabel ? 'text-ink' : 'text-ink-3'}`}
           numberOfLines={1}
         >
           {staticLabel ? placeholder : selected ? selected.label : placeholder}
         </AppText>
         <View className="shrink-0">
-          <ChevronDown size={Math.round(14 * scale)} color={palette.ink2} />
+          <ChevronDown size={Math.round(16 * scale)} color={palette.ink3} strokeWidth={2.4} />
         </View>
       </Pressable>
 
@@ -163,7 +172,7 @@ export function Dropdown<T extends string | number>({
               backdrop and close it before a row can register. */}
           <Pressable
             onPress={() => {}}
-            className="bg-surface border border-line-strong rounded-xl shadow-lg overflow-hidden"
+            className="bg-surface border border-line rounded-card shadow-lg overflow-hidden"
             style={{
               position: 'absolute',
               left,
@@ -189,7 +198,7 @@ export function Dropdown<T extends string | number>({
                     placeholder="Search..."
                     placeholderTextColor={palette.ink3}
                     allowFontScaling={false}
-                    className="w-full bg-surface-2 border border-line rounded-lg text-ink"
+                    className="w-full bg-surface-2 border border-line rounded-btn text-ink"
                     style={{
                       fontSize: 13 * scale,
                       paddingVertical: space(6),
@@ -212,20 +221,20 @@ export function Dropdown<T extends string | number>({
                     onPress={() => select(opt.id)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: opt.id === value }}
-                    className={`flex-row items-center justify-between ${index > 0 ? 'border-t border-hairline' : ''} ${
-                      opt.id === value ? 'bg-accent-soft' : 'bg-surface'
+                    className={`flex-row items-center justify-between bg-surface active:bg-surface-2 ${
+                      index > 0 ? 'border-t border-hairline' : ''
                     }`}
                     style={{ minHeight: MIN_TOUCH, paddingHorizontal: space(12), paddingVertical: space(9), gap: space(8) }}
                   >
                     <AppText
                       variant="label"
-                      className={`font-sans flex-1 ${opt.id === value ? 'font-bold text-ink' : 'text-ink-2'}`}
+                      className={`font-sans flex-1 ${opt.id === value ? 'font-semibold text-ink' : 'text-ink'}`}
                     >
                       {opt.label}
                     </AppText>
                     {opt.id === value && (
                       <View className="shrink-0">
-                        <Check size={Math.round(14 * scale)} color={palette.ink} />
+                        <Check size={Math.round(16 * scale)} color={palette.accent} strokeWidth={2.6} />
                       </View>
                     )}
                   </Pressable>

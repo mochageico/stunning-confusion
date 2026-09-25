@@ -6,6 +6,7 @@ import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
 import { AppText } from '../components/design';
 
 import { useThemeColors } from '../components/theme';
+import { formatTimeAgo } from '../lib/format';
 export default function CommunityHomeScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
   const {
@@ -22,13 +23,7 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
     navigateTo,
   } = state;
 
-  const formatEventAge = (createdAtMs: number) => {
-    const minutes = Math.max(1, Math.round((Date.now() - createdAtMs) / 60000));
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.round(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.round(hours / 24)}d ago`;
-  };
+  const formatEventAge = (createdAtMs: number) => formatTimeAgo(createdAtMs);
 
   return (
     <FadeInView style={{ flex: 1 }}>

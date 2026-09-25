@@ -386,17 +386,36 @@ export const BUTTON_SIZE: Record<
  * font setting, and `hitSlop` makes up whatever is still missing to reach
  * MIN_TOUCH. The visual stays as small as the design wants; the tap target
  * doesn't.
+ *
+ * Always round (job F3). `variant` picks the look:
+ *   outline  card-colored circle with a thin edge, ink-2 icon (close, clip,
+ *            the icon buttons in a header)
+ *   filled   accent circle, on-accent icon (send, play)
+ *   bare     no circle, accent icon (an icon sitting in a row)
+ * Leaving `variant` out keeps the old behaviour, where className supplies
+ * the colors, so existing call sites are unchanged until their S job.
  */
+export type IconButtonVariant = 'outline' | 'filled' | 'bare';
+
+const ICON_BUTTON_LOOK: Record<IconButtonVariant, string> = {
+  outline: 'bg-surface border border-line active:bg-surface-2',
+  filled: 'bg-accent active:opacity-80',
+  bare: 'active:opacity-60',
+};
+
 export function AppIconButton({
   Icon,
-  diameter = 32,
+  variant,
+  diameter = variant ? 36 : 32,
   iconSize,
   iconColor,
   className = '',
   style,
+  disabled,
   ...rest
 }: Omit<React.ComponentProps<typeof Pressable>, 'style' | 'children'> & {
-  Icon: React.ComponentType<{ size?: number; color?: string }>;
+  Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  variant?: IconButtonVariant;
   /** Unscaled circle size. The app's conventions: 28 close, 32 back, 36 send. */
   diameter?: number;
   /** Unscaled icon size. Defaults to a proportion that reads well at every diameter. */
@@ -409,14 +428,22 @@ export function AppIconButton({
   const d = Math.round(diameter * scale);
   // Whatever the circle still lacks to be comfortably tappable, spread evenly.
   const slop = Math.max(0, Math.round((MIN_TOUCH - d) / 2));
+  const defaultColor =
+    variant === 'filled' ? palette.onAccent : variant === 'bare' ? palette.accent : variant === 'outline' ? palette.ink2 : palette.ink;
   return (
     <Pressable
-      className={`items-center justify-center ${className}`}
+      className={`items-center justify-center rounded-full ${variant ? ICON_BUTTON_LOOK[variant] : ''} ${className}`}
       hitSlop={slop || undefined}
-      style={[{ width: d, height: d }, style]}
+      disabled={disabled}
+      accessibilityRole="button"
+      style={[{ width: d, height: d }, disabled ? { opacity: 0.4 } : null, style]}
       {...rest}
     >
-      <Icon size={Math.round((iconSize ?? Math.round(diameter * 0.44)) * scale)} color={iconColor ?? palette.ink} />
+      <Icon
+        size={Math.round((iconSize ?? Math.round(diameter * (variant ? 0.5 : 0.44))) * scale)}
+        color={iconColor ?? defaultColor}
+        {...(variant ? { strokeWidth: 2.2 } : null)}
+      />
     </Pressable>
   );
 }
@@ -424,20 +451,36 @@ export function AppIconButton({
 /**
  * A button that grows with its text instead of clipping it.
  *
- * Colour stays in `className` rather than becoming a `variant` prop: the app
- * themes buttons per context (emerald/blue/amber due-review rows, red destructive
- * actions, the near-black primary), and enumerating those here would mean
- * touching this file every time a screen wants a new accent. This owns
- * geometry and type; Tailwind keeps owning colour.
+ * `variant` is the look (job F3). Use it for every new button:
+ *
+ *   primary      accent fill, on-accent text. The one main action on a screen.
+ *   secondary    accent-soft fill, accent text. A second action beside it.
+ *   quiet        outlined, ink-2 text. Cancel, Start over, anything minor.
+ *   destructive  danger-soft fill, danger text. Delete, Leave, Remove.
+ *
+ * Labels are sentence case ("Add to My Verses"), never all caps, and
+ * semibold. Leaving `variant` out keeps the older behaviour, where className
+ * and textClassName carry the colors; the S jobs move those call sites over.
  */
+export type ButtonVariant = 'primary' | 'secondary' | 'quiet' | 'destructive';
+
+const BUTTON_LOOK: Record<ButtonVariant, { box: string; text: string }> = {
+  primary: { box: 'bg-accent active:opacity-80', text: 'text-on-accent' },
+  secondary: { box: 'bg-accent-soft active:opacity-80', text: 'text-accent' },
+  quiet: { box: 'border border-line-strong active:bg-surface-2', text: 'text-ink-2' },
+  destructive: { box: 'bg-danger-soft active:opacity-80', text: 'text-danger' },
+};
+
 export function AppButton({
   size = 'md',
+  variant,
   label,
   Icon,
   className = '',
   textClassName = '',
   iconColor,
   style,
+  disabled,
   children,
   ...rest
 }: Omit<React.ComponentProps<typeof Pressable>, 'style' | 'children'> & {
@@ -447,6 +490,7 @@ export function AppButton({
   style?: ViewStyle;
   children?: React.ReactNode;
   size?: ButtonSize;
+  variant?: ButtonVariant;
   label?: string;
   Icon?: React.ComponentType<{ size?: number; color?: string }>;
   textClassName?: string;
@@ -455,10 +499,27 @@ export function AppButton({
   const palette = useThemeColors();
   const scale = useFontScale();
   const s = BUTTON_SIZE[size];
+  const look = variant ? BUTTON_LOOK[variant] : null;
+  const defaultIconColor = !variant
+    ? palette.onAccent
+    : variant === 'primary'
+      ? palette.onAccent
+      : variant === 'secondary'
+        ? palette.accent
+        : variant === 'destructive'
+          ? palette.danger
+          : palette.ink2;
+  // Bold (semibold with a variant) unless textClassName picks its own weight:
+  // two weight classes don't combine, the heavier one always wins.
+  const ownWeight = /\bfont-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)\b/.test(textClassName);
+  const weight = ownWeight ? '' : look ? 'font-semibold' : 'font-bold';
   return (
     <Pressable
-      className={`flex-row items-center justify-center ${className}`}
+      className={`flex-row items-center justify-center ${look ? `rounded-btn ${look.box}` : ''} ${className}`}
       hitSlop={s.hitSlop || undefined}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={disabled ? { disabled: true } : undefined}
       style={[
         {
           minHeight: Math.round(s.minHeight * scale),
@@ -466,18 +527,20 @@ export function AppButton({
           paddingHorizontal: Math.round(s.px * scale),
           gap: Math.round(s.gap * scale),
         },
+        // Only a variant button dims itself: older call sites style their own
+        // disabled look, and dimming on top of that would double it.
+        look && disabled ? { opacity: 0.45 } : null,
         style,
       ]}
       {...rest}
     >
-      {Icon ? <Icon size={Math.round(s.icon * scale)} color={iconColor ?? palette.onAccent} /> : null}
+      {Icon ? <Icon size={Math.round(s.icon * scale)} color={iconColor ?? defaultIconColor} /> : null}
       {label ? (
         <AppText
           variant={s.type}
-          // Bold unless textClassName picks its own weight: two weight classes
-          // don't combine, the heavier one always wins.
-          className={`font-sans ${/\bfont-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)\b/.test(textClassName) ? '' : 'font-bold'} ${textClassName}`}
-          numberOfLines={1}
+          className={`font-sans ${weight} ${look ? look.text : ''} ${textClassName}`}
+          numberOfLines={look ? 2 : 1}
+          style={look ? { textAlign: 'center', flexShrink: 1 } : undefined}
         >
           {label}
         </AppText>
@@ -488,7 +551,8 @@ export function AppButton({
 }
 
 // ============================================================
-// Card — the bordered white panel used for every settings section.
+// Card — the off-white panel with a thin edge. No shadow: in this look only
+// the floating bars cast one.
 // minHeight-free by construction: it grows to whatever its children need.
 // ============================================================
 export function Card({
@@ -503,7 +567,7 @@ export function Card({
   const space = useScaledSpace();
   return (
     <View
-      className={`border-2 border-ink rounded-xl bg-surface shadow-sm ${className}`}
+      className={`border border-line rounded-card bg-surface ${className}`}
       style={{ gap: space(gap), padding: space(14) }}
     >
       {children}
@@ -582,11 +646,14 @@ export function CollapsibleCard({
   title,
   summary,
   defaultCollapsed = false,
+  accessory,
   children,
 }: {
   /** Stable key for persistence. Unique per section. */
   storageKey: string;
   title: string;
+  /** Drawn right after the title, e.g. a HelpTooltip, so a "?" never sits alone on its own row. */
+  accessory?: React.ReactNode;
   /** Current value shown on the header, so a collapsed section still tells you where it stands. */
   summary?: string;
   defaultCollapsed?: boolean;
@@ -596,7 +663,7 @@ export function CollapsibleCard({
   const [collapsed, setCollapsed] = useCollapsed(storageKey, defaultCollapsed);
   const scale = useFontScale();
   const space = useScaledSpace();
-  const iconSize = Math.round(16 * scale);
+  const iconSize = Math.round(18 * scale);
   // Title and summary are two pieces of text in one row, which is the limit
   // before it becomes the pattern that broke. Past 1.3x they stack, same rule
   // as SettingRow, with the chevron staying put on the right.
@@ -604,41 +671,39 @@ export function CollapsibleCard({
   const Chevron = collapsed ? ChevronDown : ChevronUp;
 
   return (
-    <View
-      className="border-2 border-ink rounded-xl bg-surface shadow-sm"
-      style={{ padding: space(14), gap: space(16) }}
-    >
+    <View className="border border-line rounded-card bg-surface" style={{ paddingHorizontal: space(14), paddingBottom: collapsed ? 0 : space(14) }}>
       <Pressable
         onPress={() => setCollapsed(!collapsed)}
         accessibilityRole="button"
         accessibilityState={{ expanded: !collapsed }}
         aria-expanded={!collapsed}
         className="flex-row items-center"
-        style={{ minHeight: MIN_TOUCH, gap: space(8) }}
+        style={{ minHeight: Math.round(52 * scale), paddingVertical: space(8), gap: space(8) }}
       >
         <View className={stacked ? 'flex-1' : 'flex-1 flex-row items-center'} style={{ gap: space(stacked ? 2 : 8) }}>
-          <AppText
-            variant="section"
-            className={`font-sans font-extrabold uppercase tracking-widest text-ink ${stacked ? '' : 'flex-1'}`}
-          >
-            {title}
-          </AppText>
+          <View className={`flex-row items-center ${stacked ? '' : 'flex-1'}`} style={{ gap: space(6) }}>
+            <AppText variant="body" className="font-sans font-semibold text-ink shrink">
+              {title}
+            </AppText>
+            {accessory}
+          </View>
           {summary ? (
-            <AppText variant="micro" className={`font-mono font-bold text-ink-2 ${stacked ? '' : 'shrink-0'}`}>
+            <AppText variant="label" className={`font-sans text-ink-3 ${stacked ? '' : 'shrink-0'}`}>
               {summary}
             </AppText>
           ) : null}
         </View>
         <View className="shrink-0">
-          <Chevron size={iconSize} color={palette.ink} />
+          <Chevron size={iconSize} color={palette.ink3} strokeWidth={2.4} />
         </View>
       </Pressable>
-      {!collapsed && children}
+      {!collapsed && <View style={{ gap: space(16), paddingTop: space(4) }}>{children}</View>}
     </View>
   );
 }
 
-/** Uppercase tracked header with a hairline rule under it. */
+/** A card's title row: the title on the left, anything else (a count, a
+ *  small button) on the right, with a hairline under it. Sentence case. */
 export function CardHeader({ title, children }: { title: string; children?: React.ReactNode }) {
   const space = useScaledSpace();
   return (
@@ -646,10 +711,7 @@ export function CardHeader({ title, children }: { title: string; children?: Reac
       className="flex-row items-center justify-between border-b border-hairline"
       style={{ paddingBottom: space(8), gap: space(8) }}
     >
-      <AppText
-        variant="section"
-        className="font-sans font-extrabold uppercase tracking-widest text-ink flex-1"
-      >
+      <AppText variant="body" className="font-sans font-semibold text-ink flex-1">
         {title}
       </AppText>
       {children}
@@ -658,7 +720,7 @@ export function CardHeader({ title, children }: { title: string; children?: Reac
 }
 
 // ============================================================
-// SettingRow — a label on the left, a value badge on the right.
+// SettingRow — a label on the left, its value on the right.
 //
 // The bug this replaces: `flex-row justify-between` with two plain Text
 // children and no shrink permission. Text in React Native does not shrink
@@ -666,7 +728,7 @@ export function CardHeader({ title, children }: { title: string; children?: Reac
 // pushed the value clean off the right edge of the screen.
 //
 // `flex-1` on the label (so it wraps instead of growing) plus `shrink-0` on the
-// badge (so the number is never the thing that gets squeezed) fixes it. Above
+// value (so the number is never the thing that gets squeezed) fixes it. Above
 // `stackAt`, the two stop sharing a line entirely.
 // ============================================================
 export function SettingRow({
@@ -691,24 +753,21 @@ export function SettingRow({
       style={{ gap: space(stacked ? 4 : 8) }}
     >
       <View className={stacked ? '' : 'flex-1'} style={{ gap: space(2) }}>
-        <AppText variant="label" className="font-sans font-bold text-ink">
+        <AppText variant="body" className="font-sans text-ink">
           {label}
         </AppText>
         {hint ? (
-          <AppText variant="micro" className="font-sans text-ink-2">
+          <AppText variant="caption" className="font-sans text-ink-2">
             {hint}
           </AppText>
         ) : null}
       </View>
+      {/* The value reads as plain text in ink-3, the way a grouped iPhone
+          list shows one, instead of sitting in a bordered badge. */}
       {value !== undefined && (
-        <View
-          className={`bg-surface-2 border border-line-strong rounded shrink-0 ${stacked ? 'self-start' : ''}`}
-          style={{ paddingHorizontal: space(8), paddingVertical: space(2) }}
-        >
-          <AppText variant="label" className="font-mono text-ink">
-            {value}
-          </AppText>
-        </View>
+        <AppText variant="body" className={`font-mono text-ink-3 shrink-0 ${stacked ? '' : 'text-right'}`}>
+          {value}
+        </AppText>
       )}
     </View>
   );
@@ -735,8 +794,84 @@ export function RangeCaption({ min, max }: { min: string; max: string }) {
 }
 
 // ============================================================
+// ChoiceCard — the one "pick one" pattern (job F3).
+//
+// The app had seven: ChipRow flex-1, ChipRow wrap, the grey-tray segmented
+// control, day circles, OptionCards with a check on the right, radio-left
+// cards, and empty-circle toggles. For choices that need a sentence of
+// explanation this is the only one now: a card with the title, an optional
+// description, and a radio mark on the right. Short labels with no
+// explanation use SegmentedControl (blocks.tsx) instead.
+//
+// Selection changes colors and the mark only. No shadow, so nothing about a
+// shadow can change with selection (see the iOS Fabric note on OptionCards).
+// ============================================================
+export function ChoiceCard({
+  title,
+  description,
+  selected,
+  onPress,
+  compact = false,
+  className = '',
+}: {
+  title: string;
+  description?: string;
+  selected: boolean;
+  onPress: () => void;
+  /** Tighter padding and a smaller title, for two-across grids. */
+  compact?: boolean;
+  className?: string;
+}) {
+  const space = useScaledSpace();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      // `checked` (not `selected`) is the correct state for a radio, and the
+      // explicit aria-* prop is needed because React Native Web drops
+      // accessibilityState on Pressable entirely.
+      accessibilityState={{ checked: selected }}
+      aria-checked={selected}
+      className={`flex-row items-start border rounded-card ${
+        selected ? 'border-accent bg-accent-soft' : 'border-line bg-surface active:bg-surface-2'
+      } ${className}`}
+      style={{ minHeight: MIN_TOUCH, padding: space(compact ? 10 : 14), gap: space(10) }}
+    >
+      <View className="flex-1" style={{ gap: space(2) }}>
+        <AppText variant={compact ? 'label' : 'body'} className="font-sans font-semibold text-ink">
+          {title}
+        </AppText>
+        {description ? (
+          <AppText variant="caption" className="font-sans text-ink-2">
+            {description}
+          </AppText>
+        ) : null}
+      </View>
+      <RadioMark selected={selected} size={compact ? 18 : 22} />
+    </Pressable>
+  );
+}
+
+/** The radio circle on a ChoiceCard: an empty ring, or an accent disc with a check. */
+export function RadioMark({ selected, size = 22 }: { selected: boolean; size?: number }) {
+  const palette = useThemeColors();
+  const scale = useFontScale();
+  const d = Math.round(size * scale);
+  return (
+    <View
+      // Reserved at the same size either way, so selecting never reflows the
+      // title beside it.
+      className={`rounded-full items-center justify-center shrink-0 ${selected ? 'bg-accent' : 'border-2 border-line-strong'}`}
+      style={{ width: d, height: d, marginTop: Math.round(1 * scale) }}
+    >
+      {selected ? <Check size={Math.round(size * 0.62 * scale)} color={palette.onAccent} strokeWidth={3} /> : null}
+    </View>
+  );
+}
+
+// ============================================================
 // OptionCards — single-select from a small set, each option carrying a title
-// and an explanatory sentence.
+// and an explanatory sentence. Built from ChoiceCard.
 //
 // Replaces an N-across `flex-row` of `flex-1` cards at a fixed 92pt height.
 // On a 375pt screen, four columns left roughly 52pt of usable text width per
@@ -751,15 +886,16 @@ export function RangeCaption({ min, max }: { min: string; max: string }) {
 //   preserve, not spend. Two columns of ~150pt still give a long title like
 //   "Grace at Your Discretion" room to wrap over two lines and grow.
 //
-//   At or above it — full-width stacked rows, every description always visible.
-//   Two columns stop fitting well before 1.5x, and the descriptions are the part
-//   that makes the setting comprehensible, so they get the whole content width.
+//   At or above it — full-width stacked cards, every description always
+//   visible. Two columns stop fitting well before 1.5x, and the descriptions
+//   are the part that makes the setting comprehensible, so they get the whole
+//   content width.
 //
 // Both paths use minHeight, never height, so either can grow.
 //
-// NOTE: the shadow is unconditional, and only colours change with selection.
-// Toggling shadow-* classes conditionally has caused a hard iOS freeze on the
-// New Architecture, so selection state must never add or remove a shadow.
+// NOTE: never give these a shadow that changes with selection. Toggling
+// shadow-* classes conditionally has caused a hard iOS freeze on the New
+// Architecture, so selection state must never add or remove a shadow.
 // ============================================================
 export interface OptionCardItem<T extends string> {
   id: T;
@@ -769,10 +905,6 @@ export interface OptionCardItem<T extends string> {
 
 /** Font scale at which the two-column grid gives way to the full-width list. */
 const GRID_MAX_SCALE = 1.25;
-
-const CARD_BASE = 'border-2 rounded-xl shadow-sm';
-const cardTone = (active: boolean) =>
-  active ? 'border-accent bg-accent-soft' : 'border-line bg-surface';
 
 export function OptionCards<T extends string>({
   options,
@@ -785,73 +917,44 @@ export function OptionCards<T extends string>({
 }) {
   const scale = useFontScale();
   const space = useScaledSpace();
-  // Icons take a numeric `size` prop rather than a style, so the scale is read
-  // once here as a plain number -- never inside a map or conditional, where the
-  // hook call count would vary with selection state.
-  const checkSize = Math.round(12 * scale);
 
-  if (scale < GRID_MAX_SCALE) {
-    return <OptionGrid options={options} value={value} onChange={onChange} space={space} checkSize={checkSize} />;
+  if (scale >= GRID_MAX_SCALE) {
+    return (
+      <View style={{ gap: space(8) }}>
+        {options.map((opt) => (
+          <ChoiceCard
+            key={opt.id}
+            title={opt.title}
+            description={opt.desc}
+            selected={opt.id === value}
+            onPress={() => onChange(opt.id)}
+          />
+        ))}
+      </View>
+    );
   }
-  return <OptionList options={options} value={value} onChange={onChange} space={space} checkSize={checkSize} />;
-}
 
-interface LayoutProps<T extends string> {
-  options: OptionCardItem<T>[];
-  value: T;
-  onChange: (id: T) => void;
-  space: (n: number) => number;
-  checkSize: number;
-}
-
-/** Compact path: titles in a two-column grid, selected description below. */
-function OptionGrid<T extends string>({ options, value, onChange, space, checkSize }: LayoutProps<T>) {
-  const palette = useThemeColors();
   // Chunked into explicit pairs rather than `flex-wrap` + percentage widths --
   // percentage basis plus a gap is where NativeWind/RN wrapping gets unreliable,
   // and pairs of `flex-1` children divide the row exactly.
   const rows: OptionCardItem<T>[][] = [];
   for (let i = 0; i < options.length; i += 2) rows.push(options.slice(i, i + 2));
-
   const selected = options.find((o) => o.id === value);
 
   return (
     <View style={{ gap: space(8) }}>
       {rows.map((row, rowIndex) => (
         <View key={rowIndex} className="flex-row" style={{ gap: space(8) }}>
-          {row.map((opt) => {
-            const active = opt.id === value;
-            return (
-              <Pressable
-                key={opt.id}
-                onPress={() => onChange(opt.id)}
-                accessibilityRole="radio"
-                // `checked` (not `selected`) is the correct state for a radio,
-                // and the explicit aria-* prop is needed because React Native
-                // Web drops accessibilityState on Pressable entirely.
-                accessibilityState={{ checked: active }}
-                aria-checked={active}
-                className={`flex-1 flex-row items-start ${CARD_BASE} ${cardTone(active)}`}
-                style={{ minHeight: MIN_TOUCH, padding: space(8), gap: space(6) }}
-              >
-                <AppText variant="label" className="font-serif font-black text-ink flex-1">
-                  {opt.title}
-                </AppText>
-                {/* Reserved whether or not selected, so selecting never reflows
-                    the title beside it. */}
-                <View className="items-center justify-center shrink-0" style={{ width: space(14), height: space(14) }}>
-                  {active && (
-                    <View
-                      className="rounded-full bg-accent items-center justify-center"
-                      style={{ width: space(14), height: space(14) }}
-                    >
-                      <Check size={checkSize} color={palette.onAccent} strokeWidth={3} />
-                    </View>
-                  )}
-                </View>
-              </Pressable>
-            );
-          })}
+          {row.map((opt) => (
+            <ChoiceCard
+              key={opt.id}
+              compact
+              className="flex-1"
+              title={opt.title}
+              selected={opt.id === value}
+              onPress={() => onChange(opt.id)}
+            />
+          ))}
           {/* Keeps a trailing odd card at half width instead of letting it
               stretch across the row and read as a different kind of control. */}
           {row.length === 1 && <View className="flex-1" />}
@@ -859,66 +962,59 @@ function OptionGrid<T extends string>({ options, value, onChange, space, checkSi
       ))}
 
       {selected?.desc ? (
-        <View
-          className="border border-line rounded-xl bg-surface-2"
-          style={{ padding: space(8) }}
-        >
-          <AppText variant="caption" className="font-sans text-ink-2">
-            {selected.desc}
-          </AppText>
-        </View>
+        <AppText variant="caption" className="font-sans text-ink-2" style={{ paddingHorizontal: space(4) }}>
+          {selected.desc}
+        </AppText>
       ) : null}
     </View>
   );
 }
 
-/** Roomy path: full-width rows, every description visible. */
-function OptionList<T extends string>({ options, value, onChange, space, checkSize }: LayoutProps<T>) {
-  const palette = useThemeColors();
+// ============================================================
+// Switch — the iPhone's on/off control, drawn in Views (no native module).
+//
+// Fixed size on purpose, as on the iPhone: it holds no text, so it has nothing
+// to grow for. The knob's shadow is always on; only the track color and the
+// knob's position change.
+// ============================================================
+export function Switch({
+  value,
+  onChange,
+  disabled,
+  accessibilityLabel,
+}: {
+  value: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+  accessibilityLabel?: string;
+}) {
   return (
-    <View style={{ gap: space(8) }}>
-      {options.map((opt) => {
-        const active = opt.id === value;
-        return (
-          <Pressable
-            key={opt.id}
-            onPress={() => onChange(opt.id)}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: active }}
-            aria-checked={active}
-            className={`flex-row items-start ${CARD_BASE} ${cardTone(active)}`}
-            style={{ minHeight: MIN_TOUCH, padding: space(10), gap: space(10) }}
-          >
-            <View className="flex-1" style={{ gap: space(3) }}>
-              <AppText variant="title" className="font-serif font-black text-ink">
-                {opt.title}
-              </AppText>
-              {opt.desc ? (
-                <AppText variant="caption" className="font-sans text-ink-2">
-                  {opt.desc}
-                </AppText>
-              ) : null}
-            </View>
-            <View className="items-center justify-center shrink-0" style={{ width: space(20), height: space(20) }}>
-              {active && (
-                <View
-                  className="rounded-full bg-accent items-center justify-center"
-                  style={{ width: space(20), height: space(20) }}
-                >
-                  <Check size={checkSize} color={palette.onAccent} strokeWidth={3} />
-                </View>
-              )}
-            </View>
-          </Pressable>
-        );
-      })}
-    </View>
+    <Pressable
+      onPress={() => onChange(!value)}
+      disabled={disabled}
+      hitSlop={8}
+      accessibilityRole="switch"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ checked: value, disabled }}
+      aria-checked={value}
+      className={`rounded-full justify-center shrink-0 ${value ? 'bg-accent' : 'bg-fill'}`}
+      // layout-ok: the switch holds no text, so a fixed size is correct here.
+      style={{ width: 51, height: 31, paddingHorizontal: 2, opacity: disabled ? 0.45 : 1 }}
+    >
+      {/* White in both schemes, as on the iPhone. */}
+      <View
+        className="rounded-full bg-white shadow-sm"
+        // layout-ok: the knob holds no text.
+        style={{ width: 27, height: 27, transform: [{ translateX: value ? 20 : 0 }] }}
+      />
+    </Pressable>
   );
 }
 
 /**
- * Toggle switch with a shrinkable label block beside it. Same shrink discipline
+ * A label (and optional hint) with a Switch beside it. Same shrink discipline
  * as SettingRow: the switch is fixed-size and never squeezed, the text wraps.
+ * Inside a GroupedList, use a ListRow with `accessory={<Switch />}` instead.
  */
 export function ToggleRow({
   label,
@@ -935,26 +1031,16 @@ export function ToggleRow({
   return (
     <View className="flex-row items-center justify-between" style={{ gap: space(10) }}>
       <View className="flex-1" style={{ gap: space(2) }}>
-        <AppText variant="label" className="font-sans font-bold text-ink">
+        <AppText variant="body" className="font-sans text-ink">
           {label}
         </AppText>
         {hint ? (
-          <AppText variant="micro" className="font-sans text-ink-2">
+          <AppText variant="caption" className="font-sans text-ink-2">
             {hint}
           </AppText>
         ) : null}
       </View>
-      <Pressable
-        onPress={() => onChange(!value)}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: value }}
-        aria-checked={value}
-        className={`rounded-full justify-center shrink-0 ${value ? 'bg-accent' : 'bg-fill'}`}
-        // layout-ok: the switch holds no text, so a fixed size is correct here.
-        style={{ width: 40, height: 24, paddingHorizontal: 2 }}
-      >
-        <View className="w-5 h-5 rounded-full bg-surface shadow" style={{ transform: [{ translateX: value ? 16 : 0 }] }} />
-      </Pressable>
+      <Switch value={value} onChange={onChange} accessibilityLabel={label} />
     </View>
   );
 }

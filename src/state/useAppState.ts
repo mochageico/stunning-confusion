@@ -110,6 +110,7 @@ import {
   VerseTimestamp,
 } from '../types';
 import { computeDailyPull, PersonalPacingSettings } from '../lib/groupPlanScheduler';
+import { formatDuration } from '../lib/format';
 
 export type ScreenName =
   | 'home'
@@ -4485,11 +4486,7 @@ export function useAppState() {
   }, [memoryQueue, user]);
 
   // Format record duration
-  const formatTime = (totalSec: number) => {
-    const mins = Math.floor(totalSec / 60);
-    const secs = totalSec % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  const formatTime = (totalSec: number) => formatDuration(totalSec, 'clock');
 
   // Date formatter
   const getTodayDateString = () => {

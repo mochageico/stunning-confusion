@@ -18,6 +18,8 @@
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
 // modalLearn, modalListen, modalSave, modalProgress, modalMissed.
+// blocks: not a screen of the app. It shows every shared building block
+// (src/dev/BlocksGallery.tsx) in place of the app.
 // Extra params: ios=1 reproduces iPhone font rendering in the browser (no
 // synthesized bold, so a weight that isn't a real loaded face shows as the
 // Regular it is on the phone); empty=1 skips the seeded queue;
@@ -40,6 +42,9 @@ const PARAMS =
 
 /** Decided once at startup, so the hooks below always run in the same order. */
 export const DEMO_ENABLED = __DEV__ && (PARAMS ? PARAMS.has('s') : DEMO_ON_DEVICE);
+
+/** The ?s= value, when demo mode is on. */
+export const DEMO_SCREEN: string | null = DEMO_ENABLED && PARAMS ? PARAMS.get('s') : null;
 
 /** The accent the demo URL asks for, if any. App.tsx applies it over the saved one. */
 export const DEMO_ACCENT: string | null = DEMO_ENABLED && PARAMS ? PARAMS.get('accent') : null;
