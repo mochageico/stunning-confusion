@@ -118,8 +118,8 @@ this whole file, then do only your job.
   `npm run shots -- --all` (or specific queries; see the header of
   `scripts/capture-screens.cjs`) → `.shots/` (gitignored). Before/after:
   `--out=.shots/before`. Inventories: `npm run scan:fonts`, `npm run scan:copy`.
-- **F1 · Fonts that render** — DONE 2026-09-25 (uncommitted until the user
-  reviews). What was built: `design.tsx` "Font faces" section — `APP_FONTS`
+- **F1 · Fonts that render** — DONE and committed 2026-09-25 (`cd50943`,
+  on `translation-sources`). What was built: `design.tsx` "Font faces" section — `APP_FONTS`
   (the one list `useFonts` loads: Inter 400/500/600/700 + 400 italic,
   Literata 400/500/600/700 + 400 italic), className → face resolver, and an
   `InheritedFont` context so a nested AppText keeps its parent's family/weight
