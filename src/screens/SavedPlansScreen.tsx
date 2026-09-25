@@ -6,7 +6,9 @@ import { AppState } from '../state/useAppState';
 import { FadeInView, PulseView } from '../components/ui';
 import { AppIconButton, AppText } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 export default function SavedPlansScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const { handleBack, handleCreateNewPlan, handleActivatePlan, handleDeletePlan, handleEditPlan, savedPlans } = state;
 
   // Alert.alert is a no-op on React Native Web, so deletion confirmation is
@@ -18,24 +20,24 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView
-        className="flex-1 bg-white"
+        className="flex-1 bg-canvas"
         contentContainerClassName="p-5 pb-12"
         contentContainerStyle={{ gap: 20 }}
       >
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white shrink-0" />
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface shrink-0" />
           {/* flex-1, not intrinsic width: a display-size title is wider than
               the screen minus the back button, and text in RN doesn't wrap
               unless its container is allowed to bound it. */}
           <View className="flex-1">
-            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-600 font-sans">
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-ink-2 font-sans">
               How deeply verses stick
             </AppText>
-            <AppText variant="display" className="font-serif font-bold text-[#1A1A1A] mt-0.5">
+            <AppText variant="display" className="font-serif font-bold text-ink mt-0.5">
               Review Settings
             </AppText>
-            <AppText variant="caption" className="text-neutral-600 font-sans mt-1">
+            <AppText variant="caption" className="text-ink-2 font-sans mt-1">
               How long a verse keeps coming back before it's yours for good. Tap one to use it, or Edit to change it.
             </AppText>
           </View>
@@ -44,22 +46,22 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
         {/* Create New Plan Button */}
         <Pressable
           onPress={handleCreateNewPlan}
-          className="border-2 border-dashed border-neutral-300 rounded-2xl p-5 items-center justify-center gap-2"
+          className="border-2 border-dashed border-line-strong rounded-2xl p-5 items-center justify-center gap-2"
         >
-          <View className="w-8 h-8 rounded-full bg-neutral-100 items-center justify-center">
-            <Plus size={16} color="#737373" />
+          <View className="w-8 h-8 rounded-full bg-surface-2 items-center justify-center">
+            <Plus size={16} color={palette.ink3} />
           </View>
-          <AppText variant="label" className="font-sans font-extrabold text-neutral-800">
+          <AppText variant="label" className="font-sans font-extrabold text-ink">
             Create New Settings
           </AppText>
-          <AppText variant="caption" className="text-neutral-600 font-sans text-center">
+          <AppText variant="caption" className="text-ink-2 font-sans text-center">
             Set how long a verse keeps coming back, and what happens when you miss one
           </AppText>
         </Pressable>
 
         {/* List of Saved Plans */}
         <View className="gap-3">
-          <AppText variant="section" className="font-bold text-neutral-600 tracking-wider font-sans uppercase">
+          <AppText variant="section" className="font-bold text-ink-2 tracking-wider font-sans uppercase">
             SAVED ({savedPlans.length})
           </AppText>
 
@@ -68,8 +70,8 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
               <Pressable
                 key={plan.id}
                 onPress={() => handleActivatePlan(plan.id)}
-                className={`border rounded-2xl p-4 bg-white shadow-xs relative flex flex-col justify-between gap-3 ${
-                  plan.isActive ? 'border-2 border-[#1A1A1A]' : 'border-neutral-200'
+                className={`border rounded-2xl p-4 bg-surface shadow-xs relative flex flex-col justify-between gap-3 ${
+                  plan.isActive ? 'border-2 border-ink' : 'border-line'
                 }`}
               >
                 <View className="flex-row items-start justify-between">
@@ -77,10 +79,10 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                     <View className="flex-row items-center gap-1.5">
                       {plan.isActive && (
                         <PulseView>
-                          <View className="w-2 h-2 bg-emerald-500 rounded-full" />
+                          <View className="w-2 h-2 bg-success rounded-full" />
                         </PulseView>
                       )}
-                      <AppText variant="label" className="font-sans font-extrabold text-neutral-900 leading-tight">
+                      <AppText variant="label" className="font-sans font-extrabold text-ink leading-tight">
                         {plan.name}
                       </AppText>
                     </View>
@@ -92,7 +94,7 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                         Spelled out in words rather than "7-6-5 · 3 touches",
                         which meant nothing without already knowing the
                         engine. */}
-                    <AppText variant="caption" className="font-sans text-neutral-500">
+                    <AppText variant="caption" className="font-sans text-ink-3">
                       Daily for {plan.dailyPhaseWeeks} weeks, weekly for {plan.weeklyPhaseMonths} months, monthly for{' '}
                       {plan.monthlyPhaseYears} {plan.monthlyPhaseYears === 1 ? 'year' : 'years'}
                       {plan.isBuiltIn ? ' · built-in' : ''}
@@ -101,8 +103,8 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
 
                   <View className="flex-row items-center gap-3">
                     {plan.isActive ? (
-                      <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full flex-row items-center gap-1 border border-emerald-500/20">
-                        <AppText variant="micro" className="font-sans font-bold text-emerald-700 uppercase tracking-wider">
+                      <View className="bg-success/10 px-2 py-0.5 rounded-full flex-row items-center gap-1 border border-success/20">
+                        <AppText variant="micro" className="font-sans font-bold text-success uppercase tracking-wider">
                           Active
                         </AppText>
                       </View>
@@ -111,32 +113,32 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                         onPress={() => handleEditPlan(plan)}
                         className="flex-row items-center gap-0.5"
                       >
-                        <AppText variant="micro" className="font-sans font-extrabold text-neutral-400">Edit</AppText>
-                        <ChevronRight size={10} color="#a3a3a3" />
+                        <AppText variant="micro" className="font-sans font-extrabold text-ink-3">Edit</AppText>
+                        <ChevronRight size={10} color={palette.ink3} />
                       </Pressable>
                     )}
                     {savedPlans.length > 1 && (
-                      <AppIconButton Icon={Trash2} diameter={24} iconSize={13} iconColor="#d4d4d4" onPress={(e) => { e.stopPropagation(); setDeletingPlanId(plan.id); }} className="rounded-full" hitSlop={8} />
+                      <AppIconButton Icon={Trash2} diameter={24} iconSize={13} iconColor={palette.lineStrong} onPress={(e) => { e.stopPropagation(); setDeletingPlanId(plan.id); }} className="rounded-full" hitSlop={8} />
                     )}
                   </View>
                 </View>
 
                 {plan.isActive && (
-                  <View className="flex-row justify-end pt-2 border-t border-dashed border-neutral-100">
+                  <View className="flex-row justify-end pt-2 border-t border-dashed border-hairline">
                     <Pressable
                       onPress={() => handleEditPlan(plan)}
                       className="flex-row items-center gap-0.5"
                     >
-                      <AppText variant="micro" className="font-sans font-extrabold text-neutral-500">Edit Settings</AppText>
-                      <ChevronRight size={10} color="#737373" />
+                      <AppText variant="micro" className="font-sans font-extrabold text-ink-3">Edit Settings</AppText>
+                      <ChevronRight size={10} color={palette.ink3} />
                     </Pressable>
                   </View>
                 )}
 
                 {deletingPlanId === plan.id && (
-                  <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
-                    <AppText variant="caption" className="font-sans font-bold text-red-800">Delete "{plan.name}"?</AppText>
-                    <AppText variant="micro" className="font-sans text-red-700/80 leading-relaxed">
+                  <View className="bg-danger-soft border border-danger/30 rounded-xl p-3" style={{ gap: 8 }}>
+                    <AppText variant="caption" className="font-sans font-bold text-danger">Delete "{plan.name}"?</AppText>
+                    <AppText variant="micro" className="font-sans text-danger leading-relaxed">
                       This permanently removes this plan. It can't be undone.
                     </AppText>
                     <View className="flex-row gap-2 justify-end pt-1">
@@ -145,9 +147,9 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                           e.stopPropagation();
                           setDeletingPlanId(null);
                         }}
-                        className="px-3 py-1.5 border border-neutral-300 rounded-lg bg-white"
+                        className="px-3 py-1.5 border border-line-strong rounded-lg bg-surface"
                       >
-                        <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
+                        <AppText variant="caption" className="text-ink-2 font-sans font-bold ">Cancel</AppText>
                       </Pressable>
                       <Pressable
                         onPress={(e) => {
@@ -155,9 +157,9 @@ export default function SavedPlansScreen({ state }: { state: AppState }) {
                           handleDeletePlan(plan.id);
                           setDeletingPlanId(null);
                         }}
-                        className="px-3 py-1.5 bg-red-600 rounded-lg"
+                        className="px-3 py-1.5 bg-danger rounded-lg"
                       >
-                        <AppText variant="caption" className="text-white font-sans font-bold ">Yes, Delete</AppText>
+                        <AppText variant="caption" className="text-on-accent font-sans font-bold ">Yes, Delete</AppText>
                       </Pressable>
                     </View>
                   </View>

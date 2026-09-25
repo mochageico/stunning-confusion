@@ -5,6 +5,7 @@ import { AppState } from '../state/useAppState';
 import { FadeInView, HelpTooltip } from '../components/ui';
 import { AppIconButton, AppText } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 // Streak/memorized-count thresholds for the milestone badges section --
 // purely derived from existing counts (memoryStreak/memorizedCount), no
 // new persistence needed.
@@ -66,6 +67,7 @@ function formatStudyTime(totalSeconds: number): string {
 }
 
 export default function DashboardScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const { handleBack, navigateTo, memoryQueue, memorizedCount, learningCount, memoryStreak, totalStudySeconds, activityLast90Days } = state;
 
   const totalReviewsCompleted = memoryQueue.reduce((sum, item) => sum + (item.totalSuccessfulReviews || 0), 0);
@@ -77,46 +79,46 @@ export default function DashboardScreen({ state }: { state: AppState }) {
     {
       key: 'learning',
       label: 'Learning',
-      accent: 'border-l-violet-500',
-      countColor: 'text-violet-600',
-      chip: 'bg-violet-50 border-violet-200',
-      chipText: 'text-violet-700',
+      accent: 'border-l-stage-learning',
+      countColor: 'text-ink',
+      chip: 'bg-surface-2 border-line',
+      chipText: 'text-ink-2',
       items: memoryQueue.filter((item) => item.status === 'learning'),
     },
     {
       key: 'daily',
       label: 'Daily',
-      accent: 'border-l-emerald-500',
-      countColor: 'text-emerald-600',
-      chip: 'bg-emerald-50 border-emerald-200',
-      chipText: 'text-emerald-700',
+      accent: 'border-l-stage-daily',
+      countColor: 'text-ink',
+      chip: 'bg-surface-2 border-line',
+      chipText: 'text-ink-2',
       items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'daily'),
     },
     {
       key: 'weekly',
       label: 'Weekly',
-      accent: 'border-l-blue-500',
-      countColor: 'text-blue-600',
-      chip: 'bg-blue-50 border-blue-200',
-      chipText: 'text-blue-700',
+      accent: 'border-l-stage-weekly',
+      countColor: 'text-ink',
+      chip: 'bg-surface-2 border-line',
+      chipText: 'text-ink-2',
       items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'weekly'),
     },
     {
       key: 'monthly',
       label: 'Monthly',
-      accent: 'border-l-amber-500',
-      countColor: 'text-amber-600',
-      chip: 'bg-amber-50 border-amber-200',
-      chipText: 'text-amber-700',
+      accent: 'border-l-stage-monthly',
+      countColor: 'text-ink',
+      chip: 'bg-surface-2 border-line',
+      chipText: 'text-ink-2',
       items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'monthly'),
     },
     {
       key: 'completed',
       label: 'Completed',
-      accent: 'border-l-teal-500',
-      countColor: 'text-teal-600',
-      chip: 'bg-teal-50 border-teal-200',
-      chipText: 'text-teal-700',
+      accent: 'border-l-success',
+      countColor: 'text-ink',
+      chip: 'bg-surface-2 border-line',
+      chipText: 'text-ink-2',
       items: memoryQueue.filter((item) => item.status === 'retained'),
     },
   ];
@@ -134,42 +136,42 @@ export default function DashboardScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 20 }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 20 }}>
         {/* Header */}
-        <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
-          <View>
+        <View className="flex-row items-center gap-3 border-b border-hairline pb-3">
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
+          <View className="flex-1">
             {/* "Progress Dashboard" was jargon standing in front of a plain
                 idea. This screen is the answer to "how am I doing?". */}
-            <AppText variant="title" className="font-serif font-black text-[#1A1A1A] leading-none mt-0.5">My Progress</AppText>
+            <AppText variant="title" className="font-serif font-black text-ink leading-none mt-0.5">My Progress</AppText>
           </View>
         </View>
 
         {/* STAT GRID */}
         <View className="flex-row flex-wrap gap-2.5">
-          <View className="flex-1 min-w-[45%] bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-3 items-center" style={{ gap: 2 }}>
-            <AppText variant="display" className="font-black text-[#1A1A1A] font-mono">{versesLearnedCount}</AppText>
-            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">Verses Memorized</AppText>
+          <View className="flex-1 min-w-[45%] bg-surface-2 border border-line rounded-xl p-3 items-center" style={{ gap: 2 }}>
+            <AppText variant="display" className="font-black text-ink font-mono">{versesLearnedCount}</AppText>
+            <AppText variant="micro" className="font-bold text-ink-3 uppercase tracking-wide">Verses Memorized</AppText>
           </View>
-          <View className="flex-1 min-w-[45%] bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-3 items-center" style={{ gap: 2 }}>
-            <AppText variant="display" className="font-black text-amber-600 font-mono">{learningCount}</AppText>
-            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">Verses In Progress</AppText>
+          <View className="flex-1 min-w-[45%] bg-surface-2 border border-line rounded-xl p-3 items-center" style={{ gap: 2 }}>
+            <AppText variant="display" className="font-black text-warning font-mono">{learningCount}</AppText>
+            <AppText variant="micro" className="font-bold text-ink-3 uppercase tracking-wide">Verses In Progress</AppText>
           </View>
-          <View className="flex-1 min-w-[45%] bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-3 items-center" style={{ gap: 2 }}>
-            <AppText variant="display" className="font-black text-emerald-600 font-mono">{memoryStreak}</AppText>
-            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">Day Streak</AppText>
+          <View className="flex-1 min-w-[45%] bg-surface-2 border border-line rounded-xl p-3 items-center" style={{ gap: 2 }}>
+            <AppText variant="display" className="font-black text-success font-mono">{memoryStreak}</AppText>
+            <AppText variant="micro" className="font-bold text-ink-3 uppercase tracking-wide">Day Streak</AppText>
           </View>
-          <View className="flex-1 min-w-[45%] bg-[#F3F2F1]/50 border border-[#E5E5E5] rounded-xl p-3 items-center" style={{ gap: 2 }}>
-            <AppText variant="display" className="font-black text-indigo-600 font-mono">{totalReviewsCompleted}</AppText>
-            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wide">Reviews Completed</AppText>
+          <View className="flex-1 min-w-[45%] bg-surface-2 border border-line rounded-xl p-3 items-center" style={{ gap: 2 }}>
+            <AppText variant="display" className="font-black text-accent font-mono">{totalReviewsCompleted}</AppText>
+            <AppText variant="micro" className="font-bold text-ink-3 uppercase tracking-wide">Reviews Completed</AppText>
           </View>
         </View>
 
         {/* TIME STUDIED */}
-        <View className="bg-[#1A1A1A] rounded-2xl p-5 items-center" style={{ gap: 4 }}>
-          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-neutral-400">Time Studied</AppText>
-          <AppText variant="display" className="font-black text-white font-mono">{formatStudyTime(totalStudySeconds)}</AppText>
-          <AppText variant="micro" className="font-sans text-neutral-500 text-center leading-relaxed">
+        <View className="bg-accent rounded-2xl p-5 items-center" style={{ gap: 4 }}>
+          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-on-accent/75">Time Studied</AppText>
+          <AppText variant="display" className="font-black text-on-accent font-mono">{formatStudyTime(totalStudySeconds)}</AppText>
+          <AppText variant="micro" className="font-sans text-on-accent/75 text-center leading-relaxed">
             Total time with a practice or listen session open.
           </AppText>
         </View>
@@ -177,7 +179,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
         {/* RETENTION PHASE BREAKDOWN */}
         <View style={{ gap: 8 }}>
           <View className="flex-row items-center px-1">
-            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">Retention Breakdown</AppText>
+            <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">Retention Breakdown</AppText>
             <HelpTooltip text="Where your memorized verses sit in the spaced-repetition cycle. Daily/Weekly/Monthly recur on that cadence; Completed verses have graduated out and no longer recur." />
           </View>
           {/* One row per phase, stacked -- five columns squeezed the numbers
@@ -192,15 +194,15 @@ export default function DashboardScreen({ state }: { state: AppState }) {
               return (
                 <View
                   key={row.key}
-                  className={`flex-row items-stretch border-l-4 ${row.accent} bg-white border border-neutral-200 rounded-lg overflow-hidden`}
+                  className={`flex-row items-stretch border-l-4 ${row.accent} bg-surface border border-line rounded-lg overflow-hidden`}
                 >
                   <View className="px-2.5 py-2.5 items-center justify-center" style={{ minWidth: 82, flexShrink: 0 }}>
                     <AppText variant="title" className={`font-black font-mono ${row.countColor}`}>{row.items.length}</AppText>
-                    <AppText variant="micro" className="font-bold text-neutral-400 uppercase">{row.label}</AppText>
+                    <AppText variant="micro" className="font-bold text-ink-3 uppercase">{row.label}</AppText>
                   </View>
-                  <View className="flex-1 border-l border-neutral-100 justify-center">
+                  <View className="flex-1 border-l border-hairline justify-center">
                     {row.items.length === 0 ? (
-                      <AppText variant="micro" className="font-sans text-neutral-300 px-3">No verses here yet</AppText>
+                      <AppText variant="micro" className="font-sans text-ink-3 px-3">No verses here yet</AppText>
                     ) : (
                       <ScrollView
                         horizontal
@@ -215,7 +217,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
                           </View>
                         ))}
                         {overflow > 0 && (
-                          <AppText variant="micro" className="font-sans font-bold text-neutral-400 px-1">+{overflow} more</AppText>
+                          <AppText variant="micro" className="font-sans font-bold text-ink-3 px-1">+{overflow} more</AppText>
                         )}
                       </ScrollView>
                     )}
@@ -234,22 +236,22 @@ export default function DashboardScreen({ state }: { state: AppState }) {
         <View style={{ gap: 8 }}>
           <View className="flex-row items-center justify-between px-1">
             <View className="flex-row items-center flex-1">
-              <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">Past 90 Days</AppText>
+              <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">Past 90 Days</AppText>
               <HelpTooltip text="One square per day. A square fills in on days you banked a mastery touch on a verse you're learning — darker green means more touches that day. Spaced reviews aren't counted here." />
             </View>
             <Pressable onPress={() => navigateTo('fullHistory')} hitSlop={8} className="shrink-0">
-              <AppText variant="micro" className="font-sans font-bold underline text-neutral-500">View Full History</AppText>
+              <AppText variant="micro" className="font-sans font-bold underline text-ink-3">View Full History</AppText>
             </Pressable>
           </View>
-          <View className="border border-[#E5E5E5] rounded-xl p-2.5 bg-white">
+          <View className="border border-line rounded-xl p-2.5 bg-surface">
             <View className="flex-row flex-wrap gap-[3px] justify-center">
               {activityLast90Days.map((item, index) => {
                 const color =
                   item.count === 0
-                    ? 'bg-[#F3F2F1] border-[#E5E5E5]'
+                    ? 'bg-surface-2 border-line'
                     : item.count > 6
-                      ? 'bg-emerald-600 border-emerald-700'
-                      : 'bg-emerald-300 border-emerald-400';
+                      ? 'bg-success border-success'
+                      : 'bg-success/50 border-success/60';
                 return <View key={index} style={{ width: '6.2%', height: 16 }} className={`border rounded-sm ${color}`} />;
               })}
             </View>
@@ -259,7 +261,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
         {/* MILESTONE BADGES */}
         <View style={{ gap: 8 }}>
           <View className="flex-row items-center px-1">
-            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">Streak Milestones</AppText>
+            <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">Streak Milestones</AppText>
           </View>
           <View className="flex-row flex-wrap gap-2">
             {STREAK_MILESTONES.map((threshold) => {
@@ -268,18 +270,18 @@ export default function DashboardScreen({ state }: { state: AppState }) {
                 <View
                   key={threshold}
                   className={`px-3 py-2 rounded-xl border items-center ${
-                    achieved ? 'bg-emerald-50 border-emerald-300' : 'bg-neutral-50 border-neutral-200'
+                    achieved ? 'bg-success-soft border-success/30' : 'bg-surface-2 border-line'
                   }`}
                   style={{ minWidth: 78 }}
                 >
-                  <AppText variant="body" className={`font-black font-mono ${achieved ? 'text-emerald-700' : 'text-neutral-300'}`}>
+                  <AppText variant="body" className={`font-black font-mono ${achieved ? 'text-success' : 'text-ink-3'}`}>
                     {threshold}
                   </AppText>
-                  <AppText variant="micro" className={`font-bold uppercase tracking-wide ${achieved ? 'text-emerald-700' : 'text-neutral-400'}`}>
+                  <AppText variant="micro" className={`font-bold uppercase tracking-wide ${achieved ? 'text-success' : 'text-ink-3'}`}>
                     Day{threshold === 1 ? '' : 's'}
                   </AppText>
                   {!achieved && (
-                    <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">{threshold - memoryStreak} to go</AppText>
+                    <AppText variant="micro" className="font-sans text-ink-3 mt-0.5">{threshold - memoryStreak} to go</AppText>
                   )}
                 </View>
               );
@@ -289,7 +291,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
 
         <View style={{ gap: 8 }}>
           <View className="flex-row items-center px-1">
-            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">Memorized Milestones</AppText>
+            <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">Memorized Milestones</AppText>
           </View>
           <View className="flex-row flex-wrap gap-2">
             {MEMORIZED_MILESTONES.map((threshold) => {
@@ -298,18 +300,18 @@ export default function DashboardScreen({ state }: { state: AppState }) {
                 <View
                   key={threshold}
                   className={`px-3 py-2 rounded-xl border items-center ${
-                    achieved ? 'bg-indigo-50 border-indigo-300' : 'bg-neutral-50 border-neutral-200'
+                    achieved ? 'bg-accent-soft border-accent/30' : 'bg-surface-2 border-line'
                   }`}
                   style={{ minWidth: 78 }}
                 >
-                  <AppText variant="body" className={`font-black font-mono ${achieved ? 'text-indigo-700' : 'text-neutral-300'}`}>
+                  <AppText variant="body" className={`font-black font-mono ${achieved ? 'text-accent' : 'text-ink-3'}`}>
                     {threshold}
                   </AppText>
-                  <AppText variant="micro" className={`font-bold uppercase tracking-wide ${achieved ? 'text-indigo-700' : 'text-neutral-400'}`}>
+                  <AppText variant="micro" className={`font-bold uppercase tracking-wide ${achieved ? 'text-accent' : 'text-ink-3'}`}>
                     Verses
                   </AppText>
                   {!achieved && (
-                    <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">{threshold - versesLearnedCount} to go</AppText>
+                    <AppText variant="micro" className="font-sans text-ink-3 mt-0.5">{threshold - versesLearnedCount} to go</AppText>
                   )}
                 </View>
               );

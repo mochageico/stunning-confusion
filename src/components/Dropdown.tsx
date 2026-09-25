@@ -4,6 +4,7 @@ import { Check, ChevronDown, Search } from 'lucide-react-native';
 
 import { AppTextInput, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from './design';
 
+import { useThemeColors } from './theme';
 /**
  * Generic single-select dropdown: a trigger button showing the current value,
  * opening a menu ANCHORED TO THE TRIGGER. Use this (instead of a ChipRow
@@ -65,6 +66,7 @@ export function Dropdown<T extends string | number>({
    * legibility matters most. Off by default. */
   compact?: boolean;
 }) {
+  const palette = useThemeColors();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   // Where the trigger sits in window coordinates, captured at open time. Null
@@ -132,18 +134,18 @@ export function Dropdown<T extends string | number>({
         accessibilityRole="button"
         accessibilityLabel={title}
         accessibilityState={{ expanded: open }}
-        className="flex-row items-center justify-between bg-white border border-neutral-300 rounded-xl"
+        className="flex-row items-center justify-between bg-surface border border-line-strong rounded-xl"
         style={{ minHeight: MIN_TOUCH, paddingHorizontal: space(12), paddingVertical: space(8), gap: space(6) }}
       >
         <AppText
           variant={compact ? 'micro' : 'label'}
-          className={`font-sans font-bold flex-1 ${selected || staticLabel ? 'text-[#1A1A1A]' : 'text-neutral-500'}`}
+          className={`font-sans font-bold flex-1 ${selected || staticLabel ? 'text-ink' : 'text-ink-3'}`}
           numberOfLines={1}
         >
           {staticLabel ? placeholder : selected ? selected.label : placeholder}
         </AppText>
         <View className="shrink-0">
-          <ChevronDown size={Math.round(14 * scale)} color="#525252" />
+          <ChevronDown size={Math.round(14 * scale)} color={palette.ink2} />
         </View>
       </Pressable>
 
@@ -161,7 +163,7 @@ export function Dropdown<T extends string | number>({
               backdrop and close it before a row can register. */}
           <Pressable
             onPress={() => {}}
-            className="bg-white border border-neutral-300 rounded-xl shadow-lg overflow-hidden"
+            className="bg-surface border border-line-strong rounded-xl shadow-lg overflow-hidden"
             style={{
               position: 'absolute',
               left,
@@ -172,12 +174,12 @@ export function Dropdown<T extends string | number>({
           >
             {showSearch && (
               <View
-                className="border-b border-neutral-100"
+                className="border-b border-hairline"
                 style={{ paddingHorizontal: space(8), paddingVertical: space(8) }}
               >
                 <View className="relative justify-center">
                   <View className="absolute left-2.5 z-10">
-                    <Search size={Math.round(13 * scale)} color="#a3a3a3" />
+                    <Search size={Math.round(13 * scale)} color={palette.ink3} />
                   </View>
                   {/* No autoFocus: the software keyboard would cover the very
                       rows this menu just opened to show. */}
@@ -185,9 +187,9 @@ export function Dropdown<T extends string | number>({
                     value={query}
                     onChangeText={setQuery}
                     placeholder="Search..."
-                    placeholderTextColor="#a3a3a3"
+                    placeholderTextColor={palette.ink3}
                     allowFontScaling={false}
-                    className="w-full bg-neutral-50 border border-neutral-200 rounded-lg text-[#1A1A1A]"
+                    className="w-full bg-surface-2 border border-line rounded-lg text-ink"
                     style={{
                       fontSize: 13 * scale,
                       paddingVertical: space(6),
@@ -200,7 +202,7 @@ export function Dropdown<T extends string | number>({
 
             <ScrollView keyboardShouldPersistTaps="handled">
               {filtered.length === 0 ? (
-                <AppText variant="caption" className="text-center text-neutral-500 font-sans" style={{ padding: space(16) }}>
+                <AppText variant="caption" className="text-center text-ink-3 font-sans" style={{ padding: space(16) }}>
                   No matches.
                 </AppText>
               ) : (
@@ -210,20 +212,20 @@ export function Dropdown<T extends string | number>({
                     onPress={() => select(opt.id)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: opt.id === value }}
-                    className={`flex-row items-center justify-between ${index > 0 ? 'border-t border-neutral-100' : ''} ${
-                      opt.id === value ? 'bg-[#FBF9F6]' : 'bg-white'
+                    className={`flex-row items-center justify-between ${index > 0 ? 'border-t border-hairline' : ''} ${
+                      opt.id === value ? 'bg-accent-soft' : 'bg-surface'
                     }`}
                     style={{ minHeight: MIN_TOUCH, paddingHorizontal: space(12), paddingVertical: space(9), gap: space(8) }}
                   >
                     <AppText
                       variant="label"
-                      className={`font-sans flex-1 ${opt.id === value ? 'font-bold text-[#1A1A1A]' : 'text-neutral-700'}`}
+                      className={`font-sans flex-1 ${opt.id === value ? 'font-bold text-ink' : 'text-ink-2'}`}
                     >
                       {opt.label}
                     </AppText>
                     {opt.id === value && (
                       <View className="shrink-0">
-                        <Check size={Math.round(14 * scale)} color="#1A1A1A" />
+                        <Check size={Math.round(14 * scale)} color={palette.ink} />
                       </View>
                     )}
                   </Pressable>

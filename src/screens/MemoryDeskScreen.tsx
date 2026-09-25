@@ -5,6 +5,7 @@ import { AppState, ScreenName } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 // ============================================================================
 // MEMORY DESK — one predictable door to everything about your own memory work.
 //
@@ -37,6 +38,7 @@ function DeskRow({
   detail: string;
   onPress: () => void;
 }) {
+  const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
   // Label and detail are two pieces of text sharing a row, which is the limit
@@ -47,31 +49,32 @@ function DeskRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      className="border-2 border-[#1A1A1A] rounded-xl bg-white shadow-sm flex-row items-center"
+      className="border-2 border-ink rounded-xl bg-surface shadow-sm flex-row items-center"
       style={{ minHeight: MIN_TOUCH, padding: space(12), gap: space(10) }}
     >
       <View className="shrink-0">
-        <Icon size={Math.round(18 * scale)} color="#1A1A1A" />
+        <Icon size={Math.round(18 * scale)} color={palette.ink} />
       </View>
       <View className={stacked ? 'flex-1' : 'flex-1 flex-row items-center'} style={{ gap: space(stacked ? 2 : 8) }}>
         <AppText
           variant="label"
-          className={`font-serif font-black text-[#1A1A1A] ${stacked ? '' : 'flex-1'}`}
+          className={`font-serif font-black text-ink ${stacked ? '' : 'flex-1'}`}
         >
           {label}
         </AppText>
-        <AppText variant="micro" className={`font-mono text-neutral-500 ${stacked ? '' : 'shrink-0'}`}>
+        <AppText variant="micro" className={`font-mono text-ink-3 ${stacked ? '' : 'shrink-0'}`}>
           {detail}
         </AppText>
       </View>
       <View className="shrink-0">
-        <ChevronRight size={Math.round(16 * scale)} color="#888888" />
+        <ChevronRight size={Math.round(16 * scale)} color={palette.ink3} />
       </View>
     </Pressable>
   );
 }
 
 export default function MemoryDeskScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const { handleBack, navigateTo, memoryQueue, savedPlans, isReviewDue, learningDays, newVersesPace } = state;
   const space = useScaledSpace();
   const scale = useFontScale();
@@ -90,27 +93,27 @@ export default function MemoryDeskScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(12) }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(12) }}>
         <View className="flex-row items-center" style={{ gap: space(10) }}>
           <Pressable
             onPress={handleBack}
             accessibilityRole="button"
-            className="rounded-full border border-[#E5E5E5] items-center justify-center bg-white shrink-0"
+            className="rounded-full border border-line items-center justify-center bg-surface shrink-0"
             style={{ width: space(32), height: space(32) }}
           >
-            <ArrowLeft size={Math.round(15 * scale)} color="#1A1A1A" />
+            <ArrowLeft size={Math.round(15 * scale)} color={palette.ink} />
           </Pressable>
           <View className="flex-1">
-            <AppText variant="micro" className="uppercase tracking-wider font-bold text-neutral-500 font-sans">
+            <AppText variant="micro" className="uppercase tracking-wider font-bold text-ink-3 font-sans">
               Your scripture
             </AppText>
-            <AppText variant="display" className="font-serif font-bold text-[#1A1A1A]">
+            <AppText variant="display" className="font-serif font-bold text-ink">
               My Memory Work
             </AppText>
           </View>
         </View>
 
-        <AppText variant="caption" className="text-neutral-600 font-sans">
+        <AppText variant="caption" className="text-ink-2 font-sans">
           Everything about what you're memorizing, how you're memorizing it, and what you've done so far.
         </AppText>
 

@@ -18,6 +18,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react-native';
 
+import { useThemeColors } from './theme';
 // ============================================================================
 // DESIGN SYSTEM
 //
@@ -89,22 +90,26 @@ export function useFontScale(): number {
 //
 // 11pt is the floor. The old 8pt captions had zero headroom: at any scale
 // above 1.0 they wrapped, and inside a fixed-height card that meant clipping.
+//
+// The sizes are the iPhone's own text styles (job F2): body is 17pt like
+// every Apple app, up from 14. Small roles grew less than body did, so dense
+// rows stay dense. The name after each is the iOS style it matches.
 // ============================================================
 export const TYPE = {
-  /** Smallest permitted text. Range ends, axis labels, unit hints. */
-  micro: { fontSize: 11, lineHeight: 15 },
-  /** Supporting copy under a label; the descriptive sentence on an option card. */
-  caption: { fontSize: 12, lineHeight: 17 },
-  /** Form-row labels, button text. */
-  label: { fontSize: 13, lineHeight: 18 },
-  /** Default reading size for prose. */
-  body: { fontSize: 14, lineHeight: 20 },
-  /** Uppercase tracked section headers. */
-  section: { fontSize: 12, lineHeight: 16 },
-  /** Card and option titles. */
-  title: { fontSize: 16, lineHeight: 22 },
-  /** Screen headings. */
-  display: { fontSize: 22, lineHeight: 28 },
+  /** Smallest text used. Range ends, axis labels, unit hints, small pills. iOS Caption 1. */
+  micro: { fontSize: 12, lineHeight: 16 },
+  /** Supporting copy under a label; the descriptive sentence on an option card. iOS Footnote. */
+  caption: { fontSize: 13, lineHeight: 18 },
+  /** Form-row labels, button text. iOS Subheadline. */
+  label: { fontSize: 15, lineHeight: 20 },
+  /** Default reading size for prose. iOS Body. */
+  body: { fontSize: 17, lineHeight: 22 },
+  /** Section headers above a group. iOS Footnote. */
+  section: { fontSize: 13, lineHeight: 18 },
+  /** Card and option titles. iOS Title 3. */
+  title: { fontSize: 20, lineHeight: 25 },
+  /** Screen headings. iOS Title 1. */
+  display: { fontSize: 28, lineHeight: 34 },
 } as const;
 
 export type TypeVariant = keyof typeof TYPE;
@@ -298,10 +303,13 @@ export function AppTextInput({
   ...rest
 }: React.ComponentProps<typeof TextInput> & { variant?: TypeVariant }) {
   const scale = useFontScale();
+  const palette = useThemeColors();
   const { fontSize, lineHeight } = TYPE[variant];
   return (
     <TextInput
       allowFontScaling={false}
+      // ink-3 unless the call site picks one: the platform default is too faint.
+      placeholderTextColor={palette.ink3}
       className={className}
       style={[
         fontStyleFor(resolveFont(className, null)),
@@ -383,7 +391,7 @@ export function AppIconButton({
   Icon,
   diameter = 32,
   iconSize,
-  iconColor = '#1A1A1A',
+  iconColor,
   className = '',
   style,
   ...rest
@@ -396,6 +404,7 @@ export function AppIconButton({
   iconColor?: string;
   style?: ViewStyle;
 }) {
+  const palette = useThemeColors();
   const scale = useFontScale();
   const d = Math.round(diameter * scale);
   // Whatever the circle still lacks to be comfortably tappable, spread evenly.
@@ -407,7 +416,7 @@ export function AppIconButton({
       style={[{ width: d, height: d }, style]}
       {...rest}
     >
-      <Icon size={Math.round((iconSize ?? Math.round(diameter * 0.44)) * scale)} color={iconColor} />
+      <Icon size={Math.round((iconSize ?? Math.round(diameter * 0.44)) * scale)} color={iconColor ?? palette.ink} />
     </Pressable>
   );
 }
@@ -427,7 +436,7 @@ export function AppButton({
   Icon,
   className = '',
   textClassName = '',
-  iconColor = '#FFFFFF',
+  iconColor,
   style,
   children,
   ...rest
@@ -443,6 +452,7 @@ export function AppButton({
   textClassName?: string;
   iconColor?: string;
 }) {
+  const palette = useThemeColors();
   const scale = useFontScale();
   const s = BUTTON_SIZE[size];
   return (
@@ -460,7 +470,7 @@ export function AppButton({
       ]}
       {...rest}
     >
-      {Icon ? <Icon size={Math.round(s.icon * scale)} color={iconColor} /> : null}
+      {Icon ? <Icon size={Math.round(s.icon * scale)} color={iconColor ?? palette.onAccent} /> : null}
       {label ? (
         <AppText
           variant={s.type}
@@ -493,7 +503,7 @@ export function Card({
   const space = useScaledSpace();
   return (
     <View
-      className={`border-2 border-[#1A1A1A] rounded-xl bg-white shadow-sm ${className}`}
+      className={`border-2 border-ink rounded-xl bg-surface shadow-sm ${className}`}
       style={{ gap: space(gap), padding: space(14) }}
     >
       {children}
@@ -582,6 +592,7 @@ export function CollapsibleCard({
   defaultCollapsed?: boolean;
   children: React.ReactNode;
 }) {
+  const palette = useThemeColors();
   const [collapsed, setCollapsed] = useCollapsed(storageKey, defaultCollapsed);
   const scale = useFontScale();
   const space = useScaledSpace();
@@ -594,7 +605,7 @@ export function CollapsibleCard({
 
   return (
     <View
-      className="border-2 border-[#1A1A1A] rounded-xl bg-white shadow-sm"
+      className="border-2 border-ink rounded-xl bg-surface shadow-sm"
       style={{ padding: space(14), gap: space(16) }}
     >
       <Pressable
@@ -608,18 +619,18 @@ export function CollapsibleCard({
         <View className={stacked ? 'flex-1' : 'flex-1 flex-row items-center'} style={{ gap: space(stacked ? 2 : 8) }}>
           <AppText
             variant="section"
-            className={`font-sans font-extrabold uppercase tracking-widest text-[#1A1A1A] ${stacked ? '' : 'flex-1'}`}
+            className={`font-sans font-extrabold uppercase tracking-widest text-ink ${stacked ? '' : 'flex-1'}`}
           >
             {title}
           </AppText>
           {summary ? (
-            <AppText variant="micro" className={`font-mono font-bold text-neutral-600 ${stacked ? '' : 'shrink-0'}`}>
+            <AppText variant="micro" className={`font-mono font-bold text-ink-2 ${stacked ? '' : 'shrink-0'}`}>
               {summary}
             </AppText>
           ) : null}
         </View>
         <View className="shrink-0">
-          <Chevron size={iconSize} color="#1A1A1A" />
+          <Chevron size={iconSize} color={palette.ink} />
         </View>
       </Pressable>
       {!collapsed && children}
@@ -632,12 +643,12 @@ export function CardHeader({ title, children }: { title: string; children?: Reac
   const space = useScaledSpace();
   return (
     <View
-      className="flex-row items-center justify-between border-b border-neutral-100"
+      className="flex-row items-center justify-between border-b border-hairline"
       style={{ paddingBottom: space(8), gap: space(8) }}
     >
       <AppText
         variant="section"
-        className="font-sans font-extrabold uppercase tracking-widest text-[#1A1A1A] flex-1"
+        className="font-sans font-extrabold uppercase tracking-widest text-ink flex-1"
       >
         {title}
       </AppText>
@@ -680,21 +691,21 @@ export function SettingRow({
       style={{ gap: space(stacked ? 4 : 8) }}
     >
       <View className={stacked ? '' : 'flex-1'} style={{ gap: space(2) }}>
-        <AppText variant="label" className="font-sans font-bold text-[#1A1A1A]">
+        <AppText variant="label" className="font-sans font-bold text-ink">
           {label}
         </AppText>
         {hint ? (
-          <AppText variant="micro" className="font-sans text-neutral-600">
+          <AppText variant="micro" className="font-sans text-ink-2">
             {hint}
           </AppText>
         ) : null}
       </View>
       {value !== undefined && (
         <View
-          className={`bg-[#F3F2F1] border border-neutral-300 rounded shrink-0 ${stacked ? 'self-start' : ''}`}
+          className={`bg-surface-2 border border-line-strong rounded shrink-0 ${stacked ? 'self-start' : ''}`}
           style={{ paddingHorizontal: space(8), paddingVertical: space(2) }}
         >
-          <AppText variant="label" className="font-mono text-[#1A1A1A]">
+          <AppText variant="label" className="font-mono text-ink">
             {value}
           </AppText>
         </View>
@@ -713,10 +724,10 @@ export function SettingRow({
 export function RangeCaption({ min, max }: { min: string; max: string }) {
   return (
     <View className="flex-row justify-between" style={{ gap: 8 }}>
-      <AppText variant="micro" className="text-neutral-600 font-mono shrink">
+      <AppText variant="micro" className="text-ink-2 font-mono shrink">
         {min}
       </AppText>
-      <AppText variant="micro" className="text-neutral-600 font-mono shrink text-right">
+      <AppText variant="micro" className="text-ink-2 font-mono shrink text-right">
         {max}
       </AppText>
     </View>
@@ -761,7 +772,7 @@ const GRID_MAX_SCALE = 1.25;
 
 const CARD_BASE = 'border-2 rounded-xl shadow-sm';
 const cardTone = (active: boolean) =>
-  active ? 'border-[#1A1A1A] bg-[#FBF9F6]' : 'border-[#E5E5E5] bg-white';
+  active ? 'border-accent bg-accent-soft' : 'border-line bg-surface';
 
 export function OptionCards<T extends string>({
   options,
@@ -795,6 +806,7 @@ interface LayoutProps<T extends string> {
 
 /** Compact path: titles in a two-column grid, selected description below. */
 function OptionGrid<T extends string>({ options, value, onChange, space, checkSize }: LayoutProps<T>) {
+  const palette = useThemeColors();
   // Chunked into explicit pairs rather than `flex-wrap` + percentage widths --
   // percentage basis plus a gap is where NativeWind/RN wrapping gets unreliable,
   // and pairs of `flex-1` children divide the row exactly.
@@ -822,7 +834,7 @@ function OptionGrid<T extends string>({ options, value, onChange, space, checkSi
                 className={`flex-1 flex-row items-start ${CARD_BASE} ${cardTone(active)}`}
                 style={{ minHeight: MIN_TOUCH, padding: space(8), gap: space(6) }}
               >
-                <AppText variant="label" className="font-serif font-black text-[#1A1A1A] flex-1">
+                <AppText variant="label" className="font-serif font-black text-ink flex-1">
                   {opt.title}
                 </AppText>
                 {/* Reserved whether or not selected, so selecting never reflows
@@ -830,10 +842,10 @@ function OptionGrid<T extends string>({ options, value, onChange, space, checkSi
                 <View className="items-center justify-center shrink-0" style={{ width: space(14), height: space(14) }}>
                   {active && (
                     <View
-                      className="rounded-full bg-[#1A1A1A] items-center justify-center"
+                      className="rounded-full bg-accent items-center justify-center"
                       style={{ width: space(14), height: space(14) }}
                     >
-                      <Check size={checkSize} color="#FFFFFF" strokeWidth={3} />
+                      <Check size={checkSize} color={palette.onAccent} strokeWidth={3} />
                     </View>
                   )}
                 </View>
@@ -848,10 +860,10 @@ function OptionGrid<T extends string>({ options, value, onChange, space, checkSi
 
       {selected?.desc ? (
         <View
-          className="border border-[#E5E5E5] rounded-xl bg-[#FBF9F6]"
+          className="border border-line rounded-xl bg-surface-2"
           style={{ padding: space(8) }}
         >
-          <AppText variant="caption" className="font-sans text-neutral-600">
+          <AppText variant="caption" className="font-sans text-ink-2">
             {selected.desc}
           </AppText>
         </View>
@@ -862,6 +874,7 @@ function OptionGrid<T extends string>({ options, value, onChange, space, checkSi
 
 /** Roomy path: full-width rows, every description visible. */
 function OptionList<T extends string>({ options, value, onChange, space, checkSize }: LayoutProps<T>) {
+  const palette = useThemeColors();
   return (
     <View style={{ gap: space(8) }}>
       {options.map((opt) => {
@@ -877,11 +890,11 @@ function OptionList<T extends string>({ options, value, onChange, space, checkSi
             style={{ minHeight: MIN_TOUCH, padding: space(10), gap: space(10) }}
           >
             <View className="flex-1" style={{ gap: space(3) }}>
-              <AppText variant="title" className="font-serif font-black text-[#1A1A1A]">
+              <AppText variant="title" className="font-serif font-black text-ink">
                 {opt.title}
               </AppText>
               {opt.desc ? (
-                <AppText variant="caption" className="font-sans text-neutral-600">
+                <AppText variant="caption" className="font-sans text-ink-2">
                   {opt.desc}
                 </AppText>
               ) : null}
@@ -889,10 +902,10 @@ function OptionList<T extends string>({ options, value, onChange, space, checkSi
             <View className="items-center justify-center shrink-0" style={{ width: space(20), height: space(20) }}>
               {active && (
                 <View
-                  className="rounded-full bg-[#1A1A1A] items-center justify-center"
+                  className="rounded-full bg-accent items-center justify-center"
                   style={{ width: space(20), height: space(20) }}
                 >
-                  <Check size={checkSize} color="#FFFFFF" strokeWidth={3} />
+                  <Check size={checkSize} color={palette.onAccent} strokeWidth={3} />
                 </View>
               )}
             </View>
@@ -922,11 +935,11 @@ export function ToggleRow({
   return (
     <View className="flex-row items-center justify-between" style={{ gap: space(10) }}>
       <View className="flex-1" style={{ gap: space(2) }}>
-        <AppText variant="label" className="font-sans font-bold text-neutral-800">
+        <AppText variant="label" className="font-sans font-bold text-ink">
           {label}
         </AppText>
         {hint ? (
-          <AppText variant="micro" className="font-sans text-neutral-600">
+          <AppText variant="micro" className="font-sans text-ink-2">
             {hint}
           </AppText>
         ) : null}
@@ -936,11 +949,11 @@ export function ToggleRow({
         accessibilityRole="switch"
         accessibilityState={{ checked: value }}
         aria-checked={value}
-        className={`rounded-full justify-center shrink-0 ${value ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}
+        className={`rounded-full justify-center shrink-0 ${value ? 'bg-accent' : 'bg-fill'}`}
         // layout-ok: the switch holds no text, so a fixed size is correct here.
         style={{ width: 40, height: 24, paddingHorizontal: 2 }}
       >
-        <View className="w-5 h-5 rounded-full bg-white shadow" style={{ transform: [{ translateX: value ? 16 : 0 }] }} />
+        <View className="w-5 h-5 rounded-full bg-surface shadow" style={{ transform: [{ translateX: value ? 16 : 0 }] }} />
       </Pressable>
     </View>
   );

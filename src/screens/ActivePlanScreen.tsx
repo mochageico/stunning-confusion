@@ -15,6 +15,7 @@ import { reorderQueueGroups } from '../lib/queueReorder';
 import { fetchChapterText, useChapterText } from '../state/useScripture';
 import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 
+import { useThemeColors } from '../components/theme';
 function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
   if (items.length === 0) return [];
   const groups: GroupedQueueItem[] = [];
@@ -60,6 +61,7 @@ function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
 }
 
 export default function ActivePlanScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const {
     handleBack,
     navigateTo,
@@ -208,13 +210,13 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 24 }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 24 }}>
         {/* Header Row */}
         <View className="flex-row items-start justify-between">
           <View className="flex-row items-center gap-3">
-            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
-            <View>
-              <AppText variant="title" className="font-serif font-black text-neutral-900 mt-0.5">My Verses</AppText>
+            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
+            <View className="flex-1">
+              <AppText variant="title" className="font-serif font-black text-ink mt-0.5">My Verses</AppText>
             </View>
           </View>
         </View>
@@ -262,74 +264,74 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             style={{ gap: space(headerStacked ? 10 : 12) }}
           >
             <View className={headerStacked ? '' : 'flex-1'}>
-              <AppText variant="body" className="font-serif font-black text-[#1A1A1A]">Memory Verse Queue</AppText>
-              <AppText variant="caption" className="text-neutral-400 mt-0.5">
+              <AppText variant="body" className="font-serif font-black text-ink">Memory Verse Queue</AppText>
+              <AppText variant="caption" className="text-ink-3 mt-0.5">
                 Verses you've chosen, in the order you'll learn them. Press and hold a verse to drag it somewhere else.
               </AppText>
             </View>
             <AppButton
               size="sm"
               onPress={() => setShowAddQueueItemModal(!showAddQueueItemModal)}
-              className={`bg-[#1A1A1A] rounded-xl flex-row items-center gap-1 ${headerStacked ? 'self-start' : 'shrink-0'}`}
+              className={`bg-accent rounded-xl flex-row items-center gap-1 ${headerStacked ? 'self-start' : 'shrink-0'}`}
             >
-              <Plus size={12} color="#ffffff" />
-              <AppText variant="label" className="font-sans font-bold text-white">Add Verses</AppText>
+              <Plus size={12} color={palette.onAccent} />
+              <AppText variant="label" className="font-sans font-bold text-on-accent">Add Verses</AppText>
             </AppButton>
           </View>
 
           {/* Inline Verse Addition Form */}
           {showAddQueueItemModal && (
             <FadeInView>
-              <View className="border-2 border-[#1A1A1A] rounded-2xl p-4 bg-white text-left" style={{ gap: 16 }}>
-                <View className="flex-row justify-between items-center pb-2 border-b border-neutral-100">
-                  <AppText variant="label" className="font-sans font-black text-[#1A1A1A] uppercase tracking-wider">Add Verses</AppText>
+              <View className="border-2 border-ink rounded-2xl p-4 bg-surface text-left" style={{ gap: 16 }}>
+                <View className="flex-row justify-between items-center pb-2 border-b border-hairline">
+                  <AppText variant="label" className="font-sans font-black text-ink uppercase tracking-wider">Add Verses</AppText>
                   <Pressable onPress={() => setShowAddQueueItemModal(false)}>
-                    <X size={14} color="#a3a3a3" />
+                    <X size={14} color={palette.ink3} />
                   </Pressable>
                 </View>
 
                 <View className="flex-row gap-2.5">
                   <View className="flex-1" style={{ gap: 4 }}>
-                    <AppText variant="micro" className="font-bold text-neutral-400 uppercase">Book</AppText>
+                    <AppText variant="micro" className="font-bold text-ink-3 uppercase">Book</AppText>
                     <BookPicker value={selectedAddBook} onChange={setSelectedAddBook} />
                   </View>
                   <View className="flex-1" style={{ gap: 4 }}>
-                    <AppText variant="micro" className="font-bold text-neutral-400 uppercase">Chapter</AppText>
+                    <AppText variant="micro" className="font-bold text-ink-3 uppercase">Chapter</AppText>
                     <NumericInput
                       {...addChapterField}
-                      className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
+                      className="w-full p-2 border border-line rounded-xl text-xs font-mono font-bold text-ink"
                     />
                   </View>
                 </View>
 
                 <View className="flex-row gap-2.5">
                   <View className="flex-1" style={{ gap: 4 }}>
-                    <AppText variant="micro" className="font-bold text-neutral-400 uppercase">Start Verse</AppText>
+                    <AppText variant="micro" className="font-bold text-ink-3 uppercase">Start Verse</AppText>
                     <NumericInput
                       {...addStartVerseField}
-                      className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
+                      className="w-full p-2 border border-line rounded-xl text-xs font-mono font-bold text-ink"
                     />
                   </View>
                   <View className="flex-1" style={{ gap: 4 }}>
                     <View className="flex-row items-center justify-between">
-                      <AppText variant="micro" className="font-bold text-neutral-400 uppercase">End Verse</AppText>
+                      <AppText variant="micro" className="font-bold text-ink-3 uppercase">End Verse</AppText>
                       {addChapterData && (
-                        <AppText variant="micro" className="font-mono text-neutral-400">max {addChapterData.verseCount}</AppText>
+                        <AppText variant="micro" className="font-mono text-ink-3">max {addChapterData.verseCount}</AppText>
                       )}
                     </View>
                     <NumericInput
                       {...addEndVerseField}
-                      className="w-full p-2 border border-neutral-200 rounded-xl text-xs font-mono font-bold text-[#1A1A1A]"
+                      className="w-full p-2 border border-line rounded-xl text-xs font-mono font-bold text-ink"
                     />
                   </View>
                 </View>
 
-                <View className="flex-row gap-2 justify-end pt-2 border-t border-neutral-100">
+                <View className="flex-row gap-2 justify-end pt-2 border-t border-hairline">
                   <Pressable
                     onPress={() => setShowAddQueueItemModal(false)}
-                    className="px-4 py-2 border border-neutral-200 rounded-xl"
+                    className="px-4 py-2 border border-line rounded-xl"
                   >
-                    <AppText variant="label" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
+                    <AppText variant="label" className="text-ink-2 font-sans font-bold ">Cancel</AppText>
                   </Pressable>
                   <Pressable
                     disabled={isAddingVerses}
@@ -360,9 +362,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                         `Added ${selectedAddBook} ${selectedAddChapter}:${start}${end > start ? `-${end}` : ''} to your verses!${skippedNote}`
                       );
                     }}
-                    className={`px-4 py-2 bg-[#1A1A1A] rounded-xl ${isAddingVerses ? 'opacity-50' : ''}`}
+                    className={`px-4 py-2 bg-accent rounded-xl ${isAddingVerses ? 'opacity-50' : ''}`}
                   >
-                    <AppText variant="label" className="text-white font-sans font-bold ">{isAddingVerses ? 'Adding…' : 'Add these verses'}</AppText>
+                    <AppText variant="label" className="text-on-accent font-sans font-bold ">{isAddingVerses ? 'Adding…' : 'Add these verses'}</AppText>
                   </Pressable>
                 </View>
               </View>
@@ -379,11 +381,11 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
               and anything past 360px was hidden behind a scrollbar most
               people never noticed. The list is now part of the page. */}
           <View
-            className="border border-neutral-100 p-2 rounded-2xl bg-neutral-50/30"
+            className="border border-hairline p-2 rounded-2xl bg-surface-2"
             style={{ gap: 8 }}
           >
             {grouped.length === 0 ? (
-              <AppText variant="label" className="py-8 text-center text-neutral-400 font-sans italic">
+              <AppText variant="label" className="py-8 text-center text-ink-3 font-sans italic">
                 Memory Queue is currently empty. Add verses above.
               </AppText>
             ) : (
@@ -427,34 +429,34 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     delayLongPress={250}
                     accessibilityRole="button"
                     accessibilityLabel={`${group.book} ${group.chapter}:${versesStr}. Press and hold to reorder.`}
-                    className={`flex-row items-center justify-between p-4 bg-white border rounded-xl border-l-4 ${
-                      isGroup ? 'border-l-indigo-500 border-indigo-200' : 'border-l-orange-500 border-orange-200'
-                    } ${isActive ? 'border-indigo-400 opacity-90' : ''}`}
+                    className={`flex-row items-center justify-between p-4 bg-surface border rounded-xl border-l-4 ${
+                      isGroup ? 'border-l-accent border-accent/30' : 'border-l-warning border-warning/30'
+                    } ${isActive ? 'border-accent/60 opacity-90' : ''}`}
                   >
                     <View className="flex-row items-center gap-3.5 flex-1">
                       {/* Drag affordance. The whole row is the drag target
                           (a small handle is a hard thing to hit), but the
                           grip is what makes that discoverable. */}
                       <View className="shrink-0">
-                        <GripVertical size={16} color={isActive ? '#6366f1' : '#a3a3a3'} />
+                        <GripVertical size={16} color={isActive ? palette.accent : palette.ink3} />
                       </View>
 
                       {/* Reference details */}
                       <View className="text-left flex-1" style={{ gap: 4 }}>
                         <View className="flex-row items-center gap-2 flex-wrap">
-                          <AppText variant="label" className="font-serif font-black text-[#1A1A1A]">
+                          <AppText variant="label" className="font-serif font-black text-ink">
                             {group.book} {group.chapter}:{versesStr}
                           </AppText>
-                          <AppText variant="micro" className={`px-1.5 py-0.5 rounded-full font-sans font-bold uppercase tracking-wider ${ isGroup ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-orange-50 text-orange-700 border border-orange-200' }`} >
+                          <AppText variant="micro" className={`px-1.5 py-0.5 rounded-full font-sans font-bold uppercase tracking-wider ${ isGroup ? 'bg-accent-soft text-accent border border-accent/30' : 'bg-warning-soft text-warning border border-warning/30' }`} >
                             {isGroup ? planNameFor(group.items[0].originPlanId) : 'Mine'}
                           </AppText>
                           {hasMultiple && (
-                            <AppText variant="micro" className="px-1.5 py-0.5 rounded-full font-sans font-bold bg-neutral-100 text-neutral-600 border border-neutral-200">
+                            <AppText variant="micro" className="px-1.5 py-0.5 rounded-full font-sans font-bold bg-surface-2 text-ink-2 border border-line">
                               {group.verses.length} verses
                             </AppText>
                           )}
                         </View>
-                        <AppText variant="caption" className="font-sans text-neutral-500 italic pr-2" numberOfLines={1} ellipsizeMode="tail">
+                        <AppText variant="caption" className="font-sans text-ink-3 italic pr-2" numberOfLines={1} ellipsizeMode="tail">
                           "{group.items[0].text}"{hasMultiple ? ' ...' : ''}
                         </AppText>
                       </View>
@@ -465,9 +467,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                       {group.status === 'queued' && (
                         <Pressable
                           onPress={() => promoteToLearning(group.items.map((item) => item.verseId))}
-                          className="px-2 py-0.5 rounded-full border border-[#1A1A1A] bg-white"
+                          className="px-2 py-0.5 rounded-full border border-ink bg-surface"
                         >
-                          <AppText variant="micro" className="font-sans font-bold text-[#1A1A1A]">Start Learning</AppText>
+                          <AppText variant="micro" className="font-sans font-bold text-ink">Start Learning</AppText>
                         </Pressable>
                       )}
                       {/* Only 'queued'/'learning' groups ever reach this list --
@@ -475,7 +477,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                           is done, nothing to manage. Status colors deliberately
                           avoid amber/emerald/black, already used by the Memory
                           Load Forecast below. */}
-                      <AppText variant="micro" className={`font-sans font-bold px-2 py-0.5 rounded-full border uppercase ${ group.status === 'learning' ? 'bg-violet-50 text-violet-600 border-violet-200' : 'bg-neutral-50 text-neutral-400 border-neutral-200' }`} >
+                      <AppText variant="micro" className={`font-sans font-bold px-2 py-0.5 rounded-full border uppercase ${ group.status === 'learning' ? 'bg-accent-soft text-accent border-accent/30' : 'bg-surface-2 text-ink-3 border-line' }`} >
                         {group.status}
                       </AppText>
                       <Pressable
@@ -488,7 +490,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                         }}
                         className="p-1 rounded"
                       >
-                        <Trash2 size={13} color="#d4d4d4" />
+                        <Trash2 size={13} color={palette.lineStrong} />
                       </Pressable>
                     </View>
                   </Pressable>
@@ -510,13 +512,13 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             two-editors-one-state problem the split exists to remove. */}
         <Pressable
           onPress={() => navigateTo('savedPlans')}
-          className="flex-row items-center border-t border-neutral-200"
+          className="flex-row items-center border-t border-line"
           style={{ paddingTop: space(14), gap: space(8), minHeight: 44 }}
         >
-          <AppText variant="micro" className="font-sans text-neutral-600 flex-1">
+          <AppText variant="micro" className="font-sans text-ink-2 flex-1">
             Review Settings: {activePlan ? activePlan.name : 'none chosen'} — tap to change
           </AppText>
-          <ChevronRight size={14} color="#737373" />
+          <ChevronRight size={14} color={palette.ink3} />
         </Pressable>
       </ScrollView>
     </FadeInView>

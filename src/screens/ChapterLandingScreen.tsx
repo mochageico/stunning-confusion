@@ -14,6 +14,7 @@ import { Recording } from '../types';
 import { BIBLE_TRANSLATIONS } from '../data';
 import { AppButton, AppIconButton, AppText } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 const OVERRIDE_PHASE_OPTIONS: { id: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; label: string }[] = [
   { id: 'learning', label: 'Learning' },
   { id: 'daily', label: 'Daily' },
@@ -32,6 +33,7 @@ const OVERRIDE_WEEKDAY_OPTIONS = [
 ];
 
 export default function ChapterLandingScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const {
     handleBack,
     navigateTo,
@@ -157,7 +159,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView
-        className="flex-1 bg-white"
+        className="flex-1 bg-canvas"
         contentContainerClassName="p-5"
         // Extra bottom padding whenever the floating selection bar is
         // showing, so the last verses and the copyright notice can
@@ -168,10 +170,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         contentContainerStyle={{ gap: 12, paddingBottom: floatingBarShowing ? 160 : 16 }}
       >
         {/* Title Header with back */}
-        <View className="flex-row items-center justify-between border-b border-[#E5E5E5] pb-2">
+        <View className="flex-row items-center justify-between border-b border-line pb-2">
           <View className="flex-row items-center gap-2">
-            <AppIconButton Icon={ArrowLeft} diameter={28} iconSize={14} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white" />
-            <AppText variant="title" className="font-serif font-extrabold text-[#1A1A1A]">
+            <AppIconButton Icon={ArrowLeft} diameter={28} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
+            <AppText variant="title" className="font-serif font-extrabold text-ink">
               {selectedBook} {selectedChapter}
             </AppText>
           </View>
@@ -194,9 +196,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             {/* Simple Select/Deselect All Verse trigger */}
             <Pressable
               onPress={toggleSelectAll}
-              className="border border-[#1A1A1A] px-2 py-0.5 rounded"
+              className="border border-ink px-2 py-0.5 rounded"
             >
-              <AppText variant="micro" className="font-bold font-sans uppercase text-[#1A1A1A]">
+              <AppText variant="micro" className="font-bold font-sans uppercase text-ink">
                 {selectedVerseNumbers.length === activeChapterVerses.length ? 'Deselect All' : 'Select All'}
               </AppText>
             </Pressable>
@@ -211,20 +213,20 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               re-taught it on every chapter you opened. A count is the thing
               you actually wanted to know from a progress bar. */}
           <View className="flex-row justify-between items-center">
-            <AppText variant="micro" className="font-sans font-bold text-[#888]">CHAPTER PROGRESS</AppText>
-            <AppText variant="micro" className="font-sans font-bold text-[#888]">
+            <AppText variant="micro" className="font-sans font-bold text-ink-3">CHAPTER PROGRESS</AppText>
+            <AppText variant="micro" className="font-sans font-bold text-ink-3">
               {activeChapterVerses.filter((v) => v.status === 'memorized').length} of {activeChapterVerses.length} memorized
             </AppText>
           </View>
           {/* Horizontal split colored indicator based on verses */}
-          <View className="flex-row h-3 w-full border border-[#1A1A1A] rounded-full overflow-hidden bg-[#F3F2F1]">
+          <View className="flex-row h-3 w-full border border-ink rounded-full overflow-hidden bg-surface-2">
             {activeChapterVerses.map((v) => {
               const statusColor =
-                v.status === 'memorized' ? 'bg-emerald-500' : v.status === 'learning' ? 'bg-amber-400' : 'bg-neutral-200';
+                v.status === 'memorized' ? 'bg-success' : v.status === 'learning' ? 'bg-warning' : 'bg-fill';
               return (
                 <View
                   key={v.verse}
-                  className={`${statusColor} flex-1 border-r border-white/50`}
+                  className={`${statusColor} flex-1 border-r border-on-accent/50`}
                 />
               );
             })}
@@ -232,16 +234,16 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         </View>
 
         {/* Playable Custom Audio Card */}
-        <View className="border border-[#1A1A1A] rounded-xl p-2.5 bg-white gap-2">
+        <View className="border border-ink rounded-xl p-2.5 bg-surface gap-2">
           {/* Empty state is one line then the action. The second sentence used
               to say "or find one in the community library" directly above a
               button that does exactly that. */}
           {!currentAudio ? (
             <View className="items-center py-2 gap-1.5">
-              <AppText variant="caption" className="font-sans text-neutral-500">No recordings yet for this chapter</AppText>
-              <AppButton size="sm" onPress={() => { setFeedBookFilter(selectedBook || ''); setFeedChapterFilter(String(selectedChapter ?? '')); navigateTo('audioFeed'); triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`); }} className="mt-1 bg-[#1A1A1A] rounded-md flex-row items-center justify-center gap-1">
-                <Search size={11} color="#FFFFFF" />
-                <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wider">Find Recordings</AppText>
+              <AppText variant="caption" className="font-sans text-ink-3">No recordings yet for this chapter</AppText>
+              <AppButton size="sm" onPress={() => { setFeedBookFilter(selectedBook || ''); setFeedChapterFilter(String(selectedChapter ?? '')); navigateTo('audioFeed'); triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`); }} className="mt-1 bg-accent rounded-md flex-row items-center justify-center gap-1">
+                <Search size={11} color={palette.onAccent} />
+                <AppText variant="section" className="text-on-accent font-sans font-bold uppercase tracking-wider">Find Recordings</AppText>
               </AppButton>
             </View>
           ) : (
@@ -258,20 +260,20 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     }
                   }}
                   className={`w-8 h-8 rounded-full items-center justify-center ${
-                    isPlayingThis ? 'bg-[#1A1A1A]' : 'border border-[#1A1A1A]'
+                    isPlayingThis ? 'bg-accent' : 'border border-ink'
                   }`}
                 >
                   {isPlayingThis ? (
-                    <Pause size={13} color="#FFFFFF" />
+                    <Pause size={13} color={palette.onAccent} />
                   ) : (
-                    <Play size={13} color="#1A1A1A" style={{ marginLeft: 2 }} />
+                    <Play size={13} color={palette.ink} style={{ marginLeft: 2 }} />
                   )}
                 </Pressable>
                 <View>
-                  <AppText variant="label" className="font-bold font-sans text-[#1A1A1A]" numberOfLines={1} style={{ maxWidth: 170 }}>
+                  <AppText variant="label" className="font-bold font-sans text-ink" numberOfLines={1} style={{ maxWidth: 170 }}>
                     {currentAudio.title}
                   </AppText>
-                  <AppText variant="caption" className="font-sans text-neutral-400">
+                  <AppText variant="caption" className="font-sans text-ink-3">
                     Narrator: {currentAudio.user} • {currentAudio.translation}
                   </AppText>
                 </View>
@@ -280,22 +282,22 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 onPress={() => setShowAudioSelector(!showAudioSelector)}
                 className="flex-row items-center gap-0.5"
               >
-                <AppText variant="caption" className="font-bold font-sans underline text-neutral-600">Change</AppText>
-                <ChevronDown size={11} color="#525252" style={{ transform: [{ rotate: showAudioSelector ? '180deg' : '0deg' }] }} />
+                <AppText variant="caption" className="font-bold font-sans underline text-ink-2">Change</AppText>
+                <ChevronDown size={11} color={palette.ink2} style={{ transform: [{ rotate: showAudioSelector ? '180deg' : '0deg' }] }} />
               </Pressable>
             </View>
 
             {/* Real playback progress bar */}
             {isPlayingThis && (
               <View className="gap-0.5">
-                <View className="w-full bg-neutral-100 h-1 rounded-full overflow-hidden">
-                  <View className="bg-[#1A1A1A] h-full" style={{ width: `${playingRecProgress}%` }} />
+                <View className="w-full bg-surface-2 h-1 rounded-full overflow-hidden">
+                  <View className="bg-accent h-full" style={{ width: `${playingRecProgress}%` }} />
                 </View>
                 <View className="flex-row justify-between">
-                  <AppText variant="micro" className="font-mono font-semibold text-neutral-400">
+                  <AppText variant="micro" className="font-mono font-semibold text-ink-3">
                     {formatTime(Math.round((playingRecProgress / 100) * currentAudio.duration))}
                   </AppText>
-                  <AppText variant="micro" className="font-mono font-semibold text-neutral-400">{formatTime(currentAudio.duration)}</AppText>
+                  <AppText variant="micro" className="font-mono font-semibold text-ink-3">{formatTime(currentAudio.duration)}</AppText>
                 </View>
               </View>
             )}
@@ -307,8 +309,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 inside the page's own ScrollView -- lists here are short
                 (a handful of recordings per chapter at most). */}
             {showAudioSelector && (
-              <View className="bg-[#F3F2F1] rounded-lg p-2.5 border border-[#E5E5E5] gap-2">
-                <AppText variant="micro" className="font-bold uppercase text-neutral-400 tracking-wider">
+              <View className="bg-surface-2 rounded-lg p-2.5 border border-line gap-2">
+                <AppText variant="micro" className="font-bold uppercase text-ink-3 tracking-wider">
                   Recordings — press and hold to reorder. The top one plays by default.
                 </AppText>
                 <DraggableFlatList
@@ -331,35 +333,35 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                           triggerToast(`Audio changed to ${opt.user}'s recitation`);
                         }}
                         className={`w-full p-2 rounded-md border flex-row items-center gap-2 ${
-                          isSelected ? 'bg-white border-[#1A1A1A]' : 'bg-white/60 border-[#E5E5E5]/50'
-                        } ${isActive ? 'border-indigo-400' : ''}`}
+                          isSelected ? 'bg-surface border-ink' : 'bg-on-accent/60 border-line'
+                        } ${isActive ? 'border-accent/60' : ''}`}
                       >
                         <Pressable onLongPress={drag} hitSlop={8} className="pr-0.5">
-                          <GripVertical size={13} color="#a3a3a3" />
+                          <GripVertical size={13} color={palette.ink3} />
                         </Pressable>
                         <View className="flex-1" style={{ maxWidth: 175 }}>
-                          <AppText variant="caption" className="font-bold text-[#1A1A1A]" numberOfLines={1}>
+                          <AppText variant="caption" className="font-bold text-ink" numberOfLines={1}>
                             {opt.title}
                           </AppText>
-                          <AppText variant="micro" className="text-neutral-400 font-sans">
+                          <AppText variant="micro" className="text-ink-3 font-sans">
                             {opt.user} • {opt.translation}
                           </AppText>
                         </View>
-                        {isSelected && <Check size={11} color="#1A1A1A" />}
+                        {isSelected && <Check size={11} color={palette.ink} />}
                       </Pressable>
                     );
                   }}
                 />
 
-                <View className="border-t border-[#E5E5E5]/60 pt-2 gap-1.5">
+                <View className="border-t border-line pt-2 gap-1.5">
                   {downloadableNarrations.length > 0 && (
-                    <AppButton size="sm" onPress={() => saveChapterOffline(downloadableNarrations)} disabled={chapterDownloadBusy || notYetDownloaded.length === 0} className={`w-full rounded-md flex-row items-center justify-center gap-1 border ${ notYetDownloaded.length === 0 ? 'bg-white/60 border-[#E5E5E5]' : 'bg-white border-[#1A1A1A]' } ${chapterDownloadBusy ? 'opacity-50' : ''}`}>
+                    <AppButton size="sm" onPress={() => saveChapterOffline(downloadableNarrations)} disabled={chapterDownloadBusy || notYetDownloaded.length === 0} className={`w-full rounded-md flex-row items-center justify-center gap-1 border ${ notYetDownloaded.length === 0 ? 'bg-on-accent/60 border-line' : 'bg-surface border-ink' } ${chapterDownloadBusy ? 'opacity-50' : ''}`}>
                       {notYetDownloaded.length === 0 ? (
-                        <Check size={11} color="#525252" />
+                        <Check size={11} color={palette.ink2} />
                       ) : (
-                        <Download size={11} color="#1A1A1A" />
+                        <Download size={11} color={palette.ink} />
                       )}
-                      <AppText variant="section" className={`font-sans font-bold uppercase tracking-wider ${ notYetDownloaded.length === 0 ? 'text-neutral-500' : 'text-[#1A1A1A]' }`} >
+                      <AppText variant="section" className={`font-sans font-bold uppercase tracking-wider ${ notYetDownloaded.length === 0 ? 'text-ink-3' : 'text-ink' }`} >
                         {chapterDownloadBusy
                           ? 'Downloading…'
                           : notYetDownloaded.length === 0
@@ -368,9 +370,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                       </AppText>
                     </AppButton>
                   )}
-                  <AppButton size="sm" onPress={() => { setFeedBookFilter(selectedBook || ''); setFeedChapterFilter(String(selectedChapter ?? '')); navigateTo('audioFeed'); setShowAudioSelector(false); triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`); }} className="w-full bg-[#1A1A1A] rounded-md flex-row items-center justify-center gap-1">
-                    <Search size={11} color="#FFFFFF" />
-                    <AppText variant="section" className="text-white font-sans font-bold uppercase tracking-wider">
+                  <AppButton size="sm" onPress={() => { setFeedBookFilter(selectedBook || ''); setFeedChapterFilter(String(selectedChapter ?? '')); navigateTo('audioFeed'); setShowAudioSelector(false); triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`); }} className="w-full bg-accent rounded-md flex-row items-center justify-center gap-1">
+                    <Search size={11} color={palette.onAccent} />
+                    <AppText variant="section" className="text-on-accent font-sans font-bold uppercase tracking-wider">
                       Find More Recordings
                     </AppText>
                   </AppButton>
@@ -386,8 +388,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         <ChapterPhotoStrip state={state} book={selectedBook || ''} chapter={selectedChapter ?? 0} />
 
         {/* Grid / List / Memory Grid view Toggle */}
-        <View className="bg-[#F3F2F1] p-1.5 border border-[#E5E5E5] rounded-xl gap-1.5">
-          <AppText variant="label" className="font-sans font-bold text-neutral-600 pl-1">Verse Layout</AppText>
+        <View className="bg-surface-2 p-1.5 border border-line rounded-xl gap-1.5">
+          <AppText variant="label" className="font-sans font-bold text-ink-2 pl-1">Verse Layout</AppText>
           <ChipRow
             value={chapterViewMode}
             onChange={setChapterViewMode}
@@ -403,16 +405,16 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         <View>
           {activeChapterTextLoading && activeChapterVerses.length === 0 ? (
             <View className="py-10 items-center">
-              <AppText variant="label" className="font-sans text-neutral-400">Loading {selectedBook} {selectedChapter}…</AppText>
+              <AppText variant="label" className="font-sans text-ink-3">Loading {selectedBook} {selectedChapter}…</AppText>
             </View>
           ) : activeChapterTextError ? (
             <View className="py-10 items-center gap-1">
-              <AppText variant="label" className="font-sans font-bold text-red-500">Couldn't load this chapter.</AppText>
-              <AppText variant="caption" className="font-sans text-neutral-400">{activeChapterTextError}</AppText>
+              <AppText variant="label" className="font-sans font-bold text-danger">Couldn't load this chapter.</AppText>
+              <AppText variant="caption" className="font-sans text-ink-3">{activeChapterTextError}</AppText>
             </View>
           ) : activeChapterVerses.length === 0 ? (
             <View className="py-10 items-center">
-              <AppText variant="label" className="font-sans text-neutral-400">No text available for {selectedBook} {selectedChapter} yet.</AppText>
+              <AppText variant="label" className="font-sans text-ink-3">No text available for {selectedBook} {selectedChapter} yet.</AppText>
             </View>
           ) : chapterViewMode === 'list' ? (
             /* LIST VIEW */
@@ -420,30 +422,30 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               {activeChapterVerses.map((v) => {
                 const isSelected = isVerseSelected(v.verse);
                 const dotColor =
-                  v.status === 'memorized' ? 'bg-emerald-500' : v.status === 'learning' ? 'bg-amber-400' : 'bg-neutral-200';
+                  v.status === 'memorized' ? 'bg-success' : v.status === 'learning' ? 'bg-warning' : 'bg-fill';
 
                 return (
                   <Pressable
                     key={v.verse}
                     onPress={() => toggleVerseSelection(v.verse)}
                     className={`border rounded-xl p-3 relative ${
-                      isSelected ? 'border-[#1A1A1A] bg-[#F3F2F1]/30' : 'border-[#E5E5E5] bg-white'
+                      isSelected ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
                     }`}
                   >
                     <View className="flex-row items-start gap-2.5">
                       {/* Dot Status indicator */}
                       <View className={`w-2 h-2 rounded-full mt-1.5 ${dotColor}`} />
                       <View className="flex-1" style={{ paddingRight: 48 }}>
-                        <AppText variant="body" className="font-serif leading-relaxed text-[#1A1A1A]">
-                          <AppText variant="caption" className="font-sans font-bold text-neutral-400">v{v.verse} </AppText>
+                        <AppText variant="body" className="font-serif leading-relaxed text-ink">
+                          <AppText variant="caption" className="font-sans font-bold text-ink-3">v{v.verse} </AppText>
                           {v.text}
                         </AppText>
                       </View>
                     </View>
                     {/* Due status badge */}
                     {v.dueDate && (
-                      <View className="absolute top-2.5 right-2.5 bg-[#F3F2F1] border border-[#E5E5E5] px-1.5 py-0.5 rounded">
-                        <AppText variant="micro" className="font-sans font-bold text-neutral-400">{v.dueDate}</AppText>
+                      <View className="absolute top-2.5 right-2.5 bg-surface-2 border border-line px-1.5 py-0.5 rounded">
+                        <AppText variant="micro" className="font-sans font-bold text-ink-3">{v.dueDate}</AppText>
                       </View>
                     )}
                   </Pressable>
@@ -456,7 +458,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               {activeChapterVerses.map((v) => {
                 const isSelected = isVerseSelected(v.verse);
                 const statusBorderColor =
-                  v.status === 'memorized' ? '#10b981' : v.status === 'learning' ? '#f59e0b' : '#d4d4d4';
+                  v.status === 'memorized' ? palette.success : v.status === 'learning' ? palette.warning : palette.lineStrong;
 
                 const textSnippet = v.text ? v.text.split(/\s+/).slice(0, 4).join(' ') + '...' : 'No text...';
 
@@ -465,29 +467,29 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     key={v.verse}
                     onPress={() => toggleVerseSelection(v.verse)}
                     style={{ width: '31.5%', borderLeftWidth: 3, borderLeftColor: statusBorderColor }}
-                    className={`h-16 rounded-xl bg-white border border-[#E5E5E5] p-2 justify-between relative ${
-                      isSelected ? 'border-[#1A1A1A]' : ''
+                    className={`h-16 rounded-xl bg-surface border border-line p-2 justify-between relative ${
+                      isSelected ? 'border-accent' : ''
                     }`}
                   >
                     <View className="flex-row justify-between items-center">
-                      <AppText variant="micro" className="font-sans font-extrabold text-[#1A1A1A]">v{v.verse}</AppText>
+                      <AppText variant="micro" className="font-sans font-extrabold text-ink">v{v.verse}</AppText>
                       {v.status === 'memorized' && (
-                        <View className="bg-emerald-500/10 px-1 rounded">
-                          <AppText variant="micro" className="font-mono font-bold text-emerald-700 uppercase">MEM</AppText>
+                        <View className="bg-success/10 px-1 rounded">
+                          <AppText variant="micro" className="font-mono font-bold text-success uppercase">MEM</AppText>
                         </View>
                       )}
                       {v.status === 'learning' && (
-                        <View className="bg-amber-500/15 px-1 rounded">
-                          <AppText variant="micro" className="font-mono font-bold text-amber-700 uppercase">LRN</AppText>
+                        <View className="bg-warning/15 px-1 rounded">
+                          <AppText variant="micro" className="font-mono font-bold text-warning uppercase">LRN</AppText>
                         </View>
                       )}
                     </View>
-                    <AppText variant="micro" className="font-serif italic leading-tight text-neutral-500 mt-1" numberOfLines={2}>
+                    <AppText variant="micro" className="font-serif italic leading-tight text-ink-3 mt-1" numberOfLines={2}>
                       {textSnippet}
                     </AppText>
                     {isSelected && (
-                      <View className="absolute -top-1 -right-1 bg-black w-3.5 h-3.5 rounded-full items-center justify-center border border-white">
-                        <AppText variant="micro" className="text-white font-black">✓</AppText>
+                      <View className="absolute -top-1 -right-1 bg-ink w-3.5 h-3.5 rounded-full items-center justify-center border border-surface">
+                        <AppText variant="micro" className="text-on-accent font-black">✓</AppText>
                       </View>
                     )}
                   </Pressable>
@@ -500,27 +502,27 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                icon to mark a personal memory anchor. */
             <View className="gap-2.5">
               <View className="flex-row items-center justify-between">
-                <View className="flex-row bg-neutral-100 p-0.5 rounded-lg">
+                <View className="flex-row bg-surface-2 p-0.5 rounded-lg">
                   <Pressable
                     onPress={() => setMemoryGridColumns(2)}
-                    className={`px-3 py-1 rounded-md ${memoryGridColumns === 2 ? 'bg-white' : ''}`}
+                    className={`px-3 py-1 rounded-md ${memoryGridColumns === 2 ? 'bg-surface' : ''}`}
                   >
-                    <AppText variant="caption" className={`font-sans font-extrabold ${memoryGridColumns === 2 ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                    <AppText variant="caption" className={`font-sans font-extrabold ${memoryGridColumns === 2 ? 'text-ink' : 'text-ink-3'}`}>
                       2 Columns
                     </AppText>
                   </Pressable>
                   <Pressable
                     onPress={() => setMemoryGridColumns(4)}
-                    className={`px-3 py-1 rounded-md ${memoryGridColumns === 4 ? 'bg-white' : ''}`}
+                    className={`px-3 py-1 rounded-md ${memoryGridColumns === 4 ? 'bg-surface' : ''}`}
                   >
-                    <AppText variant="caption" className={`font-sans font-extrabold ${memoryGridColumns === 4 ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                    <AppText variant="caption" className={`font-sans font-extrabold ${memoryGridColumns === 4 ? 'text-ink' : 'text-ink-3'}`}>
                       4 Columns
                     </AppText>
                   </Pressable>
                 </View>
-                <AppButton size="sm" onPress={() => printMemoryGrid( activeChapterVerses.map((v) => ({ book: selectedBook || '', chapter: selectedChapter || 0, verse: v.verse, text: v.text, })), `${selectedBook} ${selectedChapter}`, activeTranslation.id ) } className="flex-row items-center gap-1.5 bg-[#1A1A1A] rounded-lg">
-                  <Printer size={12} color="#ffffff" />
-                  <AppText variant="caption" className="font-sans font-extrabold text-white">Printable PDF</AppText>
+                <AppButton size="sm" onPress={() => printMemoryGrid( activeChapterVerses.map((v) => ({ book: selectedBook || '', chapter: selectedChapter || 0, verse: v.verse, text: v.text, })), `${selectedBook} ${selectedChapter}`, activeTranslation.id ) } className="flex-row items-center gap-1.5 bg-accent rounded-lg">
+                  <Printer size={12} color={palette.onAccent} />
+                  <AppText variant="caption" className="font-sans font-extrabold text-on-accent">Printable PDF</AppText>
                 </AppButton>
               </View>
               <MemoryGrid
@@ -558,7 +560,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             text so it is actually tappable. */}
         {activeChapterVerses.length > 0 && activeTranslation.copyright && (
           <View className="px-2 gap-0.5">
-            <AppText variant="micro" className="font-sans text-neutral-400 leading-tight text-center">
+            <AppText variant="micro" className="font-sans text-ink-3 leading-tight text-center">
               {activeTranslation.copyright}
             </AppText>
             {activeTranslation.copyrightUrl && (
@@ -567,7 +569,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 accessibilityRole="link"
                 hitSlop={8}
               >
-                <AppText variant="micro" className="font-sans text-neutral-500 underline leading-tight text-center">
+                <AppText variant="micro" className="font-sans text-ink-3 underline leading-tight text-center">
                   {activeTranslation.copyrightUrl.replace(/^https?:\/\//, '')}
                 </AppText>
               </Pressable>
@@ -586,13 +588,13 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           and the copyright notice from ever being hidden underneath it. */}
       {floatingBarShowing && (
         <View
-          className="absolute left-4 right-4 bg-white border-2 border-[#1A1A1A] rounded-xl p-3 shadow-lg"
+          className="absolute left-4 right-4 bg-surface border-2 border-ink rounded-xl p-3 shadow-lg"
           style={{ bottom: 16, gap: 8 }}
         >
           <View className="flex-row items-center justify-between pl-1">
             <View>
-              <AppText variant="micro" className="font-bold text-neutral-400 uppercase font-sans">SELECTED</AppText>
-              <AppText variant="label" className="font-extrabold font-sans text-[#1A1A1A]">
+              <AppText variant="micro" className="font-bold text-ink-3 uppercase font-sans">SELECTED</AppText>
+              <AppText variant="label" className="font-extrabold font-sans text-ink">
                 {selectedVerseNumbers.length} {selectedVerseNumbers.length === 1 ? 'Verse' : 'Verses'}
               </AppText>
             </View>
@@ -603,29 +605,29 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               }}
               className="px-2 py-1"
             >
-              <AppText variant="caption" className="font-bold font-sans text-neutral-400">Clear</AppText>
+              <AppText variant="caption" className="font-bold font-sans text-ink-3">Clear</AppText>
             </Pressable>
           </View>
           <View className="flex-row gap-1.5">
-            <AppButton size="md" onPress={() => { addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), selectedTranslationId); setSelectedVerseNumbers([]); }} className="flex-1 items-center bg-emerald-600 rounded-lg">
+            <AppButton size="md" onPress={() => { addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), selectedTranslationId); setSelectedVerseNumbers([]); }} className="flex-1 items-center bg-success rounded-lg">
               {/* One word only: four flex-1 buttons across a 375pt screen
                   leave each about 65pt of content width, so anything longer
                   silently truncates. The bar only appears once verses are
                   selected, which supplies the missing object -- "Add" reads
                   as "add these". */}
-              <AppText variant="micro" className="text-white font-bold uppercase tracking-wide" numberOfLines={1}>
+              <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wide" numberOfLines={1}>
                 Add
               </AppText>
             </AppButton>
-            <AppButton size="md" onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))} className="flex-1 items-center bg-[#1A1A1A] rounded-lg">
-              <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Listen</AppText>
+            <AppButton size="md" onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))} className="flex-1 items-center bg-accent rounded-lg">
+              <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wide">Listen</AppText>
             </AppButton>
-            <AppButton size="md" onPress={() => startPractice('learn', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))} className="flex-1 items-center bg-[#1A1A1A] rounded-lg">
-              <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Learn</AppText>
+            <AppButton size="md" onPress={() => startPractice('learn', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))} className="flex-1 items-center bg-accent rounded-lg">
+              <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wide">Learn</AppText>
             </AppButton>
-            <AppButton size="md" onPress={() => setShowStatusOverride((s) => !s)} className={`flex-1 items-center rounded-lg flex-row justify-center gap-1 ${ showStatusOverride ? 'bg-indigo-700' : 'bg-indigo-600' }`}>
-              <SlidersHorizontal size={10} color="#FFFFFF" />
-              <AppText variant="micro" className="text-white font-bold uppercase tracking-wide">Status</AppText>
+            <AppButton size="md" onPress={() => setShowStatusOverride((s) => !s)} className={`flex-1 items-center rounded-lg flex-row justify-center gap-1 bg-accent`}>
+              <SlidersHorizontal size={10} color={palette.onAccent} />
+              <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wide">Status</AppText>
             </AppButton>
           </View>
 
@@ -634,16 +636,16 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               chosen phase, skipping the normal learn-then-graduate climb. */}
           {showStatusOverride && (
             <FadeInView>
-              <View className="bg-indigo-50/60 border border-indigo-200 rounded-xl p-3 mt-1" style={{ gap: 10 }}>
+              <View className="bg-accent-soft border border-accent/30 rounded-xl p-3 mt-1" style={{ gap: 10 }}>
                 <View className="flex-row items-center justify-between">
-                  <AppText variant="micro" className="font-bold text-indigo-900 uppercase tracking-wide font-sans">
+                  <AppText variant="micro" className="font-bold text-accent uppercase tracking-wide font-sans">
                     Set Memory Status
                   </AppText>
                   <Pressable onPress={() => setShowStatusOverride(false)}>
-                    <X size={13} color="#4338ca" />
+                    <X size={13} color={palette.accent} />
                   </Pressable>
                 </View>
-                <AppText variant="micro" className="text-indigo-800/80 font-sans leading-relaxed -mt-1">
+                <AppText variant="micro" className="text-accent font-sans leading-relaxed -mt-1">
                   Already know these by heart? Tell the app, and it will start reviewing them at the right interval
                   instead of making you learn them from scratch.
                 </AppText>
@@ -663,7 +665,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
 
                 {(overridePhase === 'weekly' || overridePhase === 'monthly') && (
                   <View style={{ gap: 4 }}>
-                    <AppText variant="micro" className="font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
+                    <AppText variant="micro" className="font-bold text-accent uppercase tracking-wide font-sans">
                       Land review cycle on (optional) — tap again to clear
                     </AppText>
                     <ChipRow
@@ -678,10 +680,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 {(overridePhase === 'daily' || overridePhase === 'weekly' || overridePhase === 'monthly') && (
                   <View style={{ gap: 4 }}>
                     <View className="flex-row items-center justify-between">
-                      <AppText variant="micro" className="font-bold text-indigo-800/70 uppercase tracking-wide font-sans">
+                      <AppText variant="micro" className="font-bold text-accent uppercase tracking-wide font-sans">
                         How far into this phase?
                       </AppText>
-                      <AppText variant="micro" className="font-mono font-bold text-indigo-900">
+                      <AppText variant="micro" className="font-mono font-bold text-accent">
                         {overrideProgressPercent >= 100 ? 'Graduates next review' : `${overrideProgressUnit} (${overrideProgressCount}/${overrideProgressMax})`}
                       </AppText>
                     </View>
@@ -699,8 +701,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   </View>
                 )}
 
-                <AppButton size="md" onPress={() => { overrideVerseMemoryStatus( activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), overridePhase, selectedTranslationId, overrideWeekday ?? undefined, overrideProgressCount ); setSelectedVerseNumbers([]); setShowStatusOverride(false); }} className="w-full items-center bg-indigo-700 rounded-lg">
-                  <AppText variant="section" className="text-white font-bold uppercase tracking-wide">Apply Override</AppText>
+                <AppButton size="md" onPress={() => { overrideVerseMemoryStatus( activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), overridePhase, selectedTranslationId, overrideWeekday ?? undefined, overrideProgressCount ); setSelectedVerseNumbers([]); setShowStatusOverride(false); }} className="w-full items-center bg-accent rounded-lg">
+                  <AppText variant="section" className="text-on-accent font-bold uppercase tracking-wide">Apply Override</AppText>
                 </AppButton>
               </View>
             </FadeInView>

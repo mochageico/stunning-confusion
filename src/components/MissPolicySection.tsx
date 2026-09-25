@@ -109,7 +109,7 @@ export function MissPolicySection({
       title="Missed Review Handling"
       summary={currentTitle}
     >
-      <AppText variant="caption" className="font-sans text-neutral-600">
+      <AppText variant="caption" className="font-sans text-ink-2">
         What happens when reviews come due and you're not around — vacations, busy weeks, sick days.
       </AppText>
 
@@ -117,7 +117,7 @@ export function MissPolicySection({
 
       {missPolicy === 'custom' && (
         <View
-          className="border-t border-[#F3F2F1]"
+          className="border-t border-hairline"
           style={{ gap: space(16), paddingTop: space(8) }}
         >
           <View style={{ gap: space(6) }}>
@@ -140,7 +140,7 @@ export function MissPolicySection({
         </View>
       )}
 
-      <View className="border-t border-[#F3F2F1]" style={{ paddingTop: space(8) }}>
+      <View className="border-t border-hairline" style={{ paddingTop: space(8) }}>
         <ToggleRow
           label="When I miss reviews"
           hint={

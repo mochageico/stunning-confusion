@@ -33,9 +33,9 @@ export function ReactionBar({
       <View className={`mt-1 flex-row ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
         <Pressable
           onPress={() => setPickerOpen(true)}
-          className="w-5 h-5 rounded-full border border-neutral-200 items-center justify-center bg-white"
+          className="w-5 h-5 rounded-full border border-line items-center justify-center bg-surface"
         >
-          <AppText variant="caption" className="text-neutral-400">+</AppText>
+          <AppText variant="caption" className="text-ink-3">+</AppText>
         </Pressable>
       </View>
     );
@@ -46,9 +46,9 @@ export function ReactionBar({
       {grouped.map(({ emoji, reactors }) => {
         const mine = reactors.some((r) => r.uid === myUid);
         return (
-          <AppButton size="sm" key={emoji} onPress={() => onToggle(emoji)} className={`flex-row items-center gap-1 rounded-full border ${ mine ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-neutral-50 border-neutral-200' }`}>
+          <AppButton size="sm" key={emoji} onPress={() => onToggle(emoji)} className={`flex-row items-center gap-1 rounded-full border ${ mine ? 'bg-accent border-accent' : 'bg-surface-2 border-line' }`}>
             <AppText variant="caption">{emoji}</AppText>
-            <AppText variant="micro" className={`font-sans font-bold ${mine ? 'text-white' : 'text-neutral-500'}`}>
+            <AppText variant="micro" className={`font-sans font-bold ${mine ? 'text-on-accent' : 'text-ink-3'}`}>
               {reactors.length}
             </AppText>
           </AppButton>
@@ -56,12 +56,12 @@ export function ReactionBar({
       })}
       <Pressable
         onPress={() => setPickerOpen((v) => !v)}
-        className="w-5 h-5 rounded-full border border-neutral-200 items-center justify-center bg-white"
+        className="w-5 h-5 rounded-full border border-line items-center justify-center bg-surface"
       >
-        <AppText variant="caption" className="text-neutral-400">+</AppText>
+        <AppText variant="caption" className="text-ink-3">+</AppText>
       </Pressable>
       {pickerOpen && (
-        <View className="flex-row items-center gap-2 bg-white border border-neutral-200 rounded-full px-2.5 py-1">
+        <View className="flex-row items-center gap-2 bg-surface border border-line rounded-full px-2.5 py-1">
           {REACTION_EMOJIS.map((emoji) => (
             <Pressable
               key={emoji}

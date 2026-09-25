@@ -1,3 +1,33 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* First-paint values (Navy, light) for the color variables in
+   tailwind.config.js. ThemeProvider (src/components/theme.tsx) overrides them
+   at the app root with the user's accent. Keep in step with theme.tsx. */
+:root {
+  --canvas: 239 236 230;
+  --surface: 255 253 249;
+  --surface-2: 246 243 238;
+  --fill: 229 224 214;
+  --raised: 255 253 249;
+  --line: 226 221 212;
+  --line-strong: 217 211 200;
+  --hairline: 236 231 223;
+  --ink: 30 28 25;
+  --ink-2: 78 73 67;
+  --ink-3: 110 103 94;
+  --accent: 41 76 130;
+  --accent-soft: 227 230 234;
+  --on-accent: 255 255 255;
+  --success: 39 111 75;
+  --success-soft: 229 236 228;
+  --warning: 140 90 11;
+  --warning-soft: 241 233 220;
+  --danger: 179 38 30;
+  --danger-soft: 246 227 223;
+  --stage-learning: 110 75 184;
+  --stage-daily: 46 154 104;
+  --stage-weekly: 58 107 214;
+  --stage-monthly: 192 131 26;
+}

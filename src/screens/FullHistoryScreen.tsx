@@ -7,6 +7,7 @@ import { ChipRow, FadeInView } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { AppIconButton, AppText } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 const DATE_FILTER_OPTIONS = [
   { id: 'all', label: 'All Time' },
   { id: '7', label: 'Last 7 Days' },
@@ -20,6 +21,7 @@ const formatDate = (iso: string) =>
 type HistoryEntry = { title: string; subtitle: string; book: string; date: string };
 
 export default function FullHistoryScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const { handleBack, triggerToast, memoryQueue } = state;
   const [bookFilter, setBookFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
@@ -66,21 +68,21 @@ export default function FullHistoryScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
         {/* Header */}
-        <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
-          <View>
-            <AppText variant="title" className="font-serif font-bold text-neutral-900 leading-none mt-0.5">
+        <View className="flex-row items-center gap-3 border-b border-hairline pb-3">
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
+          <View className="flex-1">
+            <AppText variant="title" className="font-serif font-bold text-ink leading-none mt-0.5">
               Full Memorization History
             </AppText>
           </View>
         </View>
 
         {/* Filters Box */}
-        <View className="border border-neutral-200 rounded-2xl p-3 bg-neutral-50/50" style={{ gap: 10 }}>
+        <View className="border border-line rounded-2xl p-3 bg-surface-2" style={{ gap: 10 }}>
           <View>
-            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wider mb-1">
+            <AppText variant="micro" className="font-bold text-ink-3 uppercase tracking-wider mb-1">
               Filter by Scripture
             </AppText>
             <BookPicker
@@ -95,7 +97,7 @@ export default function FullHistoryScreen({ state }: { state: AppState }) {
           </View>
 
           <View>
-            <AppText variant="micro" className="font-bold text-neutral-400 uppercase tracking-wider mb-1">
+            <AppText variant="micro" className="font-bold text-ink-3 uppercase tracking-wider mb-1">
               Filter by Date Range
             </AppText>
             <ChipRow
@@ -112,27 +114,27 @@ export default function FullHistoryScreen({ state }: { state: AppState }) {
 
         {/* Filtered Timeline List */}
         <View style={{ gap: 10 }}>
-          <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
+          <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">
             TIMELINE LOGS
           </AppText>
 
-          <View className="border border-neutral-200 rounded-2xl p-4 bg-white shadow-xs">
+          <View className="border border-line rounded-2xl p-4 bg-surface shadow-xs">
             {filteredItems.length === 0 ? (
-              <AppText variant="label" className="text-neutral-400 italic text-center py-4">
+              <AppText variant="label" className="text-ink-3 italic text-center py-4">
                 {timelineItems.length === 0
                   ? "You haven't started memorizing any verses yet."
                   : 'No history matches these filters.'}
               </AppText>
             ) : (
-              <View className="relative pl-5 border-l border-neutral-200" style={{ gap: 18 }}>
+              <View className="relative pl-5 border-l border-line" style={{ gap: 18 }}>
                 {filteredItems.map((item, idx) => (
                   <View key={idx} className="relative">
                     <View
-                      className="absolute w-2 h-2 rounded-full bg-emerald-500"
+                      className="absolute w-2 h-2 rounded-full bg-success"
                       style={{ left: -25, top: 6 }}
                     />
-                    <AppText variant="label" className="font-sans font-bold text-neutral-800">{item.title}</AppText>
-                    <AppText variant="caption" className="text-neutral-400 leading-snug mt-0.5">{item.subtitle}</AppText>
+                    <AppText variant="label" className="font-sans font-bold text-ink">{item.title}</AppText>
+                    <AppText variant="caption" className="text-ink-3 leading-snug mt-0.5">{item.subtitle}</AppText>
                   </View>
                 ))}
               </View>

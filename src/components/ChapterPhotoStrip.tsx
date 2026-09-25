@@ -8,6 +8,7 @@ import ChapterPhotoViewer from './ChapterPhotoViewer';
 import { MAX_PHOTOS_PER_CHAPTER, type PhotoSource } from '../lib/chapterPhotos';
 import type { AppState } from '../state/useAppState';
 
+import { useThemeColors } from './theme';
 const THUMB_WIDTH = 62;
 const THUMB_HEIGHT = 84;
 
@@ -28,6 +29,7 @@ export default function ChapterPhotoStrip({
   book: string;
   chapter: number;
 }) {
+    const palette = useThemeColors();
   const { photosForChapter, addChapterPhoto, photoCache } = state;
   const photos = photosForChapter(book, chapter);
   const verseNumbers = state.activeChapterVerses.map((v) => v.verse);
@@ -63,23 +65,23 @@ export default function ChapterPhotoStrip({
           hitSlop={8}
         >
           {busy ? (
-            <ActivityIndicator size="small" color="#888888" />
+            <ActivityIndicator size="small" color={palette.ink3} />
           ) : (
-            <Camera size={12} color="#888888" />
+            <Camera size={12} color={palette.ink3} />
           )}
-          <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-[#888]">
+          <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-ink-3">
             {busy ? 'Adding photo…' : 'Add a photo of your Bible page'}
           </AppText>
         </Pressable>
       ) : (
         <View className="gap-1.5">
           <View className="flex-row items-center justify-between">
-            <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-[#888]">
+            <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-ink-3">
               Bible pages
             </AppText>
             {!atCapacity && (
               <Pressable onPress={() => setChoosingSource(true)} disabled={busy} hitSlop={8}>
-                <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-[#1A1A1A]">
+                <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-ink">
                   {busy ? 'Adding…' : '+ Add'}
                 </AppText>
               </Pressable>
@@ -93,7 +95,7 @@ export default function ChapterPhotoStrip({
                 <Pressable
                   key={photo.id}
                   onPress={() => setViewerIndex(index)}
-                  className="rounded-lg overflow-hidden border border-[#E5E5E5] bg-[#F3F2F1]"
+                  className="rounded-lg overflow-hidden border border-line bg-surface-2"
                   style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
                 >
                   <Image
@@ -107,7 +109,7 @@ export default function ChapterPhotoStrip({
                       chip on every thumbnail would be noise on the common case. */}
                   {label && (
                     <View className="absolute bottom-0 left-0 right-0 bg-black/55 px-1 py-0.5">
-                      <AppText variant="micro" className="font-mono font-bold text-white text-center">
+                      <AppText variant="micro" className="font-mono font-bold text-on-accent text-center">
                         {label}
                       </AppText>
                     </View>
@@ -128,29 +130,29 @@ export default function ChapterPhotoStrip({
             log sheet in PracticeModals. */}
         <View className="flex-1 bg-black/40 justify-end">
           <Pressable className="flex-1" onPress={() => setChoosingSource(false)} />
-          <View className="bg-white rounded-t-3xl p-5 gap-3">
+          <View className="bg-surface rounded-t-3xl p-5 gap-3">
             <View className="items-center gap-1 mb-1">
-              <AppText variant="title" className="font-serif font-bold text-neutral-900">
+              <AppText variant="title" className="font-serif font-bold text-ink">
                 Add a Bible page
               </AppText>
-              <AppText variant="caption" className="font-sans text-neutral-500 text-center px-2">
+              <AppText variant="caption" className="font-sans text-ink-3 text-center px-2">
                 {book} {chapter} — you can crop the photo to just the page on the next step.
               </AppText>
             </View>
 
-            <AppButton size="md" onPress={() => add('camera')} className="w-full bg-[#1A1A1A] rounded-xl items-center flex-row justify-center gap-2">
-              <Camera size={16} color="#FFFFFF" />
-              <AppText variant="label" className="font-sans font-bold text-white">Take a photo</AppText>
+            <AppButton size="md" onPress={() => add('camera')} className="w-full bg-accent rounded-xl items-center flex-row justify-center gap-2">
+              <Camera size={16} color={palette.onAccent} />
+              <AppText variant="label" className="font-sans font-bold text-on-accent">Take a photo</AppText>
             </AppButton>
 
-            <AppButton size="md" onPress={() => add('library')} className="w-full border border-neutral-300 rounded-xl items-center flex-row justify-center gap-2">
-              <Images size={16} color="#1A1A1A" />
-              <AppText variant="label" className="font-sans font-bold text-neutral-800">Choose from library</AppText>
+            <AppButton size="md" onPress={() => add('library')} className="w-full border border-line-strong rounded-xl items-center flex-row justify-center gap-2">
+              <Images size={16} color={palette.ink} />
+              <AppText variant="label" className="font-sans font-bold text-ink">Choose from library</AppText>
             </AppButton>
 
             <Pressable onPress={() => setChoosingSource(false)} className="w-full py-1.5 items-center flex-row justify-center gap-1">
-              <X size={12} color="#A3A3A3" />
-              <AppText variant="caption" className="font-sans font-bold text-neutral-400">Cancel</AppText>
+              <X size={12} color={palette.ink3} />
+              <AppText variant="caption" className="font-sans font-bold text-ink-3">Cancel</AppText>
             </Pressable>
           </View>
         </View>

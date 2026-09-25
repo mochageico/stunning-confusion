@@ -15,6 +15,7 @@ import {
   ReferenceRound,
 } from '../lib/drills';
 
+import { useThemeColors } from '../components/theme';
 // ============================================================================
 // REFERENCE <-> VERSE DRILL
 // ----------------------------------------------------------------------------
@@ -56,6 +57,7 @@ type ReviewSet = (typeof REVIEW_SETS)[number]['id'];
 type Phase = 'setup' | 'playing' | 'done';
 
 export default function ReferenceDrillScreen({ state }: { state: AppState }) {
+    const palette = useThemeColors();
   const { memoryQueue, navigateTo } = state;
 
   const [book, setBook] = useState('');
@@ -180,43 +182,43 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
     const canStart = uniqueCount > 0;
     return (
       <FadeInView style={{ flex: 1 }}>
-        <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 18 }}>
+        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 18 }}>
           <View className="flex-row items-center gap-3">
-            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
-            <View>
-              <AppText variant="title" className="font-serif font-black text-neutral-900 mt-0.5">Reference Drill</AppText>
+            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
+            <View className="flex-1">
+              <AppText variant="title" className="font-serif font-black text-ink mt-0.5">Reference Drill</AppText>
             </View>
           </View>
 
-          <AppText variant="caption" className="text-neutral-400 leading-relaxed -mt-2">
+          <AppText variant="caption" className="text-ink-3 leading-relaxed -mt-2">
             Quiz yourself on where your verses live. Pulls from everything you've started memorizing, whether or not it's due
             today — and it's practice only, so nothing here changes your review schedule.
           </AppText>
 
           {/* Range */}
           <View className="gap-2">
-            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">Range</AppText>
+            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">Range</AppText>
             <BookPicker value={book} onChange={setBook} allowAll allLabel="All my verses" title="Limit to a Book" />
             {!!book && (
               <View className="flex-row items-center gap-2">
                 <View className="flex-1">
-                  <AppText variant="micro" className="font-sans font-bold text-neutral-400 mb-1">From chapter</AppText>
+                  <AppText variant="micro" className="font-sans font-bold text-ink-3 mb-1">From chapter</AppText>
                   <NumericInput
                     value={startChapter}
                     onChangeText={setStartChapter}
                     placeholder="Any"
-                    placeholderTextColor="#a3a3a3"
-                    className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs text-[#1A1A1A]"
+                    placeholderTextColor={palette.ink3}
+                    className="bg-surface border border-line-strong rounded-xl px-3 py-2 text-xs text-ink"
                   />
                 </View>
                 <View className="flex-1">
-                  <AppText variant="micro" className="font-sans font-bold text-neutral-400 mb-1">To chapter</AppText>
+                  <AppText variant="micro" className="font-sans font-bold text-ink-3 mb-1">To chapter</AppText>
                   <NumericInput
                     value={endChapter}
                     onChangeText={setEndChapter}
                     placeholder="Any"
-                    placeholderTextColor="#a3a3a3"
-                    className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs text-[#1A1A1A]"
+                    placeholderTextColor={palette.ink3}
+                    className="bg-surface border border-line-strong rounded-xl px-3 py-2 text-xs text-ink"
                   />
                 </View>
               </View>
@@ -227,28 +229,28 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             {singleChapter !== null && (
               <View className="flex-row items-center gap-2">
                 <View className="flex-1">
-                  <AppText variant="micro" className="font-sans font-bold text-neutral-400 mb-1">From verse</AppText>
+                  <AppText variant="micro" className="font-sans font-bold text-ink-3 mb-1">From verse</AppText>
                   <NumericInput
                     value={startVerse}
                     onChangeText={setStartVerse}
                     placeholder="Any"
-                    placeholderTextColor="#a3a3a3"
-                    className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs text-[#1A1A1A]"
+                    placeholderTextColor={palette.ink3}
+                    className="bg-surface border border-line-strong rounded-xl px-3 py-2 text-xs text-ink"
                   />
                 </View>
                 <View className="flex-1">
-                  <AppText variant="micro" className="font-sans font-bold text-neutral-400 mb-1">To verse</AppText>
+                  <AppText variant="micro" className="font-sans font-bold text-ink-3 mb-1">To verse</AppText>
                   <NumericInput
                     value={endVerse}
                     onChangeText={setEndVerse}
                     placeholder="Any"
-                    placeholderTextColor="#a3a3a3"
-                    className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs text-[#1A1A1A]"
+                    placeholderTextColor={palette.ink3}
+                    className="bg-surface border border-line-strong rounded-xl px-3 py-2 text-xs text-ink"
                   />
                 </View>
               </View>
             )}
-            <AppText variant="caption" className={`font-sans font-bold ${canStart ? 'text-neutral-500' : 'text-amber-700'}`}>
+            <AppText variant="caption" className={`font-sans font-bold ${canStart ? 'text-ink-3' : 'text-warning'}`}>
               {canStart
                 ? `${uniqueCount} ${uniqueCount === 1 ? 'verse' : 'verses'} available`
                 : 'No verses match those filters yet — memorize some first, or widen the range.'}
@@ -257,37 +259,37 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
 
           {/* Review set */}
           <View className="gap-2">
-            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">
+            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">
               Pull from
             </AppText>
             <ChipRow options={REVIEW_SETS} value={reviewSet} onChange={(s) => setReviewSet(s as ReviewSet)} wrap />
             <Pressable
               onPress={() => setDueTodayOnly((d) => !d)}
               className={`flex-row items-center justify-between border rounded-xl p-3 ${
-                dueTodayOnly ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-300'
+                dueTodayOnly ? 'bg-accent border-accent' : 'bg-surface border-line-strong'
               }`}
             >
               <View className="flex-1 pr-3">
-                <AppText variant="caption" className={`font-sans font-extrabold ${dueTodayOnly ? 'text-white' : 'text-neutral-800'}`} >
+                <AppText variant="caption" className={`font-sans font-extrabold ${dueTodayOnly ? 'text-on-accent' : 'text-ink'}`} >
                   Due today only
                 </AppText>
-                <AppText variant="micro" className={`font-sans leading-snug ${dueTodayOnly ? 'text-neutral-300' : 'text-neutral-500'}`}>
+                <AppText variant="micro" className={`font-sans leading-snug ${dueTodayOnly ? 'text-on-accent/80' : 'text-ink-3'}`}>
                   Narrow to verses whose review is actually due today. Still practice only — it won't clear them.
                 </AppText>
               </View>
               <View
                 className={`w-5 h-5 rounded-full items-center justify-center ${
-                  dueTodayOnly ? 'bg-white' : 'border border-neutral-300'
+                  dueTodayOnly ? 'bg-surface' : 'border border-line-strong'
                 }`}
               >
-                {dueTodayOnly && <Check size={12} color="#171717" />}
+                {dueTodayOnly && <Check size={12} color={palette.ink} />}
               </View>
             </Pressable>
           </View>
 
           {/* Direction */}
           <View className="gap-2">
-            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">Ask me</AppText>
+            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">Ask me</AppText>
             <ChipRow
               options={[
                 { id: 'both' as const, label: 'Both ways' },
@@ -302,7 +304,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
 
           {/* Length */}
           <View className="gap-2">
-            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">Questions</AppText>
+            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">Questions</AppText>
             <ChipRow options={SESSION_LENGTHS} value={sessionLength} onChange={setSessionLength} />
           </View>
 
@@ -310,23 +312,23 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
           <Pressable
             onPress={() => setHardMode((h) => !h)}
             className={`flex-row items-center justify-between border rounded-xl p-3 ${
-              hardMode ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-300'
+              hardMode ? 'bg-accent border-accent' : 'bg-surface border-line-strong'
             }`}
           >
             <View className="flex-1 pr-3">
-              <AppText variant="caption" className={`font-sans font-extrabold ${hardMode ? 'text-white' : 'text-neutral-800'}`}>Hard mode</AppText>
-              <AppText variant="micro" className={`font-sans leading-snug ${hardMode ? 'text-neutral-300' : 'text-neutral-500'}`}>
+              <AppText variant="caption" className={`font-sans font-extrabold ${hardMode ? 'text-on-accent' : 'text-ink'}`}>Hard mode</AppText>
+              <AppText variant="micro" className={`font-sans leading-snug ${hardMode ? 'text-on-accent/80' : 'text-ink-3'}`}>
                 No multiple choice — type the reference yourself, and recall verses from memory before revealing.
               </AppText>
             </View>
-            <View className={`w-5 h-5 rounded-full items-center justify-center ${hardMode ? 'bg-white' : 'border border-neutral-300'}`}>
-              {hardMode && <Check size={12} color="#171717" />}
+            <View className={`w-5 h-5 rounded-full items-center justify-center ${hardMode ? 'bg-surface' : 'border border-line-strong'}`}>
+              {hardMode && <Check size={12} color={palette.ink} />}
             </View>
           </Pressable>
 
-          <AppButton size="lg" onPress={startSession} disabled={!canStart} className={`w-full rounded-xl flex-row items-center justify-center gap-2 ${canStart ? 'bg-[#1A1A1A]' : 'bg-neutral-200'}`}>
-            <Target size={15} color={canStart ? '#ffffff' : '#a3a3a3'} />
-            <AppText variant="label" className={`font-sans font-bold ${canStart ? 'text-white' : 'text-neutral-400'}`}>Start Drill</AppText>
+          <AppButton size="lg" onPress={startSession} disabled={!canStart} className={`w-full rounded-xl flex-row items-center justify-center gap-2 ${canStart ? 'bg-accent' : 'bg-fill'}`}>
+            <Target size={15} color={canStart ? palette.onAccent : palette.ink3} />
+            <AppText variant="label" className={`font-sans font-bold ${canStart ? 'text-on-accent' : 'text-ink-3'}`}>Start Drill</AppText>
           </AppButton>
         </ScrollView>
       </FadeInView>
@@ -340,30 +342,30 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
     const pct = rounds.length === 0 ? 0 : Math.round((score / rounds.length) * 100);
     return (
       <FadeInView style={{ flex: 1 }}>
-        <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', gap: 18 }}>
+        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5" contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', gap: 18 }}>
           <View className="items-center gap-2">
-            <View className="w-14 h-14 rounded-full border-2 border-[#1A1A1A] bg-neutral-100 items-center justify-center">
-              <Target size={26} color="#171717" />
+            <View className="w-14 h-14 rounded-full border-2 border-ink bg-surface-2 items-center justify-center">
+              <Target size={26} color={palette.ink} />
             </View>
-            <AppText variant="display" className="font-serif font-black text-neutral-900">
+            <AppText variant="display" className="font-serif font-black text-ink">
               {score} / {rounds.length}
             </AppText>
-            <AppText variant="label" className="font-sans font-bold text-neutral-500">{pct}% correct</AppText>
-            <AppText variant="caption" className="text-neutral-400 font-sans text-center px-6">
+            <AppText variant="label" className="font-sans font-bold text-ink-3">{pct}% correct</AppText>
+            <AppText variant="caption" className="text-ink-3 font-sans text-center px-6">
               Practice only — your review schedule is untouched.
             </AppText>
           </View>
 
           <View className="gap-2">
-            <AppButton size="lg" onPress={startSession} className="w-full bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-2">
-              <RefreshCw size={14} color="#ffffff" />
-              <AppText variant="label" className="font-sans font-bold text-white">Run It Again</AppText>
+            <AppButton size="lg" onPress={startSession} className="w-full bg-accent rounded-xl flex-row items-center justify-center gap-2">
+              <RefreshCw size={14} color={palette.onAccent} />
+              <AppText variant="label" className="font-sans font-bold text-on-accent">Run It Again</AppText>
             </AppButton>
-            <AppButton size="md" onPress={() => setPhase('setup')} className="w-full border border-neutral-300 rounded-xl items-center">
-              <AppText variant="caption" className="font-sans font-bold text-neutral-700">Change Settings</AppText>
+            <AppButton size="md" onPress={() => setPhase('setup')} className="w-full border border-line-strong rounded-xl items-center">
+              <AppText variant="caption" className="font-sans font-bold text-ink-2">Change Settings</AppText>
             </AppButton>
             <Pressable onPress={handleBack} className="w-full py-2 items-center">
-              <AppText variant="caption" className="font-sans font-bold text-neutral-400">Done</AppText>
+              <AppText variant="caption" className="font-sans font-bold text-ink-3">Done</AppText>
             </Pressable>
           </View>
         </ScrollView>
@@ -381,26 +383,26 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <View className="flex-1 bg-white p-5">
+      <View className="flex-1 bg-surface p-5">
         {/* Header: progress + score + bail out */}
         <View className="flex-row items-center justify-between mb-4">
           <View>
-            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-neutral-400 font-sans">
+            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-ink-3 font-sans">
               Question {roundIndex + 1} of {rounds.length}
             </AppText>
-            <AppText variant="body" className="font-serif font-black text-neutral-900">
+            <AppText variant="body" className="font-serif font-black text-ink">
               Score {score}/{roundIndex + (answered ? 1 : 0)}
             </AppText>
           </View>
-          <AppIconButton Icon={X} diameter={36} iconSize={16} iconColor="#262626" onPress={() => setPhase('done')} className="rounded-full border border-neutral-300" hitSlop={8} />
+          <AppIconButton Icon={X} diameter={36} iconSize={16} iconColor={palette.ink} onPress={() => setPhase('done')} className="rounded-full border border-line-strong" hitSlop={8} />
         </View>
 
         <ScrollView className="flex-1" contentContainerStyle={{ gap: 14, paddingBottom: 12 }}>
           {currentRound.kind === 'verseToRef' ? (
             <>
-              <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">Where is this?</AppText>
-              <View className="border-2 border-[#1A1A1A] rounded-2xl p-4 bg-white">
-                <AppText variant="body" className="font-serif leading-relaxed text-neutral-800">{currentRound.answer.text}</AppText>
+              <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">Where is this?</AppText>
+              <View className="border-2 border-ink rounded-2xl p-4 bg-surface">
+                <AppText variant="body" className="font-serif leading-relaxed text-ink">{currentRound.answer.text}</AppText>
               </View>
 
               {hardMode ? (
@@ -411,28 +413,28 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                       names case/whitespace-insensitively. It also keeps the
                       answer path free of react-native's Modal, which does not
                       currently overlay on web anywhere in this app. */}
-                  <AppTextInput value={freeGuess.book} onChangeText={(t) => setFreeGuess((g) => ({ ...g, book: t }))} placeholder="Book (e.g. Romans)" placeholderTextColor="#a3a3a3" autoCapitalize="words" autoCorrect={false} editable={!answered} className="bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-[#1A1A1A]" />
+                  <AppTextInput value={freeGuess.book} onChangeText={(t) => setFreeGuess((g) => ({ ...g, book: t }))} placeholder="Book (e.g. Romans)" placeholderTextColor={palette.ink3} autoCapitalize="words" autoCorrect={false} editable={!answered} className="bg-surface border border-line-strong rounded-xl px-3 py-2.5 text-ink" />
                   <View className="flex-row gap-2">
                     <NumericInput
                       value={freeGuess.chapter}
                       onChangeText={(t) => setFreeGuess((g) => ({ ...g, chapter: t }))}
                       placeholder="Chapter"
-                      placeholderTextColor="#a3a3a3"
+                      placeholderTextColor={palette.ink3}
                       editable={!answered}
-                      className="flex-1 bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A]"
+                      className="flex-1 bg-surface border border-line-strong rounded-xl px-3 py-2.5 text-xs text-ink"
                     />
                     <NumericInput
                       value={freeGuess.verse}
                       onChangeText={(t) => setFreeGuess((g) => ({ ...g, verse: t }))}
                       placeholder="Verse"
-                      placeholderTextColor="#a3a3a3"
+                      placeholderTextColor={palette.ink3}
                       editable={!answered}
-                      className="flex-1 bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A]"
+                      className="flex-1 bg-surface border border-line-strong rounded-xl px-3 py-2.5 text-xs text-ink"
                     />
                   </View>
                   {!answered && (
-                    <AppButton size="md" onPress={() => recordResult(referenceAnswerMatches(currentRound.answer, freeGuess))} disabled={!freeGuess.book || !freeGuess.chapter || !freeGuess.verse} className={`w-full rounded-xl items-center ${ freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'bg-[#1A1A1A]' : 'bg-neutral-200' }`}>
-                      <AppText variant="label" className={`font-sans font-bold ${ freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'text-white' : 'text-neutral-400' }`} >
+                    <AppButton size="md" onPress={() => recordResult(referenceAnswerMatches(currentRound.answer, freeGuess))} disabled={!freeGuess.book || !freeGuess.chapter || !freeGuess.verse} className={`w-full rounded-xl items-center ${ freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'bg-accent' : 'bg-fill' }`}>
+                      <AppText variant="label" className={`font-sans font-bold ${ freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'text-on-accent' : 'text-ink-3' }`} >
                         Check Answer
                       </AppText>
                     </AppButton>
@@ -449,13 +451,13 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                         onPress={answered ? undefined : () => recordResult(isAnswer)}
                         className={`border rounded-xl px-3 py-2.5 ${
                           answered && isAnswer
-                            ? 'border-emerald-500 bg-emerald-50'
+                            ? 'border-success bg-success-soft'
                             : answered
-                              ? 'border-neutral-200 bg-neutral-50'
-                              : 'border-neutral-300 bg-white'
+                              ? 'border-line bg-surface-2'
+                              : 'border-line-strong bg-surface'
                         }`}
                       >
-                        <AppText variant="label" className={`font-serif font-bold ${answered && isAnswer ? 'text-emerald-800' : 'text-neutral-800'}`}>
+                        <AppText variant="label" className={`font-serif font-bold ${answered && isAnswer ? 'text-success' : 'text-ink'}`}>
                           {optRef}
                         </AppText>
                       </Pressable>
@@ -466,32 +468,32 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             </>
           ) : (
             <>
-              <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-neutral-400">What does this say?</AppText>
-              <View className="border-2 border-[#1A1A1A] rounded-2xl p-4 bg-white items-center">
-                <AppText variant="title" className="font-serif font-black text-neutral-900">{answerRef}</AppText>
+              <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">What does this say?</AppText>
+              <View className="border-2 border-ink rounded-2xl p-4 bg-surface items-center">
+                <AppText variant="title" className="font-serif font-black text-ink">{answerRef}</AppText>
               </View>
 
               {hardMode ? (
                 <View className="gap-2">
                   {revealed ? (
                     <>
-                      <View className="bg-neutral-50 border border-neutral-200 rounded-xl p-3">
-                        <AppText variant="body" className="font-serif leading-relaxed text-neutral-800">{currentRound.answer.text}</AppText>
+                      <View className="bg-surface-2 border border-line rounded-xl p-3">
+                        <AppText variant="body" className="font-serif leading-relaxed text-ink">{currentRound.answer.text}</AppText>
                       </View>
                       {!answered && (
                         <View className="flex-row gap-2">
-                          <AppButton size="md" onPress={() => recordResult(false)} className="flex-1 border border-neutral-300 rounded-xl items-center">
-                            <AppText variant="caption" className="font-sans font-bold text-neutral-600">Missed it</AppText>
+                          <AppButton size="md" onPress={() => recordResult(false)} className="flex-1 border border-line-strong rounded-xl items-center">
+                            <AppText variant="caption" className="font-sans font-bold text-ink-2">Missed it</AppText>
                           </AppButton>
-                          <AppButton size="md" onPress={() => recordResult(true)} className="flex-1 bg-emerald-600 rounded-xl items-center">
-                            <AppText variant="caption" className="font-sans font-bold text-white">I knew it</AppText>
+                          <AppButton size="md" onPress={() => recordResult(true)} className="flex-1 bg-success rounded-xl items-center">
+                            <AppText variant="caption" className="font-sans font-bold text-on-accent">I knew it</AppText>
                           </AppButton>
                         </View>
                       )}
                     </>
                   ) : (
-                    <AppButton size="md" onPress={() => setRevealed(true)} className="w-full bg-[#1A1A1A] rounded-xl items-center">
-                      <AppText variant="label" className="font-sans font-bold text-white">Recall it, then reveal</AppText>
+                    <AppButton size="md" onPress={() => setRevealed(true)} className="w-full bg-accent rounded-xl items-center">
+                      <AppText variant="label" className="font-sans font-bold text-on-accent">Recall it, then reveal</AppText>
                     </AppButton>
                   )}
                 </View>
@@ -506,13 +508,13 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                         onPress={answered ? undefined : () => recordResult(isAnswer)}
                         className={`border rounded-xl px-3 py-2.5 ${
                           answered && isAnswer
-                            ? 'border-emerald-500 bg-emerald-50'
+                            ? 'border-success bg-success-soft'
                             : answered
-                              ? 'border-neutral-200 bg-neutral-50'
-                              : 'border-neutral-300 bg-white'
+                              ? 'border-line bg-surface-2'
+                              : 'border-line-strong bg-surface'
                         }`}
                       >
-                        <AppText variant="label" className={`font-serif leading-snug ${answered && isAnswer ? 'text-emerald-800' : 'text-neutral-700'}`} numberOfLines={3} >
+                        <AppText variant="label" className={`font-serif leading-snug ${answered && isAnswer ? 'text-success' : 'text-ink-2'}`} numberOfLines={3} >
                           {opt.text}
                         </AppText>
                       </Pressable>
@@ -527,13 +529,13 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
         {/* Result + advance */}
         {answered && (
           <View className="shrink-0 gap-2 pt-2">
-            <View className={`rounded-xl p-2.5 ${lastResult === 'right' ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
-              <AppText variant="caption" className={`font-sans font-bold text-center ${lastResult === 'right' ? 'text-emerald-800' : 'text-red-800'}`}>
+            <View className={`rounded-xl p-2.5 ${lastResult === 'right' ? 'bg-success-soft border border-success/30' : 'bg-danger-soft border border-danger/30'}`}>
+              <AppText variant="caption" className={`font-sans font-bold text-center ${lastResult === 'right' ? 'text-success' : 'text-danger'}`}>
                 {lastResult === 'right' ? 'Correct!' : `Not quite — that was ${answerRef}.`}
               </AppText>
             </View>
-            <AppButton size="lg" onPress={advance} className="w-full bg-[#1A1A1A] rounded-xl items-center">
-              <AppText variant="label" className="font-sans font-bold text-white">
+            <AppButton size="lg" onPress={advance} className="w-full bg-accent rounded-xl items-center">
+              <AppText variant="label" className="font-sans font-bold text-on-accent">
                 {roundIndex >= rounds.length - 1 ? 'See Score' : 'Next Question'}
               </AppText>
             </AppButton>

@@ -8,6 +8,7 @@ import { getMemoryCalendarProjection, CalendarDayProjection, RetentionPhase } fr
 import { FadeInView } from '../components/ui';
 import { AppIconButton, AppText } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; // Sunday-first, matches Date.getDay()
 
 // Rolling windows, not calendar-month-boundary paging -- "what's coming up
@@ -19,9 +20,10 @@ const WEEK_VIEW_DAYS = 7;
 const MONTH_VIEW_WEEKS = 5;
 
 const PHASE_COLORS: Record<RetentionPhase, { dot: string; text: string; bg: string; border: string }> = {
-  daily: { dot: 'bg-emerald-500', text: 'text-emerald-900', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-  weekly: { dot: 'bg-blue-500', text: 'text-blue-900', bg: 'bg-blue-50', border: 'border-blue-200' },
-  monthly: { dot: 'bg-amber-500', text: 'text-amber-900', bg: 'bg-amber-50', border: 'border-amber-200' },
+  // Stage color on the dot and stripe only; stage text is too light to read.
+  daily: { dot: 'bg-stage-daily', text: 'text-ink', bg: 'bg-surface', border: 'border-line border-l-stage-daily' },
+  weekly: { dot: 'bg-stage-weekly', text: 'text-ink', bg: 'bg-surface', border: 'border-line border-l-stage-weekly' },
+  monthly: { dot: 'bg-stage-monthly', text: 'text-ink', bg: 'bg-surface', border: 'border-line border-l-stage-monthly' },
 };
 
 interface GroupedDueVerse {
@@ -89,6 +91,7 @@ function groupNewVerses(
 }
 
 export default function MemoryCalendarScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const {
     handleBack,
     navigateTo,
@@ -188,41 +191,41 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 20 }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 20 }}>
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
-          <View>
-            <AppText variant="title" className="font-serif font-black text-neutral-900 mt-0.5">Memory Calendar</AppText>
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
+          <View className="flex-1">
+            <AppText variant="title" className="font-serif font-black text-ink mt-0.5">Memory Calendar</AppText>
           </View>
         </View>
 
-        <AppText variant="caption" className="text-neutral-400 leading-relaxed -mt-2">
+        <AppText variant="caption" className="text-ink-3 leading-relaxed -mt-2">
           Projects your Daily, Weekly, and Monthly reviews forward assuming every one goes well. A real miss shifts
           things, so treat this as a preview, not a promise.
         </AppText>
 
         {/* Week / Month Toggle */}
-        <View className="flex-row items-center justify-between bg-[#F3F2F1] p-1.5 border border-[#E5E5E5] rounded-xl">
-          <AppText variant="label" className="font-sans font-bold text-neutral-600 pl-1">Calendar View</AppText>
-          <View className="flex-row bg-white border border-[#E5E5E5] rounded-lg p-0.5">
+        <View className="flex-row items-center justify-between bg-surface-2 p-1.5 border border-line rounded-xl">
+          <AppText variant="label" className="font-sans font-bold text-ink-2 pl-1">Calendar View</AppText>
+          <View className="flex-row bg-surface border border-line rounded-lg p-0.5">
             <Pressable
               onPress={() => {
                 setViewMode('week');
                 setSelectedDayIdx(null);
               }}
-              className={`px-3 py-1.5 rounded-md ${viewMode === 'week' ? 'bg-[#1A1A1A]' : ''}`}
+              className={`px-3 py-1.5 rounded-md ${viewMode === 'week' ? 'bg-accent' : ''}`}
             >
-              <AppText variant="label" className={`font-bold ${viewMode === 'week' ? 'text-white' : 'text-neutral-500'}`}>Week</AppText>
+              <AppText variant="label" className={`font-bold ${viewMode === 'week' ? 'text-on-accent' : 'text-ink-3'}`}>Week</AppText>
             </Pressable>
             <Pressable
               onPress={() => {
                 setViewMode('month');
                 setSelectedDayIdx(null);
               }}
-              className={`px-3 py-1.5 rounded-md ${viewMode === 'month' ? 'bg-[#1A1A1A]' : ''}`}
+              className={`px-3 py-1.5 rounded-md ${viewMode === 'month' ? 'bg-accent' : ''}`}
             >
-              <AppText variant="label" className={`font-bold ${viewMode === 'month' ? 'text-white' : 'text-neutral-500'}`}>Month</AppText>
+              <AppText variant="label" className={`font-bold ${viewMode === 'month' ? 'text-on-accent' : 'text-ink-3'}`}>Month</AppText>
             </Pressable>
           </View>
         </View>
@@ -232,12 +235,12 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
           {(['daily', 'weekly', 'monthly'] as RetentionPhase[]).map((phase) => (
             <View key={phase} className="flex-row items-center gap-1">
               <View className={`w-2 h-2 rounded-full ${PHASE_COLORS[phase].dot}`} />
-              <AppText variant="micro" className="font-sans font-bold text-neutral-500 capitalize">{phase}</AppText>
+              <AppText variant="micro" className="font-sans font-bold text-ink-3 capitalize">{phase}</AppText>
             </View>
           ))}
           <View className="flex-row items-center gap-1">
-            <View className="w-2 h-2 rounded-full bg-neutral-300" />
-            <AppText variant="micro" className="font-sans font-bold text-neutral-500">Learning</AppText>
+            <View className="w-2 h-2 rounded-full bg-fill" />
+            <AppText variant="micro" className="font-sans font-bold text-ink-3">Learning</AppText>
           </View>
         </View>
 
@@ -259,7 +262,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
             <View className="flex-row">
               {DAY_LABELS.map((label) => (
                 <View key={label} className="flex-1 items-center">
-                  <AppText variant="micro" className="font-sans font-extrabold text-neutral-400 uppercase">{label}</AppText>
+                  <AppText variant="micro" className="font-sans font-extrabold text-ink-3 uppercase">{label}</AppText>
                 </View>
               ))}
             </View>
@@ -284,27 +287,27 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
       {/* Day-detail bottom sheet -- same pattern as BookPicker's sheet */}
       <Modal visible={selectedDay != null} animationType="slide" transparent onRequestClose={() => setSelectedDayIdx(null)}>
         <View className="flex-1 bg-black/60 justify-end">
-          <View className="bg-white rounded-t-3xl" style={{ height: '70%' }}>
-            <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-neutral-100">
+          <View className="bg-surface rounded-t-3xl" style={{ height: '70%' }}>
+            <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-hairline">
               <View>
-                <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">
+                <AppText variant="title" className="font-serif font-bold text-ink">
                   {selectedDay?.offsetFromToday === 0
                     ? 'Today'
                     : selectedDay?.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                 </AppText>
-                {selectedDay?.data?.isSabbath && <AppText variant="caption" className="text-neutral-400 font-sans mt-0.5">Sabbath — nothing scheduled</AppText>}
+                {selectedDay?.data?.isSabbath && <AppText variant="caption" className="text-ink-3 font-sans mt-0.5">Sabbath — nothing scheduled</AppText>}
               </View>
-              <AppIconButton Icon={X} diameter={28} iconSize={14} iconColor="#262626" onPress={() => setSelectedDayIdx(null)} className="rounded-full border border-neutral-300" />
+              <AppIconButton Icon={X} diameter={28} iconSize={14} iconColor={palette.ink} onPress={() => setSelectedDayIdx(null)} className="rounded-full border border-line-strong" />
             </View>
 
             <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingTop: 12, paddingBottom: 24, gap: 16 }}>
               {selectedDay?.offsetFromToday != null && selectedDay.offsetFromToday < 0 ? (
-                <AppText variant="label" className="text-center text-neutral-400 py-6">This day has already passed.</AppText>
+                <AppText variant="label" className="text-center text-ink-3 py-6">This day has already passed.</AppText>
               ) : (
                 <>
                   {selectedDay?.data && groupDueReviews(selectedDay.data.dueReviews).length > 0 && (
                     <View style={{ gap: 8 }}>
-                      <AppText variant="caption" className="font-bold text-neutral-400 tracking-widest font-sans">DUE FOR REVIEW</AppText>
+                      <AppText variant="caption" className="font-bold text-ink-3 tracking-widest font-sans">DUE FOR REVIEW</AppText>
                       {groupDueReviews(selectedDay.data.dueReviews).map((g, idx) => {
                         const colors = PHASE_COLORS[g.phase];
                         return (
@@ -317,7 +320,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
                             className={`flex-row items-center justify-between px-3 py-2.5 rounded-xl border-l-4 ${colors.border} border ${colors.bg}`}
                           >
                             <View className="flex-row items-center gap-2">
-                              <BookOpen size={13} color="#525252" />
+                              <BookOpen size={13} color={palette.ink2} />
                               <AppText variant="label" className={`font-serif font-black ${colors.text}`}>
                                 {g.book} {g.chapter}:{versesLabel(g.verses)}
                               </AppText>
@@ -330,9 +333,9 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
                   )}
 
                   {selectedDay?.data && selectedDay.data.learningCount > 0 && (
-                    <View className="flex-row items-center gap-2 px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50">
-                      <Sparkles size={13} color="#737373" />
-                      <AppText variant="label" className="font-sans font-bold text-neutral-600">
+                    <View className="flex-row items-center gap-2 px-3 py-2.5 rounded-xl border border-line bg-surface-2">
+                      <Sparkles size={13} color={palette.ink3} />
+                      <AppText variant="label" className="font-sans font-bold text-ink-2">
                         {selectedDay.data.learningCount} verse{selectedDay.data.learningCount === 1 ? '' : 's'} in Learning phase
                         (ongoing, not date-specific)
                       </AppText>
@@ -345,7 +348,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
                       joined group plans and their priority. */}
                   {selectedDay?.data && selectedDay.data.newVerseItems.length > 0 && (
                     <View style={{ gap: 8 }}>
-                      <AppText variant="caption" className="font-bold text-neutral-400 tracking-widest font-sans">STARTING THIS DAY</AppText>
+                      <AppText variant="caption" className="font-bold text-ink-3 tracking-widest font-sans">STARTING THIS DAY</AppText>
                       {groupNewVerses(selectedDay.data.newVerseItems, planNameById).map((g, idx) => (
                         <Pressable
                           key={idx}
@@ -353,16 +356,16 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
                             setSelectedDayIdx(null);
                             navigateTo('chapterLanding', g.book, g.chapter);
                           }}
-                          className="flex-row items-center justify-between px-3 py-2.5 rounded-xl border-l-4 border-l-neutral-400 border border-neutral-200 bg-neutral-50"
+                          className="flex-row items-center justify-between px-3 py-2.5 rounded-xl border-l-4 border-l-line-strong border border-line bg-surface-2"
                         >
                           <View className="flex-row items-center gap-2 flex-1">
-                            <Sparkles size={13} color="#525252" />
-                            <AppText variant="label" className="font-serif font-black text-neutral-700">
+                            <Sparkles size={13} color={palette.ink2} />
+                            <AppText variant="label" className="font-serif font-black text-ink-2">
                               {g.book} {g.chapter}:{versesLabel(g.verses)}
                             </AppText>
                           </View>
                           {g.planName && (
-                            <AppText variant="micro" className="font-sans font-bold uppercase text-indigo-700 shrink-0">
+                            <AppText variant="micro" className="font-sans font-bold uppercase text-accent shrink-0">
                               {g.planName}
                             </AppText>
                           )}
@@ -374,7 +377,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
                   {selectedDay?.data &&
                     selectedDay.data.dueReviews.length === 0 &&
                     selectedDay.data.learningCount === 0 && (
-                      <AppText variant="label" className="text-center text-neutral-400 py-6">Nothing scheduled this day.</AppText>
+                      <AppText variant="label" className="text-center text-ink-3 py-6">Nothing scheduled this day.</AppText>
                     )}
                 </>
               )}
@@ -414,15 +417,15 @@ function DayCell({
     <Pressable
       onPress={onPress}
       disabled={day.offsetFromToday < 0}
-      className={`flex-1 items-center rounded-xl border ${isToday ? 'border-2 border-[#1A1A1A]' : 'border-neutral-200'} ${
-        faded ? 'opacity-30' : 'bg-white'
+      className={`flex-1 items-center rounded-xl border ${isToday ? 'border-2 border-ink' : 'border-line'} ${
+        faded ? 'opacity-30' : 'bg-surface'
       }`}
       style={{ gap: large ? 6 : 3, paddingVertical: large ? 10 : 6 }}
     >
-      <AppText variant="micro" className={`font-sans font-extrabold uppercase ${isToday ? 'text-[#1A1A1A]' : 'text-neutral-400'}`}>
+      <AppText variant="micro" className={`font-sans font-extrabold uppercase ${isToday ? 'text-ink' : 'text-ink-3'}`}>
         {day.date.toLocaleDateString('en-US', { weekday: 'short' })}
       </AppText>
-      <AppText variant={large ? 'title' : 'caption'} className={`font-serif font-black ${isToday ? 'text-[#1A1A1A]' : 'text-neutral-700'}`}>
+      <AppText variant={large ? 'title' : 'caption'} className={`font-serif font-black ${isToday ? 'text-ink' : 'text-ink-2'}`}>
         {day.date.getDate()}
       </AppText>
 
@@ -432,23 +435,23 @@ function DayCell({
             {phasesPresent.map((phase) => (
               <View key={phase} className={`w-1.5 h-1.5 rounded-full ${PHASE_COLORS[phase].dot}`} />
             ))}
-            {hasLearning && <View className="w-1.5 h-1.5 rounded-full bg-neutral-300" />}
+            {hasLearning && <View className="w-1.5 h-1.5 rounded-full bg-fill" />}
           </View>
 
           {large && firstRef && (
-            <AppText variant="micro" className="font-serif font-bold text-neutral-700 text-center" numberOfLines={2}>
+            <AppText variant="micro" className="font-serif font-bold text-ink-2 text-center" numberOfLines={2}>
               {firstRef.book.slice(0, 3)} {firstRef.chapter}:{firstRef.verseNumber}
               {extraRefs > 0 ? ` +${extraRefs}` : ''}
             </AppText>
           )}
           {large && !firstRef && day.data && day.data.newVersesPulled > 0 && (
-            <AppText variant="micro" className="font-sans font-bold text-neutral-500 text-center" numberOfLines={1}>
+            <AppText variant="micro" className="font-sans font-bold text-ink-3 text-center" numberOfLines={1}>
               +{day.data.newVersesPulled} new
             </AppText>
           )}
 
           {loadMins > 0 && (
-            <AppText variant="micro" className="font-mono font-bold text-neutral-500">{loadMins}m</AppText>
+            <AppText variant="micro" className="font-mono font-bold text-ink-3">{loadMins}m</AppText>
           )}
         </View>
       )}

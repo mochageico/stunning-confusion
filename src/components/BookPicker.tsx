@@ -5,6 +5,7 @@ import { Check, ChevronDown, Search, X } from 'lucide-react-native';
 import { BOOKS } from '../data';
 import { AppIconButton, AppTextInput, AppText } from './design';
 
+import { useThemeColors } from './theme';
 /**
  * Replaces the old "4 books in a row" chip pickers. Book names vary a lot in
  * length and — once the full 66-book canon is loaded — there are far too many
@@ -20,7 +21,6 @@ export function BookPicker({
   allLabel = 'All Books',
   placeholder = 'Select a book',
   title = 'Select a Book',
-  dark,
 }: {
   value: string;
   onChange: (bookName: string) => void;
@@ -28,11 +28,8 @@ export function BookPicker({
   allLabel?: string;
   placeholder?: string;
   title?: string;
-  /** Trigger only. Lets the picker sit on a dark panel (the circle page's
-   *  create forms) without the list itself changing -- the list is a
-   *  full-screen sheet, which is always its own light surface. */
-  dark?: boolean;
 }) {
+  const palette = useThemeColors();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -54,17 +51,17 @@ export function BookPicker({
       <Pressable
         onPress={() => setOpen(true)}
         className={`flex-row items-center justify-between rounded-xl px-3 py-2.5 ${
-          dark ? 'bg-neutral-900 border border-neutral-800' : 'bg-white border border-neutral-300'
+          'bg-surface border border-line-strong'
         }`}
       >
         <AppText
           variant="label"
-          className={`font-sans font-bold ${dark ? 'text-white' : value ? 'text-[#1A1A1A]' : 'text-neutral-500'}`}
+          className={`font-sans font-bold ${value ? 'text-ink' : 'text-ink-3'}`}
           numberOfLines={1}
         >
           {displayLabel}
         </AppText>
-        <ChevronDown size={14} color={dark ? '#a3a3a3' : '#525252'} />
+        <ChevronDown size={14} color={palette.ink2} />
       </Pressable>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
@@ -72,20 +69,20 @@ export function BookPicker({
           {/* Fixed height, not maxHeight: a shrink-to-fit sheet slides the
               header/search bar down toward the keyboard as filtered results
               narrow, eventually covering the very rows you'd tap. */}
-          <View className="bg-white rounded-t-3xl" style={{ height: '85%' }}>
+          <View className="bg-surface rounded-t-3xl" style={{ height: '85%' }}>
             {/* Header */}
-            <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-neutral-100">
-              <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">{title}</AppText>
-              <AppIconButton Icon={X} diameter={28} iconSize={14} iconColor="#262626" onPress={() => setOpen(false)} className="rounded-full border border-neutral-300" />
+            <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-hairline">
+              <AppText variant="title" className="font-serif font-bold text-ink">{title}</AppText>
+              <AppIconButton Icon={X} diameter={28} iconSize={14} iconColor={palette.ink} onPress={() => setOpen(false)} className="rounded-full border border-line-strong" />
             </View>
 
             {/* Search */}
             <View className="px-5 pt-3">
               <View className="relative justify-center">
                 <View className="absolute left-3 z-10">
-                  <Search size={14} color="#a3a3a3" />
+                  <Search size={14} color={palette.ink3} />
                 </View>
-                <AppTextInput value={query} onChangeText={setQuery} placeholder="Search books..." placeholderTextColor="#a3a3a3" autoFocus className="w-full bg-neutral-50 border border-neutral-200 rounded-xl py-2 pl-9 pr-3 text-[#1A1A1A]" />
+                <AppTextInput value={query} onChangeText={setQuery} placeholder="Search books..." placeholderTextColor={palette.ink3} autoFocus className="w-full bg-surface-2 border border-line rounded-xl py-2 pl-9 pr-3 text-ink" />
               </View>
             </View>
 
@@ -93,27 +90,27 @@ export function BookPicker({
               {showAllRow && (
                 <Pressable
                   onPress={() => select('')}
-                  className="flex-row items-center justify-between py-3 px-3 rounded-xl bg-neutral-50 border border-neutral-200"
+                  className="flex-row items-center justify-between py-3 px-3 rounded-xl bg-surface-2 border border-line"
                 >
-                  <AppText variant="title" className="font-serif font-medium text-[#1A1A1A]">{allLabel}</AppText>
-                  {!value && <Check size={16} color="#1A1A1A" />}
+                  <AppText variant="title" className="font-serif font-medium text-ink">{allLabel}</AppText>
+                  {!value && <Check size={16} color={palette.ink} />}
                 </Pressable>
               )}
 
               {otBooks.length > 0 && (
                 <View className="gap-2">
-                  <AppText variant="caption" className="font-bold text-neutral-400 tracking-widest font-sans border-b border-neutral-100 pb-1">
+                  <AppText variant="caption" className="font-bold text-ink-3 tracking-widest font-sans border-b border-hairline pb-1">
                     OLD TESTAMENT
                   </AppText>
-                  <View className="divide-y divide-neutral-100 border border-neutral-200 rounded-xl overflow-hidden">
+                  <View className="divide-y divide-hairline border border-line rounded-xl overflow-hidden">
                     {otBooks.map((book) => (
                       <Pressable
                         key={book.id}
                         onPress={() => select(book.name)}
-                        className="w-full px-4 py-3 flex-row items-center justify-between bg-white"
+                        className="w-full px-4 py-3 flex-row items-center justify-between bg-surface"
                       >
-                        <AppText variant="title" className="font-serif font-medium text-[#1A1A1A]">{book.name}</AppText>
-                        {value === book.name && <Check size={16} color="#1A1A1A" />}
+                        <AppText variant="title" className="font-serif font-medium text-ink">{book.name}</AppText>
+                        {value === book.name && <Check size={16} color={palette.ink} />}
                       </Pressable>
                     ))}
                   </View>
@@ -122,18 +119,18 @@ export function BookPicker({
 
               {ntBooks.length > 0 && (
                 <View className="gap-2">
-                  <AppText variant="caption" className="font-bold text-neutral-400 tracking-widest font-sans border-b border-neutral-100 pb-1">
+                  <AppText variant="caption" className="font-bold text-ink-3 tracking-widest font-sans border-b border-hairline pb-1">
                     NEW TESTAMENT
                   </AppText>
-                  <View className="divide-y divide-neutral-100 border border-neutral-200 rounded-xl overflow-hidden">
+                  <View className="divide-y divide-hairline border border-line rounded-xl overflow-hidden">
                     {ntBooks.map((book) => (
                       <Pressable
                         key={book.id}
                         onPress={() => select(book.name)}
-                        className="w-full px-4 py-3 flex-row items-center justify-between bg-white"
+                        className="w-full px-4 py-3 flex-row items-center justify-between bg-surface"
                       >
-                        <AppText variant="title" className="font-serif font-medium text-[#1A1A1A]">{book.name}</AppText>
-                        {value === book.name && <Check size={16} color="#1A1A1A" />}
+                        <AppText variant="title" className="font-serif font-medium text-ink">{book.name}</AppText>
+                        {value === book.name && <Check size={16} color={palette.ink} />}
                       </Pressable>
                     ))}
                   </View>
@@ -141,7 +138,7 @@ export function BookPicker({
               )}
 
               {!showAllRow && otBooks.length === 0 && ntBooks.length === 0 && (
-                <AppText variant="label" className="text-center text-neutral-400 py-6">No books match "{query}".</AppText>
+                <AppText variant="label" className="text-center text-ink-3 py-6">No books match "{query}".</AppText>
               )}
             </ScrollView>
           </View>

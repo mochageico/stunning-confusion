@@ -111,15 +111,15 @@ export default function ListenPhotoView({
     return (
       <View className="flex-1 items-center justify-center px-6 gap-2">
         <Camera size={20} color="#A3A3A3" />
-        <AppText variant="caption" className="font-sans text-neutral-500 text-center">
+        <AppText variant="caption" className="font-sans text-ink-3 text-center">
           No page photo for {chapterLabel} yet.
         </AppText>
         <Pressable
           onPress={onAddPhoto}
-          className="border border-neutral-300 rounded-lg px-3 py-1.5 mt-1"
+          className="border border-line-strong rounded-lg px-3 py-1.5 mt-1"
           hitSlop={6}
         >
-          <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-neutral-700">
+          <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-ink-2">
             Add a photo
           </AppText>
         </Pressable>
@@ -149,8 +149,8 @@ export default function ListenPhotoView({
               over this panel. Names the CHAPTER as well as the page: a mixed
               session means the photo on screen might belong to a different
               chapter than the one you think you are hearing. */}
-          <View className="absolute top-2 right-2 bg-white/90 border border-neutral-200 rounded px-2 py-1">
-            <AppText variant="micro" className="font-sans font-bold text-neutral-700">
+          <View className="absolute top-2 right-2 bg-white/90 border border-line rounded px-2 py-1">
+            <AppText variant="micro" className="font-sans font-bold text-ink-2">
               {chapterLabel}
               {photos.length > 1 ? ` · Page ${index + 1}` : ''}
             </AppText>
@@ -158,7 +158,7 @@ export default function ListenPhotoView({
 
           <Pressable
             onPress={() => setExpanded(true)}
-            className="absolute bottom-2 right-2 bg-white/90 border border-neutral-200 rounded items-center justify-center"
+            className="absolute bottom-2 right-2 bg-white/90 border border-line rounded items-center justify-center"
             style={{ width: 28, height: 28 }}
             hitSlop={6}
           >
@@ -171,11 +171,11 @@ export default function ListenPhotoView({
           {!following && (
             <Pressable
               onPress={() => setManualIndex(null)}
-              className="absolute bottom-2 left-2 flex-row items-center gap-1 bg-white/90 border border-neutral-200 rounded px-2 py-1"
+              className="absolute bottom-2 left-2 flex-row items-center gap-1 bg-white/90 border border-line rounded px-2 py-1"
               hitSlop={6}
             >
               <Crosshair size={11} color="#1A1A1A" />
-              <AppText variant="micro" className="font-sans font-bold text-neutral-700">
+              <AppText variant="micro" className="font-sans font-bold text-ink-2">
                 Follow again
               </AppText>
             </Pressable>

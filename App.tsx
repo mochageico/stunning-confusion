@@ -49,9 +49,11 @@ import FindFriendsScreen from './src/screens/FindFriendsScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import DMThreadScreen from './src/screens/DMThreadScreen';
 import CircleChatScreen from './src/screens/CircleChatScreen';
-import { APP_FONTS, AppIconButton, AppText } from './src/components/design';
-import { useDemoState } from './src/dev/DemoHarness';
+import { APP_FONTS, AppIconButton, AppText, FontScaleOverrideProvider } from './src/components/design';
+import { DEMO_ACCENT, DEMO_FONT_SCALE, useDemoState } from './src/dev/DemoHarness';
+import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent } from './src/components/theme';
 
+import { useThemeColors } from './src/components/theme';
 // The original web app has no router — it's a hand-rolled state machine on
 // `currentTab` / `currentScreen`. This mirrors that structure 1:1 instead of
 // introducing React Navigation, to keep the port low-risk.
@@ -177,41 +179,41 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
   return (
     <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
       <FadeInView style={{ width: '100%', maxWidth: 320 }}>
-        <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4">
+        <View className="bg-surface border-2 border-ink rounded-xl p-5 gap-4">
           <View>
-            <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Save Recitation</AppText>
-            <AppText variant="label" className="text-neutral-500 font-sans mt-1">
+            <AppText variant="title" className="font-serif font-bold text-ink">Save Recitation</AppText>
+            <AppText variant="label" className="text-ink-3 font-sans mt-1">
               {isImport
                 ? 'Review the details of your tagged audio before saving and sharing.'
                 : 'Review the details of your recorded chapter before saving and sharing.'}
             </AppText>
           </View>
 
-          <View className="gap-2.5 bg-[#F3F2F1] p-3 rounded-xl border border-[#E5E5E5]">
+          <View className="gap-2.5 bg-surface-2 p-3 rounded-xl border border-line">
             <View className="flex-row justify-between">
-              <AppText variant="micro" className="text-neutral-400 font-bold uppercase font-sans">Chapter:</AppText>
-              <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">
+              <AppText variant="micro" className="text-ink-3 font-bold uppercase font-sans">Chapter:</AppText>
+              <AppText variant="label" className="text-ink font-bold font-sans ">
                 {recordingBook} {recordingChapter}
               </AppText>
             </View>
             <View className="flex-row justify-between">
-              <AppText variant="micro" className="text-neutral-400 font-bold uppercase font-sans">Translation:</AppText>
-              <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">{recordingTranslation}</AppText>
+              <AppText variant="micro" className="text-ink-3 font-bold uppercase font-sans">Translation:</AppText>
+              <AppText variant="label" className="text-ink font-bold font-sans ">{recordingTranslation}</AppText>
             </View>
             <View className="flex-row justify-between">
-              <AppText variant="micro" className="text-neutral-400 font-bold uppercase font-sans">Duration:</AppText>
-              <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">{formatTime(durationSec)}</AppText>
+              <AppText variant="micro" className="text-ink-3 font-bold uppercase font-sans">Duration:</AppText>
+              <AppText variant="label" className="text-ink font-bold font-sans ">{formatTime(durationSec)}</AppText>
             </View>
             <View className="flex-row justify-between">
-              <AppText variant="micro" className="text-neutral-400 font-bold uppercase font-sans">Scope:</AppText>
-              <AppText variant="label" className="text-emerald-700 font-bold font-sans ">
+              <AppText variant="micro" className="text-ink-3 font-bold uppercase font-sans">Scope:</AppText>
+              <AppText variant="label" className="text-success font-bold font-sans ">
                 {rangeLabel} {isImport ? 'Imported Recitation' : 'Recitation'}
               </AppText>
             </View>
           </View>
 
           <View className="gap-2">
-            <AppText variant="micro" className="font-bold uppercase text-neutral-400 tracking-wider font-sans">
+            <AppText variant="micro" className="font-bold uppercase text-ink-3 tracking-wider font-sans">
               Who can see this recitation?
             </AppText>
             <View className="flex-row gap-1.5">
@@ -222,10 +224,10 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
                     key={opt.id}
                     onPress={() => setPickedRecordingVisibility(opt.id)}
                     className={`flex-1 py-2 rounded-lg items-center border ${
-                      isSelected ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-[#E5E5E5]'
+                      isSelected ? 'bg-accent border-accent' : 'bg-surface border-line'
                     }`}
                   >
-                    <AppText variant="caption" className={`font-bold ${isSelected ? 'text-white' : 'text-neutral-700'}`}>
+                    <AppText variant="caption" className={`font-bold ${isSelected ? 'text-on-accent' : 'text-ink-2'}`}>
                       {opt.label}
                     </AppText>
                   </Pressable>
@@ -233,7 +235,7 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
               })}
             </View>
             {defaultRecordingVisibility === null && (
-              <AppText variant="micro" className="text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg p-2 leading-relaxed">
+              <AppText variant="micro" className="text-accent bg-accent-soft border border-accent/30 rounded-lg p-2 leading-relaxed">
                 Whatever you pick here becomes your default for future recordings — you can still change it each time,
                 and eventually from Settings too.
               </AppText>
@@ -246,12 +248,12 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
                 setSaveRecordingDialog(false);
                 triggerToast('Recording discarded.');
               }}
-              className="flex-1 py-2.5 px-3 border border-[#E5E5E5] rounded-xl items-center bg-white"
+              className="flex-1 py-2.5 px-3 border border-line rounded-xl items-center bg-surface"
             >
-              <AppText variant="label" className="text-neutral-500 font-bold">Discard</AppText>
+              <AppText variant="label" className="text-ink-3 font-bold">Discard</AppText>
             </Pressable>
-            <Pressable onPress={saveRecordedAudio} className="flex-1 py-2.5 px-3 bg-[#1A1A1A] rounded-xl items-center">
-              <AppText variant="label" className="text-white font-bold">Confirm & Save</AppText>
+            <Pressable onPress={saveRecordedAudio} className="flex-1 py-2.5 px-3 bg-accent rounded-xl items-center">
+              <AppText variant="label" className="text-on-accent font-bold">Confirm & Save</AppText>
             </Pressable>
           </View>
         </View>
@@ -261,6 +263,7 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
 }
 
 function ProgressModal({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const { memorizedCount, learningCount, untouchedCount, verses, setShowProgressModal, navigateTo } = state;
   // Derive from the user's actual verses (previously a hardcoded demo list
   // of four books, which showed empty 0/0 bars for anyone whose real verses
@@ -269,32 +272,32 @@ function ProgressModal({ state }: { state: AppState }) {
   return (
     <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
       <FadeInView style={{ width: '100%', maxWidth: 340 }}>
-        <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4">
-          <View className="flex-row items-center justify-between border-b border-neutral-200 pb-2">
-            <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">My Scripture Memory Plan</AppText>
+        <View className="bg-surface border-2 border-ink rounded-xl p-5 gap-4">
+          <View className="flex-row items-center justify-between border-b border-line pb-2">
+            <AppText variant="title" className="font-serif font-bold text-ink">My Scripture Memory Plan</AppText>
             <Pressable onPress={() => setShowProgressModal(false)}>
-              <X size={16} color="#a3a3a3" />
+              <X size={16} color={palette.ink3} />
             </Pressable>
           </View>
 
           <View className="gap-3.5 pt-1">
             <View className="flex-row gap-2">
-              <View className="flex-1 border border-emerald-200 rounded-xl p-2 bg-emerald-50/50 items-center">
-                <AppText variant="title" className="font-bold text-emerald-700">{memorizedCount}</AppText>
-                <AppText variant="micro" className="font-sans font-bold text-neutral-500">Memorized</AppText>
+              <View className="flex-1 border border-success/30 rounded-xl p-2 bg-success-soft items-center">
+                <AppText variant="title" className="font-bold text-success">{memorizedCount}</AppText>
+                <AppText variant="micro" className="font-sans font-bold text-ink-3">Memorized</AppText>
               </View>
-              <View className="flex-1 border border-amber-200 rounded-xl p-2 bg-amber-50/50 items-center">
-                <AppText variant="title" className="font-bold text-amber-600">{learningCount}</AppText>
-                <AppText variant="micro" className="font-sans font-bold text-neutral-500">Learning</AppText>
+              <View className="flex-1 border border-warning/30 rounded-xl p-2 bg-warning-soft items-center">
+                <AppText variant="title" className="font-bold text-warning">{learningCount}</AppText>
+                <AppText variant="micro" className="font-sans font-bold text-ink-3">Learning</AppText>
               </View>
-              <View className="flex-1 border border-neutral-200 rounded-xl p-2 bg-neutral-50/50 items-center">
-                <AppText variant="title" className="font-bold text-neutral-700">{untouchedCount}</AppText>
-                <AppText variant="micro" className="font-sans font-bold text-neutral-500">Untouched</AppText>
+              <View className="flex-1 border border-line rounded-xl p-2 bg-surface-2 items-center">
+                <AppText variant="title" className="font-bold text-ink-2">{untouchedCount}</AppText>
+                <AppText variant="micro" className="font-sans font-bold text-ink-3">Untouched</AppText>
               </View>
             </View>
 
             <View className="gap-3 pt-1">
-              <AppText variant="section" className="font-bold text-neutral-400 tracking-wider uppercase">PROGRESS BY BOOK</AppText>
+              <AppText variant="section" className="font-bold text-ink-3 tracking-wider uppercase">PROGRESS BY BOOK</AppText>
               {books.map((bookName) => {
                 const bookVerses = verses.filter((v) => v.book === bookName);
                 const memBookCount = bookVerses.filter((v) => v.status === 'memorized').length;
@@ -302,13 +305,13 @@ function ProgressModal({ state }: { state: AppState }) {
                 return (
                   <View key={bookName} className="gap-1">
                     <View className="flex-row justify-between items-center">
-                      <AppText variant="label" className="text-neutral-800 font-serif font-bold">{bookName}</AppText>
-                      <AppText variant="caption" className="text-neutral-400 font-mono">
+                      <AppText variant="label" className="text-ink font-serif font-bold">{bookName}</AppText>
+                      <AppText variant="caption" className="text-ink-3 font-mono">
                         {memBookCount}/{bookVerses.length} memorized
                       </AppText>
                     </View>
-                    <View className="w-full bg-neutral-100 h-2 rounded-full overflow-hidden border border-neutral-200">
-                      <View className="bg-[#1A1A1A] h-full" style={{ width: `${ratio}%` }} />
+                    <View className="w-full bg-surface-2 h-2 rounded-full overflow-hidden border border-line">
+                      <View className="bg-accent h-full" style={{ width: `${ratio}%` }} />
                     </View>
                   </View>
                 );
@@ -326,14 +329,14 @@ function ProgressModal({ state }: { state: AppState }) {
               setShowProgressModal(false);
               navigateTo('savedPlans');
             }}
-            className="w-full py-2.5 px-4 bg-white border border-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5"
+            className="w-full py-2.5 px-4 bg-surface border border-ink rounded-xl flex-row items-center justify-center gap-1.5"
           >
-            <Sliders size={13} color="#1A1A1A" />
-            <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">Saved Memory Rhythms</AppText>
+            <Sliders size={13} color={palette.ink} />
+            <AppText variant="label" className="text-ink font-bold font-sans ">Saved Memory Rhythms</AppText>
           </Pressable>
 
-          <Pressable onPress={() => setShowProgressModal(false)} className="w-full py-2.5 bg-neutral-200 rounded-xl items-center">
-            <AppText variant="label" className="text-[#1A1A1A] font-bold font-sans ">Close</AppText>
+          <Pressable onPress={() => setShowProgressModal(false)} className="w-full py-2.5 bg-fill rounded-xl items-center">
+            <AppText variant="label" className="text-ink font-bold font-sans ">Close</AppText>
           </Pressable>
         </View>
       </FadeInView>
@@ -365,6 +368,7 @@ const MISS_CHOICES: { id: 'grace' | 'escalate' | 'reset'; label: string; desc: s
 ];
 
 function MissedReviewPromptModal({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const { missedReviewQueue, setShowMissedReviewPrompt, resolveMissedReviewChoice, missPolicy } = state;
   const defaultChoice: 'grace' | 'escalate' | 'reset' = missPolicy === 'graceDiscretion' ? 'grace' : 'escalate';
   const [bulkChoice, setBulkChoice] = React.useState<'grace' | 'escalate' | 'reset'>(defaultChoice);
@@ -376,16 +380,16 @@ function MissedReviewPromptModal({ state }: { state: AppState }) {
   return (
     <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
       <FadeInView style={{ width: '100%', maxWidth: 360 }}>
-        <View className="bg-white border-2 border-[#1A1A1A] rounded-xl p-5 gap-4" style={{ maxHeight: '85%' }}>
-          <View className="flex-row items-center justify-between border-b border-neutral-200 pb-2">
+        <View className="bg-surface border-2 border-ink rounded-xl p-5 gap-4" style={{ maxHeight: '85%' }}>
+          <View className="flex-row items-center justify-between border-b border-line pb-2">
             <View className="flex-1 pr-2">
-              <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Missed Reviews</AppText>
-              <AppText variant="caption" className="text-neutral-500 font-sans mt-0.5">
+              <AppText variant="title" className="font-serif font-bold text-ink">Missed Reviews</AppText>
+              <AppText variant="caption" className="text-ink-3 font-sans mt-0.5">
                 You missed reviews on {verseCount} verse{verseCount === 1 ? '' : 's'}. What should happen?
               </AppText>
             </View>
             <Pressable onPress={() => setShowMissedReviewPrompt(false)}>
-              <X size={16} color="#a3a3a3" />
+              <X size={16} color={palette.ink3} />
             </Pressable>
           </View>
 
@@ -396,40 +400,40 @@ function MissedReviewPromptModal({ state }: { state: AppState }) {
                 <Pressable
                   key={choice.id}
                   onPress={() => setBulkChoice(choice.id)}
-                  className={`border-2 rounded-xl p-3 ${isSelected ? 'border-[#1A1A1A] bg-[#FBF9F6]' : 'border-[#E5E5E5] bg-white'}`}
+                  className={`border-2 rounded-xl p-3 ${isSelected ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
                 >
                   <View className="flex-row items-center gap-2">
                     <View
                       className={`w-3.5 h-3.5 rounded-full border-2 items-center justify-center ${
-                        isSelected ? 'border-[#1A1A1A]' : 'border-neutral-300'
+                        isSelected ? 'border-accent' : 'border-line-strong'
                       }`}
                     >
-                      {isSelected && <View className="w-1.5 h-1.5 bg-[#1A1A1A] rounded-full" />}
+                      {isSelected && <View className="w-1.5 h-1.5 bg-accent rounded-full" />}
                     </View>
-                    <AppText variant="label" className="font-sans font-bold text-[#1A1A1A]">{choice.label}</AppText>
+                    <AppText variant="label" className="font-sans font-bold text-ink">{choice.label}</AppText>
                   </View>
-                  <AppText variant="caption" className="text-neutral-500 font-sans mt-1 leading-relaxed pl-5.5">{choice.desc}</AppText>
+                  <AppText variant="caption" className="text-ink-3 font-sans mt-1 leading-relaxed pl-5.5">{choice.desc}</AppText>
                 </Pressable>
               );
             })}
           </View>
 
           <Pressable onPress={() => setCustomizing((v) => !v)}>
-            <AppText variant="section" className="font-sans font-bold text-indigo-600 uppercase tracking-wider">
+            <AppText variant="section" className="font-sans font-bold text-accent uppercase tracking-wider">
               {customizing ? 'Hide per-verse customization' : 'Customize per verse ->'}
             </AppText>
           </Pressable>
 
           {customizing && (
-            <ScrollView style={{ maxHeight: 180 }} className="border border-neutral-200 rounded-xl">
+            <ScrollView style={{ maxHeight: 180 }} className="border border-line rounded-xl">
               {missedReviewQueue.map(({ item, missedCycles }) => {
                 const current = overrides[item.verseId] || bulkChoice;
                 return (
-                  <View key={item.verseId} className="p-2.5 border-b border-neutral-100 last:border-b-0">
-                    <AppText variant="caption" className="font-sans font-bold text-[#1A1A1A]">
+                  <View key={item.verseId} className="p-2.5 border-b border-hairline last:border-b-0">
+                    <AppText variant="caption" className="font-sans font-bold text-ink">
                       {item.book} {item.chapter}:{item.verseNumber}
                     </AppText>
-                    <AppText variant="micro" className="text-neutral-400 font-sans mb-1.5">
+                    <AppText variant="micro" className="text-ink-3 font-sans mb-1.5">
                       {missedCycles} cycle{missedCycles === 1 ? '' : 's'} missed -- {item.retentionPhase}
                     </AppText>
                     <View className="flex-row gap-1.5">
@@ -438,10 +442,10 @@ function MissedReviewPromptModal({ state }: { state: AppState }) {
                           key={choice.id}
                           onPress={() => setOverrides((prev) => ({ ...prev, [item.verseId]: choice.id }))}
                           className={`px-2 py-1 rounded-lg border ${
-                            current === choice.id ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-[#E5E5E5]'
+                            current === choice.id ? 'bg-accent border-accent' : 'bg-surface border-line'
                           }`}
                         >
-                          <AppText variant="micro" className={`font-bold ${current === choice.id ? 'text-white' : 'text-neutral-500'}`}>
+                          <AppText variant="micro" className={`font-bold ${current === choice.id ? 'text-on-accent' : 'text-ink-3'}`}>
                             {choice.id === 'grace' ? 'Grace' : choice.id === 'escalate' ? 'Standard' : 'Reset'}
                           </AppText>
                         </Pressable>
@@ -455,9 +459,9 @@ function MissedReviewPromptModal({ state }: { state: AppState }) {
 
           <Pressable
             onPress={() => resolveMissedReviewChoice(bulkChoice, customizing ? overrides : undefined)}
-            className="w-full py-2.5 px-4 bg-[#1A1A1A] rounded-xl items-center"
+            className="w-full py-2.5 px-4 bg-accent rounded-xl items-center"
           >
-            <AppText variant="label" className="text-white font-bold font-sans ">Apply</AppText>
+            <AppText variant="label" className="text-on-accent font-bold font-sans ">Apply</AppText>
           </Pressable>
         </View>
       </FadeInView>
@@ -470,6 +474,7 @@ function MissedReviewPromptModal({ state }: { state: AppState }) {
 // to a different tab — previously play/pause controls only existed on the
 // screen you started playback from.
 function NowPlayingBar({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const { playingRecordingId, nowPlayingRecording, playingRecProgress, setPlayingRecordingId, setSelectedRecording, navigateTo } = state;
 
   if (!playingRecordingId || !nowPlayingRecording) return null;
@@ -481,28 +486,29 @@ function NowPlayingBar({ state }: { state: AppState }) {
           setSelectedRecording(nowPlayingRecording);
           navigateTo('recordingDetail');
         }}
-        className="mx-3 mt-2 mb-1 bg-[#1A1A1A] rounded-xl px-3 py-2 flex-row items-center gap-3"
+        className="mx-3 mt-2 mb-1 bg-accent rounded-xl px-3 py-2 flex-row items-center gap-3"
       >
-        <View className="w-8 h-8 rounded-lg bg-white/15 items-center justify-center shrink-0">
-          <Mic size={14} color="#FFFFFF" />
+        <View className="w-8 h-8 rounded-lg bg-on-accent/15 items-center justify-center shrink-0">
+          <Mic size={14} color={palette.onAccent} />
         </View>
 
         <View className="flex-1" style={{ gap: 4 }}>
-          <AppText variant="label" numberOfLines={1} className="text-white font-sans font-bold ">
+          <AppText variant="label" numberOfLines={1} className="text-on-accent font-sans font-bold ">
             {nowPlayingRecording.book} {nowPlayingRecording.chapter}
           </AppText>
-          <View className="w-full bg-white/20 h-1 rounded-full overflow-hidden">
-            <View className="bg-white h-full" style={{ width: `${playingRecProgress}%` }} />
+          <View className="w-full bg-on-accent/20 h-1 rounded-full overflow-hidden">
+            <View className="bg-surface h-full" style={{ width: `${playingRecProgress}%` }} />
           </View>
         </View>
 
-        <AppIconButton Icon={Pause} diameter={32} iconSize={13} iconColor="#FFFFFF" onPress={(e) => { e.stopPropagation(); setPlayingRecordingId(null); }} className="rounded-full bg-white/15 shrink-0" />
+        <AppIconButton Icon={Pause} diameter={32} iconSize={13} iconColor={palette.onAccent} onPress={(e) => { e.stopPropagation(); setPlayingRecordingId(null); }} className="rounded-full bg-on-accent/15 shrink-0" />
       </Pressable>
     </FadeInView>
   );
 }
 
 function AppShell() {
+  const palette = useThemeColors();
   // Demo mode (sample data, no sign-in) for checking UI work -- a no-op unless
   // the web preview URL carries ?s=<screen>, and never in a production build.
   // See src/dev/DemoHarness.tsx.
@@ -520,11 +526,11 @@ function AppShell() {
   // a brand-new account's showOnboarding overlay (below) then takes over
   // automatically once loadUserData creates their profile.
   if (state.loadingAuth) {
-    return <View style={{ flex: 1 }} className="bg-white" />;
+    return <View style={{ flex: 1 }} className="bg-canvas" />;
   }
   if (!state.user) {
     return (
-      <View style={{ flex: 1 }} className="bg-white">
+      <View style={{ flex: 1 }} className="bg-canvas">
         <StatusBar style="dark" />
         <SafeAreaView style={{ flex: 1 }}>
           <AuthGateScreen state={state} />
@@ -535,7 +541,7 @@ function AppShell() {
   }
 
   return (
-    <View style={{ flex: 1 }} className="bg-white">
+    <View style={{ flex: 1 }} className="bg-canvas">
       <StatusBar style="dark" />
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
         <View style={{ flex: 1 }}>
@@ -556,14 +562,14 @@ function AppShell() {
             56pt rather than 64: the bar sits on top of the home-indicator
             inset already added by SafeAreaView, so the old height pushed it
             noticeably far up the screen. */}
-        <View className="h-14 bg-white border-t border-[#E5E5E5] px-6 flex-row items-center justify-between">
+        <View className="h-14 bg-surface border-t border-line px-6 flex-row items-center justify-between">
           {TABS.map((tab) => {
             const isActive = state.currentTab === tab.id;
             const Icon = tab.Icon;
             return (
               <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1">
-                <Icon size={20} color={isActive ? '#1A1A1A' : '#888888'} strokeWidth={isActive ? 2.5 : 2} />
-                <AppText variant="micro" className={`font-sans font-bold tracking-tight mt-0.5 ${isActive ? 'text-[#1A1A1A]' : 'text-[#888888]'}`}>
+                <Icon size={20} color={isActive ? palette.ink : palette.ink3} strokeWidth={isActive ? 2.5 : 2} />
+                <AppText variant="micro" className={`font-sans font-bold tracking-tight mt-0.5 ${isActive ? 'text-ink' : 'text-ink-3'}`}>
                   {tab.label}
                 </AppText>
               </Pressable>
@@ -622,7 +628,7 @@ function AppShell() {
           going through currentScreen routing, so it shows regardless of
           whatever screen/tab was active when it fires. */}
       {state.showOnboarding && (
-        <View className="absolute inset-0 bg-white z-50">
+        <View className="absolute inset-0 bg-canvas z-50">
           <SafeAreaView style={{ flex: 1 }}>
             <OnboardingScreen state={state} />
           </SafeAreaView>
@@ -634,7 +640,7 @@ function AppShell() {
           both are somehow open, setup (the one with unanswered questions)
           isn't buried underneath it. */}
       {state.showTour && (
-        <View className="absolute inset-0 bg-white z-50">
+        <View className="absolute inset-0 bg-canvas z-50">
           <SafeAreaView style={{ flex: 1 }}>
             <TourScreen state={state} />
           </SafeAreaView>
@@ -656,13 +662,14 @@ function AppShell() {
 // progress modal, onboarding, the auth gate), which all share zIndex 50 and
 // previously painted over toasts fired while they were open.
 function ToastLayer({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   if (!state.toastMessage) return null;
   return (
     <View pointerEvents="none" style={{ position: 'absolute', top: 56, left: 0, right: 0, alignItems: 'center', zIndex: 100 }}>
       <FadeInView>
-        <View className="flex-row items-center gap-2 bg-neutral-900 border border-neutral-800 py-2.5 px-4 rounded-full">
-          <Check size={12} color="#34d399" />
-          <AppText variant="label" className="text-white font-bold font-sans">{state.toastMessage}</AppText>
+        <View className="flex-row items-center gap-2 bg-ink border border-ink py-2.5 px-4 rounded-full">
+          <Check size={12} color={palette.success} />
+          <AppText variant="label" className="text-on-accent font-bold font-sans">{state.toastMessage}</AppText>
         </View>
       </FadeInView>
     </View>
@@ -671,6 +678,16 @@ function ToastLayer({ state }: { state: AppState }) {
 
 export default function App() {
   const [fontsLoaded] = useFonts(APP_FONTS);
+  // Read before first paint, alongside the fonts, so the app opens in the
+  // chosen accent instead of flashing navy first.
+  const [initialAccent, setInitialAccent] = React.useState<AccentId | null>(null);
+  React.useEffect(() => {
+    loadStoredAccent().then((saved) => {
+      // Demo preview only: ?accent=<id> shows the app in another accent.
+      const demo = ACCENTS.find((a) => a.id === DEMO_ACCENT);
+      setInitialAccent(demo ? demo.id : saved);
+    });
+  }, []);
 
   // app.config.js sets orientation: 'default' rather than 'portrait' so the
   // photo viewer can unlock landscape at runtime -- iOS refuses to rotate
@@ -699,20 +716,26 @@ export default function App() {
     }
   }, []);
 
-  if (!fontsLoaded) {
-    return <View style={{ flex: 1, backgroundColor: '#ffffff' }} />;
+  if (!fontsLoaded || !initialAccent) {
+    return <View style={{ flex: 1, backgroundColor: '#EFECE6' }} />;
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        {DEV_LAYOUT_LAB ? (
-          <SafeAreaView style={{ flex: 1 }}>
-            <DevLayoutLab />
-          </SafeAreaView>
-        ) : (
-          <AppShell />
-        )}
+        <ThemeProvider initialAccent={initialAccent}>
+          {DEV_LAYOUT_LAB ? (
+            <SafeAreaView style={{ flex: 1 }}>
+              <DevLayoutLab />
+            </SafeAreaView>
+          ) : DEMO_FONT_SCALE ? (
+            <FontScaleOverrideProvider scale={DEMO_FONT_SCALE}>
+              <AppShell />
+            </FontScaleOverrideProvider>
+          ) : (
+            <AppShell />
+          )}
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

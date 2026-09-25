@@ -10,10 +10,15 @@
  *   npm run shots -- --all                      every screen, iPhone font rendering
  *   npm run shots -- "s=home&ios=1" "s=settings&ios=1&max=1500"
  *   npm run shots -- --out=.shots/before --all  choose the folder (default .shots)
+ *   npm run shots -- --overflow --all "w=375&scale=1.5"
+ *       also list text that runs off the screen or is cut short with "...".
+ *       Any query after --all is appended to every screen's query.
  *
  * Per-query options (the app ignores them): fixed=1 phone height only,
  * max=N cap the height, clipH=N keep only the top N points, noseg=1 skip the
- * 1300pt slices written for tall screens.
+ * 1300pt slices written for tall screens, w=N phone width in points (375 for
+ * an iPhone SE; default 390). The app itself reads scale=1.5 (text size) and
+ * accent=<id>, so those go in the query too.
  *
  * Full-length capture works by growing the emulated viewport until nothing
  * scrolls, so a long screen comes out whole instead of cut at the fold.
@@ -32,7 +37,7 @@ const CHROME_CANDIDATES = [
   '/usr/bin/google-chrome',
 ].filter(Boolean);
 const CDP_PORT = 9333;
-const W = 390;
+const DEFAULT_W = 390;
 const H = 844;
 
 // Every screen the demo mode knows, with the capture options that suit it.
@@ -51,20 +56,28 @@ const ALL = [
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function parseArgs(argv) {
-  const opts = { out: path.join(ROOT, '.shots'), port: 8099, queries: [] };
+  const opts = { out: path.join(ROOT, '.shots'), port: 8099, queries: [], overflow: false };
+  const shared = [];
   for (const a of argv) {
     if (a === '--all') opts.queries.push(...ALL);
+    else if (a === '--overflow') opts.overflow = true;
     else if (a.startsWith('--out=')) opts.out = path.resolve(ROOT, a.slice(6));
     else if (a.startsWith('--port=')) opts.port = Number(a.slice(7));
+    else if (!new URLSearchParams(a.replace(/^\?/, '')).has('s')) shared.push(a.replace(/^\?/, ''));
     else opts.queries.push(a.replace(/^\?/, ''));
   }
+  // A query with no screen (e.g. "w=375&scale=1.5") applies to every screen.
+  if (shared.length) opts.queries = opts.queries.map((q) => [q, ...shared].join('&'));
   return opts;
 }
 
 // "s=home&empty=1&ios=1" -> "home_empty". Capture options stay out of the name.
 function fileNameFor(q) {
   const p = new URLSearchParams(q);
-  const extras = [...p.keys()].filter((k) => !['s', 'ios', 'fixed', 'max', 'clipH', 'noseg'].includes(k));
+  // A flag (=1) adds its name; anything else adds name+value, e.g. accent=plum -> "accentplum".
+  const extras = [...p.keys()]
+    .filter((k) => !['s', 'ios', 'fixed', 'max', 'clipH', 'noseg'].includes(k))
+    .map((k) => (p.get(k) === '1' ? k : k + p.get(k)));
   return [p.get('s') || 'screen', ...extras].join('_') + (p.get('ios') === '1' ? '' : '_web') + '.jpg';
 }
 
@@ -138,10 +151,32 @@ async function main() {
       return extra;
     })()`;
 
+    // Text past the right/left edge (outside sideways scrollers), and text
+    // cut short with an ellipsis. RN Web renders every Text as a div.
+    const OVERFLOW = `(() => {
+      const W = innerWidth, out = [];
+      const inScroller = (el) => {
+        for (let a = el.parentElement; a; a = a.parentElement)
+          if (/(auto|scroll)/.test(getComputedStyle(a).overflowX)) return true;
+        return false;
+      };
+      for (const el of document.querySelectorAll('div')) {
+        if (el.childElementCount || !el.textContent.trim()) continue;
+        const r = el.getBoundingClientRect();
+        if (!r.width) continue;
+        const text = JSON.stringify(el.textContent.trim().slice(0, 40));
+        if ((r.right > W + 1 || r.left < -1) && !inScroller(el)) out.push('off screen: ' + text);
+        else if (el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).textOverflow === 'ellipsis')
+          out.push('cut short: ' + text);
+      }
+      return out;
+    })()`;
+
     for (const q of opts.queries) {
       const p = new URLSearchParams(q);
       const cap = Number(p.get('max')) || 9000;
       const clipH = Number(p.get('clipH')) || 0;
+      const W = Number(p.get('w')) || DEFAULT_W;
       const file = path.join(opts.out, fileNameFor(q));
       let height = H;
       await send('Emulation.setDeviceMetricsOverride', { width: W, height, deviceScaleFactor: 2, mobile: true });
@@ -166,6 +201,7 @@ async function main() {
       );
       fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
       console.log(`${path.relative(ROOT, file)}  ${W}x${clipH || height}`);
+      if (opts.overflow) for (const line of await evaluate(OVERFLOW)) console.log(`    ${line}`);
 
       // Readable slices of tall screens, for close review.
       const SEG = 1300;

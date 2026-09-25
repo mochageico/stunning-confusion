@@ -5,6 +5,7 @@ import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppIconButton, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 // ============================================================================
 // SHOW ME AROUND
 //
@@ -76,6 +77,7 @@ const ANSWERS: { q: string; a: string }[] = [
 ];
 
 export default function TourScreen({ state }: { state: AppState }) {
+    const palette = useThemeColors();
   const { setShowTour } = state;
   const space = useScaledSpace();
   const scale = useFontScale();
@@ -83,19 +85,19 @@ export default function TourScreen({ state }: { state: AppState }) {
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView
-        className="flex-1 bg-white"
+        className="flex-1 bg-canvas"
         contentContainerClassName="p-5 pb-12"
         contentContainerStyle={{ gap: space(16) }}
       >
         <View
-          className="flex-row items-start justify-between border-b border-neutral-100"
+          className="flex-row items-start justify-between border-b border-hairline"
           style={{ paddingBottom: space(12), gap: space(10) }}
         >
           <View className="flex-1">
-            <AppText variant="micro" className="font-sans font-bold uppercase tracking-widest text-neutral-500">
+            <AppText variant="micro" className="font-sans font-bold uppercase tracking-widest text-ink-3">
               A quick look
             </AppText>
-            <AppText variant="display" className="font-serif font-black text-[#1A1A1A]">
+            <AppText variant="display" className="font-serif font-black text-ink">
               What's where
             </AppText>
           </View>
@@ -103,13 +105,13 @@ export default function TourScreen({ state }: { state: AppState }) {
             Icon={X}
             diameter={32}
             iconSize={14}
-            iconColor="#262626"
+            iconColor={palette.ink}
             onPress={() => setShowTour(false)}
-            className="rounded-full border border-neutral-200 bg-white shrink-0"
+            className="rounded-full border border-line bg-surface shrink-0"
           />
         </View>
 
-        <AppText variant="label" className="font-sans text-neutral-700 leading-relaxed">
+        <AppText variant="label" className="font-sans text-ink-2 leading-relaxed">
           You pick verses. Each day the app gives you a few to work on and brings older ones back before you'd forget
           them. Everything below just supports that.
         </AppText>
@@ -118,17 +120,17 @@ export default function TourScreen({ state }: { state: AppState }) {
           {PLACES.map(({ Icon, name, what }) => (
             <View
               key={name}
-              className="rounded-xl border border-[#E5E5E5] bg-white flex-row"
+              className="rounded-xl border border-line bg-surface flex-row"
               style={{ padding: space(12), gap: space(10), minHeight: MIN_TOUCH }}
             >
               <View className="shrink-0" style={{ paddingTop: space(2) }}>
-                <Icon size={Math.round(18 * scale)} color="#1A1A1A" />
+                <Icon size={Math.round(18 * scale)} color={palette.ink} />
               </View>
               <View className="flex-1" style={{ gap: space(3) }}>
-                <AppText variant="label" className="font-serif font-black text-[#1A1A1A]">
+                <AppText variant="label" className="font-serif font-black text-ink">
                   {name}
                 </AppText>
-                <AppText variant="caption" className="font-sans text-neutral-600 leading-relaxed">
+                <AppText variant="caption" className="font-sans text-ink-2 leading-relaxed">
                   {what}
                 </AppText>
               </View>
@@ -137,19 +139,19 @@ export default function TourScreen({ state }: { state: AppState }) {
         </View>
 
         <View style={{ gap: space(10) }}>
-          <AppText variant="section" className="font-sans font-bold uppercase tracking-wider text-neutral-700">
+          <AppText variant="section" className="font-sans font-bold uppercase tracking-wider text-ink-2">
             Common questions
           </AppText>
           {ANSWERS.map(({ q, a }) => (
             <View
               key={q}
-              className="rounded-xl bg-[#FBF9F6] border border-[#E5E5E5]"
+              className="rounded-xl bg-surface-2 border border-line"
               style={{ padding: space(12), gap: space(4) }}
             >
-              <AppText variant="label" className="font-sans font-bold text-[#1A1A1A]">
+              <AppText variant="label" className="font-sans font-bold text-ink">
                 {q}
               </AppText>
-              <AppText variant="caption" className="font-sans text-neutral-600 leading-relaxed">
+              <AppText variant="caption" className="font-sans text-ink-2 leading-relaxed">
                 {a}
               </AppText>
             </View>

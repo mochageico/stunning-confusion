@@ -10,6 +10,7 @@ import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
 import { AppButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 // Derived from the single source of truth (data.ts) instead of its own
 // hardcoded list -- previously listed NIV/NKJV/NLT despite zero real text
 // ever being imported for them (see scripts/import-bible/).
@@ -28,6 +29,7 @@ const SUB_MODES = [
 ];
 
 export default function RecordScreen({ state }: { state: AppState }) {
+    const palette = useThemeColors();
   const {
     isRecording,
     isRecordingPaused,
@@ -124,23 +126,23 @@ export default function RecordScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
         {/* Header Info */}
-        <View className="border-b border-[#E5E5E5] pb-2 flex-row justify-between items-end">
+        <View className="border-b border-line pb-2 flex-row justify-between items-end">
           <View>
-            <AppText variant="micro" className="uppercase tracking-wider font-bold text-neutral-400 font-sans">
+            <AppText variant="micro" className="uppercase tracking-wider font-bold text-ink-3 font-sans">
               TELEPROMPTER VERIFICATION
             </AppText>
-            <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">
+            <AppText variant="title" className="font-serif font-bold text-ink">
               {subMode === 'record' ? 'Record Recitation' : 'Tag Imported Audio'}
             </AppText>
           </View>
           {/* Active Indicator */}
           {isRecording && (
             <PulseView>
-              <View className="flex-row items-center gap-1.5 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
-                <View className="w-2 h-2 bg-red-600 rounded-full" />
-                <AppText variant="label" className="text-red-600 font-bold">{formatTime(recordingSeconds)}</AppText>
+              <View className="flex-row items-center gap-1.5 bg-danger-soft border border-danger/30 px-2 py-0.5 rounded-full">
+                <View className="w-2 h-2 bg-danger rounded-full" />
+                <AppText variant="label" className="text-danger font-bold">{formatTime(recordingSeconds)}</AppText>
               </View>
             </PulseView>
           )}
@@ -150,7 +152,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
             uppercase-extrabold-tracked `section`: three emphasis treatments
             stacked on a two-item switch is what made the top of this screen
             shout. The dark fill already says which one is active. */}
-        <View className="flex-row bg-neutral-100 border border-neutral-200 rounded-xl" style={{ padding: space(3), gap: space(3) }}>
+        <View className="flex-row bg-surface-2 border border-line rounded-xl" style={{ padding: space(3), gap: space(3) }}>
           {SUB_MODES.map(({ id, label, Icon }) => {
             const active = subMode === id;
             return (
@@ -159,15 +161,15 @@ export default function RecordScreen({ state }: { state: AppState }) {
                 size="sm"
                 onPress={() => setSubMode(id)}
                 disabled={isRecording}
-                className={`flex-1 rounded-lg ${active ? 'bg-[#1A1A1A]' : ''} ${isRecording ? 'opacity-60' : ''}`}
+                className={`flex-1 rounded-lg ${active ? 'bg-accent' : ''} ${isRecording ? 'opacity-60' : ''}`}
                 // `sm`'s 10pt side padding is dead weight on a flex-1 segment
                 // -- it centres itself anyway -- and at 1.5x it was the
                 // difference between "Import audio" fitting on one line and
                 // wrapping to two while its neighbour stayed on one.
                 style={{ minHeight: space(36), paddingHorizontal: space(6) }}
               >
-                <Icon size={Math.round(13 * scale)} color={active ? '#FFFFFF' : '#737373'} />
-                <AppText variant="label" className={`font-sans font-bold ${active ? 'text-white' : 'text-neutral-500'}`}>
+                <Icon size={Math.round(13 * scale)} color={active ? palette.onAccent : palette.ink3} />
+                <AppText variant="label" className={`font-sans font-bold ${active ? 'text-on-accent' : 'text-ink-3'}`}>
                   {label}
                 </AppText>
               </AppButton>
@@ -183,10 +185,10 @@ export default function RecordScreen({ state }: { state: AppState }) {
             question -- which passage is this -- so they read as one thing now:
             one heading, one card, a hairline between reference and range. */}
         <View
-          className="border border-[#E5E5E5] rounded-2xl bg-[#FBF9F6]"
+          className="border border-line rounded-2xl bg-surface-2"
           style={{ padding: space(12), gap: space(10), opacity: isRecording ? 0.55 : 1 }}
         >
-          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-neutral-500">
+          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-ink-3">
             {subMode === 'record' ? "What you're reciting" : 'What this audio is'}
           </AppText>
 
@@ -230,7 +232,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
             </View>
           </View>
 
-          <View className="border-t border-[#E5E5E5]" />
+          <View className="border-t border-line" />
 
           {/* Verse range — plain typed numbers, like the "Add Verses" box on
               the Group Plan screen, instead of scrolling two long dropdowns.
@@ -238,7 +240,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
               as a plain "of 31" when the whole chapter is already selected,
               and as the tappable way back to it when it isn't. */}
           <View className={stacked ? '' : 'flex-row items-center'} style={{ gap: space(8) }}>
-            <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-neutral-500 shrink-0">
+            <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-ink-3 shrink-0">
               Verses
             </AppText>
             <View className={stacked ? 'flex-row items-center' : 'flex-1 flex-row items-center'} style={{ gap: space(8) }}>
@@ -255,11 +257,11 @@ export default function RecordScreen({ state }: { state: AppState }) {
                     if (clamped > rangeEndValue) setRecordingRangeEnd(clamped);
                   }}
                   onBlur={() => setStartText(String(rangeStartValue))}
-                  className="w-full bg-white border border-neutral-300 rounded-lg text-center font-bold text-[#1A1A1A]"
+                  className="w-full bg-surface border border-line-strong rounded-lg text-center font-bold text-ink"
                   style={{ paddingVertical: space(9), paddingHorizontal: space(8) }}
                 />
               </View>
-              <AppText variant="micro" className="text-neutral-400 font-sans shrink-0">to</AppText>
+              <AppText variant="micro" className="text-ink-3 font-sans shrink-0">to</AppText>
               <View className="flex-1">
                 <NumericInput
                   value={endText}
@@ -272,13 +274,13 @@ export default function RecordScreen({ state }: { state: AppState }) {
                     setRecordingRangeEnd(clamped);
                   }}
                   onBlur={() => setEndText(String(rangeEndValue))}
-                  className="w-full bg-white border border-neutral-300 rounded-lg text-center font-bold text-[#1A1A1A]"
+                  className="w-full bg-surface border border-line-strong rounded-lg text-center font-bold text-ink"
                   style={{ paddingVertical: space(9), paddingHorizontal: space(8) }}
                 />
               </View>
               {recordingChapterVerses.length > 0 &&
                 (isRecordingFullChapterRange ? (
-                  <AppText variant="micro" className="font-sans text-neutral-400 shrink-0">
+                  <AppText variant="micro" className="font-sans text-ink-3 shrink-0">
                     of {recordingChapterVerses.length}
                   </AppText>
                 ) : (
@@ -292,7 +294,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
                     hitSlop={8}
                     className="shrink-0"
                   >
-                    <AppText variant="micro" className="font-sans font-bold text-indigo-600">
+                    <AppText variant="micro" className="font-sans font-bold text-accent">
                       All {recordingChapterVerses.length}
                     </AppText>
                   </Pressable>
@@ -307,11 +309,11 @@ export default function RecordScreen({ state }: { state: AppState }) {
                 actually recording (this is the whole mechanism behind automatic
                 per-verse timestamps, so it needs to be impossible to miss). */}
             {isRecording && (
-              <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-3" style={{ gap: 2 }}>
-                <AppText variant="label" className="font-sans font-bold text-indigo-900">
+              <View className="bg-accent-soft border border-accent/30 rounded-xl p-3" style={{ gap: 2 }}>
+                <AppText variant="label" className="font-sans font-bold text-accent">
                   💡 Tap each verse number the instant you begin reciting it
                 </AppText>
-                <AppText variant="caption" className="font-sans text-indigo-700">
+                <AppText variant="caption" className="font-sans text-accent">
                   This times your recitation automatically. Verse {recordingSelectedVerses[0]?.verse ?? 1} is already
                   marked{recordingSelectedVerses.length > 1 ? ', so start tapping from the next one.' : '.'}{' '}
                   {taggedVerseCount}/{recordingSelectedVerses.length} verses marked.
@@ -321,16 +323,16 @@ export default function RecordScreen({ state }: { state: AppState }) {
 
             {/* Teleprompter Scrollable text display */}
             <ScrollView
-              className="border border-[#1A1A1A] rounded-xl bg-[#F3F2F1]/35 p-4"
+              className="border border-ink rounded-xl bg-surface-2 p-4"
               style={{ maxHeight: 380 }}
               contentContainerStyle={{ gap: 16 }}
             >
-              <AppText variant="micro" className="uppercase font-bold text-neutral-400 tracking-wider font-sans mb-2">
+              <AppText variant="micro" className="uppercase font-bold text-ink-3 tracking-wider font-sans mb-2">
                 TELEPROMPTER SCRIPT
               </AppText>
 
               {recordingSelectedVerses.length === 0 ? (
-                <AppText variant="label" className="text-neutral-400 italic">
+                <AppText variant="label" className="text-ink-3 italic">
                   No scripture loaded for {recordingTranslation} — try ESV, KJV, or WEB, the currently imported translations.
                 </AppText>
               ) : (
@@ -341,19 +343,19 @@ export default function RecordScreen({ state }: { state: AppState }) {
                       key={v.verse}
                       disabled={!isRecording}
                       onPress={() => handleMarkVerseTap(v.verse)}
-                      className={`flex-row gap-2 -m-1 p-1 rounded-lg ${isRecording && isTapped ? 'bg-emerald-50' : ''}`}
+                      className={`flex-row gap-2 -m-1 p-1 rounded-lg ${isRecording && isTapped ? 'bg-success-soft' : ''}`}
                     >
                       <View
                         className={`shrink-0 h-5 min-w-5 px-1 rounded items-center justify-center flex-row gap-0.5 ${
-                          isRecording ? (isTapped ? 'bg-emerald-600' : 'bg-indigo-600') : ''
+                          isRecording ? (isTapped ? 'bg-success' : 'bg-accent') : ''
                         }`}
                       >
-                        {isRecording && isTapped && <Check size={10} color="#FFFFFF" />}
-                        <AppText variant="caption" className={`font-sans font-bold ${ isRecording ? 'text-white' : 'text-neutral-400' }`} >
+                        {isRecording && isTapped && <Check size={10} color={palette.onAccent} />}
+                        <AppText variant="caption" className={`font-sans font-bold ${ isRecording ? 'text-on-accent' : 'text-ink-3' }`} >
                           {v.verse}
                         </AppText>
                       </View>
-                      <AppText variant="title" className="flex-1 font-serif leading-relaxed text-neutral-800">{v.text}</AppText>
+                      <AppText variant="title" className="flex-1 font-serif leading-relaxed text-ink">{v.text}</AppText>
                     </Pressable>
                   );
                 })
@@ -363,14 +365,14 @@ export default function RecordScreen({ state }: { state: AppState }) {
             {/* Recording Animation Waveform Display */}
             {isRecording && (
               <PulseView style={isRecordingPaused ? { opacity: 1 } : undefined}>
-                <View className="bg-[#1A1A1A] p-3 rounded-xl flex-row items-center justify-between gap-3.5">
-                  <AppText variant="micro" className="uppercase font-bold tracking-wider font-sans text-neutral-400">
+                <View className="bg-surface-2 border border-line p-3 rounded-xl flex-row items-center justify-between gap-3.5">
+                  <AppText variant="micro" className="uppercase font-bold tracking-wider font-sans text-ink-3">
                     {isRecordingPaused ? 'PAUSED' : 'AUDIO SIGNAL'}
                   </AppText>
                   <View className="flex-1 items-center">
                     <WaveBars active={isRecording && !isRecordingPaused} count={13} />
                   </View>
-                  <AppText variant="label" className="font-mono font-bold text-red-400">{formatTime(recordingSeconds)}</AppText>
+                  <AppText variant="label" className="font-mono font-bold text-danger">{formatTime(recordingSeconds)}</AppText>
                 </View>
               </PulseView>
             )}
@@ -378,32 +380,32 @@ export default function RecordScreen({ state }: { state: AppState }) {
             {/* Recording Controls */}
             <View className="pt-2">
               {!isRecording ? (
-                <AppButton size="lg" onPress={handleStartRecording} className="w-full bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-2 shadow">
-                  <Mic size={16} color="#FFFFFF" />
-                  <AppText variant="body" className="text-white font-sans font-bold ">Tap to Record recitation</AppText>
+                <AppButton size="lg" onPress={handleStartRecording} className="w-full bg-accent rounded-xl flex-row items-center justify-center gap-2 shadow">
+                  <Mic size={16} color={palette.onAccent} />
+                  <AppText variant="body" className="text-on-accent font-sans font-bold ">Tap to Record recitation</AppText>
                 </AppButton>
               ) : showResetConfirm ? (
-                <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
-                  <AppText variant="caption" className="font-sans font-bold text-red-800">Discard this recording?</AppText>
-                  <AppText variant="micro" className="font-sans text-red-700/80 leading-relaxed">
+                <View className="bg-danger-soft border border-danger/30 rounded-xl p-3" style={{ gap: 8 }}>
+                  <AppText variant="caption" className="font-sans font-bold text-danger">Discard this recording?</AppText>
+                  <AppText variant="micro" className="font-sans text-danger leading-relaxed">
                     You'll lose everything recorded so far ({formatTime(recordingSeconds)}) and any verse taps. This
                     can't be undone.
                   </AppText>
                   <View className="flex-row gap-2 justify-end pt-1">
                     <Pressable
                       onPress={() => setShowResetConfirm(false)}
-                      className="px-3 py-1.5 border border-neutral-300 rounded-lg"
+                      className="px-3 py-1.5 border border-line-strong rounded-lg"
                     >
-                      <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
+                      <AppText variant="caption" className="text-ink-2 font-sans font-bold ">Cancel</AppText>
                     </Pressable>
                     <Pressable
                       onPress={() => {
                         handleResetRecording();
                         setShowResetConfirm(false);
                       }}
-                      className="px-3 py-1.5 bg-red-600 rounded-lg"
+                      className="px-3 py-1.5 bg-danger rounded-lg"
                     >
-                      <AppText variant="caption" className="text-white font-sans font-bold ">Discard</AppText>
+                      <AppText variant="caption" className="text-on-accent font-sans font-bold ">Discard</AppText>
                     </Pressable>
                   </View>
                 </View>
@@ -411,23 +413,23 @@ export default function RecordScreen({ state }: { state: AppState }) {
                 <View className="flex-row gap-2">
                   <Pressable
                     onPress={() => setShowResetConfirm(true)}
-                    className="w-12 items-center justify-center border border-neutral-300 rounded-xl"
+                    className="w-12 items-center justify-center border border-line-strong rounded-xl"
                   >
-                    <RotateCcw size={16} color="#737373" />
+                    <RotateCcw size={16} color={palette.ink3} />
                   </Pressable>
-                  <AppButton size="lg" onPress={isRecordingPaused ? handleResumeRecording : handlePauseRecording} className="flex-1 bg-neutral-800 rounded-xl flex-row items-center justify-center gap-2 shadow">
-                    {isRecordingPaused ? <Play size={16} color="#FFFFFF" /> : <Pause size={16} color="#FFFFFF" />}
-                    <AppText variant="body" className="text-white font-sans font-bold ">
+                  <AppButton size="lg" onPress={isRecordingPaused ? handleResumeRecording : handlePauseRecording} className="flex-1 bg-ink rounded-xl flex-row items-center justify-center gap-2 shadow">
+                    {isRecordingPaused ? <Play size={16} color={palette.onAccent} /> : <Pause size={16} color={palette.onAccent} />}
+                    <AppText variant="body" className="text-on-accent font-sans font-bold ">
                       {isRecordingPaused ? 'Resume' : 'Pause'}
                     </AppText>
                   </AppButton>
                   <PulseView>
                     <Pressable
                       onPress={handleStopRecording}
-                      className="w-28 bg-red-600 py-3.5 px-4 rounded-xl flex-row items-center justify-center gap-2 shadow-lg"
+                      className="w-28 bg-danger py-3.5 px-4 rounded-xl flex-row items-center justify-center gap-2 shadow-lg"
                     >
-                      <View className="w-3 h-3 bg-white rounded-sm" />
-                      <AppText variant="body" className="text-white font-sans font-bold ">Stop</AppText>
+                      <View className="w-3 h-3 bg-surface rounded-sm" />
+                      <AppText variant="body" className="text-on-accent font-sans font-bold ">Stop</AppText>
                     </Pressable>
                   </PulseView>
                 </View>
@@ -438,43 +440,43 @@ export default function RecordScreen({ state }: { state: AppState }) {
           <>
             {/* IMPORT-AUDIO TAGGING SUB-MODE */}
             {!importedAudioUri ? (
-              <View className="items-center gap-3 py-8 border-2 border-dashed border-neutral-200 rounded-xl bg-neutral-50/50">
-                <View className="w-12 h-12 rounded-full bg-white border border-neutral-200 items-center justify-center">
-                  <FileAudio size={20} color="#737373" />
+              <View className="items-center gap-3 py-8 border-2 border-dashed border-line rounded-xl bg-surface-2">
+                <View className="w-12 h-12 rounded-full bg-surface border border-line items-center justify-center">
+                  <FileAudio size={20} color={palette.ink3} />
                 </View>
                 <View className="items-center px-6" style={{ gap: 2 }}>
-                  <AppText variant="label" className="font-sans font-bold text-neutral-700">No audio file loaded yet</AppText>
-                  <AppText variant="caption" className="font-sans text-neutral-400 text-center leading-relaxed">
+                  <AppText variant="label" className="font-sans font-bold text-ink-2">No audio file loaded yet</AppText>
+                  <AppText variant="caption" className="font-sans text-ink-3 text-center leading-relaxed">
                     Pick an existing recitation from your device, then listen back and tap each verse as it starts —
                     just like recording live, but for audio you already have.
                   </AppText>
                 </View>
-                <AppButton size="md" onPress={pickImportAudio} className="flex-row items-center gap-2 bg-[#1A1A1A] rounded-xl">
-                  <Folder size={14} color="#FFFFFF" />
-                  <AppText variant="label" className="text-white font-sans font-bold ">Choose Audio File</AppText>
+                <AppButton size="md" onPress={pickImportAudio} className="flex-row items-center gap-2 bg-accent rounded-xl">
+                  <Folder size={14} color={palette.onAccent} />
+                  <AppText variant="label" className="text-on-accent font-sans font-bold ">Choose Audio File</AppText>
                 </AppButton>
               </View>
             ) : (
               <>
                 {/* Loaded-file summary + swap option */}
-                <View className="flex-row items-center justify-between bg-neutral-50 border border-neutral-200 rounded-xl p-2.5">
+                <View className="flex-row items-center justify-between bg-surface-2 border border-line rounded-xl p-2.5">
                   <View className="flex-row items-center gap-2 flex-1 pr-2">
-                    <FileAudio size={14} color="#4f46e5" />
-                    <AppText variant="label" className="font-sans font-bold text-neutral-800 flex-1" numberOfLines={1}>
+                    <FileAudio size={14} color={palette.accent} />
+                    <AppText variant="label" className="font-sans font-bold text-ink flex-1" numberOfLines={1}>
                       {importedAudioName}
                     </AppText>
                   </View>
                   <Pressable onPress={pickImportAudio}>
-                    <AppText variant="caption" className="font-sans font-bold text-indigo-600">Change</AppText>
+                    <AppText variant="caption" className="font-sans font-bold text-accent">Change</AppText>
                   </Pressable>
                 </View>
 
                 {/* Tagging instructions */}
-                <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-3" style={{ gap: 2 }}>
-                  <AppText variant="label" className="font-sans font-bold text-indigo-900">
+                <View className="bg-accent-soft border border-accent/30 rounded-xl p-3" style={{ gap: 2 }}>
+                  <AppText variant="label" className="font-sans font-bold text-accent">
                     💡 Play the audio, tap each verse number the instant it begins
                   </AppText>
-                  <AppText variant="caption" className="font-sans text-indigo-700">
+                  <AppText variant="caption" className="font-sans text-accent">
                     Unlike live recording, no verse is pre-marked — tap each one, whenever it actually starts.{'  '}
                     {importTaggedCount}/{recordingSelectedVerses.length} verses tagged.
                   </AppText>
@@ -482,16 +484,16 @@ export default function RecordScreen({ state }: { state: AppState }) {
 
                 {/* Teleprompter, tap-to-mark against PLAYBACK position */}
                 <ScrollView
-                  className="border border-[#1A1A1A] rounded-xl bg-[#F3F2F1]/35 p-4"
+                  className="border border-ink rounded-xl bg-surface-2 p-4"
                   style={{ maxHeight: 320 }}
                   contentContainerStyle={{ gap: 16 }}
                 >
-                  <AppText variant="micro" className="uppercase font-bold text-neutral-400 tracking-wider font-sans mb-2">
+                  <AppText variant="micro" className="uppercase font-bold text-ink-3 tracking-wider font-sans mb-2">
                     TELEPROMPTER SCRIPT
                   </AppText>
 
                   {recordingSelectedVerses.length === 0 ? (
-                    <AppText variant="label" className="text-neutral-400 italic">
+                    <AppText variant="label" className="text-ink-3 italic">
                       No scripture loaded for {recordingTranslation} — try ESV, KJV, or WEB, the currently
                       imported translations.
                     </AppText>
@@ -502,17 +504,17 @@ export default function RecordScreen({ state }: { state: AppState }) {
                         <Pressable
                           key={v.verse}
                           onPress={() => handleMarkImportTap(v.verse)}
-                          className={`flex-row gap-2 -m-1 p-1 rounded-lg ${isTapped ? 'bg-emerald-50' : ''}`}
+                          className={`flex-row gap-2 -m-1 p-1 rounded-lg ${isTapped ? 'bg-success-soft' : ''}`}
                         >
                           <View
                             className={`shrink-0 h-5 min-w-5 px-1 rounded items-center justify-center flex-row gap-0.5 ${
-                              isTapped ? 'bg-emerald-600' : 'bg-indigo-600'
+                              isTapped ? 'bg-success' : 'bg-accent'
                             }`}
                           >
-                            {isTapped && <Check size={10} color="#FFFFFF" />}
-                            <AppText variant="caption" className="font-sans font-bold text-white">{v.verse}</AppText>
+                            {isTapped && <Check size={10} color={palette.onAccent} />}
+                            <AppText variant="caption" className="font-sans font-bold text-on-accent">{v.verse}</AppText>
                           </View>
-                          <AppText variant="title" className="flex-1 font-serif leading-relaxed text-neutral-800">{v.text}</AppText>
+                          <AppText variant="title" className="flex-1 font-serif leading-relaxed text-ink">{v.text}</AppText>
                         </Pressable>
                       );
                     })
@@ -520,58 +522,58 @@ export default function RecordScreen({ state }: { state: AppState }) {
                 </ScrollView>
 
                 {/* Playback transport */}
-                <View className="bg-[#1A1A1A] p-3 rounded-xl" style={{ gap: 10 }}>
+                <View className="bg-accent p-3 rounded-xl" style={{ gap: 10 }}>
                   <View className="flex-row justify-between items-center">
-                    <AppText variant="micro" className="uppercase font-bold tracking-wider font-sans text-neutral-400">
+                    <AppText variant="micro" className="uppercase font-bold tracking-wider font-sans text-on-accent/75">
                       PLAYBACK
                     </AppText>
-                    <AppText variant="label" className="font-mono font-bold text-white">
+                    <AppText variant="label" className="font-mono font-bold text-on-accent">
                       {formatTime(Math.floor(importPlayerStatus.currentTime))} / {formatTime(Math.floor(importDuration))}
                     </AppText>
                   </View>
-                  <View className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden">
-                    <View className="bg-white h-full" style={{ width: `${Math.min(100, importProgress)}%` }} />
+                  <View className="w-full bg-on-accent/20 h-1.5 rounded-full overflow-hidden">
+                    <View className="bg-surface h-full" style={{ width: `${Math.min(100, importProgress)}%` }} />
                   </View>
                   <View className="flex-row items-center justify-center gap-4 pt-1">
                     <Pressable
                       onPress={() => seekImportAudioBy(-5)}
-                      className="w-9 h-9 rounded-full border border-white/25 items-center justify-center"
+                      className="w-9 h-9 rounded-full border border-on-accent/25 items-center justify-center"
                     >
-                      <AppText variant="caption" className="font-black font-sans text-white">-5s</AppText>
+                      <AppText variant="caption" className="font-black font-sans text-on-accent">-5s</AppText>
                     </Pressable>
                     <Pressable
                       onPress={toggleImportPlayback}
-                      className="w-12 h-12 rounded-full bg-white items-center justify-center"
+                      className="w-12 h-12 rounded-full bg-surface items-center justify-center"
                     >
                       {importPlayerStatus.playing ? (
-                        <Pause size={18} color="#1A1A1A" />
+                        <Pause size={18} color={palette.ink} />
                       ) : (
-                        <Play size={18} color="#1A1A1A" style={{ marginLeft: 2 }} />
+                        <Play size={18} color={palette.ink} style={{ marginLeft: 2 }} />
                       )}
                     </Pressable>
                     <Pressable
                       onPress={() => seekImportAudioBy(5)}
-                      className="w-9 h-9 rounded-full border border-white/25 items-center justify-center"
+                      className="w-9 h-9 rounded-full border border-on-accent/25 items-center justify-center"
                     >
-                      <AppText variant="caption" className="font-black font-sans text-white">+5s</AppText>
+                      <AppText variant="caption" className="font-black font-sans text-on-accent">+5s</AppText>
                     </Pressable>
                   </View>
                 </View>
 
                 {/* Tagging controls */}
                 <View className="flex-row gap-2">
-                  <AppButton size="md" onPress={resetImportTaps} disabled={importTaggedCount === 0} className={`flex-1 border border-neutral-300 rounded-xl flex-row items-center justify-center gap-1.5 ${ importTaggedCount === 0 ? 'opacity-40' : '' }`}>
-                    <RotateCcw size={13} color="#525252" />
-                    <AppText variant="label" className="font-sans font-bold text-neutral-600">Reset Tags</AppText>
+                  <AppButton size="md" onPress={resetImportTaps} disabled={importTaggedCount === 0} className={`flex-1 border border-line-strong rounded-xl flex-row items-center justify-center gap-1.5 ${ importTaggedCount === 0 ? 'opacity-40' : '' }`}>
+                    <RotateCcw size={13} color={palette.ink2} />
+                    <AppText variant="label" className="font-sans font-bold text-ink-2">Reset Tags</AppText>
                   </AppButton>
-                  <AppButton size="md" onPress={handleFinishImportTagging} disabled={importTaggedCount === 0} className={`flex-[2] bg-[#1A1A1A] rounded-xl flex-row items-center justify-center gap-1.5 ${ importTaggedCount === 0 ? 'opacity-40' : '' }`}>
-                    <Check size={14} color="#FFFFFF" />
-                    <AppText variant="body" className="text-white font-sans font-bold ">Finish & Save Recitation</AppText>
+                  <AppButton size="md" onPress={handleFinishImportTagging} disabled={importTaggedCount === 0} className={`flex-[2] bg-accent rounded-xl flex-row items-center justify-center gap-1.5 ${ importTaggedCount === 0 ? 'opacity-40' : '' }`}>
+                    <Check size={14} color={palette.onAccent} />
+                    <AppText variant="body" className="text-on-accent font-sans font-bold ">Finish & Save Recitation</AppText>
                   </AppButton>
                 </View>
 
                 <Pressable onPress={clearImportedAudio} className="items-center py-1">
-                  <AppText variant="caption" className="text-neutral-400 font-bold">Remove this file</AppText>
+                  <AppText variant="caption" className="text-ink-3 font-bold">Remove this file</AppText>
                 </Pressable>
               </>
             )}
@@ -583,16 +585,16 @@ export default function RecordScreen({ state }: { state: AppState }) {
             about to make a new one. Same row layout/behavior as Profile's
             "Recorded Chapters" list (tap opens RecordingDetailScreen, the
             small play button plays it in place without navigating). */}
-        <View className="gap-2 pt-2 border-t border-neutral-100">
+        <View className="gap-2 pt-2 border-t border-hairline">
           <View className="flex-row items-center px-1">
-            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
+            <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">
               Prior Recordings ({userRecordings.length})
             </AppText>
           </View>
 
           {userRecordings.length === 0 ? (
-            <View className="items-center p-4 bg-[#F3F2F1]/55 rounded-xl border border-dashed border-[#E5E5E5]">
-              <AppText variant="label" className="text-[#888]">No recorded chapters yet — record or import one above!</AppText>
+            <View className="items-center p-4 bg-surface-2 rounded-xl border border-dashed border-line">
+              <AppText variant="label" className="text-ink-3">No recorded chapters yet — record or import one above!</AppText>
             </View>
           ) : (
             <View style={{ gap: 8 }}>
@@ -605,7 +607,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
                       setSelectedRecording(rec);
                       navigateTo('recordingDetail');
                     }}
-                    className="border border-[#E5E5E5] rounded-xl p-3 bg-white gap-2"
+                    className="border border-line rounded-xl p-3 bg-surface gap-2"
                   >
                     <View className="flex-row items-center justify-between">
                       <View className="flex-1 pr-2">
@@ -614,16 +616,16 @@ export default function RecordScreen({ state }: { state: AppState }) {
                               chapter name, so the weight distinguished nothing
                               -- it just made a quiet list of past work read as
                               a wall of headlines. */}
-                          <AppText variant="label" className="font-sans font-medium text-[#1A1A1A] leading-tight">
+                          <AppText variant="label" className="font-sans font-medium text-ink leading-tight">
                             {recordingLabel(rec)}
                           </AppText>
                           {rec.sourceType === 'imported' && (
-                            <AppText variant="micro" className="bg-indigo-50 text-indigo-600 font-sans border border-indigo-200 px-1.5 py-0.5 rounded font-bold uppercase">
+                            <AppText variant="micro" className="bg-accent-soft text-accent font-sans border border-accent/30 px-1.5 py-0.5 rounded font-bold uppercase">
                               Imported
                             </AppText>
                           )}
                         </View>
-                        <AppText variant="micro" className="font-sans text-neutral-400 mt-0.5">
+                        <AppText variant="micro" className="font-sans text-ink-3 mt-0.5">
                           {rec.date} • {rec.translation} • {rec.duration} seconds
                         </AppText>
                       </View>
@@ -638,20 +640,20 @@ export default function RecordScreen({ state }: { state: AppState }) {
                           }
                         }}
                         className={`w-7 h-7 rounded-full items-center justify-center shrink-0 ${
-                          isPlaying ? 'bg-[#1A1A1A]' : 'border border-[#1A1A1A]'
+                          isPlaying ? 'bg-accent' : 'border border-ink'
                         }`}
                       >
                         {isPlaying ? (
-                          <Pause size={12} color="#FFFFFF" />
+                          <Pause size={12} color={palette.onAccent} />
                         ) : (
-                          <Play size={12} color="#1A1A1A" style={{ marginLeft: 2 }} />
+                          <Play size={12} color={palette.ink} style={{ marginLeft: 2 }} />
                         )}
                       </Pressable>
                     </View>
 
                     {isPlaying && (
-                      <View className="w-full bg-neutral-100 h-1.5 rounded-full overflow-hidden">
-                        <View className="bg-[#1A1A1A] h-full" style={{ width: `${playingRecProgress}%` }} />
+                      <View className="w-full bg-surface-2 h-1.5 rounded-full overflow-hidden">
+                        <View className="bg-accent h-full" style={{ width: `${playingRecProgress}%` }} />
                       </View>
                     )}
                   </Pressable>

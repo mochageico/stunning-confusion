@@ -5,6 +5,7 @@ import { Eraser } from 'lucide-react-native';
 
 import { AppButton, AppText } from './design';
 
+import { useThemeColors } from './theme';
 // ============================================================================
 // DOODLE CANVAS -- deliberate backbone/v1, not a full drawing tool.
 // ----------------------------------------------------------------------------
@@ -29,6 +30,7 @@ interface DoodleCanvasProps {
 }
 
 export default function DoodleCanvas({ strokes, onChange }: DoodleCanvasProps) {
+    const palette = useThemeColors();
   const [liveStroke, setLiveStroke] = useState<string>('');
   const pointsRef = useRef<string[]>([]);
 
@@ -66,18 +68,18 @@ export default function DoodleCanvas({ strokes, onChange }: DoodleCanvasProps) {
       <View
         {...panResponder.panHandlers}
         style={{ width: CANVAS_SIZE, height: CANVAS_SIZE }}
-        className="bg-white border-2 border-[#1A1A1A] rounded-xl overflow-hidden"
+        className="bg-surface border-2 border-ink rounded-xl overflow-hidden"
       >
         <Svg width={CANVAS_SIZE} height={CANVAS_SIZE}>
           {strokes.map((d, i) => (
-            <Path key={i} d={d} stroke="#1A1A1A" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <Path key={i} d={d} stroke={palette.ink} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
           ))}
-          {liveStroke !== '' && <Path d={liveStroke} stroke="#1A1A1A" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />}
+          {liveStroke !== '' && <Path d={liveStroke} stroke={palette.ink} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />}
         </Svg>
       </View>
-      <AppButton size="md" onPress={() => onChange([])} disabled={strokes.length === 0} className={`flex-row items-center justify-center gap-1.5 rounded-lg border ${strokes.length === 0 ? 'border-neutral-200' : 'border-neutral-300'}`}>
-        <Eraser size={13} color={strokes.length === 0 ? '#d4d4d4' : '#525252'} />
-        <AppText variant="caption" className={`font-sans font-bold ${strokes.length === 0 ? 'text-neutral-300' : 'text-neutral-600'}`}>Clear</AppText>
+      <AppButton size="md" onPress={() => onChange([])} disabled={strokes.length === 0} className={`flex-row items-center justify-center gap-1.5 rounded-lg border ${strokes.length === 0 ? 'border-line' : 'border-line-strong'}`}>
+        <Eraser size={13} color={strokes.length === 0 ? palette.lineStrong : palette.ink2} />
+        <AppText variant="caption" className={`font-sans font-bold ${strokes.length === 0 ? 'text-ink-3' : 'text-ink-2'}`}>Clear</AppText>
       </AppButton>
     </View>
   );

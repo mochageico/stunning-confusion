@@ -48,9 +48,9 @@ export function HelpTooltip({ text }: { text: string }) {
     <>
       <Pressable
         onPress={() => setShow(true)}
-        className="w-4 h-4 rounded-full border border-neutral-300 items-center justify-center bg-white/95 ml-1.5 shrink-0"
+        className="w-4 h-4 rounded-full border border-line-strong items-center justify-center bg-on-accent/95 ml-1.5 shrink-0"
       >
-        <AppText variant="micro" className="font-sans font-black text-neutral-400">?</AppText>
+        <AppText variant="micro" className="font-sans font-black text-ink-3">?</AppText>
       </Pressable>
       <Modal visible={show} transparent animationType="none" onRequestClose={() => setShow(false)}>
         {/* RN-Web's Modal wraps children in a container that defaults to
@@ -68,8 +68,8 @@ export function HelpTooltip({ text }: { text: string }) {
         >
           {/* Swallows the tap so it doesn't also bubble to the backdrop
               Pressable above and immediately dismiss itself. */}
-          <Pressable onPress={() => {}} className="w-full bg-white border border-neutral-300 rounded-xl p-3.5 shadow-lg" style={{ maxWidth: 320 }}>
-            <AppText variant="label" className="leading-relaxed font-sans font-normal text-neutral-800 text-left">{text}</AppText>
+          <Pressable onPress={() => {}} className="w-full bg-surface border border-line-strong rounded-xl p-3.5 shadow-lg" style={{ maxWidth: 320 }}>
+            <AppText variant="label" className="leading-relaxed font-sans font-normal text-ink text-left">{text}</AppText>
           </Pressable>
         </Pressable>
       </Modal>
@@ -126,10 +126,10 @@ export function ChipRow<T extends string | number>({
             onPress={() => onChange(opt.id)}
             style={columns ? { width: `${100 / columns}%`, padding: 2 } : wrap ? { minWidth: 30 } : undefined}
             className={`py-1 rounded-lg border ${wrap ? 'px-2.5' : 'px-2'} ${columns || wrap ? '' : 'flex-1'} ${
-              active ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-200'
+              active ? 'bg-accent border-accent' : 'bg-surface border-line'
             }`}
           >
-            <AppText variant="micro" className={`font-bold text-center ${active ? 'text-white' : 'text-neutral-600'}`} numberOfLines={1} >
+            <AppText variant="micro" className={`font-bold text-center ${active ? 'text-on-accent' : 'text-ink-2'}`} numberOfLines={1} >
               {opt.label}
             </AppText>
           </Pressable>
@@ -182,27 +182,27 @@ export function StepperRow({
         disabled={atMin}
         hitSlop={8}
         className={`rounded-lg border items-center justify-center ${
-          atMin ? 'bg-neutral-50 border-neutral-200' : 'bg-white border-neutral-400'
+          atMin ? 'bg-surface-2 border-line' : 'bg-surface border-line-strong'
         }`}
         style={{ width: button, height: button }}
       >
-        <AppText variant="label" className={`font-black ${atMin ? 'text-neutral-300' : 'text-[#1A1A1A]'}`}>
+        <AppText variant="label" className={`font-black ${atMin ? 'text-ink-3' : 'text-ink'}`}>
           −
         </AppText>
       </Pressable>
-      <View className="flex-1 bg-neutral-200 h-1.5 rounded-full overflow-hidden">
-        <View className="bg-[#1A1A1A] h-full rounded-full" style={{ width: `${percent}%` }} />
+      <View className="flex-1 bg-fill h-1.5 rounded-full overflow-hidden">
+        <View className="bg-accent h-full rounded-full" style={{ width: `${percent}%` }} />
       </View>
       <Pressable
         onPress={() => setClamped(snapped + step)}
         disabled={atMax}
         hitSlop={8}
         className={`rounded-lg border items-center justify-center ${
-          atMax ? 'bg-neutral-50 border-neutral-200' : 'bg-white border-neutral-400'
+          atMax ? 'bg-surface-2 border-line' : 'bg-surface border-line-strong'
         }`}
         style={{ width: button, height: button }}
       >
-        <AppText variant="label" className={`font-black ${atMax ? 'text-neutral-300' : 'text-[#1A1A1A]'}`}>
+        <AppText variant="label" className={`font-black ${atMax ? 'text-ink-3' : 'text-ink'}`}>
           +
         </AppText>
       </Pressable>
@@ -312,19 +312,19 @@ export function DiscreteSlider<T extends string | number>({
         }}
       >
         <View ref={trackRef} className="w-full justify-center" style={{ height: 28 }}>
-          <View className="w-full bg-neutral-200 h-1.5 rounded-full overflow-hidden">
-            <View className="bg-[#1A1A1A] h-full rounded-full" style={{ width: `${percent}%` }} />
+          <View className="w-full bg-fill h-1.5 rounded-full overflow-hidden">
+            <View className="bg-accent h-full rounded-full" style={{ width: `${percent}%` }} />
           </View>
           <View
             {...panResponder.panHandlers}
-            className="absolute w-6 h-6 rounded-full bg-white border-2 border-[#1A1A1A] shadow"
+            className="absolute w-6 h-6 rounded-full bg-surface border-2 border-ink shadow"
             style={{ left: `${percent}%`, marginLeft: -12 }}
           />
         </View>
       </Pressable>
       <View className="flex-row justify-between px-0.5">
         {options.map((opt) => (
-          <AppText variant="micro" key={String(opt.id)} className="font-mono font-bold text-neutral-400">
+          <AppText variant="micro" key={String(opt.id)} className="font-mono font-bold text-ink-3">
             {opt.label}
           </AppText>
         ))}
@@ -351,7 +351,7 @@ export function AvatarCircle({
       <Image
         source={{ uri: photoUri }}
         style={{ width: size, height: size, borderRadius: size / 2 }}
-        className="border-2 border-[#1A1A1A]"
+        className="border-2 border-ink"
       />
     );
   }
@@ -359,10 +359,10 @@ export function AvatarCircle({
   return (
     <View
       style={{ width: size, height: size, borderRadius: size / 2 }}
-      className="border-2 border-[#1A1A1A] bg-[#F3F2F1] items-center justify-center"
+      className="border-2 border-ink bg-surface-2 items-center justify-center"
     >
       {/* Sized to the circle, not the OS text setting: the circle doesn't grow. */}
-      <AppText variant="inherit" className="font-serif font-bold text-[#1A1A1A]" style={{ fontSize: size * 0.4 }}>
+      <AppText variant="inherit" className="font-serif font-bold text-ink" style={{ fontSize: size * 0.4 }}>
         {initial}
       </AppText>
     </View>
@@ -375,8 +375,8 @@ export function AvatarCircle({
 export function ProgressBar({ percent, className = 'h-1.5' }: { percent: number; className?: string }) {
   const clamped = Math.max(0, Math.min(100, percent));
   return (
-    <View className={`w-full bg-neutral-200 rounded-full overflow-hidden ${className}`}>
-      <View className="bg-[#1A1A1A] h-full" style={{ width: `${clamped}%` }} />
+    <View className={`w-full bg-fill rounded-full overflow-hidden ${className}`}>
+      <View className="bg-accent h-full" style={{ width: `${clamped}%` }} />
     </View>
   );
 }
@@ -434,9 +434,9 @@ export function NumericKeyboardAccessory({ nativeID = NUMERIC_ACCESSORY_ID }: { 
   if (Platform.OS !== 'ios') return null;
   return (
     <InputAccessoryView nativeID={nativeID}>
-      <View className="bg-neutral-100 border-t border-neutral-300 flex-row justify-end px-2 py-1.5">
+      <View className="bg-surface-2 border-t border-line-strong flex-row justify-end px-2 py-1.5">
         <Pressable onPress={() => Keyboard.dismiss()} hitSlop={10} className="px-4 py-1.5">
-          <AppText variant="body" className="font-sans font-bold text-[#1A1A1A]">Done</AppText>
+          <AppText variant="body" className="font-sans font-bold text-ink">Done</AppText>
         </Pressable>
       </View>
     </InputAccessoryView>
@@ -518,18 +518,21 @@ export function BounceView({ children, style }: { children: React.ReactNode; sty
   return <Animated.View style={[{ transform: [{ translateY }] }, style]}>{children}</Animated.View>;
 }
 
-/** Bars used by the Listen-mode "sound wave" indicator — animates height randomly while `active`. */
-export function WaveBars({ active, count = 5 }: { active: boolean; count?: number }) {
+/**
+ * Bars used by the Listen-mode "sound wave" indicator — animates height
+ * randomly while `active`. `onFill` for bars sitting on an accent fill.
+ */
+export function WaveBars({ active, count = 5, onFill = false }: { active: boolean; count?: number; onFill?: boolean }) {
   return (
     <View className="flex-row items-end gap-0.5 h-5">
       {Array.from({ length: count }).map((_, i) => (
-        <WaveBar key={i} active={active} delay={i * 90} />
+        <WaveBar key={i} active={active} delay={i * 90} onFill={onFill} />
       ))}
     </View>
   );
 }
 
-function WaveBar({ active, delay }: { active: boolean; delay: number }) {
+function WaveBar({ active, delay, onFill }: { active: boolean; delay: number; onFill: boolean }) {
   const height = useRef(new Animated.Value(active ? 100 : 15)).current;
   useEffect(() => {
     if (!active) {
@@ -553,7 +556,7 @@ function WaveBar({ active, delay }: { active: boolean; delay: number }) {
   }, [active, delay, height]);
   return (
     <Animated.View
-      className="w-0.5 bg-[#1A1A1A] rounded-full"
+      className={`w-0.5 rounded-full ${onFill ? 'bg-on-accent' : 'bg-accent'}`}
       style={{ height: height.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }}
     />
   );

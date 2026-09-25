@@ -61,10 +61,10 @@ export function RhythmEditor({
           className={stacked ? '' : 'flex-row items-center justify-between'}
           style={{ gap: space(stacked ? 6 : 8) }}
         >
-          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-neutral-600">
+          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-ink-2">
             Learning days
           </AppText>
-          <AppText variant="micro" className="font-mono text-neutral-500">
+          <AppText variant="micro" className="font-mono text-ink-3">
             {rhythm.learningDays.length}/7
           </AppText>
         </View>
@@ -85,17 +85,17 @@ export function RhythmEditor({
                 aria-checked={isActive}
                 className={`flex-1 items-center justify-center rounded-full border ${
                   isActive
-                    ? 'bg-[#1A1A1A] border-[#1A1A1A]'
+                    ? 'bg-accent border-accent'
                     : isSabbath
-                      ? 'bg-neutral-100 border-neutral-200'
-                      : 'bg-white border-neutral-300'
+                      ? 'bg-surface-2 border-line'
+                      : 'bg-surface border-line-strong'
                 }`}
                 style={{ minHeight: pill, paddingVertical: space(4) }}
               >
                 <AppText
                   variant="micro"
                   className={`font-sans font-bold ${
-                    isActive ? 'text-white' : isSabbath ? 'text-neutral-400' : 'text-neutral-600'
+                    isActive ? 'text-on-accent' : isSabbath ? 'text-ink-3' : 'text-ink-2'
                   }`}
                 >
                   {d}
@@ -109,10 +109,10 @@ export function RhythmEditor({
       {/* New verses per learning day */}
       <View style={{ gap: space(6) }}>
         <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
-          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-neutral-600 flex-1">
+          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-ink-2 flex-1">
             New verses per learning day
           </AppText>
-          <AppText variant="micro" className="font-mono text-neutral-700 shrink-0">
+          <AppText variant="micro" className="font-mono text-ink-2 shrink-0">
             {rhythm.newVersesPace}
           </AppText>
         </View>
@@ -127,10 +127,10 @@ export function RhythmEditor({
       {/* Daily review time limit */}
       <View style={{ gap: space(6) }}>
         <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
-          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-neutral-600 flex-1">
+          <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-ink-2 flex-1">
             Daily review time limit
           </AppText>
-          <AppText variant="micro" className="font-mono text-neutral-700 shrink-0">
+          <AppText variant="micro" className="font-mono text-ink-2 shrink-0">
             {rhythm.maxReviewCap} min
           </AppText>
         </View>
@@ -146,13 +146,13 @@ export function RhythmEditor({
       {/* Sabbath. Lives here rather than in the plan designer because it's a
           statement about your week, exactly like learning days -- and it
           directly constrains them (the pills above grey out the Sabbath). */}
-      <View className="border-t border-neutral-100" style={{ paddingTop: space(12), gap: space(8) }}>
+      <View className="border-t border-hairline" style={{ paddingTop: space(12), gap: space(8) }}>
         <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
           <View className="flex-1" style={{ gap: space(2) }}>
-            <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-neutral-600">
+            <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-ink-2">
               Sabbath day
             </AppText>
-            <AppText variant="micro" className="font-sans text-neutral-500 leading-relaxed">
+            <AppText variant="micro" className="font-sans text-ink-3 leading-relaxed">
               A day fully free from learning and reviewing.
             </AppText>
           </View>
@@ -171,7 +171,7 @@ export function RhythmEditor({
             accessibilityRole="switch"
             accessibilityState={{ checked: rhythm.sabbathEnabled }}
             aria-checked={rhythm.sabbathEnabled}
-            className={`rounded-full justify-center shrink-0 ${rhythm.sabbathEnabled ? 'bg-[#1A1A1A]' : 'bg-neutral-300'}`}
+            className={`rounded-full justify-center shrink-0 ${rhythm.sabbathEnabled ? 'bg-accent' : 'bg-fill'}`}
             // Track width is derived from the knob, not a fixed w-12. With a
             // fixed 48px track the font-scaled knob outgrew it at 1.5x and
             // pushed 17px out of the card -- the same fixed-width-around-
@@ -179,7 +179,7 @@ export function RhythmEditor({
             style={{ width: trackWidth, height: knobSize + trackPad * 2, paddingHorizontal: trackPad }}
           >
             <View
-              className="rounded-full bg-white"
+              className="rounded-full bg-surface"
               style={{
                 width: knobSize,
                 height: knobSize,
@@ -208,13 +208,13 @@ export function RhythmEditor({
                   accessibilityState={{ checked: isActive }}
                   aria-checked={isActive}
                   className={`flex-1 items-center justify-center rounded-full border ${
-                    isActive ? 'bg-[#1A1A1A] border-[#1A1A1A]' : 'bg-white border-neutral-300'
+                    isActive ? 'bg-accent border-accent' : 'bg-surface border-line-strong'
                   }`}
                   style={{ minHeight: pill, paddingVertical: space(4) }}
                 >
                   <AppText
                     variant="micro"
-                    className={`font-sans font-bold ${isActive ? 'text-white' : 'text-neutral-600'}`}
+                    className={`font-sans font-bold ${isActive ? 'text-on-accent' : 'text-ink-2'}`}
                   >
                     {d}
                   </AppText>
@@ -228,8 +228,8 @@ export function RhythmEditor({
       {/* Effort sensitivity: scales the daily time ESTIMATE, which is what
           the review cap above is compared against. Another statement about
           you, not about a memorization method. */}
-      <View className="border-t border-neutral-100" style={{ paddingTop: space(12), gap: space(8) }}>
-        <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-neutral-600">
+      <View className="border-t border-hairline" style={{ paddingTop: space(12), gap: space(8) }}>
+        <AppText variant="micro" className="font-sans font-extrabold uppercase tracking-widest text-ink-2">
           How long verses take you
         </AppText>
         <View className="flex-row" style={{ gap: space(6) }}>
@@ -243,13 +243,13 @@ export function RhythmEditor({
                 accessibilityState={{ checked: isActive }}
                 aria-checked={isActive}
                 className={`flex-1 items-center justify-center rounded-lg border ${
-                  isActive ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-neutral-300 bg-white'
+                  isActive ? 'border-accent bg-accent' : 'border-line-strong bg-surface'
                 }`}
                 style={{ minHeight: MIN_TOUCH * 0.7, paddingVertical: space(6), paddingHorizontal: space(4) }}
               >
                 <AppText
                   variant="micro"
-                  className={`font-sans font-bold text-center ${isActive ? 'text-white' : 'text-neutral-600'}`}
+                  className={`font-sans font-bold text-center ${isActive ? 'text-on-accent' : 'text-ink-2'}`}
                 >
                   {tier.label}
                 </AppText>
@@ -262,8 +262,8 @@ export function RhythmEditor({
       {/* The consequence, in one line. This is the whole reason the dials sit
           on the queue page rather than in Settings -- you can see what they do
           to your week without leaving the screen. */}
-      <View className="border-t border-neutral-100" style={{ paddingTop: space(10) }}>
-        <AppText variant="micro" className="font-sans text-neutral-600 leading-relaxed">
+      <View className="border-t border-hairline" style={{ paddingTop: space(10) }}>
+        <AppText variant="micro" className="font-sans text-ink-2 leading-relaxed">
           {rhythm.learningDays.length === 0
             ? 'No learning days selected — no new verses will start until you pick at least one.'
             : `About ${versesPerWeek} new ${versesPerWeek === 1 ? 'verse' : 'verses'} a week, up to ${rhythm.maxReviewCap} min of review a day.`}

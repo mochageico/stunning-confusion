@@ -6,6 +6,7 @@ import { firstLetterLine, firstLetterOnly } from '../lib/recitation';
 import DoodleCanvas from './DoodleCanvas';
 import { AppButton, AppText } from './design';
 
+import { useThemeColors } from './theme';
 // ============================================================================
 // MEMORY GRID
 // ----------------------------------------------------------------------------
@@ -80,6 +81,7 @@ export default function MemoryGrid({
   onSaveDoodle,
   hideMode = 'firstLetter',
 }: MemoryGridProps) {
+  const palette = useThemeColors();
   // Percentages leave extra margin beyond the naive (100/columns)% split --
   // RN adds each box's border on top of its stated width rather than
   // absorbing it (no true border-box sizing), so a tighter percentage plus
@@ -99,33 +101,33 @@ export default function MemoryGrid({
         const grades = wordStates?.[key];
 
         const boxClass = isActive
-          ? 'border-[#1A1A1A] bg-[#1A1A1A]'
+          ? 'border-accent bg-accent'
           : isHighlighted
-            ? 'border-amber-300 bg-amber-50'
+            ? 'border-warning/30 bg-warning-soft'
             : isSelected
-              ? 'border-[#1A1A1A] bg-[#F3F2F1]'
-              : 'border-neutral-200 bg-white';
+              ? 'border-ink bg-surface-2'
+              : 'border-line bg-surface';
 
         return (
           <View key={key} style={{ width: widthPct }} className={`rounded-xl border relative ${boxClass}`}>
             {isSelected && !isActive && (
-              <View className="absolute -top-1.5 -right-1.5 bg-black w-3.5 h-3.5 rounded-full items-center justify-center border border-white z-10">
-                <AppText variant="micro" className="text-white font-black">✓</AppText>
+              <View className="absolute -top-1.5 -right-1.5 bg-ink w-3.5 h-3.5 rounded-full items-center justify-center border border-surface z-10">
+                <AppText variant="micro" className="text-on-accent font-black">✓</AppText>
               </View>
             )}
             <View className="flex-row items-center justify-between px-2 pt-1.5">
-              <View className={`px-1 rounded ${isActive ? 'bg-white/20' : 'bg-neutral-100'}`}>
-                <AppText variant="micro" className={`font-mono font-extrabold ${isActive ? 'text-white' : 'text-neutral-500'}`}>{v.verse}</AppText>
+              <View className={`px-1 rounded ${isActive ? 'bg-on-accent/20' : 'bg-surface-2'}`}>
+                <AppText variant="micro" className={`font-mono font-extrabold ${isActive ? 'text-on-accent' : 'text-ink-3'}`}>{v.verse}</AppText>
               </View>
               <View className="flex-row items-center gap-2">
                 {onToggleHighlight && (
                   <Pressable hitSlop={8} onPress={() => onToggleHighlight(key, v)}>
-                    <Highlighter size={11} color={isActive ? '#ffffff' : isHighlighted ? '#d97706' : '#c7c7c7'} />
+                    <Highlighter size={11} color={isActive ? palette.onAccent : isHighlighted ? palette.warning : palette.lineStrong} />
                   </Pressable>
                 )}
                 {onSaveDoodle && (
                   <Pressable hitSlop={8} onPress={() => setDoodleOpenKey(key)}>
-                    <Pencil size={11} color={isActive ? '#ffffff' : (doodles?.[key]?.length ?? 0) > 0 ? '#0284c7' : '#c7c7c7'} />
+                    <Pencil size={11} color={isActive ? palette.onAccent : (doodles?.[key]?.length ?? 0) > 0 ? palette.accent : palette.lineStrong} />
                   </Pressable>
                 )}
               </View>
@@ -137,30 +139,30 @@ export default function MemoryGrid({
                     const grade = grades?.[wi];
                     const dotColor =
                       grade === 'correct'
-                        ? '#10b981'
+                        ? palette.success
                         : grade === 'close'
-                          ? '#d97706'
+                          ? palette.warning
                           : grade === 'incorrect'
-                            ? '#dc2626'
+                            ? palette.danger
                             : isActive
                               ? 'rgba(255,255,255,0.4)'
-                              : '#d4d4d4';
+                              : palette.lineStrong;
                     return <View key={wi} style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: dotColor }} />;
                   })}
                 </View>
               ) : (
-                <AppText variant="caption" className={`font-mono leading-tight flex-row flex-wrap ${isActive ? 'text-white' : 'text-neutral-800'}`}>
+                <AppText variant="caption" className={`font-mono leading-tight flex-row flex-wrap ${isActive ? 'text-on-accent' : 'text-ink'}`}>
                   {words.map((w, wi) => {
                     const grade = grades?.[wi];
                     const gradeColor =
                       grade === 'correct'
-                        ? '#10b981'
+                        ? palette.success
                         : grade === 'close'
-                          ? '#d97706'
+                          ? palette.warning
                           : grade === 'incorrect'
-                            ? '#dc2626'
+                            ? palette.danger
                             : isActive
-                              ? '#ffffff'
+                              ? palette.onAccent
                               : undefined;
                     return (
                       <AppText variant="inherit" key={wi} style={gradeColor ? { color: gradeColor } : undefined}>
@@ -178,24 +180,24 @@ export default function MemoryGrid({
       {doodleOpenVerse && onSaveDoodle && (
         <Modal visible transparent animationType="fade" onRequestClose={() => setDoodleOpenKey(null)}>
           <View className="flex-1 bg-black/60 items-center justify-center p-6">
-            <View className="bg-white rounded-2xl p-4 gap-3 w-full max-w-[320px]">
+            <View className="bg-surface rounded-2xl p-4 gap-3 w-full max-w-[320px]">
               <View className="flex-row items-center justify-between">
-                <AppText className="font-serif font-bold text-neutral-900">
+                <AppText className="font-serif font-bold text-ink">
                   {doodleOpenVerse.book} {doodleOpenVerse.chapter}:{doodleOpenVerse.verse}
                 </AppText>
                 <Pressable hitSlop={8} onPress={() => setDoodleOpenKey(null)}>
-                  <X size={18} color="#262626" />
+                  <X size={18} color={palette.ink} />
                 </Pressable>
               </View>
-              <AppText variant="caption" className="font-mono text-neutral-400" numberOfLines={2}>
+              <AppText variant="caption" className="font-mono text-ink-3" numberOfLines={2}>
                 {firstLetterLine(doodleOpenVerse.text)}
               </AppText>
               <DoodleCanvas
                 strokes={doodles?.[doodleOpenKey!] || []}
                 onChange={(strokes) => onSaveDoodle(doodleOpenKey!, doodleOpenVerse, strokes)}
               />
-              <AppButton size="md" onPress={() => setDoodleOpenKey(null)} className="bg-[#1A1A1A] rounded-xl items-center">
-                <AppText variant="label" className="text-white font-sans font-bold">Done</AppText>
+              <AppButton size="md" onPress={() => setDoodleOpenKey(null)} className="bg-accent rounded-xl items-center">
+                <AppText variant="label" className="text-on-accent font-sans font-bold">Done</AppText>
               </AppButton>
             </View>
           </View>

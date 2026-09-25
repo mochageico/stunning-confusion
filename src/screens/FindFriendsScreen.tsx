@@ -5,7 +5,9 @@ import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 export default function FindFriendsScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const {
     handleBack,
     userSearchQuery,
@@ -25,12 +27,12 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
         {/* Header with back */}
-        <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={handleBack} className="rounded-full border border-neutral-200 bg-white" />
-          <View>
-            <AppText variant="title" className="font-serif font-black text-neutral-900 leading-none mt-1">
+        <View className="flex-row items-center gap-3 border-b border-hairline pb-3">
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
+          <View className="flex-1">
+            <AppText variant="title" className="font-serif font-black text-ink leading-none mt-1">
               Search People
             </AppText>
           </View>
@@ -41,22 +43,22 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
             on offer was a bare name and two buttons. */}
         {incomingFriendRequests.length > 0 && (
           <View className="gap-2">
-            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
+            <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">
               INCOMING REQUESTS ({incomingFriendRequests.length})
             </AppText>
             <View className="gap-2">
               {incomingFriendRequests.map((req) => (
                 <View
                   key={req.id}
-                  className="border border-neutral-200 rounded-xl p-3 bg-white flex-row items-center justify-between"
+                  className="border border-line rounded-xl p-3 bg-surface flex-row items-center justify-between"
                 >
                   <Pressable className="flex-1 pr-2" onPress={() => viewMemberProfileById(req.fromUid)}>
-                    <AppText variant="label" className="font-sans font-bold text-neutral-800">{req.fromName}</AppText>
-                    <AppText variant="micro" className="font-sans text-neutral-400">Wants to be friends — tap to view</AppText>
+                    <AppText variant="label" className="font-sans font-bold text-ink">{req.fromName}</AppText>
+                    <AppText variant="micro" className="font-sans text-ink-3">Wants to be friends — tap to view</AppText>
                   </Pressable>
                   <View className="flex-row gap-1.5">
-                    <AppIconButton Icon={Check} diameter={28} iconSize={13} iconColor="#FFFFFF" onPress={() => acceptFriendRequest(req)} className="rounded-full bg-emerald-600" />
-                    <AppIconButton Icon={X} diameter={28} iconSize={13} iconColor="#525252" onPress={() => declineFriendRequest(req)} className="rounded-full bg-neutral-100 border border-neutral-200" />
+                    <AppIconButton Icon={Check} diameter={28} iconSize={13} iconColor={palette.onAccent} onPress={() => acceptFriendRequest(req)} className="rounded-full bg-success" />
+                    <AppIconButton Icon={X} diameter={28} iconSize={13} iconColor={palette.ink2} onPress={() => declineFriendRequest(req)} className="rounded-full bg-surface-2 border border-line" />
                   </View>
                 </View>
               ))}
@@ -71,24 +73,24 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
             by search. */}
         {outgoingFriendRequests.length > 0 && (
           <View className="gap-2">
-            <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
+            <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">
               SENT REQUESTS ({outgoingFriendRequests.length})
             </AppText>
             <View className="gap-2">
               {outgoingFriendRequests.map((req) => (
                 <View
                   key={req.id}
-                  className="border border-neutral-200 rounded-xl p-3 bg-neutral-50 flex-row items-center justify-between"
+                  className="border border-line rounded-xl p-3 bg-surface-2 flex-row items-center justify-between"
                 >
                   <Pressable className="flex-1 pr-2" onPress={() => viewMemberProfileById(req.toUid)}>
-                    <AppText variant="label" className="font-sans font-bold text-neutral-700">{req.toName}</AppText>
-                    <AppText variant="micro" className="font-sans text-neutral-400">Waiting for them to accept</AppText>
+                    <AppText variant="label" className="font-sans font-bold text-ink-2">{req.toName}</AppText>
+                    <AppText variant="micro" className="font-sans text-ink-3">Waiting for them to accept</AppText>
                   </Pressable>
                   <Pressable
                     onPress={() => cancelFriendRequest(req)}
-                    className="bg-white border border-neutral-300 px-2.5 py-1 rounded-lg"
+                    className="bg-surface border border-line-strong px-2.5 py-1 rounded-lg"
                   >
-                    <AppText variant="micro" className="font-bold uppercase tracking-wider text-neutral-600">Cancel</AppText>
+                    <AppText variant="micro" className="font-bold uppercase tracking-wider text-ink-2">Cancel</AppText>
                   </Pressable>
                 </View>
               ))}
@@ -98,13 +100,13 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
 
         {/* Search box */}
         <View className="gap-2">
-          <AppText variant="section" className="font-bold text-neutral-400 tracking-wider font-sans uppercase">
+          <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">
             SEARCH BY NAME OR EMAIL
           </AppText>
           <View className="flex-row gap-2">
-            <AppTextInput value={userSearchQuery} onChangeText={setUserSearchQuery} onSubmitEditing={() => searchUsers(userSearchQuery)} placeholder="e.g. Jane or jane@example.com" autoCapitalize="none" className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded-xl" />
-            <AppButton size="md" onPress={() => searchUsers(userSearchQuery)} className="bg-[#1A1A1A] rounded-xl items-center justify-center">
-              <AppText variant="label" className="text-white font-bold">Search</AppText>
+            <AppTextInput value={userSearchQuery} onChangeText={setUserSearchQuery} onSubmitEditing={() => searchUsers(userSearchQuery)} placeholder="e.g. Jane or jane@example.com" autoCapitalize="none" className="flex-1 px-3 py-2 bg-surface border border-line-strong rounded-xl" />
+            <AppButton size="md" onPress={() => searchUsers(userSearchQuery)} className="bg-accent rounded-xl items-center justify-center">
+              <AppText variant="label" className="text-on-accent font-bold">Search</AppText>
             </AppButton>
           </View>
         </View>
@@ -113,11 +115,11 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
         <View className="gap-2">
           {searchingUsers ? (
             <View className="py-4 items-center">
-              <AppText variant="label" className="text-neutral-400 font-sans">Searching...</AppText>
+              <AppText variant="label" className="text-ink-3 font-sans">Searching...</AppText>
             </View>
           ) : userSearchResults.length === 0 ? (
-            <View className="items-center p-6 border border-dashed border-neutral-200 rounded-2xl">
-              <AppText variant="label" className="text-neutral-400 text-center">
+            <View className="items-center p-6 border border-dashed border-line rounded-2xl">
+              <AppText variant="label" className="text-ink-3 text-center">
                 Search by exact email, or the start of someone's name.
               </AppText>
             </View>
@@ -129,35 +131,35 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
               return (
                 <View
                   key={person.uid}
-                  className="border border-neutral-200 rounded-xl p-3 bg-white flex-row items-center justify-between"
+                  className="border border-line rounded-xl p-3 bg-surface flex-row items-center justify-between"
                 >
                   <Pressable className="flex-1 pr-2" onPress={() => viewMemberProfileById(person.uid)}>
-                    <AppText variant="label" className="font-sans font-bold text-neutral-800">{person.displayName}</AppText>
-                    {!!person.email && <AppText variant="micro" className="font-sans text-neutral-400">{person.email}</AppText>}
+                    <AppText variant="label" className="font-sans font-bold text-ink">{person.displayName}</AppText>
+                    {!!person.email && <AppText variant="micro" className="font-sans text-ink-3">{person.email}</AppText>}
                   </Pressable>
 
                   {isFriend ? (
-                    <View className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
-                      <AppText variant="micro" className="font-bold uppercase tracking-wider text-emerald-700">Friends</AppText>
+                    <View className="bg-success-soft border border-success/30 px-2.5 py-1 rounded-lg">
+                      <AppText variant="micro" className="font-bold uppercase tracking-wider text-success">Friends</AppText>
                     </View>
                   ) : incoming ? (
                     <View className="flex-row gap-1.5">
-                      <AppIconButton Icon={Check} diameter={28} iconSize={13} iconColor="#FFFFFF" onPress={() => acceptFriendRequest(incoming)} className="rounded-full bg-emerald-600" />
-                      <AppIconButton Icon={X} diameter={28} iconSize={13} iconColor="#525252" onPress={() => declineFriendRequest(incoming)} className="rounded-full bg-neutral-100 border border-neutral-200" />
+                      <AppIconButton Icon={Check} diameter={28} iconSize={13} iconColor={palette.onAccent} onPress={() => acceptFriendRequest(incoming)} className="rounded-full bg-success" />
+                      <AppIconButton Icon={X} diameter={28} iconSize={13} iconColor={palette.ink2} onPress={() => declineFriendRequest(incoming)} className="rounded-full bg-surface-2 border border-line" />
                     </View>
                   ) : outgoing ? (
                     <Pressable
                       onPress={() => cancelFriendRequest(outgoing)}
-                      className="bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-lg"
+                      className="bg-surface-2 border border-line px-2.5 py-1 rounded-lg"
                     >
-                      <AppText variant="micro" className="font-bold uppercase tracking-wider text-neutral-600">
+                      <AppText variant="micro" className="font-bold uppercase tracking-wider text-ink-2">
                         Request Sent — Cancel
                       </AppText>
                     </Pressable>
                   ) : (
-                    <AppButton size="sm" onPress={() => sendFriendRequest(person.uid, person.displayName)} className="bg-[#1A1A1A] rounded-lg flex-row items-center gap-1">
-                      <UserPlus size={11} color="#FFFFFF" />
-                      <AppText variant="micro" className="font-bold uppercase tracking-wider text-white">Add Friend</AppText>
+                    <AppButton size="sm" onPress={() => sendFriendRequest(person.uid, person.displayName)} className="bg-accent rounded-lg flex-row items-center gap-1">
+                      <UserPlus size={11} color={palette.onAccent} />
+                      <AppText variant="micro" className="font-bold uppercase tracking-wider text-on-accent">Add Friend</AppText>
                     </AppButton>
                   )}
                 </View>

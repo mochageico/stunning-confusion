@@ -248,7 +248,7 @@ export default function ChapterPhotoViewer({
                     setConfirmingDelete(false);
                     void onDelete(current);
                   }}
-                  className="bg-red-600 rounded-lg px-3 py-2"
+                  className="bg-danger rounded-lg px-3 py-2"
                 >
                   <AppText variant="caption" className="font-sans font-bold text-white">Delete page</AppText>
                 </Pressable>
@@ -260,7 +260,7 @@ export default function ChapterPhotoViewer({
                 iconSize={17}
                 iconColor="#F87171"
                 onPress={() => setConfirmingDelete(true)}
-                className="rounded-lg border border-red-500/40"
+                className="rounded-lg border border-danger/40"
               />
             )}
           </View>

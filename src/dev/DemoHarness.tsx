@@ -20,7 +20,10 @@
 // modalLearn, modalListen, modalSave, modalProgress, modalMissed.
 // Extra params: ios=1 reproduces iPhone font rendering in the browser (no
 // synthesized bold, so a weight that isn't a real loaded face shows as the
-// Regular it is on the phone); empty=1 skips the seeded queue.
+// Regular it is on the phone); empty=1 skips the seeded queue;
+// accent=<id> opens in that accent (navy, evergreen, burgundy, plum, walnut,
+// ink) without changing the one saved in Settings; scale=1.5 renders at that
+// text size, as if set in iOS Settings.
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
@@ -37,6 +40,13 @@ const PARAMS =
 
 /** Decided once at startup, so the hooks below always run in the same order. */
 export const DEMO_ENABLED = __DEV__ && (PARAMS ? PARAMS.has('s') : DEMO_ON_DEVICE);
+
+/** The accent the demo URL asks for, if any. App.tsx applies it over the saved one. */
+export const DEMO_ACCENT: string | null = DEMO_ENABLED && PARAMS ? PARAMS.get('accent') : null;
+
+/** The text size the demo URL asks for, if any. App.tsx applies it. */
+export const DEMO_FONT_SCALE: number | null =
+  DEMO_ENABLED && PARAMS && PARAMS.get('scale') ? Number(PARAMS.get('scale')) || null : null;
 
 const DAY = 86400000;
 const now = Date.now();

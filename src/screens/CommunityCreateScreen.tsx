@@ -5,7 +5,9 @@ import { AppState } from '../state/useAppState';
 import { FadeInView, HelpTooltip } from '../components/ui';
 import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 export default function CommunityCreateScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const {
     setCommunitySubView,
     createGroupName,
@@ -27,12 +29,12 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
         {/* Header with back */}
-        <View className="flex-row items-center gap-3 border-b border-neutral-100 pb-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor="#262626" onPress={() => setCommunitySubView('home')} className="rounded-full border border-neutral-200 bg-white" />
-          <View>
-            <AppText variant="title" className="font-serif font-black text-neutral-900 leading-none mt-1">
+        <View className="flex-row items-center gap-3 border-b border-hairline pb-3">
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={() => setCommunitySubView('home')} className="rounded-full border border-line bg-surface" />
+          <View className="flex-1">
+            <AppText variant="title" className="font-serif font-black text-ink leading-none mt-1">
               Create Scripture Circle
             </AppText>
           </View>
@@ -42,22 +44,22 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
         <View className="gap-4">
           {/* Group Name */}
           <View className="gap-1">
-            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">Circle Name</AppText>
-            <AppTextInput value={createGroupName} onChangeText={setCreateGroupName} placeholder="e.g. Wednesday Night Romans Fellowship" className="w-full px-3 py-2 border border-neutral-300 rounded-xl font-bold" />
+            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-ink-3">Circle Name</AppText>
+            <AppTextInput value={createGroupName} onChangeText={setCreateGroupName} placeholder="e.g. Wednesday Night Romans Fellowship" className="w-full px-3 py-2 border border-line-strong rounded-xl font-bold" />
           </View>
 
           {/* Short Description */}
           <View className="gap-1">
-            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
+            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-ink-3">
               Short Description
             </AppText>
-            <AppTextInput value={createGroupDesc} onChangeText={setCreateGroupDesc} placeholder="Who is this circle for, and what are you working through together?" multiline numberOfLines={3} textAlignVertical="top" className="w-full px-3 py-2 border border-neutral-300 rounded-xl" />
+            <AppTextInput value={createGroupDesc} onChangeText={setCreateGroupDesc} placeholder="Who is this circle for, and what are you working through together?" multiline numberOfLines={3} textAlignVertical="top" className="w-full px-3 py-2 border border-line-strong rounded-xl" />
           </View>
 
           {/* Privacy Flag */}
           <View className="gap-1">
             <View className="flex-row items-center">
-              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-neutral-400">
+              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-ink-3">
                 Privacy Setting
               </AppText>
               <HelpTooltip text="Public circles show up in the directory and anyone can join them straight away. Private circles are hidden — people can only join with the invite code you share with them." />
@@ -66,28 +68,28 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
               <Pressable
                 onPress={() => setCreateGroupPrivacy('public')}
                 className={`flex-1 p-3 rounded-xl border items-center ${
-                  createGroupPrivacy === 'public' ? 'bg-white border-neutral-900' : 'bg-neutral-50 border-neutral-200'
+                  createGroupPrivacy === 'public' ? 'bg-surface border-ink' : 'bg-surface-2 border-line'
                 }`}
               >
                 <AppText variant="label" className="font-black leading-none">🔓 Public Circle</AppText>
-                <AppText variant="micro" className="font-medium text-neutral-400 mt-1">Open to everyone</AppText>
+                <AppText variant="micro" className="font-medium text-ink-3 mt-1">Open to everyone</AppText>
               </Pressable>
 
               <Pressable
                 onPress={() => setCreateGroupPrivacy('private')}
                 className={`flex-1 p-3 rounded-xl border items-center ${
-                  createGroupPrivacy === 'private' ? 'bg-white border-neutral-900' : 'bg-neutral-50 border-neutral-200'
+                  createGroupPrivacy === 'private' ? 'bg-surface border-ink' : 'bg-surface-2 border-line'
                 }`}
               >
                 <AppText variant="label" className="font-black leading-none">🔒 Private Circle</AppText>
-                <AppText variant="micro" className="font-medium text-neutral-400 mt-1">Requires code/approval</AppText>
+                <AppText variant="micro" className="font-medium text-ink-3 mt-1">Requires code/approval</AppText>
               </Pressable>
             </View>
           </View>
 
           {/* Create Action */}
-          <AppButton size="lg" onPress={handleCreateCircle} className="w-full bg-[#1A1A1A] rounded-xl items-center shadow-md">
-            <AppText variant="label" className="text-white font-black uppercase tracking-wider">Create Scripture Circle 🛡️</AppText>
+          <AppButton size="lg" onPress={handleCreateCircle} className="w-full bg-accent rounded-xl items-center shadow-md">
+            <AppText variant="label" className="text-on-accent font-black uppercase tracking-wider">Create Scripture Circle 🛡️</AppText>
           </AppButton>
         </View>
       </ScrollView>

@@ -142,7 +142,44 @@ this whole file, then do only your job.
   the Playfair Display loads and package. Titles still marked `font-serif`
   render in Literata until their S job moves them to sans. That in-between
   state is expected.
-- **F2 · Tokens + accent setting** (L). `tailwind.config.js` theme: semantic
+- **F2 · Tokens + accent setting** — DONE 2026-09-25 (not yet committed).
+  What was built:
+  - **Theme:** `src/components/theme.tsx` holds the palette (neutrals, 6
+    accents, status, stages; light + dark), `ThemeProvider` (sets the
+    variables with `vars()` at the root, and mirrors them onto `<html>` on
+    web so Modals get them), `useThemeColors()` (hex for JS props,
+    conventionally `const palette = useThemeColors()`), and `useAccent()`.
+    Token classes: `canvas surface surface-2 fill raised line line-strong
+    hairline ink ink-2 ink-3 accent accent-soft on-accent success(-soft)
+    warning(-soft) danger(-soft) stage-learning/-daily/-weekly/-monthly`,
+    plus radius roles `rounded-card/btn/seg/seg-inner`. First-paint values
+    live in `global.css`.
+  - **Accent persistence:** stored on the device (`ui.accent.v1`). App.tsx
+    reads it before first paint, alongside the fonts. It is not mirrored
+    to the profile.
+  - **TYPE scale:** iOS text styles (micro 12, caption 13, label 15, body
+    17, section 13, title 20, display 28).
+  - **Settings:** Appearance › Accent color at the top of Settings.
+  - **Codemod:** every hex/palette class and JS hex outside the photo
+    viewers, `DevLayoutLab`, and AudioFeed's avatar colors (S6).
+  - **Choices made in the codemod:**
+    - `#1A1A1A` fills → accent.
+    - `text-white` → `on-accent` (it means "text on any strong fill").
+    - neutral-400/300 text → ink-3, so no text is below 4.5:1.
+    - Stage colors now appear only as dots and stripes; stage text is ink.
+    - `border-2 border-ink` boxes are kept; F3/S jobs slim them.
+    - The two dark inline forms (New Group Plan, New Challenge) became
+      light panels.
+    - ink-3 is `#6E675E`, not `#736C63`, to pass 4.5:1 on canvas.
+  - **Dark mode:** not turned on. `scheme` is fixed to 'light' in
+    ThemeProvider, and dark has not been reviewed screen by screen.
+  - **Demo params:** `accent=<id>`, `scale=1.5`. `shots` has `w=375` and
+    `--overflow`, which lists text running off-screen or cut short.
+  - **Known leftovers at 1.5× on SE** (all were there before F2): ChipRow
+    truncation (Settings, Full History), Chapter Landing header, Saved
+    Plans card, Recording Detail header buttons, Find/Find Friends
+    buttons, and tab labels crowding (F4 caps them).
+  Original brief: `tailwind.config.js` theme: semantic
   colors (ink / ink-2 / ink-3 / line / surface / canvas / accent /
   accent-soft / on-accent / success / warning / danger / stage-daily,
   -weekly, -monthly, -learning) with the values above, radius roles, and the

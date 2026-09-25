@@ -8,6 +8,7 @@ import { FadeInView, HelpTooltip } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
 import { AppButton, AppText, CollapsibleCard, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 /**
  * One tile in the feature grid. Was three across at a fixed `h-24` plus a
  * stranded `h-14` row: ~105pt per tile, so "Find Audio Recordings" wrapped to
@@ -23,16 +24,17 @@ function FeatureTile({
   Icon: React.ComponentType<{ size?: number; color?: string }>;
   label: string;
 }) {
+  const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
   return (
     <Pressable
       onPress={onPress}
-      className="flex-1 rounded-xl bg-white items-center justify-center shadow-sm border border-[#E5E5E5]"
+      className="flex-1 rounded-xl bg-surface items-center justify-center shadow-sm border border-line"
       style={{ minHeight: Math.round(76 * scale), padding: space(10), gap: space(6) }}
     >
-      <Icon size={Math.round(18 * scale)} color="#1A1A1A" />
-      <AppText variant="caption" className="font-sans text-center font-bold text-[#444]">
+      <Icon size={Math.round(18 * scale)} color={palette.ink} />
+      <AppText variant="caption" className="font-sans text-center font-bold text-ink-2">
         {label}
       </AppText>
     </Pressable>
@@ -84,13 +86,15 @@ function groupQueueItems(items: QueueItem[]): GroupedItem[] {
 }
 
 // One due-review group row. Daily/weekly/monthly rows are identical apart
-// from their accent color, so they share this component rather than being
+// from their stage stripe, so they share this component rather than being
 // hand-copied three times -- the same duplication that previously let the
 // plan-designer sync blocks drift out of step with each other.
 const REVIEW_ROW_THEMES = {
-  emerald: { border: 'border-l-emerald-500', label: 'text-emerald-900', outline: 'border-emerald-200', outlineText: 'text-emerald-700', solid: 'bg-emerald-600' },
-  blue: { border: 'border-l-blue-500', label: 'text-blue-900', outline: 'border-blue-200', outlineText: 'text-blue-700', solid: 'bg-blue-600' },
-  amber: { border: 'border-l-amber-500', label: 'text-amber-900', outline: 'border-amber-200', outlineText: 'text-amber-700', solid: 'bg-amber-600' },
+  // The stage shows as the stripe only. Text and buttons stay ink and accent:
+  // daily and monthly green/gold are too light to read as text.
+  emerald: { border: 'border-l-stage-daily', label: 'text-ink', outline: 'border-line-strong', outlineText: 'text-accent', solid: 'bg-accent' },
+  blue: { border: 'border-l-stage-weekly', label: 'text-ink', outline: 'border-line-strong', outlineText: 'text-accent', solid: 'bg-accent' },
+  amber: { border: 'border-l-stage-monthly', label: 'text-ink', outline: 'border-line-strong', outlineText: 'text-accent', solid: 'bg-accent' },
 } as const;
 
 function DueReviewRow({
@@ -108,42 +112,50 @@ function DueReviewRow({
   onReview: () => void;
   onManualLog: () => void;
 }) {
+  const palette = useThemeColors();
   const t = REVIEW_ROW_THEMES[theme];
+  // Past 1.3x the three buttons leave the reference a letter or two, so the
+  // reference gets its own line and the buttons sit under it.
+  const stacked = useFontScale() >= 1.3;
   return (
-    <View className={`flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border-l-4 ${t.border} border border-neutral-200 shadow-3xs`}>
-      <Pressable onPress={onOpenChapter} className="flex-1 mr-2">
-        <AppText variant="label" className={`font-serif ${t.label}`} numberOfLines={1}>
+    <View
+      className={`${stacked ? '' : 'flex-row justify-between items-center'} bg-surface px-3 py-2 rounded-xl border-l-4 ${t.border} border border-line shadow-3xs`}
+      style={stacked ? { gap: 6 } : undefined}
+    >
+      <Pressable onPress={onOpenChapter} className={stacked ? '' : 'flex-1 mr-2'}>
+        <AppText variant="label" className={`font-serif ${t.label}`} numberOfLines={stacked ? undefined : 1}>
           {group.label}
         </AppText>
       </Pressable>
       {/* All three are `sm`: secondary actions inside a row that is itself
           tappable, so they carry hitSlop rather than a 44pt frame. They were
           pinned at h-5 (20pt), which clipped their labels outright at 1.5x. */}
-      <View className="flex-row gap-1">
+      <View className={`flex-row gap-1 ${stacked ? 'self-end' : 'shrink-0'}`}>
         {/* Manual log -- for a review genuinely done off-app, without having
             to open the practice overlay just to record it. */}
         <AppButton
           size="sm"
           onPress={onManualLog}
           Icon={ClipboardCheck}
-          iconColor="#525252"
-          className="bg-white border border-neutral-200 rounded"
+          iconColor={palette.ink2}
+          className="bg-surface border border-line rounded"
           style={{ paddingHorizontal: 8 }}
         />
         <AppButton
           size="sm"
           onPress={onListen}
           label="Listen"
-          className={`bg-white border ${t.outline} rounded`}
+          className={`bg-surface border ${t.outline} rounded`}
           textClassName={`font-normal ${t.outlineText}`}
         />
-        <AppButton size="sm" onPress={onReview} label="Review" className={`${t.solid} rounded`} textClassName="font-normal text-white" />
+        <AppButton size="sm" onPress={onReview} label="Review" className={`${t.solid} rounded`} textClassName="font-normal text-on-accent" />
       </View>
     </View>
   );
 }
 
 export default function HomeScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const {
     user,
     memoryQueue,
@@ -274,17 +286,17 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5" contentContainerStyle={{ gap: 20 }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5" contentContainerStyle={{ gap: 20 }}>
         {/* Top Editorial Header -- now carries the day's time estimate, which
             summarises the whole day rather than belonging to any one section. */}
-        <View className="pb-3 border-b border-[#E5E5E5]" style={{ gap: 2 }}>
-          <AppText variant="micro" className="font-sans font-bold uppercase tracking-[0.15em] text-[#888]">
+        <View className="pb-3 border-b border-line" style={{ gap: 2 }}>
+          <AppText variant="micro" className="font-sans font-bold uppercase tracking-[0.15em] text-ink-3">
             {getTodayDateString()}
           </AppText>
-          <AppText variant="display" className="font-serif font-black text-[#1A1A1A]">
+          <AppText variant="display" className="font-serif font-black text-ink">
             {getGreeting()}, {firstName}.
           </AppText>
-          <AppText variant="caption" className="font-mono font-bold uppercase tracking-wider text-neutral-500">
+          <AppText variant="caption" className="font-mono font-bold uppercase tracking-wider text-ink-3">
             about {estMinutes} min today
           </AppText>
         </View>
@@ -302,29 +314,29 @@ export default function HomeScreen({ state }: { state: AppState }) {
             do next. */}
         {memoryQueue.length === 0 && (
           <View
-            className="rounded-xl border-2 border-[#1A1A1A] bg-[#FBF9F6]"
+            className="rounded-xl border-2 border-ink bg-surface-2"
             style={{ padding: space(16), gap: space(10) }}
           >
-            <AppText variant="body" className="font-serif font-black text-[#1A1A1A]">
+            <AppText variant="body" className="font-serif font-black text-ink">
               Start here
             </AppText>
-            <AppText variant="label" className="font-sans text-neutral-700 leading-relaxed">
+            <AppText variant="label" className="font-sans text-ink-2 leading-relaxed">
               You haven't picked any verses yet. Choose a few you'd like to know by heart — the app takes care of when
               you see them after that.
             </AppText>
             <Pressable
               onPress={() => navigateTo('books')}
               accessibilityRole="button"
-              className="w-full rounded-xl bg-[#1A1A1A] flex-row items-center justify-center"
+              className="w-full rounded-xl bg-accent flex-row items-center justify-center"
               style={{ minHeight: MIN_TOUCH, paddingVertical: space(12), gap: space(6) }}
             >
-              <BookMarked size={iconSize} color="#FFFFFF" />
-              <AppText variant="label" className="text-white font-sans font-bold">
+              <BookMarked size={iconSize} color={palette.onAccent} />
+              <AppText variant="label" className="text-on-accent font-sans font-bold">
                 Choose my first verses
               </AppText>
             </Pressable>
             <Pressable onPress={() => setShowTour(true)} className="w-full items-center" style={{ paddingVertical: space(4) }}>
-              <AppText variant="caption" className="text-neutral-500 font-sans font-bold underline">
+              <AppText variant="caption" className="text-ink-3 font-sans font-bold underline">
                 Show me around first
               </AppText>
             </Pressable>
@@ -344,10 +356,10 @@ export default function HomeScreen({ state }: { state: AppState }) {
             {memoryQueue.some((item) => item.status === 'queued') && (
               <Pressable
                 onPress={handlePullNewVerses}
-                className="bg-neutral-900 rounded flex-row items-center justify-center"
+                className="bg-accent rounded flex-row items-center justify-center"
                 style={{ minHeight: space(28), paddingHorizontal: space(8), paddingVertical: space(4) }}
               >
-                <AppText variant="micro" className="text-white font-sans font-extrabold">
+                <AppText variant="micro" className="text-on-accent font-sans font-extrabold">
                   Pull Next Verses
                 </AppText>
               </Pressable>
@@ -355,29 +367,29 @@ export default function HomeScreen({ state }: { state: AppState }) {
           </View>
 
           {showPullShieldConfirm && (
-            <View className="bg-indigo-50 border border-indigo-200 rounded-xl p-3" style={{ gap: 8 }}>
-              <AppText variant="caption" className="font-sans font-bold text-indigo-900">
+            <View className="bg-accent-soft border border-accent/30 rounded-xl p-3" style={{ gap: 8 }}>
+              <AppText variant="caption" className="font-sans font-bold text-accent">
                 🛡️ Start more verses anyway?
               </AppText>
-              <AppText variant="micro" className="font-sans text-indigo-800/80 leading-relaxed">
+              <AppText variant="micro" className="font-sans text-accent leading-relaxed">
                 Today already has about {estMinutes} minutes of review, which meets the {maxReviewCap}-minute limit you
                 set. Starting more verses now adds to that on purpose.
               </AppText>
               <View className="flex-row gap-2 justify-end pt-1">
                 <Pressable
                   onPress={() => setShowPullShieldConfirm(false)}
-                  className="px-3 py-1.5 border border-neutral-300 rounded-lg"
+                  className="px-3 py-1.5 border border-line-strong rounded-lg"
                 >
-                  <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
+                  <AppText variant="caption" className="text-ink-2 font-sans font-bold ">Cancel</AppText>
                 </Pressable>
                 <Pressable
                   onPress={() => {
                     triggerDailyPull({ bypassShield: true });
                     setShowPullShieldConfirm(false);
                   }}
-                  className="px-3 py-1.5 bg-indigo-600 rounded-lg"
+                  className="px-3 py-1.5 bg-accent rounded-lg"
                 >
-                  <AppText variant="caption" className="text-white font-sans font-bold ">Yes, start them</AppText>
+                  <AppText variant="caption" className="text-on-accent font-sans font-bold ">Yes, start them</AppText>
                 </Pressable>
               </View>
             </View>
@@ -388,31 +400,35 @@ export default function HomeScreen({ state }: { state: AppState }) {
               {groupedLearning.map((group) => (
                 <View
                   key={group.label}
-                  className="flex-col bg-neutral-50 px-3 py-2.5 rounded-xl border border-neutral-100"
+                  className="flex-col bg-surface-2 px-3 py-2.5 rounded-xl border border-hairline"
                   style={{ gap: 8 }}
                 >
-                  <View className="flex-row justify-between items-center">
-                    <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
-                      <AppText variant="label" className="font-serif text-[#1A1A1A]">{group.label}</AppText>
+                  {/* The reference wraps rather than pushing the buttons off
+                      the card; the buttons never shrink. */}
+                  <View className="flex-row justify-between items-center" style={{ gap: 8 }}>
+                    <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)} className="flex-1">
+                      <AppText variant="label" className="font-serif text-ink">{group.label}</AppText>
                     </Pressable>
-                    <View className="flex-row gap-1">
-                      <Pressable
+                    <View className="flex-row gap-1 shrink-0">
+                      <AppButton
+                        size="sm"
                         onPress={() => handleGroupPractice('listen', group.items)}
-                        className="bg-white border border-neutral-300 px-2 h-5 items-center justify-center rounded"
-                      >
-                        <AppText variant="micro" className="text-neutral-700">Listen</AppText>
-                      </Pressable>
-                      <Pressable
+                        label="Listen"
+                        className="bg-surface border border-line-strong rounded"
+                        textClassName="font-normal text-ink-2"
+                      />
+                      <AppButton
+                        size="sm"
                         onPress={() => handleGroupPractice('learn', group.items)}
-                        className="bg-[#1A1A1A] px-2 h-5 items-center justify-center rounded"
-                      >
-                        <AppText variant="micro" className="text-white">Learn</AppText>
-                      </Pressable>
+                        label="Learn"
+                        className="bg-accent rounded"
+                        textClassName="font-normal text-on-accent"
+                      />
                     </View>
                   </View>
 
                   {/* Individual Verse mastery progress bars/dots */}
-                  <View className="flex-row flex-wrap gap-x-2 gap-y-1 pt-1.5 border-t border-neutral-100">
+                  <View className="flex-row flex-wrap gap-x-2 gap-y-1 pt-1.5 border-t border-hairline">
                     {group.items.map((item) => {
                       const touchesCount = item.touchLogs ? item.touchLogs.length : 0;
                       const isBankedAwaitingReview = touchesCount >= masteryTouches;
@@ -420,21 +436,21 @@ export default function HomeScreen({ state }: { state: AppState }) {
                         <View
                           key={item.verseId}
                           className={`flex-row items-center gap-1.5 px-2 py-0.5 rounded-md border ${
-                            isBankedAwaitingReview ? 'bg-neutral-100 border-neutral-200 opacity-60' : 'bg-white border-neutral-100'
+                            isBankedAwaitingReview ? 'bg-surface-2 border-line opacity-60' : 'bg-surface border-hairline'
                           }`}
                         >
-                          <AppText variant="micro" className="font-sans font-bold text-neutral-500">v{item.verseNumber}</AppText>
+                          <AppText variant="micro" className="font-sans font-bold text-ink-3">v{item.verseNumber}</AppText>
                           <View className="flex-row gap-0.5">
                             {Array.from({ length: masteryTouches }).map((_, i) => (
                               <View
                                 key={i}
                                 className={`w-1.5 h-1.5 rounded-full ${
-                                  i < touchesCount ? 'bg-emerald-500 border border-emerald-600' : 'bg-neutral-200'
+                                  i < touchesCount ? 'bg-success border border-success' : 'bg-fill'
                                 }`}
                               />
                             ))}
                           </View>
-                          <AppText variant="micro" className="font-mono font-black text-neutral-400">
+                          <AppText variant="micro" className="font-mono font-black text-ink-3">
                             {touchesCount}/{masteryTouches}
                           </AppText>
                           {isBankedAwaitingReview && (
@@ -448,7 +464,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
               ))}
             </View>
           ) : (
-            <AppText variant="label" className="text-neutral-400 italic pl-1">Nothing being learned right now.</AppText>
+            <AppText variant="label" className="text-ink-3 italic pl-1">Nothing being learned right now.</AppText>
           )}
         </CollapsibleCard>
 
@@ -462,39 +478,39 @@ export default function HomeScreen({ state }: { state: AppState }) {
             <HelpTooltip text="Verses you've already learned, back for a quick check so you don't forget them. Each one comes back every day for a while, then once a week, then once a month — and then it stops." />
             <Pressable
               onPress={() => setShowResetConfirm(true)}
-              className="bg-red-50 border border-red-200 rounded flex-row items-center justify-center"
+              className="bg-danger-soft border border-danger/30 rounded flex-row items-center justify-center"
               style={{ minHeight: space(28), paddingHorizontal: space(8), paddingVertical: space(4) }}
             >
-              <AppText variant="micro" className="text-red-700 font-sans font-extrabold">
+              <AppText variant="micro" className="text-danger font-sans font-extrabold">
                 Reset Reviews for Today
               </AppText>
             </Pressable>
           </View>
 
           {showResetConfirm && (
-            <View className="bg-red-50 border border-red-200 rounded-xl p-3" style={{ gap: 8 }}>
-              <AppText variant="caption" className="font-sans font-bold text-red-800">
+            <View className="bg-danger-soft border border-danger/30 rounded-xl p-3" style={{ gap: 8 }}>
+              <AppText variant="caption" className="font-sans font-bold text-danger">
                 Are you sure you want to reset reviews for today?
               </AppText>
-              <AppText variant="micro" className="font-sans text-red-700/80 leading-relaxed">
+              <AppText variant="micro" className="font-sans text-danger leading-relaxed">
                 This undoes any reviews you already finished today — only verses you reviewed today go back to
                 due. Nothing you reviewed on an earlier day is affected.
               </AppText>
               <View className="flex-row gap-2 justify-end pt-1">
                 <Pressable
                   onPress={() => setShowResetConfirm(false)}
-                  className="px-3 py-1.5 border border-neutral-300 rounded-lg"
+                  className="px-3 py-1.5 border border-line-strong rounded-lg"
                 >
-                  <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
+                  <AppText variant="caption" className="text-ink-2 font-sans font-bold ">Cancel</AppText>
                 </Pressable>
                 <Pressable
                   onPress={() => {
                     triggerMockDueReviews();
                     setShowResetConfirm(false);
                   }}
-                  className="px-3 py-1.5 bg-red-600 rounded-lg"
+                  className="px-3 py-1.5 bg-danger rounded-lg"
                 >
-                  <AppText variant="caption" className="text-white font-sans font-bold ">Yes, Reset</AppText>
+                  <AppText variant="caption" className="text-on-accent font-sans font-bold ">Yes, Reset</AppText>
                 </Pressable>
               </View>
             </View>
@@ -503,26 +519,26 @@ export default function HomeScreen({ state }: { state: AppState }) {
           {/* Manual log for a group reviewed off-app. Inline card rather
               than a modal, matching this screen's other confirm patterns. */}
           {manualLogGroup && (
-            <View className="bg-neutral-50 border border-neutral-300 rounded-xl p-3" style={{ gap: 8 }}>
+            <View className="bg-surface-2 border border-line-strong rounded-xl p-3" style={{ gap: 8 }}>
               <View>
-                <AppText variant="caption" className="font-sans font-bold text-neutral-800">Log {manualLogGroup.label} manually</AppText>
-                <AppText variant="micro" className="font-sans text-neutral-500 leading-relaxed">
+                <AppText variant="caption" className="font-sans font-bold text-ink">Log {manualLogGroup.label} manually</AppText>
+                <AppText variant="micro" className="font-sans text-ink-3 leading-relaxed">
                   For a review you actually did somewhere else — out loud in the car, from a card, anywhere but here.
                 </AppText>
               </View>
               <View style={{ gap: 6 }}>
-                <AppButton size="md" onPress={() => submitManualLog('perfect')} className="w-full bg-emerald-600 rounded-lg items-center">
-                  <AppText variant="caption" className="text-white font-sans font-bold ">Perfect — no mistakes</AppText>
+                <AppButton size="md" onPress={() => submitManualLog('perfect')} className="w-full bg-success rounded-lg items-center">
+                  <AppText variant="caption" className="text-on-accent font-sans font-bold ">Perfect — no mistakes</AppText>
                 </AppButton>
-                <AppButton size="md" onPress={() => submitManualLog('passed')} className="w-full bg-indigo-600 rounded-lg items-center">
-                  <AppText variant="caption" className="text-white font-sans font-bold ">Got it, with a stumble</AppText>
+                <AppButton size="md" onPress={() => submitManualLog('passed')} className="w-full bg-accent rounded-lg items-center">
+                  <AppText variant="caption" className="text-on-accent font-sans font-bold ">Got it, with a stumble</AppText>
                 </AppButton>
                 <View className="flex-row gap-2">
-                  <AppButton size="sm" onPress={() => submitManualLog('practice')} className="flex-1 border border-dashed border-neutral-300 rounded-lg items-center">
-                    <AppText variant="caption" className="text-neutral-500 font-sans font-bold ">Needs practice</AppText>
+                  <AppButton size="sm" onPress={() => submitManualLog('practice')} className="flex-1 border border-dashed border-line-strong rounded-lg items-center">
+                    <AppText variant="caption" className="text-ink-3 font-sans font-bold ">Needs practice</AppText>
                   </AppButton>
-                  <AppButton size="sm" onPress={() => setManualLogGroup(null)} className="flex-1 border border-neutral-300 rounded-lg items-center">
-                    <AppText variant="caption" className="text-neutral-600 font-sans font-bold ">Cancel</AppText>
+                  <AppButton size="sm" onPress={() => setManualLogGroup(null)} className="flex-1 border border-line-strong rounded-lg items-center">
+                    <AppText variant="caption" className="text-ink-2 font-sans font-bold ">Cancel</AppText>
                   </AppButton>
                 </View>
               </View>
@@ -531,8 +547,8 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
           {dueReviewItems.length > 0 ? (
             <View style={{ gap: 8 }}>
-              <AppButton size="md" onPress={handleReviewAllDue} className="w-full bg-[#1A1A1A] rounded-xl items-center justify-center">
-                <AppText variant="label" className="text-white font-sans font-bold ">
+              <AppButton size="md" onPress={handleReviewAllDue} className="w-full bg-accent rounded-xl items-center justify-center">
+                <AppText variant="label" className="text-on-accent font-sans font-bold ">
                   Review All Due ({dueReviewItems.length} {dueReviewItems.length === 1 ? 'verse' : 'verses'})
                 </AppText>
               </AppButton>
@@ -564,7 +580,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
               )}
             </View>
           ) : (
-            <AppText variant="label" className="text-neutral-400 italic pl-1">No reviews due today! Keeping up nicely! 🎉</AppText>
+            <AppText variant="label" className="text-ink-3 italic pl-1">No reviews due today! Keeping up nicely! 🎉</AppText>
           )}
         </CollapsibleCard>
 
@@ -578,7 +594,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
               above; this row keeps only the window-size control. */}
           <View className="flex-row items-center" style={{ gap: space(6) }}>
             <HelpTooltip text="Verses you've picked but haven't started yet. Listening to them ahead of time makes them easier when their turn comes." />
-            <AppText variant="micro" className="font-sans font-bold text-neutral-500 shrink-0">
+            <AppText variant="micro" className="font-sans font-bold text-ink-3 shrink-0">
               Show
             </AppText>
             <View style={{ flex: 1, maxWidth: 150 }}>
@@ -591,22 +607,23 @@ export default function HomeScreen({ state }: { state: AppState }) {
               {groupedPriming.map((group) => (
                 <View
                   key={group.label}
-                  className="flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border border-neutral-200"
+                  className="flex-row justify-between items-center bg-surface px-3 py-2 rounded-xl border border-line"
+                  style={{ gap: 8 }}
                 >
-                  <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
-                    <AppText variant="label" className="font-serif text-[#1A1A1A]">{group.label}</AppText>
+                  <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)} className="flex-1">
+                    <AppText variant="label" className="font-serif text-ink">{group.label}</AppText>
                   </Pressable>
                   <Pressable
                     onPress={() => handleGroupPractice('listen', group.items)}
-                    className="bg-neutral-100 px-3 py-1 rounded-lg"
+                    className="bg-surface-2 px-3 py-1 rounded-lg shrink-0"
                   >
-                    <AppText variant="caption" className="text-[#1A1A1A] font-sans">Listen</AppText>
+                    <AppText variant="caption" className="text-ink font-sans">Listen</AppText>
                   </Pressable>
                 </View>
               ))}
             </View>
           ) : (
-            <AppText variant="label" className="text-neutral-400 italic pl-1">Nothing waiting — add more verses when you're ready.</AppText>
+            <AppText variant="label" className="text-ink-3 italic pl-1">Nothing waiting — add more verses when you're ready.</AppText>
           )}
         </CollapsibleCard>
 
@@ -624,11 +641,11 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 triggerToast("No items on dashboard to listen to!");
               }
             }}
-            className="w-full bg-[#1A1A1A] rounded-xl flex-row items-center justify-center shadow-sm"
+            className="w-full bg-accent rounded-xl flex-row items-center justify-center shadow-sm"
             style={{ minHeight: MIN_TOUCH, paddingVertical: space(12), gap: space(6) }}
           >
-            <Volume2 size={iconSize} color="#FFFFFF" />
-            <AppText variant="label" className="text-white font-sans font-bold">
+            <Volume2 size={iconSize} color={palette.onAccent} />
+            <AppText variant="label" className="text-on-accent font-sans font-bold">
               Listen to Today's Scripture
             </AppText>
           </Pressable>

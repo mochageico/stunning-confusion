@@ -16,6 +16,7 @@ import { AppIconButton, AppTextInput,
   type OptionCardItem,
 } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 // The Daily Drip / Weekend Warrior pacing presets were deleted with the
 // plan/rhythm split: they set learning days, pace and review cap, all of
 // which are Rhythm now and live on the queue screen. They were also the
@@ -52,6 +53,7 @@ const rigorOptions = (
 ];
 
 export default function PlanDesignerScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const {
     handleBack,
     triggerToast,
@@ -135,24 +137,24 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     <FadeInView style={{ flex: 1 }}>
       {/* pb-4 rather than pb-12: the Save action now lives in the pinned footer
           below, so the scroll content no longer needs to clear it. */}
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-4" contentContainerStyle={{ gap: 16 }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-4" contentContainerStyle={{ gap: 16 }}>
         {/* Header Row */}
         <View className="flex-row items-center gap-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white shrink-0" />
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface shrink-0" />
           <View className="flex-1">
             {/* Names the set being edited rather than repeating "Review
                 Settings", which is the title of the LIST screen you arrive
                 from -- two screens with an identical header gave no signal
                 that Edit had gone anywhere. */}
-            <AppText variant="section" className="uppercase tracking-wider font-bold text-neutral-700 font-sans">
+            <AppText variant="section" className="uppercase tracking-wider font-bold text-ink-2 font-sans">
               Review settings
             </AppText>
-            <AppText variant="display" className="font-serif font-bold text-[#1A1A1A]">
+            <AppText variant="display" className="font-serif font-bold text-ink">
               {customPlanName.trim() || 'New settings'}
             </AppText>
           </View>
         </View>
-        <AppText variant="body" className="text-neutral-700 font-sans -mt-1">
+        <AppText variant="body" className="text-ink-2 font-sans -mt-1">
           How long a verse keeps coming back before it's yours for good, and what happens when you miss one. How many
           days a week you memorize is a separate thing — that's on My Verses, under My Schedule.
         </AppText>
@@ -166,11 +168,11 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             account starts from, so the only way to "edit" it is to make it
             yours first. */}
         {isEditingBuiltInPlan && (
-          <View className="rounded-xl border-2 border-amber-300 bg-amber-50" style={{ padding: space(12), gap: space(4) }}>
-            <AppText variant="label" className="font-sans font-bold text-amber-900">
+          <View className="rounded-xl border-2 border-warning/30 bg-warning-soft" style={{ padding: space(12), gap: space(4) }}>
+            <AppText variant="label" className="font-sans font-bold text-warning">
               Standard is the built-in one
             </AppText>
-            <AppText variant="micro" className="font-sans text-amber-800 leading-relaxed">
+            <AppText variant="micro" className="font-sans text-warning leading-relaxed">
               Give it a new name below to make your own copy. Standard itself stays exactly as it is, so you can always
               come back to it.
             </AppText>
@@ -180,7 +182,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
         {/* The name. Unnamed settings are indistinguishable from any other set
             in the saved list, and naming is what forks the built-in. */}
         <View style={{ gap: space(6) }}>
-          <AppText variant="section" className="uppercase tracking-wider font-bold text-neutral-700 font-sans">
+          <AppText variant="section" className="uppercase tracking-wider font-bold text-ink-2 font-sans">
             Name
           </AppText>
           {/* The name is the one thing on this screen you write rather than
@@ -189,11 +191,11 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               with the OS font setting like every AppText does. */}
           <AppTextInput
             placeholder="e.g. My Settings"
-            placeholderTextColor="#a3a3a3"
+            placeholderTextColor={palette.ink3}
             value={customPlanName}
             onChangeText={setCustomPlanName}
             allowFontScaling={false}
-            className="w-full border-2 border-[#1A1A1A] rounded-xl font-sans font-bold bg-white text-[#1A1A1A]"
+            className="w-full border-2 border-ink rounded-xl font-sans font-bold bg-surface text-ink"
             style={{
               fontSize: 16 * scale,
               minHeight: MIN_TOUCH,
@@ -204,7 +206,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
 
         {/* Retention tier -- the primary choice on this screen. */}
         <View style={{ gap: space(8) }}>
-          <AppText variant="section" className="uppercase tracking-wider font-bold text-neutral-700 font-sans">
+          <AppText variant="section" className="uppercase tracking-wider font-bold text-ink-2 font-sans">
             How long verses keep coming back
           </AppText>
           <OptionCards options={rigorOptions(rigorSummary)} value={retentionRigor} onChange={chooseRetention} />
@@ -220,7 +222,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           summary={`${dailyPhaseWeeks} wks · ${weeklyPhaseMonths} mo · ${monthlyPhaseYears} yr`}
           defaultCollapsed
         >
-          <AppText variant="caption" className="text-neutral-700 font-sans">
+          <AppText variant="caption" className="text-ink-2 font-sans">
             After you learn a verse, it comes back every day for a while, then once a week, then once a month — and
             then it stops, because you know it. These set how long each of those stretches lasts. Bigger numbers mean
             more practice and a verse that's harder to forget. Changing anything here makes these settings Custom.
@@ -251,7 +253,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             {/* Mastery gates. These moved here from the deleted "Pacing &
                 Limits" section -- they were never pacing: they decide when
                 a verse graduates, which is retention. */}
-            <View style={{ gap: space(6) }} className="pt-2 border-t border-[#F3F2F1]">
+            <View style={{ gap: space(6) }} className="pt-2 border-t border-hairline">
               <SettingRow label="Perfect recalls before a verse counts as learned" value={masteryTouches} />
               <StepperRow min={1} max={6} value={masteryTouches} onChange={tune(setMasteryTouches)} />
             </View>
@@ -262,9 +264,9 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
             </View>
           </View>
 
-          <AppText variant="caption" className="text-neutral-700 font-sans pt-2 border-t border-[#F3F2F1]">
+          <AppText variant="caption" className="text-ink-2 font-sans pt-2 border-t border-hairline">
             With these numbers, a verse stops coming back after about{' '}
-            <AppText variant="caption" className="font-sans font-bold text-[#1A1A1A]">{totalRigorLabel}</AppText>.
+            <AppText variant="caption" className="font-sans font-bold text-ink">{totalRigorLabel}</AppText>.
           </AppText>
         </CollapsibleCard>
 
@@ -298,7 +300,7 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           two label/value rows -- a footer has to stay small at every font
           scale, or it eats the screen it's pinned to. */}
       <View
-        className="border-t-2 border-[#1A1A1A] bg-[#FBF9F6]"
+        className="border-t-2 border-ink bg-surface-2"
         style={{
           paddingHorizontal: space(20),
           paddingTop: space(10),
@@ -308,9 +310,9 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
       >
         <View className="flex-row items-center" style={{ gap: space(6) }}>
           <View className="shrink-0">
-            <TrendingUp size={iconSize} color="#1A1A1A" />
+            <TrendingUp size={iconSize} color={palette.ink} />
           </View>
-          <AppText variant="micro" className="font-sans text-neutral-600 flex-1">
+          <AppText variant="micro" className="font-sans text-ink-2 flex-1">
             Verses stop coming back after about {totalRigorLabel}
           </AppText>
         </View>
@@ -325,12 +327,12 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           }}
           accessibilityState={{ disabled: !canSave }}
           className={`w-full rounded-xl flex-row items-center justify-center shadow-sm ${
-            canSave ? 'bg-[#1A1A1A]' : 'bg-neutral-300'
+            canSave ? 'bg-accent' : 'bg-fill'
           }`}
           style={{ minHeight: MIN_TOUCH, paddingVertical: space(10), gap: space(6) }}
         >
-          <Check size={iconSize} color="#FFFFFF" />
-          <AppText variant="label" className="text-white font-sans font-bold uppercase tracking-widest">
+          <Check size={iconSize} color={palette.onAccent} />
+          <AppText variant="label" className="text-on-accent font-sans font-bold uppercase tracking-widest">
             {isEditingBuiltInPlan ? 'Save as my own' : 'Save'}
           </AppText>
         </Pressable>

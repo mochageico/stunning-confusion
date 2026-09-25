@@ -9,6 +9,7 @@ import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
 import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 
+import { useThemeColors } from '../components/theme';
 // Helper to assign background/text colors to known users (mirrors original web app).
 const getAvatarStyle = (user: string = '') => {
   switch (user) {
@@ -30,6 +31,7 @@ const getAvatarStyle = (user: string = '') => {
 };
 
 export default function AudioFeedScreen({ state }: { state: AppState }) {
+  const palette = useThemeColors();
   const {
     user,
     handleBack,
@@ -135,31 +137,31 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-white" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
         {/* Header Row */}
-        <View className="flex-row items-center gap-3 border-b border-[#E5E5E5] pb-1">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor="#1A1A1A" onPress={handleBack} className="rounded-full border border-[#E5E5E5] bg-white shadow-xs" />
-          <View>
-            <AppText variant="title" className="font-serif font-bold text-[#1A1A1A]">Suggested Recordings</AppText>
+        <View className="flex-row items-center gap-3 border-b border-line pb-1">
+          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface shadow-xs" />
+          <View className="flex-1">
+            <AppText variant="title" className="font-serif font-bold text-ink">Suggested Recordings</AppText>
           </View>
         </View>
 
         {/* Search Bar */}
         <View className="relative justify-center">
           <View className="absolute left-3 z-10">
-            <Search size={16} color="#a3a3a3" />
+            <Search size={16} color={palette.ink3} />
           </View>
-          <AppTextInput value={audioSearchQuery} onChangeText={setAudioSearchQuery} placeholder="Search by book, verses, or reciter..." placeholderTextColor="#a3a3a3" className="w-full bg-[#F3F2F1] border border-[#E5E5E5] rounded-xl py-2 pl-9 pr-8 text-[#1A1A1A]" />
+          <AppTextInput value={audioSearchQuery} onChangeText={setAudioSearchQuery} placeholder="Search by book, verses, or reciter..." placeholderTextColor={palette.ink3} className="w-full bg-surface-2 border border-line rounded-xl py-2 pl-9 pr-8 text-ink" />
           {!!audioSearchQuery && (
             <Pressable onPress={() => setAudioSearchQuery('')} className="absolute right-3">
-              <X size={14} color="#a3a3a3" />
+              <X size={14} color={palette.ink3} />
             </Pressable>
           )}
         </View>
 
         {/* Book Filter under Search */}
         <View className="gap-1">
-          <AppText variant="micro" className="font-bold uppercase text-neutral-400 font-sans tracking-wider">Book</AppText>
+          <AppText variant="micro" className="font-bold uppercase text-ink-3 font-sans tracking-wider">Book</AppText>
           <BookPicker
             value={feedBookFilter}
             allowAll
@@ -178,7 +180,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
         <View className="flex-row gap-3">
           {selectedBookMeta && (
             <View className="gap-1">
-              <AppText variant="micro" className="font-bold uppercase text-neutral-400 font-sans tracking-wider">Chapter</AppText>
+              <AppText variant="micro" className="font-bold uppercase text-ink-3 font-sans tracking-wider">Chapter</AppText>
               <View style={{ width: 140 }}>
                 <Dropdown
                   options={chapterOptions}
@@ -195,7 +197,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
 
           {presentTranslations.length > 1 && (
             <View className="gap-1">
-              <AppText variant="micro" className="font-bold uppercase text-neutral-400 font-sans tracking-wider">
+              <AppText variant="micro" className="font-bold uppercase text-ink-3 font-sans tracking-wider">
                 Translation
               </AppText>
               <View style={{ width: 140 }}>
@@ -214,7 +216,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
         </View>
 
         {/* Filter Tabs */}
-        <View className="flex-row gap-1 bg-[#F3F2F1] p-1 border border-[#E5E5E5] rounded-xl">
+        <View className="flex-row gap-1 bg-surface-2 p-1 border border-line rounded-xl">
           {(
             [
               { id: 'global', label: 'Global' },
@@ -224,8 +226,8 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
           ).map((opt) => {
             const active = activeFeedFilter === opt.id;
             return (
-              <AppButton size="md" key={opt.id} onPress={() => { setActiveFeedFilter(opt.id); setPlayingRecordingId(null); }} className={`flex-1 rounded-lg items-center ${active ? 'bg-[#1A1A1A]' : ''}`}>
-                <AppText variant="section" className={`uppercase tracking-wider font-sans font-bold ${ active ? 'text-white' : 'text-neutral-500' }`} >
+              <AppButton size="md" key={opt.id} onPress={() => { setActiveFeedFilter(opt.id); setPlayingRecordingId(null); }} className={`flex-1 rounded-lg items-center ${active ? 'bg-accent' : ''}`}>
+                <AppText variant="section" className={`uppercase tracking-wider font-sans font-bold ${ active ? 'text-on-accent' : 'text-ink-3' }`} >
                   {opt.label}
                 </AppText>
               </AppButton>
@@ -237,13 +239,13 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
         <View className="gap-3">
           {loadingFeedRecordings ? (
             <View className="py-8 items-center">
-              <AppText variant="label" className="text-neutral-400 font-sans">Loading recordings...</AppText>
+              <AppText variant="label" className="text-ink-3 font-sans">Loading recordings...</AppText>
             </View>
           ) : filtered.length === 0 ? (
-            <View className="items-center p-8 bg-neutral-50 rounded-xl border border-dashed border-[#E5E5E5] gap-2">
-              <Volume2 size={32} color="#d4d4d4" />
-              <AppText variant="label" className="font-sans font-bold text-neutral-400">No recordings matched your criteria</AppText>
-              <AppText variant="caption" className="font-sans text-neutral-400 text-center">
+            <View className="items-center p-8 bg-surface-2 rounded-xl border border-dashed border-line gap-2">
+              <Volume2 size={32} color={palette.lineStrong} />
+              <AppText variant="label" className="font-sans font-bold text-ink-3">No recordings matched your criteria</AppText>
+              <AppText variant="caption" className="font-sans text-ink-3 text-center">
                 Be the first to share one. Record a recitation from the Record tab and set its visibility to Circle or Public.
               </AppText>
             </View>
@@ -262,10 +264,10 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                 );
 
               return (
-                <View key={rec.id} className="border border-[#E5E5E5] rounded-xl p-3.5 bg-white gap-3 shadow-xs">
+                <View key={rec.id} className="border border-line rounded-xl p-3.5 bg-surface gap-3 shadow-xs">
                   {/* Card Top: Reciter Info */}
                   <View className="flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-2.5">
+                    <View className="flex-row items-center gap-2.5 flex-1">
                       <View
                         style={{ backgroundColor: avatarStyle.bg, borderColor: avatarStyle.border }}
                         className="w-8 h-8 rounded-full items-center justify-center border"
@@ -274,49 +276,49 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                           {rec.avatar || 'U'}
                         </AppText>
                       </View>
-                      <View>
-                        <View className="flex-row items-center gap-1.5">
-                          <AppText variant="label" className="font-bold text-[#1A1A1A]">{rec.user || 'Anonymous'}</AppText>
+                      <View className="flex-1">
+                        <View className="flex-row flex-wrap items-center gap-1.5">
+                          <AppText variant="label" className="font-bold text-ink">{rec.user || 'Anonymous'}</AppText>
                           {isOwnRecording ? (
-                            <View className="bg-emerald-100 px-1.5 py-0.5 rounded">
-                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-emerald-700">Me</AppText>
+                            <View className="bg-success-soft px-1.5 py-0.5 rounded">
+                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-success">Me</AppText>
                             </View>
                           ) : rec.user === 'Sarah Miller' || rec.user === 'Elizabeth K.' ? (
-                            <View className="bg-indigo-50 px-1.5 py-0.5 rounded">
-                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-indigo-600">Friend</AppText>
+                            <View className="bg-accent-soft px-1.5 py-0.5 rounded">
+                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-accent">Friend</AppText>
                             </View>
                           ) : rec.user === 'Brother Thomas' || rec.user === 'Mark Davis' ? (
-                            <View className="bg-amber-50 px-1.5 py-0.5 rounded">
-                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-amber-700">Group</AppText>
+                            <View className="bg-warning-soft px-1.5 py-0.5 rounded">
+                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-warning">Group</AppText>
                             </View>
                           ) : (
-                            <View className="bg-neutral-100 px-1.5 py-0.5 rounded">
-                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-neutral-500">Public</AppText>
+                            <View className="bg-surface-2 px-1.5 py-0.5 rounded">
+                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-ink-3">Public</AppText>
                             </View>
                           )}
                         </View>
-                        <AppText variant="micro" className="font-sans text-neutral-400">
+                        <AppText variant="micro" className="font-sans text-ink-3">
                           {rec.date} • {rec.translation}
                         </AppText>
                       </View>
                     </View>
-                    <AppText variant="caption" className="font-mono font-bold text-neutral-500 bg-[#F3F2F1] px-2 py-0.5 rounded-md">
+                    <AppText variant="caption" className="font-mono font-bold text-ink-3 bg-surface-2 px-2 py-0.5 rounded-md shrink-0">
                       {formatTime(rec.duration)}
                     </AppText>
                   </View>
 
                   {/* Card Middle: Title & Scripture Info */}
-                  <View className="bg-neutral-50 p-2.5 border border-[#E5E5E5] rounded-lg">
+                  <View className="bg-surface-2 p-2.5 border border-line rounded-lg">
                     <View className="flex-row items-center gap-1.5">
-                      <BookOpen size={11} color="#737373" />
-                      <AppText variant="section" className="font-sans font-bold uppercase tracking-wide text-neutral-700">
+                      <BookOpen size={11} color={palette.ink3} />
+                      <AppText variant="section" className="font-sans font-bold uppercase tracking-wide text-ink-2">
                         {recordingLabel(rec)}
                       </AppText>
                     </View>
                   </View>
 
                   {/* Card Bottom: Play / Pause & Save to Library */}
-                  <View className="flex-row items-center justify-between pt-1 border-t border-neutral-50">
+                  <View className="flex-row items-center justify-between pt-1 border-t border-hairline">
                     <View className="flex-row items-center gap-2">
                       <Pressable
                         onPress={() => {
@@ -328,23 +330,23 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                           }
                         }}
                         className={`w-7 h-7 rounded-full items-center justify-center ${
-                          isPlaying ? 'bg-[#1A1A1A]' : 'border border-[#1A1A1A]'
+                          isPlaying ? 'bg-accent' : 'border border-ink'
                         }`}
                       >
                         {isPlaying ? (
-                          <Pause size={11} color="#ffffff" />
+                          <Pause size={11} color={palette.onAccent} />
                         ) : (
-                          <Play size={11} color="#1A1A1A" style={{ marginLeft: 2 }} />
+                          <Play size={11} color={palette.ink} style={{ marginLeft: 2 }} />
                         )}
                       </Pressable>
-                      <AppText variant="caption" className="font-sans font-bold text-[#1A1A1A]">
+                      <AppText variant="caption" className="font-sans font-bold text-ink">
                         {isPlaying ? 'Playing Narration' : 'Tap to Listen'}
                       </AppText>
                     </View>
 
-                    <AppButton size="sm" onPress={() => { if (isSaved) { triggerToast(`"${rec.title}" is already in your library!`); return; } saveSharedRecordingToLibrary(rec); }} className={`flex-row items-center gap-1 rounded-lg ${ isSaved ? 'bg-emerald-50 border border-emerald-200' : 'bg-neutral-50 border border-[#E5E5E5]' }`}>
-                      {isSaved ? <Check size={11} color="#059669" /> : <Plus size={11} color="#737373" />}
-                      <AppText variant="caption" className={`font-sans font-bold ${isSaved ? 'text-emerald-700' : 'text-[#1A1A1A]'}`} >
+                    <AppButton size="sm" onPress={() => { if (isSaved) { triggerToast(`"${rec.title}" is already in your library!`); return; } saveSharedRecordingToLibrary(rec); }} className={`flex-row items-center gap-1 rounded-lg ${ isSaved ? 'bg-success-soft border border-success/30' : 'bg-surface-2 border border-line' }`}>
+                      {isSaved ? <Check size={11} color={palette.success} /> : <Plus size={11} color={palette.ink3} />}
+                      <AppText variant="caption" className={`font-sans font-bold ${isSaved ? 'text-success' : 'text-ink'}`} >
                         {isSaved ? 'Saved to Library' : 'Save to Library'}
                       </AppText>
                     </AppButton>
@@ -355,10 +357,10 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                     <View className="gap-1 pt-1">
                       <ProgressBar percent={playingRecProgress} className="h-1" />
                       <View className="flex-row justify-between">
-                        <AppText variant="micro" className="font-mono font-semibold text-neutral-400">
+                        <AppText variant="micro" className="font-mono font-semibold text-ink-3">
                           {formatTime(Math.round((playingRecProgress / 100) * rec.duration))}
                         </AppText>
-                        <AppText variant="micro" className="font-mono font-semibold text-neutral-400">
+                        <AppText variant="micro" className="font-mono font-semibold text-ink-3">
                           {formatTime(rec.duration)}
                         </AppText>
                       </View>
