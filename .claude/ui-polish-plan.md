@@ -142,7 +142,7 @@ this whole file, then do only your job.
   the Playfair Display loads and package. Titles still marked `font-serif`
   render in Literata until their S job moves them to sans. That in-between
   state is expected.
-- **F2 · Tokens + accent setting** — DONE 2026-09-25 (not yet committed).
+- **F2 · Tokens + accent setting** — DONE and committed 2026-09-25 (`38f4289`, on `translation-sources`).
   What was built:
   - **Theme:** `src/components/theme.tsx` holds the palette (neutrals, 6
     accents, status, stages; light + dark), `ThemeProvider` (sets the
