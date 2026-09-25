@@ -462,7 +462,13 @@ export function AppButton({
     >
       {Icon ? <Icon size={Math.round(s.icon * scale)} color={iconColor} /> : null}
       {label ? (
-        <AppText variant={s.type} className={`font-sans font-bold ${textClassName}`} numberOfLines={1}>
+        <AppText
+          variant={s.type}
+          // Bold unless textClassName picks its own weight: two weight classes
+          // don't combine, the heavier one always wins.
+          className={`font-sans ${/\bfont-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)\b/.test(textClassName) ? '' : 'font-bold'} ${textClassName}`}
+          numberOfLines={1}
+        >
           {label}
         </AppText>
       ) : null}

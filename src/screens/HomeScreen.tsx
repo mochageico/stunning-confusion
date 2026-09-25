@@ -112,7 +112,7 @@ function DueReviewRow({
   return (
     <View className={`flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border-l-4 ${t.border} border border-neutral-200 shadow-3xs`}>
       <Pressable onPress={onOpenChapter} className="flex-1 mr-2">
-        <AppText variant="label" className={`font-serif font-black ${t.label}`} numberOfLines={1}>
+        <AppText variant="label" className={`font-serif ${t.label}`} numberOfLines={1}>
           {group.label}
         </AppText>
       </Pressable>
@@ -135,9 +135,9 @@ function DueReviewRow({
           onPress={onListen}
           label="Listen"
           className={`bg-white border ${t.outline} rounded`}
-          textClassName={t.outlineText}
+          textClassName={`font-normal ${t.outlineText}`}
         />
-        <AppButton size="sm" onPress={onReview} label="Review" className={`${t.solid} rounded`} textClassName="text-white" />
+        <AppButton size="sm" onPress={onReview} label="Review" className={`${t.solid} rounded`} textClassName="font-normal text-white" />
       </View>
     </View>
   );
@@ -393,20 +393,20 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 >
                   <View className="flex-row justify-between items-center">
                     <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
-                      <AppText variant="label" className="font-serif font-bold text-[#1A1A1A]">{group.label}</AppText>
+                      <AppText variant="label" className="font-serif text-[#1A1A1A]">{group.label}</AppText>
                     </Pressable>
                     <View className="flex-row gap-1">
                       <Pressable
                         onPress={() => handleGroupPractice('listen', group.items)}
                         className="bg-white border border-neutral-300 px-2 h-5 items-center justify-center rounded"
                       >
-                        <AppText variant="micro" className="text-neutral-700 font-bold">Listen</AppText>
+                        <AppText variant="micro" className="text-neutral-700">Listen</AppText>
                       </Pressable>
                       <Pressable
                         onPress={() => handleGroupPractice('learn', group.items)}
                         className="bg-[#1A1A1A] px-2 h-5 items-center justify-center rounded"
                       >
-                        <AppText variant="micro" className="text-white font-bold">Learn</AppText>
+                        <AppText variant="micro" className="text-white">Learn</AppText>
                       </Pressable>
                     </View>
                   </View>
@@ -594,13 +594,13 @@ export default function HomeScreen({ state }: { state: AppState }) {
                   className="flex-row justify-between items-center bg-white px-3 py-2 rounded-xl border border-neutral-200"
                 >
                   <Pressable onPress={() => navigateTo('chapterLanding', group.book, group.chapter)}>
-                    <AppText variant="label" className="font-serif font-bold text-[#1A1A1A]">{group.label}</AppText>
+                    <AppText variant="label" className="font-serif text-[#1A1A1A]">{group.label}</AppText>
                   </Pressable>
                   <Pressable
                     onPress={() => handleGroupPractice('listen', group.items)}
                     className="bg-neutral-100 px-3 py-1 rounded-lg"
                   >
-                    <AppText variant="caption" className="text-[#1A1A1A] font-sans font-bold ">Listen</AppText>
+                    <AppText variant="caption" className="text-[#1A1A1A] font-sans">Listen</AppText>
                   </Pressable>
                 </View>
               ))}
