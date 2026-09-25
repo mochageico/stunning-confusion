@@ -202,7 +202,7 @@ this whole file, then do only your job.
   dark mode later is a switch rather than a project (ui-overhaul bucket 1).
   Proof: the demo preview in each accent, plus a phone check that switching
   recolors the whole app instantly.
-- **F3 · Building blocks** (L) — DONE 2026-09-25, not yet committed.
+- **F3 · Building blocks** (L) — DONE 2026-09-25, committed 02995f0.
   What was built:
   - **`src/components/blocks.tsx` (new):** ScreenHeader (iPhone large
     title; back link = accent chevron + `backLabel`; `eyebrow`, `subtitle`,
@@ -295,7 +295,7 @@ Optional quick-win session before everything: the 7 Bugs below.
 
 Tags: Bug / Font / Style / Copy / UX.
 
-**S1 — Today** (`HomeScreen.tsx`) — DONE 2026-09-25, not yet committed (built
+**S1 — Today** (`HomeScreen.tsx`) — DONE 2026-09-25, committed 9687870 (built
 before F4, so the tab bar is still the old one). ScreenHeader (date eyebrow,
 sans greeting, "About N min today"); sections keep CollapsibleCard (new
 `accessory` prop holds the "?" beside the title; summary no longer Courier);
@@ -320,7 +320,31 @@ More. Shots: `.shots/s1/`.
 - First run: three empty sections still render as tall "0 …" boxes under
   "Start here"; the Start-here card is a third card style.
 
-**S2 — Practice** (`PracticeModals.tsx`)
+**S2 — Practice** (`PracticeModals.tsx`) — DONE 2026-09-25.
+Header: sans reference, hairline rule, outline icon buttons, session count as
+a Badge; manual log is the same Dialog sheet as Today's. Learn: mode picker
+and Passage/Memory grid are SegmentedControls (labels only); Recall box is a
+thin-edged card; masks are sans, not Courier; mistakes count is grey until
+there's a mistake; placeholder "First letter of each word" ("First letters"
+at 1.3×+), mic no longer pushed off-screen at 1.5×; the two settings strips
+are one grouped card (DrillSettings) with ink labels, ink-2 values, and
+segmented controls inside + a one-line note on what counts; "Start over"
+(quiet) + "Reveal word" (secondary). Results panels: sans sentence-case
+titles, primary log button + caption, quiet "Practice again". Order/Build
+up/Scramble/Spot: variant buttons, thin edges, no uppercase/Courier.
+Listen: verse picker shows its value ("Coming up next", not "Priming"),
+List/Grid/Photo segmented, the lookahead is Today's compact "Show 30";
+verses are one continuous list (soft accent on the playing verse, full-ink
+text even without audio); sentence-case footer; Follow/Loop use accent-soft;
+primary Play/Pause; short EmptyState. Shots: `.shots/s2/`.
+Follow-up same day (user's call after a rows-vs-sliders mockup): Words hidden
+is a DiscreteSlider, 0-100% in steps of 5, ends labeled None/All, the value
+read out on the row. "Restart after" left the Recall screen for a new
+Practice card in Settings (set once, rarely changed); both screens share
+`lib/practicePrefs.ts` and merge into the same key. DiscreteSlider fixes:
+tap position measured from the track (a tap on the thumb or post-drag
+click used to jump near 0), drag uses the latest onChange, adjustable
+accessibility, sans labels, `showStopLabels` prop. Shots: `.shots/s2b/`.
 - Bug: typing placeholder truncated ("…(nearby key").
 - Style: uppercase mode tabs in grey tray; thick black practice box + rule;
   "Restart verse after"/"Words hidden" rows look disabled (grey on grey,

@@ -783,10 +783,10 @@ export function SettingRow({
 export function RangeCaption({ min, max }: { min: string; max: string }) {
   return (
     <View className="flex-row justify-between" style={{ gap: 8 }}>
-      <AppText variant="micro" className="text-ink-2 font-mono shrink">
+      <AppText variant="micro" className="text-ink-2 font-sans shrink">
         {min}
       </AppText>
-      <AppText variant="micro" className="text-ink-2 font-mono shrink text-right">
+      <AppText variant="micro" className="text-ink-2 font-sans shrink text-right">
         {max}
       </AppText>
     </View>

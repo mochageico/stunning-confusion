@@ -235,10 +235,19 @@ export function DiscreteSlider<T extends string | number>({
   options,
   value,
   onChange,
+  showStopLabels = true,
+  accessibilityLabel,
 }: {
   options: SliderStop<T>[];
   value: T;
   onChange: (id: T) => void;
+  /**
+   * One label under every stop. Turn it off for a long run of stops (0-100%
+   * in 5s is 21 of them), where the labels would pile into each other; show
+   * the current value somewhere else instead.
+   */
+  showStopLabels?: boolean;
+  accessibilityLabel?: string;
 }) {
   const trackWidthRef = useRef(0);
   const trackRef = useRef<View>(null);
@@ -250,6 +259,9 @@ export function DiscreteSlider<T extends string | number>({
   // plain closure over activeIndex/lastIndex would go stale after the first
   // render (same reasoning as RecordingDetailScreen's DraggableMarker).
   const startFractionRef = useRef(0);
+  // Set while the thumb is being dragged, so the tap the browser fires when
+  // the drag ends doesn't also count as a tap on the track.
+  const draggedRef = useRef(false);
   const dragStateRef = useRef({ activeIndex, lastIndex });
   dragStateRef.current = { activeIndex, lastIndex };
 
@@ -258,6 +270,10 @@ export function DiscreteSlider<T extends string | number>({
     const stop = options[idx];
     if (stop && stop.id !== value) onChange(stop.id);
   };
+  // The PanResponder below is built once, so it calls through this ref to get
+  // the current render's value and onChange rather than the first render's.
+  const jumpRef = useRef(jumpToFraction);
+  jumpRef.current = jumpToFraction;
 
   // Deliberately NOT reading width from onLayout: onLayout never fired at
   // all on this View in testing (not even once, on any platform tested so
@@ -291,13 +307,23 @@ export function DiscreteSlider<T extends string | number>({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        draggedRef.current = true;
         const { activeIndex, lastIndex } = dragStateRef.current;
         startFractionRef.current = lastIndex <= 0 ? 0 : activeIndex / lastIndex;
       },
       onPanResponderMove: (_evt, gestureState) => {
         const width = trackWidthRef.current;
         if (width <= 0) return;
-        jumpToFraction(startFractionRef.current + gestureState.dx / width);
+        jumpRef.current(startFractionRef.current + gestureState.dx / width);
+      },
+      // Cleared after the current event finishes: on web the stray tap
+      // arrives right after release; on native none arrives, and the flag
+      // must not swallow the next real tap.
+      onPanResponderRelease: () => {
+        setTimeout(() => (draggedRef.current = false), 0);
+      },
+      onPanResponderTerminate: () => {
+        setTimeout(() => (draggedRef.current = false), 0);
       },
     })
   ).current;
@@ -305,17 +331,28 @@ export function DiscreteSlider<T extends string | number>({
   return (
     <View style={{ gap: 6 }}>
       <Pressable
+        accessibilityRole="adjustable"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityValue={{ text: options[activeIndex]?.label }}
+        onAccessibilityAction={(e) => {
+          const step = e.nativeEvent.actionName === 'increment' ? 1 : e.nativeEvent.actionName === 'decrement' ? -1 : 0;
+          const stop = options[Math.max(0, Math.min(lastIndex, activeIndex + step))];
+          if (step && stop && stop.id !== value) onChange(stop.id);
+        }}
+        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
         onPress={(e) => {
-          const width = trackWidthRef.current;
-          if (width <= 0) return;
-          // nativeEvent.locationX is the real, reliable field on native RN --
-          // but on React Native Web it's frequently NaN/undefined (the
-          // Pressable there wraps a plain DOM event), so fall back to the
-          // DOM's own offsetX, which is relative to this same target.
-          const nativeEvt = e.nativeEvent as any;
-          const locationX =
-            typeof nativeEvt.locationX === 'number' && !Number.isNaN(nativeEvt.locationX) ? nativeEvt.locationX : nativeEvt.offsetX;
-          jumpToFraction(locationX / width);
+          if (draggedRef.current) {
+            draggedRef.current = false;
+            return;
+          }
+          // Measured from the track's own left edge in page coordinates.
+          // locationX (and offsetX on web) is relative to whichever child the
+          // finger landed on -- the thumb or the filled bar -- so a tap on the
+          // thumb used to read as "near the start" and jump there.
+          const pageX = (e.nativeEvent as any).pageX;
+          trackRef.current?.measure((_x, _y, width, _h, trackPageX) => {
+            if (width > 0 && typeof pageX === 'number') jumpToFraction((pageX - trackPageX) / width);
+          });
         }}
       >
         <View ref={trackRef} className="w-full justify-center" style={{ height: 28 }}>
@@ -325,18 +362,20 @@ export function DiscreteSlider<T extends string | number>({
           <View
             {...panResponder.panHandlers}
             // White knob with a fixed shadow, like the iPhone's slider thumb.
-            className="absolute w-6 h-6 rounded-full bg-white border border-line shadow-sm"
+            className="absolute w-6 h-6 rounded-full bg-raised border border-line shadow-sm"
             style={{ left: `${percent}%`, marginLeft: -12 }}
           />
         </View>
       </Pressable>
-      <View className="flex-row justify-between px-0.5">
-        {options.map((opt) => (
-          <AppText variant="micro" key={String(opt.id)} className="font-mono font-medium text-ink-3">
-            {opt.label}
-          </AppText>
-        ))}
-      </View>
+      {showStopLabels && (
+        <View className="flex-row justify-between px-0.5">
+          {options.map((opt) => (
+            <AppText variant="micro" key={String(opt.id)} className="font-sans font-medium text-ink-3">
+              {opt.label}
+            </AppText>
+          ))}
+        </View>
+      )}
     </View>
   );
 }

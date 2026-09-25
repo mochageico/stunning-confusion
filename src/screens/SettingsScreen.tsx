@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import Constants from 'expo-constants';
 import { ArrowLeft, Check } from 'lucide-react-native';
@@ -9,6 +9,14 @@ import { ChipRow, FadeInView, HelpTooltip } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS } from '../data';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { AUDIO_CACHE_SUPPORTED, CACHE_CAP_CHOICES } from '../lib/audioCache';
+import {
+  DEFAULT_STRIKE_LIMIT,
+  isStrikeLimit,
+  loadPracticePrefs,
+  savePracticePrefs,
+  STRIKE_LIMITS,
+  StrikeLimit,
+} from '../lib/practicePrefs';
 import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
 import { ACCENTS, useAccent, useThemeColors } from '../components/theme';
 
@@ -47,6 +55,39 @@ const PAUSE_DURATIONS: { id: '1w' | '2w' | '1m' | 'indefinite'; label: string; d
  * whole app at once (ThemeProvider in theme.tsx) and is remembered on this
  * device.
  */
+/**
+ * "Restart after": how many wrong words in one verse before Recall starts
+ * that verse over. It used to sit on the Recall screen beside Words hidden,
+ * but people set it once and leave it, while Words hidden changes from run to
+ * run, so it lives here. The Recall screen still shows the count ("2 of 5
+ * mistakes") and says where to change it when a verse restarts.
+ */
+function PracticeSettings() {
+  const [strikeLimit, setStrikeLimit] = useState<StrikeLimit>(DEFAULT_STRIKE_LIMIT);
+  useEffect(() => {
+    loadPracticePrefs().then((saved) => {
+      if (isStrikeLimit(saved.strikeLimit)) setStrikeLimit(saved.strikeLimit);
+    });
+  }, []);
+  return (
+    <View className="bg-surface border border-line rounded-card p-3.5" style={{ gap: 10 }}>
+      <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-ink-3">Practice</AppText>
+      <AppText variant="label" className="font-sans font-medium text-ink">Restart a verse after this many mistakes</AppText>
+      <ChipRow
+        value={strikeLimit}
+        onChange={(limit) => {
+          setStrikeLimit(limit);
+          savePracticePrefs({ strikeLimit: limit });
+        }}
+        options={STRIKE_LIMITS.map((limit) => ({ id: limit, label: limit === 'unlimited' ? 'Never' : `${limit}` }))}
+      />
+      <AppText variant="caption" className="font-sans text-ink-3">
+        In Recall, missing this many words in one verse starts that verse over from the top.
+      </AppText>
+    </View>
+  );
+}
+
 function AccentColorPicker() {
   const { accentId, setAccentId, scheme } = useAccent();
   const palette = useThemeColors();
@@ -194,6 +235,9 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-ink-3">Appearance</AppText>
           <AccentColorPicker />
         </View>
+
+        {/* PRACTICE */}
+        <PracticeSettings />
 
         {/* ACCOUNT */}
         <View className="bg-surface border border-line rounded-xl p-3.5" style={{ gap: 12 }}>

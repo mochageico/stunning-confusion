@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, type AudioPlayer, type AudioStatus } from 'expo-audio';
 import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
@@ -61,12 +60,14 @@ import {
   ScrambleRound,
   SwapVerse,
 } from '../lib/drills';
-import { BounceView, ChipRow, FadeInView, SpinView, WaveBars } from './ui';
+import { BounceView, ChipRow, DiscreteSlider, FadeInView, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
 import MemoryGrid, { verseAnnotationKey } from './MemoryGrid';
 import ListenPhotoView from './ListenPhotoView';
 import { chapterPhotoKey, sortChapterPhotos } from '../lib/chapterPhotos';
-import { AppButton, AppIconButton, AppTextInput, AppText, useCollapsed } from './design';
+import { AppButton, AppIconButton, AppTextInput, AppText, RangeCaption, useCollapsed, useFontScale, useScaledSpace } from './design';
+import { Badge, Dialog, EmptyState, SegmentedControl } from './blocks';
+import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePrefs, StrikeLimit } from '../lib/practicePrefs';
 
 import { useThemeColors } from './theme';
 /** Stable identity, so a missing photoCache prop cannot retrigger renders. */
@@ -118,7 +119,7 @@ const ListenProgress = React.memo(function ListenProgress({
       <View className="w-full bg-fill h-1 rounded-full overflow-hidden">
         <View className="bg-accent h-full" style={{ width: `${percent}%` }} />
       </View>
-      <AppText variant="micro" numberOfLines={1} className="font-bold text-ink-3 font-mono text-center">
+      <AppText variant="micro" numberOfLines={1} className="font-sans font-medium text-ink-3 text-center">
         Verse {verseIndex + 1} of {verseCount}
         {repeatsPerVerse > 1 ? ` · pass ${verseRepeatsDone + 1} of ${repeatsPerVerse}` : ''}
       </AppText>
@@ -135,6 +136,11 @@ const ListenProgress = React.memo(function ListenProgress({
 const LISTEN_SPEEDS = [0.6, 0.8, 1.0, 1.2, 1.5, 2.0];
 /** Times each verse can repeat before playback moves on. */
 const LISTEN_REPEATS = [1, 2, 3, 4, 5];
+/** Recall's words-hidden stops: 0-100% in steps of 5. Only 100 grades. */
+const HIDE_LEVELS = Array.from({ length: 21 }, (_, i) => i * 5).map((n) => ({
+  id: n,
+  label: n === 100 ? 'All' : `${n}%`,
+}));
 
 interface PracticeModalsProps {
   type: 'listen' | 'learn';
@@ -204,48 +210,65 @@ interface PracticeModalsProps {
 }
 
 // ============================================================
-// DrillSetting — the collapsed-by-default strip the Recall
-// screen's knobs live in. Mid-recall you want the passage, not
-// three panels of controls, so each one folds down to a single
-// line that still states where it stands ("Restart after ·
-// 5 mistakes"); tapping it opens the options. Open/closed
-// persists per key through the same store CollapsibleCard uses,
-// so someone who fiddles with a knob every session keeps it open.
+// DrillSetting — one row of the Recall screen's settings card.
+// Mid-recall you want the passage, not panels of controls, so
+// each row folds down to a single line that still states where
+// it stands ("Restart verse after   5 mistakes"); tapping it
+// opens the choices in place. Open/closed persists per key
+// through the same store CollapsibleCard uses, so someone who
+// fiddles with a knob every session keeps it open.
+//
+// The rows share one card (DrillSettings) and are divided by a
+// hairline, the way a grouped settings list is. They used to be
+// separate grey strips with grey Courier values, which read as
+// disabled controls rather than as settings.
 // ============================================================
+function DrillSettings({ children }: { children: React.ReactNode }) {
+  return <View className="mt-2.5 bg-surface border border-line rounded-card overflow-hidden">{children}</View>;
+}
+
 function DrillSetting({
   storageKey,
   label,
   value,
-  valueClassName = 'text-ink-3',
+  valueClassName = 'text-ink-2',
+  first = false,
   children,
 }: {
   storageKey: string;
   label: string;
-  /** Current setting, shown on the header so a folded strip still reads. */
+  /** Current setting, shown on the row so a folded row still reads. */
   value: string;
   valueClassName?: string;
+  /** The first row in its card draws no divider above it. */
+  first?: boolean;
   children: React.ReactNode;
 }) {
   const palette = useThemeColors();
+  const space = useScaledSpace();
   const [collapsed, setCollapsed] = useCollapsed(storageKey, true);
   const Chevron = collapsed ? ChevronDown : ChevronUp;
 
   return (
-    <View className="mt-2.5 bg-surface-2 border border-line rounded-xl px-2.5 py-2 gap-1.5">
+    <View
+      className={first ? '' : 'border-t border-hairline'}
+      style={{ paddingHorizontal: space(12), paddingVertical: space(10), gap: space(8) }}
+    >
       <Pressable
         onPress={() => setCollapsed(!collapsed)}
         accessibilityRole="button"
         accessibilityState={{ expanded: !collapsed }}
         hitSlop={6}
-        className="flex-row items-center gap-2"
+        className="flex-row items-center active:opacity-60"
+        style={{ gap: space(8) }}
       >
-        <AppText variant="micro" className="font-sans font-extrabold text-ink-3 tracking-wider uppercase shrink-0">
+        <AppText variant="label" className="font-sans font-medium text-ink shrink">
           {label}
         </AppText>
-        <AppText variant="micro" className={`font-mono font-bold flex-1 text-right ${valueClassName}`} numberOfLines={1}>
+        <AppText variant="label" className={`font-sans flex-1 text-right ${valueClassName}`}>
           {value}
         </AppText>
-        <Chevron size={13} color={palette.ink3} />
+        <Chevron size={Math.round(space(14))} color={palette.ink3} />
       </Pressable>
       {!collapsed && children}
     </View>
@@ -293,6 +316,8 @@ function PracticeModalsInner({
   onAddChapterPhoto,
 }: PracticeModalsProps) {
   const palette = useThemeColors();
+  const space = useScaledSpace();
+  const fontScale = useFontScale();
   const handleGroupComplete = onAdvance ?? onClose;
   // ==========================================
   // PLAYLIST / PLAY-SOURCE STATE (Listen mode only)
@@ -1121,7 +1146,8 @@ function PracticeModalsInner({
   // signal.
   const [reciteSource, setReciteSource] = useState<Record<number, 'protected' | 'speech'>>({});
   const [verseStrikes, setVerseStrikes] = useState(0);
-  const [strikeLimit, setStrikeLimit] = useState<number | 'unlimited'>(5);
+  // Set in Settings, not here (see lib/practicePrefs); read once on open.
+  const [strikeLimit, setStrikeLimit] = useState<StrikeLimit>(DEFAULT_STRIKE_LIMIT);
   const [showStrikeResetAlert, setShowStrikeResetAlert] = useState(false);
   const [typedInput, setTypedInput] = useState('');
   const [flashError, setFlashError] = useState(false);
@@ -1382,17 +1408,14 @@ function PracticeModalsInner({
   // (AsyncStorage, same mechanism useScripture.ts uses for its verse cache)
   // -- previously these were plain useState with no persistence at all and
   // silently reset to defaults on every remount.
-  const HINT_PREFS_KEY = 'practice:hintPrefs:v1';
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(HINT_PREFS_KEY);
-        if (!raw) return;
-        const saved = JSON.parse(raw);
+        const saved: any = await loadPracticePrefs();
         if (typeof saved.hideLevel === 'number') setHideLevel(saved.hideLevel);
         if (typeof saved.firstLetterLevel === 'number') setFirstLetterLevel(saved.firstLetterLevel);
         if (saved.hintMode === 'percent' || saved.hintMode === 'firstLetter') setHintMode(saved.hintMode);
-        if (saved.strikeLimit === 'unlimited' || typeof saved.strikeLimit === 'number') setStrikeLimit(saved.strikeLimit);
+        if (isStrikeLimit(saved.strikeLimit)) setStrikeLimit(saved.strikeLimit);
         if (saved.recallDisplayMode === 'passage' || saved.recallDisplayMode === 'memoryGrid') setRecallDisplayMode(saved.recallDisplayMode);
         if (saved.gridHideMode === 'firstLetter' || saved.gridHideMode === 'blank') setGridHideMode(saved.gridHideMode);
         if (saved.buildSize === 'short' || saved.buildSize === 'medium' || saved.buildSize === 'long') setBuildSize(saved.buildSize);
@@ -1405,21 +1428,20 @@ function PracticeModalsInner({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Merges rather than overwrites, and leaves strikeLimit out: that one
+  // belongs to Settings now, and writing this screen's copy back would undo
+  // a change made there.
   useEffect(() => {
-    AsyncStorage.setItem(
-      HINT_PREFS_KEY,
-      JSON.stringify({
-        hideLevel,
-        firstLetterLevel,
-        hintMode,
-        strikeLimit,
-        recallDisplayMode,
-        gridHideMode,
-        buildSize,
-        buildDirection,
-      })
-    ).catch(() => {});
-  }, [hideLevel, firstLetterLevel, hintMode, strikeLimit, recallDisplayMode, gridHideMode, buildSize, buildDirection]);
+    savePracticePrefs({
+      hideLevel,
+      firstLetterLevel,
+      hintMode,
+      recallDisplayMode,
+      gridHideMode,
+      buildSize,
+      buildDirection,
+    });
+  }, [hideLevel, firstLetterLevel, hintMode, recallDisplayMode, gridHideMode, buildSize, buildDirection]);
 
   // A chained review session (see advanceReviewSession in useAppState.ts)
   // swaps `verses` in place on the SAME mounted PracticeModals instance --
@@ -1456,7 +1478,7 @@ function PracticeModalsInner({
     () =>
       [
         { id: 'recite' as const, label: 'Recall', Icon: Mic },
-        { id: 'buildUp' as const, label: 'Build Up', Icon: Layers },
+        { id: 'buildUp' as const, label: 'Build up', Icon: Layers },
         ...(verses.length >= MIN_JIGSAW_VERSES ? [{ id: 'jigsaw' as const, label: 'Order', Icon: ListOrdered }] : []),
         { id: 'scramble' as const, label: 'Scramble', Icon: Puzzle },
         { id: 'spotSwap' as const, label: 'Spot', Icon: SearchCheck },
@@ -1808,7 +1830,7 @@ function PracticeModalsInner({
           <View className="flex-1 mr-2" style={{ gap: 1 }}>
             <View className="flex-row items-center gap-1">
               <ChevronUp size={9} color="rgba(255,255,255,0.5)" />
-              <AppText variant="micro" className="text-on-accent/60 font-sans font-extrabold uppercase tracking-wider">Now Playing</AppText>
+              <AppText variant="micro" className="text-on-accent/70 font-sans font-semibold">Now playing</AppText>
             </View>
             <AppText variant="label" numberOfLines={1} className="text-on-accent font-sans font-bold ">
               {miniVerse ? `${miniVerse.book} ${miniVerse.chapter}:${miniVerse.verse}` : referenceText}
@@ -1832,67 +1854,51 @@ function PracticeModalsInner({
   return (
     <View className="absolute inset-0 bg-surface z-50 pt-11 pb-4 px-4" id="practice_overlay">
       {/* Header Bar */}
-      <View className="flex-row items-center justify-between border-b border-ink pb-2 mb-3" style={{ gap: 8 }}>
+      <View className="flex-row items-center justify-between border-b border-hairline pb-2 mb-3" style={{ gap: 8 }}>
         {/* flex-1 so a long reference wraps instead of pushing the
             close button off the screen at large text sizes. */}
         <View className="flex-1">
-          <AppText variant="title" className="font-serif font-bold text-ink leading-tight" numberOfLines={2}>
+          <AppText variant="title" className="font-sans font-bold text-ink leading-tight" numberOfLines={2}>
             {referenceText}
           </AppText>
         </View>
         <View className="flex-row items-center gap-2 shrink-0">
-          {!!sessionTotal && sessionTotal > 1 && (
-            <View className="bg-ink px-2.5 py-1 rounded-full">
-              <AppText variant="caption" className="text-on-accent font-mono font-bold">
-                {sessionPosition} of {sessionTotal}
-              </AppText>
-            </View>
-          )}
+          {!!sessionTotal && sessionTotal > 1 && <Badge label={`${sessionPosition} of ${sessionTotal}`} />}
           {/* Manual log -- replaces the old Reveal tab's self-assessment
               buttons. Available from every learn mode, since "I already did
               this off-app" isn't tied to any particular drill. */}
           {type === 'learn' && (
-            <AppIconButton Icon={ClipboardCheck} diameter={40} iconSize={17} iconColor={palette.ink} onPress={() => setShowManualLog(true)} className="rounded-full border border-line-strong shrink-0" hitSlop={8} />
+            <AppIconButton
+              variant="outline"
+              Icon={ClipboardCheck}
+              onPress={() => setShowManualLog(true)}
+              accessibilityLabel="Log a review done somewhere else"
+            />
           )}
-          <AppIconButton Icon={X} diameter={40} iconSize={18} iconColor={palette.ink} onPress={type === 'listen' ? () => setListenMinimized(true) : onClose} className="rounded-full border border-line-strong shrink-0" hitSlop={8} />
+          <AppIconButton
+            variant="outline"
+            Icon={X}
+            onPress={type === 'listen' ? () => setListenMinimized(true) : onClose}
+            accessibilityLabel={type === 'listen' ? 'Minimize' : 'Close'}
+          />
         </View>
       </View>
 
-      {/* ======================================================== */}
-      {/* MANUAL LOG SHEET                                          */}
-      {/* ======================================================== */}
-      {showManualLog && (
-        <View className="absolute inset-0 bg-black/40 z-[60] justify-end" id="manual_log_sheet">
-          <Pressable className="flex-1" onPress={() => setShowManualLog(false)} />
-          <View className="bg-surface rounded-t-3xl p-5 gap-3" style={{ paddingBottom: insets.bottom + 20 }}>
-            <View className="items-center gap-1 mb-1">
-              <ClipboardCheck size={22} color={palette.ink} />
-              <AppText variant="title" className="font-serif font-bold text-ink">Log this review manually</AppText>
-              <AppText variant="caption" className="text-ink-3 font-sans text-center px-2">
-                For reviews you actually did — out loud in the car, from a card, anywhere but here. {referenceText}
-              </AppText>
-            </View>
-
-            <AppButton size="md" onPress={() => submitManualLog('perfect')} className="w-full bg-success rounded-xl items-center">
-              <AppText variant="label" className="font-sans font-bold text-on-accent">Perfect — no mistakes</AppText>
-              <AppText variant="micro" className="text-on-accent font-sans mt-0.5">Counts as a review and toward mastery</AppText>
-            </AppButton>
-
-            <AppButton size="md" onPress={() => submitManualLog('passed')} className="w-full bg-accent rounded-xl items-center">
-              <AppText variant="label" className="font-sans font-bold text-on-accent">Got it, with a stumble</AppText>
-              <AppText variant="micro" className="text-on-accent font-sans mt-0.5">Counts as a review only, no mastery touch</AppText>
-            </AppButton>
-
-            <AppButton size="md" onPress={() => submitManualLog('practice')} className="w-full border border-dashed border-line-strong rounded-xl items-center">
-              <AppText variant="caption" className="font-sans font-bold text-ink-3">Needs more practice</AppText>
-            </AppButton>
-
-            <Pressable onPress={() => setShowManualLog(false)} className="w-full py-1.5 items-center">
-              <AppText variant="caption" className="font-sans font-bold text-ink-3">Cancel</AppText>
-            </Pressable>
-          </View>
+      {/* Manual log. Same sheet and the same three outcomes as the one on
+          Today's review rows. */}
+      <Dialog
+        visible={showManualLog}
+        onClose={() => setShowManualLog(false)}
+        placement="sheet"
+        title={`Log ${referenceText}`}
+        message="For a review you actually did somewhere else — out loud in the car, from a card, anywhere but here."
+      >
+        <View style={{ gap: 8 }}>
+          <AppButton variant="primary" label="Perfect — no mistakes" onPress={() => submitManualLog('perfect')} />
+          <AppButton variant="secondary" label="Got it, with a stumble" onPress={() => submitManualLog('passed')} />
+          <AppButton variant="quiet" label="Needs practice" onPress={() => submitManualLog('practice')} />
         </View>
-      )}
+      </Dialog>
 
       {/* Main Panel */}
       <View className="flex-1 justify-between py-1">
@@ -1901,67 +1907,62 @@ function PracticeModalsInner({
         {/* ======================================================== */}
         {type === 'listen' && (
           <View className="flex-1 justify-between">
-            {/* View + Verse Selection -- dropdowns instead of always-visible
-                buttons/chips, to cut down on-screen clutter. Both tap
-                through to the same handleVerseClick regardless of which
-                display mode is picked. */}
-            <View className="flex-row gap-2 mb-2.5 shrink-0">
-              <View className="flex-1">
-                <Dropdown
-                  value={listenViewMode}
-                  onChange={setListenViewMode}
-                  options={[
-                    { id: 'verses' as const, label: 'Verse List' },
-                    { id: 'memoryGrid' as const, label: 'Memory Grid' },
-                    ...(sessionHasPhotos ? [{ id: 'photo' as const, label: 'Bible Photo' }] : []),
-                  ]}
-                  title="Display"
-                  placeholder="View"
-                  staticLabel
-                  searchable={false}
-                />
-              </View>
+            {/* Which verses play, and how they're shown. The verse picker
+                names its current choice rather than a fixed "Verse
+                Selection" label, and the display is a segmented control:
+                two or three short choices, all visible at once. They wrap
+                onto two lines at large text sizes. */}
+            <View className="flex-row flex-wrap items-center mb-2.5 shrink-0" style={{ gap: 8 }}>
               {((memoryQueue && memoryQueue.length > 0) || (allVerses && allVerses.length > 0)) && (
-                <View className="flex-1">
+                <View style={{ flexGrow: 1, flexBasis: space(150) }}>
                   <Dropdown
                     value={playSource}
                     onChange={setPlaySource}
                     options={[
-                      { id: 'all', label: "Today's Verses" },
-                      { id: 'memorization', label: 'Learning' },
+                      { id: 'all', label: "Today's verses" },
+                      { id: 'memorization', label: 'Learning now' },
                       { id: 'reviewing', label: 'Review' },
-                      { id: 'priming', label: 'Priming' },
-                      { id: 'selection', label: 'Selected' },
+                      { id: 'priming', label: 'Coming up next' },
+                      { id: 'selection', label: 'Selected verses' },
                     ]}
-                    title="Verse Selection"
-                    placeholder="Verse Selection"
-                    staticLabel
+                    title="Which verses play"
                     searchable={false}
                   />
                 </View>
               )}
+              <View style={{ flexGrow: 1, flexBasis: space(150) }}>
+                <SegmentedControl
+                  value={listenViewMode}
+                  onChange={setListenViewMode}
+                  accessibilityLabel="Display"
+                  options={[
+                    { id: 'verses' as const, label: 'List' },
+                    { id: 'memoryGrid' as const, label: 'Grid' },
+                    ...(sessionHasPhotos ? [{ id: 'photo' as const, label: 'Photo' }] : []),
+                  ]}
+                />
+              </View>
             </View>
 
+            {/* Same control as Today's "Coming up next" section. */}
             {playSource === 'priming' && setPrimingLookahead && (
-              <View className="flex-row items-center justify-between bg-warning-soft border border-warning/30 rounded-lg p-2 mb-2.5">
-                <View>
-                  <AppText variant="micro" className="font-sans font-bold text-warning uppercase tracking-wider">⚡ Priming Window Size</AppText>
-                  <AppText variant="micro" className="font-sans text-warning leading-none">Set lookahead priming size</AppText>
-                </View>
-                <View style={{ width: 90 }}>
-                  <Dropdown
-                    value={primingLookahead}
-                    onChange={(v) => setPrimingLookahead(Number(v))}
-                    options={[10, 20, 30, 40, 50].map((n) => ({ id: n, label: `${n}` }))}
-                    title="Priming Window Size"
-                  />
-                </View>
+              <View className="flex-row items-center justify-end mb-2.5 shrink-0" style={{ gap: 8 }}>
+                <AppText variant="caption" className="font-sans font-medium text-ink-3">
+                  Show
+                </AppText>
+                <Dropdown
+                  value={primingLookahead}
+                  onChange={(v) => setPrimingLookahead(Number(v))}
+                  options={[10, 20, 30, 40, 50].map((n) => ({ id: n, label: `${n}` }))}
+                  title="How many to show"
+                  compact
+                />
               </View>
             )}
 
             {/* Verse Highlight Box — verse-by-verse, not word-by-word: the
                 only real timing data this app has is per verse. */}
-            <View className="bg-surface-2 border border-line rounded-2xl flex-1 mb-3 overflow-hidden">
+            <View className="bg-surface border border-line rounded-card flex-1 mb-3 overflow-hidden">
               {/* Content area. The photo layer is absolute within THIS box
                   rather than the panel, so it covers the two scroll views
                   without also covering the footer bar below them. */}
@@ -1982,7 +1983,7 @@ function PracticeModalsInner({
               ) : (
               <ScrollView
                 ref={verseListRef}
-                className="flex-1 p-4"
+                className="flex-1 p-2"
                 contentContainerStyle={{ paddingBottom: 12 }}
                 onScrollBeginDrag={() => {
                   // Only a real finger-drag lands here -- a programmatic
@@ -1996,7 +1997,7 @@ function PracticeModalsInner({
                     stable content-relative origin to measure against. The gap
                     lives here rather than on contentContainerStyle for the
                     same reason. */}
-                <View ref={verseContentRef} collapsable={false} style={{ gap: 10 }}>
+                <View ref={verseContentRef} collapsable={false} style={{ gap: 4 }}>
                 {activePlayVerses.map((verseObj, index) => {
                   const segment = playableSegments[index];
                   const hasAudio = !!segment.recording;
@@ -2012,29 +2013,30 @@ function PracticeModalsInner({
                     selectionStart !== null &&
                     (selectionEnd !== null ? index >= selectionStart && index <= selectionEnd : index === selectionStart);
 
-                  let cardClassName = 'rounded-xl px-3 py-2.5 border ';
+                  // One continuous list, not a card per verse: the verse
+                  // playing gets a soft accent fill, and a selection range a
+                  // soft amber or green one. Verse text stays full ink even
+                  // without audio -- "No audio" says that on its own, and
+                  // greying the words made them hard to read.
+                  let cardClassName = 'rounded-btn px-3 py-2.5 ';
                   if (isActive) {
-                    cardClassName += 'bg-accent border-accent';
+                    cardClassName += 'bg-accent-soft';
                   } else if (playSource === 'selection' && selectionStart !== null) {
                     if (!inSelectionRange) {
-                      cardClassName += 'bg-surface border-line opacity-40';
+                      cardClassName += 'opacity-40';
                     } else {
-                      cardClassName += segmentClosed ? 'bg-success-soft border-success/30' : 'bg-warning-soft border-warning/30';
+                      cardClassName += segmentClosed ? 'bg-success-soft' : 'bg-warning-soft';
                     }
-                  } else if (isRead) {
-                    cardClassName += 'bg-fill/40 border-line';
-                  } else {
-                    cardClassName += 'bg-surface border-line';
                   }
 
                   const refClassName = isActive
-                    ? 'text-on-accent/70'
+                    ? 'text-accent'
                     : inSelectionRange
                       ? segmentClosed
                         ? 'text-success'
                         : 'text-warning'
                       : 'text-ink-3';
-                  const textClassName = isActive ? 'text-on-accent' : !hasAudio ? 'text-ink-3' : 'text-ink';
+                  const textClassName = isRead && !isActive ? 'text-ink-2' : 'text-ink';
 
                   return (
                     <Pressable
@@ -2046,11 +2048,11 @@ function PracticeModalsInner({
                       className={cardClassName}
                     >
                       <View className="flex-row items-center justify-between mb-0.5">
-                        <AppText variant="micro" className={`font-sans font-extrabold uppercase tracking-wide ${refClassName}`}>
+                        <AppText variant="caption" className={`font-sans font-semibold ${refClassName}`}>
                           {verseObj.book} {verseObj.chapter}:{verseObj.verse}
                         </AppText>
                         {!hasAudio && (
-                          <AppText variant="micro" className={`font-sans font-bold uppercase tracking-wide ${isActive ? 'text-on-accent/50' : 'text-ink-3'}`}>
+                          <AppText variant="caption" className="font-sans text-ink-3">
                             No audio
                           </AppText>
                         )}
@@ -2101,23 +2103,26 @@ function PracticeModalsInner({
                 <View className="flex-row items-center gap-2 flex-1">
                   {playSource === 'selection' && selectionStart !== null ? (
                     <>
-                      <AppButton size="sm" onPress={() => { setSelectionStart(null); setSelectionEnd(null); setCurrentVerseIndex(0); }} className="flex-row items-center gap-1.5 bg-surface border border-line-strong rounded-lg shrink-0">
-                        <RefreshCw size={10} color={palette.ink} />
-                        <AppText variant="micro" className="font-sans font-extrabold text-ink">Reset</AppText>
-                      </AppButton>
-                      {/* Matches the card colours: amber while the segment is
+                      <AppButton
+                        size="sm"
+                        variant="quiet"
+                        Icon={RefreshCw}
+                        label="Reset"
+                        onPress={() => { setSelectionStart(null); setSelectionEnd(null); setCurrentVerseIndex(0); }}
+                        className="shrink-0"
+                      />
+                      {/* Matches the row colours: amber while the segment is
                           still open, green once it is closed and looping. */}
                       <AppText
-                        variant="micro"
-                        numberOfLines={1}
-                        className={`font-sans font-extrabold uppercase tracking-wider flex-1 ${selectionEnd === null ? 'text-warning' : 'text-success'}`}
+                        variant="caption"
+                        className={`font-sans font-semibold flex-1 ${selectionEnd === null ? 'text-warning' : 'text-success'}`}
                       >
                         {segmentStatusLabel}
                       </AppText>
                     </>
                   ) : (
-                    <AppText variant="micro" numberOfLines={1} className="font-sans font-bold text-ink-3 uppercase tracking-wider flex-1">
-                      {playSource === 'selection' ? 'Tap verse to select segment' : 'Playlist Auto-playback'}
+                    <AppText variant="caption" className="font-sans text-ink-3 flex-1">
+                      {playSource === 'selection' ? 'Tap the first verse to loop' : 'Tap a verse to play from there'}
                     </AppText>
                   )}
                 </View>
@@ -2131,11 +2136,12 @@ function PracticeModalsInner({
                     onPress={() => setAutoFollow((on) => !on)}
                     accessibilityRole="switch"
                     accessibilityState={{ checked: autoFollow }}
-                    className={`flex-row items-center gap-1 rounded-full border shrink-0 ${autoFollow ? 'bg-accent border-accent' : 'bg-surface border-line-strong'}`}
-                  >
-                    <MoveVertical size={10} color={autoFollow ? palette.onAccent : palette.ink3} />
-                    <AppText variant="micro" className={`font-sans font-extrabold ${autoFollow ? 'text-on-accent' : 'text-ink-3'}`}>Follow</AppText>
-                  </AppButton>
+                    Icon={MoveVertical}
+                    iconColor={autoFollow ? palette.accent : palette.ink3}
+                    label="Follow"
+                    textClassName={`font-semibold ${autoFollow ? 'text-accent' : 'text-ink-2'}`}
+                    className={`rounded-full border shrink-0 ${autoFollow ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
+                  />
                 )}
               </View>
             </View>
@@ -2143,13 +2149,10 @@ function PracticeModalsInner({
             {/* Custom Control and Audio Looping Panel */}
             <View className="gap-3 bg-surface pt-2">
               {!hasAnyAudio ? (
-                <View className="items-center gap-1.5 py-4 bg-surface-2 rounded-xl border border-dashed border-line-strong">
-                  <AppText variant="label" className="font-sans font-bold text-ink-2">No audio recorded for these verses yet</AppText>
-                  <AppText variant="caption" className="font-sans text-ink-3 text-center px-6 leading-relaxed">
-                    Record a recitation from the Record tab, or select a narration for this chapter from its Chapter
-                    Landing page — playback here uses whichever recording is set there.
-                  </AppText>
-                </View>
+                <EmptyState
+                  title="No recordings for these verses yet"
+                  message="Record one on the Record tab, or pick a narration on the chapter's page."
+                />
               ) : (
                 <>
                   {/* Settings pills. These replaced two bordered cards, each
@@ -2168,8 +2171,8 @@ function PracticeModalsInner({
                       value whether or not it's open. */}
                   <View className="gap-1.5">
                     {openSetting !== null && (
-                      <View className="bg-surface-2 border border-line rounded-xl p-2 gap-1.5">
-                        <AppText variant="micro" className="font-sans font-bold text-ink-3 uppercase tracking-wider">
+                      <View className="bg-surface-2 border border-line rounded-card p-2.5 gap-2">
+                        <AppText variant="caption" className="font-sans font-semibold text-ink-2">
                           {openSetting === 'speed' ? 'Playback speed' : 'Times each verse plays before moving on'}
                         </AppText>
                         {openSetting === 'speed' ? (
@@ -2198,7 +2201,7 @@ function PracticeModalsInner({
                             this pill clipped to "1.0x s..." at 1.5x font
                             scale. The expander names it in full once open. */}
                         <Sliders size={10} color={palette.ink3} />
-                        <AppText variant="micro" numberOfLines={1} className="font-mono font-bold text-ink">
+                        <AppText variant="micro" numberOfLines={1} className="font-sans font-semibold text-ink">
                           {listenSpeed.toFixed(1)}×
                         </AppText>
                       </AppButton>
@@ -2208,7 +2211,7 @@ function PracticeModalsInner({
                         onPress={() => setOpenSetting((cur) => (cur === 'repeats' ? null : 'repeats'))}
                         className={`flex-1 rounded-full border ${openSetting === 'repeats' ? 'bg-surface-2 border-line-strong' : 'bg-surface border-line-strong'}`}
                       >
-                        <AppText variant="micro" numberOfLines={1} className="font-mono font-bold text-ink">
+                        <AppText variant="micro" numberOfLines={1} className="font-sans font-semibold text-ink">
                           {repeatsPerVerse}× each
                         </AppText>
                       </AppButton>
@@ -2220,10 +2223,10 @@ function PracticeModalsInner({
                         onPress={() => setRepeatMode((m) => (m === 'playlist' ? 'off' : 'playlist'))}
                         accessibilityRole="switch"
                         accessibilityState={{ checked: repeatMode === 'playlist' }}
-                        className={`flex-row items-center gap-1 rounded-full border shrink-0 ${repeatMode === 'playlist' ? 'bg-accent border-accent' : 'bg-surface border-line-strong'}`}
+                        className={`flex-row items-center gap-1 rounded-full border shrink-0 ${repeatMode === 'playlist' ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
                       >
-                        <Repeat size={10} color={repeatMode === 'playlist' ? palette.onAccent : palette.ink3} />
-                        <AppText variant="micro" numberOfLines={1} className={`font-sans font-extrabold ${repeatMode === 'playlist' ? 'text-on-accent' : 'text-ink-3'}`}>
+                        <Repeat size={10} color={repeatMode === 'playlist' ? palette.accent : palette.ink3} />
+                        <AppText variant="micro" numberOfLines={1} className={`font-sans font-semibold ${repeatMode === 'playlist' ? 'text-accent' : 'text-ink-2'}`}>
                           {repeatMode === 'playlist' ? 'Loop' : 'Off'}
                         </AppText>
                       </AppButton>
@@ -2261,18 +2264,22 @@ function PracticeModalsInner({
                       that was only ever true when the repeat pill was on. */}
                   <View className="flex-row items-center gap-2.5 pb-1">
                     <AppIconButton
+                      variant="outline"
                       Icon={RefreshCw}
                       diameter={44}
-                      iconSize={16}
-                      iconColor={palette.ink}
+                      iconSize={18}
                       onPress={restartListen}
                       accessibilityLabel="Restart from the first verse"
-                      className="rounded-full border-2 border-ink shrink-0"
+                      className="shrink-0"
                     />
-                    <AppButton size="lg" onPress={toggleListenPlaying} className={`flex-1 rounded-xl flex-row items-center justify-center gap-1.5 ${ listenPlaying ? 'bg-ink' : 'bg-accent' }`}>
-                      {listenPlaying ? <Pause size={14} color={palette.onAccent} /> : <Play size={14} color={palette.onAccent} />}
-                      <AppText variant="label" className="font-sans font-bold text-on-accent">{listenPlaying ? 'Pause' : 'Play'}</AppText>
-                    </AppButton>
+                    <AppButton
+                      size="lg"
+                      variant="primary"
+                      Icon={listenPlaying ? Pause : Play}
+                      label={listenPlaying ? 'Pause' : 'Play'}
+                      onPress={toggleListenPlaying}
+                      className="flex-1"
+                    />
                   </View>
                 </>
               )}
@@ -2296,24 +2303,18 @@ function PracticeModalsInner({
 
             {/* Mode picker. Recall is the only graded mode; the rest are
                 supplementary drills (see the LearnMode comment above). */}
-            {/* Five modes no longer fit one row at a readable size (and
-                certainly not at 1.5x text scale), so this wraps -- centred,
-                so a trailing partial row reads as a deliberate group instead
-                of a layout bug. Chips size to their content rather than
-                flex-1 for the same reason ChipRow's wrap mode does: dividing
-                the row evenly squeezes the longest label to a sliver. */}
-            <View className="flex-row flex-wrap justify-center bg-surface-2 p-1 rounded-xl mb-3.5 border border-line shrink-0 gap-y-1">
-              {learnModes.map(({ id, label, Icon }) => {
-                const active = learnTab === id;
-                return (
-                  <AppButton size="sm" key={id} onPress={() => switchLearnTab(id)} className={` rounded-lg flex-row items-center justify-center gap-1 ${active ? 'bg-accent' : ''}`}>
-                    <Icon size={12} color={active ? palette.onAccent : palette.ink3} />
-                    <AppText variant="micro" className={`uppercase tracking-wider font-sans font-extrabold ${active ? 'text-on-accent' : 'text-ink-3'}`} numberOfLines={1} >
-                      {label}
-                    </AppText>
-                  </AppButton>
-                );
-              })}
+            {/* The standard segmented control, labels only: at five modes
+                the icons were what pushed the old picker onto two rows.
+                Segments size to their labels, so "Scramble" gets more room
+                than "Spot", and a label wraps rather than being cut off at
+                large text sizes. */}
+            <View className="mb-3 shrink-0">
+              <SegmentedControl
+                value={learnTab}
+                onChange={switchLearnTab}
+                accessibilityLabel="Practice mode"
+                options={learnModes.map(({ id, label }) => ({ id, label }))}
+              />
             </View>
 
             {learnTab === 'recite' ? (
@@ -2323,35 +2324,35 @@ function PracticeModalsInner({
                       highlight: words before the pointer are graded, the
                       word at the pointer is the "current" target for both
                       channels, everything after is masked. */}
-                  <View className={`border-2 rounded-2xl p-4 flex-1 justify-between relative ${flashError ? 'border-danger bg-danger-soft' : 'border-ink bg-surface'}`}>
+                  <View className={`border rounded-card p-4 flex-1 justify-between relative ${flashError ? 'border-danger bg-danger-soft' : 'border-line bg-surface'}`}>
                     {/* Strike Reset Alert Overlay */}
                     {showStrikeResetAlert && (
                       <FadeInView style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
-                        <View className="flex-1 bg-on-accent/95 items-center justify-center p-4 rounded-xl">
+                        <View className="flex-1 bg-surface/95 items-center justify-center p-4 rounded-card">
                           <SpinView>
                             <View className="w-10 h-10 rounded-full bg-danger-soft items-center justify-center mb-2">
                               <RefreshCw size={20} color={palette.danger} />
                             </View>
                           </SpinView>
-                          <AppText variant="body" className="font-sans font-extrabold text-danger">Verse Restarting!</AppText>
-                          <AppText variant="caption" className="text-danger font-medium px-4 text-center">
-                            That's {strikeLimit} mistakes on this verse. Let's take it again from the beginning!
+                          <AppText variant="body" className="font-sans font-bold text-ink">Starting the verse over</AppText>
+                          <AppText variant="caption" className="font-sans text-ink-2 px-4 text-center">
+                            That's {strikeLimit} mistakes in this verse, so it starts again from the top. You can change
+                            this in Settings.
                           </AppText>
                         </View>
                       </FadeInView>
                     )}
 
-                    <View className="flex-row bg-surface-2 p-0.5 rounded-lg mb-2 shrink-0">
-                      <AppButton size="sm" onPress={() => setRecallDisplayMode('passage')} className={`flex-1 rounded-md items-center ${recallDisplayMode === 'passage' ? 'bg-surface' : ''}`}>
-                        <AppText variant="micro" className={`font-sans font-extrabold uppercase tracking-wider ${recallDisplayMode === 'passage' ? 'text-ink' : 'text-ink-3'}`}>
-                          Passage
-                        </AppText>
-                      </AppButton>
-                      <AppButton size="sm" onPress={() => setRecallDisplayMode('memoryGrid')} className={`flex-1 rounded-md items-center ${recallDisplayMode === 'memoryGrid' ? 'bg-accent' : ''}`}>
-                        <AppText variant="micro" className={`font-sans font-extrabold uppercase tracking-wider ${recallDisplayMode === 'memoryGrid' ? 'text-on-accent' : 'text-ink-3'}`}>
-                          Memory Grid
-                        </AppText>
-                      </AppButton>
+                    <View className="mb-3 shrink-0">
+                      <SegmentedControl
+                        value={recallDisplayMode}
+                        onChange={setRecallDisplayMode}
+                        accessibilityLabel="Show the verses as"
+                        options={[
+                          { id: 'passage' as const, label: 'Passage' },
+                          { id: 'memoryGrid' as const, label: 'Memory grid' },
+                        ]}
+                      />
                     </View>
 
                     {recallDisplayMode === 'memoryGrid' ? (
@@ -2369,10 +2370,6 @@ function PracticeModalsInner({
                       </ScrollView>
                     ) : (
                     <ScrollView className="flex-1 mb-2">
-                      <AppText variant="micro" className="font-sans font-bold text-ink-3 tracking-wider mb-1">
-                        Recall Practice — {verses.length} {verses.length === 1 ? 'verse' : 'verses'} ({referenceText})
-                      </AppText>
-
                       <View className="gap-3">
                         {(() => {
                           let flatIdx = 0;
@@ -2447,7 +2444,7 @@ function PracticeModalsInner({
                                     return (
                                       <AppText variant="inherit"
                                         key={idx}
-                                        className={`font-serif rounded px-1 font-mono font-bold ${
+                                        className={`font-sans rounded px-1 font-bold ${
                                           isCurrent ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-ink-3'
                                         }`}
                                       >
@@ -2459,8 +2456,8 @@ function PracticeModalsInner({
                                   return (
                                     <AppText variant="inherit"
                                       key={idx}
-                                      className={`font-serif rounded px-1 font-mono font-bold ${
-                                        isCurrent ? 'bg-warning-soft text-ink-3' : 'bg-surface-2 text-ink-3'
+                                      className={`font-sans rounded px-1 font-bold ${
+                                        isCurrent ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-ink-3'
                                       }`}
                                     >
                                       {maskLetters(w)}{' '}
@@ -2483,22 +2480,29 @@ function PracticeModalsInner({
                     <View className="gap-2.5 pt-2">
                       <View className="flex-row justify-between items-center px-1">
                         <View className="flex-row items-center gap-2">
+                          {/* Red only once there's a mistake to count. */}
                           {strikeLimit !== 'unlimited' && (
-                            <AppText variant="caption" className="text-danger font-medium">{verseStrikes} of {strikeLimit} mistakes</AppText>
+                            <AppText variant="caption" className={`font-sans font-medium ${verseStrikes > 0 ? 'text-danger' : 'text-ink-3'}`}>
+                              {verseStrikes} of {strikeLimit} mistakes
+                            </AppText>
                           )}
                         </View>
-                        <AppText variant="caption" className="text-ink-3 font-bold">{recitePointer} of {reciteWordObjects.length} words</AppText>
+                        <AppText variant="caption" className="font-sans font-medium text-ink-3">{recitePointer} of {reciteWordObjects.length} words</AppText>
                       </View>
 
                       <View className="flex-row items-center gap-2">
-                        <AppTextInput value={typedInput} onChangeText={handleReciteTypeChar} placeholder={showStrikeResetAlert ? 'Resetting...' : 'Type first letter of each word (nearby keys count)...'} className="flex-1 bg-surface-2 border border-line-strong rounded-xl py-2 px-3 text-center font-sans font-semibold text-ink" editable={!showStrikeResetAlert} />
+                        {/* Short enough to fit an SE at 1.5x. Nearby keys still
+                            count; that's forgiveness, not an instruction. */}
+                        <AppTextInput value={typedInput} onChangeText={handleReciteTypeChar} placeholder={showStrikeResetAlert ? 'Starting over…' : fontScale >= 1.3 ? 'First letters' : 'First letter of each word'} style={{ minWidth: 0 }} className="flex-1 bg-surface-2 border border-line rounded-btn py-2 px-3 text-center font-sans font-semibold text-ink" editable={!showStrikeResetAlert} />
                         {speechAvailable && (
-                          <Pressable
+                          <AppIconButton
+                            Icon={isListeningSpeak ? MicOff : Mic}
+                            diameter={40}
+                            iconColor={palette.onAccent}
                             onPress={() => (isListeningSpeak ? stopListening() : startListening())}
-                            className={`w-9 h-9 rounded-full items-center justify-center shrink-0 ${isListeningSpeak ? 'bg-danger' : 'bg-accent'}`}
-                          >
-                            {isListeningSpeak ? <MicOff size={15} color={palette.onAccent} /> : <Mic size={15} color={palette.onAccent} />}
-                          </Pressable>
+                            accessibilityLabel={isListeningSpeak ? 'Stop listening' : 'Say it out loud'}
+                            className={`shrink-0 ${isListeningSpeak ? 'bg-danger' : 'bg-accent'}`}
+                          />
                         )}
                       </View>
                       {isListeningSpeak && (
@@ -2509,34 +2513,7 @@ function PracticeModalsInner({
                     </View>
                   </View>
 
-                  {/* How many wrong words before the verse starts over. Named
-                      for what it does rather than "Strike Reset Limit
-                      (Accuracy Assist)", which described the mechanism twice
-                      and the effect never. Chips, not a slider: four stops is
-                      too few to be worth dragging for, and every stop is
-                      already one tap away. */}
-                  <DrillSetting
-                    storageKey="recall.restart"
-                    label="Restart verse after"
-                    value={strikeLimit === 'unlimited' ? 'Never' : `${strikeLimit} mistakes`}
-                  >
-                    <ChipRow
-                      value={strikeLimit === 'unlimited' ? 'unlimited' : strikeLimit}
-                      onChange={(id) => {
-                        const limit = id === 'unlimited' ? 'unlimited' : Number(id);
-                        setStrikeLimit(limit as number | 'unlimited');
-                        setVerseStrikes(0);
-                      }}
-                      options={[3, 5, 10, 'unlimited'].map((limit) => ({
-                        id: limit as number | 'unlimited',
-                        label: limit === 'unlimited' ? 'Never' : `${limit}`,
-                      }))}
-                    />
-                    <AppText variant="micro" className="text-ink-3 font-sans leading-[15px]">
-                      Miss this many words in one verse and it starts over from the top.
-                    </AppText>
-                  </DrillSetting>
-
+                  <DrillSettings>
                   {/* How many words get hidden this attempt -- changing it or
                       resetting always re-rolls a fresh random subset.
                       % Hidden only grades at 100% (Blind); First Letter
@@ -2547,39 +2524,50 @@ function PracticeModalsInner({
                   {recallDisplayMode === 'passage' && (
                     <DrillSetting
                       storageKey="recall.hiding"
+                      first
                       label="Words hidden"
-                      valueClassName={hintMode === 'firstLetter' ? 'text-accent' : 'text-ink-3'}
+                      valueClassName={hintMode === 'firstLetter' ? 'text-accent' : 'text-ink-2'}
                       value={
                         hintMode === 'firstLetter'
-                          ? 'First letter · review only'
+                          ? 'First letters · review only'
                           : activeLevel === 100
-                            ? 'Blind'
+                            ? 'All (blind)'
                             : `${activeLevel}% · practice only`
                       }
                     >
-                      <View className="flex-row bg-fill p-0.5 rounded-lg">
-                        <AppButton size="sm" onPress={() => switchHintMode('percent')} className={`flex-1 rounded-md items-center ${hintMode === 'percent' ? 'bg-surface' : ''}`}>
-                          <AppText variant="micro" className={`font-sans font-extrabold ${hintMode === 'percent' ? 'text-ink' : 'text-ink-3'}`}>
-                            % Hidden
-                          </AppText>
-                        </AppButton>
-                        <AppButton size="sm" onPress={() => switchHintMode('firstLetter')} className={`flex-1 rounded-md items-center ${hintMode === 'firstLetter' ? 'bg-accent' : ''}`}>
-                          <AppText variant="micro" className={`font-sans font-extrabold ${hintMode === 'firstLetter' ? 'text-on-accent' : 'text-ink-3'}`}>
-                            First Letter
-                          </AppText>
-                        </AppButton>
-                      </View>
+                      <SegmentedControl
+                        value={hintMode}
+                        onChange={switchHintMode}
+                        accessibilityLabel="How words are hidden"
+                        options={[
+                          { id: 'percent' as const, label: 'Hide words' },
+                          { id: 'firstLetter' as const, label: 'Show first letters' },
+                        ]}
+                      />
                       {hintMode === 'percent' && (
-                        <ChipRow
-                          value={activeLevel}
-                          onChange={(level) => {
-                            setActiveLevel(level);
-                            resetReciteGame();
-                            regenerateHiddenWords(level);
-                          }}
-                          options={[0, 25, 50, 75, 100].map((level) => ({ id: level, label: level === 100 ? 'Blind' : `${level}%` }))}
-                        />
+                        // 0-100 in steps of 5. The row above reads the
+                        // current value out, so the slider needs only its
+                        // two ends labeled rather than 21 stops.
+                        <View style={{ gap: 2 }}>
+                          <DiscreteSlider
+                            value={activeLevel}
+                            onChange={(level) => {
+                              setActiveLevel(level);
+                              resetReciteGame();
+                              regenerateHiddenWords(level);
+                            }}
+                            options={HIDE_LEVELS}
+                            showStopLabels={false}
+                            accessibilityLabel="Words hidden"
+                          />
+                          <RangeCaption min="None" max="All" />
+                        </View>
                       )}
+                      <AppText variant="caption" className="text-ink-3 font-sans">
+                        {hintMode === 'firstLetter'
+                          ? 'Counts as a review, but never toward learning a verse.'
+                          : 'Only a run with every word hidden counts as a review.'}
+                      </AppText>
                     </DrillSetting>
                   )}
 
@@ -2589,34 +2577,32 @@ function PracticeModalsInner({
                   {recallDisplayMode === 'memoryGrid' && (
                     <DrillSetting
                       storageKey="recall.grid"
+                      first
                       label="Grid shows"
-                      valueClassName={gridHideMode === 'blank' ? 'text-accent' : 'text-ink-3'}
                       value={gridHideMode === 'blank' ? 'Nothing' : 'First letters'}
                     >
-                      <View className="flex-row bg-fill p-0.5 rounded-lg">
-                        <AppButton size="sm" onPress={() => setGridHideMode('firstLetter')} className={`flex-1 rounded-md items-center ${gridHideMode === 'firstLetter' ? 'bg-surface' : ''}`}>
-                          <AppText variant="micro" className={`font-sans font-extrabold ${gridHideMode === 'firstLetter' ? 'text-ink' : 'text-ink-3'}`}>
-                            First Letter
-                          </AppText>
-                        </AppButton>
-                        <AppButton size="sm" onPress={() => setGridHideMode('blank')} className={`flex-1 rounded-md items-center ${gridHideMode === 'blank' ? 'bg-accent' : ''}`}>
-                          <AppText variant="micro" className={`font-sans font-extrabold ${gridHideMode === 'blank' ? 'text-on-accent' : 'text-ink-3'}`}>
-                            Fully Hidden
-                          </AppText>
-                        </AppButton>
-                      </View>
+                      <SegmentedControl
+                        value={gridHideMode}
+                        onChange={setGridHideMode}
+                        accessibilityLabel="What the grid shows"
+                        options={[
+                          { id: 'firstLetter' as const, label: 'First letters' },
+                          { id: 'blank' as const, label: 'Nothing' },
+                        ]}
+                      />
                     </DrillSetting>
                   )}
+                  </DrillSettings>
 
-                  {/* Options */}
-                  <View className="mt-2 flex-row gap-2.5">
-                    <AppButton size="md" onPress={() => { resetReciteGame(); regenerateHiddenWords(activeLevel); }} className="flex-1 border border-line-strong rounded-xl flex-row items-center justify-center gap-1.5">
-                      <RefreshCw size={12} color={palette.ink2} />
-                      <AppText variant="label" className="font-sans font-bold text-ink-2">Reset Passage</AppText>
-                    </AppButton>
-                    <AppButton size="md" onPress={handleReciteHint} className="flex-1 border-2 border-ink rounded-xl items-center justify-center">
-                      <AppText variant="label" className="font-sans font-bold text-ink">Reveal Word</AppText>
-                    </AppButton>
+                  <View className="mt-2.5 flex-row gap-2.5">
+                    <AppButton
+                      variant="quiet"
+                      Icon={fontScale >= 1.3 ? undefined : RefreshCw}
+                      label="Start over"
+                      onPress={() => { resetReciteGame(); regenerateHiddenWords(activeLevel); }}
+                      className="flex-1"
+                    />
+                    <AppButton variant="secondary" Icon={fontScale >= 1.3 ? undefined : Eye} label="Reveal word" onPress={handleReciteHint} className="flex-1" />
                   </View>
                 </View>
               ) : hintMode === 'percent' && hideLevel < 100 ? (
@@ -2629,33 +2615,34 @@ function PracticeModalsInner({
                   return (
                     <ScrollView className="flex-1" contentContainerClassName="items-center justify-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
                       <BounceView>
-                        <View className="w-12 h-12 bg-surface-2 border-2 border-ink rounded-full items-center justify-center">
-                          <Shuffle size={24} color={palette.ink} />
+                        <View className="w-12 h-12 bg-accent-soft rounded-full items-center justify-center">
+                          <Shuffle size={24} color={palette.accent} />
                         </View>
                       </BounceView>
-                      <View className="items-center">
-                        <AppText variant="title" className="font-serif font-bold text-ink leading-tight">Nice practice run!</AppText>
-                        <AppText variant="label" className="text-ink-3 font-sans mt-0.5 text-center px-6 leading-relaxed">
-                          {pct}% word accuracy with {hideLevel}% of words hidden. Anything short of fully blind is warm-up
-                          only — it never counts toward a mastery touch or a review.
+                      <View className="items-center gap-1">
+                        <AppText variant="title" className="font-sans font-bold text-ink leading-tight">Nice practice run</AppText>
+                        <AppText variant="label" className="text-ink-2 font-sans text-center px-4">
+                          {pct}% word accuracy with {hideLevel}% of words hidden. Anything short of every word hidden is
+                          warm-up only, so nothing was logged.
                         </AppText>
                       </View>
 
                       <View className="w-full gap-2">
-                        <AppButton size="md" onPress={() => { resetReciteGame(); regenerateHiddenWords(hideLevel); }} className="w-full bg-accent rounded-xl flex-row items-center justify-center gap-1.5">
-                          <Shuffle size={14} color={palette.onAccent} />
-                          <AppText variant="label" className="font-sans font-bold text-on-accent">Practice Again (new words hidden)</AppText>
-                        </AppButton>
-                        <Pressable
+                        <AppButton
+                          variant="primary"
+                          Icon={Shuffle}
+                          label="Practice again with new words hidden"
+                          onPress={() => { resetReciteGame(); regenerateHiddenWords(hideLevel); }}
+                        />
+                        <AppButton
+                          variant="quiet"
+                          label="Try it with every word hidden"
                           onPress={() => {
                             setHideLevel(100);
                             resetReciteGame();
                             regenerateHiddenWords(100);
                           }}
-                          className="w-full py-1 items-center"
-                        >
-                          <AppText variant="caption" className="text-ink-3 font-bold">Try It Fully Blind Instead</AppText>
-                        </Pressable>
+                        />
                       </View>
                     </ScrollView>
                   );
@@ -2677,27 +2664,23 @@ function PracticeModalsInner({
                   return (
                     <ScrollView className="flex-1" contentContainerClassName="items-center justify-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
                       <BounceView>
-                        <View className={`w-12 h-12 border-2 rounded-full items-center justify-center ${assisted ? 'bg-accent-soft border-accent' : 'bg-surface-2 border-ink'}`}>
-                          <Sparkles size={24} color={assisted ? palette.accent : palette.ink} />
+                        <View className={`w-12 h-12 rounded-full items-center justify-center ${summary.passesReview ? 'bg-success-soft' : 'bg-accent-soft'}`}>
+                          <Sparkles size={24} color={summary.passesReview ? palette.success : palette.accent} />
                         </View>
                       </BounceView>
-                      <View className="items-center">
-                        {assisted && (
-                          <View className="bg-accent-soft rounded-full px-2 py-0.5 mb-1">
-                            <AppText variant="micro" className="font-sans font-extrabold text-accent uppercase tracking-wider">First-Letter Assisted</AppText>
-                          </View>
-                        )}
-                        <AppText variant="title" className="font-serif font-bold text-ink leading-tight">
-                          {isMasteryEligible ? 'Perfect Recall!' : summary.passesReview ? (assisted && summary.isPerfect ? 'Nicely Recalled!' : 'Close Enough!') : 'Keep Practicing!'}
+                      <View className="items-center gap-1">
+                        {assisted && <Badge tone="accent" label="First letters shown" />}
+                        <AppText variant="title" className="font-sans font-bold text-ink leading-tight text-center">
+                          {isMasteryEligible ? 'Perfect recall' : summary.passesReview ? (assisted && summary.isPerfect ? 'Nicely recalled' : 'Close enough') : 'Keep practicing'}
                         </AppText>
-                        <AppText variant="label" className="text-ink-3 font-sans mt-0.5">
-                          {pct}% word accuracy — {summary.perfectWords} exact
+                        <AppText variant="label" className="text-ink-2 font-sans text-center">
+                          {pct}% word accuracy: {summary.perfectWords} exact
                           {summary.closeWords > 0 ? `, ${summary.closeWords} near-miss` : ''}
                           {summary.missedWords > 0 ? `, ${summary.missedWords} missed` : ''} of {summary.totalWords} words.
                         </AppText>
                       </View>
 
-                      <View className="w-full bg-surface-2 border border-line rounded-xl p-3 gap-1.5 max-h-[110px]">
+                      <View className="w-full bg-surface-2 border border-line rounded-card p-3 gap-1.5 max-h-[110px]">
                         <ScrollView>
                           {verses.map((v) => (
                             <AppText variant="label" key={v.verse} className="font-serif italic text-ink-2">
@@ -2710,32 +2693,47 @@ function PracticeModalsInner({
 
                       <View className="w-full gap-2">
                         {isMasteryEligible ? (
-                          <AppButton size="md" onPress={() => { onUpdateStatus(verses, 'memorized', drill, { perfect: true }); handleGroupComplete(); }} className="w-full bg-success rounded-xl flex-row items-center justify-center gap-1.5">
-                            <Check size={14} color={palette.onAccent} />
-                            <AppText variant="label" className="font-sans font-bold text-on-accent">Log Perfect Recall (counts toward mastery)</AppText>
-                          </AppButton>
+                          <>
+                            <AppButton
+                              size="lg"
+                              variant="primary"
+                              Icon={Check}
+                              label="Log perfect recall"
+                              onPress={() => { onUpdateStatus(verses, 'memorized', drill, { perfect: true }); handleGroupComplete(); }}
+                            />
+                            <AppText variant="caption" className="text-center text-ink-3 font-sans px-4">
+                              Counts as a review, and as one of the perfect recalls a new verse needs.
+                            </AppText>
+                          </>
                         ) : summary.passesReview ? (
                           <>
-                            <AppButton size="md" onPress={() => { onUpdateStatus(verses, 'memorized', drill, { perfect: false }); handleGroupComplete(); }} className={`w-full rounded-xl flex-row items-center justify-center gap-1.5 bg-accent`}>
-                              <Check size={14} color={palette.onAccent} />
-                              <AppText variant="label" className="font-sans font-bold text-on-accent">
-                                {assisted ? `Count as Review (First-Letter Assist)` : `Count as Review (${pct}% ≥ ${passPct}%)`}
-                              </AppText>
-                            </AppButton>
-                            <AppText variant="micro" className="text-center text-ink-3 font-sans font-bold px-4">
+                            <AppButton
+                              size="lg"
+                              variant="primary"
+                              Icon={Check}
+                              label="Count as a review"
+                              onPress={() => { onUpdateStatus(verses, 'memorized', drill, { perfect: false }); handleGroupComplete(); }}
+                            />
+                            <AppText variant="caption" className="text-center text-ink-3 font-sans px-4">
                               {assisted
-                                ? 'With first-letter hints on, this counts as a review but never as a mastery touch. Switch to % Hidden, set to fully blind, for that.'
-                                : 'Counts for verses in spaced review. Learning verses only bank a mastery touch on a perfect run.'}
+                                ? 'With first letters shown, this counts as a review but not toward learning a new verse. Hide every word for that.'
+                                : `${pct}% clears the ${passPct}% a review needs. A new verse only moves forward on a perfect run.`}
                             </AppText>
                           </>
                         ) : (
-                          <AppButton size="md" onPress={() => { onUpdateStatus(verses, 'learning', drill); handleGroupComplete(); }} className="w-full bg-accent rounded-xl items-center">
-                            <AppText variant="label" className="font-sans font-bold text-on-accent">Log as Needs Practice (below {passPct}%)</AppText>
-                          </AppButton>
+                          <>
+                            <AppButton
+                              size="lg"
+                              variant="primary"
+                              label="Log as needs practice"
+                              onPress={() => { onUpdateStatus(verses, 'learning', drill); handleGroupComplete(); }}
+                            />
+                            <AppText variant="caption" className="text-center text-ink-3 font-sans px-4">
+                              A review needs {passPct}% of the words right.
+                            </AppText>
+                          </>
                         )}
-                        <Pressable onPress={resetReciteGame} className="w-full py-1 items-center">
-                          <AppText variant="caption" className="text-ink-3 font-bold">Practice Again</AppText>
-                        </Pressable>
+                        <AppButton variant="quiet" label="Practice again" onPress={resetReciteGame} />
                       </View>
                     </ScrollView>
                   );
@@ -2758,8 +2756,8 @@ function PracticeModalsInner({
                   <View className="flex-1 justify-between">
                     <ScrollView className="flex-1 mb-2" contentContainerClassName="gap-2 pb-2">
                       <View className="flex-row items-center gap-1 mb-0.5">
-                        <Info size={10} color={palette.ink3} />
-                        <AppText variant="micro" className="text-ink-3 font-bold font-sans">
+                        <Info size={12} color={palette.ink3} />
+                        <AppText variant="caption" className="text-ink-3 font-sans flex-1">
                           Tap a verse to place it, tap a placed verse to take it back
                         </AppText>
                       </View>
@@ -2777,22 +2775,22 @@ function PracticeModalsInner({
                               setJigsawSlots((prev) => prev.map((s, i) => (i === slotIdx ? null : s)));
                               setJigsawChecked(false);
                             }}
-                            className={`border-2 rounded-xl p-2.5 min-h-[52px] justify-center ${
+                            className={`border rounded-card p-2.5 min-h-[52px] justify-center ${
                               tile === null
                                 ? 'border-dashed border-line-strong bg-surface-2'
                                 : showResult
                                   ? isRight
                                     ? 'border-success bg-success-soft'
                                     : 'border-danger/60 bg-danger-soft'
-                                  : 'border-ink bg-surface'
+                                  : 'border-line-strong bg-surface'
                             }`}
                           >
                             {tile === null ? (
-                              <AppText variant="caption" className="font-sans font-bold text-ink-3">Slot {slotIdx + 1}</AppText>
+                              <AppText variant="caption" className="font-sans font-medium text-ink-3">Slot {slotIdx + 1}</AppText>
                             ) : (
                               <View className="flex-row items-start gap-2">
-                                <View className={`px-1.5 py-0.5 rounded ${showResult ? (isRight ? 'bg-success' : 'bg-danger') : 'bg-ink'}`}>
-                                  <AppText variant="micro" className="font-mono font-bold text-on-accent">{slotIdx + 1}</AppText>
+                                <View className={`px-1.5 py-0.5 rounded ${showResult ? (isRight ? 'bg-success' : 'bg-danger') : 'bg-accent'}`}>
+                                  <AppText variant="micro" className="font-sans font-bold text-on-accent">{slotIdx + 1}</AppText>
                                 </View>
                                 <AppText variant="label" className="font-serif leading-snug text-ink flex-1">{tile.text}</AppText>
                               </View>
@@ -2804,7 +2802,7 @@ function PracticeModalsInner({
                       {/* Tile bank */}
                       {bankRemaining.length > 0 && (
                         <View className="mt-1 gap-2">
-                          <AppText variant="micro" className="font-sans font-bold text-ink-3 uppercase tracking-wider">Verses to place</AppText>
+                          <AppText variant="caption" className="font-sans font-semibold text-ink-3">Verses to place</AppText>
                           {bankRemaining.map((tileIdx) => (
                             <Pressable
                               key={`bank-${jigsawTiles[tileIdx].id}`}
@@ -2814,7 +2812,7 @@ function PracticeModalsInner({
                                 setJigsawSlots((prev) => prev.map((s, i) => (i === firstEmpty ? tileIdx : s)));
                                 setJigsawChecked(false);
                               }}
-                              className="border border-line-strong bg-surface-2 rounded-xl p-2.5"
+                              className="border border-line bg-surface-2 rounded-card p-2.5"
                             >
                               <AppText variant="label" className="font-serif leading-snug text-ink-2">{jigsawTiles[tileIdx].text}</AppText>
                             </Pressable>
@@ -2825,26 +2823,20 @@ function PracticeModalsInner({
 
                     <View className="shrink-0 gap-2">
                       {solved ? (
-                        <View className="bg-success-soft border border-success/30 rounded-xl p-2.5 flex-row items-center justify-center gap-2">
+                        <View className="bg-success-soft border border-success/30 rounded-card p-2.5 flex-row items-center justify-center gap-2">
                           <Trophy size={14} color={palette.success} />
                           <AppText variant="caption" className="font-sans font-bold text-success">Correct order! Practice only — nothing logged.</AppText>
                         </View>
                       ) : jigsawChecked ? (
-                        <View className="bg-warning-soft border border-warning/30 rounded-xl p-2.5">
+                        <View className="bg-warning-soft border border-warning/30 rounded-card p-2.5">
                           <AppText variant="caption" className="font-sans font-bold text-warning text-center">
                             {correctCount} of {jigsawTiles.length} in the right place — tap a wrong one to move it.
                           </AppText>
                         </View>
                       ) : null}
                       <View className="flex-row gap-2">
-                        <AppButton size="md" onPress={resetJigsaw} className="flex-1 border border-line-strong rounded-xl flex-row items-center justify-center gap-1.5">
-                          <Undo2 size={13} color={palette.ink2} />
-                          <AppText variant="caption" className="font-sans font-bold text-ink-2">Reshuffle</AppText>
-                        </AppButton>
-                        <AppButton size="md" onPress={() => setJigsawChecked(true)} disabled={!allPlaced} className={`flex-1 rounded-xl flex-row items-center justify-center gap-1.5 ${allPlaced ? 'bg-accent' : 'bg-fill'}`}>
-                          <Check size={13} color={allPlaced ? palette.onAccent : palette.ink3} />
-                          <AppText variant="caption" className={`font-sans font-bold ${allPlaced ? 'text-on-accent' : 'text-ink-3'}`}>Check Order</AppText>
-                        </AppButton>
+                        <AppButton variant="quiet" Icon={Undo2} label="Reshuffle" onPress={resetJigsaw} className="flex-1" />
+                        <AppButton variant="primary" Icon={Check} label="Check order" onPress={() => setJigsawChecked(true)} disabled={!allPlaced} className="flex-1" />
                       </View>
                     </View>
                   </View>
@@ -2877,17 +2869,11 @@ function PracticeModalsInner({
                       <AppText variant="body" className="font-sans font-bold text-ink text-center">
                         {verses.length > 1 ? 'The whole passage, from memory' : 'The whole verse, from memory'}
                       </AppText>
-                      <AppText variant="caption" className="text-ink-3 font-sans text-center leading-[18px]">
-                        Build Up doesn't count toward review — the words were on screen and you graded yourself. Want to prove it cold?
+                      <AppText variant="caption" className="text-ink-3 font-sans text-center">
+                        Build up doesn't count toward review — the words were on screen and you graded yourself. Want to prove it cold?
                       </AppText>
-                      <AppButton size="lg" onPress={handoffToRecall} className="w-full rounded-xl bg-accent flex-row items-center justify-center gap-1.5">
-                        <Mic size={14} color={palette.onAccent} />
-                        <AppText variant="label" className="font-sans font-bold text-on-accent">Try it blind in Recall</AppText>
-                      </AppButton>
-                      <AppButton size="md" onPress={resetBuildUp} className="w-full rounded-xl border border-line-strong flex-row items-center justify-center gap-1.5">
-                        <RefreshCw size={13} color={palette.ink2} />
-                        <AppText variant="caption" className="font-sans font-bold text-ink-2">Run it again</AppText>
-                      </AppButton>
+                      <AppButton size="lg" variant="primary" Icon={Mic} label="Try it blind in Recall" onPress={handoffToRecall} className="w-full" />
+                      <AppButton variant="quiet" Icon={RefreshCw} label="Run it again" onPress={resetBuildUp} className="w-full" />
                     </View>
                   );
                 }
@@ -2920,14 +2906,14 @@ function PracticeModalsInner({
                     {/* Progress: how much is stacked, and where we are. */}
                     <View className="shrink-0 gap-1.5 mb-2">
                       <View className="flex-row items-center justify-between">
-                        <AppText variant="micro" className="font-sans font-bold text-ink-3 uppercase tracking-wider">
+                        <AppText variant="caption" className="font-sans font-semibold text-ink-3 flex-1">
                           {stage.phase === 'reassemble'
                             ? `Putting it together — verse ${stage.step} of ${stage.stepCount}`
                             : `${verse ? `${verse.chapter}:${verse.verse} — ` : ''}phrase ${stage.step} of ${stage.stepCount}`}
                         </AppText>
                         <Pressable onPress={() => setBuildSettingsOpen((p) => !p)} hitSlop={8} className="flex-row items-center gap-1">
                           <Sliders size={12} color={palette.ink3} />
-                          <AppText variant="micro" className="font-sans font-bold text-ink-3 uppercase tracking-wider">
+                          <AppText variant="caption" className="font-sans font-semibold text-ink-2">
                             {buildDirection === 'forward' ? 'Forward' : 'Backward'}
                           </AppText>
                         </Pressable>
@@ -2956,7 +2942,7 @@ function PracticeModalsInner({
                         between the user and phrase 1 is a tax on every
                         session to serve the rare one. */}
                     {buildSettingsOpen && (
-                      <View className="shrink-0 bg-surface-2 border border-line rounded-xl p-2.5 gap-2 mb-2">
+                      <View className="shrink-0 bg-surface-2 border border-line rounded-card p-2.5 gap-2 mb-2">
                         {/* Label ABOVE the chips, not beside them. ChipRow's
                             default chips are flex-1, so they need the full
                             row width to divide -- sitting them next to a label
@@ -2985,7 +2971,7 @@ function PracticeModalsInner({
                             onChange={changeBuildDirection}
                           />
                         </View>
-                        <AppText variant="caption" className="text-ink-3 font-sans leading-[15px]">
+                        <AppText variant="caption" className="text-ink-3 font-sans">
                           Building from the end means every repetition finishes on the words you know best. Changing either setting restarts the verse.
                         </AppText>
                       </View>
@@ -2994,7 +2980,7 @@ function PracticeModalsInner({
                     {/* The passage. Everything in play fades together; the
                         phrase just added is the amber one. */}
                     <ScrollView className="flex-1" contentContainerClassName="grow justify-center py-2">
-                      <View className="border-2 border-ink bg-surface rounded-2xl p-4">
+                      <View className="border border-line bg-surface rounded-card p-4">
                         <AppText variant="title" className="font-serif leading-[30px]">
                           {stage.segments.map((seg, i) => (
                             <AppText variant="inherit" key={i} className={seg.isNew ? 'text-warning' : 'text-ink'}>
@@ -3016,7 +3002,7 @@ function PracticeModalsInner({
                               <View
                                 className={`w-2 h-2 rounded-full ${reached ? 'bg-accent' : 'border border-line-strong'}`}
                               />
-                              <AppText variant="micro" className={`font-sans font-bold uppercase tracking-wider ${ i === buildRepIdx ? 'text-ink' : 'text-ink-3' }`} >
+                              <AppText variant="caption" className={`font-sans ${ i === buildRepIdx ? 'font-semibold text-ink' : 'font-medium text-ink-3' }`} >
                                 {rep === 'read' ? 'Read' : rep === 'hint' ? 'Hints' : 'From memory'}
                               </AppText>
                             </View>
@@ -3024,25 +3010,27 @@ function PracticeModalsInner({
                         })}
                       </View>
 
-                      <AppButton size="lg" onPress={advanceBuildUp} className="w-full rounded-xl bg-accent flex-row items-center justify-center gap-1.5">
-                        <AppText variant="label" className="font-sans font-bold text-on-accent">{actionLabel}</AppText>
-                        <ChevronRight size={15} color={palette.onAccent} />
+                      <AppButton size="lg" variant="primary" label={actionLabel} onPress={advanceBuildUp} className="w-full">
+                        <ChevronRight size={17} color={palette.onAccent} />
                       </AppButton>
 
                       <View className="flex-row gap-2">
-                        <AppButton size="md" onPress={stepBackBuildUp} disabled={buildStageIdx === 0 && buildRepIdx === 0} className={`flex-1 border rounded-xl flex-row items-center justify-center gap-1.5 ${ buildStageIdx === 0 && buildRepIdx === 0 ? 'border-line' : 'border-line-strong' }`}>
-                          <Undo2 size={13} color={buildStageIdx === 0 && buildRepIdx === 0 ? palette.lineStrong : palette.ink2} />
-                          <AppText variant="caption" className={`font-sans font-bold ${ buildStageIdx === 0 && buildRepIdx === 0 ? 'text-ink-3' : 'text-ink-2' }`} >
-                            Back
-                          </AppText>
-                        </AppButton>
+                        <AppButton
+                          variant="quiet"
+                          Icon={Undo2}
+                          label="Back"
+                          onPress={stepBackBuildUp}
+                          disabled={buildStageIdx === 0 && buildRepIdx === 0}
+                          className="flex-1"
+                        />
                         {buildRep !== 'read' && (
-                          <AppButton size="md" onPress={() => setBuildPeek((p) => !p)} className={`flex-1 border rounded-xl flex-row items-center justify-center gap-1.5 ${ buildPeek ? 'border-warning/60 bg-warning-soft' : 'border-line-strong' }`}>
-                            {buildPeek ? <EyeOff size={13} color={palette.warning} /> : <Eye size={13} color={palette.ink2} />}
-                            <AppText variant="caption" className={`font-sans font-bold ${buildPeek ? 'text-warning' : 'text-ink-2'}`}>
-                              {buildPeek ? 'Hide' : 'Peek'}
-                            </AppText>
-                          </AppButton>
+                          <AppButton
+                            variant={buildPeek ? 'secondary' : 'quiet'}
+                            Icon={buildPeek ? EyeOff : Eye}
+                            label={buildPeek ? 'Hide' : 'Peek'}
+                            onPress={() => setBuildPeek((p) => !p)}
+                            className="flex-1"
+                          />
                         )}
                       </View>
                     </View>
@@ -3077,7 +3065,7 @@ function PracticeModalsInner({
                   <View className="flex-1 justify-between">
                     <ScrollView className="flex-1 mb-2" contentContainerClassName="gap-2 pb-2">
                       <View className="flex-row items-center justify-between">
-                        <AppText variant="micro" className="font-sans font-bold text-ink-3 uppercase tracking-wider">
+                        <AppText variant="caption" className="font-sans font-semibold text-ink-3 flex-1">
                           {round.label} — verse {scrambleIndex + 1} of {scrambleRounds.length}
                         </AppText>
                         {scrambleSolved.has(scrambleIndex) && <Check size={12} color={palette.success} />}
@@ -3090,16 +3078,16 @@ function PracticeModalsInner({
                           drill never pre-emptively tells you you're wrong
                           while you're still placing tiles. */}
                       <View
-                        className={`border-2 rounded-2xl p-3 min-h-[110px] ${
+                        className={`border rounded-card p-3 min-h-[110px] ${
                           solved
                             ? 'border-success bg-success-soft'
                             : scrambleChecked
                               ? 'border-danger/60 bg-danger-soft'
-                              : 'border-ink bg-surface'
+                              : 'border-line bg-surface'
                         }`}
                       >
                         {scrambleSlots.every((s) => s === null) ? (
-                          <AppText variant="caption" className="text-ink-3 font-sans font-bold">Tap phrases below to build the verse…</AppText>
+                          <AppText variant="caption" className="text-ink-3 font-sans">Tap the phrases below to build the verse</AppText>
                         ) : (
                           <View className="flex-row flex-wrap gap-1.5">
                             {scrambleSlots.map((phraseIdx, slotIdx) =>
@@ -3117,7 +3105,7 @@ function PracticeModalsInner({
                                     setScrambleChecked(false);
                                   }}
                                   className={`px-2 py-1 rounded-lg border ${
-                                    scrambleChecked && phraseIdx !== slotIdx ? 'bg-danger-soft border-danger/30' : 'bg-ink border-ink'
+                                    scrambleChecked && phraseIdx !== slotIdx ? 'bg-danger-soft border-danger/30' : 'bg-accent border-accent'
                                   }`}
                                 >
                                   <AppText variant="label" className={`font-serif ${scrambleChecked && phraseIdx !== slotIdx ? 'text-danger' : 'text-on-accent'}`}>
@@ -3153,7 +3141,7 @@ function PracticeModalsInner({
 
                     <View className="shrink-0 gap-2">
                       {(solved || scrambleChecked) && (
-                        <View className={`rounded-xl p-2.5 ${solved ? 'bg-success-soft border border-success/30' : 'bg-warning-soft border border-warning/30'}`}>
+                        <View className={`rounded-card p-2.5 ${solved ? 'bg-success-soft border border-success/30' : 'bg-warning-soft border border-warning/30'}`}>
                           <AppText variant="caption" className={`font-sans font-bold text-center ${solved ? 'text-success' : 'text-warning'}`}>
                             {solved
                               ? isLastRound
@@ -3164,19 +3152,19 @@ function PracticeModalsInner({
                         </View>
                       )}
                       <View className="flex-row gap-2">
-                        <AppButton size="md" onPress={() => { setScrambleSlots(round.phrases.map(() => null)); setScrambleChecked(false); }} className="flex-1 border border-line-strong rounded-xl flex-row items-center justify-center gap-1.5">
-                          <Undo2 size={13} color={palette.ink2} />
-                          <AppText variant="caption" className="font-sans font-bold text-ink-2">Clear</AppText>
-                        </AppButton>
+                        <AppButton
+                          variant="quiet"
+                          Icon={Undo2}
+                          label="Clear"
+                          onPress={() => { setScrambleSlots(round.phrases.map(() => null)); setScrambleChecked(false); }}
+                          className="flex-1"
+                        />
                         {solved && !isLastRound ? (
-                          <AppButton size="md" onPress={() => setScrambleIndex((i) => i + 1)} className="flex-1 rounded-xl bg-success flex-row items-center justify-center gap-1.5">
-                            <AppText variant="caption" className="font-sans font-bold text-on-accent">Next Verse</AppText>
+                          <AppButton variant="primary" label="Next verse" onPress={() => setScrambleIndex((i) => i + 1)} className="flex-1">
+                            <ChevronRight size={15} color={palette.onAccent} />
                           </AppButton>
                         ) : (
-                          <AppButton size="md" onPress={() => setScrambleChecked(true)} disabled={!allPlaced} className={`flex-1 rounded-xl flex-row items-center justify-center gap-1.5 ${allPlaced ? 'bg-accent' : 'bg-fill'}`}>
-                            <Check size={13} color={allPlaced ? palette.onAccent : palette.ink3} />
-                            <AppText variant="caption" className={`font-sans font-bold ${allPlaced ? 'text-on-accent' : 'text-ink-3'}`}>Check</AppText>
-                          </AppButton>
+                          <AppButton variant="primary" Icon={Check} label="Check" onPress={() => setScrambleChecked(true)} disabled={!allPlaced} className="flex-1" />
                         )}
                       </View>
                     </View>
@@ -3197,8 +3185,8 @@ function PracticeModalsInner({
                   <View className="flex-1 justify-between">
                     <ScrollView className="flex-1 mb-2" contentContainerClassName="gap-3 pb-2">
                       <View className="flex-row items-center gap-1">
-                        <Info size={10} color={palette.ink3} />
-                        <AppText variant="micro" className="text-ink-3 font-bold font-sans">
+                        <Info size={12} color={palette.ink3} />
+                        <AppText variant="caption" className="text-ink-3 font-sans flex-1">
                           {swapSubmitted ? 'Green = caught, red = missed, amber = wrongly flagged' : 'Tap every word that does not belong'}
                         </AppText>
                       </View>
@@ -3247,8 +3235,8 @@ function PracticeModalsInner({
 
                       {/* After submitting, show what the swapped words really were */}
                       {swapSubmitted && score.totalDecoys > 0 && (
-                        <View className="bg-surface-2 border border-line rounded-xl p-2.5 gap-1">
-                          <AppText variant="micro" className="font-sans font-bold text-ink-3 uppercase tracking-wider">The real words</AppText>
+                        <View className="bg-surface-2 border border-line rounded-card p-2.5 gap-1">
+                          <AppText variant="caption" className="font-sans font-semibold text-ink-3">The real words</AppText>
                           {swapVerses.flatMap((sv) =>
                             sv.tokens
                               .filter((t) => t.isDecoy)
@@ -3264,7 +3252,7 @@ function PracticeModalsInner({
 
                     <View className="shrink-0 gap-2">
                       {swapSubmitted ? (
-                        <View className="bg-surface-2 border border-line rounded-xl p-2.5">
+                        <View className="bg-surface-2 border border-line rounded-card p-2.5">
                           <AppText variant="caption" className="font-sans font-bold text-ink text-center">
                             Caught {score.caught} of {score.totalDecoys}
                             {score.falseAlarms > 0 ? ` · ${score.falseAlarms} wrongly flagged` : ''} — practice only, nothing logged.
@@ -3275,7 +3263,7 @@ function PracticeModalsInner({
                         // flex-1, so next to a label in a justify-between row
                         // they size against the leftovers and squash to
                         // slivers (same fix as the Build-up settings).
-                        <View className="bg-surface-2 border border-line rounded-xl px-3 py-2 gap-1">
+                        <View className="bg-surface-2 border border-line rounded-card px-3 py-2 gap-1">
                           <AppText variant="caption" className="font-sans font-bold text-ink-2">Swaps per verse</AppText>
                           <ChipRow
                             options={[
@@ -3292,15 +3280,9 @@ function PracticeModalsInner({
                         </View>
                       )}
                       <View className="flex-row gap-2">
-                        <AppButton size="md" onPress={() => resetSwap()} className="flex-1 border border-line-strong rounded-xl flex-row items-center justify-center gap-1.5">
-                          <Shuffle size={13} color={palette.ink2} />
-                          <AppText variant="caption" className="font-sans font-bold text-ink-2">New Swaps</AppText>
-                        </AppButton>
+                        <AppButton variant="quiet" Icon={Shuffle} label="New swaps" onPress={() => resetSwap()} className="flex-1" />
                         {!swapSubmitted && (
-                          <AppButton size="md" onPress={() => setSwapSubmitted(true)} disabled={noDecoys} className={`flex-1 rounded-xl flex-row items-center justify-center gap-1.5 ${noDecoys ? 'bg-fill' : 'bg-accent'}`}>
-                            <Check size={13} color={noDecoys ? palette.ink3 : palette.onAccent} />
-                            <AppText variant="caption" className={`font-sans font-bold ${noDecoys ? 'text-ink-3' : 'text-on-accent'}`}>Check</AppText>
-                          </AppButton>
+                          <AppButton variant="primary" Icon={Check} label="Check" onPress={() => setSwapSubmitted(true)} disabled={noDecoys} className="flex-1" />
                         )}
                       </View>
                     </View>
