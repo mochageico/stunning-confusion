@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { LayoutChangeEvent, Modal, Pressable, View } from 'react-native';
 import { Highlighter, Pencil, X } from 'lucide-react-native';
 
 import { firstLetterLine, firstLetterOnly } from '../lib/recitation';
@@ -66,6 +66,9 @@ interface MemoryGridProps {
    * always. 'blank' hides words entirely -- just the verse number, no text
    * at all -- for reciting from pure recall with only box order as a cue. */
   hideMode?: 'firstLetter' | 'blank';
+  /** Each box's position within the grid -- the chapter page uses it to
+   * work out which box is under the finger during hold-and-drag select. */
+  onBoxLayout?: (index: number, e: LayoutChangeEvent) => void;
 }
 
 export default function MemoryGrid({
@@ -80,6 +83,7 @@ export default function MemoryGrid({
   doodles,
   onSaveDoodle,
   hideMode = 'firstLetter',
+  onBoxLayout,
 }: MemoryGridProps) {
   const palette = useThemeColors();
   // Percentages leave extra margin beyond the naive (100/columns)% split --
@@ -109,7 +113,7 @@ export default function MemoryGrid({
               : 'border-line bg-surface';
 
         return (
-          <View key={key} style={{ width: widthPct }} className={`rounded-xl border relative ${boxClass}`}>
+          <View key={key} onLayout={onBoxLayout ? (e) => onBoxLayout(index, e) : undefined} style={{ width: widthPct }} className={`rounded-xl border relative ${boxClass}`}>
             {isSelected && !isActive && (
               <View className="absolute -top-1.5 -right-1.5 bg-ink w-3.5 h-3.5 rounded-full items-center justify-center border border-surface z-10">
                 <AppText variant="micro" className="text-on-accent font-black">✓</AppText>

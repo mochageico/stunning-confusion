@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { ArrowLeft, Check, ChevronDown, Download, GripVertical, Pause, Play, Printer, Search, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
@@ -13,6 +14,7 @@ import { printMemoryGrid } from '../lib/printMemoryGrid';
 import { Recording } from '../types';
 import { BIBLE_TRANSLATIONS } from '../data';
 import { AppButton, AppIconButton, AppText } from '../components/design';
+import { useDragSelect } from '../components/useDragSelect';
 
 import { useThemeColors } from '../components/theme';
 const OVERRIDE_PHASE_OPTIONS: { id: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; label: string }[] = [
@@ -154,11 +156,25 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const chapterDownloadBusy = downloadableNarrations.some((r) => downloadingRecordingIds.has(r.id));
 
   const floatingBarShowing = selectedVerseNumbers.length > 0;
+
+  // Hold a verse, then slide to select a run of them (all three views).
+  const scrollRef = useRef<ScrollView>(null);
+  const [floatingBarHeight, setFloatingBarHeight] = useState(0);
+  const dragSelect = useDragSelect({
+    ids: activeChapterVerses.map((v) => v.verse),
+    selected: selectedVerseNumbers,
+    setSelected: setSelectedVerseNumbers,
+    onTap: toggleVerseSelection,
+    scrollRef,
+    bottomInset: floatingBarShowing ? floatingBarHeight + 16 : 0,
+  });
   const activeTranslation = BIBLE_TRANSLATIONS.find((t) => t.id === selectedTranslationId) ?? BIBLE_TRANSLATIONS[0];
 
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView
+        ref={scrollRef}
+        {...dragSelect.scrollProps}
         className="flex-1 bg-canvas"
         contentContainerClassName="p-5"
         // Extra bottom padding whenever the floating selection bar is
@@ -418,8 +434,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             </View>
           ) : chapterViewMode === 'list' ? (
             /* LIST VIEW */
-            <View className="gap-2.5">
-              {activeChapterVerses.map((v) => {
+            <GestureDetector gesture={dragSelect.gesture}>
+            <View className="gap-2.5" collapsable={false}>
+              {activeChapterVerses.map((v, index) => {
                 const isSelected = isVerseSelected(v.verse);
                 const dotColor =
                   v.status === 'memorized' ? 'bg-success' : v.status === 'learning' ? 'bg-warning' : 'bg-fill';
@@ -427,7 +444,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 return (
                   <Pressable
                     key={v.verse}
-                    onPress={() => toggleVerseSelection(v.verse)}
+                    onLayout={dragSelect.itemLayout(index)}
+                    onPress={() => dragSelect.handleTap(v.verse)}
                     className={`border rounded-xl p-3 relative ${
                       isSelected ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
                     }`}
@@ -452,10 +470,12 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 );
               })}
             </View>
+            </GestureDetector>
           ) : chapterViewMode === 'grid' ? (
             /* GRID VIEW - Compact & informative with word snippets */
-            <View className="flex-row flex-wrap gap-2 pt-1">
-              {activeChapterVerses.map((v) => {
+            <GestureDetector gesture={dragSelect.gesture}>
+            <View className="flex-row flex-wrap gap-2 pt-1" collapsable={false}>
+              {activeChapterVerses.map((v, index) => {
                 const isSelected = isVerseSelected(v.verse);
                 const statusBorderColor =
                   v.status === 'memorized' ? palette.success : v.status === 'learning' ? palette.warning : palette.lineStrong;
@@ -465,7 +485,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 return (
                   <Pressable
                     key={v.verse}
-                    onPress={() => toggleVerseSelection(v.verse)}
+                    onLayout={dragSelect.itemLayout(index)}
+                    onPress={() => dragSelect.handleTap(v.verse)}
                     style={{ width: '31.5%', borderLeftWidth: 3, borderLeftColor: statusBorderColor }}
                     className={`h-16 rounded-xl bg-surface border border-line p-2 justify-between relative ${
                       isSelected ? 'border-accent' : ''
@@ -496,6 +517,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 );
               })}
             </View>
+            </GestureDetector>
           ) : (
             /* MEMORY GRID VIEW - Scripture Memory Fellowship style: every
                word's first letter, tap to select (same as List/Grid), pin
@@ -525,6 +547,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   <AppText variant="caption" className="font-sans font-extrabold text-on-accent">Printable PDF</AppText>
                 </AppButton>
               </View>
+              <GestureDetector gesture={dragSelect.gesture}>
+              <View collapsable={false}>
               <MemoryGrid
                 verses={activeChapterVerses.map((v) => ({
                   book: selectedBook || '',
@@ -544,8 +568,11 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                       .map((v) => verseAnnotationKey(selectedBook || '', selectedChapter || 0, v.verse))
                   )
                 }
-                onTapVerse={(v) => toggleVerseSelection(v.verse)}
+                onTapVerse={(v) => dragSelect.handleTap(v.verse)}
+                onBoxLayout={(index, e) => dragSelect.itemLayout(index)(e)}
               />
+              </View>
+              </GestureDetector>
             </View>
           )}
         </View>
@@ -590,6 +617,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         <View
           className="absolute left-4 right-4 bg-surface border-2 border-ink rounded-xl p-3 shadow-lg"
           style={{ bottom: 16, gap: 8 }}
+          onLayout={(e) => setFloatingBarHeight(e.nativeEvent.layout.height)}
         >
           <View className="flex-row items-center justify-between pl-1">
             <View>

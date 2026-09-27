@@ -55,6 +55,7 @@
     "check:layout": "node scripts/check-layout.cjs",
     "check:calendar": "node scripts/run-calendar-check.cjs",
     "check:queue": "node scripts/run-queue-check.cjs",
+    "check:dragselect": "node scripts/run-dragselect-check.cjs",
     "check:buildup": "node scripts/run-buildup-check.cjs",
     "check:translations": "node scripts/run-translations-check.cjs",
     "shots": "node scripts/capture-screens.cjs",
