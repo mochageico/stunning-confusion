@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, Check, RefreshCw, Target, X } from 'lucide-react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { RefreshCw, Target, X } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
-import { ChipRow, FadeInView, NumericInput } from '../components/ui';
+import { FadeInView, NumericInput } from '../components/ui';
+import { Dropdown } from '../components/Dropdown';
 import { BookPicker } from '../components/BookPicker';
-import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText, Switch, useScaledSpace } from '../components/design';
+import { GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 import {
   buildReferenceRounds,
   formatReference,
@@ -15,7 +17,6 @@ import {
   ReferenceRound,
 } from '../lib/drills';
 
-import { useThemeColors } from '../components/theme';
 // ============================================================================
 // REFERENCE <-> VERSE DRILL
 // ----------------------------------------------------------------------------
@@ -48,16 +49,22 @@ const SESSION_LENGTHS = [
 const REVIEW_SETS = [
   { id: 'all' as const, label: 'All started' },
   { id: 'learning' as const, label: 'Learning' },
-  { id: 'daily' as const, label: 'Daily' },
-  { id: 'weekly' as const, label: 'Weekly' },
-  { id: 'monthly' as const, label: 'Monthly' },
+  { id: 'daily' as const, label: 'Daily reviews' },
+  { id: 'weekly' as const, label: 'Weekly reviews' },
+  { id: 'monthly' as const, label: 'Monthly reviews' },
 ];
+const DIRECTIONS = [
+  { id: 'both' as const, label: 'Both ways' },
+  { id: 'refToVerse' as const, label: 'Reference → verse' },
+  { id: 'verseToRef' as const, label: 'Verse → reference' },
+];
+
 type ReviewSet = (typeof REVIEW_SETS)[number]['id'];
 
 type Phase = 'setup' | 'playing' | 'done';
 
 export default function ReferenceDrillScreen({ state }: { state: AppState }) {
-    const palette = useThemeColors();
+  const space = useScaledSpace();
   const { memoryQueue, navigateTo } = state;
 
   const [book, setBook] = useState('');
@@ -175,6 +182,16 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
 
   const handleBack = () => navigateTo('home');
 
+  const numberField = 'bg-surface border border-line rounded-btn text-ink font-sans';
+  const boundField = (label: string, value: string, onChange: (t: string) => void) => (
+    <View style={{ flexGrow: 1, flexBasis: space(120), gap: space(4) }}>
+      <AppText variant="caption" className="font-sans font-medium text-ink-2">
+        {label}
+      </AppText>
+      <NumericInput value={value} onChangeText={onChange} placeholder="Any" className={numberField} style={{ padding: space(10) }} />
+    </View>
+  );
+
   // ==========================================================================
   // SETUP
   // ==========================================================================
@@ -182,154 +199,88 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
     const canStart = uniqueCount > 0;
     return (
       <FadeInView style={{ flex: 1 }}>
-        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 18 }}>
-          <View className="flex-row items-center gap-3">
-            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
-            <View className="flex-1">
-              <AppText variant="title" className="font-serif font-black text-ink mt-0.5">Reference Drill</AppText>
-            </View>
-          </View>
+        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+          <ScreenHeader
+            title="Reference practice"
+            subtitle="Quiz yourself on where your verses are. It's practice only, so it never changes your review schedule."
+            onBack={handleBack}
+            backLabel="Today"
+          />
 
-          <AppText variant="caption" className="text-ink-3 leading-relaxed -mt-2">
-            Quiz yourself on where your verses live. Pulls from everything you've started memorizing, whether or not it's due
-            today — and it's practice only, so nothing here changes your review schedule.
-          </AppText>
-
-          {/* Range */}
-          <View className="gap-2">
-            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">Range</AppText>
-            <BookPicker value={book} onChange={setBook} allowAll allLabel="All my verses" title="Limit to a Book" />
+          {/* Which verses */}
+          <View style={{ gap: space(8) }}>
+            <SectionHeader title="Which verses" />
+            <BookPicker value={book} onChange={setBook} allowAll allLabel="All my verses" title="Limit to a book" />
             {!!book && (
-              <View className="flex-row items-center gap-2">
-                <View className="flex-1">
-                  <AppText variant="micro" className="font-sans font-bold text-ink-3 mb-1">From chapter</AppText>
-                  <NumericInput
-                    value={startChapter}
-                    onChangeText={setStartChapter}
-                    placeholder="Any"
-                    placeholderTextColor={palette.ink3}
-                    className="bg-surface border border-line-strong rounded-xl px-3 py-2 text-xs text-ink"
-                  />
-                </View>
-                <View className="flex-1">
-                  <AppText variant="micro" className="font-sans font-bold text-ink-3 mb-1">To chapter</AppText>
-                  <NumericInput
-                    value={endChapter}
-                    onChangeText={setEndChapter}
-                    placeholder="Any"
-                    placeholderTextColor={palette.ink3}
-                    className="bg-surface border border-line-strong rounded-xl px-3 py-2 text-xs text-ink"
-                  />
-                </View>
+              <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+                {boundField('From chapter', startChapter, setStartChapter)}
+                {boundField('To chapter', endChapter, setEndChapter)}
               </View>
             )}
 
             {/* Verse bounds appear only once the range is a single chapter --
                 see the singleChapter note above. */}
             {singleChapter !== null && (
-              <View className="flex-row items-center gap-2">
-                <View className="flex-1">
-                  <AppText variant="micro" className="font-sans font-bold text-ink-3 mb-1">From verse</AppText>
-                  <NumericInput
-                    value={startVerse}
-                    onChangeText={setStartVerse}
-                    placeholder="Any"
-                    placeholderTextColor={palette.ink3}
-                    className="bg-surface border border-line-strong rounded-xl px-3 py-2 text-xs text-ink"
-                  />
-                </View>
-                <View className="flex-1">
-                  <AppText variant="micro" className="font-sans font-bold text-ink-3 mb-1">To verse</AppText>
-                  <NumericInput
-                    value={endVerse}
-                    onChangeText={setEndVerse}
-                    placeholder="Any"
-                    placeholderTextColor={palette.ink3}
-                    className="bg-surface border border-line-strong rounded-xl px-3 py-2 text-xs text-ink"
-                  />
-                </View>
+              <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+                {boundField('From verse', startVerse, setStartVerse)}
+                {boundField('To verse', endVerse, setEndVerse)}
               </View>
             )}
-            <AppText variant="caption" className={`font-sans font-bold ${canStart ? 'text-ink-3' : 'text-warning'}`}>
+            <AppText variant="caption" className={`font-sans ${canStart ? 'text-ink-3' : 'text-warning'}`} style={{ paddingHorizontal: space(4) }}>
               {canStart
-                ? `${uniqueCount} ${uniqueCount === 1 ? 'verse' : 'verses'} available`
-                : 'No verses match those filters yet — memorize some first, or widen the range.'}
+                ? `${uniqueCount} ${uniqueCount === 1 ? 'verse' : 'verses'} to practice`
+                : 'No verses match yet. Start memorizing some first, or widen the range.'}
             </AppText>
           </View>
 
-          {/* Review set */}
-          <View className="gap-2">
-            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">
-              Pull from
-            </AppText>
-            <ChipRow options={REVIEW_SETS} value={reviewSet} onChange={(s) => setReviewSet(s as ReviewSet)} wrap />
-            <Pressable
-              onPress={() => setDueTodayOnly((d) => !d)}
-              className={`flex-row items-center justify-between border rounded-xl p-3 ${
-                dueTodayOnly ? 'bg-accent border-accent' : 'bg-surface border-line-strong'
-              }`}
-            >
-              <View className="flex-1 pr-3">
-                <AppText variant="caption" className={`font-sans font-extrabold ${dueTodayOnly ? 'text-on-accent' : 'text-ink'}`} >
-                  Due today only
-                </AppText>
-                <AppText variant="micro" className={`font-sans leading-snug ${dueTodayOnly ? 'text-on-accent/80' : 'text-ink-3'}`}>
-                  Narrow to verses whose review is actually due today. Still practice only — it won't clear them.
-                </AppText>
-              </View>
-              <View
-                className={`w-5 h-5 rounded-full items-center justify-center ${
-                  dueTodayOnly ? 'bg-surface' : 'border border-line-strong'
-                }`}
-              >
-                {dueTodayOnly && <Check size={12} color={palette.ink} />}
-              </View>
-            </Pressable>
-          </View>
-
-          {/* Direction */}
-          <View className="gap-2">
-            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">Ask me</AppText>
-            <ChipRow
-              options={[
-                { id: 'both' as const, label: 'Both ways' },
-                { id: 'refToVerse' as const, label: 'Reference → Verse' },
-                { id: 'verseToRef' as const, label: 'Verse → Reference' },
-              ]}
-              value={direction}
-              onChange={(d) => setDirection(d as DrillDirection)}
-              wrap
+          {/* The choices, as settings rows: a picker or a switch on the right
+              of each, one shape for all of them. */}
+          <GroupedList header="Questions">
+            <ListRow
+              title="From"
+              accessory={
+                <Dropdown
+                  value={reviewSet}
+                  onChange={(s) => setReviewSet(s as ReviewSet)}
+                  options={REVIEW_SETS}
+                  title="Practice verses from"
+                  searchable={false}
+                  compact
+                />
+              }
             />
-          </View>
+            <ListRow
+              title="Ask me"
+              accessory={
+                <Dropdown
+                  value={direction}
+                  onChange={(d) => setDirection(d as DrillDirection)}
+                  options={DIRECTIONS}
+                  title="Ask me"
+                  searchable={false}
+                  compact
+                />
+              }
+            />
+            <ListRow
+              title="How many"
+              accessory={
+                <Dropdown value={sessionLength} onChange={setSessionLength} options={SESSION_LENGTHS} title="How many questions" searchable={false} compact />
+              }
+            />
+            <ListRow
+              title="Due today only"
+              subtitle="Only verses whose review is due today. Still practice: it won't count as their review."
+              accessory={<Switch value={dueTodayOnly} onChange={setDueTodayOnly} accessibilityLabel="Due today only" />}
+            />
+            <ListRow
+              title="Hard mode"
+              subtitle="No multiple choice. Type the reference yourself, and recall verses before you reveal them."
+              accessory={<Switch value={hardMode} onChange={setHardMode} accessibilityLabel="Hard mode" />}
+            />
+          </GroupedList>
 
-          {/* Length */}
-          <View className="gap-2">
-            <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">Questions</AppText>
-            <ChipRow options={SESSION_LENGTHS} value={sessionLength} onChange={setSessionLength} />
-          </View>
-
-          {/* Hard mode */}
-          <Pressable
-            onPress={() => setHardMode((h) => !h)}
-            className={`flex-row items-center justify-between border rounded-xl p-3 ${
-              hardMode ? 'bg-accent border-accent' : 'bg-surface border-line-strong'
-            }`}
-          >
-            <View className="flex-1 pr-3">
-              <AppText variant="caption" className={`font-sans font-extrabold ${hardMode ? 'text-on-accent' : 'text-ink'}`}>Hard mode</AppText>
-              <AppText variant="micro" className={`font-sans leading-snug ${hardMode ? 'text-on-accent/80' : 'text-ink-3'}`}>
-                No multiple choice — type the reference yourself, and recall verses from memory before revealing.
-              </AppText>
-            </View>
-            <View className={`w-5 h-5 rounded-full items-center justify-center ${hardMode ? 'bg-surface' : 'border border-line-strong'}`}>
-              {hardMode && <Check size={12} color={palette.ink} />}
-            </View>
-          </Pressable>
-
-          <AppButton size="lg" onPress={startSession} disabled={!canStart} className={`w-full rounded-xl flex-row items-center justify-center gap-2 ${canStart ? 'bg-accent' : 'bg-fill'}`}>
-            <Target size={15} color={canStart ? palette.onAccent : palette.ink3} />
-            <AppText variant="label" className={`font-sans font-bold ${canStart ? 'text-on-accent' : 'text-ink-3'}`}>Start Drill</AppText>
-          </AppButton>
+          <AppButton size="lg" variant="primary" Icon={Target} label="Start" onPress={startSession} disabled={!canStart} />
         </ScrollView>
       </FadeInView>
     );
@@ -342,31 +293,23 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
     const pct = rounds.length === 0 ? 0 : Math.round((score / rounds.length) * 100);
     return (
       <FadeInView style={{ flex: 1 }}>
-        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5" contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', gap: 18 }}>
-          <View className="items-center gap-2">
-            <View className="w-14 h-14 rounded-full border-2 border-ink bg-surface-2 items-center justify-center">
-              <Target size={26} color={palette.ink} />
-            </View>
-            <AppText variant="display" className="font-serif font-black text-ink">
-              {score} / {rounds.length}
+        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5" contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', gap: space(24) }}>
+          <View className="items-center" style={{ gap: space(6) }}>
+            <AppText variant="display" className="font-sans font-bold text-ink" style={{ fontVariant: ['tabular-nums'] }}>
+              {score} of {rounds.length}
             </AppText>
-            <AppText variant="label" className="font-sans font-bold text-ink-3">{pct}% correct</AppText>
-            <AppText variant="caption" className="text-ink-3 font-sans text-center px-6">
-              Practice only — your review schedule is untouched.
+            <AppText variant="label" className="font-sans font-medium text-ink-2">
+              {pct}% right
+            </AppText>
+            <AppText variant="caption" className="font-sans text-ink-3 text-center">
+              Practice only. Your review schedule hasn't changed.
             </AppText>
           </View>
 
-          <View className="gap-2">
-            <AppButton size="lg" onPress={startSession} className="w-full bg-accent rounded-xl flex-row items-center justify-center gap-2">
-              <RefreshCw size={14} color={palette.onAccent} />
-              <AppText variant="label" className="font-sans font-bold text-on-accent">Run It Again</AppText>
-            </AppButton>
-            <AppButton size="md" onPress={() => setPhase('setup')} className="w-full border border-line-strong rounded-xl items-center">
-              <AppText variant="caption" className="font-sans font-bold text-ink-2">Change Settings</AppText>
-            </AppButton>
-            <Pressable onPress={handleBack} className="w-full py-2 items-center">
-              <AppText variant="caption" className="font-sans font-bold text-ink-3">Done</AppText>
-            </Pressable>
+          <View style={{ gap: space(8) }}>
+            <AppButton size="lg" variant="primary" Icon={RefreshCw} label="Go again" onPress={startSession} />
+            <AppButton variant="secondary" label="Change settings" onPress={() => setPhase('setup')} />
+            <AppButton variant="quiet" label="Done" onPress={handleBack} />
           </View>
         </ScrollView>
       </FadeInView>
@@ -381,67 +324,90 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
   const answered = lastResult !== null;
   const answerRef = formatReference(currentRound.answer);
 
+  // One multiple-choice option. Colors change on answer; no shadow involved.
+  const optionClass = (isAnswer: boolean) =>
+    `border rounded-btn ${
+      answered && isAnswer ? 'border-success bg-success-soft' : answered ? 'border-line bg-surface-2' : 'border-line bg-surface active:bg-surface-2'
+    }`;
+  const optionStyle = { paddingHorizontal: space(14), paddingVertical: space(12) };
+  const questionLabel = (text: string) => (
+    <AppText variant="label" className="font-sans font-semibold text-ink-2">
+      {text}
+    </AppText>
+  );
+
   return (
     <FadeInView style={{ flex: 1 }}>
-      <View className="flex-1 bg-surface p-5">
+      <View className="flex-1 bg-canvas p-5">
         {/* Header: progress + score + bail out */}
-        <View className="flex-row items-center justify-between mb-4">
-          <View>
-            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-ink-3 font-sans">
+        <View className="flex-row items-center justify-between" style={{ marginBottom: space(16), gap: space(12) }}>
+          <View className="flex-1">
+            <AppText variant="caption" className="font-sans font-medium text-ink-3">
               Question {roundIndex + 1} of {rounds.length}
             </AppText>
-            <AppText variant="body" className="font-serif font-black text-ink">
-              Score {score}/{roundIndex + (answered ? 1 : 0)}
+            <AppText variant="title" className="font-sans font-bold text-ink">
+              {score} right so far
             </AppText>
           </View>
-          <AppIconButton Icon={X} diameter={36} iconSize={16} iconColor={palette.ink} onPress={() => setPhase('done')} className="rounded-full border border-line-strong" hitSlop={8} />
+          <AppIconButton Icon={X} variant="outline" onPress={() => setPhase('done')} accessibilityLabel="End practice" />
         </View>
 
-        <ScrollView className="flex-1" contentContainerStyle={{ gap: 14, paddingBottom: 12 }}>
+        <ScrollView className="flex-1" contentContainerStyle={{ gap: space(12), paddingBottom: space(12) }}>
           {currentRound.kind === 'verseToRef' ? (
             <>
-              <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">Where is this?</AppText>
-              <View className="border-2 border-ink rounded-2xl p-4 bg-surface">
+              {questionLabel('Where is this?')}
+              <View className="bg-surface border border-line rounded-card" style={{ padding: space(16) }}>
                 <AppText variant="body" className="font-serif leading-relaxed text-ink">{currentRound.answer.text}</AppText>
               </View>
 
               {hardMode ? (
-                <View className="gap-2">
+                <View style={{ gap: space(8) }}>
                   {/* Plain text entry rather than the BookPicker sheet: typing
                       "Romans" is faster than scrolling a 66-book list mid-
                       quiz, and referenceAnswerMatches already compares book
                       names case/whitespace-insensitively. It also keeps the
                       answer path free of react-native's Modal, which does not
                       currently overlay on web anywhere in this app. */}
-                  <AppTextInput value={freeGuess.book} onChangeText={(t) => setFreeGuess((g) => ({ ...g, book: t }))} placeholder="Book (e.g. Romans)" placeholderTextColor={palette.ink3} autoCapitalize="words" autoCorrect={false} editable={!answered} className="bg-surface border border-line-strong rounded-xl px-3 py-2.5 text-ink" />
-                  <View className="flex-row gap-2">
+                  <AppTextInput
+                    value={freeGuess.book}
+                    onChangeText={(t) => setFreeGuess((g) => ({ ...g, book: t }))}
+                    placeholder="Book (e.g. Romans)"
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    editable={!answered}
+                    variant="body"
+                    className={numberField}
+                    style={{ padding: space(10) }}
+                  />
+                  <View className="flex-row" style={{ gap: space(8) }}>
                     <NumericInput
                       value={freeGuess.chapter}
                       onChangeText={(t) => setFreeGuess((g) => ({ ...g, chapter: t }))}
                       placeholder="Chapter"
-                      placeholderTextColor={palette.ink3}
                       editable={!answered}
-                      className="flex-1 bg-surface border border-line-strong rounded-xl px-3 py-2.5 text-xs text-ink"
+                      className={`flex-1 ${numberField}`}
+                      style={{ padding: space(10), minWidth: 0 }}
                     />
                     <NumericInput
                       value={freeGuess.verse}
                       onChangeText={(t) => setFreeGuess((g) => ({ ...g, verse: t }))}
                       placeholder="Verse"
-                      placeholderTextColor={palette.ink3}
                       editable={!answered}
-                      className="flex-1 bg-surface border border-line-strong rounded-xl px-3 py-2.5 text-xs text-ink"
+                      className={`flex-1 ${numberField}`}
+                      style={{ padding: space(10), minWidth: 0 }}
                     />
                   </View>
                   {!answered && (
-                    <AppButton size="md" onPress={() => recordResult(referenceAnswerMatches(currentRound.answer, freeGuess))} disabled={!freeGuess.book || !freeGuess.chapter || !freeGuess.verse} className={`w-full rounded-xl items-center ${ freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'bg-accent' : 'bg-fill' }`}>
-                      <AppText variant="label" className={`font-sans font-bold ${ freeGuess.book && freeGuess.chapter && freeGuess.verse ? 'text-on-accent' : 'text-ink-3' }`} >
-                        Check Answer
-                      </AppText>
-                    </AppButton>
+                    <AppButton
+                      variant="primary"
+                      label="Check answer"
+                      onPress={() => recordResult(referenceAnswerMatches(currentRound.answer, freeGuess))}
+                      disabled={!freeGuess.book || !freeGuess.chapter || !freeGuess.verse}
+                    />
                   )}
                 </View>
               ) : (
-                <View className="gap-2">
+                <View style={{ gap: space(8) }}>
                   {currentRound.options.map((opt) => {
                     const optRef = formatReference(opt);
                     const isAnswer = optRef === answerRef;
@@ -449,15 +415,11 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                       <Pressable
                         key={optRef}
                         onPress={answered ? undefined : () => recordResult(isAnswer)}
-                        className={`border rounded-xl px-3 py-2.5 ${
-                          answered && isAnswer
-                            ? 'border-success bg-success-soft'
-                            : answered
-                              ? 'border-line bg-surface-2'
-                              : 'border-line-strong bg-surface'
-                        }`}
+                        accessibilityRole="button"
+                        className={optionClass(isAnswer)}
+                        style={optionStyle}
                       >
-                        <AppText variant="label" className={`font-serif font-bold ${answered && isAnswer ? 'text-success' : 'text-ink'}`}>
+                        <AppText variant="body" className={`font-sans font-medium ${answered && isAnswer ? 'text-success' : 'text-ink'}`}>
                           {optRef}
                         </AppText>
                       </Pressable>
@@ -468,37 +430,35 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             </>
           ) : (
             <>
-              <AppText variant="section" className="font-sans font-extrabold uppercase tracking-wider text-ink-3">What does this say?</AppText>
-              <View className="border-2 border-ink rounded-2xl p-4 bg-surface items-center">
-                <AppText variant="title" className="font-serif font-black text-ink">{answerRef}</AppText>
+              {questionLabel('What does this say?')}
+              <View className="bg-surface border border-line rounded-card items-center" style={{ padding: space(16) }}>
+                <AppText variant="title" className="font-sans font-bold text-ink">{answerRef}</AppText>
               </View>
 
               {hardMode ? (
-                <View className="gap-2">
+                <View style={{ gap: space(8) }}>
                   {revealed ? (
                     <>
-                      <View className="bg-surface-2 border border-line rounded-xl p-3">
+                      <View className="bg-surface-2 border border-line rounded-card" style={{ padding: space(14) }}>
                         <AppText variant="body" className="font-serif leading-relaxed text-ink">{currentRound.answer.text}</AppText>
                       </View>
                       {!answered && (
-                        <View className="flex-row gap-2">
-                          <AppButton size="md" onPress={() => recordResult(false)} className="flex-1 border border-line-strong rounded-xl items-center">
-                            <AppText variant="caption" className="font-sans font-bold text-ink-2">Missed it</AppText>
-                          </AppButton>
-                          <AppButton size="md" onPress={() => recordResult(true)} className="flex-1 bg-success rounded-xl items-center">
-                            <AppText variant="caption" className="font-sans font-bold text-on-accent">I knew it</AppText>
-                          </AppButton>
+                        <View className="flex-row" style={{ gap: space(8) }}>
+                          <View className="flex-1">
+                            <AppButton variant="secondary" label="Missed it" onPress={() => recordResult(false)} />
+                          </View>
+                          <View className="flex-1">
+                            <AppButton variant="primary" label="I knew it" onPress={() => recordResult(true)} />
+                          </View>
                         </View>
                       )}
                     </>
                   ) : (
-                    <AppButton size="md" onPress={() => setRevealed(true)} className="w-full bg-accent rounded-xl items-center">
-                      <AppText variant="label" className="font-sans font-bold text-on-accent">Recall it, then reveal</AppText>
-                    </AppButton>
+                    <AppButton variant="primary" label="Recall it, then reveal" onPress={() => setRevealed(true)} />
                   )}
                 </View>
               ) : (
-                <View className="gap-2">
+                <View style={{ gap: space(8) }}>
                   {currentRound.options.map((opt) => {
                     const optRef = formatReference(opt);
                     const isAnswer = optRef === answerRef;
@@ -506,15 +466,15 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                       <Pressable
                         key={optRef}
                         onPress={answered ? undefined : () => recordResult(isAnswer)}
-                        className={`border rounded-xl px-3 py-2.5 ${
-                          answered && isAnswer
-                            ? 'border-success bg-success-soft'
-                            : answered
-                              ? 'border-line bg-surface-2'
-                              : 'border-line-strong bg-surface'
-                        }`}
+                        accessibilityRole="button"
+                        className={optionClass(isAnswer)}
+                        style={optionStyle}
                       >
-                        <AppText variant="label" className={`font-serif leading-snug ${answered && isAnswer ? 'text-success' : 'text-ink-2'}`} numberOfLines={3} >
+                        <AppText
+                          variant="label"
+                          className={`font-serif leading-snug ${answered && isAnswer ? 'text-success' : 'text-ink'}`}
+                          numberOfLines={3}
+                        >
                           {opt.text}
                         </AppText>
                       </Pressable>
@@ -528,17 +488,18 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
 
         {/* Result + advance */}
         {answered && (
-          <View className="shrink-0 gap-2 pt-2">
-            <View className={`rounded-xl p-2.5 ${lastResult === 'right' ? 'bg-success-soft border border-success/30' : 'bg-danger-soft border border-danger/30'}`}>
-              <AppText variant="caption" className={`font-sans font-bold text-center ${lastResult === 'right' ? 'text-success' : 'text-danger'}`}>
-                {lastResult === 'right' ? 'Correct!' : `Not quite — that was ${answerRef}.`}
+          <View className="shrink-0" style={{ gap: space(8), paddingTop: space(8) }}>
+            <View className={`rounded-btn ${lastResult === 'right' ? 'bg-success-soft' : 'bg-danger-soft'}`} style={{ padding: space(10) }}>
+              <AppText variant="label" className={`font-sans font-semibold text-center ${lastResult === 'right' ? 'text-success' : 'text-danger'}`}>
+                {lastResult === 'right' ? 'Right!' : `Not quite. That was ${answerRef}.`}
               </AppText>
             </View>
-            <AppButton size="lg" onPress={advance} className="w-full bg-accent rounded-xl items-center">
-              <AppText variant="label" className="font-sans font-bold text-on-accent">
-                {roundIndex >= rounds.length - 1 ? 'See Score' : 'Next Question'}
-              </AppText>
-            </AppButton>
+            <AppButton
+              size="lg"
+              variant="primary"
+              label={roundIndex >= rounds.length - 1 ? 'See how you did' : 'Next question'}
+              onPress={advance}
+            />
           </View>
         )}
       </View>

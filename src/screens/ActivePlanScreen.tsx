@@ -1,5 +1,5 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, ChevronRight, GripVertical, Plus, X, Trash2 } from 'lucide-react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { GripVertical, Plus, Trash2 } from 'lucide-react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import { useState } from 'react';
@@ -8,6 +8,7 @@ import { AppState, buildVerseId } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
 import { FadeInView, NumericInput, useClampedNumberField } from '../components/ui';
 import { AppButton, AppIconButton, AppText, CollapsibleCard, useFontScale, useScaledSpace } from '../components/design';
+import { Badge, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 import { RhythmEditor } from '../components/RhythmEditor';
 import { QueueSources } from '../components/QueueSources';
 import { BookPicker } from '../components/BookPicker';
@@ -181,45 +182,63 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const planNameFor = (planId?: string) =>
     joinedGroupPlanDetails.find((p) => p.planId === planId)?.name || 'Group';
 
-  // Reorders two adjacent VISIBLE groups.
-  //
-  // This must never rebuild the queue from `grouped`. `grouped` is a filtered
-  // view -- queued/learning only -- so flattening it and passing the result to
-  // updateMemoryQueue() replaces the entire queue with just those items, and
-  // every reviewing/retained verse silently disappears from state. The
-  // auto-sync then reads that as "the user removed 100+ verses" and deletes
-  // the documents. That is exactly how a real user's whole review history was
-  // destroyed by a single tap on an arrow.
-  //
-  // So: permute orderIndex AMONG the visible items only, reusing the index
-  // slots they already occupy, and map over `prev` so every other item is
-  // carried through untouched.
-  const reorderGroups = (from: number, to: number) => {
-    updateMemoryQueue((prev) => reorderQueueGroups(prev, grouped, from, to));
+  // Your own verses and each group plan's verses as separate lists (ui
+  // overhaul bucket 3). Which source goes first each learning day is set in
+  // "Where verses come from", so mixing them in one list implied an order
+  // the scheduler doesn't follow. Each list reorders only among itself:
+  // reorderQueueGroups reuses the orderIndex slots of the groups it's given,
+  // so moving one of your verses never shifts a plan's verses or vice versa.
+  const planIds = Array.from(
+    new Set(grouped.filter((g) => g.origin === 'group').map((g) => g.items[0].originPlanId || ''))
+  );
+  const sections = [
+    { key: 'mine', title: 'My own verses', groups: grouped.filter((g) => g.origin !== 'group') },
+    ...planIds.map((id) => ({
+      key: id || 'group',
+      title: planNameFor(id || undefined),
+      groups: grouped.filter((g) => g.origin === 'group' && (g.items[0].originPlanId || '') === id),
+    })),
+  ].filter((s) => s.key === 'mine' || s.groups.length > 0);
+
+  const addVerses = async () => {
+    const start = Math.min(selectedAddVerse, selectedAddEndVerse);
+    const end = Math.max(selectedAddVerse, selectedAddEndVerse);
+
+    setIsAddingVerses(true);
+    const result = await addVerseRangeToQueue(selectedAddBook, selectedAddChapter, start, end);
+    setIsAddingVerses(false);
+
+    if (result.error) {
+      triggerToast(result.error);
+      return;
+    }
+    if (result.added === 0) {
+      triggerToast(`${selectedAddBook} ${selectedAddChapter}:${start}-${end} is already on your list!`);
+      return;
+    }
+
+    setShowAddQueueItemModal(false);
+    const skippedNotes = [
+      result.alreadyThere > 0 ? `${result.alreadyThere} already on your list` : null,
+      result.missingText > 0 ? `${result.missingText} had no text available` : null,
+    ].filter(Boolean);
+    const skippedNote = skippedNotes.length > 0 ? ` (${skippedNotes.join(', ')}, skipped)` : '';
+    triggerToast(
+      `Added ${selectedAddBook} ${selectedAddChapter}:${start}${end > start ? `-${end}` : ''} to your verses!${skippedNote}`
+    );
   };
 
-  // moveGroupUp/moveGroupDown were deleted with the per-row arrow buttons --
-  // the list is drag-ordered now. Both were thin wrappers over reorderGroups,
-  // which is still the single path every reorder goes through.
-
-  // The 7-day Memory Load Forecast used to live here. It moved to the Memory
-  // Calendar, which already projects the same days and can name the actual
-  // verses due on each one instead of only counting them -- see
-  // getMemoryCalendarProjection. Keeping a second, vaguer copy of that on
-  // this screen was the reason this page had two jobs.
+  const fieldLabel = (text: string) => (
+    <AppText variant="caption" className="font-sans font-medium text-ink-2">
+      {text}
+    </AppText>
+  );
+  const numberField = 'w-full bg-surface border border-line rounded-btn text-ink font-sans';
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 24 }}>
-        {/* Header Row */}
-        <View className="flex-row items-start justify-between">
-          <View className="flex-row items-center gap-3">
-            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
-            <View className="flex-1">
-              <AppText variant="title" className="font-serif font-black text-ink mt-0.5">My Verses</AppText>
-            </View>
-          </View>
-        </View>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        <ScreenHeader title="My Verses" onBack={handleBack} backLabel="My Memory Work" />
 
         {/* MY SCHEDULE -- user-level pacing, commits live. Called "Rhythm"
             before, which collided head-on with Saved Plans calling its
@@ -252,275 +271,215 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           </CollapsibleCard>
         )}
 
-        {/* MEMORY QUEUE SECTION */}
-        <View style={{ gap: 12 }}>
-          {/* The title block needs flex-1 and the button shrink-0: without
-              them the description text sets the row's width, and the Add
-              Verses button was pushed partly off the right edge. Past 1.3x
-              they stack instead, since a two-line title plus a button simply
-              doesn't fit one row at large text sizes. */}
+        {/* THE VERSES -- queued and learning only. Verses in spaced review
+            live on the Memory Calendar (see the `grouped` filter above). */}
+        <View style={{ gap: space(12) }}>
           <View
             className={headerStacked ? '' : 'flex-row justify-between items-center'}
             style={{ gap: space(headerStacked ? 10 : 12) }}
           >
-            <View className={headerStacked ? '' : 'flex-1'}>
-              <AppText variant="body" className="font-serif font-black text-ink">Memory Verse Queue</AppText>
-              <AppText variant="caption" className="text-ink-3 mt-0.5">
-                Verses you've chosen, in the order you'll learn them. Press and hold a verse to drag it somewhere else.
-              </AppText>
+            <AppText variant="caption" className={`font-sans text-ink-3 ${headerStacked ? '' : 'flex-1'}`}>
+              Verses you've chosen, in the order you'll learn them. Press and hold one to move it.
+            </AppText>
+            <View className={headerStacked ? 'flex-row' : 'shrink-0'}>
+              <AppButton
+                size="sm"
+                variant={showAddQueueItemModal ? 'quiet' : 'primary'}
+                Icon={showAddQueueItemModal ? undefined : Plus}
+                label={showAddQueueItemModal ? 'Cancel' : 'Add verses'}
+                onPress={() => setShowAddQueueItemModal(!showAddQueueItemModal)}
+              />
             </View>
-            <AppButton
-              size="sm"
-              onPress={() => setShowAddQueueItemModal(!showAddQueueItemModal)}
-              className={`bg-accent rounded-xl flex-row items-center gap-1 ${headerStacked ? 'self-start' : 'shrink-0'}`}
-            >
-              <Plus size={12} color={palette.onAccent} />
-              <AppText variant="label" className="font-sans font-bold text-on-accent">Add Verses</AppText>
-            </AppButton>
           </View>
 
-          {/* Inline Verse Addition Form */}
+          {/* Add form, inline rather than in a sheet: its number fields use
+              the shared keyboard Done bar, which a Modal would need its own
+              copy of (see the pairing rule in ui.tsx). */}
           {showAddQueueItemModal && (
             <FadeInView>
-              <View className="border-2 border-ink rounded-2xl p-4 bg-surface text-left" style={{ gap: 16 }}>
-                <View className="flex-row justify-between items-center pb-2 border-b border-hairline">
-                  <AppText variant="label" className="font-sans font-black text-ink uppercase tracking-wider">Add Verses</AppText>
-                  <Pressable onPress={() => setShowAddQueueItemModal(false)}>
-                    <X size={14} color={palette.ink3} />
-                  </Pressable>
+              <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(14) }}>
+                <View style={{ gap: space(4) }}>
+                  {fieldLabel('Book')}
+                  <BookPicker value={selectedAddBook} onChange={setSelectedAddBook} />
                 </View>
 
-                <View className="flex-row gap-2.5">
-                  <View className="flex-1" style={{ gap: 4 }}>
-                    <AppText variant="micro" className="font-bold text-ink-3 uppercase">Book</AppText>
-                    <BookPicker value={selectedAddBook} onChange={setSelectedAddBook} />
-                  </View>
-                  <View className="flex-1" style={{ gap: 4 }}>
-                    <AppText variant="micro" className="font-bold text-ink-3 uppercase">Chapter</AppText>
-                    <NumericInput
-                      {...addChapterField}
-                      className="w-full p-2 border border-line rounded-xl text-xs font-mono font-bold text-ink"
-                    />
-                  </View>
-                </View>
-
-                <View className="flex-row gap-2.5">
-                  <View className="flex-1" style={{ gap: 4 }}>
-                    <AppText variant="micro" className="font-bold text-ink-3 uppercase">Start Verse</AppText>
-                    <NumericInput
-                      {...addStartVerseField}
-                      className="w-full p-2 border border-line rounded-xl text-xs font-mono font-bold text-ink"
-                    />
-                  </View>
-                  <View className="flex-1" style={{ gap: 4 }}>
-                    <View className="flex-row items-center justify-between">
-                      <AppText variant="micro" className="font-bold text-ink-3 uppercase">End Verse</AppText>
-                      {addChapterData && (
-                        <AppText variant="micro" className="font-mono text-ink-3">max {addChapterData.verseCount}</AppText>
-                      )}
+                {/* Chapter, first verse and last verse share a row until the
+                    text is large, then wrap two and one. */}
+                <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+                  {[
+                    { label: 'Chapter', field: addChapterField },
+                    { label: 'First verse', field: addStartVerseField },
+                    {
+                      label: addChapterData ? `Last verse (up to ${addChapterData.verseCount})` : 'Last verse',
+                      field: addEndVerseField,
+                    },
+                  ].map(({ label, field }) => (
+                    <View key={label} style={{ flexGrow: 1, flexBasis: space(88), gap: space(4) }}>
+                      {fieldLabel(label)}
+                      <NumericInput {...field} className={numberField} style={{ padding: space(10) }} />
                     </View>
-                    <NumericInput
-                      {...addEndVerseField}
-                      className="w-full p-2 border border-line rounded-xl text-xs font-mono font-bold text-ink"
-                    />
-                  </View>
+                  ))}
                 </View>
 
-                <View className="flex-row gap-2 justify-end pt-2 border-t border-hairline">
-                  <Pressable
-                    onPress={() => setShowAddQueueItemModal(false)}
-                    className="px-4 py-2 border border-line rounded-xl"
-                  >
-                    <AppText variant="label" className="text-ink-2 font-sans font-bold ">Cancel</AppText>
-                  </Pressable>
-                  <Pressable
+                <View className="flex-row justify-end" style={{ gap: space(8) }}>
+                  <AppButton
+                    variant="primary"
+                    label={isAddingVerses ? 'Adding…' : 'Add these verses'}
                     disabled={isAddingVerses}
-                    onPress={async () => {
-                      const start = Math.min(selectedAddVerse, selectedAddEndVerse);
-                      const end = Math.max(selectedAddVerse, selectedAddEndVerse);
-
-                      setIsAddingVerses(true);
-                      const result = await addVerseRangeToQueue(selectedAddBook, selectedAddChapter, start, end);
-                      setIsAddingVerses(false);
-
-                      if (result.error) {
-                        triggerToast(result.error);
-                        return;
-                      }
-                      if (result.added === 0) {
-                        triggerToast(`${selectedAddBook} ${selectedAddChapter}:${start}-${end} is already on your list!`);
-                        return;
-                      }
-
-                      setShowAddQueueItemModal(false);
-                      const skippedNotes = [
-                        result.alreadyThere > 0 ? `${result.alreadyThere} already on your list` : null,
-                        result.missingText > 0 ? `${result.missingText} had no text available` : null,
-                      ].filter(Boolean);
-                      const skippedNote = skippedNotes.length > 0 ? ` (${skippedNotes.join(', ')}, skipped)` : '';
-                      triggerToast(
-                        `Added ${selectedAddBook} ${selectedAddChapter}:${start}${end > start ? `-${end}` : ''} to your verses!${skippedNote}`
-                      );
-                    }}
-                    className={`px-4 py-2 bg-accent rounded-xl ${isAddingVerses ? 'opacity-50' : ''}`}
-                  >
-                    <AppText variant="label" className="text-on-accent font-sans font-bold ">{isAddingVerses ? 'Adding…' : 'Add these verses'}</AppText>
-                  </Pressable>
+                    onPress={addVerses}
+                  />
                 </View>
               </View>
             </FadeInView>
           )}
 
-          {/* Queue list -- verses in Spaced Review live in the Memory
-              Calendar now, not here (see the `grouped` filter above).
-
-              A plain View, not a nested ScrollView. This used to be a
-              ScrollView with maxHeight: 360 inside the screen's own
-              ScrollView; on a touch device the inner one swallows vertical
-              drags that start over it, so the page underneath felt stuck,
-              and anything past 360px was hidden behind a scrollbar most
-              people never noticed. The list is now part of the page. */}
-          <View
-            className="border border-hairline p-2 rounded-2xl bg-surface-2"
-            style={{ gap: 8 }}
-          >
-            {grouped.length === 0 ? (
-              <AppText variant="label" className="py-8 text-center text-ink-3 font-sans italic">
-                Memory Queue is currently empty. Add verses above.
-              </AppText>
-            ) : (
-              // Real drag-to-reorder, replacing a column of up/down arrow
-              // buttons per row. The description above claimed "drag to
-              // reorder" while the only way to move anything was tapping an
-              // arrow repeatedly.
-              //
-              // scrollEnabled={false} because this always nests inside the
-              // screen's own ScrollView -- same reason and same pattern as
-              // the recording list in ChapterLandingScreen, which is where
-              // DraggableFlatList is already proven in this app.
-              //
-              // onDragEnd uses `from`/`to` rather than the reordered `data`
-              // array: reorderGroups permutes orderIndex among the VISIBLE
-              // items only and maps over the full queue, so reviewing and
-              // retained verses are carried through untouched. Rebuilding
-              // the queue from `data` would drop every verse this filtered
-              // list doesn't show -- the exact bug the comment on
-              // reorderGroups above exists to warn about.
-              <DraggableFlatList
-                data={grouped}
-                scrollEnabled={false}
-                keyExtractor={(group) => group.id || `${group.book}_${group.chapter}_${group.verses[0]}`}
-                contentContainerStyle={{ gap: 8 }}
-                onDragEnd={({ from, to }) => {
-                  if (from === to) return;
-                  reorderGroups(from, to);
-                  triggerToast('Reordered.');
-                }}
-                renderItem={({ item: group, drag, isActive }: RenderItemParams<GroupedQueueItem>) => {
-                  const isGroup = group.origin === 'group';
-                  const hasMultiple = group.verses.length > 1;
-                  const versesStr = hasMultiple
-                    ? `${group.verses[0]}-${group.verses[group.verses.length - 1]}`
-                    : `${group.verses[0]}`;
-
-                  return (
-                  <Pressable
-                    onLongPress={drag}
-                    delayLongPress={250}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${group.book} ${group.chapter}:${versesStr}. Press and hold to reorder.`}
-                    className={`flex-row items-center justify-between p-4 bg-surface border rounded-xl border-l-4 ${
-                      isGroup ? 'border-l-accent border-accent/30' : 'border-l-warning border-warning/30'
-                    } ${isActive ? 'border-accent/60 opacity-90' : ''}`}
-                  >
-                    <View className="flex-row items-center gap-3.5 flex-1">
-                      {/* Drag affordance. The whole row is the drag target
-                          (a small handle is a hard thing to hit), but the
-                          grip is what makes that discoverable. */}
-                      <View className="shrink-0">
-                        <GripVertical size={16} color={isActive ? palette.accent : palette.ink3} />
-                      </View>
-
-                      {/* Reference details */}
-                      <View className="text-left flex-1" style={{ gap: 4 }}>
-                        <View className="flex-row items-center gap-2 flex-wrap">
-                          <AppText variant="label" className="font-serif font-black text-ink">
-                            {group.book} {group.chapter}:{versesStr}
-                          </AppText>
-                          <AppText variant="micro" className={`px-1.5 py-0.5 rounded-full font-sans font-bold uppercase tracking-wider ${ isGroup ? 'bg-accent-soft text-accent border border-accent/30' : 'bg-warning-soft text-warning border border-warning/30' }`} >
-                            {isGroup ? planNameFor(group.items[0].originPlanId) : 'Mine'}
-                          </AppText>
-                          {hasMultiple && (
-                            <AppText variant="micro" className="px-1.5 py-0.5 rounded-full font-sans font-bold bg-surface-2 text-ink-2 border border-line">
-                              {group.verses.length} verses
-                            </AppText>
-                          )}
-                        </View>
-                        <AppText variant="caption" className="font-sans text-ink-3 italic pr-2" numberOfLines={1} ellipsizeMode="tail">
-                          "{group.items[0].text}"{hasMultiple ? ' ...' : ''}
-                        </AppText>
-                      </View>
-                    </View>
-
-                    {/* Right column status & delete */}
-                    <View className="flex-row items-center gap-3">
-                      {group.status === 'queued' && (
-                        <Pressable
-                          onPress={() => promoteToLearning(group.items.map((item) => item.verseId))}
-                          className="px-2 py-0.5 rounded-full border border-ink bg-surface"
-                        >
-                          <AppText variant="micro" className="font-sans font-bold text-ink">Start Learning</AppText>
-                        </Pressable>
-                      )}
-                      {/* Only 'queued'/'learning' groups ever reach this list --
-                          'reviewing' is on the Memory Calendar and 'retained'
-                          is done, nothing to manage. Status colors deliberately
-                          avoid amber/emerald/black, already used by the Memory
-                          Load Forecast below. */}
-                      <AppText variant="micro" className={`font-sans font-bold px-2 py-0.5 rounded-full border uppercase ${ group.status === 'learning' ? 'bg-accent-soft text-accent border-accent/30' : 'bg-surface-2 text-ink-3 border-line' }`} >
-                        {group.status}
-                      </AppText>
-                      <Pressable
-                        onPress={() => {
+          {grouped.length === 0 ? (
+            <EmptyState
+              title="Nothing waiting to start"
+              message="Add verses here or from a chapter's page. Verses you're already reviewing are on the Memory Calendar."
+            />
+          ) : (
+            sections.map((section) => (
+              <View key={section.key} style={{ gap: space(6) }}>
+                {sections.length > 1 && <SectionHeader title={section.title} />}
+                {section.groups.length === 0 ? (
+                  <AppText variant="label" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
+                    None waiting.
+                  </AppText>
+                ) : (
+                  // Real drag-to-reorder. scrollEnabled={false} because this
+                  // always nests inside the screen's own ScrollView -- same
+                  // pattern as the recording list on the chapter page.
+                  //
+                  // onDragEnd uses `from`/`to` rather than the reordered
+                  // `data` array: reorderQueueGroups permutes orderIndex
+                  // among this section's items only and maps over the full
+                  // queue, so every other verse is carried through untouched.
+                  // Rebuilding the queue from `data` would drop every verse
+                  // this list doesn't show -- the bug queueReorder.ts
+                  // exists to prevent.
+                  <DraggableFlatList
+                    data={section.groups}
+                    scrollEnabled={false}
+                    keyExtractor={(group) => group.id || `${group.book}_${group.chapter}_${group.verses[0]}`}
+                    contentContainerStyle={{ gap: space(8) }}
+                    onDragEnd={({ from, to }) => {
+                      if (from === to) return;
+                      updateMemoryQueue((prev) => reorderQueueGroups(prev, section.groups, from, to));
+                      triggerToast('Reordered.');
+                    }}
+                    renderItem={({ item: group, drag, isActive }: RenderItemParams<GroupedQueueItem>) => (
+                      <VerseGroupRow
+                        group={group}
+                        drag={drag}
+                        isActive={isActive}
+                        onStart={() => promoteToLearning(group.items.map((item) => item.verseId))}
+                        onRemove={() => {
                           // removeQueueItems, not a raw filter: deleting from
                           // Firestore now requires recorded intent, so this is
                           // the only route that actually removes documents.
                           removeQueueItems(group.items.map((item) => item.verseId));
                           triggerToast('Removed those verses from your list.');
                         }}
-                        className="p-1 rounded"
-                      >
-                        <Trash2 size={13} color={palette.lineStrong} />
-                      </Pressable>
-                    </View>
-                  </Pressable>
-                  );
-                }}
-              />
-            )}
-          </View>
+                      />
+                    )}
+                  />
+                )}
+              </View>
+            ))
+          )}
         </View>
-
-        {/* The Memory Calendar card was removed from this screen. It's reached
-            from My Memory Work, which is the menu that owns every destination
-            of that kind -- a second, larger door to it here made this page
-            look like the hub rather than one of the things the hub leads to. */}
 
         {/* RETENTION FOOTER -- read-only. Keeps the two halves of the split
             visibly connected (this page owns pacing, the designer owns the
             method) without letting you edit the plan from here, which is the
             two-editors-one-state problem the split exists to remove. */}
-        <Pressable
-          onPress={() => navigateTo('savedPlans')}
-          className="flex-row items-center border-t border-line"
-          style={{ paddingTop: space(14), gap: space(8), minHeight: 44 }}
-        >
-          <AppText variant="micro" className="font-sans text-ink-2 flex-1">
-            Review Settings: {activePlan ? activePlan.name : 'none chosen'} — tap to change
-          </AppText>
-          <ChevronRight size={14} color={palette.ink3} />
-        </Pressable>
+        <GroupedList>
+          <ListRow
+            title="Review Settings"
+            value={activePlan ? activePlan.name : 'None chosen'}
+            onPress={() => navigateTo('savedPlans')}
+          />
+        </GroupedList>
       </ScrollView>
     </FadeInView>
+  );
+}
+
+/**
+ * One run of consecutive verses on My Verses. The reference gets the full
+ * width of the first line (it used to share it with three badges and a
+ * button, which crushed it to a wrapped column); status and the Start button
+ * sit on their own line underneath.
+ */
+function VerseGroupRow({
+  group,
+  drag,
+  isActive,
+  onStart,
+  onRemove,
+}: {
+  group: GroupedQueueItem;
+  drag: () => void;
+  isActive: boolean;
+  onStart: () => void;
+  onRemove: () => void;
+}) {
+  const palette = useThemeColors();
+  const scale = useFontScale();
+  const space = useScaledSpace();
+  const hasMultiple = group.verses.length > 1;
+  const versesStr = hasMultiple ? `${group.verses[0]}-${group.verses[group.verses.length - 1]}` : `${group.verses[0]}`;
+  const reference = `${group.book} ${group.chapter}:${versesStr}`;
+
+  return (
+    <Pressable
+      onLongPress={drag}
+      delayLongPress={250}
+      accessibilityRole="button"
+      accessibilityLabel={`${reference}. Press and hold to move.`}
+      className={`flex-row items-start rounded-card border ${isActive ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
+      style={{ padding: space(12), gap: space(10) }}
+    >
+      {/* Drag affordance. The whole row is the drag target (a small handle
+          is a hard thing to hit), but the grip is what makes that
+          discoverable. */}
+      <View className="shrink-0" style={{ paddingTop: space(2) }}>
+        <GripVertical size={Math.round(16 * scale)} color={isActive ? palette.accent : palette.ink3} />
+      </View>
+
+      <View className="flex-1" style={{ gap: space(6), minWidth: 0 }}>
+        <View className="flex-row items-start" style={{ gap: space(8) }}>
+          <AppText variant="label" className="font-sans font-semibold text-ink flex-1">
+            {reference}
+          </AppText>
+          <AppIconButton
+            Icon={Trash2}
+            variant="bare"
+            diameter={28}
+            iconColor={palette.ink3}
+            accessibilityLabel={`Remove ${reference}`}
+            onPress={onRemove}
+          />
+        </View>
+        <AppText variant="caption" className="font-serif text-ink-2" numberOfLines={1}>
+          {group.items[0].text}
+        </AppText>
+        <View className="flex-row flex-wrap items-center" style={{ gap: space(8) }}>
+          {/* Only 'queued'/'learning' groups reach this list. */}
+          <Badge label={group.status === 'learning' ? 'Learning' : 'Waiting'} tone={group.status === 'learning' ? 'accent' : 'neutral'} />
+          {hasMultiple && (
+            <AppText variant="caption" className="font-sans text-ink-3">
+              {group.verses.length} verses
+            </AppText>
+          )}
+          {group.status === 'queued' && (
+            <View className="ml-auto">
+              <AppButton size="sm" variant="secondary" label="Start learning" onPress={onStart} />
+            </View>
+          )}
+        </View>
+      </View>
+    </Pressable>
   );
 }

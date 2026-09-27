@@ -1,55 +1,47 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft } from 'lucide-react-native';
+import { ScrollView, View } from 'react-native';
 
 import { AppState } from '../state/useAppState';
-import { ChipRow, FadeInView } from '../components/ui';
+import { FadeInView } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
-import { AppIconButton, AppText } from '../components/design';
+import { Dropdown } from '../components/Dropdown';
+import { AppText, useScaledSpace } from '../components/design';
+import { EmptyState, ScreenHeader, SectionHeader } from '../components/blocks';
 
-import { useThemeColors } from '../components/theme';
 import { formatDate } from '../lib/format';
+
+// A dropdown rather than a row of chips: four date ranges in chips truncated
+// to "Last 30 D…" at large text.
 const DATE_FILTER_OPTIONS = [
-  { id: 'all', label: 'All Time' },
-  { id: '7', label: 'Last 7 Days' },
-  { id: '30', label: 'Last 30 Days' },
-  { id: '90', label: 'Last 90 Days' },
+  { id: 'all', label: 'Any time' },
+  { id: '7', label: 'Last 7 days' },
+  { id: '30', label: 'Last 30 days' },
+  { id: '90', label: 'Last 90 days' },
 ];
 
-
-type HistoryEntry = { title: string; subtitle: string; book: string; date: string };
+type HistoryEntry = { title: string; kind: 'started' | 'memorized'; book: string; date: string };
 
 export default function FullHistoryScreen({ state }: { state: AppState }) {
-  const palette = useThemeColors();
-  const { handleBack, triggerToast, memoryQueue } = state;
+  const { handleBack, memoryQueue } = state;
+  const space = useScaledSpace();
   const [bookFilter, setBookFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
 
   // Real timeline, derived from the actual memory queue rather than fake
   // sample data: each verse contributes a "started learning" event (from
-  // dateStarted) and, once it graduates all the way through the retention
-  // phases, a "memorized" event (dated by its last real review).
+  // dateStarted) and, once it has come through every review stage, a
+  // "memorized" event (dated by its last real review).
   const timelineItems = useMemo<HistoryEntry[]>(() => {
     const items: HistoryEntry[] = [];
     memoryQueue.forEach((item) => {
       const ref = `${item.book} ${item.chapter}:${item.verseNumber}`;
       if (item.dateStarted) {
-        items.push({
-          title: `Started learning ${ref}`,
-          subtitle: `${formatDate(item.dateStarted)} • Added to your active memorization queue`,
-          book: item.book,
-          date: item.dateStarted,
-        });
+        items.push({ title: `Started learning ${ref}`, kind: 'started', book: item.book, date: item.dateStarted });
       }
       if (item.status === 'retained') {
         const retainedDate = item.lastReviewDate || item.dateStarted;
         if (retainedDate) {
-          items.push({
-            title: `Memorized ${ref}`,
-            subtitle: `${formatDate(retainedDate)} • Fully memorized — reached long-term retention`,
-            book: item.book,
-            date: retainedDate,
-          });
+          items.push({ title: `Memorized ${ref}`, kind: 'memorized', book: item.book, date: retainedDate });
         }
       }
     });
@@ -67,79 +59,65 @@ export default function FullHistoryScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
-        {/* Header */}
-        <View className="flex-row items-center gap-3 border-b border-hairline pb-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
-          <View className="flex-1">
-            <AppText variant="title" className="font-serif font-bold text-ink leading-none mt-0.5">
-              Full Memorization History
-            </AppText>
-          </View>
-        </View>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        <ScreenHeader title="History" onBack={handleBack} />
 
-        {/* Filters Box */}
-        <View className="border border-line rounded-2xl p-3 bg-surface-2" style={{ gap: 10 }}>
-          <View>
-            <AppText variant="micro" className="font-bold text-ink-3 uppercase tracking-wider mb-1">
-              Filter by Scripture
+        {/* Filters: side by side, wrapping one above the other at large text. */}
+        <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+          <View style={{ flexGrow: 1, flexBasis: space(150), gap: space(4) }}>
+            <AppText variant="caption" className="font-sans font-medium text-ink-2">
+              Book
             </AppText>
-            <BookPicker
-              value={bookFilter}
-              allowAll
-              allLabel="All Books"
-              onChange={(name) => {
-                setBookFilter(name);
-                triggerToast(`Filtered history by: ${(name || 'All Books').toUpperCase()}`);
-              }}
-            />
+            <BookPicker value={bookFilter} allowAll allLabel="All books" onChange={setBookFilter} />
           </View>
-
-          <View>
-            <AppText variant="micro" className="font-bold text-ink-3 uppercase tracking-wider mb-1">
-              Filter by Date Range
+          <View style={{ flexGrow: 1, flexBasis: space(150), gap: space(4) }}>
+            <AppText variant="caption" className="font-sans font-medium text-ink-2">
+              When
             </AppText>
-            <ChipRow
-              options={DATE_FILTER_OPTIONS}
+            <Dropdown
               value={dateFilter}
-              onChange={(id) => {
-                setDateFilter(String(id));
-                const label = DATE_FILTER_OPTIONS.find((o) => o.id === id)?.label || String(id);
-                triggerToast(`Filtered timeline range: ${label.toUpperCase()}`);
-              }}
+              onChange={setDateFilter}
+              options={DATE_FILTER_OPTIONS}
+              title="When"
+              searchable={false}
             />
           </View>
         </View>
 
-        {/* Filtered Timeline List */}
-        <View style={{ gap: 10 }}>
-          <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">
-            TIMELINE LOGS
-          </AppText>
-
-          <View className="border border-line rounded-2xl p-4 bg-surface shadow-xs">
-            {filteredItems.length === 0 ? (
-              <AppText variant="label" className="text-ink-3 italic text-center py-4">
-                {timelineItems.length === 0
-                  ? "You haven't started memorizing any verses yet."
-                  : 'No history matches these filters.'}
-              </AppText>
-            ) : (
-              <View className="relative pl-5 border-l border-line" style={{ gap: 18 }}>
+        {filteredItems.length === 0 ? (
+          <EmptyState
+            title={timelineItems.length === 0 ? 'Nothing here yet' : 'Nothing matches'}
+            message={
+              timelineItems.length === 0
+                ? 'Verses show up here when you start learning them, and again once they are memorized for good.'
+                : 'Try another book or a longer time range.'
+            }
+          />
+        ) : (
+          <View style={{ gap: space(6) }}>
+            <SectionHeader title={`${filteredItems.length} ${filteredItems.length === 1 ? 'event' : 'events'}`} />
+            {/* A timeline: a dot per event on a thin rule down the left. */}
+            <View className="bg-surface border border-line rounded-card" style={{ padding: space(14) }}>
+              <View className="border-l border-line" style={{ paddingLeft: space(16), marginLeft: space(4), gap: space(16) }}>
                 {filteredItems.map((item, idx) => (
-                  <View key={idx} className="relative">
+                  <View key={idx}>
                     <View
-                      className="absolute w-2 h-2 rounded-full bg-success"
-                      style={{ left: -25, top: 6 }}
+                      className={`absolute w-2 h-2 rounded-full ${item.kind === 'memorized' ? 'bg-success' : 'bg-accent'}`}
+                      style={{ left: -space(16) - 4.5, top: space(6) }}
                     />
-                    <AppText variant="label" className="font-sans font-bold text-ink">{item.title}</AppText>
-                    <AppText variant="caption" className="text-ink-3 leading-snug mt-0.5">{item.subtitle}</AppText>
+                    <AppText variant="label" className="font-sans font-semibold text-ink">
+                      {item.title}
+                    </AppText>
+                    <AppText variant="caption" className="font-sans text-ink-3">
+                      {formatDate(item.date)}
+                      {item.kind === 'memorized' ? ' · memorized for good' : ''}
+                    </AppText>
                   </View>
                 ))}
               </View>
-            )}
+            </View>
           </View>
-        </View>
+        )}
       </ScrollView>
     </FadeInView>
   );

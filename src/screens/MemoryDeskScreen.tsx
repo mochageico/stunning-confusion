@@ -1,11 +1,11 @@
-import { Pressable, ScrollView, View } from 'react-native';
-import { ArrowLeft, CalendarDays, ChevronRight, FolderOpen, History, ListOrdered } from 'lucide-react-native';
+import { ScrollView } from 'react-native';
+import { CalendarDays, FolderOpen, History, ListOrdered } from 'lucide-react-native';
 
 import { AppState, ScreenName } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
-import { AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
+import { useScaledSpace } from '../components/design';
+import { GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 
-import { useThemeColors } from '../components/theme';
 // ============================================================================
 // MEMORY DESK — one predictable door to everything about your own memory work.
 //
@@ -20,67 +20,18 @@ import { useThemeColors } from '../components/theme';
 //
 // Every row shows its CURRENT STATE rather than just a name. That's the point:
 // you can read where everything stands at a glance without opening anything,
-// so the menu informs rather than hides.
+// so the menu informs rather than hides. (ListRow moves the state under the
+// title past 1.3x.)
 //
 // Community group plans deliberately do NOT live here -- they're group-owned
 // content on a different lifecycle, and belong in the Community tab.
 // ============================================================================
 
-function DeskRow({
-  Icon,
-  label,
-  detail,
-  onPress,
-}: {
-  Icon: React.ComponentType<{ size?: number; color?: string }>;
-  label: string;
-  /** Current state, e.g. "12 queued · 3 learning". Shown beside or under the label. */
-  detail: string;
-  onPress: () => void;
-}) {
-  const palette = useThemeColors();
-  const scale = useFontScale();
-  const space = useScaledSpace();
-  // Label and detail are two pieces of text sharing a row, which is the limit
-  // before this becomes the pattern that leaks. Past 1.3x they stack, with the
-  // chevron staying put on the right.
-  const stacked = scale >= 1.3;
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      className="border-2 border-ink rounded-xl bg-surface shadow-sm flex-row items-center"
-      style={{ minHeight: MIN_TOUCH, padding: space(12), gap: space(10) }}
-    >
-      <View className="shrink-0">
-        <Icon size={Math.round(18 * scale)} color={palette.ink} />
-      </View>
-      <View className={stacked ? 'flex-1' : 'flex-1 flex-row items-center'} style={{ gap: space(stacked ? 2 : 8) }}>
-        <AppText
-          variant="label"
-          className={`font-serif font-black text-ink ${stacked ? '' : 'flex-1'}`}
-        >
-          {label}
-        </AppText>
-        <AppText variant="micro" className={`font-mono text-ink-3 ${stacked ? '' : 'shrink-0'}`}>
-          {detail}
-        </AppText>
-      </View>
-      <View className="shrink-0">
-        <ChevronRight size={Math.round(16 * scale)} color={palette.ink3} />
-      </View>
-    </Pressable>
-  );
-}
-
 export default function MemoryDeskScreen({ state }: { state: AppState }) {
-  const palette = useThemeColors();
   const { handleBack, navigateTo, memoryQueue, savedPlans, isReviewDue, reviewsPaused, learningDays, newVersesPace } = state;
   const space = useScaledSpace();
-  const scale = useFontScale();
 
   const queuedCount = memoryQueue.filter((item) => item.status === 'queued').length;
-  const learningCount = memoryQueue.filter((item) => item.status === 'learning').length;
   // Nothing is due while reviews are paused -- same as Home.
   const dueTodayCount = reviewsPaused ? 0 : memoryQueue.filter(
     (item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate)
@@ -94,44 +45,29 @@ export default function MemoryDeskScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(12) }}>
-        <View className="flex-row items-center" style={{ gap: space(10) }}>
-          <Pressable
-            onPress={handleBack}
-            accessibilityRole="button"
-            className="rounded-full border border-line items-center justify-center bg-surface shrink-0"
-            style={{ width: space(32), height: space(32) }}
-          >
-            <ArrowLeft size={Math.round(15 * scale)} color={palette.ink} />
-          </Pressable>
-          <View className="flex-1">
-            <AppText variant="micro" className="uppercase tracking-wider font-bold text-ink-3 font-sans">
-              Your scripture
-            </AppText>
-            <AppText variant="display" className="font-serif font-bold text-ink">
-              My Memory Work
-            </AppText>
-          </View>
-        </View>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        {/* Today is the only way in. */}
+        <ScreenHeader
+          title="My Memory Work"
+          subtitle="What you're memorizing, how, and what you've done so far."
+          onBack={handleBack}
+          backLabel="Today"
+        />
 
-        <AppText variant="caption" className="text-ink-2 font-sans">
-          Everything about what you're memorizing, how you're memorizing it, and what you've done so far.
-        </AppText>
-
-        <View style={{ gap: space(8) }}>
+        <GroupedList>
           {/* My Verses owns the schedule dials, so its detail line says what
               your week looks like, not just how many verses are sitting
               there. */}
-          <DeskRow
+          <ListRow
             Icon={ListOrdered}
-            label="My Verses & Schedule"
-            detail={`${queuedCount} waiting · ${newVersesPace}/day, ${learningDays.length} days`}
+            title="My Verses & Schedule"
+            value={`${queuedCount} waiting · ${newVersesPace}/day, ${learningDays.length} days`}
             onPress={go('activePlan')}
           />
-          <DeskRow
+          <ListRow
             Icon={CalendarDays}
-            label="Memory Calendar"
-            detail={dueTodayCount === 1 ? '1 due today' : `${dueTodayCount} due today`}
+            title="Memory Calendar"
+            value={reviewsPaused ? 'Paused' : dueTodayCount === 1 ? '1 due today' : `${dueTodayCount} due today`}
             onPress={go('memoryCalendar')}
           />
           {/* The one door to the Review Settings editor. There used to be a
@@ -143,19 +79,19 @@ export default function MemoryDeskScreen({ state }: { state: AppState }) {
               an editingPlanId made Save take the create-new branch and mint a
               duplicate.) The active preset's name rides along on this row so
               the desk still tells you where things stand at a glance. */}
-          <DeskRow
+          <ListRow
             Icon={FolderOpen}
-            label="Review Settings"
-            detail={activePlanName ? `${activePlanName} · ${savedPlans.length} saved` : `${savedPlans.length} saved`}
+            title="Review Settings"
+            value={activePlanName ? `${activePlanName} · ${savedPlans.length} saved` : `${savedPlans.length} saved`}
             onPress={go('savedPlans')}
           />
-          <DeskRow
+          <ListRow
             Icon={History}
-            label="History"
-            detail={retainedCount === 1 ? '1 retained' : `${retainedCount} retained`}
+            title="History"
+            value={retainedCount === 1 ? '1 retained' : `${retainedCount} retained`}
             onPress={go('fullHistory')}
           />
-        </View>
+        </GroupedList>
       </ScrollView>
     </FadeInView>
   );

@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { Check, ChevronDown, Search, X } from 'lucide-react-native';
 
 import { BOOKS } from '../data';
-import { AppIconButton, AppTextInput, AppText } from './design';
+import { AppIconButton, AppTextInput, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from './design';
+import { GroupedList, ListRow } from './blocks';
 
 import { useThemeColors } from './theme';
 /**
@@ -18,9 +19,9 @@ export function BookPicker({
   value,
   onChange,
   allowAll,
-  allLabel = 'All Books',
+  allLabel = 'All books',
   placeholder = 'Select a book',
-  title = 'Select a Book',
+  title = 'Choose a book',
 }: {
   value: string;
   onChange: (bookName: string) => void;
@@ -32,6 +33,9 @@ export function BookPicker({
   const palette = useThemeColors();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const scale = useFontScale();
+  const space = useScaledSpace();
+  const checkMark = <Check size={Math.round(18 * scale)} color={palette.accent} strokeWidth={2.4} />;
 
   const q = query.trim().toLowerCase();
   const otBooks = useMemo(() => (q ? BOOKS.ot.filter((b) => b.name.toLowerCase().includes(q)) : BOOKS.ot), [q]);
@@ -50,95 +54,70 @@ export function BookPicker({
     <View>
       <Pressable
         onPress={() => setOpen(true)}
-        className={`flex-row items-center justify-between rounded-xl px-3 py-2.5 ${
-          'bg-surface border border-line-strong'
-        }`}
+        accessibilityRole="button"
+        accessibilityLabel={`Book: ${displayLabel}`}
+        className="flex-row items-center justify-between bg-surface border border-line rounded-btn active:bg-surface-2"
+        style={{ minHeight: MIN_TOUCH, paddingHorizontal: space(12), paddingVertical: space(8), gap: space(8) }}
       >
-        <AppText
-          variant="label"
-          className={`font-sans font-bold ${value ? 'text-ink' : 'text-ink-3'}`}
-          numberOfLines={1}
-        >
+        <AppText variant="body" className={`font-sans flex-1 ${value ? 'text-ink' : 'text-ink-3'}`} numberOfLines={1}>
           {displayLabel}
         </AppText>
-        <ChevronDown size={14} color={palette.ink2} />
+        <ChevronDown size={Math.round(16 * scale)} color={palette.ink3} />
       </Pressable>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <View className="flex-1 bg-black/60 justify-end">
+        <View className="flex-1 bg-black/40 justify-end">
           {/* Fixed height, not maxHeight: a shrink-to-fit sheet slides the
               header/search bar down toward the keyboard as filtered results
-              narrow, eventually covering the very rows you'd tap. */}
-          <View className="bg-surface rounded-t-3xl" style={{ height: '85%' }}>
-            {/* Header */}
-            <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-hairline">
-              <AppText variant="title" className="font-serif font-bold text-ink">{title}</AppText>
-              <AppIconButton Icon={X} diameter={28} iconSize={14} iconColor={palette.ink} onPress={() => setOpen(false)} className="rounded-full border border-line-strong" />
+              narrow, eventually covering the very rows you'd tap. (Which is
+              also why this isn't the shared Dialog, which shrinks to fit.) */}
+          <View className="bg-surface rounded-t-card" style={{ height: '85%' }}>
+            <View className="flex-row items-center justify-between" style={{ paddingHorizontal: space(18), paddingTop: space(16), paddingBottom: space(10), gap: space(12) }}>
+              <AppText variant="title" className="font-sans font-bold text-ink flex-1">{title}</AppText>
+              <AppIconButton Icon={X} variant="outline" diameter={30} onPress={() => setOpen(false)} accessibilityLabel="Close" />
             </View>
 
-            {/* Search */}
-            <View className="px-5 pt-3">
-              <View className="relative justify-center">
-                <View className="absolute left-3 z-10">
-                  <Search size={14} color={palette.ink3} />
-                </View>
-                <AppTextInput value={query} onChangeText={setQuery} placeholder="Search books..." placeholderTextColor={palette.ink3} autoFocus className="w-full bg-surface-2 border border-line rounded-xl py-2 pl-9 pr-3 text-ink" />
+            <View style={{ paddingHorizontal: space(18) }}>
+              <View className="flex-row items-center bg-surface-2 border border-line rounded-btn" style={{ paddingHorizontal: space(12), gap: space(8) }}>
+                <Search size={Math.round(16 * scale)} color={palette.ink3} />
+                <AppTextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search books"
+                  accessibilityLabel="Search books"
+                  autoFocus
+                  variant="body"
+                  className="flex-1 text-ink font-sans"
+                  style={{ minWidth: 0, paddingVertical: space(10) }}
+                />
               </View>
             </View>
 
-            <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingTop: 12, paddingBottom: 24, gap: 16 }}>
+            <ScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: space(18), paddingTop: space(14), paddingBottom: space(24), gap: space(18) }}>
               {showAllRow && (
-                <Pressable
-                  onPress={() => select('')}
-                  className="flex-row items-center justify-between py-3 px-3 rounded-xl bg-surface-2 border border-line"
-                >
-                  <AppText variant="title" className="font-serif font-medium text-ink">{allLabel}</AppText>
-                  {!value && <Check size={16} color={palette.ink} />}
-                </Pressable>
+                <GroupedList>
+                  <ListRow title={allLabel} onPress={() => select('')} accessory={!value ? checkMark : 'none'} />
+                </GroupedList>
               )}
 
               {otBooks.length > 0 && (
-                <View className="gap-2">
-                  <AppText variant="caption" className="font-bold text-ink-3 tracking-widest font-sans border-b border-hairline pb-1">
-                    OLD TESTAMENT
-                  </AppText>
-                  <View className="divide-y divide-hairline border border-line rounded-xl overflow-hidden">
-                    {otBooks.map((book) => (
-                      <Pressable
-                        key={book.id}
-                        onPress={() => select(book.name)}
-                        className="w-full px-4 py-3 flex-row items-center justify-between bg-surface"
-                      >
-                        <AppText variant="title" className="font-serif font-medium text-ink">{book.name}</AppText>
-                        {value === book.name && <Check size={16} color={palette.ink} />}
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
+                <GroupedList header="Old Testament">
+                  {otBooks.map((book) => (
+                    <ListRow key={book.id} title={book.name} onPress={() => select(book.name)} accessory={value === book.name ? checkMark : 'none'} />
+                  ))}
+                </GroupedList>
               )}
 
               {ntBooks.length > 0 && (
-                <View className="gap-2">
-                  <AppText variant="caption" className="font-bold text-ink-3 tracking-widest font-sans border-b border-hairline pb-1">
-                    NEW TESTAMENT
-                  </AppText>
-                  <View className="divide-y divide-hairline border border-line rounded-xl overflow-hidden">
-                    {ntBooks.map((book) => (
-                      <Pressable
-                        key={book.id}
-                        onPress={() => select(book.name)}
-                        className="w-full px-4 py-3 flex-row items-center justify-between bg-surface"
-                      >
-                        <AppText variant="title" className="font-serif font-medium text-ink">{book.name}</AppText>
-                        {value === book.name && <Check size={16} color={palette.ink} />}
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
+                <GroupedList header="New Testament">
+                  {ntBooks.map((book) => (
+                    <ListRow key={book.id} title={book.name} onPress={() => select(book.name)} accessory={value === book.name ? checkMark : 'none'} />
+                  ))}
+                </GroupedList>
               )}
 
               {!showAllRow && otBooks.length === 0 && ntBooks.length === 0 && (
-                <AppText variant="label" className="text-center text-ink-3 py-6">No books match "{query}".</AppText>
+                <AppText variant="label" className="font-sans text-center text-ink-3 py-6">No books match "{query.trim()}".</AppText>
               )}
             </ScrollView>
           </View>

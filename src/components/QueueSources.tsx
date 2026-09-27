@@ -1,7 +1,8 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { GroupPlan, GroupPlanMembership } from '../types';
-import { AppText, MIN_TOUCH, useFontScale, useScaledSpace } from './design';
+import { AppText, useFontScale, useScaledSpace } from './design';
+import { SegmentedControl } from './blocks';
 
 // Short forms of GroupPlanDetailScreen's PRIORITY_OPTIONS, for the inline
 // control here. Same three modes, same order, same plain language -- see
@@ -62,81 +63,61 @@ export function QueueSources({
 
   return (
     <View style={{ gap: space(12) }}>
-      {/* Your own queue */}
-      <View
-        className="flex-row items-center justify-between rounded-xl border border-line bg-surface"
-        style={{ padding: space(12), gap: space(8) }}
-      >
-        <AppText variant="body" className="font-sans font-bold text-ink flex-1">
-          My own verses
-        </AppText>
-        <AppText variant="micro" className="font-mono text-ink-3 shrink-0">
-          {individualQueuedCount} queued
-        </AppText>
-      </View>
-
-      {/* Joined group plans */}
-      {rows.map(({ membership, plan }) => (
+      {/* One card: your own verses, then each joined plan with its priority. */}
+      <View className="bg-surface border border-line rounded-card overflow-hidden">
         <View
-          key={membership.planId}
-          className="rounded-xl border border-accent/30 bg-accent-soft"
-          style={{ padding: space(12), gap: space(10) }}
+          className={stacked ? '' : 'flex-row items-center justify-between'}
+          style={{ padding: space(12), gap: space(stacked ? 2 : 8) }}
         >
-          <View
-            className={stacked ? '' : 'flex-row items-center justify-between'}
-            style={{ gap: space(stacked ? 4 : 8) }}
-          >
-            <AppText variant="body" className="font-sans font-bold text-accent flex-1">
-              {plan.name}
-            </AppText>
-            <AppText variant="micro" className="font-mono text-accent shrink-0">
-              {plan.versesPerWeek}/week
-            </AppText>
-          </View>
-
-          <View className="flex-row" style={{ gap: space(6) }}>
-            {PRIORITY_LABELS.map((opt) => {
-              const active = opt.id === membership.priority;
-              return (
-                <Pressable
-                  key={opt.id}
-                  onPress={() => onChangePriority(membership.planId, opt.id)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: active }}
-                  aria-checked={active}
-                  className={`flex-1 items-center justify-center rounded-lg border ${
-                    active ? 'border-accent bg-accent' : 'border-accent/30 bg-surface'
-                  }`}
-                  style={{ minHeight: MIN_TOUCH * 0.7, paddingVertical: space(6), paddingHorizontal: space(4) }}
-                >
-                  <AppText
-                    variant="micro"
-                    className={`font-sans font-bold text-center ${active ? 'text-on-accent' : 'text-accent'}`}
-                  >
-                    {opt.short}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {membership.priority === 'additive' && (
-            <AppText variant="micro" className="font-sans text-accent leading-relaxed">
-              Pulls on top of your daily pace, and keeps going even when the Review Shield is up.
-            </AppText>
-          )}
+          <AppText variant="label" className="font-sans font-semibold text-ink flex-1">
+            My own verses
+          </AppText>
+          <AppText variant="label" className="font-sans text-ink-3 shrink-0">
+            {individualQueuedCount} waiting
+          </AppText>
         </View>
-      ))}
+
+        {rows.map(({ membership, plan }) => (
+          <View
+            key={membership.planId}
+            className="border-t border-hairline"
+            style={{ padding: space(12), gap: space(10) }}
+          >
+            <View
+              className={stacked ? '' : 'flex-row items-center justify-between'}
+              style={{ gap: space(stacked ? 2 : 8) }}
+            >
+              <AppText variant="label" className="font-sans font-semibold text-ink flex-1">
+                {plan.name}
+              </AppText>
+              <AppText variant="label" className="font-sans text-ink-3 shrink-0">
+                {plan.versesPerWeek} a week
+              </AppText>
+            </View>
+
+            <SegmentedControl
+              value={membership.priority}
+              onChange={(id) => onChangePriority(membership.planId, id)}
+              accessibilityLabel={`Which comes first, ${plan.name} or your own verses`}
+              options={PRIORITY_LABELS.map((opt) => ({ id: opt.id, label: opt.short }))}
+            />
+
+            {membership.priority === 'additive' && (
+              <AppText variant="caption" className="font-sans text-ink-3">
+                Starts on top of your daily pace, even when today's review time is already full.
+              </AppText>
+            )}
+          </View>
+        ))}
+      </View>
 
       {/* What the next learning day would actually do. The single line that
           answers "does this setting do anything?" */}
-      <View className="rounded-xl border border-line bg-surface-2" style={{ padding: space(12) }}>
-        <AppText variant="micro" className="font-sans text-ink-2 leading-relaxed">
-          {previewParts.length > 0
-            ? `Next learning day: ${previewParts.join(', ')}.`
-            : 'Next learning day: nothing left to pull.'}
-        </AppText>
-      </View>
+      <AppText variant="caption" className="font-sans text-ink-2" style={{ paddingHorizontal: space(4) }}>
+        {previewParts.length > 0
+          ? `Next learning day: ${previewParts.join(', ')}.`
+          : 'Next learning day: nothing waiting to start.'}
+      </AppText>
     </View>
   );
 }
