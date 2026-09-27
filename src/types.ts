@@ -84,6 +84,26 @@ export interface TouchLog {
   drillType: 'speak' | 'type' | 'reveal';
 }
 
+// One dated entry in a verse's review history -- the timeline the per-verse
+// page draws. Unlike touchLogs (Learning only, and wiped by a manual status
+// change), this covers the verse's whole life and is never cleared. Optional
+// fields are omitted rather than set to undefined (Firestore rejects
+// undefined values).
+export interface ReviewLog {
+  at: string;                  // ISO timestamp
+  // pass    -- a practice that counted (a banked Learning touch, or a review)
+  // miss    -- a failed review that counted against the verse
+  // grace   -- a failed review covered by grace, no penalty
+  // skipped -- review date(s) passed with no attempt
+  // placed  -- moved to this stage by hand (Status on the chapter page)
+  result: 'pass' | 'miss' | 'grace' | 'skipped' | 'placed';
+  stage: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; // the stage it happened in
+  refresher?: true;            // happened during a refresher stint after a miss
+  drillType?: TouchLog['drillType'];
+  cycles?: number;             // skipped: how many review dates passed
+  forgiven?: true;             // skipped: resolved with no penalty
+}
+
 // A circle-scoped, manager-curated shared memorization plan. Members join it
 // and its verses feed automatically into their own personal queue (see
 // src/lib/groupPlanScheduler.ts) at whatever weekly pace the manager sets --
@@ -149,6 +169,7 @@ export interface QueueItem {
 
   // 3-Touch Mastery State
   touchLogs?: TouchLog[];      // Tracks valid, hour-separated touches
+  reviewLogs?: ReviewLog[];    // Full dated history, oldest first -- see ReviewLog
   reviewsToday?: number;       // Tracks successful reviews for today
 
   // Demotion softening: a miss while in Daily doesn't send the verse back to

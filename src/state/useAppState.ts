@@ -24,6 +24,7 @@ import {
 } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
 import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
+import { appendReviewLog } from '../lib/reviewLog';
 import type { AudioCacheSnapshot } from '../lib/audioCache';
 import {
   cacheAudioFile,
@@ -3819,6 +3820,9 @@ export function useAppState() {
             // key), which was breaking the memory-queue auto-sync for every
             // verse not currently in a refresher.
             ...(data.origin !== undefined ? { origin: data.origin } : {}),
+            ...(data.originPlanId !== undefined ? { originPlanId: data.originPlanId } : {}),
+            ...(data.chapterReviewAnchorDay !== undefined ? { chapterReviewAnchorDay: data.chapterReviewAnchorDay } : {}),
+            ...(Array.isArray(data.reviewLogs) ? { reviewLogs: data.reviewLogs } : {}),
             ...(data.refresherReturnPhase !== undefined ? { refresherReturnPhase: data.refresherReturnPhase } : {}),
             ...(data.refresherReturnProgress !== undefined ? { refresherReturnProgress: data.refresherReturnProgress } : {}),
             ...(data.refresherTargetUnits !== undefined ? { refresherTargetUnits: data.refresherTargetUnits } : {}),
@@ -4559,6 +4563,10 @@ export function useAppState() {
           refresherDailyDays,
           refresherWeeklyWeeks,
         }, outcomeFor(item.verseId));
+        appendReviewLog(updatedItem, item, 'skipped', {
+          cycles: missedCycles,
+          ...(tag === 'frozen' || tag === 'grace' ? { forgiven: true as const } : {}),
+        });
         if (tag !== 'grace' && tag !== 'frozen' && tag !== 'none') {
           updatedItem.reviewsToday = 0;
         }
@@ -5113,6 +5121,9 @@ export function useAppState() {
         base.currentStreakCount = Math.max(1, progressCount ?? 1);
         base.nextReviewDueDate = dueDateISO;
       }
+      // Everything above is a deliberate reset, but the history stays --
+      // those reviews really happened. Note the move itself.
+      appendReviewLog(base, base, 'placed');
 
       if (existing) {
         const idx = nextQueue.findIndex((q) => q.verseId === verseId);
@@ -5245,6 +5256,10 @@ export function useAppState() {
           refresherWeeklyWeeks,
         });
         updatedItem = resolvedItem;
+        appendReviewLog(updatedItem, item, 'skipped', {
+          cycles: missedCycles,
+          ...(tag === 'frozen' || tag === 'grace' ? { forgiven: true as const } : {}),
+        });
         if (tag !== 'grace' && tag !== 'frozen' && tag !== 'none') {
           updatedItem.reviewsToday = 0;
         }
@@ -5277,6 +5292,7 @@ export function useAppState() {
           };
           const updatedLogs = [...(item.touchLogs || []), newTouch];
           updatedItem.touchLogs = updatedLogs;
+          appendReviewLog(updatedItem, item, 'pass', { drillType: inferredType });
           updatedItem.totalSuccessfulReviews += 1;
           updatedItem.currentStreakCount += 1;
 
@@ -5310,6 +5326,8 @@ export function useAppState() {
           triggerToast('Touch logged, but within 1-hour constraint. Only 1 touch per hour counts toward Mastery! ⏳');
         }
       } else if (item.status === 'reviewing') {
+        // Logged against the stage as it stands before this review moves it on.
+        appendReviewLog(updatedItem, updatedItem, 'pass', drillType ? { drillType } : {});
         // Check reviewsRequired per day constraint
         const lastReviewDateStr = item.lastReviewDate;
         const isSameDay =
@@ -5450,7 +5468,9 @@ export function useAppState() {
     } else {
       // FAILED REVIEW (today's actual attempt, on top of any catch-up above)
       if (item.status === 'reviewing') {
+        const beforeMiss = { ...updatedItem };
         const tag = applyMissToItem(updatedItem, { graceCount, refresherDailyDays, refresherWeeklyWeeks });
+        appendReviewLog(updatedItem, beforeMiss, tag === 'grace' ? 'grace' : 'miss', drillType ? { drillType } : {});
         if (tag !== 'grace' && tag !== 'none') {
           updatedItem.reviewsToday = 0;
         }
