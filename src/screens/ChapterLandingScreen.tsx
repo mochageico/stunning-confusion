@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureDetector } from 'react-native-gesture-handler';
-import { ArrowLeft, Check, ChevronDown, Download, GripVertical, Pause, Play, Printer, Search, SlidersHorizontal, X } from 'lucide-react-native';
+import { Check, Download, GripVertical, Pause, Play, Printer, Search } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { cacheableTarget } from '../lib/audioCache';
@@ -13,7 +13,8 @@ import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { printMemoryGrid } from '../lib/printMemoryGrid';
 import { Recording } from '../types';
 import { BIBLE_TRANSLATIONS } from '../data';
-import { AppButton, AppIconButton, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppText, RangeCaption, useFontScale, useScaledSpace } from '../components/design';
+import { Dialog, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { useDragSelect } from '../components/useDragSelect';
 
 import { useThemeColors } from '../components/theme';
@@ -34,8 +35,23 @@ const OVERRIDE_WEEKDAY_OPTIONS = [
   { id: 'Su', label: 'Sun' },
 ];
 
+// A verse's status as a dot (list, grid) and as words (screen readers).
+const STATUS_DOT: Record<string, string> = { memorized: 'bg-success', learning: 'bg-warning' };
+const STATUS_WORD: Record<string, string> = { memorized: 'memorized', learning: 'learning' };
+
+// "Due: Today" reads as a label on a form; "Due today" reads as a sentence.
+function dueLabel(dueDate: string | undefined): string | null {
+  if (!dueDate) return null;
+  const m = dueDate.match(/^Due:\s*(.*)$/i);
+  if (!m) return dueDate;
+  const when = /^(today|tomorrow)$/i.test(m[1]) ? m[1].toLowerCase() : m[1];
+  return `Due ${when}`;
+}
+
 export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
+  const scale = useFontScale();
+  const space = useScaledSpace();
   const {
     handleBack,
     navigateTo,
@@ -169,6 +185,34 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     bottomInset: floatingBarShowing ? floatingBarHeight + 16 : 0,
   });
   const activeTranslation = BIBLE_TRANSLATIONS.find((t) => t.id === selectedTranslationId) ?? BIBLE_TRANSLATIONS[0];
+  const selectedVerses = () => activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse));
+  const oneVerse = selectedVerseNumbers.length === 1;
+  const them = oneVerse ? 'it' : 'them';
+
+  // Grid tiles fill each row exactly: as many columns as fit at the smallest
+  // comfortable tile (which grows with text size), sharing the leftover room.
+  const [gridWidth, setGridWidth] = useState(0);
+  const tileGap = space(8);
+  const minTile = space(96);
+  const gridColumns = Math.max(1, Math.floor((gridWidth + tileGap) / (minTile + tileGap)));
+  const tileWidth = gridWidth > 0 ? Math.floor((gridWidth - tileGap * (gridColumns - 1)) / gridColumns) : minTile;
+
+  const changeButton = (
+    <AppButton
+      size="sm"
+      variant="quiet"
+      label={showAudioSelector ? 'Done' : 'Change'}
+      onPress={() => setShowAudioSelector(!showAudioSelector)}
+    />
+  );
+
+  // The recordings feed, already filtered to this chapter.
+  const openRecordingsFeed = () => {
+    setFeedBookFilter(selectedBook || '');
+    setFeedChapterFilter(String(selectedChapter ?? ''));
+    navigateTo('audioFeed');
+    triggerToast(`Showing recordings of ${selectedBook} ${selectedChapter}`);
+  };
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -183,90 +227,71 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         // underneath -- the bar itself no longer takes up real space in
         // the scroll flow (see below), so nothing pushes content up for it
         // automatically.
-        contentContainerStyle={{ gap: 12, paddingBottom: floatingBarShowing ? 160 : 16 }}
+        contentContainerStyle={{ gap: space(16), paddingBottom: floatingBarShowing ? floatingBarHeight + 32 : 16 }}
       >
-        {/* Title Header with back */}
-        <View className="flex-row items-center justify-between border-b border-line pb-2">
-          <View className="flex-row items-center gap-2">
-            <AppIconButton Icon={ArrowLeft} diameter={28} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
-            <AppText variant="title" className="font-serif font-extrabold text-ink">
-              {selectedBook} {selectedChapter}
-            </AppText>
-          </View>
+        {/* Back can lead to Today, the chapter grid or My Memory Work, so it
+            says "Back" rather than naming one of them. The translation picker
+            sits in the actions slot: it decides which text loads here and
+            which translation gets set on any verses added from here.
+            Progress on the same verse in two translations is tracked
+            separately (see buildVerseId in useAppState.ts). */}
+        <ScreenHeader
+          title={`${selectedBook} ${selectedChapter}`}
+          subtitle={
+            activeChapterVerses.length > 0
+              ? `${activeChapterVerses.filter((v) => v.status === 'memorized').length} of ${activeChapterVerses.length} verses memorized`
+              : undefined
+          }
+          onBack={handleBack}
+          actions={
+            <Dropdown
+              value={selectedTranslationId}
+              onChange={setSelectedTranslationId}
+              options={BIBLE_TRANSLATIONS.map((t) => ({ id: t.id, label: t.id }))}
+              title="Translation"
+              searchable={false}
+              compact
+            />
+          }
+        />
 
-          <View className="flex-row items-center gap-2">
-            {/* Translation picker -- determines which translation's text
-                loads for this chapter, and which translation gets set on
-                any verses added to the queue from here. Progress on the
-                same verse in two different translations is tracked
-                independently (see buildVerseId in useAppState.ts). */}
-            <View style={{ width: 84 }}>
-              <Dropdown
-                value={selectedTranslationId}
-                onChange={setSelectedTranslationId}
-                options={BIBLE_TRANSLATIONS.map((t) => ({ id: t.id, label: t.id }))}
-                title="Translation"
-                searchable={false}
-              />
-            </View>
-            {/* Simple Select/Deselect All Verse trigger */}
-            <Pressable
-              onPress={toggleSelectAll}
-              className="border border-ink px-2 py-0.5 rounded"
-            >
-              <AppText variant="micro" className="font-bold font-sans uppercase text-ink">
-                {selectedVerseNumbers.length === activeChapterVerses.length ? 'Deselect All' : 'Select All'}
-              </AppText>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Segmented Progress Bar */}
-        <View className="gap-1.5">
-          {/* The three-swatch legend is gone. It spent six elements teaching
-              a colour code that the bar below, the verse dots, and every
-              other surface in the app already use consistently -- and it
-              re-taught it on every chapter you opened. A count is the thing
-              you actually wanted to know from a progress bar. */}
-          <View className="flex-row justify-between items-center">
-            <AppText variant="micro" className="font-sans font-bold text-ink-3">CHAPTER PROGRESS</AppText>
-            <AppText variant="micro" className="font-sans font-bold text-ink-3">
-              {activeChapterVerses.filter((v) => v.status === 'memorized').length} of {activeChapterVerses.length} memorized
-            </AppText>
-          </View>
-          {/* Horizontal split colored indicator based on verses */}
-          <View className="flex-row h-3 w-full border border-ink rounded-full overflow-hidden bg-surface-2">
+        {/* Chapter progress: one sliver per verse, in the same status colors
+            as the dots beside each verse. The count is in the subtitle. */}
+        <View>
+          <View className="flex-row h-2 w-full rounded-full overflow-hidden bg-fill">
             {activeChapterVerses.map((v) => {
               const statusColor =
                 v.status === 'memorized' ? 'bg-success' : v.status === 'learning' ? 'bg-warning' : 'bg-fill';
               return (
                 <View
                   key={v.verse}
-                  className={`${statusColor} flex-1 border-r border-on-accent/50`}
+                  className={`${statusColor} flex-1 border-r border-canvas`}
                 />
               );
             })}
           </View>
         </View>
 
-        {/* Playable Custom Audio Card */}
-        <View className="border border-ink rounded-xl p-2.5 bg-surface gap-2">
+        {/* This chapter's recording: play it here, or change which one plays. */}
+        <View className="bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(12) }}>
           {/* Empty state is one line then the action. The second sentence used
               to say "or find one in the community library" directly above a
               button that does exactly that. */}
           {!currentAudio ? (
-            <View className="items-center py-2 gap-1.5">
-              <AppText variant="caption" className="font-sans text-ink-3">No recordings yet for this chapter</AppText>
-              <AppButton size="sm" onPress={() => { setFeedBookFilter(selectedBook || ''); setFeedChapterFilter(String(selectedChapter ?? '')); navigateTo('audioFeed'); triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`); }} className="mt-1 bg-accent rounded-md flex-row items-center justify-center gap-1">
-                <Search size={11} color={palette.onAccent} />
-                <AppText variant="section" className="text-on-accent font-sans font-bold uppercase tracking-wider">Find Recordings</AppText>
-              </AppButton>
+            <View className="items-center" style={{ gap: space(8), paddingVertical: space(4) }}>
+              <AppText variant="label" className="font-sans text-ink-2 text-center">
+                No recordings for this chapter yet
+              </AppText>
+              <AppButton size="sm" variant="secondary" Icon={Search} label="Find recordings" onPress={openRecordingsFeed} />
             </View>
           ) : (
-          <View className="gap-3">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <Pressable
+            <>
+              <View className="flex-row items-center" style={{ gap: space(12) }}>
+                <AppIconButton
+                  variant="filled"
+                  Icon={isPlayingThis ? Pause : Play}
+                  diameter={40}
+                  accessibilityLabel={isPlayingThis ? 'Pause' : `Play ${currentAudio.title}`}
                   onPress={() => {
                     if (isPlayingThis) {
                       setPlayingRecordingId(null);
@@ -275,127 +300,122 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                       setPlayingRecProgress(0);
                     }
                   }}
-                  className={`w-8 h-8 rounded-full items-center justify-center ${
-                    isPlayingThis ? 'bg-accent' : 'border border-ink'
-                  }`}
-                >
-                  {isPlayingThis ? (
-                    <Pause size={13} color={palette.onAccent} />
-                  ) : (
-                    <Play size={13} color={palette.ink} style={{ marginLeft: 2 }} />
-                  )}
-                </Pressable>
-                <View>
-                  <AppText variant="label" className="font-bold font-sans text-ink" numberOfLines={1} style={{ maxWidth: 170 }}>
+                />
+                <View className="flex-1" style={{ minWidth: 0 }}>
+                  <AppText variant="label" className="font-sans font-semibold text-ink" numberOfLines={scale >= 1.3 ? 2 : 1}>
                     {currentAudio.title}
                   </AppText>
-                  <AppText variant="caption" className="font-sans text-ink-3">
-                    Narrator: {currentAudio.user} • {currentAudio.translation}
+                  <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={1}>
+                    {currentAudio.user} · {currentAudio.translation}
                   </AppText>
+                  {/* Past 1.3x the button would squeeze the title to a few
+                      letters, so it moves under the title instead. */}
+                  {scale >= 1.3 ? <View className="flex-row" style={{ paddingTop: space(6) }}>{changeButton}</View> : null}
                 </View>
+                {scale >= 1.3 ? null : changeButton}
               </View>
-              <Pressable
-                onPress={() => setShowAudioSelector(!showAudioSelector)}
-                className="flex-row items-center gap-0.5"
-              >
-                <AppText variant="caption" className="font-bold font-sans underline text-ink-2">Change</AppText>
-                <ChevronDown size={11} color={palette.ink2} style={{ transform: [{ rotate: showAudioSelector ? '180deg' : '0deg' }] }} />
-              </Pressable>
-            </View>
 
-            {/* Real playback progress bar */}
-            {isPlayingThis && (
-              <View className="gap-0.5">
-                <View className="w-full bg-surface-2 h-1 rounded-full overflow-hidden">
-                  <View className="bg-accent h-full" style={{ width: `${playingRecProgress}%` }} />
-                </View>
-                <View className="flex-row justify-between">
-                  <AppText variant="micro" className="font-mono font-semibold text-ink-3">
-                    {formatTime(Math.round((playingRecProgress / 100) * currentAudio.duration))}
-                  </AppText>
-                  <AppText variant="micro" className="font-mono font-semibold text-ink-3">{formatTime(currentAudio.duration)}</AppText>
-                </View>
-              </View>
-            )}
-
-            {/* Dropdown Selector — priority-ordered, drag-to-reorder list.
-                The top row is this chapter's default (see resolveChapterAudio);
-                tapping a row still just switches the active playback source,
-                same as before. scrollEnabled is off since this always nests
-                inside the page's own ScrollView -- lists here are short
-                (a handful of recordings per chapter at most). */}
-            {showAudioSelector && (
-              <View className="bg-surface-2 rounded-lg p-2.5 border border-line gap-2">
-                <AppText variant="micro" className="font-bold uppercase text-ink-3 tracking-wider">
-                  Recordings — press and hold to reorder. The top one plays by default.
-                </AppText>
-                <DraggableFlatList
-                  data={optionsList}
-                  scrollEnabled={false}
-                  keyExtractor={(opt) => opt.id}
-                  contentContainerStyle={{ gap: 6 }}
-                  onDragEnd={({ data }) => reorderChapterRecordings(data.map((r) => r.id))}
-                  renderItem={({ item: opt, drag, isActive }: RenderItemParams<Recording>) => {
-                    const isSelected = currentAudio.id === opt.id;
-                    return (
-                      <Pressable
-                        onPress={() => {
-                          setSelectedChapterAudios((prev) => ({
-                            ...prev,
-                            [activeChapterKey]: opt as Recording,
-                          }));
-                          setShowAudioSelector(false);
-                          setPlayingRecordingId(null);
-                          triggerToast(`Audio changed to ${opt.user}'s recitation`);
-                        }}
-                        className={`w-full p-2 rounded-md border flex-row items-center gap-2 ${
-                          isSelected ? 'bg-surface border-ink' : 'bg-on-accent/60 border-line'
-                        } ${isActive ? 'border-accent/60' : ''}`}
-                      >
-                        <Pressable onLongPress={drag} hitSlop={8} className="pr-0.5">
-                          <GripVertical size={13} color={palette.ink3} />
-                        </Pressable>
-                        <View className="flex-1" style={{ maxWidth: 175 }}>
-                          <AppText variant="caption" className="font-bold text-ink" numberOfLines={1}>
-                            {opt.title}
-                          </AppText>
-                          <AppText variant="micro" className="text-ink-3 font-sans">
-                            {opt.user} • {opt.translation}
-                          </AppText>
-                        </View>
-                        {isSelected && <Check size={11} color={palette.ink} />}
-                      </Pressable>
-                    );
-                  }}
-                />
-
-                <View className="border-t border-line pt-2 gap-1.5">
-                  {downloadableNarrations.length > 0 && (
-                    <AppButton size="sm" onPress={() => saveChapterOffline(downloadableNarrations)} disabled={chapterDownloadBusy || notYetDownloaded.length === 0} className={`w-full rounded-md flex-row items-center justify-center gap-1 border ${ notYetDownloaded.length === 0 ? 'bg-on-accent/60 border-line' : 'bg-surface border-ink' } ${chapterDownloadBusy ? 'opacity-50' : ''}`}>
-                      {notYetDownloaded.length === 0 ? (
-                        <Check size={11} color={palette.ink2} />
-                      ) : (
-                        <Download size={11} color={palette.ink} />
-                      )}
-                      <AppText variant="section" className={`font-sans font-bold uppercase tracking-wider ${ notYetDownloaded.length === 0 ? 'text-ink-3' : 'text-ink' }`} >
-                        {chapterDownloadBusy
-                          ? 'Downloading…'
-                          : notYetDownloaded.length === 0
-                            ? 'Saved Offline'
-                            : `Save ${notYetDownloaded.length} Offline`}
-                      </AppText>
-                    </AppButton>
-                  )}
-                  <AppButton size="sm" onPress={() => { setFeedBookFilter(selectedBook || ''); setFeedChapterFilter(String(selectedChapter ?? '')); navigateTo('audioFeed'); setShowAudioSelector(false); triggerToast(`Filtered suggested library for ${selectedBook} ${selectedChapter}`); }} className="w-full bg-accent rounded-md flex-row items-center justify-center gap-1">
-                    <Search size={11} color={palette.onAccent} />
-                    <AppText variant="section" className="text-on-accent font-sans font-bold uppercase tracking-wider">
-                      Find More Recordings
+              {/* Real playback progress bar */}
+              {isPlayingThis && (
+                <View style={{ gap: space(4) }}>
+                  <View className="w-full bg-fill h-1 rounded-full overflow-hidden">
+                    <View className="bg-accent h-full" style={{ width: `${playingRecProgress}%` }} />
+                  </View>
+                  <View className="flex-row justify-between">
+                    <AppText variant="caption" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
+                      {formatTime(Math.round((playingRecProgress / 100) * currentAudio.duration))}
                     </AppText>
-                  </AppButton>
+                    <AppText variant="caption" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
+                      {formatTime(currentAudio.duration)}
+                    </AppText>
+                  </View>
                 </View>
-              </View>
-            )}
-          </View>
+              )}
+
+              {/* Priority-ordered, drag-to-reorder list. The top row is this
+                  chapter's default (see resolveChapterAudio); tapping a row
+                  just switches what plays now. scrollEnabled is off since this
+                  always nests inside the page's own ScrollView -- lists here
+                  are short (a handful of recordings per chapter at most). */}
+              {showAudioSelector && (
+                <View className="border-t border-hairline" style={{ paddingTop: space(12), gap: space(10) }}>
+                  <AppText variant="caption" className="font-sans text-ink-3">
+                    Press and hold the handle to reorder. The top one plays by default.
+                  </AppText>
+                  <DraggableFlatList
+                    data={optionsList}
+                    scrollEnabled={false}
+                    keyExtractor={(opt) => opt.id}
+                    contentContainerStyle={{ gap: space(6) }}
+                    onDragEnd={({ data }) => reorderChapterRecordings(data.map((r) => r.id))}
+                    renderItem={({ item: opt, drag, isActive }: RenderItemParams<Recording>) => {
+                      const isSelected = currentAudio.id === opt.id;
+                      return (
+                        <Pressable
+                          onPress={() => {
+                            setSelectedChapterAudios((prev) => ({
+                              ...prev,
+                              [activeChapterKey]: opt as Recording,
+                            }));
+                            setShowAudioSelector(false);
+                            setPlayingRecordingId(null);
+                            triggerToast(`Now playing ${opt.user}'s recording`);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isSelected }}
+                          className={`w-full rounded-btn border flex-row items-center ${
+                            isSelected || isActive ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
+                          }`}
+                          style={{ padding: space(10), gap: space(8) }}
+                        >
+                          <Pressable onLongPress={drag} hitSlop={10} accessibilityLabel="Hold to reorder">
+                            <GripVertical size={Math.round(16 * scale)} color={palette.ink3} />
+                          </Pressable>
+                          <View className="flex-1" style={{ minWidth: 0 }}>
+                            <AppText variant="label" className="font-sans font-semibold text-ink" numberOfLines={1}>
+                              {opt.title}
+                            </AppText>
+                            <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={1}>
+                              {opt.user} · {opt.translation}
+                            </AppText>
+                          </View>
+                          {isSelected && <Check size={Math.round(16 * scale)} color={palette.accent} strokeWidth={2.4} />}
+                        </Pressable>
+                      );
+                    }}
+                  />
+
+                  <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
+                    {downloadableNarrations.length > 0 && (
+                      <AppButton
+                        size="sm"
+                        variant="secondary"
+                        Icon={notYetDownloaded.length === 0 ? Check : Download}
+                        label={
+                          chapterDownloadBusy
+                            ? 'Downloading…'
+                            : notYetDownloaded.length === 0
+                              ? 'Saved offline'
+                              : `Save ${notYetDownloaded.length} offline`
+                        }
+                        disabled={chapterDownloadBusy || notYetDownloaded.length === 0}
+                        onPress={() => saveChapterOffline(downloadableNarrations)}
+                      />
+                    )}
+                    <AppButton
+                      size="sm"
+                      variant="quiet"
+                      Icon={Search}
+                      label="Find more recordings"
+                      onPress={() => {
+                        setShowAudioSelector(false);
+                        openRecordingsFeed();
+                      }}
+                    />
+                  </View>
+                </View>
+              )}
+            </>
           )}
         </View>
 
@@ -403,19 +423,26 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             single muted line when there are none -- see ChapterPhotoStrip. */}
         <ChapterPhotoStrip state={state} book={selectedBook || ''} chapter={selectedChapter ?? 0} />
 
-        {/* Grid / List / Memory Grid view Toggle */}
-        <View className="bg-surface-2 p-1.5 border border-line rounded-xl gap-1.5">
-          <AppText variant="label" className="font-sans font-bold text-ink-2 pl-1">Verse Layout</AppText>
-          <ChipRow
-            value={chapterViewMode}
-            onChange={setChapterViewMode}
-            options={[
-              { id: 'list', label: 'List' },
-              { id: 'grid', label: 'Grid' },
-              { id: 'memoryGrid', label: 'Memory Grid' },
-            ]}
+        {/* How the verses are laid out, then the verses. Select all lives
+            here, beside the thing it selects. */}
+        <SegmentedControl
+          value={chapterViewMode}
+          onChange={setChapterViewMode}
+          accessibilityLabel="Verse layout"
+          options={[
+            { id: 'list', label: 'List' },
+            { id: 'grid', label: 'Grid' },
+            { id: 'memoryGrid', label: 'Memory grid' },
+          ]}
+        />
+
+        {activeChapterVerses.length > 0 && (
+          <SectionHeader
+            title={selectedVerseNumbers.length > 0 ? `${selectedVerseNumbers.length} selected` : 'Tap a verse to select it'}
+            actionLabel={selectedVerseNumbers.length === activeChapterVerses.length ? 'Deselect all' : 'Select all'}
+            onAction={toggleSelectAll}
           />
-        </View>
+        )}
 
         {/* Dynamic verses area */}
         <View>
@@ -433,86 +460,88 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               <AppText variant="label" className="font-sans text-ink-3">No text available for {selectedBook} {selectedChapter} yet.</AppText>
             </View>
           ) : chapterViewMode === 'list' ? (
-            /* LIST VIEW */
+            /* LIST VIEW -- one continuous card, a row per verse: the number
+               and its status dot in a narrow column, the text beside them. */
             <GestureDetector gesture={dragSelect.gesture}>
-            <View className="gap-2.5" collapsable={false}>
+            <View className="bg-surface border border-line rounded-card overflow-hidden" collapsable={false}>
               {activeChapterVerses.map((v, index) => {
                 const isSelected = isVerseSelected(v.verse);
-                const dotColor =
-                  v.status === 'memorized' ? 'bg-success' : v.status === 'learning' ? 'bg-warning' : 'bg-fill';
+                const due = dueLabel(v.dueDate);
 
                 return (
                   <Pressable
                     key={v.verse}
                     onLayout={dragSelect.itemLayout(index)}
                     onPress={() => dragSelect.handleTap(v.verse)}
-                    className={`border rounded-xl p-3 relative ${
-                      isSelected ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
-                    }`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`Verse ${v.verse}, ${STATUS_WORD[v.status] ?? 'not started'}`}
+                    className={`flex-row ${index > 0 ? 'border-t border-hairline' : ''} ${isSelected ? 'bg-accent-soft' : ''}`}
+                    style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(10) }}
                   >
-                    <View className="flex-row items-start gap-2.5">
-                      {/* Dot Status indicator */}
-                      <View className={`w-2 h-2 rounded-full mt-1.5 ${dotColor}`} />
-                      <View className="flex-1" style={{ paddingRight: 48 }}>
-                        <AppText variant="body" className="font-serif leading-relaxed text-ink">
-                          <AppText variant="caption" className="font-sans font-bold text-ink-3">v{v.verse} </AppText>
-                          {v.text}
-                        </AppText>
-                      </View>
+                    <View className="items-center" style={{ minWidth: space(22), gap: space(6), paddingTop: space(2) }}>
+                      <AppText
+                        variant="caption"
+                        className={`font-sans font-semibold ${isSelected ? 'text-accent' : 'text-ink-3'}`}
+                        style={{ fontVariant: ['tabular-nums'] }}
+                      >
+                        {v.verse}
+                      </AppText>
+                      <View className={`w-2 h-2 rounded-full ${STATUS_DOT[v.status] ?? 'bg-fill'}`} />
                     </View>
-                    {/* Due status badge */}
-                    {v.dueDate && (
-                      <View className="absolute top-2.5 right-2.5 bg-surface-2 border border-line px-1.5 py-0.5 rounded">
-                        <AppText variant="micro" className="font-sans font-bold text-ink-3">{v.dueDate}</AppText>
-                      </View>
-                    )}
+                    <View className="flex-1" style={{ gap: space(4) }}>
+                      <AppText variant="body" className="font-serif leading-relaxed text-ink">
+                        {v.text}
+                      </AppText>
+                      {due ? (
+                        <AppText variant="caption" className="font-sans text-ink-3">
+                          {due}
+                        </AppText>
+                      ) : null}
+                    </View>
                   </Pressable>
                 );
               })}
             </View>
             </GestureDetector>
           ) : chapterViewMode === 'grid' ? (
-            /* GRID VIEW - Compact & informative with word snippets */
+            /* GRID VIEW -- the first few words of each verse. Tiles are sized
+               to fill each row: three across normally, two at large text. */
             <GestureDetector gesture={dragSelect.gesture}>
-            <View className="flex-row flex-wrap gap-2 pt-1" collapsable={false}>
+            <View
+              className="flex-row flex-wrap"
+              style={{ gap: tileGap }}
+              collapsable={false}
+              onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
+            >
               {activeChapterVerses.map((v, index) => {
                 const isSelected = isVerseSelected(v.verse);
-                const statusBorderColor =
-                  v.status === 'memorized' ? palette.success : v.status === 'learning' ? palette.warning : palette.lineStrong;
-
-                const textSnippet = v.text ? v.text.split(/\s+/).slice(0, 4).join(' ') + '...' : 'No text...';
+                const textSnippet = v.text ? v.text.split(/\s+/).slice(0, 4).join(' ') + '…' : '';
 
                 return (
                   <Pressable
                     key={v.verse}
                     onLayout={dragSelect.itemLayout(index)}
                     onPress={() => dragSelect.handleTap(v.verse)}
-                    style={{ width: '31.5%', borderLeftWidth: 3, borderLeftColor: statusBorderColor }}
-                    className={`h-16 rounded-xl bg-surface border border-line p-2 justify-between relative ${
-                      isSelected ? 'border-accent' : ''
-                    }`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`Verse ${v.verse}, ${STATUS_WORD[v.status] ?? 'not started'}`}
+                    style={{ width: tileWidth, minHeight: space(64), padding: space(10), gap: space(4) }}
+                    className={`rounded-btn border ${isSelected ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
                   >
-                    <View className="flex-row justify-between items-center">
-                      <AppText variant="micro" className="font-sans font-extrabold text-ink">v{v.verse}</AppText>
-                      {v.status === 'memorized' && (
-                        <View className="bg-success/10 px-1 rounded">
-                          <AppText variant="micro" className="font-mono font-bold text-success uppercase">MEM</AppText>
-                        </View>
-                      )}
-                      {v.status === 'learning' && (
-                        <View className="bg-warning/15 px-1 rounded">
-                          <AppText variant="micro" className="font-mono font-bold text-warning uppercase">LRN</AppText>
-                        </View>
-                      )}
+                    <View className="flex-row items-center justify-between" style={{ gap: space(6) }}>
+                      <AppText
+                        variant="caption"
+                        className={`font-sans font-semibold ${isSelected ? 'text-accent' : 'text-ink'}`}
+                        style={{ fontVariant: ['tabular-nums'] }}
+                      >
+                        {v.verse}
+                      </AppText>
+                      <View className={`w-2 h-2 rounded-full ${STATUS_DOT[v.status] ?? 'bg-fill'}`} />
                     </View>
-                    <AppText variant="micro" className="font-serif italic leading-tight text-ink-3 mt-1" numberOfLines={2}>
+                    <AppText variant="caption" className="font-serif text-ink-2" numberOfLines={2}>
                       {textSnippet}
                     </AppText>
-                    {isSelected && (
-                      <View className="absolute -top-1 -right-1 bg-ink w-3.5 h-3.5 rounded-full items-center justify-center border border-surface">
-                        <AppText variant="micro" className="text-on-accent font-black">✓</AppText>
-                      </View>
-                    )}
                   </Pressable>
                 );
               })}
@@ -522,30 +551,33 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             /* MEMORY GRID VIEW - Scripture Memory Fellowship style: every
                word's first letter, tap to select (same as List/Grid), pin
                icon to mark a personal memory anchor. */
-            <View className="gap-2.5">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row bg-surface-2 p-0.5 rounded-lg">
-                  <Pressable
-                    onPress={() => setMemoryGridColumns(2)}
-                    className={`px-3 py-1 rounded-md ${memoryGridColumns === 2 ? 'bg-surface' : ''}`}
-                  >
-                    <AppText variant="caption" className={`font-sans font-extrabold ${memoryGridColumns === 2 ? 'text-ink' : 'text-ink-3'}`}>
-                      2 Columns
-                    </AppText>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setMemoryGridColumns(4)}
-                    className={`px-3 py-1 rounded-md ${memoryGridColumns === 4 ? 'bg-surface' : ''}`}
-                  >
-                    <AppText variant="caption" className={`font-sans font-extrabold ${memoryGridColumns === 4 ? 'text-ink' : 'text-ink-3'}`}>
-                      4 Columns
-                    </AppText>
-                  </Pressable>
+            <View style={{ gap: space(12) }}>
+              <View className="flex-row flex-wrap items-center justify-between" style={{ gap: space(8) }}>
+                <View style={{ flexGrow: 1, flexBasis: space(170) }}>
+                  <SegmentedControl
+                    value={memoryGridColumns}
+                    onChange={setMemoryGridColumns}
+                    accessibilityLabel="Columns"
+                    options={[
+                      { id: 2, label: '2 columns' },
+                      { id: 4, label: '4 columns' },
+                    ]}
+                  />
                 </View>
-                <AppButton size="sm" onPress={() => printMemoryGrid( activeChapterVerses.map((v) => ({ book: selectedBook || '', chapter: selectedChapter || 0, verse: v.verse, text: v.text, })), `${selectedBook} ${selectedChapter}`, activeTranslation.id ) } className="flex-row items-center gap-1.5 bg-accent rounded-lg">
-                  <Printer size={12} color={palette.onAccent} />
-                  <AppText variant="caption" className="font-sans font-extrabold text-on-accent">Printable PDF</AppText>
-                </AppButton>
+                <AppButton
+                  size="sm"
+                  variant="secondary"
+                  Icon={Printer}
+                  label="Print"
+                  accessibilityLabel="Print as a PDF"
+                  onPress={() =>
+                    printMemoryGrid(
+                      activeChapterVerses.map((v) => ({ book: selectedBook || '', chapter: selectedChapter || 0, verse: v.verse, text: v.text })),
+                      `${selectedBook} ${selectedChapter}`,
+                      activeTranslation.id
+                    )
+                  }
+                />
               </View>
               <GestureDetector gesture={dragSelect.gesture}>
               <View collapsable={false}>
@@ -606,137 +638,138 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
 
       </ScrollView>
 
-      {/* Floating Action Menu -- hovers above the verse content near the
+      {/* Floating action bar -- hovers above the verse content near the
           bottom of the viewport (not the end of the scrollable page), so
           it's reachable the instant verses are selected without scrolling
           all the way down. Rendered as an absolutely-positioned sibling of
           the ScrollView rather than inside its content flow; the matching
           extra paddingBottom on the ScrollView above keeps the last verses
-          and the copyright notice from ever being hidden underneath it. */}
+          and the copyright notice from ever being hidden underneath it.
+          The shadow is on a view that mounts and unmounts whole, never
+          toggled by a class (see ios-fabric-shadow-deadlock). */}
       {floatingBarShowing && (
         <View
-          className="absolute left-4 right-4 bg-surface border-2 border-ink rounded-xl p-3 shadow-lg"
-          style={{ bottom: 16, gap: 8 }}
+          className="absolute left-4 right-4 bg-surface border border-line rounded-card shadow-lg"
+          style={{ bottom: 16, padding: space(12), gap: space(10) }}
           onLayout={(e) => setFloatingBarHeight(e.nativeEvent.layout.height)}
         >
-          <View className="flex-row items-center justify-between pl-1">
-            <View>
-              <AppText variant="micro" className="font-bold text-ink-3 uppercase font-sans">SELECTED</AppText>
-              <AppText variant="label" className="font-extrabold font-sans text-ink">
-                {selectedVerseNumbers.length} {selectedVerseNumbers.length === 1 ? 'Verse' : 'Verses'}
-              </AppText>
-            </View>
-            <Pressable
+          <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
+            <AppText variant="label" className="font-sans font-semibold text-ink shrink">
+              {selectedVerseNumbers.length} {selectedVerseNumbers.length === 1 ? 'verse' : 'verses'} selected
+            </AppText>
+            <AppButton size="sm" variant="quiet" label="Clear" onPress={() => setSelectedVerseNumbers([])} />
+          </View>
+          {/* Four across normally; two by two at large text, where four
+              would each be too narrow for their one word. */}
+          <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
+            {[
+              {
+                label: 'Add',
+                a11y: 'Add to My Verses',
+                variant: 'primary' as const,
+                onPress: () => {
+                  addVersesToQueue(selectedVerses(), selectedTranslationId);
+                  setSelectedVerseNumbers([]);
+                },
+              },
+              { label: 'Listen', a11y: 'Listen', variant: 'secondary' as const, onPress: () => startPractice('listen', selectedVerses()) },
+              { label: 'Learn', a11y: 'Learn', variant: 'secondary' as const, onPress: () => startPractice('learn', selectedVerses()) },
+              { label: 'Status', a11y: 'Set memory status', variant: 'secondary' as const, onPress: () => setShowStatusOverride(true) },
+            ].map((b) => (
+              <View key={b.label} style={{ flexGrow: 1, flexBasis: space(64) }}>
+                <AppButton size="sm" variant={b.variant} label={b.label} accessibilityLabel={b.a11y} onPress={b.onPress} />
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Manual memory-status override -- for verses already memorized
+          outside the app. Sets the selected verses directly to a chosen
+          stage, skipping the normal learn-then-review climb. */}
+      <Dialog
+        visible={showStatusOverride && floatingBarShowing}
+        onClose={() => setShowStatusOverride(false)}
+        placement="sheet"
+        title={oneVerse ? 'Already know this one?' : 'Already know these?'}
+        message={`Tell the app where ${oneVerse ? 'this verse is' : 'these verses are'}, and it will review ${them} on that schedule instead of teaching ${them} from scratch.`}
+        actions={
+          <>
+            <AppButton variant="quiet" label="Cancel" onPress={() => setShowStatusOverride(false)} />
+            <AppButton
+              variant="primary"
+              label="Save"
               onPress={() => {
+                overrideVerseMemoryStatus(
+                  selectedVerses(),
+                  overridePhase,
+                  selectedTranslationId,
+                  overrideWeekday ?? undefined,
+                  overrideProgressCount
+                );
                 setSelectedVerseNumbers([]);
                 setShowStatusOverride(false);
               }}
-              className="px-2 py-1"
-            >
-              <AppText variant="caption" className="font-bold font-sans text-ink-3">Clear</AppText>
-            </Pressable>
-          </View>
-          <View className="flex-row gap-1.5">
-            <AppButton size="md" onPress={() => { addVersesToQueue(activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), selectedTranslationId); setSelectedVerseNumbers([]); }} className="flex-1 items-center bg-success rounded-lg">
-              {/* One word only: four flex-1 buttons across a 375pt screen
-                  leave each about 65pt of content width, so anything longer
-                  silently truncates. The bar only appears once verses are
-                  selected, which supplies the missing object -- "Add" reads
-                  as "add these". */}
-              <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wide" numberOfLines={1}>
-                Add
-              </AppText>
-            </AppButton>
-            <AppButton size="md" onPress={() => startPractice('listen', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))} className="flex-1 items-center bg-accent rounded-lg">
-              <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wide">Listen</AppText>
-            </AppButton>
-            <AppButton size="md" onPress={() => startPractice('learn', activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)))} className="flex-1 items-center bg-accent rounded-lg">
-              <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wide">Learn</AppText>
-            </AppButton>
-            <AppButton size="md" onPress={() => setShowStatusOverride((s) => !s)} className={`flex-1 items-center rounded-lg flex-row justify-center gap-1 bg-accent`}>
-              <SlidersHorizontal size={10} color={palette.onAccent} />
-              <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wide">Status</AppText>
-            </AppButton>
-          </View>
-
-          {/* Manual memory-status override -- for verses already memorized
-              outside the app. Sets the selected verses directly to a
-              chosen phase, skipping the normal learn-then-graduate climb. */}
-          {showStatusOverride && (
-            <FadeInView>
-              <View className="bg-accent-soft border border-accent/30 rounded-xl p-3 mt-1" style={{ gap: 10 }}>
-                <View className="flex-row items-center justify-between">
-                  <AppText variant="micro" className="font-bold text-accent uppercase tracking-wide font-sans">
-                    Set Memory Status
-                  </AppText>
-                  <Pressable onPress={() => setShowStatusOverride(false)}>
-                    <X size={13} color={palette.accent} />
-                  </Pressable>
-                </View>
-                <AppText variant="micro" className="text-accent font-sans leading-relaxed -mt-1">
-                  Already know these by heart? Tell the app, and it will start reviewing them at the right interval
-                  instead of making you learn them from scratch.
-                </AppText>
-
-                <View style={{ gap: 4 }}>
-                  <ChipRow
-                    wrap
-                    value={overridePhase}
-                    onChange={(id) => {
-                      setOverridePhase(id);
-                      if (id !== 'weekly' && id !== 'monthly') setOverrideWeekday(null);
-                      setOverrideProgressPercent(0);
-                    }}
-                    options={OVERRIDE_PHASE_OPTIONS}
-                  />
-                </View>
-
-                {(overridePhase === 'weekly' || overridePhase === 'monthly') && (
-                  <View style={{ gap: 4 }}>
-                    <AppText variant="micro" className="font-bold text-accent uppercase tracking-wide font-sans">
-                      Land review cycle on (optional) — tap again to clear
-                    </AppText>
-                    <ChipRow
-                      wrap
-                      value={overrideWeekday ?? ''}
-                      onChange={(id) => setOverrideWeekday((prev) => (prev === id ? null : (id as string)))}
-                      options={OVERRIDE_WEEKDAY_OPTIONS}
-                    />
-                  </View>
-                )}
-
-                {(overridePhase === 'daily' || overridePhase === 'weekly' || overridePhase === 'monthly') && (
-                  <View style={{ gap: 4 }}>
-                    <View className="flex-row items-center justify-between">
-                      <AppText variant="micro" className="font-bold text-accent uppercase tracking-wide font-sans">
-                        How far into this phase?
-                      </AppText>
-                      <AppText variant="micro" className="font-mono font-bold text-accent">
-                        {overrideProgressPercent >= 100 ? 'Graduates next review' : `${overrideProgressUnit} (${overrideProgressCount}/${overrideProgressMax})`}
-                      </AppText>
-                    </View>
-                    <DiscreteSlider
-                      value={overrideProgressPercent}
-                      onChange={setOverrideProgressPercent}
-                      options={Array.from({ length: 21 }, (_, i) => i * 5).map((p) => ({
-                        id: p,
-                        // Labeling every 5% stop would overlap into an
-                        // unreadable smear -- only the quarter-marks get text,
-                        // the rest are still real, draggable/tappable stops.
-                        label: p % 25 === 0 ? (p === 0 ? 'Start' : `${p}%`) : '',
-                      }))}
-                    />
-                  </View>
-                )}
-
-                <AppButton size="md" onPress={() => { overrideVerseMemoryStatus( activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse)), overridePhase, selectedTranslationId, overrideWeekday ?? undefined, overrideProgressCount ); setSelectedVerseNumbers([]); setShowStatusOverride(false); }} className="w-full items-center bg-accent rounded-lg">
-                  <AppText variant="section" className="text-on-accent font-bold uppercase tracking-wide">Apply Override</AppText>
-                </AppButton>
-              </View>
-            </FadeInView>
-          )}
+            />
+          </>
+        }
+      >
+        <View style={{ gap: space(8) }}>
+          <AppText variant="label" className="font-sans font-medium text-ink">
+            Put {them} in
+          </AppText>
+          <ChipRow
+            wrap
+            value={overridePhase}
+            onChange={(id) => {
+              setOverridePhase(id);
+              if (id !== 'weekly' && id !== 'monthly') setOverrideWeekday(null);
+              setOverrideProgressPercent(0);
+            }}
+            options={OVERRIDE_PHASE_OPTIONS}
+          />
         </View>
-      )}
+
+        {(overridePhase === 'weekly' || overridePhase === 'monthly') && (
+          <View style={{ gap: space(8) }}>
+            <AppText variant="label" className="font-sans font-medium text-ink">
+              Review {them} on
+            </AppText>
+            <ChipRow
+              wrap
+              value={overrideWeekday ?? ''}
+              onChange={(id) => setOverrideWeekday((prev) => (prev === id ? null : (id as string)))}
+              options={OVERRIDE_WEEKDAY_OPTIONS}
+            />
+            <AppText variant="caption" className="font-sans text-ink-3">
+              Optional. Tap the day again to clear it.
+            </AppText>
+          </View>
+        )}
+
+        {(overridePhase === 'daily' || overridePhase === 'weekly' || overridePhase === 'monthly') && (
+          <View style={{ gap: space(8) }}>
+            <View className="flex-row flex-wrap items-baseline justify-between" style={{ columnGap: space(8) }}>
+              <AppText variant="label" className="font-sans font-medium text-ink">
+                How far along
+              </AppText>
+              <AppText variant="label" className="font-sans text-ink-2">
+                {overrideProgressPercent >= 100
+                  ? 'Moves on after the next review'
+                  : `${overrideProgressUnit} (${overrideProgressCount} of ${overrideProgressMax})`}
+              </AppText>
+            </View>
+            <DiscreteSlider
+              value={overrideProgressPercent}
+              onChange={setOverrideProgressPercent}
+              options={Array.from({ length: 21 }, (_, i) => i * 5).map((p) => ({ id: p, label: `${p}%` }))}
+              showStopLabels={false}
+              accessibilityLabel="How far along"
+            />
+            <RangeCaption min="Just started" max="Ready to move on" />
+          </View>
+        )}
+      </Dialog>
     </FadeInView>
   );
 }

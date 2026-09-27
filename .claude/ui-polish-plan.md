@@ -355,7 +355,7 @@ accessibility, sans labels, `showStopLabels` prop. Shots: `.shots/s2b/`.
   faint verse text; uppercase labels; 40-word empty state naming "Chapter
   Landing page".
 
-**S3 — Verse Finder**
+**S3 — Verse Finder** — DONE 2026-09-26 (shots in `.shots/s3/`). Books: ScreenHeader "Verse Finder" (back to Today), token search field, two GroupedLists of ListRows, EmptyState for no match. Chapters: ScreenHeader with "N chapters" subtitle, sans tabular numbers in tiles sized to fill each row (left-aligned on purpose: numbers in order read like a calendar). Chapter page: ScreenHeader with the count as subtitle and the translation as a compact dropdown action; thin progress bar; recording card rebuilt (filled play button, quiet Change that moves under the title past 1.3×, sentence-case picker and buttons); SegmentedControl for layout and memory-grid columns; SectionHeader "Tap a verse to select it" + Select all; verses as one continuous card (number + status dot column, "Due today" caption); grid tiles sized like Chapters (3 across, 2 at 1.5×); floating bar re-skinned; the status override is now a Dialog sheet ("Already know these?", "How far along", no phase/graduate words) with the 5% slider + RangeCaption. ChapterPhotoStrip: sentence-case accent link, SectionHeader, source chooser is a Dialog sheet. The drag-to-select work from the "Verse landing pages" session was kept as is.
 - `BooksScreen.tsx`: good model list; serif old-style digits ("1 Samuel").
 - `ChaptersScreen.tsx:42`: bouncing old-style digits; thick black box per
   number; pointless "CHAPTERS AVAILABLE" eyebrow.
