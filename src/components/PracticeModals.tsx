@@ -167,6 +167,9 @@ interface PracticeModalsProps {
   sessionTotal?: number;
   memoryQueue?: QueueItem[];
   primingLookahead?: number;
+  // Settings -> Pause Reviews is on: nothing is due, so the "reviewing" and
+  // "Today's Verses" playlists leave due reviews out, same as Home.
+  reviewsPaused?: boolean;
   setPrimingLookahead?: (val: number) => void;
   // Listen mode only — real audio playback needs to resolve which of the
   // user's saved recordings represents each verse's chapter, exactly the
@@ -296,6 +299,7 @@ function PracticeModalsInner({
   sessionTotal,
   memoryQueue,
   primingLookahead = 30,
+  reviewsPaused = false,
   setPrimingLookahead,
   userRecordings = [],
   selectedChapterAudios = {},
@@ -353,7 +357,7 @@ function PracticeModalsInner({
         });
 
         dbLearning = memoryQueue.filter((item) => item.status === 'learning').map(mapQueueItemToVerse);
-        dbReviewing = memoryQueue
+        dbReviewing = reviewsPaused ? [] : memoryQueue
           .filter((item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate))
           .map(mapQueueItemToVerse);
         dbPriming = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead).map(mapQueueItemToVerse);
@@ -385,7 +389,7 @@ function PracticeModalsInner({
     setSelectionStart(null);
     setSelectionEnd(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playSource, verses, allVerses, memoryQueue, primingLookahead]);
+  }, [playSource, verses, allVerses, memoryQueue, primingLookahead, reviewsPaused]);
 
   // Header reference text
   const referenceText = useMemo(() => {

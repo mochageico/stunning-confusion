@@ -171,16 +171,16 @@ export default function HomeScreen({ state }: { state: AppState }) {
     handleUpdateVerseStatus,
     triggerDailyPull,
     isReviewDue,
-    pausedAt,
+    reviewsPaused,
     pausedUntil,
+    resumeReviews,
     setShowTour,
   } = state;
 
   // While paused (Settings -> Pause Reviews), nothing should read as "due" --
-  // that's the whole promise of pausing. An indefinite pause (pausedUntil
-  // null) stays active until resumed manually; a dated pause clears itself
-  // here once its date passes even before the user taps Resume.
-  const isPausedNow = !!pausedAt && (!pausedUntil || new Date(pausedUntil) > new Date());
+  // that's the whole promise of pausing. reviewsPaused is the same flag the
+  // time estimate, the calendar and Listen use, so they all agree.
+  const isPausedNow = reviewsPaused;
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showPullShieldConfirm, setShowPullShieldConfirm] = useState(false);
@@ -384,7 +384,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
             <CollapsibleCard
               storageKey="home.reviews"
               title="Review"
-              summary={`${dueReviewItems.length} due`}
+              summary={isPausedNow ? 'Paused' : `${dueReviewItems.length} due`}
               defaultCollapsed={dueReviewItems.length === 0}
               accessory={
                 <HelpTooltip text="Verses you've already learned, back for a quick check so you don't forget them. Each one comes back every day for a while, then once a week, then once a month — and then it stops." />
@@ -434,6 +434,18 @@ export default function HomeScreen({ state }: { state: AppState }) {
                     );
                   })}
                 </>
+              ) : isPausedNow ? (
+                // Says why the list is empty. "All caught up" here read as
+                // the reviews having vanished while the calendar still
+                // showed them waiting.
+                <View style={{ gap: space(8) }}>
+                  <AppText variant="label" className="font-sans text-ink-2">
+                    {pausedUntil
+                      ? `Reviews are paused until ${formatDate(new Date(pausedUntil), 'long')}. Nothing is due and nothing counts as missed while you're away.`
+                      : 'Reviews are paused. Nothing is due and nothing counts as missed until you resume.'}
+                  </AppText>
+                  <AppButton variant="secondary" label="Resume reviews" onPress={resumeReviews} />
+                </View>
               ) : (
                 <AppText variant="label" className="font-sans text-ink-3">
                   No reviews due today. You're all caught up.
@@ -441,17 +453,20 @@ export default function HomeScreen({ state }: { state: AppState }) {
               )}
 
               {/* Deliberately quiet and last: it undoes finished work, so it
-                  must never be the first thing under the Review title. */}
-              <Pressable
-                onPress={() => setShowResetConfirm(true)}
-                accessibilityRole="button"
-                hitSlop={10}
-                className="self-start active:opacity-60"
-              >
-                <AppText variant="caption" className="font-sans font-medium text-ink-3 underline">
-                  Reset today's reviews
-                </AppText>
-              </Pressable>
+                  must never be the first thing under the Review title.
+                  Hidden while paused -- there's nothing due to reset. */}
+              {!isPausedNow && (
+                <Pressable
+                  onPress={() => setShowResetConfirm(true)}
+                  accessibilityRole="button"
+                  hitSlop={10}
+                  className="self-start active:opacity-60"
+                >
+                  <AppText variant="caption" className="font-sans font-medium text-ink-3 underline">
+                    Reset today's reviews
+                  </AppText>
+                </Pressable>
+              )}
             </CollapsibleCard>
 
             <CollapsibleCard

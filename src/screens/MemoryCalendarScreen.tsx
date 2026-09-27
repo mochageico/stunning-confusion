@@ -105,6 +105,8 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
     sabbathDay,
     joinedGroupPlanDetails,
     joinedGroupPlanMemberships,
+    pausedAt,
+    pausedUntil,
     cognitiveLoadSensitivity,
     getEstimatedReviewTime,
   } = state;
@@ -150,10 +152,12 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
           sabbathDay,
           joinedPlans: joinedGroupPlanDetails,
           memberships: joinedGroupPlanMemberships,
+          pausedAt,
+          pausedUntil,
         },
         Math.max(daysFromTodayThroughGridEnd, 1)
       ),
-    [memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, daysFromTodayThroughGridEnd]
+    [memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil, daysFromTodayThroughGridEnd]
   );
 
   // Estimated minutes for a projected day, reusing the same per-verse math

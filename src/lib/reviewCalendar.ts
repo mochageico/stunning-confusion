@@ -35,6 +35,36 @@ export interface CalendarPlanSettings {
   // plans (and the layout lab) can leave them out.
   joinedPlans?: GroupPlan[];
   memberships?: GroupPlanMembership[];
+  // Settings -> Pause Reviews. A paused day has no reviews and no pull, and
+  // anything that came due during the pause lands on the first day back --
+  // the real engine never moves a due date for a pause, it just stops
+  // treating it as due (see isPauseInEffect).
+  pausedAt?: string | null;
+  pausedUntil?: string | null;
+}
+
+/**
+ * Whether Pause Reviews is in effect at `at`. An indefinite pause (pausedUntil
+ * null) lasts until resumed manually; a dated one ends at its pausedUntil
+ * instant. The one definition Home, the time estimate, the calendar and
+ * Listen all share, so none of them can show reviews the others hide.
+ */
+export function isPauseInEffect(pausedAt: string | null | undefined, pausedUntil: string | null | undefined, at: Date = new Date()): boolean {
+  if (!pausedAt) return false;
+  return !pausedUntil || new Date(pausedUntil) > at;
+}
+
+/**
+ * Whether a whole calendar day counts as paused. Today follows the pause
+ * exactly as it stands right now (matching Home); a future day is paused
+ * only if the pause still holds at its end, so the day you come back on
+ * shows its reviews.
+ */
+export function isDayPaused(date: Date, isToday: boolean, pausedAt: string | null | undefined, pausedUntil: string | null | undefined): boolean {
+  if (isToday) return isPauseInEffect(pausedAt, pausedUntil);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+  return isPauseInEffect(pausedAt, pausedUntil, endOfDay);
 }
 
 export interface CalendarDayProjection {
@@ -251,11 +281,23 @@ export function getMemoryCalendarProjection(queue: QueueItem[], plan: CalendarPl
   const baseLearningCount = queue.filter((item) => item.status === 'learning').length;
   const reviewingItems = queue.filter((item) => item.status === 'reviewing');
 
+  const pausedByIndex = Array.from({ length: days }, (_, i) => {
+    const date = new Date(today);
+    date.setDate(date.getDate() + i);
+    return isDayPaused(date, i === 0, plan.pausedAt, plan.pausedUntil);
+  });
+  // Reviews start from the first unpaused day in the window: anything due
+  // before then (overdue, or due mid-pause) is due that day instead. No
+  // unpaused day at all (an open-ended pause) means no reviews to show.
+  const firstActiveIndex = pausedByIndex.indexOf(false);
+  const firstActiveDay = new Date(today);
+  firstActiveDay.setDate(firstActiveDay.getDate() + Math.max(firstActiveIndex, 0));
+
   // Precompute every reviewing item's occurrences once, then bucket by date
   // -- cheaper than re-scanning all items for every single day.
   const occurrencesByDateKey = new Map<string, { item: QueueItem; phase: RetentionPhase }[]>();
-  reviewingItems.forEach((item) => {
-    projectItemOccurrences(item, plan, queue, today, windowEnd).forEach(({ date, phase }) => {
+  (firstActiveIndex === -1 ? [] : reviewingItems).forEach((item) => {
+    projectItemOccurrences(item, plan, queue, firstActiveDay, windowEnd).forEach(({ date, phase }) => {
       const key = date.toDateString();
       const bucket = occurrencesByDateKey.get(key) || [];
       bucket.push({ item, phase });
@@ -284,8 +326,9 @@ export function getMemoryCalendarProjection(queue: QueueItem[], plan: CalendarPl
     // Today's own pull, if any, is already reflected in the real queue
     // (baseLearningCount) -- only project pulls for days AFTER today,
     // matching getMemoryLoadForecast's exact same convention.
+    // A paused day pulls nothing either -- triggerDailyPull refuses to.
     let newVerseItems: QueueItem[] = [];
-    if (i > 0 && isLearningDay) {
+    if (i > 0 && isLearningDay && !pausedByIndex[i]) {
       const { verseIds } = computeDailyPull(
         simQueue,
         { newVersesPace: plan.newVersesPace, learningDays: plan.learningDays },

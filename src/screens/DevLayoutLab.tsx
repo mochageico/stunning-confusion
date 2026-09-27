@@ -330,8 +330,9 @@ function useMockHomeState() {
     handleUpdateVerseStatus: noop,
     triggerDailyPull: noop,
     isReviewDue: () => true,
-    pausedAt: null,
+    reviewsPaused: false,
     pausedUntil: null,
+    resumeReviews: noop,
   };
 }
 

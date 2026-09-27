@@ -172,5 +172,43 @@ console.log('reviewCalendar — new-verse projection');
   check('no verses are pulled on a sabbath day', sabbathDays.every((d) => d.newVersesPulled === 0));
 }
 
+// --------------------------------------------------------------------- pause
+{
+  // A reviewing verse that's already overdue -- due today on an unpaused day.
+  const overdue: QueueItem = {
+    ...queued('r0', 0),
+    status: 'reviewing',
+    retentionPhase: 'daily',
+    nextReviewDueDate: new Date(Date.now() - 3 * 86400000).toISOString(),
+    currentStreakCount: 1,
+  };
+  const queue = [overdue, ...Array.from({ length: 40 }, (_, i) => queued(`v${i}`, i + 1))];
+  const hoursAgo = new Date(Date.now() - 3600000).toISOString();
+
+  const unpaused = getMemoryCalendarProjection(queue, BASE, 8);
+  check('unpaused: an overdue review shows as due today', unpaused[0].dueReviews.length === 1);
+
+  // Open-ended pause (the "until I resume" option).
+  const open = getMemoryCalendarProjection(queue, { ...BASE, pausedAt: hoursAgo, pausedUntil: null }, 8);
+  check('open-ended pause: no reviews on any day', open.every((d) => d.dueReviews.length === 0));
+  check('open-ended pause: no pulls on any day', open.every((d) => d.newVersesPulled === 0));
+
+  // Dated pause ending mid-day 3, the way Settings sets it (now + N days).
+  const until = new Date(Date.now() + 3 * 86400000).toISOString();
+  const dated = getMemoryCalendarProjection(queue, { ...BASE, pausedAt: hoursAgo, pausedUntil: until }, 8);
+  check('dated pause: nothing due before the return day', dated.slice(0, 3).every((d) => d.dueReviews.length === 0));
+  check('dated pause: the overdue review lands on the return day', dated[3].dueReviews.length === 1, dated.map((d) => d.dueReviews.length));
+  check('dated pause: no pulls while paused', dated.slice(0, 3).every((d) => d.newVersesPulled === 0));
+  check('dated pause: pulls start again on the return day', dated[3].newVersesPulled === BASE.newVersesPace);
+
+  // A pause whose date already passed is over -- same as not paused.
+  const expired = getMemoryCalendarProjection(
+    queue,
+    { ...BASE, pausedAt: new Date(Date.now() - 10 * 86400000).toISOString(), pausedUntil: hoursAgo },
+    8
+  );
+  check('an expired pause changes nothing', expired[0].dueReviews.length === 1);
+}
+
 console.log(failures === 0 ? '\ncheck:calendar — all assertions passed.' : `\ncheck:calendar — ${failures} FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

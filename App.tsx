@@ -593,6 +593,7 @@ function AppShell() {
           onUpdateStatus={state.handleUpdateVerseStatus}
           memoryQueue={state.memoryQueue}
           primingLookahead={state.primingLookahead}
+          reviewsPaused={state.reviewsPaused}
           setPrimingLookahead={state.setPrimingLookahead}
           userRecordings={state.userRecordings}
           selectedChapterAudios={state.selectedChapterAudios}

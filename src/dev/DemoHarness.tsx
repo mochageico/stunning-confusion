@@ -285,6 +285,13 @@ export function useDemoState(real: AppState): AppState {
     booted.current = true;
     if (params.get('empty') !== '1') real.setMemoryQueue(buildQueue() as any);
     real.setUserRecordings(recordings as any);
+    // `paused=1` pauses reviews until resumed; `paused=<n>` for n days.
+    const paused = params.get('paused');
+    if (paused) {
+      const days = Number(paused);
+      real.setPausedAt(new Date(Date.now() - 86400000).toISOString());
+      real.setPausedUntil(paused === '1' || !days ? null : new Date(Date.now() + days * 86400000).toISOString());
+    }
     const tabFor: Record<string, 'community' | 'record' | 'profile'> = {
       community: 'community',
       find: 'community',

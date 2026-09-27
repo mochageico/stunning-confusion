@@ -75,13 +75,14 @@ function DeskRow({
 
 export default function MemoryDeskScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
-  const { handleBack, navigateTo, memoryQueue, savedPlans, isReviewDue, learningDays, newVersesPace } = state;
+  const { handleBack, navigateTo, memoryQueue, savedPlans, isReviewDue, reviewsPaused, learningDays, newVersesPace } = state;
   const space = useScaledSpace();
   const scale = useFontScale();
 
   const queuedCount = memoryQueue.filter((item) => item.status === 'queued').length;
   const learningCount = memoryQueue.filter((item) => item.status === 'learning').length;
-  const dueTodayCount = memoryQueue.filter(
+  // Nothing is due while reviews are paused -- same as Home.
+  const dueTodayCount = reviewsPaused ? 0 : memoryQueue.filter(
     (item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate)
   ).length;
   const activePlanName = savedPlans.find((p) => p.isActive)?.name;

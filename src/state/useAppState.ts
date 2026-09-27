@@ -111,6 +111,7 @@ import {
   VerseTimestamp,
 } from '../types';
 import { computeDailyPull, PersonalPacingSettings } from '../lib/groupPlanScheduler';
+import { isDayPaused, isPauseInEffect } from '../lib/reviewCalendar';
 import { formatDuration } from '../lib/format';
 
 export type ScreenName =
@@ -1134,6 +1135,9 @@ export function useAppState() {
   // Pause -- see MemoryPlan.pausedAt/pausedUntil in types.ts.
   const [pausedAt, setPausedAt] = useState<string | null>(null);
   const [pausedUntil, setPausedUntil] = useState<string | null>(null);
+  // Paused right now? While it is, nothing reads as due anywhere -- Home,
+  // the time estimate, the calendar and Listen all go through this.
+  const reviewsPaused = isPauseInEffect(pausedAt, pausedUntil);
   // Missed-review popup: items found overdue on this app-open, awaiting the
   // user's choice (see resolveMissedReviewChoice). Populated once, in
   // loadUserData, when the active plan's missPolicyAskEveryTime is on --
@@ -4611,6 +4615,9 @@ export function useAppState() {
   const computeDayReviewLoad = (queue: QueueItem[], date: Date, isToday: boolean) => {
     let seconds = 0;
     let count = 0;
+    // Nothing is due while reviews are paused, so a paused day costs nothing
+    // -- the same rule Home's review list and the calendar follow.
+    if (isDayPaused(date, isToday, pausedAt, pausedUntil)) return { seconds, count };
     queue.forEach((item) => {
       if (item.status !== 'reviewing') return;
       const due = item.nextReviewDueDate ? new Date(item.nextReviewDueDate) : null;
@@ -4672,7 +4679,7 @@ export function useAppState() {
   // reversible choice ("I know reviews are already full today, pull more
   // anyway"), not a hard constraint.
   const triggerDailyPull = async (opts?: { bypassShield?: boolean }) => {
-    if (pausedAt && (!pausedUntil || new Date(pausedUntil) > new Date())) {
+    if (reviewsPaused) {
       triggerToast('Reviews are paused -- resume from Settings to pull new verses. 🌴');
       return;
     }
@@ -5302,7 +5309,10 @@ export function useAppState() {
             // verses still have reviews due today. It releases automatically
             // the moment the last due review clears (see the sweep at the
             // end of this function).
-            const dueReviewsPending = memoryQueueRef.current.some(
+            // While paused nothing is due, so there's nothing to wait for --
+            // holding the verse back would strand it behind reviews Home
+            // isn't even showing.
+            const dueReviewsPending = !reviewsPaused && memoryQueueRef.current.some(
               (q) =>
                 q.verseId !== item.verseId &&
                 q.status === 'reviewing' &&
@@ -5911,7 +5921,7 @@ export function useAppState() {
             } else if (queueItem.status === 'reviewing') {
               status = 'memorized';
               const isDue = isReviewDue(queueItem.nextReviewDueDate, getLogicalDate(dayStartHour));
-              if (isDue) dueDate = 'Due: Today';
+              if (isDue && !reviewsPaused) dueDate = 'Due: Today';
             } else if (queueItem.status === 'learning') {
               status = 'learning';
               dueDate = 'Due: Today';
@@ -6766,6 +6776,7 @@ export function useAppState() {
     refresherWeeklyWeeks, setRefresherWeeklyWeeks,
     pausedAt, setPausedAt,
     pausedUntil, setPausedUntil,
+    reviewsPaused,
     pauseReviews, resumeReviews,
     missedReviewQueue,
     showMissedReviewPrompt, setShowMissedReviewPrompt,
