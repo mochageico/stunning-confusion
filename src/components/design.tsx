@@ -765,7 +765,7 @@ export function SettingRow({
       {/* The value reads as plain text in ink-3, the way a grouped iPhone
           list shows one, instead of sitting in a bordered badge. */}
       {value !== undefined && (
-        <AppText variant="body" className={`font-mono text-ink-3 shrink-0 ${stacked ? '' : 'text-right'}`}>
+        <AppText variant="body" className={`font-sans text-ink-3 shrink-0 ${stacked ? '' : 'text-right'}`}>
           {value}
         </AppText>
       )}

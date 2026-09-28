@@ -3272,7 +3272,7 @@ export function useAppState() {
     if (activePlan) {
       syncDesignerFromPlan(activePlan);
 
-      triggerToast(`Activated plan: "${activePlan.name}" ⚡`);
+      triggerToast(`Now using "${activePlan.name}".`);
 
       if (auth.currentUser) {
         try {
@@ -3301,7 +3301,7 @@ export function useAppState() {
   // the live editing state, the same way switching plans normally works.
   const handleDeletePlan = async (planId: string) => {
     if (savedPlans.length <= 1) {
-      triggerToast("Can't delete your only plan — save another one first.");
+      triggerToast("You need at least one set of review settings. Make another first.");
       return;
     }
     const deletedPlan = savedPlans.find((p) => p.id === planId);
@@ -3371,7 +3371,7 @@ export function useAppState() {
     setGraceCount(1);
     setRefresherDailyDays(7);
     setRefresherWeeklyWeeks(4);
-    setCustomPlanName('New Custom Plan');
+    setCustomPlanName('My settings');
     navigateTo('planDesigner');
   };
 
@@ -3410,15 +3410,15 @@ export function useAppState() {
     if (targetPlan && !isForkingBuiltIn) {
       updatedPlans = updatedPlans.map((p) =>
         p.id === editingPlanId
-          ? { ...p, name: customPlanName || 'My Custom Plan', ...editedFields, updatedAt: new Date().toISOString() }
+          ? { ...p, name: customPlanName || 'My settings', ...editedFields, updatedAt: new Date().toISOString() }
           : p
       );
-      triggerToast(`Plan "${customPlanName}" updated successfully! 🎯`);
+      triggerToast(`Saved "${customPlanName}".`);
     } else {
       const forkedName =
         isForkingBuiltIn && customPlanName.trim() === targetPlan?.name
           ? `${targetPlan.name} (Custom)`
-          : customPlanName || 'My Custom Plan';
+          : customPlanName || 'My settings';
 
       const newPlan: MemoryPlan = {
         id: 'plan-' + Date.now(),
@@ -3432,8 +3432,8 @@ export function useAppState() {
       updatedPlans.push(newPlan);
       triggerToast(
         isForkingBuiltIn
-          ? `Created "${forkedName}" from Standard and switched to it. 🎯`
-          : `New plan "${forkedName}" saved and activated! 🎯`
+          ? `Saved "${forkedName}" as your own copy and switched to it.`
+          : `Saved "${forkedName}" and switched to it.`
       );
     }
 

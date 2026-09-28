@@ -1,22 +1,22 @@
-import { Pressable, ScrollView, View } from 'react-native';
-import { ArrowLeft, Check, TrendingUp } from 'lucide-react-native';
+import { ScrollView, View } from 'react-native';
+import { Check } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, StepperRow } from '../components/ui';
 import { MissPolicySection } from '../components/MissPolicySection';
-import { AppIconButton, AppTextInput,
+import {
+  AppButton,
+  AppTextInput,
   AppText,
   CollapsibleCard,
   MIN_TOUCH,
   OptionCards,
   RangeCaption,
   SettingRow,
-  useFontScale,
   useScaledSpace,
   type OptionCardItem,
 } from '../components/design';
-
-import { useThemeColors } from '../components/theme';
+import { ScreenHeader, SectionHeader } from '../components/blocks';
 // The Daily Drip / Weekend Warrior pacing presets were deleted with the
 // plan/rhythm split: they set learning days, pace and review cap, all of
 // which are Rhythm now and live on the queue screen. They were also the
@@ -53,10 +53,8 @@ const rigorOptions = (
 ];
 
 export default function PlanDesignerScreen({ state }: { state: AppState }) {
-  const palette = useThemeColors();
   const {
     handleBack,
-    triggerToast,
     masteryTouches,
     setMasteryTouches,
     reviewsRequired,
@@ -92,7 +90,6 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
     setWeeklyPhaseMonths(cfg.months);
     setMonthlyPhaseYears(cfg.years);
     setMasteryTouches(cfg.touches);
-    triggerToast(`Retention set to ${cfg.label} (${cfg.weeks}-${cfg.months}-${cfg.years}, ${cfg.touches} touches). 🎯`);
   };
 
   const chooseRetention = (choice: RetentionChoice) => {
@@ -101,7 +98,6 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
       // the plan is yours to tune, not a preset of its own -- so it keeps
       // whatever tier you were on as the starting point to edit from.
       setRetentionRigor('custom');
-      triggerToast('Retention set to Custom — fine-tune the numbers below. 🎛️');
       return;
     }
     applyRigorPreset(choice);
@@ -130,92 +126,57 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
   const canSave = !isEditingBuiltInPlan || nameChangedFromBuiltIn;
 
   const space = useScaledSpace();
-  const scale = useFontScale();
-  const iconSize = Math.round(14 * scale);
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      {/* pb-4 rather than pb-12: the Save action now lives in the pinned footer
-          below, so the scroll content no longer needs to clear it. */}
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-4" contentContainerStyle={{ gap: 16 }}>
-        {/* Header Row */}
-        <View className="flex-row items-center gap-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface shrink-0" />
-          <View className="flex-1">
-            {/* Names the set being edited rather than repeating "Review
-                Settings", which is the title of the LIST screen you arrive
-                from -- two screens with an identical header gave no signal
-                that Edit had gone anywhere. */}
-            <AppText variant="section" className="uppercase tracking-wider font-bold text-ink-2 font-sans">
-              Review settings
-            </AppText>
-            <AppText variant="display" className="font-serif font-bold text-ink">
-              {customPlanName.trim() || 'New settings'}
-            </AppText>
-          </View>
-        </View>
-        <AppText variant="body" className="text-ink-2 font-sans -mt-1">
-          How long a verse keeps coming back before it's yours for good, and what happens when you miss one. How many
-          days a week you memorize is a separate thing — that's on My Verses, under My Schedule.
-        </AppText>
-
-        {/* The Basic/Advanced toggle was removed along with the pacing
-            sections. It existed to hide the tuning knobs from a newer user
-            while leaving presets and pacing visible -- but retention IS the
-            screen now, so Advanced would have hidden the entire point of it. */}
-
-        {/* Copy-on-write notice. The shipped plan is the baseline every
-            account starts from, so the only way to "edit" it is to make it
-            yours first. */}
-        {isEditingBuiltInPlan && (
-          <View className="rounded-xl border-2 border-warning/30 bg-warning-soft" style={{ padding: space(12), gap: space(4) }}>
-            <AppText variant="label" className="font-sans font-bold text-warning">
-              Standard is the built-in one
-            </AppText>
-            <AppText variant="micro" className="font-sans text-warning leading-relaxed">
-              Give it a new name below to make your own copy. Standard itself stays exactly as it is, so you can always
-              come back to it.
-            </AppText>
-          </View>
-        )}
+      {/* pb-4 rather than pb-12: Save lives in the pinned footer below, so
+          the scroll content doesn't need to clear it. */}
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-4" contentContainerStyle={{ gap: space(20) }}>
+        {/* Titled with the set being edited rather than "Review Settings",
+            the title of the list you arrive from: two screens with the same
+            header gave no sign that Edit had gone anywhere. */}
+        <ScreenHeader
+          title={customPlanName.trim() || 'New settings'}
+          subtitle="How long a verse keeps coming back, and what happens when you miss one. Which days you learn is set in My Schedule."
+          onBack={handleBack}
+          backLabel="Review Settings"
+        />
 
         {/* The name. Unnamed settings are indistinguishable from any other set
-            in the saved list, and naming is what forks the built-in. */}
+            in the saved list, and naming is what forks the built-in, which is
+            why the copy-on-write note sits right under the field. */}
         <View style={{ gap: space(6) }}>
-          <AppText variant="section" className="uppercase tracking-wider font-bold text-ink-2 font-sans">
-            Name
-          </AppText>
-          {/* The name is the one thing on this screen you write rather than
-              pick, and it was set in 12pt -- smaller than the labels around
-              it. Sized off the scale directly (not a className) so it grows
-              with the OS font setting like every AppText does. */}
+          <SectionHeader title="Name" />
           <AppTextInput
-            placeholder="e.g. My Settings"
-            placeholderTextColor={palette.ink3}
+            placeholder="e.g. My settings"
             value={customPlanName}
             onChangeText={setCustomPlanName}
-            allowFontScaling={false}
-            className="w-full border-2 border-ink rounded-xl font-sans font-bold bg-surface text-ink"
-            style={{
-              fontSize: 16 * scale,
-              minHeight: MIN_TOUCH,
-              paddingHorizontal: space(12),
-              paddingVertical: space(10),
-            }} />
+            variant="body"
+            accessibilityLabel="Name"
+            className="w-full border border-line rounded-btn font-sans bg-surface text-ink"
+            style={{ minHeight: MIN_TOUCH, paddingHorizontal: space(12), paddingVertical: space(10) }}
+          />
+          {isEditingBuiltInPlan && (
+            <AppText
+              variant="caption"
+              className={`font-sans ${canSave ? 'text-ink-3' : 'text-warning'}`}
+              style={{ paddingHorizontal: space(4) }}
+            >
+              Standard is built in and always stays as it is. Give these a new name to save your own copy.
+            </AppText>
+          )}
         </View>
 
         {/* Retention tier -- the primary choice on this screen. */}
         <View style={{ gap: space(8) }}>
-          <AppText variant="section" className="uppercase tracking-wider font-bold text-ink-2 font-sans">
-            How long verses keep coming back
-          </AppText>
+          <SectionHeader title="How long verses keep coming back" />
           <OptionCards options={rigorOptions(rigorSummary)} value={retentionRigor} onChange={chooseRetention} />
         </View>
 
-        {/* Fine-tuning: the exact phase lengths and mastery gates behind the
-            three tiers above. Collapsed by default -- picking a tier is
-            enough for most people, and touching anything here moves the plan
-            to 'custom'. */}
+        {/* Fine-tuning: the exact lengths and mastery gates behind the three
+            tiers above. Collapsed by default -- picking a tier is enough for
+            most people, and touching anything here moves the plan to
+            'custom'. */}
         <CollapsibleCard
           storageKey="planDesigner.retentionRigor"
           title="Change the details"
@@ -223,27 +184,24 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           defaultCollapsed
         >
           <AppText variant="caption" className="text-ink-2 font-sans">
-            After you learn a verse, it comes back every day for a while, then once a week, then once a month — and
+            After you learn a verse, it comes back every day for a while, then once a week, then once a month, and
             then it stops, because you know it. These set how long each of those stretches lasts. Bigger numbers mean
             more practice and a verse that's harder to forget. Changing anything here makes these settings Custom.
           </AppText>
 
           <View style={{ gap: space(16) }}>
-            {/* Daily Phase Length */}
             <View style={{ gap: space(6) }}>
               <SettingRow label="Comes back daily for" value={`${dailyPhaseWeeks} weeks`} />
               <StepperRow min={3} max={14} value={dailyPhaseWeeks} onChange={tune(setDailyPhaseWeeks)} />
               <RangeCaption min="3 weeks" max="14 weeks" />
             </View>
 
-            {/* Weekly Phase Length */}
             <View style={{ gap: space(6) }}>
               <SettingRow label="Then weekly for" value={`${weeklyPhaseMonths} months`} />
               <StepperRow min={2} max={12} value={weeklyPhaseMonths} onChange={tune(setWeeklyPhaseMonths)} />
               <RangeCaption min="2 months" max="12 months" />
             </View>
 
-            {/* Monthly Phase Length */}
             <View style={{ gap: space(6) }}>
               <SettingRow label="Then monthly for" value={`${monthlyPhaseYears} years`} />
               <StepperRow min={1} max={10} value={monthlyPhaseYears} onChange={tune(setMonthlyPhaseYears)} />
@@ -252,8 +210,8 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
 
             {/* Mastery gates. These moved here from the deleted "Pacing &
                 Limits" section -- they were never pacing: they decide when
-                a verse graduates, which is retention. */}
-            <View style={{ gap: space(6) }} className="pt-2 border-t border-hairline">
+                a verse moves on, which is retention. */}
+            <View style={{ gap: space(6), paddingTop: space(8) }} className="border-t border-hairline">
               <SettingRow label="Perfect recalls before a verse counts as learned" value={masteryTouches} />
               <StepperRow min={1} max={6} value={masteryTouches} onChange={tune(setMasteryTouches)} />
             </View>
@@ -263,17 +221,10 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
               <StepperRow min={1} max={5} value={reviewsRequired} onChange={tune(setReviewsRequired)} />
             </View>
           </View>
-
-          <AppText variant="caption" className="text-ink-2 font-sans pt-2 border-t border-hairline">
-            With these numbers, a verse stops coming back after about{' '}
-            <AppText variant="caption" className="font-sans font-bold text-ink">{totalRigorLabel}</AppText>.
-          </AppText>
         </CollapsibleCard>
 
-        {/* Missed Review Handling. Extracted into its own component so the
-            dev layout lab can render it at every supported font scale
-            without a signed-in user. No longer Advanced-gated: what happens
-            when you miss a review is half of what a plan even is. */}
+        {/* Missed reviews. Its own component so the dev layout lab can render
+            it at every font scale without a signed-in user. */}
         <MissPolicySection
           missPolicy={missPolicy}
           setMissPolicy={setMissPolicy}
@@ -285,57 +236,31 @@ export default function PlanDesignerScreen({ state }: { state: AppState }) {
           setRefresherDailyDays={setRefresherDailyDays}
           refresherWeeklyWeeks={refresherWeeklyWeeks}
           setRefresherWeeklyWeeks={setRefresherWeeklyWeeks}
-          onToast={triggerToast}
         />
-
       </ScrollView>
 
-      {/* Sticky footer -- the forecast summary and Save, pinned outside the
-          ScrollView. Two reasons: the primary action is always reachable
-          without scrolling to the bottom (which at 1.5x was a long way down),
-          and the scroll content sheds ~150pt of chrome, which is what kept the
-          collapsed plan from fitting a screen.
-
-          Condensed to a single wrapping summary line rather than the old
-          two label/value rows -- a footer has to stay small at every font
-          scale, or it eats the screen it's pinned to. */}
+      {/* Pinned footer: the one-line consequence and Save, outside the
+          ScrollView so the primary action is always in reach without
+          scrolling (a long way down at 1.5x). Kept to a caption and a button
+          so it stays small at every text size. A hairline, not a heavy rule:
+          it's a tray, not a warning. */}
       <View
-        className="border-t-2 border-ink bg-surface-2"
-        style={{
-          paddingHorizontal: space(20),
-          paddingTop: space(10),
-          paddingBottom: space(14),
-          gap: space(8),
-        }}
+        className="border-t border-line bg-surface"
+        style={{ paddingHorizontal: space(20), paddingTop: space(10), paddingBottom: space(14), gap: space(8) }}
       >
-        <View className="flex-row items-center" style={{ gap: space(6) }}>
-          <View className="shrink-0">
-            <TrendingUp size={iconSize} color={palette.ink} />
-          </View>
-          <AppText variant="micro" className="font-sans text-ink-2 flex-1">
-            Verses stop coming back after about {totalRigorLabel}
-          </AppText>
-        </View>
-
-        <Pressable
-          onPress={() => {
-            if (!canSave) {
-              triggerToast('Give these settings a new name first — Standard is the built-in one.');
-              return;
-            }
-            handleSavePlan();
-          }}
-          accessibilityState={{ disabled: !canSave }}
-          className={`w-full rounded-xl flex-row items-center justify-center shadow-sm ${
-            canSave ? 'bg-accent' : 'bg-fill'
-          }`}
-          style={{ minHeight: MIN_TOUCH, paddingVertical: space(10), gap: space(6) }}
-        >
-          <Check size={iconSize} color={palette.onAccent} />
-          <AppText variant="label" className="text-on-accent font-sans font-bold uppercase tracking-widest">
-            {isEditingBuiltInPlan ? 'Save as my own' : 'Save'}
-          </AppText>
-        </Pressable>
+        <AppText variant="caption" className="font-sans text-ink-2 text-center">
+          Verses stop coming back after about {totalRigorLabel}.
+        </AppText>
+        {/* Disabled until a built-in is renamed; the note under the name
+            field says why, in warning color while it's blocking. */}
+        <AppButton
+          size="lg"
+          variant="primary"
+          Icon={Check}
+          label={isEditingBuiltInPlan ? 'Save as my own' : 'Save'}
+          disabled={!canSave}
+          onPress={handleSavePlan}
+        />
       </View>
     </FadeInView>
   );
