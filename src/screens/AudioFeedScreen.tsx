@@ -1,40 +1,43 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, BookOpen, Check, Pause, Play, Plus, Search, Volume2, X } from 'lucide-react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { Check, Pause, Play, Plus, Search, Volume2, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { FadeInView, ProgressBar } from '../components/ui';
+import { Recording } from '../types';
+import { FadeInView } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
 import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
-import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
-
+import { formatDate, formatDuration } from '../lib/format';
+import { AppButton, AppIconButton, AppTextInput, AppText, useFontScale, useScaledSpace } from '../components/design';
+import { Avatar, Badge, EmptyState, ScreenHeader, SegmentedControl, type BadgeTone } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
-// Helper to assign background/text colors to known users (mirrors original web app).
-const getAvatarStyle = (user: string = '') => {
-  switch (user) {
-    case 'Sarah Miller':
-      return { bg: '#f0fdfa', text: '#0f766e', border: '#99f6e4' }; // teal
-    case 'Elizabeth K.':
-      return { bg: '#fdf4ff', text: '#a21caf', border: '#f5d0fe' }; // fuchsia
-    case 'Brother Thomas':
-      return { bg: '#fffbeb', text: '#b45309', border: '#fde68a' }; // amber
-    case 'Mark Davis':
-      return { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' }; // blue
-    case 'Pastor Robert':
-      return { bg: '#eef2ff', text: '#4338ca', border: '#c7d2fe' }; // indigo
-    case 'Grace Thompson':
-      return { bg: '#fff1f2', text: '#be123c', border: '#fecdd3' }; // rose
-    default:
-      return { bg: '#f5f5f5', text: '#1A1A1A', border: '#E5E5E5' };
-  }
+
+// Opens from Today and from a chapter's page; the back link names which.
+const BACK_LABELS: Partial<Record<string, string>> = {
+  home: 'Today',
+  chapterLanding: 'Chapter',
 };
+
+const FEED_FILTERS = [
+  { id: 'global' as const, label: 'Everyone' },
+  { id: 'group' as const, label: 'Circles' },
+  { id: 'friends' as const, label: 'Friends' },
+];
+
+// The guest-preview mock feed names its people rather than carrying real
+// uids, so these stand in for "is a friend" / "is in a circle" there.
+const MOCK_FRIENDS = new Set(['Sarah Miller', 'Elizabeth K.']);
+const MOCK_CIRCLE = new Set(['Brother Thomas', 'Mark Davis']);
 
 export default function AudioFeedScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
+  const scale = useFontScale();
+  const space = useScaledSpace();
   const {
     user,
     handleBack,
+    backHistory,
     audioSearchQuery,
     setAudioSearchQuery,
     feedBookFilter,
@@ -47,7 +50,6 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     setFeedTranslationFilter,
     setPlayingRecordingId,
     playingRecordingId,
-    playingRecProgress,
     setPlayingRecProgress,
     feedRecordings,
     loadingFeedRecordings,
@@ -55,9 +57,9 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     friends,
     circleFriends,
     saveSharedRecordingToLibrary,
-    formatTime,
     triggerToast,
   } = state;
+
 
   // Translation options are derived from what the feed ACTUALLY contains
   // rather than hardcoded from BIBLE_TRANSLATIONS: offering "KJV" when nobody
@@ -135,242 +137,204 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     );
   }
 
+  const prevScreen = backHistory[backHistory.length - 1]?.screen;
+  const iconSize = Math.round(16 * scale);
+
+  // Who a recording is from, relative to you. Public strangers get no badge:
+  // "Public" on most of the rows said nothing.
+  const relationFor = (rec: Recording): { label: string; tone: BadgeTone } | null => {
+    if (rec.userId && user?.uid && rec.userId === user.uid) return { label: 'You', tone: 'success' };
+    if ((rec.userId && friendUids.has(rec.userId)) || MOCK_FRIENDS.has(rec.user || '')) return { label: 'Friend', tone: 'accent' };
+    if ((rec.userId && circleUids.has(rec.userId)) || MOCK_CIRCLE.has(rec.user || '')) return { label: 'Circle', tone: 'neutral' };
+    return null;
+  };
+
+  const filterBasis = { flexGrow: 1, flexBasis: space(120), gap: space(4) };
+  const fieldLabel = (text: string) => (
+    <AppText variant="caption" className="font-sans font-medium text-ink-2">
+      {text}
+    </AppText>
+  );
+
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
-        {/* Header Row */}
-        <View className="flex-row items-center gap-3 border-b border-line pb-1">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={15} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface shadow-xs" />
-          <View className="flex-1">
-            <AppText variant="title" className="font-serif font-bold text-ink">Suggested Recordings</AppText>
-          </View>
-        </View>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        {/* Named like the Today row that opens it. It was "Suggested
+            Recordings" here and "Find Recordings" on the way in. */}
+        <ScreenHeader
+          title="Find recordings"
+          subtitle="Recitations other people have shared. Save one to play it from your own list."
+          onBack={handleBack}
+          backLabel={(prevScreen && BACK_LABELS[prevScreen]) || 'Back'}
+        />
 
-        {/* Search Bar */}
-        <View className="relative justify-center">
-          <View className="absolute left-3 z-10">
-            <Search size={16} color={palette.ink3} />
+        <View style={{ gap: space(12) }}>
+          <View className="flex-row items-center bg-surface border border-line rounded-btn" style={{ paddingHorizontal: space(12), gap: space(8) }}>
+            <Search size={iconSize} color={palette.ink3} />
+            <AppTextInput
+              value={audioSearchQuery}
+              onChangeText={setAudioSearchQuery}
+              placeholder="Search by passage or person"
+              accessibilityLabel="Search recordings"
+              variant="body"
+              className="flex-1 text-ink font-sans"
+              style={{ minWidth: 0, paddingVertical: space(10) }}
+            />
+            {!!audioSearchQuery && (
+              <Pressable onPress={() => setAudioSearchQuery('')} hitSlop={10} accessibilityRole="button" accessibilityLabel="Clear search">
+                <X size={iconSize} color={palette.ink3} />
+              </Pressable>
+            )}
           </View>
-          <AppTextInput value={audioSearchQuery} onChangeText={setAudioSearchQuery} placeholder="Search by book, verses, or reciter..." placeholderTextColor={palette.ink3} className="w-full bg-surface-2 border border-line rounded-xl py-2 pl-9 pr-8 text-ink" />
-          {!!audioSearchQuery && (
-            <Pressable onPress={() => setAudioSearchQuery('')} className="absolute right-3">
-              <X size={14} color={palette.ink3} />
-            </Pressable>
-          )}
-        </View>
 
-        {/* Book Filter under Search */}
-        <View className="gap-1">
-          <AppText variant="micro" className="font-bold uppercase text-ink-3 font-sans tracking-wider">Book</AppText>
-          <BookPicker
-            value={feedBookFilter}
-            allowAll
-            allLabel="All Books"
-            onChange={(name) => {
-              setFeedBookFilter(name);
-              setFeedChapterFilter(''); // Reset chapter when book changes
+          <SegmentedControl
+            value={activeFeedFilter}
+            onChange={(id) => {
+              setActiveFeedFilter(id);
               setPlayingRecordingId(null);
             }}
+            accessibilityLabel="Whose recordings"
+            options={FEED_FILTERS}
           />
-        </View>
 
-        {/* Chapter + Translation filters. Chapter is only meaningful once a
-            specific book is chosen; Translation only once the feed actually
-            holds more than one. */}
-        <View className="flex-row gap-3">
-          {selectedBookMeta && (
-            <View className="gap-1">
-              <AppText variant="micro" className="font-bold uppercase text-ink-3 font-sans tracking-wider">Chapter</AppText>
-              <View style={{ width: 140 }}>
+          {/* Book, then Chapter once a book is picked, then Translation once
+              the feed holds more than one. Each takes an equal share of the
+              row and wraps when the row runs out, so they're never three
+              unrelated widths. */}
+          <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+            <View style={{ ...filterBasis, flexBasis: space(160) }}>
+              {fieldLabel('Book')}
+              <BookPicker
+                value={feedBookFilter}
+                allowAll
+                onChange={(name) => {
+                  setFeedBookFilter(name);
+                  setFeedChapterFilter(''); // a chapter only means something within its book
+                  setPlayingRecordingId(null);
+                }}
+              />
+            </View>
+            {selectedBookMeta && (
+              <View style={filterBasis}>
+                {fieldLabel('Chapter')}
                 <Dropdown
                   options={chapterOptions}
                   value={feedChapterFilter}
-                  title="Select a Chapter"
+                  title="Chapter"
                   onChange={(id) => {
                     setFeedChapterFilter(id);
                     setPlayingRecordingId(null);
                   }}
                 />
               </View>
-            </View>
-          )}
-
-          {presentTranslations.length > 1 && (
-            <View className="gap-1">
-              <AppText variant="micro" className="font-bold uppercase text-ink-3 font-sans tracking-wider">
-                Translation
-              </AppText>
-              <View style={{ width: 140 }}>
+            )}
+            {presentTranslations.length > 1 && (
+              <View style={filterBasis}>
+                {fieldLabel('Translation')}
                 <Dropdown
                   options={translationOptions}
                   value={feedTranslationFilter}
-                  title="Select a Translation"
+                  title="Translation"
                   onChange={(id) => {
                     setFeedTranslationFilter(id);
                     setPlayingRecordingId(null);
                   }}
                 />
               </View>
-            </View>
-          )}
+            )}
+          </View>
         </View>
 
-        {/* Filter Tabs */}
-        <View className="flex-row gap-1 bg-surface-2 p-1 border border-line rounded-xl">
-          {(
-            [
-              { id: 'global', label: 'Global' },
-              { id: 'group', label: 'My Group' },
-              { id: 'friends', label: 'Friends' },
-            ] as const
-          ).map((opt) => {
-            const active = activeFeedFilter === opt.id;
-            return (
-              <AppButton size="md" key={opt.id} onPress={() => { setActiveFeedFilter(opt.id); setPlayingRecordingId(null); }} className={`flex-1 rounded-lg items-center ${active ? 'bg-accent' : ''}`}>
-                <AppText variant="section" className={`uppercase tracking-wider font-sans font-bold ${ active ? 'text-on-accent' : 'text-ink-3' }`} >
-                  {opt.label}
-                </AppText>
-              </AppButton>
-            );
-          })}
-        </View>
-
-        {/* List of recordings */}
-        <View className="gap-3">
-          {loadingFeedRecordings ? (
-            <View className="py-8 items-center">
-              <AppText variant="label" className="text-ink-3 font-sans">Loading recordings...</AppText>
-            </View>
-          ) : filtered.length === 0 ? (
-            <View className="items-center p-8 bg-surface-2 rounded-xl border border-dashed border-line gap-2">
-              <Volume2 size={32} color={palette.lineStrong} />
-              <AppText variant="label" className="font-sans font-bold text-ink-3">No recordings matched your criteria</AppText>
-              <AppText variant="caption" className="font-sans text-ink-3 text-center">
-                Be the first to share one. Record a recitation from the Record tab and set its visibility to Circle or Public.
-              </AppText>
-            </View>
-          ) : (
-            filtered.map((rec) => {
+        {loadingFeedRecordings ? (
+          <AppText variant="label" className="font-sans text-ink-3 text-center" style={{ paddingVertical: space(24) }}>
+            Loading recordings…
+          </AppText>
+        ) : filtered.length === 0 ? (
+          <View className="bg-surface border border-line rounded-card">
+            <EmptyState
+              Icon={Volume2}
+              title="No recordings match"
+              message="Try a wider search, or share your own: record on the Record tab and choose Circle or Public."
+            />
+          </View>
+        ) : (
+          // One card of rows, like every other list in the app. The reference
+          // leads each row -- it's what you came to find -- with the person,
+          // date, translation and length on the line under it.
+          <View className="bg-surface border border-line rounded-card overflow-hidden">
+            {filtered.map((rec, idx) => {
               const isPlaying = playingRecordingId === rec.id;
-              const avatarStyle = getAvatarStyle(rec.user);
-              const isOwnRecording = !!rec.userId && !!user?.uid && rec.userId === user.uid;
+              const relation = relationFor(rec);
+              const isOwn = relation?.label === 'You';
               const isSaved =
-                isOwnRecording ||
+                isOwn ||
                 userRecordings.some(
                   (ur) =>
                     ur.savedFromRecordingId === rec.id ||
                     ur.id === rec.id ||
                     (ur.book === rec.book && ur.chapter === rec.chapter && ur.user === rec.user && ur.translation === rec.translation)
                 );
+              const meta = [rec.user || 'Someone', formatDate(rec.date), rec.translation, formatDuration(rec.duration)]
+                .filter(Boolean)
+                .join(' · ');
 
               return (
-                <View key={rec.id} className="border border-line rounded-xl p-3.5 bg-surface gap-3 shadow-xs">
-                  {/* Card Top: Reciter Info */}
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-row items-center gap-2.5 flex-1">
-                      <View
-                        style={{ backgroundColor: avatarStyle.bg, borderColor: avatarStyle.border }}
-                        className="w-8 h-8 rounded-full items-center justify-center border"
-                      >
-                        <AppText variant="label" style={{ color: avatarStyle.text }} className="font-sans font-bold ">
-                          {rec.avatar || 'U'}
-                        </AppText>
-                      </View>
-                      <View className="flex-1">
-                        <View className="flex-row flex-wrap items-center gap-1.5">
-                          <AppText variant="label" className="font-bold text-ink">{rec.user || 'Anonymous'}</AppText>
-                          {isOwnRecording ? (
-                            <View className="bg-success-soft px-1.5 py-0.5 rounded">
-                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-success">Me</AppText>
-                            </View>
-                          ) : rec.user === 'Sarah Miller' || rec.user === 'Elizabeth K.' ? (
-                            <View className="bg-accent-soft px-1.5 py-0.5 rounded">
-                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-accent">Friend</AppText>
-                            </View>
-                          ) : rec.user === 'Brother Thomas' || rec.user === 'Mark Davis' ? (
-                            <View className="bg-warning-soft px-1.5 py-0.5 rounded">
-                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-warning">Group</AppText>
-                            </View>
-                          ) : (
-                            <View className="bg-surface-2 px-1.5 py-0.5 rounded">
-                              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wide text-ink-3">Public</AppText>
-                            </View>
-                          )}
-                        </View>
-                        <AppText variant="micro" className="font-sans text-ink-3">
-                          {rec.date} • {rec.translation}
-                        </AppText>
-                      </View>
-                    </View>
-                    <AppText variant="caption" className="font-mono font-bold text-ink-3 bg-surface-2 px-2 py-0.5 rounded-md shrink-0">
-                      {formatTime(rec.duration)}
-                    </AppText>
-                  </View>
-
-                  {/* Card Middle: Title & Scripture Info */}
-                  <View className="bg-surface-2 p-2.5 border border-line rounded-lg">
-                    <View className="flex-row items-center gap-1.5">
-                      <BookOpen size={11} color={palette.ink3} />
-                      <AppText variant="section" className="font-sans font-bold uppercase tracking-wide text-ink-2">
+                <View
+                  key={rec.id}
+                  className={`flex-row items-start ${idx > 0 ? 'border-t border-hairline' : ''}`}
+                  style={{ padding: space(14), gap: space(12) }}
+                >
+                  <Avatar name={rec.user} size={Math.round(36 * scale)} />
+                  <View className="flex-1" style={{ gap: space(6), minWidth: 0 }}>
+                    <View style={{ gap: space(1) }}>
+                      <AppText variant="body" className="font-sans font-semibold text-ink">
                         {recordingLabel(rec)}
                       </AppText>
-                    </View>
-                  </View>
-
-                  {/* Card Bottom: Play / Pause & Save to Library */}
-                  <View className="flex-row items-center justify-between pt-1 border-t border-hairline">
-                    <View className="flex-row items-center gap-2">
-                      <Pressable
-                        onPress={() => {
-                          if (isPlaying) {
-                            setPlayingRecordingId(null);
-                          } else {
-                            setPlayingRecordingId(rec.id);
-                            setPlayingRecProgress(0);
-                          }
-                        }}
-                        className={`w-7 h-7 rounded-full items-center justify-center ${
-                          isPlaying ? 'bg-accent' : 'border border-ink'
-                        }`}
-                      >
-                        {isPlaying ? (
-                          <Pause size={11} color={palette.onAccent} />
-                        ) : (
-                          <Play size={11} color={palette.ink} style={{ marginLeft: 2 }} />
-                        )}
-                      </Pressable>
-                      <AppText variant="caption" className="font-sans font-bold text-ink">
-                        {isPlaying ? 'Playing Narration' : 'Tap to Listen'}
+                      <AppText variant="caption" className="font-sans text-ink-3">
+                        {meta}
                       </AppText>
                     </View>
-
-                    <AppButton size="sm" onPress={() => { if (isSaved) { triggerToast(`"${rec.title}" is already in your library!`); return; } saveSharedRecordingToLibrary(rec); }} className={`flex-row items-center gap-1 rounded-lg ${ isSaved ? 'bg-success-soft border border-success/30' : 'bg-surface-2 border border-line' }`}>
-                      {isSaved ? <Check size={11} color={palette.success} /> : <Plus size={11} color={palette.ink3} />}
-                      <AppText variant="caption" className={`font-sans font-bold ${isSaved ? 'text-success' : 'text-ink'}`} >
-                        {isSaved ? 'Saved to Library' : 'Save to Library'}
-                      </AppText>
-                    </AppButton>
-                  </View>
-
-                  {/* Custom Playback Progress indicator inside the active card */}
-                  {isPlaying && (
-                    <View className="gap-1 pt-1">
-                      <ProgressBar percent={playingRecProgress} className="h-1" />
-                      <View className="flex-row justify-between">
-                        <AppText variant="micro" className="font-mono font-semibold text-ink-3">
-                          {formatTime(Math.round((playingRecProgress / 100) * rec.duration))}
-                        </AppText>
-                        <AppText variant="micro" className="font-mono font-semibold text-ink-3">
-                          {formatTime(rec.duration)}
-                        </AppText>
-                      </View>
+                    <View className="flex-row flex-wrap items-center" style={{ gap: space(8) }}>
+                      {relation && <Badge label={relation.label} tone={relation.tone} />}
+                      {!isOwn && (
+                        <AppButton
+                          size="sm"
+                          variant={isSaved ? 'quiet' : 'secondary'}
+                          Icon={isSaved ? Check : Plus}
+                          label={isSaved ? 'Saved' : 'Save'}
+                          accessibilityLabel={isSaved ? `${recordingLabel(rec)} is saved` : `Save ${recordingLabel(rec)}`}
+                          onPress={() => {
+                            if (isSaved) {
+                              triggerToast(`${recordingLabel(rec)} is already in your recordings.`);
+                              return;
+                            }
+                            saveSharedRecordingToLibrary(rec);
+                          }}
+                        />
+                      )}
                     </View>
-                  )}
+                  </View>
+                  {/* Plays in place; the now-playing bar above the tabs shows
+                      progress and keeps going if you leave. */}
+                  <AppIconButton
+                    Icon={isPlaying ? Pause : Play}
+                    variant={isPlaying ? 'filled' : 'outline'}
+                    diameter={38}
+                    accessibilityLabel={`${isPlaying ? 'Pause' : 'Play'} ${recordingLabel(rec)}`}
+                    onPress={() => {
+                      if (isPlaying) {
+                        setPlayingRecordingId(null);
+                      } else {
+                        setPlayingRecordingId(rec.id);
+                        setPlayingRecProgress(0);
+                      }
+                    }}
+                  />
                 </View>
               );
-            })
-          )}
-        </View>
+            })}
+          </View>
+        )}
       </ScrollView>
     </FadeInView>
   );

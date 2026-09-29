@@ -10,7 +10,15 @@
 const DAY_MS = 86400000;
 
 function toDate(value: Date | string | number): Date {
-  return value instanceof Date ? value : new Date(value);
+  if (value instanceof Date) return value;
+  // A bare "2026-09-23" (how recordings store their date) is a calendar day,
+  // not an instant. new Date() reads it as UTC midnight, which is the evening
+  // before anywhere west of Greenwich, so it's built as local midnight here.
+  if (typeof value === 'string') {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+  return new Date(value);
 }
 
 function startOfDay(d: Date): number {

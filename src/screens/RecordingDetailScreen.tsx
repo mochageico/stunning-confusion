@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { PanResponder, Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, Check, Download, Pause, Pencil, Play, Trash2, X } from 'lucide-react-native';
+import { PanResponder, Pressable, ScrollView, View } from 'react-native';
+import { Check, Download, Pause, Play, Trash2 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { VerseTimestamp } from '../types';
-import { FadeInView, HelpTooltip, PulseView } from '../components/ui';
+import { FadeInView } from '../components/ui';
 import { BIBLE_TRANSLATIONS } from '../data';
-import { recordingLabel } from '../lib/recordingLabel';
+import { recordingLabel, recordingMeta } from '../lib/recordingLabel';
 import { cacheableTarget } from '../lib/audioCache';
 import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/studioAudio';
-import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
+import { AppButton, AppIconButton, AppTextInput, AppText, MIN_TOUCH, useScaledSpace } from '../components/design';
+import { Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
+import { formatDate, formatDuration } from '../lib/format';
 
-import { useThemeColors } from '../components/theme';
-import { formatDuration } from '../lib/format';
 // Derived from the single source of truth (data.ts) instead of its own
 // separately-hardcoded lookup -- previously listed NIV/NKJV/NLT despite zero
 // real text ever being imported for them, and had already drifted from
@@ -21,12 +21,14 @@ const TRANSLATION_FULL_NAMES: Record<string, string> = Object.fromEntries(
   BIBLE_TRANSLATIONS.map((t) => [t.id, t.name])
 );
 
-// A/B switch for comparing the processed render against the raw take. Both
-// files are kept permanently, so this is a pure playback-source swap.
-const STUDIO_AB_CHOICES: Array<{ studio: boolean; label: string }> = [
-  { studio: true, label: 'Studio' },
-  { studio: false, label: 'Original' },
-];
+// This page opens from more than one place, so the back link names whichever
+// one you came from.
+const BACK_LABELS: Partial<Record<string, string>> = {
+  record: 'Record',
+  profile: 'Profile',
+  chapterLanding: 'Chapter',
+  audioFeed: 'Recordings',
+};
 
 const WAVEFORM_HEIGHTS = [
   8, 16, 24, 12, 20, 28, 32, 16, 24, 20, 12, 24, 32, 28, 20, 16, 12, 20, 28, 24, 32, 20, 16, 24, 28,
@@ -87,7 +89,7 @@ function DraggableMarker({
       className="items-center"
     >
       <View className="bg-accent px-1 rounded" style={{ minWidth: 16 }}>
-        <AppText variant="micro" className="text-on-accent font-bold text-center">{verse}</AppText>
+        <AppText variant="micro" className="text-on-accent font-sans font-semibold text-center">{verse}</AppText>
       </View>
       <View className="w-0.5 h-3 bg-accent" />
     </View>
@@ -95,9 +97,10 @@ function DraggableMarker({
 }
 
 export default function RecordingDetailScreen({ state }: { state: AppState }) {
-  const palette = useThemeColors();
+  const space = useScaledSpace();
   const {
     selectedRecording,
+    backHistory,
     handleBack,
     deleteRecording,
     triggerToast,
@@ -292,270 +295,137 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
     await saveVerseSyncOffsets(verseTimestamps);
   };
 
+  const recLabel = recordingLabel(selectedRecording);
+  const prevScreen = backHistory[backHistory.length - 1]?.screen;
+  const tabular = { fontVariant: ['tabular-nums' as const] };
+
+  const seekBy = (delta: number) => {
+    if (!isPlayingThis) return;
+    if (hasRealAudio) seekRecordingBy(delta);
+    else setPlayingRecProgress((prev) => Math.max(0, Math.min(100, prev + (delta > 0 ? 10 : -10))));
+  };
+
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
-        {/* Header / Back Button */}
-        <View className="flex-row items-center justify-between border-b border-hairline pb-3">
-          <View className="flex-row items-center gap-3">
-            <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
-            <View className="flex-1">
-              <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-accent bg-accent-soft px-1.5 py-0.5 rounded font-sans self-start">
-                {selectedRecording.sourceType === 'imported' ? 'IMPORTED AUDIO' : 'CHAPTER RECITATION'}
-              </AppText>
-              <AppText variant="title" className="font-serif font-black text-ink leading-none mt-1">
-                {recordingLabel(selectedRecording)}
-              </AppText>
-            </View>
-          </View>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        <ScreenHeader
+          title={recLabel}
+          eyebrow={selectedRecording.sourceType === 'imported' ? 'Imported audio' : undefined}
+          subtitle={recordingMeta({ ...selectedRecording, sourceType: undefined })}
+          onBack={handleBack}
+          backLabel={(prevScreen && BACK_LABELS[prevScreen]) || 'Back'}
+        />
 
-          <Pressable
-            onPress={() => setShowDeleteConfirm(true)}
-            className="px-2 py-1 bg-danger-soft border border-danger/30 rounded-lg"
-          >
-            <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-danger">Delete Rec</AppText>
-          </Pressable>
-        </View>
-
-        {showDeleteConfirm && (
-          <View className="bg-danger-soft border border-danger/30 rounded-xl p-3" style={{ gap: 8 }}>
-            <AppText variant="caption" className="font-sans font-bold text-danger">Delete this recording?</AppText>
-            <AppText variant="micro" className="font-sans text-danger leading-relaxed">
-              The recitation for {selectedRecording.book} {selectedRecording.chapter} will be permanently removed.
-              This can't be undone.
-            </AppText>
-            <View className="flex-row gap-2 justify-end pt-1">
-              <Pressable
-                onPress={() => setShowDeleteConfirm(false)}
-                className="px-3 py-1.5 border border-line-strong rounded-lg bg-surface"
-              >
-                <AppText variant="caption" className="text-ink-2 font-sans font-bold ">Cancel</AppText>
-              </Pressable>
-              <Pressable
-                onPress={async () => {
-                  setShowDeleteConfirm(false);
-                  await deleteRecording(selectedRecording);
-                  triggerToast(`Recitation for ${selectedRecording.book} ${selectedRecording.chapter} deleted. 🗑️`);
-                  handleBack();
-                }}
-                className="px-3 py-1.5 bg-danger rounded-lg"
-              >
-                <AppText variant="caption" className="text-on-accent font-sans font-bold ">Yes, Delete</AppText>
-              </Pressable>
-            </View>
-          </View>
-        )}
-
-        {/* Recording Metadata Card */}
-        <View className="border border-line rounded-2xl p-4 bg-surface-2" style={{ gap: 12 }}>
-          <View className="flex-row flex-wrap" style={{ gap: 12 }}>
-            <View style={{ width: '45%' }}>
-              <AppText variant="micro" className="uppercase tracking-wider text-ink-3 font-bold font-sans">Translation</AppText>
-              <AppText variant="label" className="font-extrabold text-ink font-sans">
-                {selectedRecording.translation}
-                {TRANSLATION_FULL_NAMES[selectedRecording.translation] ? ` (${TRANSLATION_FULL_NAMES[selectedRecording.translation]})` : ''}
-              </AppText>
-            </View>
-            <View style={{ width: '45%' }}>
-              <AppText variant="micro" className="uppercase tracking-wider text-ink-3 font-bold font-sans">Duration</AppText>
-              <AppText variant="label" className="font-extrabold text-ink font-sans">{selectedRecording.duration} seconds</AppText>
-            </View>
-            <View style={{ width: '45%' }}>
-              <AppText variant="micro" className="uppercase tracking-wider text-ink-3 font-bold font-sans">Recitation Date</AppText>
-              <AppText variant="label" className="font-extrabold text-ink font-sans">{selectedRecording.date}</AppText>
-            </View>
-            <View style={{ width: '45%' }}>
-              <AppText variant="micro" className="uppercase tracking-wider text-ink-3 font-bold font-sans">Speaker</AppText>
-              {isEditingSpeaker ? (
-                <View className="flex-row items-center gap-1.5 mt-0.5">
-                  <AppTextInput value={speakerDraft} onChangeText={setSpeakerDraft} autoFocus className="flex-1 font-extrabold text-ink font-sans border-b border-line-strong py-0.5" />
-                  <AppIconButton Icon={Check} diameter={20} iconSize={10} iconColor={palette.onAccent} onPress={() => { setIsEditingSpeaker(false); updateRecordingSpeaker(selectedRecording, speakerDraft); }} className="rounded-full bg-success" />
-                  <AppIconButton Icon={X} diameter={20} iconSize={10} iconColor={palette.ink3} onPress={() => setIsEditingSpeaker(false)} className="rounded-full border border-line-strong" />
-                </View>
-              ) : (
-                <Pressable
-                  onPress={() => {
-                    setSpeakerDraft(selectedRecording.user || 'Me');
-                    setIsEditingSpeaker(true);
-                  }}
-                  className="flex-row items-center gap-1"
-                >
-                  <AppText variant="label" className="font-extrabold text-ink font-sans">{selectedRecording.user || 'Me'}</AppText>
-                  <Pencil size={9} color={palette.ink3} />
-                </Pressable>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Playback Simulation */}
-        <View className="border border-line rounded-2xl p-4 bg-surface" style={{ gap: 12 }}>
-          <View className="flex-row justify-between items-center">
-            <AppText variant="micro" className="font-bold text-ink-3 tracking-wider font-sans uppercase">Audio Player</AppText>
-            <AppText variant="caption" className="font-mono font-bold text-ink-2">
-              {isPlayingThis ? `${Math.floor((playingRecProgress / 100) * selectedRecording.duration)}s` : '0s'} /{' '}
-              {selectedRecording.duration}s
-            </AppText>
-          </View>
-
-          {/* Animated Waveform Visualizer */}
-          <View className="h-10 flex-row items-end justify-center px-1 py-2 bg-surface-2 rounded-xl border border-hairline overflow-hidden" style={{ gap: 3 }}>
+        {/* PLAYER. One filled button -- play -- and quiet skips either side. */}
+        <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+          <View className="flex-row items-end justify-center overflow-hidden" style={{ height: space(40), gap: 3 }}>
             {WAVEFORM_HEIGHTS.map((h, i) => {
               const isActive = isPlayingThis && (i / 32) * 100 <= playingRecProgress;
-              const bar = (
-                <View
-                  key={i}
-                  style={{ width: 4, height: h }}
-                  className={`rounded-full ${isActive ? 'bg-accent border border-accent' : 'bg-fill'}`}
-                />
-              );
-              return isActive ? (
-                <PulseView key={i} style={{ width: 4, height: h }}>
-                  {bar}
-                </PulseView>
-              ) : (
-                bar
-              );
+              // layout-ok: waveform bars hold no text.
+              return <View key={i} style={{ width: 4, height: h }} className={`rounded-full ${isActive ? 'bg-accent' : 'bg-fill'}`} />;
             })}
           </View>
-
-          {/* Controls Bar */}
-          <View className="flex-row justify-center items-center gap-4">
-            <Pressable
-              onPress={() => {
-                if (!isPlayingThis) return;
-                if (hasRealAudio) {
-                  seekRecordingBy(-5);
-                } else {
-                  setPlayingRecProgress((prev) => Math.max(0, prev - 10));
-                }
-                triggerToast('Rewind 5s');
-              }}
-              className="w-8 h-8 rounded-full border border-line items-center justify-center bg-surface"
-            >
-              <AppText variant="caption" className="font-black font-sans text-ink-2">-5s</AppText>
-            </Pressable>
-
-            <Pressable
+          <View className="flex-row justify-between">
+            <AppText variant="caption" className="font-sans text-ink-3" style={tabular}>
+              {formatSec(currentPlaybackSec)}
+            </AppText>
+            <AppText variant="caption" className="font-sans text-ink-3" style={tabular}>
+              {formatSec(durationSec)}
+            </AppText>
+          </View>
+          <View className="flex-row items-center justify-center" style={{ gap: space(16) }}>
+            <AppButton size="sm" variant="quiet" label="−5s" accessibilityLabel="Back 5 seconds" disabled={!isPlayingThis} onPress={() => seekBy(-5)} />
+            <AppIconButton
+              Icon={isPlayingThis ? Pause : Play}
+              variant="filled"
+              diameter={52}
+              accessibilityLabel={isPlayingThis ? 'Pause' : 'Play'}
               onPress={() => {
                 if (isPlayingThis) {
                   setPlayingRecordingId(null);
                 } else {
                   setPlayingRecordingId(selectedRecording.id);
                   setPlayingRecProgress(0);
-                  triggerToast('Playing chapter recitation...');
                 }
               }}
-              className="w-11 h-11 rounded-full bg-accent items-center justify-center"
-            >
-              {isPlayingThis ? (
-                <Pause size={18} color={palette.onAccent} />
-              ) : (
-                <Play size={18} color={palette.onAccent} style={{ marginLeft: 2 }} />
-              )}
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                if (!isPlayingThis) return;
-                if (hasRealAudio) {
-                  seekRecordingBy(5);
-                } else {
-                  setPlayingRecProgress((prev) => Math.min(100, prev + 10));
-                }
-                triggerToast('Fast Forward 5s');
-              }}
-              className="w-8 h-8 rounded-full border border-line items-center justify-center bg-surface"
-            >
-              <AppText variant="caption" className="font-black font-sans text-ink-2">+5s</AppText>
-            </Pressable>
+            />
+            <AppButton size="sm" variant="quiet" label="+5s" accessibilityLabel="Forward 5 seconds" disabled={!isPlayingThis} onPress={() => seekBy(5)} />
           </View>
 
-          {/* Studio A/B — only meaningful once a processed render exists.
-              While it's still being made, show the status instead so the
-              absence of the switch doesn't read as a missing feature. */}
-          {studioLabel && (
-            <View className="items-center" style={{ gap: 6 }}>
-              {hasStudioAudio(selectedRecording) ? (
-                <View className="flex-row bg-surface-2 rounded-lg p-0.5">
-                  {STUDIO_AB_CHOICES.map((choice) => {
-                    const isSelected = studioAbActive === choice.studio;
-                    return (
-                      <Pressable
-                        key={choice.label}
-                        onPress={() => setStudioAbOverride(choice.studio)}
-                        className={`px-3 py-1 rounded-md ${isSelected ? 'bg-surface border border-line' : ''}`}
-                      >
-                        <AppText variant="micro" className={`font-sans font-bold uppercase tracking-wider ${ isSelected ? 'text-ink' : 'text-ink-3' }`} >
-                          {choice.label}
-                        </AppText>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : (
-                <AppText variant="micro" className="font-sans text-ink-3 uppercase tracking-wider">{studioLabel}</AppText>
-              )}
-            </View>
-          )}
-
-          {/* Offline download. Only offered once there is a settled version to
-              download — while a studio render is still processing, whichever
-              file we saved would be superseded minutes later. */}
-          {offlineTarget && (
-            <AppButton size="sm" onPress={() => isDownloaded ? removeRecordingDownload(selectedRecording) : saveRecordingOffline(selectedRecording) } disabled={isDownloading} className={`flex-row items-center rounded-full border ${ isDownloaded ? 'bg-surface-2 border-line' : 'bg-surface border-line' } ${isDownloading ? 'opacity-50' : ''}`} style={{ gap: 6 }}>
-              {isDownloaded ? (
-                <Trash2 size={11} color={palette.ink3} strokeWidth={2.5} />
-              ) : (
-                <Download size={11} color={palette.ink} strokeWidth={2.5} />
-              )}
-              <AppText variant="micro" className={`font-sans font-bold uppercase tracking-wider ${ isDownloaded ? 'text-ink-3' : 'text-ink' }`} >
-                {isDownloading ? 'Downloading…' : isDownloaded ? 'Remove Download' : 'Save Offline'}
+          {/* Studio A/B -- only once a processed render exists. While it's
+              still being made, the status shows instead, so the missing
+              switch doesn't read as a missing feature. */}
+          {studioLabel &&
+            (hasStudioAudio(selectedRecording) ? (
+              <SegmentedControl
+                value={studioAbActive ? 'studio' : 'original'}
+                onChange={(id) => setStudioAbOverride(id === 'studio')}
+                accessibilityLabel="Which version plays"
+                options={[
+                  { id: 'studio', label: 'Studio' },
+                  { id: 'original', label: 'Original' },
+                ]}
+              />
+            ) : (
+              <AppText variant="caption" className="font-sans text-ink-3 text-center">
+                {studioLabel}
               </AppText>
-            </AppButton>
+            ))}
+
+          {/* Offline download. Only once there's a settled version: while a
+              studio render is processing, whichever file we saved would be
+              superseded minutes later. */}
+          {offlineTarget && (
+            <View className="items-center">
+              <AppButton
+                size="sm"
+                variant="quiet"
+                Icon={isDownloaded ? Trash2 : Download}
+                label={isDownloading ? 'Downloading…' : isDownloaded ? 'Remove download' : 'Save offline'}
+                disabled={isDownloading}
+                onPress={() => (isDownloaded ? removeRecordingDownload(selectedRecording) : saveRecordingOffline(selectedRecording))}
+              />
+            </View>
           )}
         </View>
 
-        {/* Verse Sync Timeline — scrub the real playback position and drop/
-            drag a marker per verse, instead of typing raw MM:SS offsets. */}
-        <View style={{ gap: 10 }}>
-          <View className="flex-row justify-between items-center px-1">
-            <View className="flex-row items-center">
-              <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">
-                VERSE SYNC TIMELINE
-              </AppText>
-              <HelpTooltip text="Tap the timeline (or use the player above) to scrub, then tap a verse chip to drop its marker at the current position. Drag an existing marker to fine-tune it." />
-            </View>
+        {/* DETAILS */}
+        <GroupedList header="Details">
+          <ListRow
+            title="Translation"
+            value={TRANSLATION_FULL_NAMES[selectedRecording.translation] || selectedRecording.translation}
+          />
+          <ListRow title="Length" value={formatDuration(durationSec, 'words')} />
+          <ListRow title="Recorded" value={formatDate(selectedRecording.date, 'long')} />
+          <ListRow
+            title="Speaker"
+            value={selectedRecording.user || 'Me'}
+            onPress={() => {
+              setSpeakerDraft(selectedRecording.user || 'Me');
+              setIsEditingSpeaker(true);
+            }}
+          />
+        </GroupedList>
 
-            {!isEditingSync ? (
-              <Pressable onPress={() => setIsEditingSync(true)} className="bg-accent px-2 py-1 rounded">
-                <AppText variant="micro" className="text-on-accent font-sans font-bold uppercase tracking-wider">Edit Sync ✎</AppText>
-              </Pressable>
-            ) : (
-              <View className="flex-row gap-1.5">
-                <Pressable onPress={handleSaveSync} className="bg-success px-2 py-1 rounded">
-                  <AppText variant="micro" className="text-on-accent font-sans font-bold uppercase tracking-wider">Save ✓</AppText>
-                </Pressable>
-                <Pressable onPress={() => setIsEditingSync(false)} className="bg-fill px-2 py-1 rounded">
-                  <AppText variant="micro" className="text-ink-2 font-sans font-bold uppercase tracking-wider">Cancel</AppText>
-                </Pressable>
-              </View>
-            )}
-          </View>
+        {/* VERSE TIMING -- scrub the real playback position and drop or drag
+            a marker per verse, instead of typing raw offsets. */}
+        <View style={{ gap: space(6) }}>
+          <SectionHeader
+            title="Verse timing"
+            actionLabel={isEditingSync ? undefined : 'Edit'}
+            onAction={isEditingSync ? undefined : () => setIsEditingSync(true)}
+          />
 
-          {/* Timeline strip */}
-          <View className="bg-surface border border-line rounded-2xl p-3" style={{ gap: 8 }}>
-            <Pressable
-              onPress={(e) => handleTapSeek(e.nativeEvent.locationX)}
-              disabled={!isEditingSync && !hasRealAudio}
-            >
+          <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(10) }}>
+            <Pressable onPress={(e) => handleTapSeek(e.nativeEvent.locationX)} disabled={!isEditingSync && !hasRealAudio}>
               <View
                 ref={timelineRef}
                 onLayout={handleTimelineLayout}
-                className="w-full bg-surface-2 rounded-full overflow-visible"
-                style={{ height: 10, marginTop: isEditingSync ? 16 : 0 }}
+                className="w-full bg-fill rounded-full overflow-visible"
+                // layout-ok: the track holds no text; markers sit above it.
+                style={{ height: 8, marginTop: isEditingSync ? 18 : 0 }}
               >
-                <View className="bg-surface-2 h-full rounded-full overflow-hidden">
+                <View className="h-full rounded-full overflow-hidden">
                   <View
                     className="bg-accent h-full"
                     style={{ width: `${durationSec > 0 ? Math.min(100, (currentPlaybackSec / durationSec) * 100) : 0}%` }}
@@ -588,97 +458,167 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
                           height: '100%',
                           width: 2,
                         }}
-                        className="bg-accent"
+                        className="bg-ink-3"
                       />
                     ))}
               </View>
             </Pressable>
             <View className="flex-row justify-between">
-              <AppText variant="micro" className="font-mono font-semibold text-ink-3">00:00</AppText>
-              <AppText variant="micro" className="font-mono font-semibold text-ink-3">{formatSec(durationSec)}</AppText>
+              <AppText variant="caption" className="font-sans text-ink-3" style={tabular}>
+                {formatSec(0)}
+              </AppText>
+              <AppText variant="caption" className="font-sans text-ink-3" style={tabular}>
+                {formatSec(durationSec)}
+              </AppText>
             </View>
 
             {isEditingSync && (
               <>
-                <AppText variant="micro" className="text-ink-3 font-sans leading-relaxed">
-                  Play the audio above, then tap each verse below the instant it starts. Drag a marker on the timeline
-                  to fine-tune it afterward.
+                <AppText variant="caption" className="font-sans text-ink-2">
+                  Play the recording above and tap each verse the moment it starts. Drag a marker on the line to
+                  fine-tune it.
                 </AppText>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                {chapterVerseNumbers.length === 0 && (
+                  <AppText variant="caption" className="font-sans text-warning">
+                    This chapter's text isn't available in {selectedRecording.translation} yet, so there are no verses
+                    to mark.
+                  </AppText>
+                )}
+                <View className="flex-row flex-wrap" style={{ gap: space(6) }}>
                   {chapterVerseNumbers.map((verse) => {
                     const isTagged = draftTaps[verse] !== undefined;
                     return (
                       <Pressable
                         key={verse}
                         onPress={() => handleTagVerse(verse)}
-                        className={`px-2.5 py-1.5 rounded-lg border ${
-                          isTagged ? 'bg-accent border-accent' : 'bg-surface border-line-strong'
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mark verse ${verse} here`}
+                        className={`items-center justify-center rounded-btn border ${
+                          isTagged ? 'bg-accent border-accent' : 'bg-surface border-line-strong active:bg-surface-2'
                         }`}
+                        style={{ minWidth: space(40), minHeight: space(36), paddingHorizontal: space(8) }}
                       >
-                        <AppText variant="caption" className={`font-bold font-mono ${isTagged ? 'text-on-accent' : 'text-ink-3'}`}>
-                          v{verse}
+                        <AppText
+                          variant="label"
+                          className={`font-sans font-semibold ${isTagged ? 'text-on-accent' : 'text-ink-2'}`}
+                          style={tabular}
+                        >
+                          {verse}
                         </AppText>
                       </Pressable>
                     );
                   })}
-                </ScrollView>
+                </View>
+                <View className="flex-row justify-end" style={{ gap: space(8) }}>
+                  <AppButton size="sm" variant="quiet" label="Cancel" onPress={() => setIsEditingSync(false)} />
+                  <AppButton size="sm" variant="primary" Icon={Check} label="Save timing" onPress={handleSaveSync} />
+                </View>
               </>
             )}
           </View>
 
-          {/* Read-only verse reference list — unchanged from before, minus
-              the old text-input editing (now done via the timeline above). */}
+          {/* Each verse's slot, tappable to jump there. */}
           {!isEditingSync &&
             (!selectedRecording.verseTimestamps || selectedRecording.verseTimestamps.length === 0 ? (
-              <View className="items-center p-4 bg-surface-2 rounded-xl border border-dashed border-line">
-                <AppText variant="label" className="text-ink-3 text-center">
-                  No verse timestamps for this recording — tap "Edit Sync" above and tag verses while listening back.
-                </AppText>
+              <View className="bg-surface border border-line rounded-card">
+                <EmptyState
+                  title="No verse timing yet"
+                  message="Tap Edit, play the recording, and tap each verse as it starts. Then any verse can be played on its own."
+                />
               </View>
             ) : (
-              <View className="border border-line rounded-2xl bg-surface overflow-hidden">
-                <View className="bg-surface-2 px-3.5 py-2.5 border-b border-line flex-row justify-between">
-                  <AppText variant="section" className="uppercase font-bold text-ink-3 tracking-wider font-sans">Verse Reference</AppText>
-                  <AppText variant="section" className="uppercase font-bold text-ink-3 tracking-wider font-sans">Timeline Offset Segment</AppText>
-                </View>
-
-                <View>
-                  {selectedRecording.verseTimestamps.map((vt, idx) => (
-                    <View
-                      key={vt.verse}
-                      className={`p-3 flex-row justify-between items-center bg-surface ${
-                        idx < selectedRecording.verseTimestamps!.length - 1 ? 'border-b border-hairline' : ''
-                      }`}
-                    >
-                      <View style={{ maxWidth: 140 }}>
-                        <AppText variant="label" className="font-extrabold text-ink font-sans">Verse {vt.verse}</AppText>
-                        <AppText variant="micro" className="text-ink-3 mt-0.5" numberOfLines={1} ellipsizeMode="tail">
-                          {selectedRecordingChapterTextData?.verses[String(vt.verse)] ?? ''}
-                        </AppText>
-                      </View>
-
-                      <Pressable
-                        onPress={() => {
-                          if (hasRealAudio) {
-                            seekRecordingToTime(selectedRecording, vt.startSec);
-                            triggerToast(`Jumping to Verse ${vt.verse}...`);
-                          } else {
-                            triggerToast(`Playing segment for Verse ${vt.verse} (${formatSec(vt.startSec)} - ${formatSec(vt.endSec)})`);
-                          }
-                        }}
-                        className="bg-surface-2 px-2.5 py-1 rounded border border-line"
-                      >
-                        <AppText variant="label" className="font-mono font-bold text-ink ">
-                          {formatSec(vt.startSec)} - {formatSec(vt.endSec)} 🔊
-                        </AppText>
-                      </Pressable>
+              <View className="bg-surface border border-line rounded-card overflow-hidden">
+                {selectedRecording.verseTimestamps.map((vt, idx) => (
+                  <View
+                    key={vt.verse}
+                    className={`flex-row items-center ${idx > 0 ? 'border-t border-hairline' : ''}`}
+                    style={{ paddingLeft: space(14), paddingRight: space(8), paddingVertical: space(10), gap: space(10) }}
+                  >
+                    <View className="flex-1" style={{ gap: space(1), minWidth: 0 }}>
+                      <AppText variant="label" className="font-sans font-semibold text-ink">
+                        Verse {vt.verse}
+                      </AppText>
+                      <AppText variant="caption" className="font-serif text-ink-3" numberOfLines={1}>
+                        {selectedRecordingChapterTextData?.verses[String(vt.verse)] ?? ''}
+                      </AppText>
                     </View>
-                  ))}
-                </View>
+                    <AppButton
+                      size="sm"
+                      variant="quiet"
+                      Icon={Play}
+                      label={formatSec(vt.startSec)}
+                      accessibilityLabel={`Play from verse ${vt.verse}`}
+                      onPress={() => {
+                        if (hasRealAudio) seekRecordingToTime(selectedRecording, vt.startSec);
+                        else triggerToast(`Verse ${vt.verse} runs ${formatSec(vt.startSec)} to ${formatSec(vt.endSec)}.`);
+                      }}
+                    />
+                  </View>
+                ))}
               </View>
             ))}
         </View>
+
+        {/* Delete at the foot, as a destructive row, rather than a red caps
+            button beside the title that ran off the screen at 1.5x. */}
+        <GroupedList>
+          <ListRow title="Delete recording" destructive accessory="none" onPress={() => setShowDeleteConfirm(true)} />
+        </GroupedList>
       </ScrollView>
+
+      <Dialog
+        visible={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        title="Delete this recording?"
+        message={`Your recitation of ${recLabel} will be removed for good. This can't be undone.`}
+        actions={
+          <>
+            <AppButton variant="quiet" label="Cancel" onPress={() => setShowDeleteConfirm(false)} />
+            <AppButton
+              variant="destructive"
+              label="Delete"
+              onPress={async () => {
+                setShowDeleteConfirm(false);
+                await deleteRecording(selectedRecording);
+                triggerToast(`Deleted ${recLabel}.`);
+                handleBack();
+              }}
+            />
+          </>
+        }
+      />
+
+      {/* The speaker's name, edited in a small dialog rather than an inline
+          field squeezed into half a grid cell. */}
+      <Dialog
+        visible={isEditingSpeaker}
+        onClose={() => setIsEditingSpeaker(false)}
+        title="Who's speaking?"
+        actions={
+          <>
+            <AppButton variant="quiet" label="Cancel" onPress={() => setIsEditingSpeaker(false)} />
+            <AppButton
+              variant="primary"
+              label="Save"
+              disabled={!speakerDraft.trim()}
+              onPress={() => {
+                setIsEditingSpeaker(false);
+                updateRecordingSpeaker(selectedRecording, speakerDraft.trim());
+              }}
+            />
+          </>
+        }
+      >
+        <AppTextInput
+          value={speakerDraft}
+          onChangeText={setSpeakerDraft}
+          autoFocus
+          variant="body"
+          accessibilityLabel="Speaker"
+          className="w-full bg-surface border border-line rounded-btn font-sans text-ink"
+          style={{ minHeight: MIN_TOUCH, paddingHorizontal: space(12), paddingVertical: space(10) }}
+        />
+      </Dialog>
     </FadeInView>
   );
 }

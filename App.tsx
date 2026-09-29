@@ -50,7 +50,7 @@ import MessagesScreen from './src/screens/MessagesScreen';
 import DMThreadScreen from './src/screens/DMThreadScreen';
 import CircleChatScreen from './src/screens/CircleChatScreen';
 import { APP_FONTS, AppButton, AppIconButton, AppText, ChoiceCard, FontScaleOverrideProvider, useScaledSpace } from './src/components/design';
-import { Dialog, SegmentedControl } from './src/components/blocks';
+import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from './src/components/blocks';
 import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
 import BlocksGallery from './src/dev/BlocksGallery';
 import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent } from './src/components/theme';
@@ -153,7 +153,17 @@ function Screens({ state }: { state: AppState }) {
   return <ProfileScreen state={state} />;
 }
 
+// What each visibility choice means, said once under the switch.
+const VISIBILITY_HINT: Record<'private' | 'circle' | 'public', string> = {
+  private: 'Only you can hear it.',
+  circle: 'People in your circles can hear it.',
+  public: 'Anyone can find it in recordings.',
+};
+
+// A Dialog that needs an answer: tapping outside mustn't quietly throw a
+// recording away, so the only ways out are Discard and Save.
 function SaveRecordingDialog({ state }: { state: AppState }) {
+  const space = useScaledSpace();
   const {
     recordingBook,
     recordingChapter,
@@ -173,94 +183,53 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
   } = state;
   const isImport = pendingRecordingSource === 'import';
   const durationSec = isImport ? Math.round(importPlayerStatus.duration || 0) : lastRecordingDuration;
-  const rangeLabel = isRecordingFullChapterRange
-    ? 'Full Chapter'
-    : recordingSelectedVerses.length === 1
-      ? `Verse ${recordingSelectedVerses[0]?.verse}`
-      : `Verses ${recordingSelectedVerses[0]?.verse}-${recordingSelectedVerses[recordingSelectedVerses.length - 1]?.verse}`;
+  const first = recordingSelectedVerses[0]?.verse;
+  const last = recordingSelectedVerses[recordingSelectedVerses.length - 1]?.verse;
+  const passage =
+    isRecordingFullChapterRange || first === undefined
+      ? `${recordingBook} ${recordingChapter}`
+      : `${recordingBook} ${recordingChapter}:${first === last ? first : `${first}-${last}`}`;
+
   return (
-    <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
-      <FadeInView style={{ width: '100%', maxWidth: 320 }}>
-        <View className="bg-surface border-2 border-ink rounded-xl p-5 gap-4">
-          <View>
-            <AppText variant="title" className="font-serif font-bold text-ink">Save Recitation</AppText>
-            <AppText variant="label" className="text-ink-3 font-sans mt-1">
-              {isImport
-                ? 'Review the details of your tagged audio before saving and sharing.'
-                : 'Review the details of your recorded chapter before saving and sharing.'}
-            </AppText>
-          </View>
+    <Dialog
+      visible
+      dismissable={false}
+      onClose={() => setSaveRecordingDialog(false)}
+      title={isImport ? 'Save this audio?' : 'Save this recitation?'}
+      actions={
+        <>
+          <AppButton
+            variant="quiet"
+            label="Discard"
+            onPress={() => {
+              setSaveRecordingDialog(false);
+              triggerToast('Recording discarded.');
+            }}
+          />
+          <AppButton variant="primary" label="Save" onPress={saveRecordedAudio} />
+        </>
+      }
+    >
+      <GroupedList>
+        <ListRow title="Passage" value={passage} />
+        <ListRow title="Translation" value={recordingTranslation} />
+        <ListRow title="Length" value={formatTime(durationSec)} />
+      </GroupedList>
 
-          <View className="gap-2.5 bg-surface-2 p-3 rounded-xl border border-line">
-            <View className="flex-row justify-between">
-              <AppText variant="micro" className="text-ink-3 font-bold uppercase font-sans">Chapter:</AppText>
-              <AppText variant="label" className="text-ink font-bold font-sans ">
-                {recordingBook} {recordingChapter}
-              </AppText>
-            </View>
-            <View className="flex-row justify-between">
-              <AppText variant="micro" className="text-ink-3 font-bold uppercase font-sans">Translation:</AppText>
-              <AppText variant="label" className="text-ink font-bold font-sans ">{recordingTranslation}</AppText>
-            </View>
-            <View className="flex-row justify-between">
-              <AppText variant="micro" className="text-ink-3 font-bold uppercase font-sans">Duration:</AppText>
-              <AppText variant="label" className="text-ink font-bold font-sans ">{formatTime(durationSec)}</AppText>
-            </View>
-            <View className="flex-row justify-between">
-              <AppText variant="micro" className="text-ink-3 font-bold uppercase font-sans">Scope:</AppText>
-              <AppText variant="label" className="text-success font-bold font-sans ">
-                {rangeLabel} {isImport ? 'Imported Recitation' : 'Recitation'}
-              </AppText>
-            </View>
-          </View>
-
-          <View className="gap-2">
-            <AppText variant="micro" className="font-bold uppercase text-ink-3 tracking-wider font-sans">
-              Who can see this recitation?
-            </AppText>
-            <View className="flex-row gap-1.5">
-              {RECORDING_VISIBILITY_OPTIONS.map((opt) => {
-                const isSelected = pickedRecordingVisibility === opt.id;
-                return (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => setPickedRecordingVisibility(opt.id)}
-                    className={`flex-1 py-2 rounded-lg items-center border ${
-                      isSelected ? 'bg-accent border-accent' : 'bg-surface border-line'
-                    }`}
-                  >
-                    <AppText variant="caption" className={`font-bold ${isSelected ? 'text-on-accent' : 'text-ink-2'}`}>
-                      {opt.label}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {defaultRecordingVisibility === null && (
-              <AppText variant="micro" className="text-accent bg-accent-soft border border-accent/30 rounded-lg p-2 leading-relaxed">
-                Whatever you pick here becomes your default for future recordings — you can still change it each time,
-                and eventually from Settings too.
-              </AppText>
-            )}
-          </View>
-
-          <View className="flex-row gap-2.5 pt-1">
-            <Pressable
-              onPress={() => {
-                setSaveRecordingDialog(false);
-                triggerToast('Recording discarded.');
-              }}
-              className="flex-1 py-2.5 px-3 border border-line rounded-xl items-center bg-surface"
-            >
-              <AppText variant="label" className="text-ink-3 font-bold">Discard</AppText>
-            </Pressable>
-            <Pressable onPress={saveRecordedAudio} className="flex-1 py-2.5 px-3 bg-accent rounded-xl items-center">
-              <AppText variant="label" className="text-on-accent font-bold">Confirm & Save</AppText>
-            </Pressable>
-          </View>
-        </View>
-      </FadeInView>
-    </View>
+      <View style={{ gap: space(6) }}>
+        <SectionHeader title="Who can hear it" />
+        <SegmentedControl
+          value={pickedRecordingVisibility}
+          onChange={setPickedRecordingVisibility}
+          accessibilityLabel="Who can hear it"
+          options={RECORDING_VISIBILITY_OPTIONS}
+        />
+        <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
+          {VISIBILITY_HINT[pickedRecordingVisibility]}
+          {defaultRecordingVisibility === null ? ' It will be your default next time.' : ''}
+        </AppText>
+      </View>
+    </Dialog>
   );
 }
 
