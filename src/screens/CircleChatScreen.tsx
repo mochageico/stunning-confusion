@@ -1,16 +1,15 @@
 import { useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Send } from 'lucide-react-native';
+import { Send } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
 import { ReactionBar } from '../components/ReactionBar';
 import { AppIconButton, AppTextInput, AppText } from '../components/design';
+import { ScreenHeader } from '../components/blocks';
 
-import { useThemeColors } from '../components/theme';
 export default function CircleChatScreen({ state }: { state: AppState }) {
-  const palette = useThemeColors();
   const {
     user,
     activeCircle,
@@ -48,12 +47,8 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-        <View className="flex-row items-center gap-3 border-b border-hairline p-4">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={goBack} className="rounded-full border border-line bg-surface" />
-          <View className="flex-1">
-            <AppText variant="micro" className="uppercase tracking-wider font-extrabold text-ink-3 font-sans">Group Chat</AppText>
-            <AppText variant="body" className="font-serif font-bold text-ink leading-none mt-0.5">{activeCircle.name}</AppText>
-          </View>
+        <View className="border-b border-hairline" style={{ paddingHorizontal: 20, paddingVertical: 8 }}>
+          <ScreenHeader inline title={activeCircle.name} eyebrow="Group chat" onBack={goBack} backLabel="Circle" />
         </View>
 
         <ScrollView
@@ -67,7 +62,7 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
             <AppText variant="label" className="text-ink-3 font-sans text-center mt-4">Loading…</AppText>
           ) : activeCircleMessages.length === 0 ? (
             <AppText variant="label" className="text-ink-3 font-sans text-center mt-4">
-              No messages yet. Kick off the conversation 👋
+              No messages yet. Say hello to the circle.
             </AppText>
           ) : (
             activeCircleMessages.map((msg) => {
@@ -97,8 +92,8 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
           className="flex-row items-center gap-2 px-3 pt-3 border-t border-hairline bg-surface"
           style={{ paddingBottom: Math.max(bottomPad, 12) }}
         >
-          <AppTextInput value={draft} onChangeText={setDraft} placeholder="Message the circle…" placeholderTextColor={palette.ink3} multiline className="flex-1 bg-surface-2 border border-line rounded-xl px-3 py-2 text-ink font-sans max-h-24" />
-          <AppIconButton Icon={Send} diameter={36} iconSize={14} iconColor={palette.onAccent} onPress={handleSend} disabled={!draft.trim()} className={` rounded-full ${draft.trim() ? 'bg-accent' : 'bg-fill'}`} />
+          <AppTextInput value={draft} onChangeText={setDraft} placeholder="Message the circle…" accessibilityLabel="Message" multiline className="flex-1 bg-surface-2 border border-line rounded-xl px-3 py-2 text-ink font-sans max-h-24" />
+          <AppIconButton Icon={Send} variant="filled" diameter={36} onPress={handleSend} disabled={!draft.trim()} accessibilityLabel="Send" />
         </View>
       </FadeInView>
   );

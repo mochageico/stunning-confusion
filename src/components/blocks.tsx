@@ -1,9 +1,9 @@
 import React, { createContext, useContext } from 'react';
 import { Image, Modal, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
+import { ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 
-import { AppButton, AppIconButton, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from './design';
+import { AppButton, AppIconButton, AppText, MIN_TOUCH, useCollapsed, useFontScale, useScaledSpace } from './design';
 import { useThemeColors } from './theme';
 
 // ============================================================================
@@ -166,6 +166,69 @@ export function SectionHeader({
 }
 
 // ============================================================
+// CollapsibleSection
+//
+// A SectionHeader you can fold: the title is a button with a small chevron
+// (down when open, right when folded), remembered between visits. For the
+// long optional lists (friends, activity, plans) so a person who doesn't want
+// them can put them away. Collapsing is an option, never a mode -- every
+// section starts open unless a caller says otherwise.
+// ============================================================
+export function CollapsibleSection({
+  storageKey,
+  title,
+  actionLabel,
+  onAction,
+  defaultCollapsed = false,
+  children,
+}: {
+  /** Unique per section; the folded state is saved under it. */
+  storageKey: string;
+  title: string;
+  /** A small accent link on the right, e.g. "Find friends". */
+  actionLabel?: string;
+  onAction?: () => void;
+  defaultCollapsed?: boolean;
+  children: React.ReactNode;
+}) {
+  const palette = useThemeColors();
+  const scale = useFontScale();
+  const space = useScaledSpace();
+  const [collapsed, setCollapsed] = useCollapsed(storageKey, defaultCollapsed);
+  return (
+    <View style={{ gap: space(6) }}>
+      <View className="flex-row items-center justify-between" style={{ paddingHorizontal: space(4), gap: space(8) }}>
+        <Pressable
+          onPress={() => setCollapsed(!collapsed)}
+          accessibilityRole="button"
+          accessibilityLabel={title}
+          accessibilityState={{ expanded: !collapsed }}
+          aria-expanded={!collapsed}
+          hitSlop={8}
+          className="flex-1 flex-row items-center active:opacity-60"
+          style={{ minHeight: MIN_TOUCH, gap: space(4) }}
+        >
+          <View style={{ transform: [{ rotate: collapsed ? '-90deg' : '0deg' }] }}>
+            <ChevronDown size={Math.round(16 * scale)} color={palette.ink3} strokeWidth={2.6} />
+          </View>
+          <AppText variant="section" className="font-sans font-semibold text-ink-3 shrink" accessibilityRole="header">
+            {title}
+          </AppText>
+        </Pressable>
+        {actionLabel && onAction ? (
+          <Pressable onPress={onAction} hitSlop={10} accessibilityRole="button" className="active:opacity-60 shrink-0">
+            <AppText variant="section" className="font-sans font-semibold text-accent">
+              {actionLabel}
+            </AppText>
+          </Pressable>
+        ) : null}
+      </View>
+      {collapsed ? null : children}
+    </View>
+  );
+}
+
+// ============================================================
 // GroupedList + ListRow
 //
 // A card of rows, the way the iPhone's Settings app groups them. Dividers are
@@ -213,6 +276,7 @@ export function ListRow({
   value,
   Icon,
   iconColor,
+  leading,
   onPress,
   accessory,
   destructive = false,
@@ -224,6 +288,8 @@ export function ListRow({
   /** A plain lucide icon in the accent. No tinted tile, per the chosen look. */
   Icon?: IconType;
   iconColor?: string;
+  /** Something other than an icon at the start, e.g. an Avatar. Wins over Icon. */
+  leading?: React.ReactNode;
   onPress?: () => void;
   /** Defaults to a chevron when the row is tappable. Pass a Switch, a Badge, or 'none'. */
   accessory?: 'chevron' | 'none' | React.ReactNode;
@@ -241,7 +307,9 @@ export function ListRow({
 
   const content = (
     <>
-      {Icon ? (
+      {leading ? (
+        <View className="shrink-0">{leading}</View>
+      ) : Icon ? (
         <View className="shrink-0">
           <Icon size={Math.round(22 * scale)} color={iconColor ?? (destructive ? palette.danger : palette.accent)} strokeWidth={2} />
         </View>

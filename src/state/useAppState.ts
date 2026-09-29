@@ -2585,12 +2585,12 @@ export function useAppState() {
 
   const createCircle = async (name: string, description: string, isPublic: boolean) => {
     if (!auth.currentUser) {
-      triggerToast('Sign in to create a Scripture Circle.');
+      triggerToast('Sign in to create a circle.');
       return;
     }
     const trimmedName = name.trim();
     if (!trimmedName) {
-      triggerToast('Please specify a circle name! 🏷️');
+      triggerToast('Give the circle a name first.');
       return;
     }
     const uid = auth.currentUser.uid;
@@ -2624,7 +2624,7 @@ export function useAppState() {
       await batch.commit();
       setMyCircles((prev) => [...prev, newCircle]);
       openCircle(circleRef.id);
-      triggerToast(`Successfully created "${trimmedName}" Scripture Circle! 🛡️`);
+      triggerToast(`Created "${trimmedName}".`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleRef.id}`);
     }
@@ -2632,7 +2632,7 @@ export function useAppState() {
 
   const joinCircle = async (circleId: string, circleName?: string) => {
     if (!auth.currentUser) {
-      triggerToast('Sign in to join a Scripture Circle.');
+      triggerToast('Sign in to join a circle.');
       return;
     }
     const uid = auth.currentUser.uid;
@@ -2641,7 +2641,7 @@ export function useAppState() {
       const existing = await getDoc(memberRef);
       if (existing.exists()) {
         openCircle(circleId);
-        triggerToast("You're already in this circle!");
+        triggerToast("You're already in this circle.");
         return;
       }
 
@@ -2661,7 +2661,7 @@ export function useAppState() {
 
       await loadMyCircles();
       openCircle(circleId);
-      triggerToast(`Successfully joined "${circleName || 'the circle'}"! 🛡️`);
+      triggerToast(`Joined "${circleName || 'the circle'}".`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/members/${uid}`);
     }
@@ -2670,7 +2670,7 @@ export function useAppState() {
   const joinCircleByCode = async (codeInput: string) => {
     const code = codeInput.trim().toUpperCase();
     if (!code) {
-      triggerToast('Please enter an invite code! 🔑');
+      triggerToast('Enter an invite code first.');
       return;
     }
     try {
@@ -2685,7 +2685,7 @@ export function useAppState() {
       setInviteCodeInput('');
     } catch (err) {
       console.error('Failed to join by code:', err);
-      triggerToast('Failed to join via invite code.');
+      triggerToast("Couldn't join with that code. Please try again.");
     }
   };
 
@@ -2699,7 +2699,7 @@ export function useAppState() {
       await batch.commit();
       setMyCircles((prev) => prev.filter((c) => c.id !== circleId));
       setViewingGroupDetail(false);
-      triggerToast('You have left the Scripture Circle. 🚪');
+      triggerToast('You left the circle.');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/members`);
     }
@@ -2725,7 +2725,7 @@ export function useAppState() {
 
       setMyCircles((prev) => prev.filter((c) => c.id !== circleId));
       setViewingGroupDetail(false);
-      triggerToast('Disbanded the Scripture Circle. 🌪️');
+      triggerToast('Circle disbanded.');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}`);
     }
@@ -2735,7 +2735,7 @@ export function useAppState() {
     try {
       await deleteDoc(doc(db, 'circles', circleId, 'members', memberUid));
       setActiveCircleMembers((prev) => prev.filter((m) => m.uid !== memberUid));
-      triggerToast('Removed member from the scripture circle. 🧹');
+      triggerToast('Member removed.');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/members/${memberUid}`);
     }
@@ -2760,7 +2760,7 @@ export function useAppState() {
     if (!auth.currentUser) return;
     const trimmedName = input.name.trim();
     if (!trimmedName) {
-      triggerToast('Please specify a plan title! 🏷️');
+      triggerToast('Give the plan a name first.');
       return;
     }
     const planRef = doc(collection(db, 'circles', circleId, 'groupPlans'));
@@ -2781,7 +2781,7 @@ export function useAppState() {
     try {
       await setDoc(planRef, newPlan);
       setActiveCircleGroupPlans((prev) => [...prev, newPlan]);
-      triggerToast(`Created "${trimmedName}"! Add verses and set a pace from its page. 🛡️`);
+      triggerToast(`Created "${trimmedName}". Add verses and set a pace from its page.`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planRef.id}`);
     }
@@ -2840,7 +2840,7 @@ export function useAppState() {
       const updated = [...joinedGroupChallenges.filter((m) => m.challengeId !== challenge.id), membership];
       setJoinedGroupChallenges(updated);
       await persistJoinedGroupChallenges(updated);
-      triggerToast(`Joined "${challenge.title}"! Verses added to your queue. 🏆`);
+      triggerToast(`Joined "${challenge.title}". Its verses are in your queue.`);
     } catch (err) {
       handleFirestoreError(
         err,
@@ -2858,7 +2858,7 @@ export function useAppState() {
     if (!auth.currentUser) return;
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      triggerToast('Please give the challenge a title! 🏷️');
+      triggerToast('Give the challenge a name first.');
       return;
     }
     try {
@@ -2897,7 +2897,7 @@ export function useAppState() {
     try {
       await updateDoc(doc(db, 'circles', challenge.circleId, 'challenges', challenge.id), { status });
       setActiveCircleChallenges((prev) => prev.map((c) => (c.id === challenge.id ? { ...c, status } : c)));
-      triggerToast(status === 'cancelled' ? 'Challenge cancelled.' : 'Challenge ended! 🏁');
+      triggerToast(status === 'cancelled' ? 'Challenge cancelled.' : 'Challenge ended.');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `circles/${challenge.circleId}/challenges/${challenge.id}`);
     }
@@ -3036,7 +3036,7 @@ export function useAppState() {
         await addGroupPlanVersesToOwnQueue(planId, newVerseIds);
       }
 
-      triggerToast(`Added ${newVerseIds.length} verse${newVerseIds.length === 1 ? '' : 's'} to the plan. 📖`);
+      triggerToast(`Added ${newVerseIds.length} verse${newVerseIds.length === 1 ? '' : 's'} to the plan.`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planId}`);
     }
@@ -3048,7 +3048,7 @@ export function useAppState() {
       setActiveCircleGroupPlans((prev) => prev.filter((p) => p.planId !== planId));
       setJoinedGroupPlanDetails((prev) => prev.filter((p) => p.planId !== planId));
       setViewingGroupPlan((prev) => (prev && prev.planId === planId ? null : prev));
-      triggerToast('Deleted group plan. 🗑️');
+      triggerToast('Plan deleted.');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/groupPlans/${planId}`);
     }
@@ -3212,10 +3212,10 @@ export function useAppState() {
       setJoinedGroupPlanDetails((prev) => [...prev.filter((p) => p.planId !== plan.planId), plan]);
       await persistJoinedGroupPlans(updatedMemberships);
 
-      triggerToast(`Joined "${plan.name}"! Verses added to your queue. 🎯`);
+      triggerToast(`Joined "${plan.name}". Its verses are in your queue.`);
     } catch (err) {
       console.error('Error joining group plan:', err);
-      triggerToast('Failed to join this group plan.');
+      triggerToast("Couldn't join this plan. Please try again.");
     }
   };
 
@@ -3232,7 +3232,7 @@ export function useAppState() {
         .map((item) => item.verseId)
     );
     await persistJoinedGroupPlans(updatedMemberships);
-    triggerToast('Left the group plan.');
+    triggerToast('You left the plan.');
   };
 
   const setGroupPlanPriority = async (planId: string, priority: GroupPlanMembership['priority']) => {

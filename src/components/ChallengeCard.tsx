@@ -7,7 +7,7 @@ import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 import { useChapterText } from '../state/useScripture';
 import { BookPicker } from './BookPicker';
 import { NumericInput, NumericKeyboardAccessory, ProgressBar } from './ui';
-import { AppButton, AppIconButton, AppText } from './design';
+import { AppButton, AppIconButton, AppText, useScaledSpace } from './design';
 
 import { useThemeColors } from './theme';
 // This sheet is a Modal -- its own iOS view controller -- so it must register
@@ -57,7 +57,6 @@ function ChallengeRangeForm({
   onSubmit: (range: ChallengeRange) => void;
   onCancel: () => void;
 }) {
-  const palette = useThemeColors();
   const [book, setBook] = useState('Philippians');
   const [chapter, setChapter] = useState('2');
   const [startVerse, setStartVerse] = useState('');
@@ -83,70 +82,80 @@ function ChallengeRangeForm({
     setEndVerse('');
   };
 
-  const labelTone = 'text-ink-3';
-  const inputTone = 'bg-surface border border-line-strong text-ink';
+  const space = useScaledSpace();
+  // Book takes a row of its own; the three number fields share the next one
+  // and wrap when the text is big, so none is squeezed.
+  const numberBasis = { flexGrow: 1, flexBasis: space(96), gap: space(4) };
+  const label = (text: string, extra?: string) => (
+    <View className="flex-row items-center justify-between">
+      <AppText variant="caption" className="font-sans font-medium text-ink-2">
+        {text}
+      </AppText>
+      {extra ? (
+        <AppText variant="caption" className="font-sans text-ink-3">
+          {extra}
+        </AppText>
+      ) : null}
+    </View>
+  );
+  const numberInput = 'bg-surface border border-line rounded-btn text-ink font-sans text-center';
+  const numberStyle = { paddingHorizontal: space(8), paddingVertical: space(10) };
 
   return (
-    <View style={{ gap: 10 }}>
-      <View className="flex-row gap-2">
-        <View className="flex-1">
-          <AppText variant="micro" className={`font-bold ${labelTone} uppercase tracking-widest mb-0.5`}>Book</AppText>
-          <BookPicker value={book} onChange={setBook} />
-        </View>
-        <View style={{ width: 76 }}>
-          <AppText variant="micro" className={`font-bold ${labelTone} uppercase tracking-widest mb-0.5`}>Chapter</AppText>
+    <View style={{ gap: space(12) }}>
+      <View style={{ gap: space(4) }}>
+        {label('Book')}
+        <BookPicker value={book} onChange={setBook} />
+      </View>
+
+      <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+        <View style={numberBasis}>
+          {label('Chapter')}
           <NumericInput
             value={chapter}
             onChangeText={setChapter}
             accessoryID={accessoryID}
-            className={`w-full rounded-lg px-2 py-2.5 text-xs text-center ${inputTone}`}
+            accessibilityLabel="Chapter"
+            className={numberInput}
+            style={numberStyle}
           />
         </View>
-      </View>
-
-      <View className="flex-row gap-2 items-end">
-        <View className="flex-1">
-          <AppText variant="micro" className={`font-bold ${labelTone} uppercase tracking-widest mb-0.5`}>Start Verse (optional)</AppText>
+        <View style={numberBasis}>
+          {label('From verse')}
           <NumericInput
             value={startVerse}
             onChangeText={setStartVerse}
             accessoryID={accessoryID}
+            accessibilityLabel="From verse (optional)"
             placeholder="1"
-            placeholderTextColor={palette.ink3}
-            className={`w-full rounded-lg px-2 py-2 text-xs text-center ${inputTone}`}
+            className={numberInput}
+            style={numberStyle}
           />
         </View>
-        <View className="flex-1">
-          <View className="flex-row items-center justify-between mb-0.5">
-            <AppText variant="micro" className={`font-bold ${labelTone} uppercase tracking-widest`}>End Verse</AppText>
-            {chapterData && <AppText variant="micro" className={`font-mono ${labelTone}`}>max {chapterData.verseCount}</AppText>}
-          </View>
+        <View style={numberBasis}>
+          {label('To verse', chapterData ? `of ${chapterData.verseCount}` : undefined)}
           <NumericInput
             value={endVerse}
             onChangeText={setEndVerse}
             accessoryID={accessoryID}
+            accessibilityLabel="To verse (optional)"
             placeholder={chapterData ? String(chapterData.verseCount) : 'end'}
-            placeholderTextColor={palette.ink3}
-            className={`w-full rounded-lg px-2 py-2 text-xs text-center ${inputTone}`}
+            className={numberInput}
+            style={numberStyle}
           />
         </View>
       </View>
+      <AppText variant="caption" className="font-sans text-ink-3">
+        Leave the verses blank to race through the whole chapter.
+      </AppText>
 
       {inline ? (
-        // Cancel + confirm on one right-aligned row, matching the New Group
-        // Plan form this sits beside.
-        <View className="flex-row justify-end gap-2 pt-2 border-t border-hairline">
-          <Pressable onPress={onCancel} className="bg-surface border border-line-strong px-3 py-2 rounded-lg">
-            <AppText variant="micro" className="text-ink-2 font-bold uppercase">Cancel</AppText>
-          </Pressable>
-          <Pressable onPress={handleSubmit} className="bg-accent px-4 py-2 rounded-lg">
-            <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wider">{submitLabel}</AppText>
-          </Pressable>
+        <View className="flex-row flex-wrap justify-end" style={{ gap: space(8) }}>
+          <AppButton variant="quiet" label="Cancel" onPress={onCancel} />
+          <AppButton variant="primary" label={submitLabel} onPress={handleSubmit} />
         </View>
       ) : (
-        <AppButton size="lg" onPress={handleSubmit} className="bg-accent rounded-xl items-center">
-          <AppText variant="section" className="text-on-accent font-bold uppercase tracking-wider">{submitLabel}</AppText>
-        </AppButton>
+        <AppButton size="lg" variant="primary" label={submitLabel} onPress={handleSubmit} />
       )}
     </View>
   );
@@ -176,7 +185,7 @@ export function ChallengeCreateSheet({
           </View>
 
           <ChallengeRangeForm
-            submitLabel="🏆 Send Challenge"
+            submitLabel="Send challenge"
             accessoryID={CHALLENGE_ACCESSORY_ID}
             onSubmit={onSubmit}
             onCancel={onClose}
@@ -199,13 +208,10 @@ export function ChallengeCreateInline({
   onSubmit: (range: ChallengeRange) => void;
   onCancel: () => void;
 }) {
+  const space = useScaledSpace();
   return (
-    <View className="bg-surface-2 border border-line rounded-xl p-4" style={{ gap: 12 }}>
-      <View className="flex-row justify-between items-center border-b border-hairline pb-1.5">
-        <AppText variant="micro" className="font-black uppercase tracking-wider text-ink-3">New Challenge</AppText>
-        <AppText variant="micro" className="bg-accent-soft text-accent px-2 py-0.5 rounded uppercase font-black">Race</AppText>
-      </View>
-      <ChallengeRangeForm inline submitLabel="🏆 Start Challenge" onSubmit={onSubmit} onCancel={onCancel} />
+    <View className="bg-surface border border-line rounded-card" style={{ padding: space(14) }}>
+      <ChallengeRangeForm inline submitLabel="Start challenge" onSubmit={onSubmit} onCancel={onCancel} />
     </View>
   );
 }

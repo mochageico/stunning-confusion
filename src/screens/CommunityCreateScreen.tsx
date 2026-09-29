@@ -1,13 +1,17 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft } from 'lucide-react-native';
+import { ScrollView, View } from 'react-native';
 
 import { AppState } from '../state/useAppState';
-import { FadeInView, HelpTooltip } from '../components/ui';
-import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
+import { FadeInView } from '../components/ui';
+import { AppButton, AppText, AppTextInput, OptionCards, useScaledSpace } from '../components/design';
+import { ScreenHeader } from '../components/blocks';
 
-import { useThemeColors } from '../components/theme';
+const PRIVACY_OPTIONS = [
+  { id: 'public' as const, title: 'Public', desc: 'Listed in Find a circle. Anyone can join right away.' },
+  { id: 'private' as const, title: 'Private', desc: 'Hidden from search. People join with the invite code you share.' },
+];
+
 export default function CommunityCreateScreen({ state }: { state: AppState }) {
-  const palette = useThemeColors();
+  const space = useScaledSpace();
   const {
     setCommunitySubView,
     createGroupName,
@@ -27,71 +31,60 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
     setCreateGroupPrivacy('public');
   };
 
+  const fieldLabel = (text: string) => (
+    <AppText variant="caption" className="font-sans font-medium text-ink-2">
+      {text}
+    </AppText>
+  );
+  const inputBox = 'bg-surface border border-line rounded-btn text-ink font-sans';
+
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
-        {/* Header with back */}
-        <View className="flex-row items-center gap-3 border-b border-hairline pb-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={() => setCommunitySubView('home')} className="rounded-full border border-line bg-surface" />
-          <View className="flex-1">
-            <AppText variant="title" className="font-serif font-black text-ink leading-none mt-1">
-              Create Scripture Circle
-            </AppText>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        <ScreenHeader
+          title="Create a circle"
+          subtitle="Gather a few people to memorize together."
+          onBack={() => setCommunitySubView('home')}
+          backLabel="Community"
+        />
+
+        <View style={{ gap: space(16) }}>
+          <View style={{ gap: space(4) }}>
+            {fieldLabel('Name')}
+            <AppTextInput
+              value={createGroupName}
+              onChangeText={setCreateGroupName}
+              placeholder="e.g. Wednesday night Romans"
+              accessibilityLabel="Circle name"
+              variant="body"
+              className={inputBox}
+              style={{ paddingHorizontal: space(12), paddingVertical: space(10) }}
+            />
+          </View>
+
+          <View style={{ gap: space(4) }}>
+            {fieldLabel('Description (optional)')}
+            <AppTextInput
+              value={createGroupDesc}
+              onChangeText={setCreateGroupDesc}
+              placeholder="Who is it for, and what will you work through?"
+              accessibilityLabel="Circle description"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              variant="body"
+              className={inputBox}
+              style={{ paddingHorizontal: space(12), paddingVertical: space(10), minHeight: space(88) }}
+            />
+          </View>
+
+          <View style={{ gap: space(6) }}>
+            {fieldLabel('Who can join')}
+            <OptionCards options={PRIVACY_OPTIONS} value={createGroupPrivacy} onChange={setCreateGroupPrivacy} />
           </View>
         </View>
 
-        {/* Creation Form */}
-        <View className="gap-4">
-          {/* Group Name */}
-          <View className="gap-1">
-            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-ink-3">Circle Name</AppText>
-            <AppTextInput value={createGroupName} onChangeText={setCreateGroupName} placeholder="e.g. Wednesday Night Romans Fellowship" className="w-full px-3 py-2 border border-line-strong rounded-xl font-bold" />
-          </View>
-
-          {/* Short Description */}
-          <View className="gap-1">
-            <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-ink-3">
-              Short Description
-            </AppText>
-            <AppTextInput value={createGroupDesc} onChangeText={setCreateGroupDesc} placeholder="Who is this circle for, and what are you working through together?" multiline numberOfLines={3} textAlignVertical="top" className="w-full px-3 py-2 border border-line-strong rounded-xl" />
-          </View>
-
-          {/* Privacy Flag */}
-          <View className="gap-1">
-            <View className="flex-row items-center">
-              <AppText variant="micro" className="font-extrabold uppercase tracking-wider text-ink-3">
-                Privacy Setting
-              </AppText>
-              <HelpTooltip text="Public circles show up in the directory and anyone can join them straight away. Private circles are hidden — people can only join with the invite code you share with them." />
-            </View>
-            <View className="flex-row gap-2 mt-1">
-              <Pressable
-                onPress={() => setCreateGroupPrivacy('public')}
-                className={`flex-1 p-3 rounded-xl border items-center ${
-                  createGroupPrivacy === 'public' ? 'bg-surface border-ink' : 'bg-surface-2 border-line'
-                }`}
-              >
-                <AppText variant="label" className="font-black leading-none">🔓 Public Circle</AppText>
-                <AppText variant="micro" className="font-medium text-ink-3 mt-1">Open to everyone</AppText>
-              </Pressable>
-
-              <Pressable
-                onPress={() => setCreateGroupPrivacy('private')}
-                className={`flex-1 p-3 rounded-xl border items-center ${
-                  createGroupPrivacy === 'private' ? 'bg-surface border-ink' : 'bg-surface-2 border-line'
-                }`}
-              >
-                <AppText variant="label" className="font-black leading-none">🔒 Private Circle</AppText>
-                <AppText variant="micro" className="font-medium text-ink-3 mt-1">Requires code/approval</AppText>
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Create Action */}
-          <AppButton size="lg" onPress={handleCreateCircle} className="w-full bg-accent rounded-xl items-center shadow-md">
-            <AppText variant="label" className="text-on-accent font-black uppercase tracking-wider">Create Scripture Circle 🛡️</AppText>
-          </AppButton>
-        </View>
+        <AppButton size="lg" variant="primary" label="Create circle" onPress={handleCreateCircle} />
       </ScrollView>
     </FadeInView>
   );

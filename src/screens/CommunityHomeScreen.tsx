@@ -1,14 +1,16 @@
-import { Pressable, ScrollView, View } from 'react-native';
-import { MessageCircle, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react-native';
+import { ScrollView, View } from 'react-native';
+import { Award, Check, ChevronRight, MessageCircle, Plus, Search, UserPlus, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { AvatarCircle, FadeInView, HelpTooltip } from '../components/ui';
-import { AppText } from '../components/design';
-
+import { FadeInView } from '../components/ui';
+import { AppIconButton, AppText, useScaledSpace } from '../components/design';
+import { Avatar, Badge, CollapsibleSection, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { formatTimeAgo } from '../lib/format';
+
 export default function CommunityHomeScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
+  const space = useScaledSpace();
   const {
     user,
     setCommunitySubView,
@@ -23,203 +25,145 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
     navigateTo,
   } = state;
 
-  const formatEventAge = (createdAtMs: number) => formatTimeAgo(createdAtMs);
-
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5" contentContainerStyle={{ gap: 16 }}>
-        {/* Sub-view navigation. One label each: the old eyebrow-plus-title
-            pair ("Find Circle" over "Search Directory") said the same thing
-            twice at two sizes, which is what made this header feel inflated.
-            An eyebrow earns its place only when it adds information the
-            title doesn't. */}
-        <View className="flex-row gap-2">
-          <Pressable
-            onPress={() => setCommunitySubView('find')}
-            className="flex-1 border border-line bg-surface-2 p-2.5 rounded-xl flex-row items-center justify-between"
-          >
-            <AppText variant="label" className="font-sans font-bold text-ink">Find Circle</AppText>
-            <Search size={14} color={palette.ink3} />
-          </Pressable>
-
-          <Pressable
-            onPress={() => setCommunitySubView('create')}
-            className="flex-1 border border-line bg-surface-2 p-2.5 rounded-xl flex-row items-center justify-between"
-          >
-            <AppText variant="label" className="font-sans font-bold text-ink">Create Circle</AppText>
-            <Plus size={14} color={palette.ink3} />
-          </Pressable>
-        </View>
-
-        {/* List of Joined Circles */}
-        <View className="gap-1.5">
-          <View className="flex-row items-center px-1">
-            <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">
-              YOUR ACTIVE COMMUNITIES ({myCircles.length})
-            </AppText>
-            <HelpTooltip text="The scripture circles you've joined. Tap one to open its members, shared group plans, challenges, and group chat." />
-          </View>
-
-          <View className="gap-2">
-            {myCircles.map((c) => {
-              const role = c.ownerId === user?.uid ? 'Leader' : 'Member';
-              return (
-                // The badge shows your role and nothing else. It used to flip
-                // to "Active Circle" for whichever circle you last opened,
-                // which described app state rather than the circle -- and it
-                // replaced the one genuinely useful fact (are you the leader
-                // here?) with something the user hadn't asked about.
-                <Pressable
-                  key={c.id}
-                  onPress={() => openCircle(c.id)}
-                  className="w-full bg-surface border border-line rounded-2xl p-3 flex-row justify-between items-center shadow-xs"
-                >
-                  <View className="gap-0.5 pr-3 flex-1">
-                    <View className="flex-row items-center gap-1.5">
-                      <View className="px-1.5 py-0.5 rounded bg-surface-2 border border-line">
-                        <AppText variant="micro" className="font-bold font-sans uppercase text-ink-2">{role}</AppText>
-                      </View>
-                      <View
-                        className={`px-1.5 py-0.5 rounded border ${
-                          c.isPublic ? 'bg-success-soft border-success/30' : 'bg-warning-soft border-warning/30'
-                        }`}
-                      >
-                        <AppText variant="micro" className={`font-bold font-sans uppercase ${ c.isPublic ? 'text-success' : 'text-warning' }`} >
-                          {c.isPublic ? 'Public' : 'Private'}
-                        </AppText>
-                      </View>
-                    </View>
-                    <AppText variant="caption" className="font-sans font-black text-ink leading-snug mt-1">{c.name}</AppText>
-                  </View>
-                  <Users size={16} color={palette.ink} />
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Friends -- real, mutual connections independent of circle
-            membership. Same pattern as ProfileScreen's Friends section,
-            surfaced here too since Community is where people look for
-            other people. */}
-        <View className="gap-1.5">
-          <View className="flex-row items-center justify-between px-1 gap-2">
-            <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase flex-1">
-              FRIENDS ({friends.length})
-            </AppText>
-            {/* Direct messages. This was a lone envelope button in the Profile
-                header -- Profile is where you go to look at yourself, not at
-                other people, and it was the only door into the DM inbox. DMs
-                are 1:1 with the people in this very list, so the entry point
-                sits on it. */}
-            <Pressable
-              onPress={() => navigateTo('messages')}
-              accessibilityRole="button"
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        {/* The one tab that had no title. Messages sits up here because DMs
+            are with the people below, and Community is where you look for
+            people. */}
+        <ScreenHeader
+          title="Community"
+          subtitle="Memorize alongside friends and circles."
+          actions={
+            <AppIconButton
+              Icon={MessageCircle}
+              variant="outline"
+              diameter={36}
               accessibilityLabel="Messages"
-              hitSlop={8}
-              className="border border-line-strong rounded-lg px-2 py-1.5 shrink-0"
+              onPress={() => navigateTo('messages')}
+            />
+          }
+        />
+
+        <View style={{ gap: space(12) }}>
+          {myCircles.length === 0 ? (
+            <View style={{ gap: space(6) }}>
+              <SectionHeader title="Your circles" />
+              <View className="bg-surface border border-line rounded-card">
+                <EmptyState
+                  Icon={Users}
+                  title="You're not in a circle yet"
+                  message="A circle is a small group that shares plans, challenges and a chat."
+                  actionLabel="Find a circle"
+                  onAction={() => setCommunitySubView('find')}
+                />
+              </View>
+            </View>
+          ) : (
+            // The role sits under the name; it's the one fact about a circle
+            // you can't tell from its title.
+            <GroupedList
+              header={`Your circles · ${myCircles.length}`}
+              footer="Open a circle for its members, group plans, challenges and chat."
             >
-              <MessageCircle size={14} color={palette.ink2} />
-            </Pressable>
-            <Pressable onPress={() => navigateTo('findFriends')} className="bg-accent px-2.5 py-1.5 rounded-lg relative flex-row items-center gap-1 shrink-0">
-              <UserPlus size={11} color={palette.onAccent} />
-              <AppText variant="micro" className="text-on-accent font-sans font-bold uppercase tracking-wider">Find Friends</AppText>
+              {myCircles.map((c) => (
+                <ListRow
+                  key={c.id}
+                  Icon={Users}
+                  title={c.name}
+                  subtitle={`${c.ownerId === user?.uid ? 'Leader' : 'Member'} · ${c.isPublic ? 'Public' : 'Private'}`}
+                  onPress={() => openCircle(c.id)}
+                />
+              ))}
+            </GroupedList>
+          )}
+
+          <GroupedList>
+            <ListRow Icon={Search} title="Find a circle" onPress={() => setCommunitySubView('find')} />
+            <ListRow Icon={Plus} title="Create a circle" onPress={() => setCommunitySubView('create')} />
+          </GroupedList>
+        </View>
+
+        <CollapsibleSection
+          storageKey="community.friends"
+          title={`Friends · ${friends.length}`}
+          actionLabel="Find friends"
+          onAction={() => navigateTo('findFriends')}
+        >
+          {friends.length === 0 && incomingFriendRequests.length === 0 ? (
+            <View className="bg-surface border border-line rounded-card">
+              <EmptyState
+                Icon={UserPlus}
+                title="No friends yet"
+                message="Friends can see how you're doing and send you nudges."
+                actionLabel="Find friends"
+                onAction={() => navigateTo('findFriends')}
+              />
+            </View>
+          ) : (
+            <GroupedList>
               {incomingFriendRequests.length > 0 && (
-                <View className="absolute -top-1.5 -right-1.5 bg-danger w-4 h-4 rounded-full items-center justify-center border border-surface">
-                  <AppText variant="micro" className="text-on-accent font-black">{incomingFriendRequests.length}</AppText>
-                </View>
-              )}
-            </Pressable>
-          </View>
-          {friends.length === 0 ? (
-            <AppText variant="caption" className="text-ink-3 font-sans italic px-1">
-              No friends yet — tap Find Friends to search for people.
-            </AppText>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 2 }}>
-              {friends.map((f) => (
-                <Pressable
-                  key={f.uid}
-                  onPress={() => viewMemberProfileById(f.uid)}
-                  className="flex-row items-center gap-2 border border-line rounded-xl p-2 bg-surface shrink-0"
-                >
-                  <AvatarCircle name={f.displayName} photoUri={f.avatarUrl} size={28} />
-                  <View>
-                    <AppText variant="caption" className="font-bold text-ink leading-none">{f.displayName}</AppText>
-                    <AppText variant="micro" className="font-sans text-ink-3 leading-none mt-0.5">View Profile</AppText>
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-
-        {/* Community Activity Feed */}
-        <View className="gap-2.5">
-          <View className="flex-row justify-between items-center">
-            <AppText variant="section" className="font-bold text-ink-3 tracking-wider font-sans uppercase">
-              RECENT GROUP FEED
-            </AppText>
-            <Pressable onPress={loadActivityFeed} className="flex-row items-center gap-1">
-              <RefreshCw size={8} color={palette.ink} />
-              <AppText variant="micro" className="font-sans font-bold uppercase text-ink">Refresh</AppText>
-            </Pressable>
-          </View>
-
-          {loadingActivityEvents ? (
-            <View className="py-4 items-center">
-              <AppText variant="label" className="text-ink-3 font-sans">Loading activity...</AppText>
-            </View>
-          ) : activityEvents.length === 0 ? (
-            <View className="border border-dashed border-line rounded-xl p-4 items-center">
-              <AppText variant="label" className="text-ink-3 font-sans text-center">
-                No milestones yet. This fills in as you or your real circle members fully memorize a verse or chapter —
-                keep at it! 🌱
-              </AppText>
-            </View>
-          ) : (
-            <View className="border border-line rounded-xl p-4 bg-surface gap-3.5 shadow-sm">
-              {activityEvents.map((event, idx) => (
-                <View key={event.id}>
-                  <View className="flex-row items-start gap-3">
-                    <View
-                      className={`w-2 h-2 rounded-full mt-1.5 bg-success`}
-                    />
-                    <View className="gap-0.5 flex-1">
-                      <AppText variant="label" className="font-sans text-ink-2 leading-relaxed">
-                        <AppText variant="inherit" onPress={() => viewMemberProfileById(event.uid)} className="font-black text-ink">
-                          {event.uid === user?.uid ? 'You' : event.authorName}
-                        </AppText>{' '}
-                        {event.type === 'chapter' ? (
-                          <>
-                            completed memorizing the entire chapter of{' '}
-                            <AppText variant="inherit" className="font-bold text-ink">
-                              {event.book} {event.chapter}
-                            </AppText>{' '}
-                            ({event.verseCount} verses)! 👑
-                          </>
-                        ) : (
-                          <>
-                            completed memorizing{' '}
-                            <AppText variant="inherit" className="font-bold text-ink">
-                              {event.book} {event.chapter}:{event.verse}
-                            </AppText>
-                            .
-                          </>
-                        )}
-                      </AppText>
-                      <AppText variant="micro" className="text-ink-3 font-mono">
-                        {formatEventAge(event.createdAtMs)}
-                        {event.type === 'chapter' ? ' • Milestone Achievement' : ''}
-                      </AppText>
+                <ListRow
+                  key="requests"
+                  Icon={UserPlus}
+                  title="Friend requests"
+                  onPress={() => navigateTo('findFriends')}
+                  accessory={
+                    <View className="flex-row items-center" style={{ gap: space(6) }}>
+                      <Badge label={`${incomingFriendRequests.length} new`} tone="accent" />
+                      <ChevronRight size={18} color={palette.ink3} strokeWidth={2.4} />
                     </View>
-                  </View>
-                  {idx < activityEvents.length - 1 && <View className="border-t border-hairline mt-3.5" />}
-                </View>
+                  }
+                />
+              )}
+              {friends.map((f) => (
+                <ListRow
+                  key={f.uid}
+                  leading={<Avatar name={f.displayName} photoUri={f.avatarUrl} size={36} />}
+                  title={f.displayName}
+                  onPress={() => viewMemberProfileById(f.uid)}
+                />
               ))}
-            </View>
+            </GroupedList>
           )}
-        </View>
+        </CollapsibleSection>
+
+        <CollapsibleSection storageKey="community.milestones" title="Recent milestones" actionLabel="Refresh" onAction={loadActivityFeed}>
+          {loadingActivityEvents ? (
+            <AppText variant="label" className="font-sans text-ink-3 text-center" style={{ paddingVertical: space(24) }}>
+              Loading…
+            </AppText>
+          ) : activityEvents.length === 0 ? (
+            <View className="bg-surface border border-line rounded-card">
+              <EmptyState
+                Icon={Award}
+                title="No milestones yet"
+                message="When you or people in your circles finish memorizing a verse or chapter, it shows up here."
+              />
+            </View>
+          ) : (
+            <GroupedList>
+              {activityEvents.map((event) => {
+                const who = event.uid === user?.uid ? 'You' : event.authorName;
+                const isChapter = event.type === 'chapter';
+                return (
+                  <ListRow
+                    key={event.id}
+                    Icon={isChapter ? Award : Check}
+                    title={
+                      isChapter
+                        ? `${who} memorized ${event.book} ${event.chapter}`
+                        : `${who} memorized ${event.book} ${event.chapter}:${event.verse}`
+                    }
+                    subtitle={`${isChapter ? `Whole chapter, ${event.verseCount} verses · ` : ''}${formatTimeAgo(event.createdAtMs)}`}
+                    onPress={() => viewMemberProfileById(event.uid)}
+                    accessory="none"
+                  />
+                );
+              })}
+            </GroupedList>
+          )}
+        </CollapsibleSection>
       </ScrollView>
     </FadeInView>
   );
