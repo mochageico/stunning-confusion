@@ -1,73 +1,77 @@
-import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { REACTION_EMOJIS } from '../data';
 import { MessageReaction } from '../types';
-import { AppButton, AppText } from './design';
+import { AppText, useScaledSpace } from './design';
 
 // Shared by DMThreadScreen and CircleChatScreen -- renders under a message
-// bubble. Grouped pills (one per emoji actually used, with a count) plus a
-// small "+" that reveals the fixed 5-emoji picker row. One reaction per user
-// per message is enforced by toggleReaction (useAppState.ts), not here --
-// this component just reflects whatever reactions/{messageId} currently has.
+// bubble. One pill per emoji actually used, with a count. Nothing shows under
+// a message nobody has reacted to: tapping the bubble opens the picker (the
+// fixed 5 emoji) in its place. One reaction per user per message is enforced
+// by toggleReaction (useAppState.ts), not here.
 export function ReactionBar({
   reactions,
   myUid,
   onToggle,
   align = 'left',
+  pickerOpen = false,
+  onPickerDone,
 }: {
   reactions: MessageReaction[];
   myUid: string | undefined;
   onToggle: (emoji: string) => void;
   align?: 'left' | 'right';
+  /** The parent opens this when the bubble is tapped. */
+  pickerOpen?: boolean;
+  /** Called after an emoji is picked, so the parent can close the picker. */
+  onPickerDone?: () => void;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const space = useScaledSpace();
 
   const grouped = REACTION_EMOJIS.map((emoji) => ({
     emoji,
     reactors: reactions.filter((r) => r.emoji === emoji),
   })).filter((g) => g.reactors.length > 0);
 
-  if (grouped.length === 0 && !pickerOpen) {
-    return (
-      <View className={`mt-1 flex-row ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
-        <Pressable
-          onPress={() => setPickerOpen(true)}
-          className="w-5 h-5 rounded-full border border-line items-center justify-center bg-surface"
-        >
-          <AppText variant="caption" className="text-ink-3">+</AppText>
-        </Pressable>
-      </View>
-    );
-  }
+  if (grouped.length === 0 && !pickerOpen) return null;
 
   return (
-    <View className={`mt-1 flex-row flex-wrap items-center gap-1 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+    <View
+      className={`flex-row flex-wrap items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}
+      style={{ marginTop: space(4), gap: space(6) }}
+    >
       {grouped.map(({ emoji, reactors }) => {
         const mine = reactors.some((r) => r.uid === myUid);
         return (
-          <AppButton size="sm" key={emoji} onPress={() => onToggle(emoji)} className={`flex-row items-center gap-1 rounded-full border ${ mine ? 'bg-accent border-accent' : 'bg-surface-2 border-line' }`}>
+          <Pressable
+            key={emoji}
+            onPress={() => onToggle(emoji)}
+            accessibilityRole="button"
+            accessibilityLabel={`${emoji} ${reactors.length}${mine ? ', yours' : ''}`}
+            className={`flex-row items-center rounded-full border ${mine ? 'bg-accent-soft border-accent' : 'bg-surface border-line'}`}
+            style={{ paddingHorizontal: space(8), paddingVertical: space(3), gap: space(4) }}
+          >
             <AppText variant="caption">{emoji}</AppText>
-            <AppText variant="micro" className={`font-sans font-bold ${mine ? 'text-on-accent' : 'text-ink-3'}`}>
+            <AppText variant="caption" className={`font-sans font-semibold ${mine ? 'text-accent' : 'text-ink-3'}`}>
               {reactors.length}
             </AppText>
-          </AppButton>
+          </Pressable>
         );
       })}
-      <Pressable
-        onPress={() => setPickerOpen((v) => !v)}
-        className="w-5 h-5 rounded-full border border-line items-center justify-center bg-surface"
-      >
-        <AppText variant="caption" className="text-ink-3">+</AppText>
-      </Pressable>
       {pickerOpen && (
-        <View className="flex-row items-center gap-2 bg-surface border border-line rounded-full px-2.5 py-1">
+        <View
+          className="flex-row items-center bg-surface border border-line rounded-full"
+          style={{ paddingHorizontal: space(10), paddingVertical: space(4), gap: space(12) }}
+        >
           {REACTION_EMOJIS.map((emoji) => (
             <Pressable
               key={emoji}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`React ${emoji}`}
               onPress={() => {
                 onToggle(emoji);
-                setPickerOpen(false);
+                onPickerDone?.();
               }}
             >
               <AppText variant="body">{emoji}</AppText>

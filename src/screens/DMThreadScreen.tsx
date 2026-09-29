@@ -1,16 +1,18 @@
 import { useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Lock, Send, Trophy, UserPlus } from 'lucide-react-native';
+import { Lock, Send, Trophy, UserPlus } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
+import { FadeInView, useKeyboardHeight } from '../components/ui';
 import { ReactionBar } from '../components/ReactionBar';
 import { ChallengeCard, ChallengeCreateSheet } from '../components/ChallengeCard';
-import { AppButton, AppIconButton, AppTextInput, AppText } from '../components/design';
-
+import { AppButton, AppIconButton, AppTextInput, AppText, useScaledSpace } from '../components/design';
+import { ScreenHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+
 export default function DMThreadScreen({ state }: { state: AppState }) {
+  const space = useScaledSpace();
   const palette = useThemeColors();
   const {
     user,
@@ -34,6 +36,8 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
 
   const [draft, setDraft] = useState('');
   const [showChallengeSheet, setShowChallengeSheet] = useState(false);
+  // The message whose emoji picker is open. Tap a bubble to open it.
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const keyboardHeight = useKeyboardHeight();
   const insets = useSafeAreaInsets();
@@ -61,111 +65,122 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-        <View className="flex-row items-center gap-3 border-b border-hairline p-4">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={goBack} className="rounded-full border border-line bg-surface" />
-          <AvatarCircle name={activeDMThread.otherName} photoUri={activeDMThread.otherAvatarUrl || null} size={30} />
-          <AppText variant="body" className="font-serif font-bold text-ink">{activeDMThread.otherName}</AppText>
+      <View className="border-b border-hairline" style={{ paddingHorizontal: 20, paddingVertical: 8 }}>
+        <ScreenHeader inline title={activeDMThread.otherName} onBack={goBack} backLabel="Messages" />
+      </View>
+
+      {/* No status filter: declined/cancelled challenges render as a compact
+          row (see ChallengeCard) so they can actually be deleted rather than
+          lingering invisibly in Firestore. */}
+      {activeChallenges.length > 0 && (
+        <View style={{ paddingHorizontal: space(16), paddingTop: space(12) }}>
+          {activeChallenges.map((challenge) => (
+            <ChallengeCard
+              key={challenge.id}
+              challenge={challenge}
+              myUid={user?.uid}
+              onAccept={() => acceptChallenge(challenge)}
+              onDecline={() => declineChallenge(challenge)}
+              onDelete={() => deleteChallenge(challenge)}
+            />
+          ))}
         </View>
+      )}
 
-        {/* No status filter: declined/cancelled challenges render as a compact
-            dismissible row (see ChallengeCard) so they can actually be deleted
-            rather than lingering invisibly in Firestore. */}
-        {activeChallenges.length > 0 && (
-          <View className="px-3 pt-3">
-            {activeChallenges.map((challenge) => (
-              <ChallengeCard
-                key={challenge.id}
-                challenge={challenge}
-                myUid={user?.uid}
-                onAccept={() => acceptChallenge(challenge)}
-                onDecline={() => declineChallenge(challenge)}
-                onDelete={() => deleteChallenge(challenge)}
-              />
-            ))}
-          </View>
-        )}
-
-        <ScrollView
-          ref={scrollRef}
-          className="flex-1 bg-canvas"
-          contentContainerClassName="p-4"
-          contentContainerStyle={{ gap: 8 }}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-        >
-          {loadingActiveDMMessages ? (
-            <AppText variant="label" className="text-ink-3 font-sans text-center mt-4">Loading…</AppText>
-          ) : activeDMMessages.length === 0 ? (
-            <AppText variant="label" className="text-ink-3 font-sans text-center mt-4">
-              No messages yet. Say hello 👋
-            </AppText>
-          ) : (
-            activeDMMessages.map((msg) => {
-              const isMine = msg.fromUid === user?.uid;
-              return (
-                <View key={msg.id}>
-                  <View className={`flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
-                    <View
-                      className={`max-w-[78%] px-3 py-2 rounded-2xl ${
-                        isMine ? 'bg-accent rounded-br-sm' : 'bg-surface-2 rounded-bl-sm'
-                      }`}
-                    >
-                      <AppText variant="label" className={`font-sans ${isMine ? 'text-on-accent' : 'text-ink'}`}>{msg.text}</AppText>
-                    </View>
-                  </View>
-                  <ReactionBar
-                    reactions={reactionsByMessageId[msg.id] || []}
-                    myUid={user?.uid}
-                    align={isMine ? 'right' : 'left'}
-                    onToggle={(emoji) => activeDMThread && toggleReaction('dm', activeDMThread.id, msg.id, emoji)}
-                  />
-                </View>
-              );
-            })
-          )}
-        </ScrollView>
-
-        {activeDMThreadActive ? (
-          <View
-            className="flex-row items-center gap-2 px-3 pt-3 border-t border-hairline bg-surface"
-            style={{ paddingBottom: Math.max(bottomPad, 12) }}
-          >
-            <AppTextInput value={draft} onChangeText={setDraft} placeholder="Type a message…" placeholderTextColor={palette.ink3} multiline className="flex-1 bg-surface-2 border border-line rounded-xl px-3 py-2 text-ink font-sans max-h-24" />
-            <AppIconButton Icon={Trophy} diameter={36} iconSize={14} iconColor={palette.warning} onPress={() => setShowChallengeSheet(true)} className="rounded-full border border-warning/30 bg-warning-soft" />
-            <AppIconButton Icon={Send} diameter={36} iconSize={14} iconColor={palette.onAccent} onPress={handleSend} disabled={!draft.trim()} className={` rounded-full ${draft.trim() ? 'bg-accent' : 'bg-fill'}`} />
-          </View>
+      <ScrollView
+        ref={scrollRef}
+        className="flex-1 bg-canvas"
+        contentContainerStyle={{ padding: space(16), gap: space(10) }}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+      >
+        {loadingActiveDMMessages ? (
+          <AppText variant="label" className="text-ink-3 font-sans text-center" style={{ marginTop: space(16) }}>Loading…</AppText>
+        ) : activeDMMessages.length === 0 ? (
+          <AppText variant="label" className="text-ink-3 font-sans text-center" style={{ marginTop: space(16) }}>
+            No messages yet. Say hello.
+          </AppText>
         ) : (
-          <View
-            className="px-4 pt-4 border-t border-warning/30 bg-warning-soft"
-            style={{ gap: 8, paddingBottom: Math.max(bottomPad, 16) }}
-          >
-            <View className="flex-row items-center gap-1.5">
-              <Lock size={12} color={palette.warning} />
-              <AppText variant="section" className="font-sans font-bold text-warning uppercase tracking-wide">
-                Read-only conversation
-              </AppText>
-            </View>
-            <AppText variant="caption" className="text-warning font-sans leading-relaxed">
-              You and {activeDMThread.otherName} are no longer friends or sharing a community, so new messages are
-              disabled. History is kept. Send a friend request to keep the conversation going.
-            </AppText>
-            <AppButton size="md" onPress={() => !requestAlreadySent && sendFriendRequest(activeDMThread.otherUid, activeDMThread.otherName)} disabled={requestAlreadySent} className={`flex-row items-center justify-center gap-1.5 rounded-xl ${ requestAlreadySent ? 'bg-fill' : 'bg-accent' }`}>
-              <UserPlus size={12} color={requestAlreadySent ? palette.ink3 : palette.onAccent} />
-              <AppText variant="section" className={`font-sans font-bold uppercase tracking-wide ${requestAlreadySent ? 'text-ink-3' : 'text-on-accent'}`}>
-                {requestAlreadySent ? 'Friend Request Sent' : 'Send Friend Request'}
-              </AppText>
-            </AppButton>
-          </View>
+          activeDMMessages.map((msg) => {
+            const isMine = msg.fromUid === user?.uid;
+            return (
+              <View key={msg.id}>
+                <View className={`flex-row ${isMine ? 'justify-end' : 'justify-start'}`}>
+                  <Pressable
+                    onPress={() => setPickerFor(pickerFor === msg.id ? null : msg.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Message: ${msg.text}. Tap to react.`}
+                    className={`rounded-card ${isMine ? 'bg-accent rounded-br-sm' : 'bg-surface border border-line rounded-bl-sm'}`}
+                    style={{ maxWidth: '78%', paddingHorizontal: space(12), paddingVertical: space(8) }}
+                  >
+                    <AppText variant="label" className={`font-sans ${isMine ? 'text-on-accent' : 'text-ink'}`}>{msg.text}</AppText>
+                  </Pressable>
+                </View>
+                <ReactionBar
+                  reactions={reactionsByMessageId[msg.id] || []}
+                  myUid={user?.uid}
+                  align={isMine ? 'right' : 'left'}
+                  pickerOpen={pickerFor === msg.id}
+                  onPickerDone={() => setPickerFor(null)}
+                  onToggle={(emoji) => activeDMThread && toggleReaction('dm', activeDMThread.id, msg.id, emoji)}
+                />
+              </View>
+            );
+          })
         )}
+      </ScrollView>
 
-        <ChallengeCreateSheet
-          visible={showChallengeSheet}
-          title={`Challenge ${activeDMThread.otherName}`}
-          onClose={() => setShowChallengeSheet(false)}
-          onSubmit={(range) => {
-            sendChallenge(activeDMThread.otherUid, activeDMThread.otherName, activeDMThread.otherAvatarUrl, range);
-            setShowChallengeSheet(false);
-          }}
-        />
-      </FadeInView>
+      {activeDMThreadActive ? (
+        <View
+          className="flex-row items-center border-t border-hairline bg-surface"
+          style={{ gap: space(8), paddingHorizontal: space(12), paddingTop: space(10), paddingBottom: Math.max(bottomPad, 12) }}
+        >
+          <AppTextInput
+            value={draft}
+            onChangeText={setDraft}
+            placeholder="Message"
+            accessibilityLabel="Message"
+            variant="body"
+            multiline
+            numberOfLines={1}
+            className="flex-1 bg-surface-2 border border-line rounded-btn text-ink font-sans"
+            style={{ paddingHorizontal: space(12), paddingVertical: space(8), minHeight: space(40), maxHeight: 120 }}
+          />
+          <AppIconButton Icon={Trophy} variant="outline" diameter={36} accessibilityLabel="Challenge" onPress={() => setShowChallengeSheet(true)} />
+          <AppIconButton Icon={Send} variant="filled" diameter={36} onPress={handleSend} disabled={!draft.trim()} accessibilityLabel="Send" />
+        </View>
+      ) : (
+        <View
+          className="bg-surface border-t border-hairline"
+          style={{ gap: space(10), paddingHorizontal: space(16), paddingTop: space(14), paddingBottom: Math.max(bottomPad, 16) }}
+        >
+          <View className="flex-row items-center" style={{ gap: space(6) }}>
+            <Lock size={14} color={palette.ink3} />
+            <AppText variant="label" className="font-sans font-semibold text-ink">
+              This conversation is read-only
+            </AppText>
+          </View>
+          <AppText variant="caption" className="font-sans text-ink-2">
+            You and {activeDMThread.otherName} are no longer friends or in a circle together, so new messages are off. Your history is kept. Send a friend request to keep talking.
+          </AppText>
+          <AppButton
+            variant={requestAlreadySent ? 'quiet' : 'primary'}
+            Icon={UserPlus}
+            label={requestAlreadySent ? 'Friend request sent' : 'Send friend request'}
+            disabled={requestAlreadySent}
+            onPress={() => !requestAlreadySent && sendFriendRequest(activeDMThread.otherUid, activeDMThread.otherName)}
+          />
+        </View>
+      )}
+
+      <ChallengeCreateSheet
+        visible={showChallengeSheet}
+        title={`Challenge ${activeDMThread.otherName}`}
+        onClose={() => setShowChallengeSheet(false)}
+        onSubmit={(range) => {
+          sendChallenge(activeDMThread.otherUid, activeDMThread.otherName, activeDMThread.otherAvatarUrl, range);
+          setShowChallengeSheet(false);
+        }}
+      />
+    </FadeInView>
   );
 }

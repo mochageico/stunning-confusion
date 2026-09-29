@@ -1,11 +1,12 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, MessageCircle } from 'lucide-react-native';
+import { ScrollView, View } from 'react-native';
+import { ChevronRight, MessageCircle } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { AvatarCircle, FadeInView } from '../components/ui';
-import { AppIconButton, AppText } from '../components/design';
-
+import { FadeInView } from '../components/ui';
+import { AppText, useFontScale, useScaledSpace } from '../components/design';
+import { Avatar, Badge, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+
 function timeAgo(iso: string): string {
   if (!iso) return '';
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -19,62 +20,57 @@ function timeAgo(iso: string): string {
 
 export default function MessagesScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
+  const scale = useFontScale();
+  const space = useScaledSpace();
   const { dmThreads, loadingDmThreads, openDMThread, handleBack, user, friends, myChallengeBadges } = state;
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: 16 }}>
-        <View className="flex-row items-center gap-3 border-b border-hairline pb-3">
-          <AppIconButton Icon={ArrowLeft} diameter={32} iconSize={14} iconColor={palette.ink} onPress={handleBack} className="rounded-full border border-line bg-surface" />
-          <View className="flex-1">
-            <AppText variant="title" className="font-serif font-bold text-ink leading-none mt-0.5">Direct Messages</AppText>
-          </View>
-        </View>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        <ScreenHeader title="Messages" onBack={handleBack} backLabel="Community" />
 
         {!user ? (
-          <AppText variant="label" className="text-ink-3 font-sans px-1">Sign in to message friends.</AppText>
+          <AppText variant="label" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
+            Sign in to message friends.
+          </AppText>
         ) : loadingDmThreads ? (
-          <AppText variant="label" className="text-ink-3 font-sans px-1">Loading conversations…</AppText>
+          <AppText variant="label" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
+            Loading conversations…
+          </AppText>
         ) : dmThreads.length === 0 ? (
-          <View className="p-6 border border-dashed border-line rounded-2xl items-center" style={{ gap: 4 }}>
-            <MessageCircle size={20} color={palette.ink3} />
-            <AppText variant="label" className="text-center text-ink-3 font-sans mt-1">
-              No conversations yet. Message a friend from their profile to start one.
-            </AppText>
+          <View className="bg-surface border border-line rounded-card">
+            <EmptyState
+              Icon={MessageCircle}
+              title="No conversations yet"
+              message="Message a friend from their profile to start one."
+            />
           </View>
         ) : (
-          <View style={{ gap: 8 }}>
+          <GroupedList>
             {dmThreads.map((thread) => {
               const isFriend = friends.some((f) => f.uid === thread.otherUid);
               const hasChallenge = myChallengeBadges.some((c) => c.dmThreadId === thread.id);
+              // The badges drop out past 1.3x: they'd squeeze the name.
+              const showBadge = scale < 1.3 && (hasChallenge || !isFriend);
               return (
-                <Pressable
+                <ListRow
                   key={thread.id}
+                  leading={<Avatar name={thread.otherName} photoUri={thread.otherAvatarUrl || null} size={40} />}
+                  title={thread.otherName}
+                  subtitle={thread.lastMessage || "No messages yet"}
+                  subtitleLines={1}
+                  value={timeAgo(thread.lastMessageAt)}
                   onPress={() => openDMThread(thread.otherUid, thread.otherName, thread.otherAvatarUrl)}
-                  className="flex-row items-center gap-3 border border-line rounded-xl p-3 bg-surface"
-                >
-                  <AvatarCircle name={thread.otherName} photoUri={thread.otherAvatarUrl || null} size={36} />
-                  <View className="flex-1">
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center gap-1">
-                        <AppText variant="label" className="font-sans font-bold text-ink">{thread.otherName}</AppText>
-                        {hasChallenge && <AppText variant="caption">🏆</AppText>}
-                      </View>
-                      <AppText variant="micro" className="text-ink-3 font-sans">{timeAgo(thread.lastMessageAt)}</AppText>
+                  accessory={
+                    <View className="flex-row items-center" style={{ gap: space(6) }}>
+                      {showBadge && (hasChallenge ? <Badge label="Challenge" tone="accent" /> : <Badge label="May be read-only" tone="warning" />)}
+                      <ChevronRight size={Math.round(18 * scale)} color={palette.ink3} strokeWidth={2.4} />
                     </View>
-                    <AppText variant="caption" className="text-ink-3 font-sans mt-0.5" numberOfLines={1} ellipsizeMode="tail">
-                      {thread.lastMessage || 'Say hello 👋'}
-                    </AppText>
-                    {!isFriend && (
-                      <AppText variant="micro" className="text-warning font-sans font-bold uppercase tracking-wide mt-1">
-                        May be read-only
-                      </AppText>
-                    )}
-                  </View>
-                </Pressable>
+                  }
+                />
               );
             })}
-          </View>
+          </GroupedList>
         )}
       </ScrollView>
     </FadeInView>

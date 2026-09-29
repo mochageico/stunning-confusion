@@ -6,7 +6,7 @@ import { Send } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { AvatarCircle, FadeInView, useKeyboardHeight } from '../components/ui';
 import { ReactionBar } from '../components/ReactionBar';
-import { AppIconButton, AppTextInput, AppText } from '../components/design';
+import { AppIconButton, AppTextInput, AppText, useScaledSpace } from '../components/design';
 import { ScreenHeader } from '../components/blocks';
 
 export default function CircleChatScreen({ state }: { state: AppState }) {
@@ -24,7 +24,10 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
   } = state;
 
   const [draft, setDraft] = useState('');
+  // The message whose emoji picker is open. Tap a bubble to open it.
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const space = useScaledSpace();
   const keyboardHeight = useKeyboardHeight();
   const insets = useSafeAreaInsets();
 
@@ -71,15 +74,23 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
                 <View key={msg.id} style={{ gap: 2 }}>
                   <View className={`flex-row gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
                     <AvatarCircle name={msg.fromName} photoUri={msg.fromAvatarUrl || null} size={24} />
-                    <View className={`max-w-[74%] px-3 py-2 rounded-2xl ${isMine ? 'bg-accent rounded-br-sm' : 'bg-surface-2 rounded-bl-sm'}`}>
-                      {!isMine && <AppText variant="micro" className="font-sans font-bold text-ink-3 mb-0.5">{msg.fromName}</AppText>}
+                    <Pressable
+                      onPress={() => setPickerFor(pickerFor === msg.id ? null : msg.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Message from ${msg.fromName}: ${msg.text}. Tap to react.`}
+                      className={`rounded-card ${isMine ? 'bg-accent rounded-br-sm' : 'bg-surface border border-line rounded-bl-sm'}`}
+                      style={{ maxWidth: '74%', paddingHorizontal: space(12), paddingVertical: space(8) }}
+                    >
+                      {!isMine && <AppText variant="caption" className="font-sans font-semibold text-ink-3">{msg.fromName}</AppText>}
                       <AppText variant="label" className={`font-sans ${isMine ? 'text-on-accent' : 'text-ink'}`}>{msg.text}</AppText>
-                    </View>
+                    </Pressable>
                   </View>
                   <ReactionBar
                     reactions={reactionsByMessageId[msg.id] || []}
                     myUid={user?.uid}
                     align={isMine ? 'right' : 'left'}
+                    pickerOpen={pickerFor === msg.id}
+                    onPickerDone={() => setPickerFor(null)}
                     onToggle={(emoji) => activeCircleChatId && toggleReaction('circle', activeCircleChatId, msg.id, emoji)}
                   />
                 </View>
@@ -92,7 +103,17 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
           className="flex-row items-center gap-2 px-3 pt-3 border-t border-hairline bg-surface"
           style={{ paddingBottom: Math.max(bottomPad, 12) }}
         >
-          <AppTextInput value={draft} onChangeText={setDraft} placeholder="Message the circle…" accessibilityLabel="Message" multiline className="flex-1 bg-surface-2 border border-line rounded-xl px-3 py-2 text-ink font-sans max-h-24" />
+          <AppTextInput
+            value={draft}
+            onChangeText={setDraft}
+            placeholder="Message the circle"
+            accessibilityLabel="Message"
+            variant="body"
+            multiline
+            numberOfLines={1}
+            className="flex-1 bg-surface-2 border border-line rounded-btn text-ink font-sans"
+            style={{ paddingHorizontal: space(12), paddingVertical: space(8), minHeight: space(40), maxHeight: 120 }}
+          />
           <AppIconButton Icon={Send} variant="filled" diameter={36} onPress={handleSend} disabled={!draft.trim()} accessibilityLabel="Send" />
         </View>
       </FadeInView>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
-import { Trash2, X } from 'lucide-react-native';
+import { View } from 'react-native';
+import { Trash2 } from 'lucide-react-native';
 
 import { Challenge } from '../types';
 import { DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
@@ -8,6 +8,7 @@ import { useChapterText } from '../state/useScripture';
 import { BookPicker } from './BookPicker';
 import { NumericInput, NumericKeyboardAccessory, ProgressBar } from './ui';
 import { AppButton, AppIconButton, AppText, useScaledSpace } from './design';
+import { Badge, Dialog } from './blocks';
 
 import { useThemeColors } from './theme';
 // This sheet is a Modal -- its own iOS view controller -- so it must register
@@ -161,8 +162,8 @@ function ChallengeRangeForm({
   );
 }
 
-/** Bottom-sheet presentation. Used from a chat thread, where there's no room
- *  on screen to expand a form in place. */
+/** Bottom-sheet presentation. Used from a chat thread and a friend's
+ *  profile, where there's no room on screen to expand a form in place. */
 export function ChallengeCreateSheet({
   visible,
   title,
@@ -174,26 +175,11 @@ export function ChallengeCreateSheet({
   onClose: () => void;
   onSubmit: (range: ChallengeRange) => void;
 }) {
-  const palette = useThemeColors();
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View className="flex-1 bg-black/40 justify-end">
-        <View className="bg-surface rounded-t-2xl p-5" style={{ gap: 12 }}>
-          <View className="flex-row items-center justify-between">
-            <AppText variant="body" className="font-serif font-bold text-ink">{title}</AppText>
-            <AppIconButton Icon={X} diameter={28} iconSize={12} iconColor={palette.ink} onPress={onClose} className="rounded-full border border-line" />
-          </View>
-
-          <ChallengeRangeForm
-            submitLabel="Send challenge"
-            accessoryID={CHALLENGE_ACCESSORY_ID}
-            onSubmit={onSubmit}
-            onCancel={onClose}
-          />
-        </View>
-      </View>
+    <Dialog visible={visible} onClose={onClose} placement="sheet" title={title}>
+      <ChallengeRangeForm submitLabel="Send challenge" accessoryID={CHALLENGE_ACCESSORY_ID} onSubmit={onSubmit} onCancel={onClose} />
       <NumericKeyboardAccessory nativeID={CHALLENGE_ACCESSORY_ID} />
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -219,12 +205,11 @@ export function ChallengeCreateInline({
 // 1:1 challenge card -- pending (accept/decline for the recipient, waiting
 // note for the sender), active (dual progress bars), or completed/declined.
 //
-// Every status carries a delete control, because either participant can now
-// remove the challenge outright (see deleteChallenge in useAppState.ts). That
-// includes declined/cancelled ones: those used to render as `null`, which
-// meant a whole class of challenge was permanently un-deletable -- invisible
-// in the thread but still a live Firestore doc. They now show as a compact
-// dismissible row instead.
+// Every status can be deleted, because either participant can remove the
+// challenge outright (see deleteChallenge in useAppState.ts). That includes
+// declined/cancelled ones: those used to render as `null`, which meant a whole
+// class of challenge was permanently un-deletable -- invisible in the thread
+// but still a live Firestore doc. They show as a compact row instead.
 export function ChallengeCard({
   challenge,
   myUid,
@@ -239,117 +224,123 @@ export function ChallengeCard({
   onDelete: () => void;
 }) {
   const palette = useThemeColors();
+  const space = useScaledSpace();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const isRecipient = challenge.toUid === myUid;
   const myProgress = isRecipient ? challenge.toProgress : challenge.fromProgress;
   const theirProgress = isRecipient ? challenge.fromProgress : challenge.toProgress;
   const theirName = isRecipient ? challenge.fromName : challenge.toName;
+  const total = Math.max(1, challenge.totalVerses);
 
-  // Deleting is destructive for the OTHER person too, so it always asks first
-  // -- matching the inline confirm-card idiom used on Home/MemberProfile
-  // rather than a native Alert.
-  const deleteControl = (
-    <AppIconButton Icon={Trash2} diameter={24} iconSize={12} iconColor={palette.ink3} onPress={() => setConfirmingDelete(true)} hitSlop={8} className="rounded-full" />
+  // Deleting is destructive for the OTHER person too, so it always asks first.
+  const deleteDialog = (
+    <Dialog
+      visible={confirmingDelete}
+      onClose={() => setConfirmingDelete(false)}
+      title="Delete this challenge?"
+      message="It's removed for both of you. Verses you've started stay in your queue."
+      actions={
+        <>
+          <AppButton variant="quiet" label="Keep it" onPress={() => setConfirmingDelete(false)} />
+          <AppButton
+            variant="destructive"
+            label="Delete"
+            onPress={() => {
+              setConfirmingDelete(false);
+              onDelete();
+            }}
+          />
+        </>
+      }
+    />
   );
 
-  const confirmRow = (
-    <View className="border border-line bg-surface rounded-lg p-2.5" style={{ gap: 8 }}>
-      <AppText variant="caption" className="font-sans text-ink-2 leading-snug">
-        Delete this challenge for both of you? Verses you've started stay in your queue.
-      </AppText>
-      <View className="flex-row gap-2">
-        <AppButton size="md" onPress={() => setConfirmingDelete(false)} className="flex-1 bg-surface border border-line-strong rounded-lg items-center">
-          <AppText variant="micro" className="text-ink-2 font-bold uppercase tracking-wide">Keep</AppText>
-        </AppButton>
-        <AppButton size="md" onPress={onDelete} className="flex-1 bg-danger rounded-lg items-center">
-          <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wide">Delete</AppText>
-        </AppButton>
-      </View>
-    </View>
-  );
+  const box = 'bg-surface border border-line rounded-card';
+  const boxStyle = { padding: space(14), gap: space(10), marginBottom: space(8) };
 
   if (challenge.status === 'declined' || challenge.status === 'cancelled') {
     return (
-      <View className="mx-1 mb-2 border border-line bg-surface-2 rounded-xl p-3" style={{ gap: 8 }}>
-        <View className="flex-row items-center justify-between">
-          <View className="flex-1 pr-2">
-            <AppText variant="caption" className="font-sans font-bold text-ink-3">
-              {referenceLabel(challenge)} — {challenge.status === 'declined' ? 'declined' : 'cancelled'}
-            </AppText>
-          </View>
-          {deleteControl}
-        </View>
-        {confirmingDelete && confirmRow}
+      <View className={`${box} flex-row items-center`} style={{ ...boxStyle, gap: space(8) }}>
+        <AppText variant="label" className="font-sans text-ink-3 flex-1">
+          {referenceLabel(challenge)} · {challenge.status === 'declined' ? 'declined' : 'cancelled'}
+        </AppText>
+        <AppButton size="sm" variant="quiet" label="Remove" onPress={() => setConfirmingDelete(true)} />
+        {deleteDialog}
       </View>
     );
   }
 
+  const badge =
+    challenge.status === 'pending' ? (
+      <Badge label="Pending" tone="warning" />
+    ) : challenge.status === 'completed' ? (
+      <Badge label="Complete" tone="success" />
+    ) : (
+      <Badge label="Racing" tone="accent" />
+    );
+
+  const progressRow = (name: string, value: number) => (
+    <View style={{ gap: space(4) }}>
+      <View className="flex-row justify-between" style={{ gap: space(8) }}>
+        <AppText variant="caption" className="font-sans text-ink-2 flex-1">{name}</AppText>
+        <AppText variant="caption" className="font-sans text-ink-3">
+          {value} of {challenge.totalVerses}
+        </AppText>
+      </View>
+      <ProgressBar percent={(value / total) * 100} />
+    </View>
+  );
+
   return (
-    <View className="mx-1 mb-2 border border-warning/30 bg-warning-soft rounded-xl p-3" style={{ gap: 8 }}>
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-1.5 flex-1 pr-2">
-          <AppText variant="label">🏆</AppText>
-          <AppText variant="section" className="font-sans font-extrabold text-warning uppercase tracking-wide">
+    <View className={box} style={boxStyle}>
+      <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
+        <View className="flex-1 flex-row items-center flex-wrap" style={{ gap: space(8) }}>
+          <AppText variant="body" className="font-sans font-semibold text-ink">
             {referenceLabel(challenge)}
           </AppText>
+          {badge}
         </View>
-        {deleteControl}
+        <AppIconButton
+          Icon={Trash2}
+          variant="bare"
+          diameter={30}
+          iconColor={palette.ink3}
+          accessibilityLabel="Delete challenge"
+          onPress={() => setConfirmingDelete(true)}
+        />
       </View>
 
-      {confirmingDelete && confirmRow}
-
       {challenge.status === 'pending' && isRecipient && (
-        <View style={{ gap: 8 }}>
-          <AppText variant="caption" className="text-warning font-sans">{challenge.fromName} challenged you to a memorization race!</AppText>
-          <View className="flex-row gap-2">
-            <AppButton size="md" onPress={onAccept} className="flex-1 bg-accent rounded-lg items-center">
-              <AppText variant="micro" className="text-on-accent font-bold uppercase tracking-wide">Accept</AppText>
-            </AppButton>
-            <AppButton size="md" onPress={onDecline} className="flex-1 bg-surface border border-line-strong rounded-lg items-center">
-              <AppText variant="micro" className="text-ink-2 font-bold uppercase tracking-wide">Decline</AppText>
-            </AppButton>
+        <View style={{ gap: space(10) }}>
+          <AppText variant="label" className="font-sans text-ink-2">
+            {challenge.fromName} challenged you to a memorization race.
+          </AppText>
+          <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
+            <AppButton variant="primary" label="Accept" onPress={onAccept} />
+            <AppButton variant="quiet" label="Decline" onPress={onDecline} />
           </View>
         </View>
       )}
 
       {challenge.status === 'pending' && !isRecipient && (
-        <View style={{ gap: 8 }}>
-          <AppText variant="caption" className="text-warning font-sans">Waiting for {challenge.toName} to accept…</AppText>
+        <View style={{ gap: space(10) }}>
+          <AppText variant="label" className="font-sans text-ink-2">Waiting for {challenge.toName} to accept.</AppText>
           {/* No confirm step here -- nothing has been accepted yet, so
               cancelling an unanswered invitation costs the other side nothing. */}
-          <Pressable onPress={onDelete} className="self-start bg-surface border border-line-strong px-3 py-1.5 rounded-lg">
-            <AppText variant="micro" className="text-ink-2 font-bold uppercase tracking-wide">Cancel Challenge</AppText>
-          </Pressable>
+          <AppButton size="sm" variant="quiet" label="Cancel challenge" onPress={onDelete} style={{ alignSelf: 'flex-start' }} />
         </View>
       )}
 
       {(challenge.status === 'active' || challenge.status === 'completed') && (
-        <View style={{ gap: 6 }}>
-          <View style={{ gap: 3 }}>
-            <View className="flex-row justify-between">
-              <AppText variant="micro" className="font-sans font-bold text-ink-2">You</AppText>
-              <AppText variant="micro" className="font-mono text-ink-3">
-                {myProgress}/{challenge.totalVerses}
-              </AppText>
-            </View>
-            <ProgressBar percent={(myProgress / Math.max(1, challenge.totalVerses)) * 100} />
-          </View>
-          <View style={{ gap: 3 }}>
-            <View className="flex-row justify-between">
-              <AppText variant="micro" className="font-sans font-bold text-ink-2">{theirName}</AppText>
-              <AppText variant="micro" className="font-mono text-ink-3">
-                {theirProgress}/{challenge.totalVerses}
-              </AppText>
-            </View>
-            <ProgressBar percent={(theirProgress / Math.max(1, challenge.totalVerses)) * 100} />
-          </View>
+        <View style={{ gap: space(8) }}>
+          {progressRow('You', myProgress)}
+          {progressRow(theirName, theirProgress)}
           {challenge.status === 'completed' && (
-            <AppText variant="micro" className="font-sans font-bold text-success uppercase tracking-wide">
-              🎉 Challenge complete — you both finished!
-            </AppText>
+            <AppText variant="caption" className="font-sans font-semibold text-success">You both finished.</AppText>
           )}
         </View>
       )}
+      {deleteDialog}
     </View>
   );
 }

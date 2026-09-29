@@ -273,6 +273,7 @@ export function GroupedList({
 export function ListRow({
   title,
   subtitle,
+  subtitleLines,
   value,
   Icon,
   iconColor,
@@ -283,6 +284,8 @@ export function ListRow({
 }: {
   title: string;
   subtitle?: string;
+  /** Cut the subtitle to this many lines (a message preview); it wraps freely by default. */
+  subtitleLines?: number;
   /** The current setting, in grey on the right ("7:00 AM", "5 due"). */
   value?: string;
   /** A plain lucide icon in the accent. No tinted tile, per the chosen look. */
@@ -323,7 +326,7 @@ export function ListRow({
             {title}
           </AppText>
           {subtitle ? (
-            <AppText variant="caption" className="font-sans text-ink-3">
+            <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={subtitleLines}>
               {subtitle}
             </AppText>
           ) : null}
@@ -501,6 +504,32 @@ export function Avatar({
       <AppText variant="inherit" className="font-sans font-semibold text-accent" style={{ fontSize: size * 0.42 }}>
         {initial}
       </AppText>
+    </View>
+  );
+}
+
+// ============================================================
+// StatRow — a few headline numbers side by side in one card, divided by
+// hairlines. One word per label so a wrapped label never nudges its number
+// off the line the others share; numbers are top-aligned for the same reason.
+// ============================================================
+export function StatRow({ stats }: { stats: { label: string; value: string | number }[] }) {
+  const space = useScaledSpace();
+  return (
+    <View className="flex-row items-stretch bg-surface border border-line rounded-card" style={{ paddingVertical: space(14) }}>
+      {stats.map((stat, i) => (
+        <React.Fragment key={stat.label}>
+          {i > 0 && <View className="w-px bg-hairline" style={{ marginVertical: space(2) }} />}
+          <View className="flex-1 items-center justify-start" style={{ gap: space(2), paddingHorizontal: space(4) }}>
+            <AppText variant="display" className="font-sans font-bold text-ink">
+              {stat.value}
+            </AppText>
+            <AppText variant="caption" className="font-sans text-ink-3 text-center">
+              {stat.label}
+            </AppText>
+          </View>
+        </React.Fragment>
+      ))}
     </View>
   );
 }

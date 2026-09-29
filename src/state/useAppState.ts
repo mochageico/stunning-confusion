@@ -1864,7 +1864,7 @@ export function useAppState() {
         status: 'pending',
         createdAt: new Date().toISOString(),
       });
-      triggerToast(`Friend request sent to ${toName}! 🤝`);
+      triggerToast(`Friend request sent to ${toName}.`);
       loadFriendRequests();
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `friendRequests/${requestId}`);
@@ -1891,7 +1891,7 @@ export function useAppState() {
         friendsSince,
       });
       await batch.commit();
-      triggerToast(`You and ${request.fromName} are now friends! 🎉`);
+      triggerToast(`You and ${request.fromName} are now friends.`);
       loadFriendRequests();
       loadFriends();
     } catch (err) {
@@ -2051,7 +2051,7 @@ export function useAppState() {
       await setDoc(doc(db, 'profiles', myUid, 'accountabilitySentLog', friend.uid), { lastSentAt: nowISO });
 
       setAccountabilitySentLog((prev) => ({ ...prev, [friend.uid]: nowISO }));
-      triggerToast(`Accountability nudge sent to ${friend.displayName}! 📣`);
+      triggerToast(`Nudge sent to ${friend.displayName}.`);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'accountabilityNudges');
       triggerToast('Could not send that nudge -- please try again.');
@@ -2230,7 +2230,7 @@ export function useAppState() {
       if (range.endVerse != null) data.endVerse = range.endVerse;
       await addDoc(collection(db, 'challenges'), data);
       addVersesToQueue(verses, selectedTranslationId);
-      triggerToast(`Challenge sent to ${toName}! 🏆`);
+      triggerToast(`Challenge sent to ${toName}.`);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'challenges');
       triggerToast("Couldn't send that challenge -- please try again.");
@@ -2246,7 +2246,7 @@ export function useAppState() {
         respondedAt: new Date().toISOString(),
       });
       addVersesToQueue(verses, selectedTranslationId);
-      triggerToast(`Challenge accepted! Race is on. 🏁`);
+      triggerToast('Challenge accepted. The race is on.');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `challenges/${challenge.id}`);
     }
@@ -4063,7 +4063,7 @@ export function useAppState() {
         },
         { merge: true }
       );
-      triggerToast(vis === 'friends' ? 'Your verses are now visible to friends. 👀' : 'Your verses are now private. 🔒');
+      triggerToast(vis === 'friends' ? 'Your verses are now visible to friends.' : 'Your verses are now private.');
     } catch (err) {
       console.error('Failed to update memory queue visibility:', err);
       triggerToast('Failed to update memory queue visibility.');
