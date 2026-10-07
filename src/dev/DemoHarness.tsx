@@ -404,7 +404,6 @@ export function useDemoState(real: AppState): AppState {
     overrides.modalVerses = q.slice(0, 2).map((x) => ({ book: x.book, chapter: x.chapter, verse: x.verseNumber, text: x.text, status: 'learning' })) as any;
   }
   if (s === 'modalSave') overrides.saveRecordingDialog = true;
-  if (s === 'modalProgress') overrides.showProgressModal = true;
   if (s === 'modalMissed') {
     const q = buildQueue();
     overrides.showMissedReviewPrompt = true;

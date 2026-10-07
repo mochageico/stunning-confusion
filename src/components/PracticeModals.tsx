@@ -1534,7 +1534,7 @@ function PracticeModalsInner({
         triggerLocalToast(`Speech engine error: ${message}`);
       },
     });
-    triggerLocalToast('Microphone active! Recite the passage... 🎙️');
+    triggerLocalToast('Microphone active! Recite the passage...');
   };
 
   const stopListening = () => {

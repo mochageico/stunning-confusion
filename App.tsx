@@ -5,7 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import { Check, Home as HomeIcon, Mic, Pause, Sliders, User, Users, X } from 'lucide-react-native';
+import { Check, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
 
 import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
@@ -230,88 +230,6 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
         </AppText>
       </View>
     </Dialog>
-  );
-}
-
-function ProgressModal({ state }: { state: AppState }) {
-  const palette = useThemeColors();
-  const { memorizedCount, learningCount, untouchedCount, verses, setShowProgressModal, navigateTo } = state;
-  // Derive from the user's actual verses (previously a hardcoded demo list
-  // of four books, which showed empty 0/0 bars for anyone whose real verses
-  // were in other books).
-  const books = Array.from(new Set(verses.map((v) => v.book)));
-  return (
-    <View className="absolute inset-0 bg-black/60 items-center justify-center p-4 z-50">
-      <FadeInView style={{ width: '100%', maxWidth: 340 }}>
-        <View className="bg-surface border-2 border-ink rounded-xl p-5 gap-4">
-          <View className="flex-row items-center justify-between border-b border-line pb-2">
-            <AppText variant="title" className="font-serif font-bold text-ink">My Scripture Memory Plan</AppText>
-            <Pressable onPress={() => setShowProgressModal(false)}>
-              <X size={16} color={palette.ink3} />
-            </Pressable>
-          </View>
-
-          <View className="gap-3.5 pt-1">
-            <View className="flex-row gap-2">
-              <View className="flex-1 border border-success/30 rounded-xl p-2 bg-success-soft items-center">
-                <AppText variant="title" className="font-bold text-success">{memorizedCount}</AppText>
-                <AppText variant="micro" className="font-sans font-bold text-ink-3">Memorized</AppText>
-              </View>
-              <View className="flex-1 border border-warning/30 rounded-xl p-2 bg-warning-soft items-center">
-                <AppText variant="title" className="font-bold text-warning">{learningCount}</AppText>
-                <AppText variant="micro" className="font-sans font-bold text-ink-3">Learning</AppText>
-              </View>
-              <View className="flex-1 border border-line rounded-xl p-2 bg-surface-2 items-center">
-                <AppText variant="title" className="font-bold text-ink-2">{untouchedCount}</AppText>
-                <AppText variant="micro" className="font-sans font-bold text-ink-3">Untouched</AppText>
-              </View>
-            </View>
-
-            <View className="gap-3 pt-1">
-              <AppText variant="section" className="font-bold text-ink-3 tracking-wider uppercase">PROGRESS BY BOOK</AppText>
-              {books.map((bookName) => {
-                const bookVerses = verses.filter((v) => v.book === bookName);
-                const memBookCount = bookVerses.filter((v) => v.status === 'memorized').length;
-                const ratio = Math.round((memBookCount / bookVerses.length) * 100) || 0;
-                return (
-                  <View key={bookName} className="gap-1">
-                    <View className="flex-row justify-between items-center">
-                      <AppText variant="label" className="text-ink font-serif font-bold">{bookName}</AppText>
-                      <AppText variant="caption" className="text-ink-3 font-mono">
-                        {memBookCount}/{bookVerses.length} memorized
-                      </AppText>
-                    </View>
-                    <View className="w-full bg-surface-2 h-2 rounded-full overflow-hidden border border-line">
-                      <View className="bg-accent h-full" style={{ width: `${ratio}%` }} />
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Saved Memory Rhythms, not the designer directly. The designer has
-              to be told which rhythm it's editing -- a bare navigateTo left
-              editingPlanId null, and Save then took the create-new branch,
-              minting a duplicate. Going through the list is now the one door
-              into it (see MemoryDeskScreen). */}
-          <Pressable
-            onPress={() => {
-              setShowProgressModal(false);
-              navigateTo('savedPlans');
-            }}
-            className="w-full py-2.5 px-4 bg-surface border border-ink rounded-xl flex-row items-center justify-center gap-1.5"
-          >
-            <Sliders size={13} color={palette.ink} />
-            <AppText variant="label" className="text-ink font-bold font-sans ">Saved Memory Rhythms</AppText>
-          </Pressable>
-
-          <Pressable onPress={() => setShowProgressModal(false)} className="w-full py-2.5 bg-fill rounded-xl items-center">
-            <AppText variant="label" className="text-ink font-bold font-sans ">Close</AppText>
-          </Pressable>
-        </View>
-      </FadeInView>
-    </View>
   );
 }
 
@@ -607,7 +525,6 @@ function AppShell() {
       )}
 
       {state.saveRecordingDialog && <SaveRecordingDialog state={state} />}
-      {state.showProgressModal && <ProgressModal state={state} />}
       {state.showMissedReviewPrompt && <MissedReviewPromptModal state={state} />}
 
       {/* First-run setup -- same full-screen-overlay convention as the

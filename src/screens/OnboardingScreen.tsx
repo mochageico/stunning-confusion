@@ -5,7 +5,8 @@ import { Check, X } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView, NumericInput, StepperRow, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
-import { AppIconButton, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
+import { AppButton, AppIconButton, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
+import { ScreenHeader } from '../components/blocks';
 
 import { useThemeColors } from '../components/theme';
 // ============================================================================
@@ -64,7 +65,7 @@ function SetupCard({
 
   return (
     <View
-      className={`rounded-xl border-2 bg-surface ${done ? 'border-success' : 'border-ink'}`}
+      className="rounded-card border border-line bg-surface"
       style={{ padding: space(14), gap: space(10) }}
     >
       <View className="flex-row items-center" style={{ gap: space(8) }}>
@@ -80,7 +81,7 @@ function SetupCard({
             </AppText>
           )}
         </View>
-        <AppText variant="body" className="font-serif font-black text-ink flex-1">
+        <AppText variant="body" className="font-sans font-semibold text-ink flex-1">
           {title}
         </AppText>
       </View>
@@ -160,29 +161,15 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
         contentContainerClassName="p-5 pb-12"
         contentContainerStyle={{ gap: space(16) }}
       >
-        {/* Header */}
-        <View className="flex-row items-start justify-between border-b border-hairline" style={{ paddingBottom: space(12), gap: space(10) }}>
-          <View className="flex-1">
-            <AppText variant="micro" className="font-sans font-bold uppercase tracking-widest text-ink-3">
-              Welcome
-            </AppText>
-            <AppText variant="display" className="font-serif font-black text-ink">
-              Let's set you up
-            </AppText>
-          </View>
-          <AppIconButton
-            Icon={X}
-            diameter={32}
-            iconSize={14}
-            iconColor={palette.ink}
-            onPress={dismissOnboarding}
-            className="rounded-full border border-line bg-surface shrink-0"
-          />
-        </View>
+        <ScreenHeader
+          eyebrow="Welcome"
+          title="Let's set you up"
+          actions={<AppIconButton Icon={X} variant="outline" diameter={36} accessibilityLabel="Skip setup" onPress={dismissOnboarding} />}
+        />
 
         {/* CARD 1 -- the idea. This is the piece the old checklist never had:
             a plain-English statement of the loop, before any settings. */}
-        <SetupCard index={1} title="How this works" done>
+        <SetupCard index={1} title="How this works">
           <View style={{ gap: space(8) }}>
             <AppText variant="label" className="font-sans text-ink leading-relaxed">
               You pick verses you want to know by heart.
@@ -194,7 +181,7 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
             <AppText variant="label" className="font-sans text-ink leading-relaxed">
               Open the app, do what's on the Today screen, and close it. That's the whole thing.
             </AppText>
-            <View className="rounded-lg bg-surface-2 border border-line" style={{ padding: space(10) }}>
+            <View className="rounded-btn bg-surface-2 border border-line" style={{ padding: space(10) }}>
               <AppText variant="caption" className="font-sans text-ink-2 leading-relaxed">
                 A verse comes back every day for a few weeks, then once a week, then once a month — and then it stops,
                 because by then it's yours. You don't have to schedule any of that.
@@ -209,55 +196,44 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
             A few verses is a better start than a whole chapter. You can always add more later.
           </AppText>
 
-          <View className="flex-row" style={{ gap: space(8) }}>
-            <View className="flex-1" style={{ gap: space(4) }}>
-              <AppText variant="micro" className="font-sans font-bold uppercase text-ink-3">Book</AppText>
-              <BookPicker value={book} onChange={setBook} />
-            </View>
-            <View style={{ width: '28%', gap: space(4) }}>
-              <AppText variant="micro" className="font-sans font-bold uppercase text-ink-3">Chapter</AppText>
+          <View style={{ gap: space(4) }}>
+            <AppText variant="caption" className="font-sans font-medium text-ink-2">Book</AppText>
+            <BookPicker value={book} onChange={setBook} />
+          </View>
+
+          {/* The three numbers share a row and wrap when the text is big. */}
+          <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+            <View style={{ flexGrow: 1, flexBasis: space(96), gap: space(4) }}>
+              <AppText variant="caption" className="font-sans font-medium text-ink-2">Chapter</AppText>
               <NumericInput
                 {...chapterField}
-                className="w-full border border-line-strong rounded-lg font-mono font-bold text-ink"
+                className="w-full bg-surface border border-line rounded-btn font-sans text-ink"
                 style={{ minHeight: MIN_TOUCH * 0.8, paddingHorizontal: space(8) }}
               />
             </View>
-          </View>
-
-          <View className="flex-row" style={{ gap: space(8) }}>
-            <View className="flex-1" style={{ gap: space(4) }}>
-              <AppText variant="micro" className="font-sans font-bold uppercase text-ink-3">From verse</AppText>
+            <View style={{ flexGrow: 1, flexBasis: space(96), gap: space(4) }}>
+              <AppText variant="caption" className="font-sans font-medium text-ink-2">From verse</AppText>
               <NumericInput
                 {...startField}
-                className="w-full border border-line-strong rounded-lg font-mono font-bold text-ink"
+                className="w-full bg-surface border border-line rounded-btn font-sans text-ink"
                 style={{ minHeight: MIN_TOUCH * 0.8, paddingHorizontal: space(8) }}
               />
             </View>
-            <View className="flex-1" style={{ gap: space(4) }}>
-              <AppText variant="micro" className="font-sans font-bold uppercase text-ink-3">To verse</AppText>
+            <View style={{ flexGrow: 1, flexBasis: space(96), gap: space(4) }}>
+              <AppText variant="caption" className="font-sans font-medium text-ink-2">To verse</AppText>
               <NumericInput
                 {...endField}
-                className="w-full border border-line-strong rounded-lg font-mono font-bold text-ink"
+                className="w-full bg-surface border border-line rounded-btn font-sans text-ink"
                 style={{ minHeight: MIN_TOUCH * 0.8, paddingHorizontal: space(8) }}
               />
             </View>
           </View>
 
-          <Pressable
-            onPress={handleAddVerses}
-            disabled={adding}
-            accessibilityRole="button"
-            className={`w-full rounded-xl items-center justify-center ${adding ? 'bg-ink-3' : 'bg-accent'}`}
-            style={{ minHeight: MIN_TOUCH, paddingVertical: space(10) }}
-          >
-            <AppText variant="label" className="text-on-accent font-sans font-bold">
-              {adding ? 'Adding…' : 'Add these verses'}
-            </AppText>
-          </Pressable>
+          <AppButton variant="primary" label={adding ? 'Adding…' : 'Add these verses'} disabled={adding} onPress={handleAddVerses} />
 
           {addedLabel && (
-            <View className="rounded-lg border border-success/30 bg-success-soft" style={{ padding: space(10) }}>
-              <AppText variant="caption" className="font-sans font-bold text-success">{addedLabel}</AppText>
+            <View className="rounded-btn bg-success-soft" style={{ padding: space(10) }}>
+              <AppText variant="caption" className="font-sans font-semibold text-success">{addedLabel}</AppText>
             </View>
           )}
         </SetupCard>
@@ -297,10 +273,10 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
 
           <View style={{ gap: space(6) }}>
             <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
-              <AppText variant="micro" className="font-sans font-bold uppercase text-ink-3 flex-1">
+              <AppText variant="caption" className="font-sans font-medium text-ink-2 flex-1">
                 New verses each of those days
               </AppText>
-              <AppText variant="micro" className="font-mono font-bold text-ink-2 shrink-0">{newVersesPace}</AppText>
+              <AppText variant="caption" className="font-sans font-semibold text-ink shrink-0">{newVersesPace}</AppText>
             </View>
             <StepperRow
               value={newVersesPace}
@@ -312,7 +288,7 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
 
           {/* The consequence, in one line -- so the dials mean something
               without having to imagine their effect. */}
-          <View className="rounded-lg bg-surface-2 border border-line" style={{ padding: space(10) }}>
+          <View className="rounded-btn bg-surface-2 border border-line" style={{ padding: space(10) }}>
             <AppText variant="caption" className="font-sans text-ink-2 leading-relaxed">
               {learningDays.length === 0
                 ? "No days picked yet — pick at least one, or nothing new will start."
@@ -321,22 +297,10 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
           </View>
         </SetupCard>
 
-        <Pressable
-          onPress={dismissOnboarding}
-          accessibilityRole="button"
-          className="w-full rounded-xl bg-accent items-center justify-center"
-          style={{ minHeight: MIN_TOUCH, paddingVertical: space(12) }}
-        >
-          <AppText variant="label" className="text-on-accent font-sans font-bold uppercase tracking-widest">
-            {hasVerses ? "I'm ready — start" : 'Go to Today'}
-          </AppText>
-        </Pressable>
-
-        <Pressable onPress={dismissOnboarding} className="w-full items-center" style={{ paddingVertical: space(6) }}>
-          <AppText variant="caption" className="text-ink-3 font-sans font-bold underline">
-            Skip for now
-          </AppText>
-        </Pressable>
+        <View style={{ gap: space(4) }}>
+          <AppButton size="lg" variant="primary" label={hasVerses ? "I'm ready, start" : 'Go to Today'} onPress={dismissOnboarding} />
+          <AppButton variant="quiet" label="Skip for now" onPress={dismissOnboarding} className="border-0" />
+        </View>
       </ScrollView>
     </FadeInView>
   );

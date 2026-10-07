@@ -1,22 +1,30 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { BookOpen } from 'lucide-react-native';
 
 import { FadeInView, useKeyboardHeight } from '../components/ui';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { useEmailAuth } from '../state/useEmailAuth';
 import { AppState } from '../state/useAppState';
-import { AppButton, AppTextInput, AppText } from '../components/design';
-
+import { AppButton, AppTextInput, AppText, useFontScale, useScaledSpace } from '../components/design';
+import { SegmentedControl } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+
+const AUTH_MODES = [
+  { id: 'signIn' as const, label: 'Sign in' },
+  { id: 'signUp' as const, label: 'Create account' },
+];
+
 // Shown instead of the whole tabbed app whenever there's no signed-in user --
 // sign-in/sign-up now happens here, up front, rather than being buried in the
 // Profile tab behind a guest/demo-data preview. Once auth resolves, the auth
 // listener in useAppState flips `user`, this screen unmounts, and (for a
-// brand-new account) the four-step Getting Started guide takes over from
-// App.tsx's normal showOnboarding overlay.
+// brand-new account) the Getting Started setup takes over from App.tsx's
+// normal showOnboarding overlay.
 export default function AuthGateScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
+  const scale = useFontScale();
+  const space = useScaledSpace();
   const { triggerToast } = state;
   const { signInWithGoogle } = useGoogleSignIn();
   const { signUp, signIn, resetPassword } = useEmailAuth();
@@ -40,7 +48,7 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
 
   const handleEmailAuthSubmit = async () => {
     if (authMode === 'signUp' && !displayNameInput.trim()) {
-      triggerToast('Enter a display name to create your account.');
+      triggerToast('Enter a name to create your account.');
       return;
     }
     if (!emailInput.trim() || !passwordInput) {
@@ -67,6 +75,10 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
     );
   };
 
+  const inputBox = 'bg-surface border border-line rounded-btn text-ink font-sans';
+  const inputStyle = { paddingHorizontal: space(12), paddingVertical: space(12) };
+  const logoSize = Math.round(64 * scale);
+
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView
@@ -76,66 +88,79 @@ export default function AuthGateScreen({ state }: { state: AppState }) {
         // useKeyboardHeight's comment) -- extra bottom padding while the
         // keyboard is up shifts this centered content upward instead of
         // letting the keyboard cover the password field.
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', gap: 24, paddingBottom: 24 + keyboardHeight }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', gap: space(28), paddingBottom: 24 + keyboardHeight }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="items-center" style={{ gap: 8 }}>
-          <View className="w-14 h-14 rounded-2xl bg-accent items-center justify-center">
-            <BookOpen size={26} color={palette.onAccent} />
+        <View className="items-center" style={{ gap: space(10) }}>
+          <View className="rounded-card bg-accent items-center justify-center" style={{ width: logoSize, height: logoSize }}>
+            <BookOpen size={Math.round(30 * scale)} color={palette.onAccent} />
           </View>
-          <AppText variant="display" className="font-serif font-black text-ink text-center">Scripture Memory</AppText>
-          <AppText variant="label" className="font-sans text-ink-3 text-center leading-relaxed max-w-[280px]">
-            Sign in or create an account to start memorizing scripture and syncing your progress.
+          <AppText variant="display" className="font-sans font-bold text-ink text-center">Scripture Memory</AppText>
+          <AppText variant="body" className="font-sans text-ink-2 text-center" style={{ maxWidth: 300 }}>
+            Learn verses, keep them, and practice with friends.
           </AppText>
         </View>
 
-        <View style={{ gap: 12 }}>
-          <AppButton size="lg" onPress={handleGoogleSignIn} disabled={submitting} className="w-full border-2 border-ink rounded-xl items-center">
-            <AppText variant="label" className="text-ink font-sans font-bold uppercase tracking-wider">
-              Continue with Google
-            </AppText>
-          </AppButton>
+        <View style={{ gap: space(12) }}>
+          <AppButton size="lg" variant="primary" label="Continue with Google" onPress={handleGoogleSignIn} disabled={submitting} />
 
-          <Pressable onPress={() => setShowEmailAuth(!showEmailAuth)}>
-            <AppText variant="caption" className="font-sans font-bold underline text-ink-3 text-center">
-              {showEmailAuth ? 'Hide email sign-in' : 'Or use email instead'}
-            </AppText>
-          </Pressable>
+          {!showEmailAuth && (
+            <AppButton size="lg" variant="quiet" label="Continue with email" onPress={() => setShowEmailAuth(true)} />
+          )}
 
           {showEmailAuth && (
             <FadeInView>
-              <View className="border border-line rounded-xl p-4" style={{ gap: 10 }}>
-                <View className="flex-row gap-2">
-                  <AppButton size="md" onPress={() => setAuthMode('signIn')} className={`flex-1 rounded-lg border items-center ${ authMode === 'signIn' ? 'bg-accent border-accent' : 'bg-surface border-line' }`}>
-                    <AppText variant="caption" className={`font-sans font-bold uppercase ${authMode === 'signIn' ? 'text-on-accent' : 'text-ink-3'}`}>
-                      Sign In
-                    </AppText>
-                  </AppButton>
-                  <AppButton size="md" onPress={() => setAuthMode('signUp')} className={`flex-1 rounded-lg border items-center ${ authMode === 'signUp' ? 'bg-accent border-accent' : 'bg-surface border-line' }`}>
-                    <AppText variant="caption" className={`font-sans font-bold uppercase ${authMode === 'signUp' ? 'text-on-accent' : 'text-ink-3'}`}>
-                      Create Account
-                    </AppText>
-                  </AppButton>
-                </View>
+              <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+                <SegmentedControl value={authMode} onChange={setAuthMode} options={AUTH_MODES} accessibilityLabel="Sign in or create an account" />
 
                 {authMode === 'signUp' && (
-                  <AppTextInput value={displayNameInput} onChangeText={setDisplayNameInput} placeholder="Display name" className="w-full px-3 py-2.5 bg-surface border border-line-strong rounded-xl" />
+                  <AppTextInput
+                    value={displayNameInput}
+                    onChangeText={setDisplayNameInput}
+                    placeholder="Your name"
+                    accessibilityLabel="Your name"
+                    variant="body"
+                    className={inputBox}
+                    style={inputStyle}
+                  />
                 )}
-                <AppTextInput value={emailInput} onChangeText={setEmailInput} placeholder="Email" autoCapitalize="none" keyboardType="email-address" className="w-full px-3 py-2.5 bg-surface border border-line-strong rounded-xl" />
-                <AppTextInput value={passwordInput} onChangeText={setPasswordInput} placeholder="Password" secureTextEntry className="w-full px-3 py-2.5 bg-surface border border-line-strong rounded-xl" />
+                <AppTextInput
+                  value={emailInput}
+                  onChangeText={setEmailInput}
+                  placeholder="Email"
+                  accessibilityLabel="Email"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  variant="body"
+                  className={inputBox}
+                  style={inputStyle}
+                />
+                <AppTextInput
+                  value={passwordInput}
+                  onChangeText={setPasswordInput}
+                  placeholder="Password"
+                  accessibilityLabel="Password"
+                  secureTextEntry
+                  variant="body"
+                  className={inputBox}
+                  style={inputStyle}
+                />
 
-                <AppButton size="md" onPress={handleEmailAuthSubmit} disabled={submitting} className="w-full bg-accent rounded-xl items-center">
-                  <AppText variant="section" className="text-on-accent font-sans font-bold uppercase tracking-wider">
-                    {authMode === 'signUp' ? 'Create Account' : 'Sign In'}
-                  </AppText>
-                </AppButton>
+                <AppButton
+                  size="lg"
+                  variant="primary"
+                  label={authMode === 'signUp' ? 'Create account' : 'Sign in'}
+                  onPress={handleEmailAuthSubmit}
+                  disabled={submitting}
+                />
 
                 {/* Sign-in only -- meaningless while creating an account.
                     Reuses whatever is already typed in the Email field rather
                     than adding a second address input. */}
                 {authMode === 'signIn' && (
-                  <Pressable onPress={handleForgotPassword} disabled={submitting} className="items-center pt-0.5">
-                    <AppText variant="caption" className="font-sans font-bold underline text-ink-3">
+                  <Pressable onPress={handleForgotPassword} disabled={submitting} accessibilityRole="button" className="items-center active:opacity-60" style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <AppText variant="label" className="font-sans font-medium text-accent">
                       Forgot your password?
                     </AppText>
                   </Pressable>

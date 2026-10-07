@@ -1282,7 +1282,6 @@ export function useAppState() {
   const [createGroupPrivacy, setCreateGroupPrivacy] = useState<'public' | 'private'>('public');
 
   // Dashboard Metrics popover / progress modal helper
-  const [showProgressModal, setShowProgressModal] = useState(false);
 
   // Active playing of saved rec
   const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
@@ -2886,7 +2885,7 @@ export function useAppState() {
       const newChallenge = { id: challengeRef.id, ...data } as GroupChallenge;
       setActiveCircleChallenges((prev) => [...prev, newChallenge]);
       await joinGroupChallenge(newChallenge);
-      triggerToast(`Created "${trimmedTitle}"! 🏆`);
+      triggerToast(`Created "${trimmedTitle}"!`);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `circles/${circleId}/challenges`);
     }
@@ -3502,7 +3501,7 @@ export function useAppState() {
 
   const resumeReviews = () => {
     setPauseState(null, null);
-    triggerToast('Welcome back! Reviews have resumed. 🎯');
+    triggerToast('Welcome back! Reviews have resumed.');
   };
 
   // saveActivePlanRhythm was deleted here. It existed to persist the queue
@@ -3885,7 +3884,7 @@ export function useAppState() {
         handleFirestoreError(e, OperationType.GET, `users/${currentUser.uid}/chapterPhotos`);
       }
 
-      triggerToast('Cloud profile and scripture data synchronized! ☁️');
+      triggerToast('Cloud profile and scripture data synchronized!');
     } catch (err) {
       console.error('Error in loadUserData master catch block:', err);
       triggerToast('Could not sync with Cloud storage.');
@@ -4013,7 +4012,7 @@ export function useAppState() {
         { merge: true }
       );
       setUser({ ...auth.currentUser } as any);
-      triggerToast('Display name updated! ✏️');
+      triggerToast('Display name updated!');
     } catch (err) {
       console.error('Failed to update display name:', err);
       triggerToast('Failed to update display name.');
@@ -4028,7 +4027,7 @@ export function useAppState() {
     if (!auth.currentUser) return;
     try {
       await setDoc(doc(db, 'profiles', auth.currentUser.uid), { defaultRecordingVisibility: vis }, { merge: true });
-      triggerToast('Default recording visibility updated! 🎙️');
+      triggerToast('Default recording visibility updated!');
     } catch (err) {
       console.error('Failed to update default recording visibility:', err);
       triggerToast('Failed to update default recording visibility.');
@@ -4680,11 +4679,11 @@ export function useAppState() {
   // anyway"), not a hard constraint.
   const triggerDailyPull = async (opts?: { bypassShield?: boolean }) => {
     if (reviewsPaused) {
-      triggerToast('Reviews are paused -- resume from Settings to pull new verses. 🌴');
+      triggerToast('Reviews are paused -- resume from Settings to pull new verses.');
       return;
     }
     if (!isTodayLearningDay()) {
-      triggerToast(`Today (${getTodayAbbreviation()}) is a non-learning day. Focus on reviews! 📅`);
+      triggerToast(`Today (${getTodayAbbreviation()}) is a non-learning day. Focus on reviews!`);
       return;
     }
 
@@ -4701,12 +4700,12 @@ export function useAppState() {
     // weekly share comes through.
     const additiveMemberships = joinedGroupPlanMemberships.filter((m) => m.priority === 'additive');
     if (shieldActive && additiveMemberships.length === 0) {
-      triggerToast(`Review Shield is Active! Review time (${estTime}m) >= limit (${maxReviewCap}m). No new verses pulled today. 🛡️`);
+      triggerToast(`Review Shield is Active! Review time (${estTime}m) >= limit (${maxReviewCap}m). No new verses pulled today.`);
       return;
     }
 
     if (!memoryQueue.some((item) => item.status === 'queued')) {
-      triggerToast('No more queued verses to pull! 🎉');
+      triggerToast('No more queued verses to pull!');
       return;
     }
 
@@ -4734,7 +4733,7 @@ export function useAppState() {
     }
 
     if (pulledVerseIds.length === 0) {
-      triggerToast('No more queued verses to pull! 🎉');
+      triggerToast('No more queued verses to pull!');
       return;
     }
 
@@ -4850,7 +4849,7 @@ export function useAppState() {
       })
     );
     if (promotedCount > 0) {
-      triggerToast(`Moved ${promotedCount === 1 ? 'that verse' : `${promotedCount} verses`} into Learning! 📖`);
+      triggerToast(`Moved ${promotedCount === 1 ? 'that verse' : `${promotedCount} verses`} into Learning!`);
       syncChallengeProgress();
     }
   };
@@ -5159,7 +5158,7 @@ export function useAppState() {
     const dueNote = dueDateISO
       ? ` Next due ${new Date(dueDateISO).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}.`
       : '';
-    triggerToast(`Set ${total} ${total === 1 ? 'verse' : 'verses'} to ${phaseLabel}.${dueNote} 🎯`);
+    triggerToast(`Set ${total} ${total === 1 ? 'verse' : 'verses'} to ${phaseLabel}.${dueNote}`);
   };
 
   // Ref cache of "the progress value I last actually wrote" per challenge,
@@ -5283,7 +5282,7 @@ export function useAppState() {
         // Perfection gate: a run with any missed words never banks a touch,
         // no matter how close — "close enough" only exists for reviews.
         if (opts?.perfect === false) {
-          triggerToast('Good recall! A run must be perfect (no missed words) to bank a mastery touch. 🔒');
+          triggerToast('Good recall! A run must be perfect (no missed words) to bank a mastery touch.');
           return;
         }
         // 3-Touch Mastery Gate checks. PracticeModals' Recall mode and the
@@ -5319,7 +5318,7 @@ export function useAppState() {
                 isReviewDue(q.nextReviewDueDate, getLogicalDate(dayStartHour))
             );
             if (dueReviewsPending) {
-              triggerToast(`Mastery touches complete (${updatedLogs.length}/${masteryTouches})! Finish today's reviews to lock this verse in. 🔒`);
+              triggerToast(`Mastery touches complete (${updatedLogs.length}/${masteryTouches})! Finish today's reviews to lock this verse in.`);
             } else {
               updatedItem.status = 'reviewing';
               updatedItem.retentionPhase = 'daily';
@@ -5327,13 +5326,13 @@ export function useAppState() {
               updatedItem.currentStreakCount = 1;
               updatedItem.nextReviewDueDate = nextDueDateISO(1);
               updatedItem.reviewsToday = 0;
-              triggerToast('Passage mastered! Transitioned to 7-6-5 spaced review. 🎉');
+              triggerToast('Passage mastered! Transitioned to 7-6-5 spaced review.');
             }
           } else {
-            triggerToast(`Recall logged! Mastery progress: ${updatedLogs.length}/${masteryTouches} touches. 🌟`);
+            triggerToast(`Recall logged! Mastery progress: ${updatedLogs.length}/${masteryTouches} touches.`);
           }
         } else {
-          triggerToast('Touch logged, but within 1-hour constraint. Only 1 touch per hour counts toward Mastery! ⏳');
+          triggerToast('Touch logged, but within 1-hour constraint. Only 1 touch per hour counts toward Mastery!');
         }
       } else if (item.status === 'reviewing') {
         // Logged against the stage as it stands before this review moves it on.
@@ -5400,7 +5399,7 @@ export function useAppState() {
               );
             } else {
               updatedItem.nextReviewDueDate = nextDueDateISO(updatedItem.retentionPhase === 'weekly' ? 7 : 1);
-              triggerToast(`Refresher review complete! (${updatedItem.currentStreakCount}/${updatedItem.refresherTargetUnits}) 📅`);
+              triggerToast(`Refresher review complete! (${updatedItem.currentStreakCount}/${updatedItem.refresherTargetUnits})`);
             }
           } else if (updatedItem.retentionPhase === 'daily') {
             if (updatedItem.currentStreakCount >= dailyGraduationDays) {
@@ -5415,10 +5414,10 @@ export function useAppState() {
                 DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()];
               updatedItem.chapterReviewAnchorDay = anchor;
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(tomorrow, anchor, 1, sabbathEnabled, sabbathDay).toISOString();
-              triggerToast(`Graduated to Weekly Review phase, aligned to ${DAY_FULL_NAMES[anchor]} with the rest of ${updatedItem.book} ${updatedItem.chapter}! 🌟`);
+              triggerToast(`Graduated to Weekly Review phase, aligned to ${DAY_FULL_NAMES[anchor]} with the rest of ${updatedItem.book} ${updatedItem.chapter}!`);
             } else {
               updatedItem.nextReviewDueDate = nextDueDateISO(1);
-              triggerToast('Daily reviews complete! Spaced date advanced. 📅');
+              triggerToast('Daily reviews complete! Spaced date advanced.');
             }
           } else if (updatedItem.retentionPhase === 'weekly') {
             if (updatedItem.currentStreakCount >= weeklyGraduationReviews) {
@@ -5433,7 +5432,7 @@ export function useAppState() {
                 DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()];
               updatedItem.chapterReviewAnchorDay = anchor;
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(tomorrow, anchor, 4, sabbathEnabled, sabbathDay).toISOString();
-              triggerToast(`Graduated to Monthly Review phase, still aligned to ${DAY_FULL_NAMES[anchor]}! 🌟`);
+              triggerToast(`Graduated to Monthly Review phase, still aligned to ${DAY_FULL_NAMES[anchor]}!`);
             } else if (updatedItem.chapterReviewAnchorDay) {
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(
                 tomorrow,
@@ -5442,19 +5441,19 @@ export function useAppState() {
                 sabbathEnabled,
                 sabbathDay
               ).toISOString();
-              triggerToast('Weekly review complete! Spaced date advanced. 📅');
+              triggerToast('Weekly review complete! Spaced date advanced.');
             } else {
               // Not retroactive -- a legacy weekly item with no anchor yet
               // keeps the old unanchored math until it actually transitions.
               updatedItem.nextReviewDueDate = nextDueDateISO(7);
-              triggerToast('Weekly review complete! Spaced date advanced. 📅');
+              triggerToast('Weekly review complete! Spaced date advanced.');
             }
           } else if (updatedItem.retentionPhase === 'monthly') {
             if (updatedItem.currentStreakCount >= monthlyGraduationReviews) {
               updatedItem.status = 'retained';
               updatedItem.retentionPhase = 'none';
               updatedItem.nextReviewDueDate = null;
-              triggerToast('Successfully RETAINED forever! 🏆🎉');
+              triggerToast('Successfully RETAINED forever!');
             } else if (updatedItem.chapterReviewAnchorDay) {
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(
                 tomorrow,
@@ -5463,16 +5462,16 @@ export function useAppState() {
                 sabbathEnabled,
                 sabbathDay
               ).toISOString();
-              triggerToast('Monthly review complete! Spaced date advanced. 📅');
+              triggerToast('Monthly review complete! Spaced date advanced.');
             } else {
               // Not retroactive -- see the Weekly same-phase branch above.
               updatedItem.nextReviewDueDate = nextDueDateISO(30);
-              triggerToast('Monthly review complete! Spaced date advanced. 📅');
+              triggerToast('Monthly review complete! Spaced date advanced.');
             }
           }
           updatedItem.reviewsToday = 0; // Reset for next review cycle
         } else {
-          triggerToast(`Review logged! (${currentReviewsToday}/${reviewsRequired} required for today) 📅`);
+          triggerToast(`Review logged! (${currentReviewsToday}/${reviewsRequired} required for today)`);
         }
       }
     } else {
@@ -5488,7 +5487,7 @@ export function useAppState() {
         const message = describeMissOutcome(tag, updatedItem, dailyGraduationDaysTotal);
         if (message) triggerToast(message);
       } else {
-        triggerToast('Incorrect. Keep practicing! 🔄');
+        triggerToast('Incorrect. Keep practicing!');
       }
     }
 
@@ -5625,7 +5624,7 @@ export function useAppState() {
         console.error('Failed to sync mock queue items:', err);
       }
     }
-    triggerToast(`🧪 ${reviewedToday.length} verse${reviewedToday.length === 1 ? '' : 's'} reviewed today reset back to due.`);
+    triggerToast(` ${reviewedToday.length} verse${reviewedToday.length === 1 ? '' : 's'} reviewed today reset back to due.`);
   };
 
   const handleUpdateVerseStatus = async (
@@ -6474,7 +6473,7 @@ export function useAppState() {
       // Recordings are loaded once via getDocs (see loadUserData), so without
       // this the studio render wouldn't appear until the next app launch.
       watchStudioRender(uid, id);
-      triggerToast(`${titleSuffix} saved! 🎙️`);
+      triggerToast(`${titleSuffix} saved!`);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${uid}/recordings/${id}`);
     }
@@ -6584,7 +6583,7 @@ export function useAppState() {
       const updated = { ...selectedRecording, verseTimestamps };
       setSelectedRecording(updated);
       setUserRecordings((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-      triggerToast('Verse sync offsets updated! 🔄');
+      triggerToast('Verse sync offsets updated!');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/recordings/${selectedRecording.id}`);
     }
@@ -6665,7 +6664,7 @@ export function useAppState() {
       // would fail the write the same way full-chapter recordings did.
       await setDoc(doc(db, 'users', uid, 'recordings', id), stripUndefined({ ...savedRec, createdAt: serverTimestamp() }));
       setUserRecordings((prev) => [savedRec, ...prev]);
-      triggerToast(`Saved to My Library! Added to your ${rec.book} ${rec.chapter} options. 📚`);
+      triggerToast(`Saved to My Library! Added to your ${rec.book} ${rec.chapter} options.`);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `users/${uid}/recordings/${id}`);
     }
@@ -6822,7 +6821,6 @@ export function useAppState() {
     createGroupName, setCreateGroupName,
     createGroupDesc, setCreateGroupDesc,
     createGroupPrivacy, setCreateGroupPrivacy,
-    showProgressModal, setShowProgressModal,
     playingRecordingId, setPlayingRecordingId,
     playingRecProgress, setPlayingRecProgress,
     nowPlayingRecording,

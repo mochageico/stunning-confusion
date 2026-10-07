@@ -3,9 +3,9 @@ import { BookMarked, CalendarDays, FolderOpen, Home as HomeIcon, Mic, Users, X }
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
-import { AppIconButton, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
+import { AppIconButton, AppText, useScaledSpace } from '../components/design';
+import { GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 
-import { useThemeColors } from '../components/theme';
 // ============================================================================
 // SHOW ME AROUND
 //
@@ -77,85 +77,39 @@ const ANSWERS: { q: string; a: string }[] = [
 ];
 
 export default function TourScreen({ state }: { state: AppState }) {
-    const palette = useThemeColors();
   const { setShowTour } = state;
   const space = useScaledSpace();
-  const scale = useFontScale();
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView
-        className="flex-1 bg-canvas"
-        contentContainerClassName="p-5 pb-12"
-        contentContainerStyle={{ gap: space(16) }}
-      >
-        <View
-          className="flex-row items-start justify-between border-b border-hairline"
-          style={{ paddingBottom: space(12), gap: space(10) }}
-        >
-          <View className="flex-1">
-            <AppText variant="micro" className="font-sans font-bold uppercase tracking-widest text-ink-3">
-              A quick look
-            </AppText>
-            <AppText variant="display" className="font-serif font-black text-ink">
-              What's where
-            </AppText>
-          </View>
-          <AppIconButton
-            Icon={X}
-            diameter={32}
-            iconSize={14}
-            iconColor={palette.ink}
-            onPress={() => setShowTour(false)}
-            className="rounded-full border border-line bg-surface shrink-0"
-          />
-        </View>
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        <ScreenHeader
+          eyebrow="A quick look"
+          title="What's where"
+          subtitle="You pick verses. Each day the app gives you a few to work on and brings older ones back before you'd forget them. Everything below just supports that."
+          actions={<AppIconButton Icon={X} variant="outline" diameter={36} accessibilityLabel="Close" onPress={() => setShowTour(false)} />}
+        />
 
-        <AppText variant="label" className="font-sans text-ink-2 leading-relaxed">
-          You pick verses. Each day the app gives you a few to work on and brings older ones back before you'd forget
-          them. Everything below just supports that.
-        </AppText>
-
-        <View style={{ gap: space(10) }}>
+        <GroupedList>
           {PLACES.map(({ Icon, name, what }) => (
-            <View
-              key={name}
-              className="rounded-xl border border-line bg-surface flex-row"
-              style={{ padding: space(12), gap: space(10), minHeight: MIN_TOUCH }}
-            >
-              <View className="shrink-0" style={{ paddingTop: space(2) }}>
-                <Icon size={Math.round(18 * scale)} color={palette.ink} />
-              </View>
-              <View className="flex-1" style={{ gap: space(3) }}>
-                <AppText variant="label" className="font-serif font-black text-ink">
-                  {name}
-                </AppText>
-                <AppText variant="caption" className="font-sans text-ink-2 leading-relaxed">
-                  {what}
-                </AppText>
-              </View>
-            </View>
+            <ListRow key={name} Icon={Icon} title={name} subtitle={what} accessory="none" />
           ))}
-        </View>
+        </GroupedList>
 
-        <View style={{ gap: space(10) }}>
-          <AppText variant="section" className="font-sans font-bold uppercase tracking-wider text-ink-2">
-            Common questions
-          </AppText>
-          {ANSWERS.map(({ q, a }) => (
-            <View
-              key={q}
-              className="rounded-xl bg-surface-2 border border-line"
-              style={{ padding: space(12), gap: space(4) }}
-            >
-              <AppText variant="label" className="font-sans font-bold text-ink">
-                {q}
-              </AppText>
-              <AppText variant="caption" className="font-sans text-ink-2 leading-relaxed">
-                {a}
-              </AppText>
-            </View>
-          ))}
+        <View style={{ gap: space(6) }}>
+          <SectionHeader title="Common questions" />
+          <View style={{ gap: space(10) }}>
+            {ANSWERS.map(({ q, a }) => (
+              <View key={q} className="rounded-card bg-surface border border-line" style={{ padding: space(14), gap: space(4) }}>
+                <AppText variant="body" className="font-sans font-semibold text-ink">
+                  {q}
+                </AppText>
+                <AppText variant="label" className="font-sans text-ink-2">
+                  {a}
+                </AppText>
+              </View>
+            ))}
+          </View>
         </View>
       </ScrollView>
     </FadeInView>

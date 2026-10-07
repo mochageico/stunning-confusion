@@ -50,7 +50,7 @@ const ALL = [
   'community&noseg=1', 'find&fixed=1', 'create&fixed=1', 'preview&fixed=1', 'groupDetail&noseg=1',
   'groupPlanDetail&noseg=1', 'profile&fixed=1', 'memberProfile&fixed=1', 'findFriends&fixed=1',
   'messages&fixed=1', 'dmThread&fixed=1', 'circleChat&fixed=1', 'dashboard&noseg=1', 'settings&noseg=1',
-  'onboarding&noseg=1', 'tour&max=1500&noseg=1', 'auth&fixed=1', 'modalProgress&fixed=1',
+  'onboarding&noseg=1', 'tour&max=1500&noseg=1', 'auth&fixed=1',
 ].map((q) => `s=${q}&ios=1`);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
