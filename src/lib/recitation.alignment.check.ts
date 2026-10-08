@@ -539,6 +539,29 @@ scenario('17. Real-world repro: Romans 8:1-14 dense repetition', () => {
 });
 
 // ============================================================================
+// Hyphenated / dash-joined words: one written word, several spoken ones
+// ============================================================================
+scenario('18. Hyphenated and em-dash-joined words', () => {
+  const expected = 'love, joy, peace, patience, kindness, goodness, faithfulness, gentleness, self-control; against such things there is no law.';
+  const spoken = 'love joy peace patience kindness goodness faithfulness gentleness self control against such things there is no law';
+  const outcomes = gradeTranscript(expected, spoken);
+  check('every word, including "self-control", grades non-missed', outcomes.every((o) => o !== 'missed'), outcomes.join(','));
+
+  const dashed = gradeTranscript('a man of sorrows\u2014and acquainted with grief', 'a man of sorrows and acquainted with grief');
+  check('an unspaced em-dash join ("sorrows\u2014and") grades non-missed', dashed.every((o) => o !== 'missed'), dashed.join(','));
+
+  const inLaw = gradeTranscript('his son-in-law went', 'his son in law went');
+  check('a three-part join ("son-in-law") grades non-missed', inLaw.every((o) => o !== 'missed'), inLaw.join(','));
+
+  const halfSaid = gradeTranscript('gentleness, self-control; against', 'gentleness self against');
+  check('saying only half of a hyphenated word still grades it missed', halfSaid[1] === 'missed', halfSaid.join(','));
+
+  const liveTokens = tokenizeWords(expected);
+  const live = alignRecitationWindow(liveTokens, tokenizeWords(spoken));
+  check('live alignment also reaches the end through the hyphenated word', live.pointer === liveTokens.length, `pointer=${live.pointer}/${liveTokens.length}`);
+});
+
+// ============================================================================
 console.log(`\n${total - failures}/${total} checks passed.`);
 if (failures > 0) {
   console.error(`${failures} FAILED.`);

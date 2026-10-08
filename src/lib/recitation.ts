@@ -332,6 +332,19 @@ const pairCost = (expectedWord: string, spokenWord: string): number => {
 const skipExpectedCost = (expectedWord: string): number =>
   isCommonlyDroppedWord(expectedWord) ? SKIP_EXPECTED_DROPPABLE_COST : SKIP_EXPECTED_COST;
 
+// A written word that joins two or three spoken ones -- "self-control",
+// "son-in-law", or the ESV's unspaced em-dash ("flesh—could") -- normalizes to
+// ONE expected token ("selfcontrol"), but every speech engine hears it as
+// separate words ("self control"). Without this move those words could never
+// match and always graded missed. Exact-match only, so it can't become a new
+// source of false passes; deliberately the same cost as a real match.
+const MAX_JOINED_SPOKEN = 3;
+
+const joinedSpokenCost = (expectedWord: string, spoken: string[], j: number, span: number): number | null => {
+  if (span < 2 || j - span < 0) return null;
+  return spoken.slice(j - span, j).join('') === expectedWord ? MATCH_COST : null;
+};
+
 // dp[i][j] = min cost aligning expected[0..i) with spoken[0..j). Standard
 // three-move recurrence (match/substitute diagonally, skip an expected word,
 // insert a spoken word) with the tuned costs above instead of plain 0/1.
@@ -343,11 +356,16 @@ const buildAlignmentTable = (expected: string[], spoken: string[]): number[][] =
   for (let j = 1; j <= n; j++) dp[0][j] = dp[0][j - 1] + INSERT_SPOKEN_COST;
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
-      dp[i][j] = Math.min(
+      let best = Math.min(
         dp[i - 1][j - 1] + pairCost(expected[i - 1], spoken[j - 1]),
         dp[i - 1][j] + skipExpectedCost(expected[i - 1]),
         dp[i][j - 1] + INSERT_SPOKEN_COST
       );
+      for (let span = 2; span <= MAX_JOINED_SPOKEN; span++) {
+        const joined = joinedSpokenCost(expected[i - 1], spoken, j, span);
+        if (joined !== null) best = Math.min(best, dp[i - 1][j - span] + joined);
+      }
+      dp[i][j] = best;
     }
   }
   return dp;
@@ -371,6 +389,19 @@ const backtraceOutcomes = (
   let i = startI;
   let j = startJ;
   while (i > 0 && j > 0) {
+    const joinedSpan = (() => {
+      for (let span = 2; span <= MAX_JOINED_SPOKEN; span++) {
+        const joined = joinedSpokenCost(expected[i - 1], spoken, j, span);
+        if (joined !== null && dp[i][j] === dp[i - 1][j - span] + joined) return span;
+      }
+      return 0;
+    })();
+    if (joinedSpan > 0) {
+      outcomes[i - 1] = 'perfect';
+      i -= 1;
+      j -= joinedSpan;
+      continue;
+    }
     const cost = pairCost(expected[i - 1], spoken[j - 1]);
     if (dp[i][j] === dp[i - 1][j - 1] + cost) {
       outcomes[i - 1] = cost === MATCH_COST ? 'perfect' : cost === CLOSE_MATCH_COST ? 'close' : 'missed';
