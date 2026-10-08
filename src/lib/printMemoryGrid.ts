@@ -37,7 +37,7 @@ function buildGridHtml(verses: PrintableVerse[], reference: string, translationI
   // Public-domain translations require no notice, so the block is omitted
   // entirely rather than rendered empty -- this used to hardcode Crossway's
   // ESV notice onto every grid, which was wrong for a BSB or WEB export.
-  const copyright = copyrightFor(translationId);
+  const copyright = copyrightFor(translationId, verses[0]?.book);
   // Printed sheets carry the notice too -- Lockman's licence asks for it "in a
   // conspicuous place" in the licensed work, and a printout handed to someone
   // else is exactly where attribution matters most. The URL is spelled out

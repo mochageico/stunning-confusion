@@ -37,10 +37,40 @@ export interface TranslationCapabilities {
   publishAudio: boolean;
 }
 
+/**
+ * The writing system a passage's text is in. Everything that splits, compares
+ * or displays verse words keys off this -- see textScriptFor() in data.ts.
+ */
+export type TextScript = 'latin' | 'hebrew' | 'greek';
+
 export interface BibleTranslation {
-  id: string; // short code, e.g. 'ESV', 'WEB'
+  id: string; // short code, e.g. 'ESV', 'WEB' -- stored in queue item ids, so never rename one
   name: string; // full name, e.g. 'English Standard Version'
+  /**
+   * What pickers show when the id isn't fit to show a person ('HEBGRK' ->
+   * 'Hebrew/Greek'). Absent means the id is the label.
+   */
+  shortLabel?: string;
+  /**
+   * Non-English text, by testament. Absent means English throughout. The
+   * Hebrew/Greek translation is one id whose Old Testament is Hebrew and New
+   * Testament is Greek.
+   */
+  scripts?: { ot: TextScript; nt: TextScript };
+  /**
+   * Hidden from pickers outside development builds. For a translation whose
+   * text or app support isn't finished -- it can be selected and tested in a
+   * dev build without shipping half-working to TestFlight.
+   */
+  inDevelopment?: boolean;
   copyright?: string; // required attribution text, when the translation is not public domain
+  /**
+   * Attribution that applies to one testament only, shown in place of
+   * `copyright` for that testament's books. The Hebrew/Greek translation's
+   * Old Testament (WLC) is public domain; its New Testament (SBLGNT) is
+   * CC BY 4.0 and must be credited.
+   */
+  testamentCopyright?: { ot?: string; nt?: string };
   /**
    * Publisher URL the attribution must link to, when the licence requires a
    * link rather than just a notice. The Lockman Foundation's licence is

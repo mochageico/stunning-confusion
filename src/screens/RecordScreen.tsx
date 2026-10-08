@@ -6,7 +6,7 @@ import { AppState } from '../state/useAppState';
 import { FadeInView, NumericInput, WaveBars } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
-import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
+import { PICKER_TRANSLATIONS, getBookByName, translationLabel } from '../data';
 import { recordingLabel, recordingMeta } from '../lib/recordingLabel';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
@@ -15,7 +15,7 @@ import { useThemeColors } from '../components/theme';
 // Derived from the single source of truth (data.ts) instead of its own
 // hardcoded list -- previously listed NIV/NKJV/NLT despite zero real text
 // ever being imported for them (see scripts/import-bible/).
-const TRANSLATION_OPTIONS = BIBLE_TRANSLATIONS.map((t) => ({ id: t.id, label: t.id }));
+const TRANSLATION_OPTIONS = PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }));
 
 // The two things this screen can be doing. One word each: at 1.5x the longer
 // "Record Live" / "Import Audio" pair stopped fitting on one line each.

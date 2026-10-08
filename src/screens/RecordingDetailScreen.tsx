@@ -5,7 +5,7 @@ import { Check, Download, Pause, Play, Trash2 } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { VerseTimestamp } from '../types';
 import { FadeInView } from '../components/ui';
-import { BIBLE_TRANSLATIONS } from '../data';
+import { BIBLE_TRANSLATIONS, translationLabel } from '../data';
 import { recordingLabel, recordingMeta } from '../lib/recordingLabel';
 import { cacheableTarget } from '../lib/audioCache';
 import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/studioAudio';
@@ -480,7 +480,7 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
                 </AppText>
                 {chapterVerseNumbers.length === 0 && (
                   <AppText variant="caption" className="font-sans text-warning">
-                    This chapter's text isn't available in {selectedRecording.translation} yet, so there are no verses
+                    This chapter's text isn't available in {translationLabel(selectedRecording.translation)} yet, so there are no verses
                     to mark.
                   </AppText>
                 )}

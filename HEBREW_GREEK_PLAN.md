@@ -117,6 +117,15 @@ doxology). Where it differs from the steps below:
 
 ## Phase 1 — Registry and plumbing
 
+**Status (2026-10-08): done except step 5 (speech gate).** The text is in Firestore —
+Romans 8 loads in Greek with the SBLGNT credit on web demo mode. The entry is
+`inDevelopment: true`: it shows in pickers in dev builds only, never TestFlight,
+until phases 2–3 land. Flip it off then. Step 5 lives in `PracticeModals.tsx`, which
+had another session's uncommitted work at the time — fold it into Phase 2, which
+edits that file anyway. Pickers use `PICKER_TRANSLATIONS` + `translationLabel()`;
+`AudioFeedScreen`'s translation filter still shows raw ids (also left for a quieter
+moment).
+
 1. Add the `HEBGRK` entry to `BIBLE_TRANSLATIONS` (`src/data.ts`), after the
    public-domain English ones.
 2. New optional field `shortLabel` on `BibleTranslation` (`src/types.ts:40`)

@@ -12,7 +12,7 @@ import ChapterPhotoStrip from '../components/ChapterPhotoStrip';
 import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { printMemoryGrid } from '../lib/printMemoryGrid';
 import { Recording } from '../types';
-import { BIBLE_TRANSLATIONS } from '../data';
+import { BIBLE_TRANSLATIONS, PICKER_TRANSLATIONS, copyrightFor, translationLabel } from '../data';
 import { AppButton, AppIconButton, AppText, RangeCaption, useFontScale, useScaledSpace } from '../components/design';
 import { Dialog, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { useDragSelect } from '../components/useDragSelect';
@@ -185,6 +185,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     bottomInset: floatingBarShowing ? floatingBarHeight + 16 : 0,
   });
   const activeTranslation = BIBLE_TRANSLATIONS.find((t) => t.id === selectedTranslationId) ?? BIBLE_TRANSLATIONS[0];
+  // Per book, not per translation: the Hebrew/Greek translation owes credit
+  // for its Greek New Testament only.
+  const activeCopyright = copyrightFor(activeTranslation.id, selectedBook || undefined);
   const selectedVerses = () => activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse));
   const oneVerse = selectedVerseNumbers.length === 1;
   const them = oneVerse ? 'it' : 'them';
@@ -247,7 +250,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             <Dropdown
               value={selectedTranslationId}
               onChange={setSelectedTranslationId}
-              options={BIBLE_TRANSLATIONS.map((t) => ({ id: t.id, label: t.id }))}
+              options={PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }))}
               title="Translation"
               searchable={false}
               compact
@@ -306,7 +309,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     {currentAudio.title}
                   </AppText>
                   <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={1}>
-                    {currentAudio.user} · {currentAudio.translation}
+                    {currentAudio.user} · {translationLabel(currentAudio.translation)}
                   </AppText>
                   {/* Past 1.3x the button would squeeze the title to a few
                       letters, so it moves under the title instead. */}
@@ -376,7 +379,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                               {opt.title}
                             </AppText>
                             <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={1}>
-                              {opt.user} · {opt.translation}
+                              {opt.user} · {translationLabel(opt.translation)}
                             </AppText>
                           </View>
                           {isSelected && <Check size={Math.round(16 * scale)} color={palette.accent} strokeWidth={2.4} />}
@@ -617,10 +620,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             conspicuous place", so for the NASB a plain-text notice would not
             satisfy the terms. Rendered as a real Pressable rather than styled
             text so it is actually tappable. */}
-        {activeChapterVerses.length > 0 && activeTranslation.copyright && (
+        {activeChapterVerses.length > 0 && activeCopyright && (
           <View className="px-2 gap-0.5">
             <AppText variant="micro" className="font-sans text-ink-3 leading-tight text-center">
-              {activeTranslation.copyright}
+              {activeCopyright}
             </AppText>
             {activeTranslation.copyrightUrl && (
               <Pressable

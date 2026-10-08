@@ -10,10 +10,13 @@
 import {
   BIBLE_TRANSLATIONS,
   DEFAULT_TRANSLATION_ID,
+  PICKER_TRANSLATIONS,
   capabilityWarningsFor,
   copyrightFor,
   copyrightUrlFor,
   getTranslation,
+  textScriptFor,
+  translationLabel,
 } from '../data';
 
 let failures = 0;
@@ -107,6 +110,40 @@ check(
     (t) => t.capabilities.persistText && t.capabilities.print && t.capabilities.publishAudio && t.capabilities.cacheTtlMs === null
   ),
   BIBLE_TRANSLATIONS.filter((t) => t.isPublicDomain).map((t) => ({ id: t.id, ...t.capabilities }))
+);
+
+// ── Hebrew/Greek: one id, two texts ─────────────────────────────────────────
+// The id is a Firestore path segment and the first field of underscore-joined
+// queue item ids, so a '/' or '_' in it would corrupt both.
+check(
+  'no translation id contains "/" or "_"',
+  BIBLE_TRANSLATIONS.every((t) => !/[/_]/.test(t.id)),
+  BIBLE_TRANSLATIONS.filter((t) => /[/_]/.test(t.id)).map((t) => t.id)
+);
+check('Hebrew/Greek is listed', !!getTranslation('HEBGRK'));
+check("Hebrew/Greek shows as 'Hebrew/Greek', not its id", translationLabel('HEBGRK') === 'Hebrew/Greek', {
+  actual: translationLabel('HEBGRK'),
+});
+check('a translation without a shortLabel shows its id', translationLabel('BSB') === 'BSB');
+check('an unknown id shows as itself (old recordings)', translationLabel('NOPE') === 'NOPE');
+check('Hebrew/Greek: Old Testament is Hebrew', textScriptFor('HEBGRK', 'Genesis') === 'hebrew');
+check('Hebrew/Greek: New Testament is Greek', textScriptFor('HEBGRK', 'John') === 'greek');
+check('English translations are latin', textScriptFor('BSB', 'Genesis') === 'latin' && textScriptFor('KJV', 'John') === 'latin');
+// SBLGNT is CC BY 4.0: its credit must appear on Greek chapters, and the
+// public-domain WLC must not be stamped with it.
+check('Hebrew/Greek credits SBLGNT on New Testament books', /SBL Greek New Testament/.test(copyrightFor('HEBGRK', 'Romans') ?? ''), {
+  actual: copyrightFor('HEBGRK', 'Romans'),
+});
+check('Hebrew/Greek carries no credit on Old Testament books', copyrightFor('HEBGRK', 'Psalms') === null, {
+  actual: copyrightFor('HEBGRK', 'Psalms'),
+});
+check('book-specific lookup leaves other translations unchanged', copyrightFor('NASB', 'John') === copyrightFor('NASB'));
+// Pickers hide in-development translations only outside dev builds; this
+// check runs as plain Node, which counts as development.
+check(
+  'every translation is pickable in a development build',
+  PICKER_TRANSLATIONS.length === BIBLE_TRANSLATIONS.length,
+  { picker: PICKER_TRANSLATIONS.length, all: BIBLE_TRANSLATIONS.length }
 );
 
 // ESV is the worked example of a licensed translation: it must be listed (old

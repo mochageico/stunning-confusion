@@ -1,5 +1,5 @@
 import { VerseState, Recording, MemoryPlan, Rhythm } from './types';
-import { BibleBook, BibleTranslation, TranslationCapabilities } from './types';
+import { BibleBook, BibleTranslation, TextScript, TranslationCapabilities } from './types';
 
 // Shared by the Save-Recording dialog (App.tsx) and SettingsScreen's default-
 // visibility picker, so both always offer the exact same 3 choices.
@@ -159,6 +159,12 @@ const LICENSED_CAPABILITIES: TranslationCapabilities = {
 const ESV_COPYRIGHT_NOTICE =
   'Scripture quotations are from the ESV® Bible (The Holy Bible, English Standard Version®), copyright © 2001 by Crossway, a publishing ministry of Good News Publishers. Used by permission. All rights reserved.';
 
+// The credit SBLGNT's CC BY 4.0 licence asks for, worded from its README
+// ("Copyright 2010 by the Society of Biblical Literature and Logos Bible
+// Software"). Shown on New Testament chapters of the Hebrew/Greek translation.
+const SBLGNT_COPYRIGHT_NOTICE =
+  'Greek New Testament: SBL Greek New Testament, copyright © 2010 Society of Biblical Literature and Logos Bible Software. Licensed CC BY 4.0.';
+
 // Single source of truth for which translations actually have real text
 // imported (see scripts/import-bible/) -- both RecordScreen and
 // RecordingDetailScreen used to keep their own separate hardcoded lists,
@@ -186,6 +192,31 @@ export const BIBLE_TRANSLATIONS: BibleTranslation[] = [
   {
     id: 'KJV',
     name: 'King James Version',
+    isPublicDomain: true,
+    source: 'firestore',
+    capabilities: UNRESTRICTED,
+  },
+  // One picker entry, two texts: Old Testament in Hebrew (the Westminster
+  // Leningrad Codex), New Testament in Greek (the SBL Greek New Testament).
+  // Imported by scripts/import-bible/adapters/originalLanguages.js, in English
+  // verse numbering so a reference opens the same verse as in the BSB. See
+  // HEBREW_GREEK_PLAN.md.
+  //
+  // `isPublicDomain: true` is the WLC exactly and the SBLGNT in effect: CC BY
+  // 4.0 needs no permission for anything this app does (drills included),
+  // only credit -- carried by testamentCopyright on New Testament books.
+  //
+  // The id has no '/' or '_': it becomes a Firestore path segment and the
+  // first field of `${translationId}_${bookId}_${chapter}_${verse}` queue ids.
+  {
+    id: 'HEBGRK',
+    name: 'Original languages (WLC + SBLGNT)',
+    shortLabel: 'Hebrew/Greek',
+    scripts: { ot: 'hebrew', nt: 'greek' },
+    // Until right-to-left display and Hebrew/Greek-aware drills land
+    // (plan phases 2-3), and the text is imported to Firestore.
+    inDevelopment: true,
+    testamentCopyright: { nt: SBLGNT_COPYRIGHT_NOTICE },
     isPublicDomain: true,
     source: 'firestore',
     capabilities: UNRESTRICTED,
@@ -299,16 +330,62 @@ export const BIBLE_TRANSLATIONS: BibleTranslation[] = [
 export const getTranslation = (id: string): BibleTranslation | undefined =>
   BIBLE_TRANSLATIONS.find((t) => t.id === id);
 
+// `__DEV__` is React Native's; the plain-Node check scripts that import this
+// file don't define it, and there "development" is the right answer.
+const IS_DEV_BUILD = typeof __DEV__ === 'undefined' || __DEV__;
+
+/**
+ * The translations a person can pick. Same order as BIBLE_TRANSLATIONS, minus
+ * any still `inDevelopment` when this isn't a development build. Lookups by
+ * id (getTranslation) still see every translation, so a saved verse or a
+ * recording in a hidden translation keeps its name.
+ */
+export const PICKER_TRANSLATIONS: BibleTranslation[] = BIBLE_TRANSLATIONS.filter(
+  (t) => !t.inDevelopment || IS_DEV_BUILD
+);
+
+/**
+ * What to show a person for a translation id: its shortLabel when it has one
+ * ('HEBGRK' -> 'Hebrew/Greek'), otherwise the id itself -- which is also the
+ * fallback for ids no longer in the registry (old recordings).
+ */
+export const translationLabel = (id: string): string => getTranslation(id)?.shortLabel ?? id;
+
+/**
+ * Which writing system a passage is in. 'latin' for every English
+ * translation; for the Hebrew/Greek one, 'hebrew' in the Old Testament and
+ * 'greek' in the New. An unknown book falls back to 'latin'.
+ */
+export const textScriptFor = (translationId: string, bookName: string): TextScript => {
+  const scripts = getTranslation(translationId)?.scripts;
+  if (!scripts) return 'latin';
+  const book = getBookByName(bookName);
+  return book ? scripts[book.testament] : 'latin';
+};
+
 /**
  * Attribution text for one translation, or null when none is required.
+ *
+ * Pass the book wherever one is known: a translation can owe credit for one
+ * testament only (see BibleTranslation.testamentCopyright).
  *
  * Replaces a directly-imported ESV_COPYRIGHT_NOTICE constant, which stamped
  * Crossway's notice onto every printed memory grid regardless of which
  * translation the grid was built from -- wrong in both directions once more
  * than one translation exists.
  */
-export const copyrightFor = (translationId: string): string | null =>
-  getTranslation(translationId)?.copyright ?? null;
+export const copyrightFor = (translationId: string, bookName?: string): string | null => {
+  const t = getTranslation(translationId);
+  if (!t) return null;
+  // Testament-specific credit (the Hebrew/Greek translation's SBLGNT line)
+  // applies only to that testament's books, so it needs the book to decide.
+  if (t.testamentCopyright && bookName) {
+    const testament = getBookByName(bookName)?.testament;
+    const credit = testament ? t.testamentCopyright[testament] : undefined;
+    if (credit) return credit;
+  }
+  return t.copyright ?? null;
+};
 
 /**
  * Publisher URL that must accompany the notice, or null when the licence
