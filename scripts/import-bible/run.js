@@ -6,6 +6,7 @@
 //   node run.js --adapter esv --book Genesis           # one book
 //   node run.js --adapter esv                          # whole Bible
 //   node run.js --adapter localFile --book "1 John"     # public-domain source
+//   node run.js --adapter originalLanguages             # Hebrew/Greek (HEBGRK)
 //
 // Requires a Firebase service account key (Firestore Console > Project
 // Settings > Service Accounts > Generate new private key) referenced via
@@ -87,6 +88,9 @@ async function main() {
           chapter,
           verses,
           verseCount,
+          // Optional per-adapter fields -- today only originalLanguages'
+          // Psalm superscriptions ({ headings: { "1": "..." } }).
+          ...(adapter.chapterExtras ? adapter.chapterExtras(book.name, chapter) : {}),
         });
         totalChapters += 1;
         totalVerses += verseCount;

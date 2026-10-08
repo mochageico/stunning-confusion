@@ -10,3 +10,5 @@ web.xml
 *.zip
 *serviceAccountKey*.json
 *-firebase-adminsdk-*.json
+# Hebrew/Greek sources (OSHB + SBLGNT), unzipped -- see README.md.
+sources/

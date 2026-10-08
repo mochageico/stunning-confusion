@@ -91,6 +91,45 @@ If a future dataset doesn't match either format, `LOCAL_BIBLE_FORMAT` (`usfx-xml
 `scrollmapper-json`) forces detection, and `adapters/localFile.js`'s `parseUsfxXml`/
 `parseScrollmapperJson` functions are the place to add a third format.
 
+### `originalLanguages` — Hebrew/Greek (`HEBGRK`)
+
+One translation id, two texts: Old Testament books from the **Westminster Leningrad
+Codex** (public domain, via the Open Scriptures Hebrew Bible), New Testament books from
+the **SBL Greek New Testament** (CC BY 4.0 — the app must show its credit line on NT
+chapters). Decisions behind it are in `HEBREW_GREEK_PLAN.md` at the repo root.
+
+```bash
+mkdir -p sources && cd sources
+curl -sSL -o morphhb.zip https://github.com/openscriptures/morphhb/archive/refs/heads/master.zip
+curl -sSL -o sblgnt.zip https://github.com/LogosBible/SBLGNT/archive/refs/heads/master.zip
+unzip -q morphhb.zip && unzip -q sblgnt.zip && cd ..
+node verify-original-languages.js          # dry run -- writes nothing
+node run.js --adapter originalLanguages
+```
+
+What the adapter does to the text, so it reads like a learner's Bible:
+- **Hebrew keeps vowel points, drops cantillation accents** (and meteg/paseq). Maqaf and
+  sof pasuq stay. Paragraph markers (פ/ס) go.
+- **Ketiv/qere: the qere is stored.** OSHB gives the ketiv unpointed, which would put a
+  bare consonantal word mid-verse; the qere is pointed and is what's read aloud.
+- **English verse numbering.** OSHB's `VerseMap.xml` maps Hebrew to KJV numbers (Malachi
+  3:19 → 4:1, etc.). Where the BSB follows the Hebrew instead (1 Kgs 18/20/22) the Hebrew
+  break is kept; two mid-verse splits (Isa 63:19/64:1, Ps 13:5/6) are cut at hand-checked
+  words.
+- **Psalm superscriptions** that Hebrew numbers as their own verse(s) go into a separate
+  `headings` field on the chapter document (63 chapters), not into verse 1. Short
+  superscriptions that Hebrew prints *inside* verse 1 (e.g. Ps 23:1 מִזְמוֹר לְדָוִד) stay
+  there — the source doesn't mark where they end.
+- **Greek drops SBLGNT's apparatus signs** (⸀ ⸂ ⸃ …) and brackets, keeps accents. Four
+  verse breaks are adjusted to the BSB's (Acts 19:40/41, 2 Cor 13:12-14, 3 John 14/15,
+  Rev 12:17/18), and Mark's "shorter ending" is cut from 16:8 as the BSB footnotes it.
+
+`verify-original-languages.js` compares every chapter's verse numbers with the BSB and
+scans for stray characters. Expected result: 1,189 chapters, 0 unexpected characters, and
+exactly two differences, both real textual ones — **Nehemiah 7:68** is absent from the
+Hebrew, and **Romans 16** in SBLGNT has a v.24 and no doxology (BSB 16:25-27).
+`--show "Psalms 51"` prints one chapter.
+
 ## Running
 
 ```bash
