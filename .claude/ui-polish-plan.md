@@ -254,7 +254,7 @@ this whole file, then do only your job.
   `absolute inset-0` overlays and 11 RN `Modal`s), `formatDate` /
   `formatDuration`. Restyle CollapsibleCard, OptionCards, ToggleRow,
   StepperRow, ChipRow, Dropdown, HelpTooltip.
-- **F4 · Floating tab bar + mini player** (M; after F2). Replace the tab bar
+- **F4 · Floating tab bar + mini player** (M; after F2). DONE 2026-10-08, not yet committed. src/components/TabBar.tsx: FloatingTabBar (surface pill, hairline, one static shadow-md, active tab = accent-soft pill with accent icon + label, labels capped at 1.15x), BottomBars tray, PageFade (react-native-svg gradient), useAboveTabBar(). Deviation from the brief, on purpose: the bar is laid out BELOW the screens rather than over them, so no screen needs its own bottom inset and nothing can hide under it; the fade softens the edge. Pill bottom = safe-area inset - 12 (just clear of the home indicator) or 8 on home-button phones. NowPlayingBar and the minimized Listen bar are the same pill style. Both bars unmount on chat screens and while the keyboard is up. Demo: playing=1 shows the now-playing bar. Original brief: Replace the tab bar
   in `App.tsx` (~line 564, inside the bottom `SafeAreaView`) with a floating
   pill:
   - Position and look: 16pt side margins, sitting 8pt above the home

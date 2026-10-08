@@ -9,7 +9,8 @@ import { Check, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-n
 
 import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
-import { FadeInView, NumericKeyboardAccessory } from './src/components/ui';
+import { FadeInView, NumericKeyboardAccessory, useKeyboardHeight } from './src/components/ui';
+import { BottomBars, FloatingTabBar, PageFade } from './src/components/TabBar';
 import { RECORDING_VISIBILITY_OPTIONS } from './src/data';
 
 import RecordingDetailScreen from './src/screens/RecordingDetailScreen';
@@ -379,33 +380,46 @@ function MissedVerseRow({
 // screen you started playback from.
 function NowPlayingBar({ state }: { state: AppState }) {
   const palette = useThemeColors();
+  const space = useScaledSpace();
   const { playingRecordingId, nowPlayingRecording, playingRecProgress, setPlayingRecordingId, setSelectedRecording, navigateTo } = state;
 
   if (!playingRecordingId || !nowPlayingRecording) return null;
 
+  // The tab bar's pill, one step up: surface, hairline edge, one static
+  // shadow on a view that mounts and unmounts whole (never a toggled class).
   return (
     <FadeInView>
+      {/* button-ok: the floating now-playing bar, not a button */}
       <Pressable
         onPress={() => {
           setSelectedRecording(nowPlayingRecording);
           navigateTo('recordingDetail');
         }}
-        className="mx-3 mt-2 mb-1 bg-accent rounded-xl px-3 py-2 flex-row items-center gap-3"
+        accessibilityRole="button"
+        accessibilityLabel={`Now playing ${nowPlayingRecording.book} ${nowPlayingRecording.chapter}. Open the recording.`}
+        className="bg-surface border border-line rounded-full flex-row items-center shadow-md active:bg-surface-2"
+        style={{ paddingVertical: space(6), paddingLeft: space(6), paddingRight: space(6), gap: space(10) }}
       >
-        <View className="w-8 h-8 rounded-lg bg-on-accent/15 items-center justify-center shrink-0">
-          <Mic size={14} color={palette.onAccent} />
+        <View className="rounded-full bg-accent-soft items-center justify-center shrink-0" style={{ width: space(36), height: space(36) }}>
+          <Mic size={16} color={palette.accent} />
         </View>
 
-        <View className="flex-1" style={{ gap: 4 }}>
-          <AppText variant="label" numberOfLines={1} className="text-on-accent font-sans font-bold ">
+        <View className="flex-1" style={{ gap: space(4), minWidth: 0 }}>
+          <AppText variant="label" numberOfLines={1} className="text-ink font-sans font-semibold">
             {nowPlayingRecording.book} {nowPlayingRecording.chapter}
           </AppText>
-          <View className="w-full bg-on-accent/20 h-1 rounded-full overflow-hidden">
-            <View className="bg-surface h-full" style={{ width: `${playingRecProgress}%` }} />
+          <View className="w-full bg-fill h-1 rounded-full overflow-hidden">
+            <View className="bg-accent h-full" style={{ width: `${playingRecProgress}%` }} />
           </View>
         </View>
 
-        <AppIconButton Icon={Pause} diameter={32} iconSize={13} iconColor={palette.onAccent} onPress={(e) => { e.stopPropagation(); setPlayingRecordingId(null); }} className="rounded-full bg-on-accent/15 shrink-0" />
+        <AppIconButton
+          Icon={Pause}
+          variant="filled"
+          diameter={36}
+          accessibilityLabel="Pause"
+          onPress={(e) => { e.stopPropagation(); setPlayingRecordingId(null); }}
+        />
       </Pressable>
     </FadeInView>
   );
@@ -423,6 +437,10 @@ function AppShell() {
   // a sibling bar it doesn't know about, which was undershooting how far the
   // composer needs to rise above the keyboard.
   const chatScreenActive = state.currentScreen === 'dmThread' || state.currentScreen === 'circleChat';
+  // The bars also step aside while the keyboard is up, so a text field near
+  // the bottom isn't squeezed against them. Unmounted, never hidden by style.
+  const keyboardHeight = useKeyboardHeight();
+  const showBars = !chatScreenActive && keyboardHeight === 0;
 
   // While Firebase resolves whether a session already exists, render nothing
   // rather than flashing the sign-in gate first. Once resolved, no user means
@@ -450,39 +468,20 @@ function AppShell() {
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
         <View style={{ flex: 1 }}>
           <Screens state={state} />
+          {showBars && <PageFade />}
         </View>
       </SafeAreaView>
 
-      {!chatScreenActive && (
-      <SafeAreaView edges={['bottom', 'left', 'right']}>
-        <NowPlayingBar state={state} />
-        {/* The tab bar is now always the tab bar. It used to be swapped out
-            for a single "Back to Guide" button whenever a Getting-Started
-            step was running, to stop a first-time user wandering off
-            mid-step -- but that made the guide something you were trapped
-            inside rather than something you used, and the guide it belonged
-            to no longer exists.
-
-            56pt rather than 64: the bar sits on top of the home-indicator
-            inset already added by SafeAreaView, so the old height pushed it
-            noticeably far up the screen. */}
-        <View className="h-14 bg-surface border-t border-line px-6 flex-row items-center justify-between">
-          {TABS.map((tab) => {
-            const isActive = state.currentTab === tab.id;
-            const Icon = tab.Icon;
-            return (
-              <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1">
-                <Icon size={20} color={isActive ? palette.ink : palette.ink3} strokeWidth={isActive ? 2.5 : 2} />
-                {/* Capped, like iOS's own tab bar: four labels share a fixed row, and at
-                    1.5x "Community" ran into its neighbours on an SE. */}
-                <AppText variant="micro" maxScale={1.15} numberOfLines={1} className={`font-sans font-bold tracking-tight mt-0.5 ${isActive ? 'text-ink' : 'text-ink-3'}`}>
-                  {tab.label}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </View>
-      </SafeAreaView>
+      {/* Floating tab bar (job F4). It sits below the screens, not over
+          them, so content ends just above it and nothing can hide under it;
+          PageFade softens that edge. The tab bar used to be swapped for a
+          "Back to Guide" button during Getting Started; it is always the tab
+          bar now. */}
+      {showBars && (
+        <BottomBars>
+          <NowPlayingBar state={state} />
+          <FloatingTabBar tabs={TABS} current={state.currentTab} onSelect={state.selectTab} />
+        </BottomBars>
       )}
 
       {/* Interactive Full Practice Screen Overlay */}

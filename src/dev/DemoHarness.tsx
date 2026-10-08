@@ -404,6 +404,12 @@ export function useDemoState(real: AppState): AppState {
     overrides.modalVerses = q.slice(0, 2).map((x) => ({ book: x.book, chapter: x.chapter, verse: x.verseNumber, text: x.text, status: 'learning' })) as any;
   }
   if (s === 'modalSave') overrides.saveRecordingDialog = true;
+  // `playing=1` shows the now-playing bar above the tabs, without real audio.
+  if (params.get('playing') === '1') {
+    overrides.playingRecordingId = recordings[0].id;
+    overrides.nowPlayingRecording = recordings[0] as any;
+    overrides.playingRecProgress = 40;
+  }
   if (s === 'modalMissed') {
     const q = buildQueue();
     overrides.showMissedReviewPrompt = true;

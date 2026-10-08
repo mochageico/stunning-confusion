@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   Eye,
   EyeOff,
+  Headphones,
   Info,
   Layers,
   ListOrdered,
@@ -70,6 +71,7 @@ import { Badge, Dialog, EmptyState, SegmentedControl } from './blocks';
 import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePrefs, StrikeLimit } from '../lib/practicePrefs';
 
 import { useThemeColors } from './theme';
+import { useAboveTabBar } from './TabBar';
 /** Stable identity, so a missing photoCache prop cannot retrigger renders. */
 const EMPTY_PHOTO_CACHE: ReadonlyMap<string, string> = new Map();
 
@@ -456,6 +458,7 @@ function PracticeModalsInner({
   // foregrounded.
   const [listenMinimized, setListenMinimized] = useState(false);
   const insets = useSafeAreaInsets();
+  const aboveTabBar = useAboveTabBar();
 
   // For every verse in the active playlist, resolve which real recording (if
   // any) covers it and that recording's tagged {startSec, endSec} for this
@@ -1826,10 +1829,10 @@ function PracticeModalsInner({
   }
 
   // Minimized Listen mode: a small persistent bar instead of the full
-  // overlay, positioned above the tab bar (its height, 64px, is hardcoded
-  // to match AppShell's own h-16 tab/Back-to-Guide row -- this component
-  // renders as its own absolutely-positioned sibling, not inside that row's
-  // normal flex flow, so it can't inherit the offset automatically).
+  // overlay, floating just above the tab bar in the same pill style as the
+  // app's own now-playing bar. It renders as an absolutely-positioned
+  // sibling, not inside the tab bar's tray, so it takes its offset from
+  // useAboveTabBar rather than inheriting it.
   // pointerEvents="box-none" on the full-screen wrapper means only the bar
   // itself (given pointerEvents="auto") captures touches -- everything else
   // on screen stays reachable, so the user can genuinely navigate the rest
@@ -1842,31 +1845,36 @@ function PracticeModalsInner({
         <Pressable
           onPress={() => setListenMinimized(false)}
           pointerEvents="auto"
-          style={{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 76 }}
-          className="bg-accent rounded-2xl px-3 py-2.5 flex-row items-center shadow-lg"
+          accessibilityRole="button"
+          accessibilityLabel="Open Listen"
+          style={{ position: 'absolute', left: 16, right: 16, bottom: aboveTabBar, paddingVertical: space(6), paddingLeft: space(6), paddingRight: space(6), gap: space(10) }}
+          className="bg-surface border border-line rounded-full flex-row items-center shadow-md active:bg-surface-2"
         >
-          <View className="w-8 h-8 rounded-lg bg-on-accent/15 items-center justify-center shrink-0 mr-3">
-            <WaveBars active={listenPlaying} count={4} onFill />
+          <View className="rounded-full bg-accent-soft items-center justify-center shrink-0" style={{ width: space(36), height: space(36) }}>
+            {/* Moving bars while it plays; at rest they shrink to nothing, so
+                a headphones icon holds the spot instead. */}
+            {listenPlaying ? <WaveBars active count={4} /> : <Headphones size={16} color={palette.accent} />}
           </View>
-          <View className="flex-1 mr-2" style={{ gap: 1 }}>
+          <View className="flex-1" style={{ gap: 1, minWidth: 0 }}>
             <View className="flex-row items-center gap-1">
-              <ChevronUp size={9} color="rgba(255,255,255,0.5)" />
-              <AppText variant="micro" className="text-on-accent/70 font-sans font-semibold">Now playing</AppText>
+              <ChevronUp size={10} color={palette.ink3} />
+              <AppText variant="micro" className="text-ink-3 font-sans font-semibold">Now playing</AppText>
             </View>
-            <AppText variant="label" numberOfLines={1} className="text-on-accent font-sans font-bold ">
+            <AppText variant="label" numberOfLines={1} className="text-ink font-sans font-semibold">
               {miniVerse ? `${miniVerse.book} ${miniVerse.chapter}:${miniVerse.verse}` : referenceText}
             </AppText>
           </View>
-          <Pressable
+          <AppIconButton
+            Icon={listenPlaying ? Pause : Play}
+            variant="filled"
+            diameter={36}
+            accessibilityLabel={listenPlaying ? 'Pause' : 'Play'}
             onPress={(e) => {
               e.stopPropagation();
               toggleListenPlaying();
             }}
-            className="w-9 h-9 rounded-full bg-on-accent/15 items-center justify-center shrink-0 mr-1.5"
-          >
-            {listenPlaying ? <Pause size={15} color={palette.onAccent} /> : <Play size={15} color={palette.onAccent} />}
-          </Pressable>
-          <AppIconButton Icon={X} diameter={36} iconSize={15} iconColor={palette.onAccent} onPress={(e) => { e.stopPropagation(); onClose(); }} className="rounded-full bg-on-accent/15 shrink-0" />
+          />
+          <AppIconButton Icon={X} variant="bare" diameter={36} iconColor={palette.ink3} accessibilityLabel="Stop listening" onPress={(e) => { e.stopPropagation(); onClose(); }} />
         </Pressable>
       </View>
     );
