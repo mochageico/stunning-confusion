@@ -3,7 +3,7 @@ import { LayoutChangeEvent, Modal, Pressable, View } from 'react-native';
 import { Highlighter, Pencil, X } from 'lucide-react-native';
 
 import { firstLetterLine, firstLetterOnly } from '../lib/recitation';
-import { scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
+import { isRtl, scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
 import DoodleCanvas from './DoodleCanvas';
 import { AppButton, AppText } from './design';
 
@@ -96,9 +96,14 @@ export default function MemoryGrid({
   const widthPct = columns === 2 ? '47%' : '22%';
   const [doodleOpenKey, setDoodleOpenKey] = useState<string | null>(null);
   const doodleOpenVerse = verses.find((v) => verseAnnotationKey(v.book, v.chapter, v.verse) === doodleOpenKey) || null;
+  // A Hebrew passage reads right to left at every level: boxes start
+  // top-right, the verse number sits at each box's right, and the word dots
+  // run leftward. (A grid is always one translation and chapter.)
+  const rtl = verses.length > 0 && isRtl(scriptOfVerse(verses[0]));
+  const row = rtl ? 'flex-row-reverse' : 'flex-row';
 
   return (
-    <View className="flex-row flex-wrap gap-2">
+    <View className={`${row} flex-wrap gap-2`}>
       {verses.map((v, index) => {
         const key = verseAnnotationKey(v.book, v.chapter, v.verse);
         const isHighlighted = !!highlightedKeys?.has(key);
@@ -123,7 +128,7 @@ export default function MemoryGrid({
                 <AppText variant="micro" className="text-on-accent font-black">✓</AppText>
               </View>
             )}
-            <View className="flex-row items-center justify-between px-2 pt-1.5">
+            <View className={`${row} items-center justify-between px-2 pt-1.5`}>
               <View className={`px-1 rounded ${isActive ? 'bg-on-accent/20' : 'bg-surface-2'}`}>
                 <AppText variant="micro" className={`font-sans font-extrabold ${isActive ? 'text-on-accent' : 'text-ink-3'}`}>{v.verse}</AppText>
               </View>
@@ -142,7 +147,7 @@ export default function MemoryGrid({
             </View>
             <Pressable onPress={() => onTapVerse?.(v, index)} className="px-2 pb-2 pt-0.5">
               {hideMode === 'blank' ? (
-                <View className="flex-row flex-wrap items-center" style={{ gap: 3 }}>
+                <View className={`${row} flex-wrap items-center`} style={{ gap: 3 }}>
                   {words.map((w, wi) => {
                     const grade = grades?.[wi];
                     const dotColor =
@@ -160,7 +165,7 @@ export default function MemoryGrid({
                   })}
                 </View>
               ) : (
-                <AppText variant="caption" className={`font-sans leading-tight flex-row flex-wrap ${isActive ? 'text-on-accent' : 'text-ink'}`}>
+                <AppText variant="caption" script={script} className={`font-sans leading-tight flex-row flex-wrap ${isActive ? 'text-on-accent' : 'text-ink'}`}>
                   {words.map((w, wi) => {
                     const grade = grades?.[wi];
                     const gradeColor =
@@ -198,7 +203,7 @@ export default function MemoryGrid({
                   <X size={18} color={palette.ink} />
                 </Pressable>
               </View>
-              <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={2}>
+              <AppText variant="caption" script={scriptOfVerse(doodleOpenVerse)} className="font-sans text-ink-3" numberOfLines={2}>
                 {firstLetterLine(doodleOpenVerse.text, scriptOfVerse(doodleOpenVerse))}
               </AppText>
               <DoodleCanvas

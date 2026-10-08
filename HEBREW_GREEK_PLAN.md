@@ -199,6 +199,26 @@ long), all script-aware:
 
 ## Phase 3 — Right-to-left display and fonts
 
+**Status (2026-10-08): done on web; not yet seen on a real iPhone.** How it landed:
+- **Fonts:** Greek needs nothing. Inter and Literata both carry all of polytonic
+  Greek (checked against each TTF's character table). Hebrew is Noto Serif Hebrew
+  (`@expo-google-fonts/noto-serif-hebrew`, OFL, 4 weights × 56 KB), in `APP_FONTS`.
+- **`AppText script=`** is the one switch. `script="hebrew"` on a paragraph swaps in the
+  weight-matched Hebrew face, sets it 1.2× (`HEBREW_TEXT_SCALE`, line height too), and
+  makes it right-to-left. Nested spans inherit the face. Direction per platform: iOS
+  `writingDirection`, web an explicit `dir="rtl"` (react-native-web otherwise uses
+  `dir="auto"`, which a fully masked Recall line can't resolve), Android a leading
+  U+200F mark. `textAlign: right` everywhere.
+- **Rows** that set verses or tiles side by side use `flex-row-reverse` for Hebrew
+  (`isRtl()`): chapter list rows and grid tiles, memory grid boxes/headers/dots, Order
+  slots, Scramble answer and bank, the Record teleprompter. The printed grid gets
+  `dir="rtl" lang="he"`. The spot-the-swap results arrow flips to ←.
+- **Mixed-translation lists** (Listen playlists, the reference drill) carry
+  `translationId` per verse and pick the script per verse.
+- **Verified on web:** Psalm 23 list (numbers right, Noto Serif Hebrew at 20.4px),
+  memory grid (verse 1 top-right), Recall (masked lines RTL, revealed words fill
+  from the right), Scramble (first phrase lands on the right).
+
 1. **Fonts.** Hebrew: Ezra SIL or Noto Serif Hebrew (both OFL) — pick whichever
    stacks vowel points more cleanly at our sizes on iPhone. Greek: Gentium Plus
    (OFL), which handles polytonic Greek well. Add to `APP_FONTS`. Regular weight

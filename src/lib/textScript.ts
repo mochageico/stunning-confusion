@@ -108,6 +108,13 @@ const wordShape = (word: string, script: TextScript): { prefix: string; core: st
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
+ * Whether a script reads right-to-left -- Hebrew only. Layouts that place
+ * words or verses side by side (tile rows, the memory grid) reverse their row
+ * direction on it, so the first word sits on the right.
+ */
+export const isRtl = (script: TextScript): boolean => script === 'hebrew';
+
+/**
  * Which writing system a verse is in. A verse that doesn't say which
  * translation it's from predates the field and is English.
  */

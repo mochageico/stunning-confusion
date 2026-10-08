@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 import { firstLetterLine } from './recitation';
-import { scriptOfVerse } from './textScript';
+import { isRtl, scriptOfVerse } from './textScript';
 import { copyrightFor, copyrightUrlFor } from '../data';
 
 // ============================================================================
@@ -24,10 +24,16 @@ export interface PrintableVerse {
 }
 
 function buildGridHtml(verses: PrintableVerse[], reference: string, translationId: string): string {
+  // A printed grid is one chapter, so one script. Hebrew runs right to left
+  // at every level -- boxes start top-right (dir on the grid reverses the
+  // flex row) and each box's letters read RTL. lang lets the print engine
+  // pick a Hebrew-capable system font for the letters.
+  const script = verses.length > 0 ? scriptOfVerse({ book: verses[0].book, translationId }) : 'latin';
+  const dirAttrs = isRtl(script) ? ' dir="rtl" lang="he"' : '';
   const boxes = verses
     .map((v) => {
-      const words = firstLetterLine(v.text, scriptOfVerse({ book: v.book, translationId }));
-      return `<div class="box"><div class="vnum">${v.verse}</div><div class="letters">${words}</div></div>`;
+      const words = firstLetterLine(v.text, script);
+      return `<div class="box"><div class="vnum">${v.verse}</div><div class="letters"${dirAttrs}>${words}</div></div>`;
     })
     .join('\n');
 
@@ -63,7 +69,7 @@ function buildGridHtml(verses: PrintableVerse[], reference: string, translationI
 <body>
   <h1>${reference}</h1>
   <div class="subtitle">Memory Grid</div>
-  <div class="grid">${boxes}</div>
+  <div class="grid"${dirAttrs}>${boxes}</div>
   ${copyright ? `<div class="copyright">${copyright}${copyrightUrl ? ` ${copyrightUrl}` : ''}</div>` : ''}
 </body>
 </html>`;

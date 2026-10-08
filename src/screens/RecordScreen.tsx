@@ -6,7 +6,9 @@ import { AppState } from '../state/useAppState';
 import { FadeInView, NumericInput, WaveBars } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
-import { PICKER_TRANSLATIONS, getBookByName, translationLabel } from '../data';
+import { PICKER_TRANSLATIONS, getBookByName, textScriptFor, translationLabel } from '../data';
+import { isRtl } from '../lib/textScript';
+import type { TextScript } from '../types';
 import { recordingLabel, recordingMeta } from '../lib/recordingLabel';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
@@ -279,6 +281,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
               live={isRecording}
               onTap={handleMarkVerseTap}
               maxHeight={240}
+              script={textScriptFor(recordingTranslation, recordingBook)}
             />
 
             {isRecording && (
@@ -359,6 +362,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
               live
               onTap={handleMarkImportTap}
               maxHeight={240}
+              script={textScriptFor(recordingTranslation, recordingBook)}
             />
 
             {/* Playback. A card like the rest of the screen, not a solid
@@ -500,12 +504,15 @@ function ScriptList({
   live,
   onTap,
   maxHeight,
+  script = 'latin',
 }: {
   verses: { verse: number; text: string }[];
   tapped: Record<number, unknown>;
   live: boolean;
   onTap: (verse: number) => void;
   maxHeight: number;
+  /** Hebrew sets each row right-to-left: number on the right, text RTL. */
+  script?: TextScript;
 }) {
   const palette = useThemeColors();
   const scale = useFontScale();
@@ -533,7 +540,7 @@ function ScriptList({
                 onPress={() => onTap(v.verse)}
                 accessibilityRole={live ? 'button' : undefined}
                 accessibilityLabel={live ? `Verse ${v.verse}${isTapped ? ', marked' : ''}` : undefined}
-                className={`flex-row items-start rounded-btn ${live && isTapped ? 'bg-success-soft' : ''}`}
+                className={`${isRtl(script) ? 'flex-row-reverse' : 'flex-row'} items-start rounded-btn ${live && isTapped ? 'bg-success-soft' : ''}`}
                 style={{ gap: space(10), margin: -space(4), padding: space(4) }}
               >
                 <View
@@ -551,7 +558,7 @@ function ScriptList({
                     {v.verse}
                   </AppText>
                 </View>
-                <AppText variant="title" className="flex-1 font-serif leading-relaxed text-ink">
+                <AppText variant="title" script={script} className="flex-1 font-serif leading-relaxed text-ink">
                   {v.text}
                 </AppText>
               </Pressable>

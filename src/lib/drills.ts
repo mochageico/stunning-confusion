@@ -287,6 +287,8 @@ export interface ReferenceItem {
   chapter: number;
   verse: number;
   text: string;
+  /** Which translation `text` is from -- the pool can mix them, so each item says. */
+  translationId?: string;
 }
 
 export type DrillDirection = 'both' | 'refToVerse' | 'verseToRef';

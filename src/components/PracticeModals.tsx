@@ -45,7 +45,7 @@ import {
   SpeechRecognizer,
   WordOutcome,
 } from '../lib/recitation';
-import { joinWords, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
+import { isRtl, joinWords, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
 import {
   buildJigsawTiles,
   buildScrambleRounds,
@@ -357,6 +357,8 @@ function PracticeModalsInner({
           verse: item.verseNumber,
           text: item.text,
           status: item.status === 'retained' ? 'memorized' : 'learning',
+          // Playlists mix translations, so each verse carries its own.
+          translationId: item.translationId || 'ESV',
         });
 
         dbLearning = memoryQueue.filter((item) => item.status === 'learning').map(mapQueueItemToVerse);
@@ -1103,6 +1105,10 @@ function PracticeModalsInner({
   // (maskLetters / maskExceptFirstLetter) included, since an English-only
   // mask leaves Hebrew words fully visible.
   const passageScript = useMemo(() => (verses.length > 0 ? scriptOfVerse(verses[0]) : 'latin'), [verses]);
+  // Rows that set words or a verse beside its number (word tiles, Order's
+  // numbered slots) run right-to-left for Hebrew; the text itself gets
+  // `script={passageScript}` on its AppText.
+  const passageRow = isRtl(passageScript) ? 'flex-row-reverse' : 'flex-row';
 
   // ==========================================
   // LEARN MODE — Recall (typed + spoken, either channel advances the same
@@ -2074,7 +2080,7 @@ function PracticeModalsInner({
                           </AppText>
                         )}
                       </View>
-                      <AppText variant="body" className={`font-serif leading-relaxed ${textClassName}`}>{verseObj.text}</AppText>
+                      <AppText variant="body" script={scriptOfVerse(verseObj)} className={`font-serif leading-relaxed ${textClassName}`}>{verseObj.text}</AppText>
                     </Pressable>
                   );
                 })}
@@ -2393,7 +2399,7 @@ function PracticeModalsInner({
                           return verses.map((v) => {
                             const words = splitWords(v.text, passageScript);
                             return (
-                              <AppText variant="body" key={`${v.book}-${v.chapter}-${v.verse}`} className="font-serif leading-relaxed text-ink">
+                              <AppText variant="body" script={passageScript} key={`${v.book}-${v.chapter}-${v.verse}`} className="font-serif leading-relaxed text-ink">
                                 <AppText variant="caption" className="font-sans font-bold text-ink-3">{v.verse} </AppText>
                                 {words.map((w, idx) => {
                                   const isCountedWord = normalizeToken(w, passageScript).length > 0;
@@ -2704,7 +2710,7 @@ function PracticeModalsInner({
                       <View className="w-full bg-surface-2 border border-line rounded-card p-3 gap-1.5 max-h-[110px]">
                         <ScrollView>
                           {verses.map((v) => (
-                            <AppText variant="label" key={v.verse} className="font-serif italic text-ink-2">
+                            <AppText variant="label" script={passageScript} key={v.verse} className="font-serif italic text-ink-2">
                               <AppText variant="micro" className="font-sans font-bold text-ink-3 not-italic">{v.verse} </AppText>
                               {v.text}
                             </AppText>
@@ -2809,11 +2815,11 @@ function PracticeModalsInner({
                             {tile === null ? (
                               <AppText variant="caption" className="font-sans font-medium text-ink-3">Slot {slotIdx + 1}</AppText>
                             ) : (
-                              <View className="flex-row items-start gap-2">
+                              <View className={`${passageRow} items-start gap-2`}>
                                 <View className={`px-1.5 py-0.5 rounded ${showResult ? (isRight ? 'bg-success' : 'bg-danger') : 'bg-accent'}`}>
                                   <AppText variant="micro" className="font-sans font-bold text-on-accent">{slotIdx + 1}</AppText>
                                 </View>
-                                <AppText variant="label" className="font-serif leading-snug text-ink flex-1">{tile.text}</AppText>
+                                <AppText variant="label" script={passageScript} className="font-serif leading-snug text-ink flex-1">{tile.text}</AppText>
                               </View>
                             )}
                           </Pressable>
@@ -2835,7 +2841,7 @@ function PracticeModalsInner({
                               }}
                               className="border border-line bg-surface-2 rounded-card p-2.5"
                             >
-                              <AppText variant="label" className="font-serif leading-snug text-ink-2">{jigsawTiles[tileIdx].text}</AppText>
+                              <AppText variant="label" script={passageScript} className="font-serif leading-snug text-ink-2">{jigsawTiles[tileIdx].text}</AppText>
                             </Pressable>
                           ))}
                         </View>
@@ -3002,7 +3008,7 @@ function PracticeModalsInner({
                         phrase just added is the amber one. */}
                     <ScrollView className="flex-1" contentContainerClassName="grow justify-center py-2">
                       <View className="border border-line bg-surface rounded-card p-4">
-                        <AppText variant="title" className="font-serif leading-[30px]">
+                        <AppText variant="title" script={passageScript} className="font-serif leading-[30px]">
                           {stage.segments.map((seg, i) => (
                             <AppText variant="inherit" key={i} className={seg.isNew ? 'text-warning' : 'text-ink'}>
                               {maskBuildSegment(seg.text)}
@@ -3110,7 +3116,7 @@ function PracticeModalsInner({
                         {scrambleSlots.every((s) => s === null) ? (
                           <AppText variant="caption" className="text-ink-3 font-sans">Tap the phrases below to build the verse</AppText>
                         ) : (
-                          <View className="flex-row flex-wrap gap-1.5">
+                          <View className={`${passageRow} flex-wrap gap-1.5`}>
                             {scrambleSlots.map((phraseIdx, slotIdx) =>
                               phraseIdx === null ? null : (
                                 <Pressable
@@ -3129,7 +3135,7 @@ function PracticeModalsInner({
                                     scrambleChecked && phraseIdx !== slotIdx ? 'bg-danger-soft border-danger/30' : 'bg-accent border-accent'
                                   }`}
                                 >
-                                  <AppText variant="label" className={`font-serif ${scrambleChecked && phraseIdx !== slotIdx ? 'text-danger' : 'text-on-accent'}`}>
+                                  <AppText variant="label" script={passageScript} className={`font-serif ${scrambleChecked && phraseIdx !== slotIdx ? 'text-danger' : 'text-on-accent'}`}>
                                     {round.phrases[phraseIdx]}
                                   </AppText>
                                 </Pressable>
@@ -3141,7 +3147,7 @@ function PracticeModalsInner({
 
                       {/* Tile bank */}
                       {bankRemaining.length > 0 && (
-                        <View className="flex-row flex-wrap gap-1.5 mt-1">
+                        <View className={`${passageRow} flex-wrap gap-1.5 mt-1`}>
                           {bankRemaining.map((phraseIdx) => (
                             <Pressable
                               key={`b-${phraseIdx}`}
@@ -3153,7 +3159,7 @@ function PracticeModalsInner({
                               }}
                               className="px-2 py-1 rounded-lg border border-line-strong bg-surface-2"
                             >
-                              <AppText variant="label" className="font-serif text-ink-2">{round.phrases[phraseIdx]}</AppText>
+                              <AppText variant="label" script={passageScript} className="font-serif text-ink-2">{round.phrases[phraseIdx]}</AppText>
                             </Pressable>
                           ))}
                         </View>
@@ -3218,7 +3224,7 @@ function PracticeModalsInner({
                         </AppText>
                       ) : (
                         swapVerses.map((sv) => (
-                          <AppText variant="body" key={sv.id} className="font-serif leading-relaxed text-ink">
+                          <AppText variant="body" script={passageScript} key={sv.id} className="font-serif leading-relaxed text-ink">
                             <AppText variant="caption" className="font-sans font-bold text-ink-3">{sv.label} </AppText>
                             {sv.tokens.map((tok) => {
                               const isSelected = swapSelected.has(tok.index);
@@ -3262,8 +3268,9 @@ function PracticeModalsInner({
                             sv.tokens
                               .filter((t) => t.isDecoy)
                               .map((t) => (
-                                <AppText variant="label" key={t.index} className="font-serif text-ink-2">
-                                  <AppText variant="inherit" className="text-danger line-through">{t.display}</AppText> → <AppText variant="inherit" className="text-success font-bold">{t.original}</AppText>
+                                <AppText variant="label" script={passageScript} key={t.index} className="font-serif text-ink-2">
+                                  {/* Read right to left in Hebrew, so the arrow points left: imposter ← real word. */}
+                                  <AppText variant="inherit" className="text-danger line-through">{t.display}</AppText> {isRtl(passageScript) ? '←' : '→'} <AppText variant="inherit" className="text-success font-bold">{t.original}</AppText>
                                 </AppText>
                               ))
                           )}

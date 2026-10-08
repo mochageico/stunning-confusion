@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useMemo, useSyncExternalStore } from 'react';
-import { Pressable, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { TextStyle, ViewStyle } from 'react-native';
+import {
+  NotoSerifHebrew_400Regular,
+  NotoSerifHebrew_500Medium,
+  NotoSerifHebrew_600SemiBold,
+  NotoSerifHebrew_700Bold,
+} from '@expo-google-fonts/noto-serif-hebrew';
+import type { TextScript } from '../types';
 import {
   Inter_400Regular,
   Inter_400Regular_Italic,
@@ -149,6 +156,13 @@ export const APP_FONTS = {
   Literata_600SemiBold,
   Literata_700Bold,
   Literata_400Regular_Italic,
+  // Hebrew verse text (Hebrew/Greek translation, Old Testament). Neither
+  // Inter nor Literata has a single Hebrew glyph; both already cover
+  // polytonic Greek, so Greek needs nothing extra.
+  NotoSerifHebrew_400Regular,
+  NotoSerifHebrew_500Medium,
+  NotoSerifHebrew_600SemiBold,
+  NotoSerifHebrew_700Bold,
 };
 
 type FontFamilyRole = 'sans' | 'serif' | 'mono';
@@ -157,6 +171,8 @@ interface FontSpec {
   family: FontFamilyRole;
   weight: FontWeightStep;
   italic: boolean;
+  /** The writing system of the text -- Hebrew swaps in a Hebrew face. */
+  script: TextScript;
 }
 
 // When a className carries two family tokens (a few conditional strings do),
@@ -223,16 +239,23 @@ function parseFontTokens(className: string | undefined): Partial<FontSpec> {
  */
 const InheritedFont = createContext<FontSpec | null>(null);
 
-function resolveFont(className: string | undefined, parent: FontSpec | null): FontSpec {
+function resolveFont(className: string | undefined, parent: FontSpec | null, script?: TextScript): FontSpec {
   const own = parseFontTokens(className);
   return {
     family: own.family ?? parent?.family ?? 'sans',
     weight: own.weight ?? parent?.weight ?? 400,
     italic: own.italic ?? parent?.italic ?? false,
+    script: script ?? parent?.script ?? 'latin',
   };
 }
 
-function fontStyleFor({ family, weight, italic }: FontSpec): TextStyle {
+function fontStyleFor({ family, weight, italic, script }: FontSpec): TextStyle {
+  // Hebrew: one face for every family role (a sans Hebrew would be a fourth
+  // font for the same few screens), weight-matched, never italic -- Hebrew
+  // has no italic, and a slanted Hebrew face would only be a fake.
+  if (script === 'hebrew') {
+    return { fontFamily: `NotoSerifHebrew_${WEIGHT_SUFFIX[weight]}`, fontWeight: 'normal', fontStyle: 'normal' };
+  }
   const base = family === 'serif' ? 'Literata' : 'Inter';
   return {
     fontFamily: italic ? `${base}_400Regular_Italic` : `${base}_${WEIGHT_SUFFIX[weight]}`,
@@ -241,6 +264,22 @@ function fontStyleFor({ family, weight, italic }: FontSpec): TextStyle {
     ...(family === 'mono' ? { fontVariant: ['tabular-nums'] } : family === 'serif' ? { fontVariant: ['lining-nums'] } : null),
   };
 }
+
+/**
+ * Hebrew with vowel points reads small at Latin sizes -- the points hang off
+ * a letter body that's already compact -- so Hebrew verse text is set this
+ * much larger than the variant's size (line height scales with it, so the
+ * points under one line never touch the letters of the next).
+ */
+export const HEBREW_TEXT_SCALE = 1.2;
+
+// iOS honours writingDirection; Android ignores it and takes the paragraph's
+// direction from its first strong character, which a masked Recall line
+// doesn't have -- so on Android a right-to-left mark (U+200F, invisible,
+// zero-width) is put in front. textAlign is explicit on every platform,
+// since 'auto' alignment follows the device locale, not the text.
+const RTL_TEXT_STYLE: TextStyle = { writingDirection: 'rtl', textAlign: 'right' };
+const RLM = String.fromCharCode(0x200f);
 
 /**
  * Text with the scaling contract applied. Pass colour, weight, and font family
@@ -258,26 +297,61 @@ export function AppText({
   style,
   children,
   maxScale,
+  script,
   ...rest
 }: React.ComponentProps<typeof Text> & {
   variant?: TypeVariant | 'inherit';
   /** Stop growing past this text size. Only for chrome with a fixed slot
    *  (tab bar labels), the way iOS caps its own tab bar. */
   maxScale?: number;
+  /**
+   * The writing system of verse text (see textScriptFor / scriptOfVerse).
+   * Set it on the paragraph, not on each word -- nested AppText inherits it.
+   * 'hebrew' sets the paragraph right-to-left, in the Hebrew face, at
+   * HEBREW_TEXT_SCALE. 'greek' and 'latin' change nothing: both app fonts
+   * already carry polytonic Greek.
+   */
+  script?: TextScript;
 }) {
   const fontScale = useFontScale();
   const scale = maxScale ? Math.min(fontScale, maxScale) : fontScale;
   const parentFont = useContext(InheritedFont);
-  const font = resolveFont(className, parentFont);
+  const font = resolveFont(className, parentFont, script);
   const { family, weight, italic } = font;
-  const inherited = useMemo<FontSpec>(() => ({ family, weight, italic }), [family, weight, italic]);
+  const inherited = useMemo<FontSpec>(
+    () => ({ family, weight, italic, script: font.script }),
+    [family, weight, italic, font.script]
+  );
+  const scriptScale = font.script === 'hebrew' ? HEBREW_TEXT_SCALE : 1;
   const size =
     variant === 'inherit'
       ? null
-      : { fontSize: TYPE[variant].fontSize * scale, lineHeight: TYPE[variant].lineHeight * scale };
+      : {
+          fontSize: TYPE[variant].fontSize * scale * scriptScale,
+          lineHeight: TYPE[variant].lineHeight * scale * scriptScale,
+        };
+  // Direction is a paragraph property, so only the AppText that was handed
+  // `script="hebrew"` sets it; nested spans just follow.
+  const rtlParagraph = script === 'hebrew';
   const text = (
-    <Text allowFontScaling={false} className={className} style={[fontStyleFor(font), size, style]} {...rest}>
-      {children}
+    <Text
+      allowFontScaling={false}
+      className={className}
+      style={[fontStyleFor(font), size, rtlParagraph ? RTL_TEXT_STYLE : null, style]}
+      // Web: an explicit dir, because react-native-web otherwise sets
+      // dir="auto" and a fully masked Recall line (bullets and ׃, no letters)
+      // has nothing for the browser to infer RTL from.
+      {...(rtlParagraph && Platform.OS === 'web' ? ({ dir: 'rtl' } as object) : null)}
+      {...rest}
+    >
+      {rtlParagraph && Platform.OS === 'android' ? (
+        <>
+          {RLM}
+          {children}
+        </>
+      ) : (
+        children
+      )}
     </Text>
   );
   // Plain strings have no nested AppText to inherit anything.

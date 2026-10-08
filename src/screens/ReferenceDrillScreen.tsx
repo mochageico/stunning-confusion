@@ -3,6 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { RefreshCw, Target, X } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
+import { scriptOfVerse } from '../lib/textScript';
 import { FadeInView, NumericInput } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
 import { BookPicker } from '../components/BookPicker';
@@ -136,7 +137,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
         if (dueTodayOnly && !(i.status === 'reviewing' && isReviewDue(i.nextReviewDueDate))) return false;
         return true;
       })
-      .map((i) => ({ book: i.book, chapter: i.chapter, verse: i.verseNumber, text: i.text }));
+      .map((i) => ({ book: i.book, chapter: i.chapter, verse: i.verseNumber, text: i.text, translationId: i.translationId || 'ESV' }));
   }, [
     memoryQueue,
     book,
@@ -357,7 +358,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
             <>
               {questionLabel('Where is this?')}
               <View className="bg-surface border border-line rounded-card" style={{ padding: space(16) }}>
-                <AppText variant="body" className="font-serif leading-relaxed text-ink">{currentRound.answer.text}</AppText>
+                <AppText variant="body" script={scriptOfVerse(currentRound.answer)} className="font-serif leading-relaxed text-ink">{currentRound.answer.text}</AppText>
               </View>
 
               {hardMode ? (
@@ -440,7 +441,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                   {revealed ? (
                     <>
                       <View className="bg-surface-2 border border-line rounded-card" style={{ padding: space(14) }}>
-                        <AppText variant="body" className="font-serif leading-relaxed text-ink">{currentRound.answer.text}</AppText>
+                        <AppText variant="body" script={scriptOfVerse(currentRound.answer)} className="font-serif leading-relaxed text-ink">{currentRound.answer.text}</AppText>
                       </View>
                       {!answered && (
                         <View className="flex-row" style={{ gap: space(8) }}>
@@ -472,6 +473,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
                       >
                         <AppText
                           variant="label"
+                          script={scriptOfVerse(opt)}
                           className={`font-serif leading-snug ${answered && isAnswer ? 'text-success' : 'text-ink'}`}
                           numberOfLines={3}
                         >

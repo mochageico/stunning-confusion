@@ -12,7 +12,8 @@ import ChapterPhotoStrip from '../components/ChapterPhotoStrip';
 import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { printMemoryGrid } from '../lib/printMemoryGrid';
 import { Recording } from '../types';
-import { BIBLE_TRANSLATIONS, PICKER_TRANSLATIONS, copyrightFor, translationLabel } from '../data';
+import { BIBLE_TRANSLATIONS, PICKER_TRANSLATIONS, copyrightFor, textScriptFor, translationLabel } from '../data';
+import { isRtl, joinWords, splitWords } from '../lib/textScript';
 import { AppButton, AppIconButton, AppText, RangeCaption, useFontScale, useScaledSpace } from '../components/design';
 import { Dialog, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { useDragSelect } from '../components/useDragSelect';
@@ -188,6 +189,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   // Per book, not per translation: the Hebrew/Greek translation owes credit
   // for its Greek New Testament only.
   const activeCopyright = copyrightFor(activeTranslation.id, selectedBook || undefined);
+  // Hebrew/Greek: the chapter's writing system. Hebrew lays verse rows and
+  // tiles out right-to-left (number on the right, verse 1 top-right).
+  const chapterScript = textScriptFor(activeTranslation.id, selectedBook || '');
+  const rtl = isRtl(chapterScript);
   const selectedVerses = () => activeChapterVerses.filter((v) => selectedVerseNumbers.includes(v.verse));
   const oneVerse = selectedVerseNumbers.length === 1;
   const them = oneVerse ? 'it' : 'them';
@@ -479,7 +484,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     accessibilityRole="button"
                     accessibilityState={{ selected: isSelected }}
                     accessibilityLabel={`Verse ${v.verse}, ${STATUS_WORD[v.status] ?? 'not started'}`}
-                    className={`flex-row ${index > 0 ? 'border-t border-hairline' : ''} ${isSelected ? 'bg-accent-soft' : ''}`}
+                    className={`${rtl ? 'flex-row-reverse' : 'flex-row'} ${index > 0 ? 'border-t border-hairline' : ''} ${isSelected ? 'bg-accent-soft' : ''}`}
                     style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(10) }}
                   >
                     <View className="items-center" style={{ minWidth: space(22), gap: space(6), paddingTop: space(2) }}>
@@ -493,7 +498,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                       <View className={`w-2 h-2 rounded-full ${STATUS_DOT[v.status] ?? 'bg-fill'}`} />
                     </View>
                     <View className="flex-1" style={{ gap: space(4) }}>
-                      <AppText variant="body" className="font-serif leading-relaxed text-ink">
+                      <AppText variant="body" script={chapterScript} className="font-serif leading-relaxed text-ink">
                         {v.text}
                       </AppText>
                       {due ? (
@@ -512,14 +517,14 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                to fill each row: three across normally, two at large text. */
             <GestureDetector gesture={dragSelect.gesture}>
             <View
-              className="flex-row flex-wrap"
+              className={`${rtl ? 'flex-row-reverse' : 'flex-row'} flex-wrap`}
               style={{ gap: tileGap }}
               collapsable={false}
               onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
             >
               {activeChapterVerses.map((v, index) => {
                 const isSelected = isVerseSelected(v.verse);
-                const textSnippet = v.text ? v.text.split(/\s+/).slice(0, 4).join(' ') + '…' : '';
+                const textSnippet = v.text ? joinWords(splitWords(v.text, chapterScript).slice(0, 4)) + '…' : '';
 
                 return (
                   <Pressable
@@ -542,7 +547,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                       </AppText>
                       <View className={`w-2 h-2 rounded-full ${STATUS_DOT[v.status] ?? 'bg-fill'}`} />
                     </View>
-                    <AppText variant="caption" className="font-serif text-ink-2" numberOfLines={2}>
+                    <AppText variant="caption" script={chapterScript} className="font-serif text-ink-2" numberOfLines={2}>
                       {textSnippet}
                     </AppText>
                   </Pressable>
