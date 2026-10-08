@@ -1,15 +1,16 @@
 import { ScrollView, View } from 'react-native';
-import { BarChart3, Bell, Settings as SettingsIcon, UserPlus, Users, X } from 'lucide-react-native';
+import { BarChart3, Bell, BellDot, Settings as SettingsIcon, UserPlus, Users, X } from 'lucide-react-native';
 
 import { FadeInView } from '../components/ui';
 import { AppState } from '../state/useAppState';
-import { AppIconButton, AppText, useScaledSpace } from '../components/design';
+import { AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Avatar, Badge, GroupedList, ListRow, ScreenHeader, StatRow } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 
 export default function ProfileScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
   const space = useScaledSpace();
+  const scale = useFontScale();
   const {
     user,
     memoryQueue,
@@ -82,13 +83,16 @@ export default function ProfileScreen({ state }: { state: AppState }) {
             {receivedAccountabilityNudges.map((n) => (
               <ListRow
                 key={n.id}
-                Icon={Bell}
+                // The dotted bell marks an unread note on its own, so the "New"
+                // badge can step aside at large text, where it squeezed the
+                // message into a one-word-wide column.
+                Icon={n.read ? Bell : BellDot}
                 title={n.fromName}
                 subtitle={n.message}
                 onPress={() => !n.read && markAccountabilityNudgeRead(n.id)}
                 accessory={
                   <View className="flex-row items-center" style={{ gap: space(6) }}>
-                    {!n.read && <Badge label="New" tone="accent" />}
+                    {!n.read && scale < 1.3 && <Badge label="New" tone="accent" />}
                     <AppIconButton
                       Icon={X}
                       variant="bare"

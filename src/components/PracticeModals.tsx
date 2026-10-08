@@ -1879,8 +1879,10 @@ function PracticeModalsInner({
         {/* flex-1 so a long reference wraps instead of pushing the
             close button off the screen at large text sizes. */}
         <View className="flex-1">
+          {/* Non-breaking hyphen: at large text a range wraps as "Romans /
+              8:28-29", never "Romans 8:28- / 29". */}
           <AppText variant="title" className="font-sans font-bold text-ink leading-tight" numberOfLines={2}>
-            {referenceText}
+            {referenceText.replace(/-/g, '‑')}
           </AppText>
         </View>
         <View className="flex-row items-center gap-2 shrink-0">

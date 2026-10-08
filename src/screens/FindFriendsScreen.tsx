@@ -28,6 +28,10 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
     viewMemberProfileById,
   } = state;
 
+  // The avatar gives way at large text: the row has a name, a note and up to
+  // two buttons to fit, and on an SE the name was wrapping a word per line.
+  const avatar = (name: string) => (scale < 1.3 ? <Avatar name={name} size={40} /> : undefined);
+
   // Accept / decline as two round icon buttons, the same on a request row and
   // a search result.
   const acceptDecline = (accept: () => void, decline: () => void, name: string) => (
@@ -49,7 +53,7 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
             {incomingFriendRequests.map((req) => (
               <ListRow
                 key={req.id}
-                leading={<Avatar name={req.fromName} size={40} />}
+                leading={avatar(req.fromName)}
                 title={req.fromName}
                 subtitle="Wants to be friends"
                 onPress={() => viewMemberProfileById(req.fromUid)}
@@ -69,7 +73,7 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
             {outgoingFriendRequests.map((req) => (
               <ListRow
                 key={req.id}
-                leading={<Avatar name={req.toName} size={40} />}
+                leading={avatar(req.toName)}
                 title={req.toName}
                 subtitle="Waiting for them to accept"
                 onPress={() => viewMemberProfileById(req.toUid)}
@@ -125,7 +129,7 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
               return (
                 <ListRow
                   key={person.uid}
-                  leading={<Avatar name={person.displayName} size={40} />}
+                  leading={avatar(person.displayName)}
                   title={person.displayName}
                   subtitle={person.email || undefined}
                   onPress={() => viewMemberProfileById(person.uid)}

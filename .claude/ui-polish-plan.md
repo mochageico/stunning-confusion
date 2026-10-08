@@ -289,6 +289,16 @@ this whole file, then do only your job.
   in className, `font-mono`, `text-neutral-400` on text, `uppercase` outside
   SectionHeader, raw Pressable buttons, conditional `shadow-*`.
 - **L2 Big-text pass** (M): every screen at 1.5× on SE width, then the phone.
+  SE-width half DONE 2026-10-08, not yet committed. All 36 demo screens shot
+  at w=375 scale=1.5 (`.shots/l2/`, fixes in `.shots/l2b/`). Fixed: tab
+  labels ran together (AppText `maxScale`, tab labels capped at 1.15 like
+  iOS); practice title broke "8:28- / 29" and "catch- / up" (non-breaking
+  hyphen); Profile notes squeezed by the New badge (BellDot marks unread, badge
+  hidden at >=1.3); Find friends and Find recordings drop avatars at >=1.3;
+  feed search placeholder shortened at >=1.3; circle preview "Led by" ->
+  "Leader" row with an icon. Left as is: two-word segment labels wrap ("Build
+  up"), My progress chips scroll sideways by design. Phone half: user checks
+  on device at the largest Text Size.
 
 Optional quick-win session before everything: the 7 Bugs below.
 

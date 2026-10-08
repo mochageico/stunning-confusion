@@ -251,7 +251,7 @@ const MISS_CHOICES: { id: MissChoice; label: string; short: string; desc: string
   },
   {
     id: 'escalate',
-    label: 'A short catch-up',
+    label: 'A short catch‑up', // non-breaking hyphen: never "catch- / up" at large text
     short: 'Catch up',
     desc: 'Verses you review weekly get a few days of daily reviews, and monthly ones a few weeks of weekly reviews, then carry on as before.',
   },
@@ -473,7 +473,9 @@ function AppShell() {
             return (
               <Pressable key={tab.id} onPress={() => state.selectTab(tab.id)} className="items-center justify-center flex-1 py-1">
                 <Icon size={20} color={isActive ? palette.ink : palette.ink3} strokeWidth={isActive ? 2.5 : 2} />
-                <AppText variant="micro" className={`font-sans font-bold tracking-tight mt-0.5 ${isActive ? 'text-ink' : 'text-ink-3'}`}>
+                {/* Capped, like iOS's own tab bar: four labels share a fixed row, and at
+                    1.5x "Community" ran into its neighbours on an SE. */}
+                <AppText variant="micro" maxScale={1.15} numberOfLines={1} className={`font-sans font-bold tracking-tight mt-0.5 ${isActive ? 'text-ink' : 'text-ink-3'}`}>
                   {tab.label}
                 </AppText>
               </Pressable>

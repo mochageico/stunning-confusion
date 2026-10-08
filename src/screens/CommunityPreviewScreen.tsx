@@ -1,5 +1,5 @@
 import { ScrollView, View } from 'react-native';
-import { Globe, Lock } from 'lucide-react-native';
+import { Globe, Lock, User } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
@@ -28,7 +28,7 @@ export default function CommunityPreviewScreen({ state }: { state: AppState }) {
         />
 
         <GroupedList>
-          <ListRow title="Led by" value={previewCircle.ownerName} />
+          <ListRow Icon={User} title="Leader" value={previewCircle.ownerName} />
           <ListRow
             Icon={previewCircle.isPublic ? Globe : Lock}
             title="Who can join"

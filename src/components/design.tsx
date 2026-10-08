@@ -257,9 +257,16 @@ export function AppText({
   className,
   style,
   children,
+  maxScale,
   ...rest
-}: React.ComponentProps<typeof Text> & { variant?: TypeVariant | 'inherit' }) {
-  const scale = useFontScale();
+}: React.ComponentProps<typeof Text> & {
+  variant?: TypeVariant | 'inherit';
+  /** Stop growing past this text size. Only for chrome with a fixed slot
+   *  (tab bar labels), the way iOS caps its own tab bar. */
+  maxScale?: number;
+}) {
+  const fontScale = useFontScale();
+  const scale = maxScale ? Math.min(fontScale, maxScale) : fontScale;
   const parentFont = useContext(InheritedFont);
   const font = resolveFont(className, parentFont);
   const { family, weight, italic } = font;

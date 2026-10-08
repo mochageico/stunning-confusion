@@ -174,7 +174,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
             <AppTextInput
               value={audioSearchQuery}
               onChangeText={setAudioSearchQuery}
-              placeholder="Search by passage or person"
+              placeholder={scale >= 1.3 ? 'Passage or person' : 'Search by passage or person'}
               accessibilityLabel="Search recordings"
               variant="body"
               className="flex-1 text-ink font-sans"
@@ -284,7 +284,10 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                   className={`flex-row items-start ${idx > 0 ? 'border-t border-hairline' : ''}`}
                   style={{ padding: space(14), gap: space(12) }}
                 >
-                  <Avatar name={rec.user} size={Math.round(36 * scale)} />
+                  {/* The person is named on the line under the reference, so
+                      the avatar gives way at large text, where it left the
+                      text a column too narrow for "Friend" and Save to share. */}
+                  {scale < 1.3 && <Avatar name={rec.user} size={Math.round(36 * scale)} />}
                   <View className="flex-1" style={{ gap: space(6), minWidth: 0 }}>
                     <View style={{ gap: space(1) }}>
                       <AppText variant="body" className="font-sans font-semibold text-ink">
