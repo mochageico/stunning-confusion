@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 
-import { firstLetterOnly } from './recitation';
+import { firstLetterLine } from './recitation';
+import { scriptOfVerse } from './textScript';
 import { copyrightFor, copyrightUrlFor } from '../data';
 
 // ============================================================================
@@ -25,11 +26,7 @@ export interface PrintableVerse {
 function buildGridHtml(verses: PrintableVerse[], reference: string, translationId: string): string {
   const boxes = verses
     .map((v) => {
-      const words = v.text
-        .split(/\s+/)
-        .filter((w) => w.length > 0)
-        .map(firstLetterOnly)
-        .join(' ');
+      const words = firstLetterLine(v.text, scriptOfVerse({ book: v.book, translationId }));
       return `<div class="box"><div class="vnum">${v.verse}</div><div class="letters">${words}</div></div>`;
     })
     .join('\n');

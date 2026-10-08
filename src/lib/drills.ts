@@ -1,4 +1,14 @@
+import { TextScript } from '../types';
 import { normalizeToken } from './recitation';
+import { applyWordShape, joinWords, scriptOfVerse, splitWords, wordCore } from './textScript';
+
+export { applyWordShape } from './textScript';
+
+/**
+ * The verse shape the drills take. `translationId` decides the writing
+ * system (scriptOfVerse); without it a verse is English.
+ */
+type DrillVerse = { book: string; chapter: number; verse: number; text: string; translationId?: string };
 
 // ============================================================================
 // SUPPLEMENTARY DRILL LOGIC
@@ -97,10 +107,10 @@ export const PHRASE_TARGET_WORDS = 3.5;
  * for this function — the UI only consumes the returned strings — but it's a
  * separate upgrade, not a prerequisite for shipping the drill.
  */
-export const chunkIntoPhrases = (text: string): string[] => {
-  const words = text.split(/\s+/).filter((w) => w.length > 0);
+export const chunkIntoPhrases = (text: string, script: TextScript = 'latin'): string[] => {
+  const words = splitWords(text, script);
   if (words.length === 0) return [];
-  if (words.length <= 4) return [words.join(' ')];
+  if (words.length <= 4) return [joinWords(words)];
 
   const chunkCount = Math.max(2, Math.round(words.length / PHRASE_TARGET_WORDS));
   const base = Math.floor(words.length / chunkCount);
@@ -111,7 +121,7 @@ export const chunkIntoPhrases = (text: string): string[] => {
   for (let c = 0; c < chunkCount; c++) {
     const size = base + (remainder > 0 ? 1 : 0);
     if (remainder > 0) remainder--;
-    chunks.push(words.slice(cursor, cursor + size).join(' '));
+    chunks.push(joinWords(words.slice(cursor, cursor + size)));
     cursor += size;
   }
   return chunks;
@@ -132,12 +142,10 @@ export interface ScrambleRound {
  * pool would be a memory test of a different (much harder) kind; stepping
  * verse-by-verse matches how every other drill in the app iterates.
  */
-export const buildScrambleRounds = (
-  verses: { book: string; chapter: number; verse: number; text: string }[]
-): ScrambleRound[] =>
+export const buildScrambleRounds = (verses: DrillVerse[]): ScrambleRound[] =>
   verses
     .map((v) => {
-      const phrases = chunkIntoPhrases(v.text);
+      const phrases = chunkIntoPhrases(v.text, scriptOfVerse(v));
       return {
         id: `${v.book}-${v.chapter}-${v.verse}`,
         label: `${v.chapter}:${v.verse}`,
@@ -160,6 +168,12 @@ export const buildScrambleRounds = (
  */
 export const MIN_SWAP_WORD_LENGTH = 4;
 
+/**
+ * Hebrew is measured in bare consonants, and its words run short: אֱלֹהִים is
+ * five letters, אֶרֶץ three. Four would leave too few eligible words.
+ */
+const minSwapLength = (script: TextScript): number => (script === 'hebrew' ? 3 : MIN_SWAP_WORD_LENGTH);
+
 export const DEFAULT_SWAPS_PER_VERSE = 2;
 
 export interface SwapToken {
@@ -180,25 +194,6 @@ export interface SwapVerse {
 }
 
 /**
- * Copies the original word's shape onto a replacement: leading/trailing
- * punctuation and leading capitalization carry over, so a swapped word never
- * gives itself away by being the only one missing a comma or starting
- * lowercase mid-sentence.
- */
-export const applyWordShape = (original: string, replacement: string): string => {
-  const firstAlnum = original.search(/[a-zA-Z0-9]/);
-  if (firstAlnum === -1) return replacement;
-  const lastAlnum = original.search(/[a-zA-Z0-9][^a-zA-Z0-9]*$/);
-  const prefix = original.slice(0, firstAlnum);
-  const suffix = lastAlnum === -1 ? '' : original.slice(lastAlnum + 1);
-  const wasCapitalized = original[firstAlnum] === original[firstAlnum].toUpperCase();
-  const core = wasCapitalized
-    ? replacement.charAt(0).toUpperCase() + replacement.slice(1)
-    : replacement.toLowerCase();
-  return `${prefix}${core}${suffix}`;
-};
-
-/**
  * Replaces a few words per verse with real words pulled from elsewhere in the
  * same passage.
  *
@@ -210,28 +205,36 @@ export const applyWordShape = (original: string, replacement: string): string =>
  * would only need to replace how `pool` is built below.
  */
 export const buildSwapVerses = (
-  verses: { book: string; chapter: number; verse: number; text: string }[],
+  verses: DrillVerse[],
   swapsPerVerse: number = DEFAULT_SWAPS_PER_VERSE
 ): SwapVerse[] => {
-  // Every substantial word in the group, deduped — the decoy vocabulary.
-  const pool = Array.from(
-    new Set(
-      verses
-        .flatMap((v) => v.text.split(/\s+/))
-        .map(normalizeToken)
-        .filter((w) => w.length >= MIN_SWAP_WORD_LENGTH)
-    )
-  );
+  // Every substantial word in the group, deduped by its comparable form --
+  // the decoy vocabulary. `display` is what gets dropped into the verse: for
+  // English the normalized word (applyWordShape restores its case); for
+  // Hebrew/Greek the word's real letters with punctuation trimmed, because a
+  // normalized Hebrew decoy has no vowel points and would be the one
+  // unpointed word on screen.
+  const poolByKey = new Map<string, { key: string; display: string }>();
+  verses.forEach((v) => {
+    const script = scriptOfVerse(v);
+    splitWords(v.text, script).forEach((w) => {
+      const key = normalizeToken(w, script);
+      if (key.length < minSwapLength(script) || poolByKey.has(key)) return;
+      poolByKey.set(key, { key, display: script === 'latin' ? key : wordCore(w, script) });
+    });
+  });
+  const pool = Array.from(poolByKey.values());
 
   let flatIndex = 0;
 
   return verses.map((v) => {
-    const words = v.text.split(/\s+/).filter((w) => w.length > 0);
+    const script = scriptOfVerse(v);
+    const words = splitWords(v.text, script);
 
     // Which positions in this verse are even eligible to be swapped.
     const eligible = words
       .map((w, i) => ({ w, i }))
-      .filter(({ w }) => normalizeToken(w).length >= MIN_SWAP_WORD_LENGTH)
+      .filter(({ w }) => normalizeToken(w, script).length >= minSwapLength(script))
       .map(({ i }) => i);
 
     // Never swap so much of a short verse that it stops being recognizable;
@@ -243,13 +246,13 @@ export const buildSwapVerses = (
       const index = flatIndex++;
       if (!chosen.has(i)) return { display: word, isDecoy: false, index };
 
-      const realWord = normalizeToken(word);
-      const candidates = pool.filter((p) => p !== realWord);
+      const realWord = normalizeToken(word, script);
+      const candidates = pool.filter((p) => p.key !== realWord);
       if (candidates.length === 0) return { display: word, isDecoy: false, index };
 
       const decoy = candidates[Math.floor(Math.random() * candidates.length)];
       return {
-        display: applyWordShape(word, decoy),
+        display: applyWordShape(word, decoy.display, script),
         isDecoy: true,
         original: word,
         index,
@@ -403,7 +406,16 @@ const isHinge = (word: string): boolean => HINGE_WORDS.has(normalizeToken(word))
  * True when this word closes a clause -- trailing quotes/brackets are skipped
  * so `world,"` counts the same as `world,`.
  */
-const endsClause = (word: string): boolean => /[,;:.!?—–]["'’”)\]]*$/.test(word);
+// Greek and Hebrew clause marks, by code point because they're lookalikes of
+// ASCII on screen: the ano teleia (Greek semicolon, U+0387, and the U+00B7
+// middle dot SBLGNT actually uses for it), the Greek question mark (U+037E,
+// which looks like ';'), and the Hebrew sof pasuq (U+05C3, end of verse).
+const CLAUSE_END_EXTRA = new Set([0x0387, 0x00b7, 0x037e, 0x05c3].map((c) => String.fromCharCode(c)));
+const endsClause = (word: string): boolean => {
+  if (/[,;:.!?—–]["'’”)\]]*$/.test(word)) return true;
+  const bare = word.replace(/["'’”)\]]+$/, '');
+  return CLAUSE_END_EXTRA.has(bare.slice(-1));
+};
 
 /**
  * Splits one long run of words at hinge-preferred boundaries near the target
@@ -461,8 +473,8 @@ const subdivideRun = (words: string[], target: number): string[][] => {
  * enough to be one bite legitimately returns one bite -- that's a real answer,
  * not a degenerate case, and the drill still runs its three reps over it.
  */
-export const splitIntoBites = (text: string, size: BiteSize = 'medium'): string[] => {
-  const words = text.split(/\s+/).filter((w) => w.length > 0);
+export const splitIntoBites = (text: string, size: BiteSize = 'medium', script: TextScript = 'latin'): string[] => {
+  const words = splitWords(text, script);
   if (words.length === 0) return [];
 
   const target = BITE_TARGET_WORDS[size];
@@ -498,7 +510,7 @@ export const splitIntoBites = (text: string, size: BiteSize = 'medium'): string[
     merged.shift();
   }
 
-  return merged.map((b) => b.join(' '));
+  return merged.map(joinWords);
 };
 
 export type BuildDirection = 'forward' | 'backward';
@@ -556,14 +568,15 @@ const accumulate = (pieces: string[], direction: BuildDirection): BuildUpSegment
  * last bite stage already *was* the whole verse.
  */
 export const buildUpStages = (
-  verses: { text: string }[],
+  verses: { text: string; book?: string; translationId?: string }[],
   opts: { size?: BiteSize; direction?: BuildDirection } = {}
 ): BuildUpStage[] => {
   const { size = 'medium', direction = 'forward' } = opts;
   const stages: BuildUpStage[] = [];
 
   verses.forEach((v, verseIndex) => {
-    const bites = splitIntoBites(v.text, size);
+    const script = v.book ? scriptOfVerse({ book: v.book, translationId: v.translationId }) : 'latin';
+    const bites = splitIntoBites(v.text, size, script);
     if (bites.length === 0) return;
     accumulate(bites, direction).forEach((segments, i, all) => {
       stages.push({ phase: 'bite', verseIndex, segments, step: i + 1, stepCount: all.length });

@@ -144,6 +144,23 @@ moment).
 
 ## Phase 2 — Word handling (the real work)
 
+**Status (2026-10-08): done.** `src/lib/textScript.ts` holds the script-aware
+primitives (`splitWords`, `joinWords`, `wordGap`, `normalizeToken`, `firstLetterOnly`,
+masks, `applyWordShape`, `scriptOfVerse`); `recitation.ts` re-exports them. Greek
+accent folding uses a generated table (`greekBaseLetters.ts`), not `normalize()`.
+`npm run check:textscript` (41 checks). Seen working on web: Psalm 23 Recall in Hebrew
+(57 words, strict typing, mic hidden), Romans 8 memory grid in Greek, spot-the-swap
+decoys keep their vowel points, build-up runs. Beyond the steps below:
+- **Grading matched the wrong item.** `handleUpdateVerseStatus` found the saved verse
+  by reference alone, so a Hebrew Recall could credit the BSB copy of the same verse.
+  `VerseState` now carries `translationId` (Home, chapter page, review sessions) and
+  matching uses it.
+- **Masks were English-only.** Recall's hide/first-letter masks and Build up's hint rep
+  left Hebrew fully visible; they now go through `maskLetters`/`maskExceptFirstLetter`.
+- **Gaps after a maqaf.** Word-by-word layouts (Recall, memory grid, spot-the-swap,
+  build-up segments) add their own spaces; they use `wordGap()` so עַל־מֵי stays joined.
+- Speech gate (Phase 1 step 5) landed here.
+
 All in `src/lib/recitation.ts` (plus a new `src/lib/scripts.ts` if it gets
 long), all script-aware:
 

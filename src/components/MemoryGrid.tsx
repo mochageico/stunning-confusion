@@ -3,6 +3,7 @@ import { LayoutChangeEvent, Modal, Pressable, View } from 'react-native';
 import { Highlighter, Pencil, X } from 'lucide-react-native';
 
 import { firstLetterLine, firstLetterOnly } from '../lib/recitation';
+import { scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
 import DoodleCanvas from './DoodleCanvas';
 import { AppButton, AppText } from './design';
 
@@ -33,6 +34,8 @@ export interface MemoryGridVerse {
   chapter: number;
   verse: number;
   text: string;
+  /** Which translation `text` is from -- Hebrew/Greek split into words differently. */
+  translationId?: string;
 }
 
 /** Stable per-verse key for highlight/doodle persistence -- shared by every
@@ -54,8 +57,8 @@ interface MemoryGridProps {
   /** Index currently playing/active (Listen mode), shown with a solid fill. */
   activeIndex?: number;
   /** Per-word correctness for a live Recall session -- index-aligned with
-   * each verse's `text.split(/\s+/).filter(w => w.length > 0)` (the exact
-   * same split+filter this component renders words from). */
+   * each verse's `splitWords(text, scriptOfVerse(verse))` (the exact same
+   * split this component renders words from). */
   wordStates?: Record<string, ('correct' | 'close' | 'incorrect' | undefined)[]>;
   /** Per-verse doodle strokes (SVG path "d" strings) -- backbone feature, a
    * single-pen freehand layer per verse. Omit both this and onSaveDoodle to
@@ -101,7 +104,8 @@ export default function MemoryGrid({
         const isHighlighted = !!highlightedKeys?.has(key);
         const isSelected = !!selectedKeys?.has(key);
         const isActive = activeIndex === index;
-        const words = v.text.split(/\s+/).filter((w) => w.length > 0);
+        const script = scriptOfVerse(v);
+        const words = splitWords(v.text, script);
         const grades = wordStates?.[key];
 
         const boxClass = isActive
@@ -171,7 +175,7 @@ export default function MemoryGrid({
                               : undefined;
                     return (
                       <AppText variant="inherit" key={wi} style={gradeColor ? { color: gradeColor } : undefined}>
-                        {firstLetterOnly(w)}{' '}
+                        {firstLetterOnly(w, script)}{wordGap(w)}
                       </AppText>
                     );
                   })}
@@ -195,7 +199,7 @@ export default function MemoryGrid({
                 </Pressable>
               </View>
               <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={2}>
-                {firstLetterLine(doodleOpenVerse.text)}
+                {firstLetterLine(doodleOpenVerse.text, scriptOfVerse(doodleOpenVerse))}
               </AppText>
               <DoodleCanvas
                 strokes={doodles?.[doodleOpenKey!] || []}

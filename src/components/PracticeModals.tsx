@@ -45,6 +45,7 @@ import {
   SpeechRecognizer,
   WordOutcome,
 } from '../lib/recitation';
+import { joinWords, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
 import {
   buildJigsawTiles,
   buildScrambleRounds,
@@ -1095,24 +1096,13 @@ function PracticeModalsInner({
     }
   };
 
-  // ==========================================
-  // Helper to mask alphabetical characters but keep punctuation
-  // ==========================================
-  const maskLetters = (word: string) => {
-    return word.replace(/[a-zA-Z0-9]/g, '•');
-  };
-
-  // First Letter mode's mask -- keeps the word's real first letter/digit
-  // visible (and any leading punctuation, e.g. an opening quote) and masks
-  // the rest, instead of blanking the whole word.
-  const maskExceptFirstLetter = (word: string) => {
-    const firstAlnumIdx = word.search(/[a-zA-Z0-9]/);
-    if (firstAlnumIdx === -1) return maskLetters(word);
-    const before = word.slice(0, firstAlnumIdx);
-    const first = word[firstAlnumIdx];
-    const rest = word.slice(firstAlnumIdx + 1).replace(/[a-zA-Z0-9]/g, '•');
-    return `${before}${first}${rest}`;
-  };
+  // The passage's writing system. One per session: every way into practice
+  // (a Home group, a chapter-page selection) is a single translation and
+  // chapter, so a group never mixes Hebrew with Greek or English. Every
+  // split, compare and mask below goes through it -- word masks
+  // (maskLetters / maskExceptFirstLetter) included, since an English-only
+  // mask leaves Hebrew words fully visible.
+  const passageScript = useMemo(() => (verses.length > 0 ? scriptOfVerse(verses[0]) : 'latin'), [verses]);
 
   // ==========================================
   // LEARN MODE — Recall (typed + spoken, either channel advances the same
@@ -1148,12 +1138,12 @@ function PracticeModalsInner({
   const reciteWordObjects = useMemo(() => {
     const list: { verseIdx: number; word: string }[] = [];
     verses.forEach((v, verseIdx) => {
-      v.text.split(/\s+/).forEach((w) => {
-        if (normalizeToken(w).length > 0) list.push({ verseIdx, word: w });
+      splitWords(v.text, passageScript).forEach((w) => {
+        if (normalizeToken(w, passageScript).length > 0) list.push({ verseIdx, word: w });
       });
     });
     return list;
-  }, [verses]);
+  }, [verses, passageScript]);
 
   // How many words have been confirmed so far (either channel), and each
   // confirmed word's grade. Both persist across a tab switch away and back
@@ -1259,7 +1249,7 @@ function PracticeModalsInner({
     // right letter — accepted and advanced just like 'exact', but graded
     // separately so a perfect-run check can still see the difference
     // between clean recall and fat-fingered recall (both count as correct).
-    const verdict = classifyFirstLetterAttempt(lastChar, current.word);
+    const verdict = classifyFirstLetterAttempt(lastChar, current.word, passageScript);
 
     if (verdict !== 'wrong') {
       const alreadyMissed = reciteOutcomes[recitePointer] === 'missed';
@@ -1412,12 +1402,12 @@ function PracticeModalsInner({
     const map: Record<string, ('correct' | 'close' | 'incorrect' | undefined)[]> = {};
     let flatIdx = 0;
     verses.forEach((v) => {
-      // Same split + filter MemoryGrid itself renders from (text.split(/\s+/)
-      // then drop empty strings) -- must match exactly or indices drift.
-      const words = v.text.split(/\s+/).filter((w) => w.length > 0);
+      // Same split MemoryGrid itself renders from (splitWords with the
+      // verse's script) -- must match exactly or indices drift.
+      const words = splitWords(v.text, passageScript);
       const key = verseAnnotationKey(v.book, v.chapter, v.verse);
       map[key] = words.map((w) => {
-        if (normalizeToken(w).length === 0) return undefined;
+        if (normalizeToken(w, passageScript).length === 0) return undefined;
         const g = flatIdx++;
         if (g >= recitePointer) return undefined;
         const outcome = reciteOutcomes[g];
@@ -1425,7 +1415,7 @@ function PracticeModalsInner({
       });
     });
     return map;
-  }, [verses, recitePointer, reciteOutcomes]);
+  }, [verses, recitePointer, reciteOutcomes, passageScript]);
 
   // Words Hidden / First Letter / Strike Limit prefs persist across sessions
   // (AsyncStorage, same mechanism useScripture.ts uses for its verse cache)
@@ -1695,11 +1685,7 @@ function PracticeModalsInner({
   const maskBuildSegment = (text: string) => {
     if (buildRep === 'read' || buildPeek) return text;
     const maskWord = buildRep === 'hint' ? maskExceptFirstLetter : maskLetters;
-    return text
-      .split(/\s+/)
-      .filter((w) => w.length > 0)
-      .map(maskWord)
-      .join(' ');
+    return joinWords(splitWords(text, passageScript).map((w) => maskWord(w, passageScript)));
   };
 
   // --- Verse-order jigsaw ---
@@ -2001,7 +1987,7 @@ function PracticeModalsInner({
               {listenViewMode === 'memoryGrid' ? (
                 <ScrollView className="flex-1 p-3" contentContainerStyle={{ paddingBottom: 12 }}>
                   <MemoryGrid
-                    verses={activePlayVerses.map((v) => ({ book: v.book, chapter: v.chapter, verse: v.verse, text: v.text }))}
+                    verses={activePlayVerses.map((v) => ({ book: v.book, chapter: v.chapter, verse: v.verse, text: v.text, translationId: v.translationId }))}
                     columns={memoryGridColumns}
                     activeIndex={listenPlaying ? currentVerseIndex : undefined}
                     highlightedKeys={highlightedVerses}
@@ -2389,7 +2375,7 @@ function PracticeModalsInner({
                     {recallDisplayMode === 'memoryGrid' ? (
                       <ScrollView className="flex-1 mb-2">
                         <MemoryGrid
-                          verses={verses.map((v) => ({ book: v.book, chapter: v.chapter, verse: v.verse, text: v.text }))}
+                          verses={verses.map((v) => ({ book: v.book, chapter: v.chapter, verse: v.verse, text: v.text, translationId: v.translationId }))}
                           columns={memoryGridColumns}
                           highlightedKeys={highlightedVerses}
                           onToggleHighlight={onToggleVerseHighlight ? (key) => onToggleVerseHighlight(key) : undefined}
@@ -2405,12 +2391,12 @@ function PracticeModalsInner({
                         {(() => {
                           let flatIdx = 0;
                           return verses.map((v) => {
-                            const words = v.text.split(/\s+/);
+                            const words = splitWords(v.text, passageScript);
                             return (
                               <AppText variant="body" key={`${v.book}-${v.chapter}-${v.verse}`} className="font-serif leading-relaxed text-ink">
                                 <AppText variant="caption" className="font-sans font-bold text-ink-3">{v.verse} </AppText>
                                 {words.map((w, idx) => {
-                                  const isCountedWord = normalizeToken(w).length > 0;
+                                  const isCountedWord = normalizeToken(w, passageScript).length > 0;
                                   const g = isCountedWord ? flatIdx++ : -1;
                                   const isPast = g >= 0 && g < recitePointer;
                                   const isCurrent = g === recitePointer;
@@ -2435,7 +2421,7 @@ function PracticeModalsInner({
                                         className={`font-serif font-semibold ${gradeClass}`}
                                         onPress={outcome === 'missed' ? () => overrideWordAsCorrect(g) : undefined}
                                       >
-                                        {w}{' '}
+                                        {w}{wordGap(w)}
                                       </AppText>
                                     );
                                   }
@@ -2446,7 +2432,7 @@ function PracticeModalsInner({
                                     // just render it plainly.
                                     return (
                                       <AppText variant="inherit" key={idx} className="font-serif text-ink">
-                                        {w}{' '}
+                                        {w}{wordGap(w)}
                                       </AppText>
                                     );
                                   }
@@ -2461,7 +2447,7 @@ function PracticeModalsInner({
                                         key={idx}
                                         className={`font-serif rounded px-1 ${isCurrent ? 'bg-warning-soft text-ink-2' : 'text-ink-3'}`}
                                       >
-                                        {w}{' '}
+                                        {w}{wordGap(w)}
                                       </AppText>
                                     );
                                   }
@@ -2479,7 +2465,7 @@ function PracticeModalsInner({
                                           isCurrent ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-ink-3'
                                         }`}
                                       >
-                                        {maskExceptFirstLetter(w)}{' '}
+                                        {maskExceptFirstLetter(w, passageScript)}{wordGap(w)}
                                       </AppText>
                                     );
                                   }
@@ -2491,7 +2477,7 @@ function PracticeModalsInner({
                                         isCurrent ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-ink-3'
                                       }`}
                                     >
-                                      {maskLetters(w)}{' '}
+                                      {maskLetters(w, passageScript)}{wordGap(w)}
                                     </AppText>
                                   );
                                 })}
@@ -2525,7 +2511,11 @@ function PracticeModalsInner({
                         {/* Short enough to fit an SE at 1.5x. Nearby keys still
                             count; that's forgiveness, not an instruction. */}
                         <AppTextInput value={typedInput} onChangeText={handleReciteTypeChar} placeholder={showStrikeResetAlert ? 'Starting over…' : fontScale >= 1.3 ? 'First letters' : 'First letter of each word'} style={{ minWidth: 0 }} className="flex-1 bg-surface-2 border border-line rounded-btn py-2 px-3 text-center font-sans font-semibold text-ink" editable={!showStrikeResetAlert} />
-                        {speechAvailable && (
+                        {/* English only: phone speech engines know modern
+                            Hebrew at best, with no vowel points, so they
+                            can't grade Biblical Hebrew or Koine Greek. Typing
+                            still works for both. */}
+                        {speechAvailable && passageScript === 'latin' && (
                           <AppIconButton
                             Icon={isListeningSpeak ? MicOff : Mic}
                             diameter={40}
@@ -3016,7 +3006,7 @@ function PracticeModalsInner({
                           {stage.segments.map((seg, i) => (
                             <AppText variant="inherit" key={i} className={seg.isNew ? 'text-warning' : 'text-ink'}>
                               {maskBuildSegment(seg.text)}
-                              {i < stage.segments.length - 1 ? ' ' : ''}
+                              {i < stage.segments.length - 1 ? wordGap(seg.text) : ''}
                             </AppText>
                           ))}
                         </AppText>
@@ -3256,7 +3246,7 @@ function PracticeModalsInner({
                                   }
                                   className={`font-serif ${cls}`}
                                 >
-                                  {tok.display}{' '}
+                                  {tok.display}{wordGap(tok.display)}
                                 </AppText>
                               );
                             })}

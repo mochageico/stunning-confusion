@@ -1,4 +1,8 @@
 import { Platform } from 'react-native';
+import { TextScript } from '../types';
+import { firstLetterOnly, joinWords, normalizeToken, splitWords } from './textScript';
+
+export { firstLetterOnly, normalizeToken } from './textScript';
 
 // ============================================================================
 // RECITATION GRADING ENGINE
@@ -52,41 +56,23 @@ export const summarizeOutcomes = (outcomes: WordOutcome[]): RecitationSummary =>
 // TEXT NORMALIZATION
 // ============================================================================
 
-/** Lowercases and strips everything but letters/digits: "Spirit," -> "spirit". */
-export const normalizeToken = (word: string): string => word.toLowerCase().replace(/[^a-z0-9]/g, '');
+// The word-level primitives (normalizeToken, firstLetterOnly) live in
+// textScript.ts because they differ for Hebrew/Greek; they're re-exported
+// above, where every drill already imports them from.
 
 /** Splits verse text (or a speech transcript) into normalized word tokens. */
-export const tokenizeWords = (text: string): string[] =>
-  text
-    .split(/\s+/)
-    .map(normalizeToken)
+export const tokenizeWords = (text: string, script: TextScript = 'latin'): string[] =>
+  splitWords(text, script)
+    .map((w) => normalizeToken(w, script))
     .filter((t) => t.length > 0);
 
 /**
- * Collapses a word to its first letter, keeping any leading punctuation
- * (opening quote/paren) and trailing punctuation (comma, period, closing
- * quote) attached -- e.g. "beginning," -> "b,", `"Let` -> `"L`. Used by the
- * Scripture Memory Fellowship-style Memory Grid, which shows every word's
- * first letter permanently (unlike Recall's First Letter hint mode, which
- * only reveals a random hidden subset).
+ * "In the beginning, God..." -> "I t b, G...", one letter-group per word --
+ * the Scripture Memory Fellowship-style Memory Grid line. Hebrew joins across
+ * a maqaf with no space, as written.
  */
-export const firstLetterOnly = (word: string): string => {
-  const firstIdx = word.search(/[a-zA-Z0-9]/);
-  if (firstIdx === -1) return word;
-  const before = word.slice(0, firstIdx);
-  const first = word[firstIdx];
-  const trailingMatch = word.slice(firstIdx + 1).match(/[^a-zA-Z0-9]*$/);
-  const trailing = trailingMatch ? trailingMatch[0] : '';
-  return `${before}${first}${trailing}`;
-};
-
-/** "In the beginning, God..." -> "I t b, G...", one letter-group per word. */
-export const firstLetterLine = (text: string): string =>
-  text
-    .split(/\s+/)
-    .filter((w) => w.length > 0)
-    .map(firstLetterOnly)
-    .join(' ');
+export const firstLetterLine = (text: string, script: TextScript = 'latin'): string =>
+  joinWords(splitWords(text, script).map((w) => firstLetterOnly(w, script)));
 
 // ============================================================================
 // FIRST-LETTER TYPING — NEAR-MISS KEYBOARD FORGIVENESS
@@ -144,10 +130,14 @@ export type LetterVerdict = 'exact' | 'close' | 'wrong';
  * 'wrong'  — anything else.
  * Words with no letters/digits (rare, e.g. an em-dash token) grade 'exact'.
  */
-export const classifyFirstLetterAttempt = (typedChar: string, word: string): LetterVerdict => {
-  const target = normalizeToken(word).charAt(0);
+export const classifyFirstLetterAttempt = (typedChar: string, word: string, script: TextScript = 'latin'): LetterVerdict => {
+  const target = normalizeToken(word, script).charAt(0);
   if (!target) return 'exact';
-  const typed = typedChar.toLowerCase();
+  // Hebrew/Greek fold the typed key the same way as the word (final forms,
+  // case, accents); English keeps its plain lowercase. There's no near-key
+  // forgiveness outside English -- isAdjacentKey only knows QWERTY, so a
+  // Hebrew or Greek near-miss is just wrong. Strict, by the user's choice.
+  const typed = script === 'latin' ? typedChar.toLowerCase() : normalizeToken(typedChar, script);
   if (typed === target) return 'exact';
   if (isAdjacentKey(typed, target)) return 'close';
   return 'wrong';

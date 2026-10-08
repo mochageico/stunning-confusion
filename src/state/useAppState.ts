@@ -532,6 +532,7 @@ export function mapQueueItemsToVerseStates(items: QueueItem[]): VerseState[] {
     verse: item.verseNumber,
     text: item.text,
     status: item.status === 'retained' ? 'memorized' : 'learning',
+    translationId: item.translationId || 'ESV',
   }));
 }
 
@@ -5677,8 +5678,16 @@ export function useAppState() {
     for (const v of versesToUpdate) {
       // Read through the ref, not the render-time snapshot — each loop
       // iteration must see the queue updates the previous iteration made.
+      // Matched by translation too when the verse says which: Psalm 23:1 in
+      // the BSB and in Hebrew are independent items, and grading a Hebrew
+      // recall must not credit the BSB one. ('ESV' is the same legacy
+      // default for translation-less items used everywhere else here.)
       const itemInQueue = memoryQueueRef.current.find(
-        (q) => q.book === v.book && q.chapter === v.chapter && q.verseNumber === v.verse
+        (q) =>
+          q.book === v.book &&
+          q.chapter === v.chapter &&
+          q.verseNumber === v.verse &&
+          (!v.translationId || (q.translationId || 'ESV') === v.translationId)
       );
       if (itemInQueue) {
         await handleReviewCompleted(itemInQueue, success, drillType, opts);
@@ -5933,6 +5942,7 @@ export function useAppState() {
             text: activeChapterTextData.verses[String(verseNum)],
             status,
             dueDate,
+            translationId: selectedTranslationId,
           };
         })
     : [];

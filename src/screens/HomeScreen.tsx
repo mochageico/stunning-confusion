@@ -9,6 +9,7 @@ import { Dropdown } from '../components/Dropdown';
 import { AppButton, AppIconButton, AppText, Card, CollapsibleCard, useFontScale, useScaledSpace } from '../components/design';
 import { Dialog, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { formatDate } from '../lib/format';
+import { translationLabel } from '../data';
 
 const LOOKAHEAD_OPTIONS = [
   { id: 10, label: '10' },
@@ -43,7 +44,7 @@ function groupQueueItems(items: QueueItem[]): GroupedItem[] {
     list.sort((a, b) => a.verseNumber - b.verseNumber);
     const versesStr =
       list.length === 1 ? `${list[0].verseNumber}` : `${list[0].verseNumber}-${list[list.length - 1].verseNumber}`;
-    const translationSuffix = translationId && translationId !== 'ESV' ? ` (${translationId})` : '';
+    const translationSuffix = translationId && translationId !== 'ESV' ? ` (${translationLabel(translationId)})` : '';
     return {
       label: `${book} ${chapter}:${versesStr}${translationSuffix}`,
       book,
@@ -227,6 +228,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
       verse: item.verseNumber,
       text: item.text,
       status: item.status === 'retained' ? 'memorized' : 'learning',
+      translationId: item.translationId || 'ESV',
     }));
   };
 

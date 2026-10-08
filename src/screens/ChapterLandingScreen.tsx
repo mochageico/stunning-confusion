@@ -590,6 +590,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   chapter: selectedChapter || 0,
                   verse: v.verse,
                   text: v.text,
+                  translationId: activeTranslation.id,
                 }))}
                 columns={memoryGridColumns}
                 highlightedKeys={highlightedVerses}

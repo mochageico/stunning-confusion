@@ -5,6 +5,14 @@ export interface VerseState {
   text: string;
   status: 'memorized' | 'learning' | 'untouched';
   dueDate?: string;
+  /**
+   * Which translation `text` is from. Practice needs it twice: to know the
+   * writing system (Hebrew/Greek words split and compare differently -- see
+   * textScriptFor), and to grade the right saved item when the same verse is
+   * being learned in two translations. Absent on older call sites; treated
+   * as English and matched on reference alone, as before.
+   */
+  translationId?: string;
 }
 
 export interface BibleBook {
