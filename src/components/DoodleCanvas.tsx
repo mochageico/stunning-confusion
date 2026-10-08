@@ -77,10 +77,7 @@ export default function DoodleCanvas({ strokes, onChange }: DoodleCanvasProps) {
           {liveStroke !== '' && <Path d={liveStroke} stroke={palette.ink} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />}
         </Svg>
       </View>
-      <AppButton size="md" onPress={() => onChange([])} disabled={strokes.length === 0} className={`flex-row items-center justify-center gap-1.5 rounded-lg border ${strokes.length === 0 ? 'border-line' : 'border-line-strong'}`}>
-        <Eraser size={13} color={strokes.length === 0 ? palette.lineStrong : palette.ink2} />
-        <AppText variant="caption" className={`font-sans font-bold ${strokes.length === 0 ? 'text-ink-3' : 'text-ink-2'}`}>Clear</AppText>
-      </AppButton>
+      <AppButton variant="quiet" Icon={Eraser} label="Clear" onPress={() => onChange([])} disabled={strokes.length === 0} />
     </View>
   );
 }

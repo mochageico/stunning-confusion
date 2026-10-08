@@ -1838,6 +1838,7 @@ function PracticeModalsInner({
     const miniVerse = currentSegment?.verseObj ?? activePlayVerses[currentVerseIndex] ?? null;
     return (
       <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 }}>
+        {/* button-ok: the floating now-playing bar, not a button */}
         <Pressable
           onPress={() => setListenMinimized(false)}
           pointerEvents="auto"
@@ -2151,7 +2152,7 @@ function PracticeModalsInner({
                     screen. Only offered for the card list, the one view that
                     can actually run the verse off-screen. */}
                 {listenViewMode === 'verses' && (
-                  <AppButton
+                  <AppButton // button-ok: a Listen setting pill that draws its own on/off state
                     size="sm"
                     onPress={() => setAutoFollow((on) => !on)}
                     accessibilityRole="switch"
@@ -2212,7 +2213,7 @@ function PracticeModalsInner({
                     )}
 
                     <View className="flex-row gap-1.5">
-                      <AppButton
+                      <AppButton // button-ok: a Listen setting pill that draws its own on/off state
                         size="sm"
                         onPress={() => setOpenSetting((cur) => (cur === 'speed' ? null : 'speed'))}
                         className={`flex-row items-center justify-center gap-1 flex-1 rounded-full border ${openSetting === 'speed' ? 'bg-surface-2 border-line-strong' : 'bg-surface border-line-strong'}`}
@@ -2226,7 +2227,7 @@ function PracticeModalsInner({
                         </AppText>
                       </AppButton>
 
-                      <AppButton
+                      <AppButton // button-ok: a Listen setting pill that draws its own on/off state
                         size="sm"
                         onPress={() => setOpenSetting((cur) => (cur === 'repeats' ? null : 'repeats'))}
                         className={`flex-1 rounded-full border ${openSetting === 'repeats' ? 'bg-surface-2 border-line-strong' : 'bg-surface border-line-strong'}`}
@@ -2238,7 +2239,7 @@ function PracticeModalsInner({
 
                       {/* End-of-list behaviour -- a plain toggle, so it needs no
                           expander of its own. */}
-                      <AppButton
+                      <AppButton // button-ok: a Listen setting pill that draws its own on/off state
                         size="sm"
                         onPress={() => setRepeatMode((m) => (m === 'playlist' ? 'off' : 'playlist'))}
                         accessibilityRole="switch"

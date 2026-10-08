@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Camera, Crosshair, Maximize2, X } from 'lucide-react-native';
 
 import { AppIconButton, AppText } from './design';
+import { useThemeColors } from './theme';
 import ZoomablePhoto from './ZoomablePhoto';
 import { photoForVerse } from '../lib/chapterPhotos';
 import type { PhotoCacheMap } from '../lib/photoCache';
@@ -55,6 +56,7 @@ export default function ListenPhotoView({
    */
   visible: boolean;
 }) {
+  const palette = useThemeColors();
   const insets = useSafeAreaInsets();
   // null == following playback. A number == the user took the wheel.
   const [manualIndex, setManualIndex] = useState<number | null>(null);
@@ -110,7 +112,7 @@ export default function ListenPhotoView({
   if (photos.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-6 gap-2">
-        <Camera size={20} color="#A3A3A3" />
+        <Camera size={20} color={palette.ink3} />
         <AppText variant="caption" className="font-sans text-ink-3 text-center">
           No page photo for {chapterLabel} yet.
         </AppText>
@@ -119,7 +121,7 @@ export default function ListenPhotoView({
           className="border border-line-strong rounded-lg px-3 py-1.5 mt-1"
           hitSlop={6}
         >
-          <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-ink-2">
+          <AppText variant="micro" className="font-sans font-semibold text-ink-2">
             Add a photo
           </AppText>
         </Pressable>
@@ -159,10 +161,11 @@ export default function ListenPhotoView({
           <Pressable
             onPress={() => setExpanded(true)}
             className="absolute bottom-2 right-2 bg-white/90 border border-line rounded items-center justify-center"
+            // layout-ok: an icon button, no text
             style={{ width: 28, height: 28 }}
             hitSlop={6}
           >
-            <Maximize2 size={14} color="#1A1A1A" />
+            <Maximize2 size={14} color={palette.ink} />
           </Pressable>
 
           {/* Only worth saying once the latch is actually released -- a
@@ -174,7 +177,7 @@ export default function ListenPhotoView({
               className="absolute bottom-2 left-2 flex-row items-center gap-1 bg-white/90 border border-line rounded px-2 py-1"
               hitSlop={6}
             >
-              <Crosshair size={11} color="#1A1A1A" />
+              <Crosshair size={11} color={palette.ink} />
               <AppText variant="micro" className="font-sans font-bold text-ink-2">
                 Follow again
               </AppText>
@@ -194,7 +197,8 @@ export default function ListenPhotoView({
                   key={photo.id}
                   onPress={() => setManualIndex(i)}
                   hitSlop={6}
-                  className={`rounded-full ${i === index ? 'bg-neutral-800' : 'bg-neutral-800/25'}`}
+                  className={`rounded-full ${i === index ? 'bg-ink' : 'bg-ink/25'}`}
+                  // layout-ok: a page dot, no text
                   style={{ width: 6, height: 6 }}
                 />
               ))}
@@ -216,7 +220,7 @@ export default function ListenPhotoView({
               Icon={X}
               diameter={36}
               iconSize={18}
-              iconColor="#FFFFFF"
+              iconColor="white" // theme-ok: the full-screen viewer is always black
               onPress={() => setExpanded(false)}
               className="rounded-full border border-white/25"
             />

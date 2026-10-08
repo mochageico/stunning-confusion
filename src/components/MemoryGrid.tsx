@@ -121,7 +121,7 @@ export default function MemoryGrid({
             )}
             <View className="flex-row items-center justify-between px-2 pt-1.5">
               <View className={`px-1 rounded ${isActive ? 'bg-on-accent/20' : 'bg-surface-2'}`}>
-                <AppText variant="micro" className={`font-mono font-extrabold ${isActive ? 'text-on-accent' : 'text-ink-3'}`}>{v.verse}</AppText>
+                <AppText variant="micro" className={`font-sans font-extrabold ${isActive ? 'text-on-accent' : 'text-ink-3'}`}>{v.verse}</AppText>
               </View>
               <View className="flex-row items-center gap-2">
                 {onToggleHighlight && (
@@ -151,11 +151,12 @@ export default function MemoryGrid({
                             : isActive
                               ? 'rgba(255,255,255,0.4)'
                               : palette.lineStrong;
+                    // layout-ok: a word dot, no text
                     return <View key={wi} style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: dotColor }} />;
                   })}
                 </View>
               ) : (
-                <AppText variant="caption" className={`font-mono leading-tight flex-row flex-wrap ${isActive ? 'text-on-accent' : 'text-ink'}`}>
+                <AppText variant="caption" className={`font-sans leading-tight flex-row flex-wrap ${isActive ? 'text-on-accent' : 'text-ink'}`}>
                   {words.map((w, wi) => {
                     const grade = grades?.[wi];
                     const gradeColor =
@@ -193,16 +194,14 @@ export default function MemoryGrid({
                   <X size={18} color={palette.ink} />
                 </Pressable>
               </View>
-              <AppText variant="caption" className="font-mono text-ink-3" numberOfLines={2}>
+              <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={2}>
                 {firstLetterLine(doodleOpenVerse.text)}
               </AppText>
               <DoodleCanvas
                 strokes={doodles?.[doodleOpenKey!] || []}
                 onChange={(strokes) => onSaveDoodle(doodleOpenKey!, doodleOpenVerse, strokes)}
               />
-              <AppButton size="md" onPress={() => setDoodleOpenKey(null)} className="bg-accent rounded-xl items-center">
-                <AppText variant="label" className="text-on-accent font-sans font-bold">Done</AppText>
-              </AppButton>
+              <AppButton variant="primary" label="Done" onPress={() => setDoodleOpenKey(null)} />
             </View>
           </View>
         </Modal>

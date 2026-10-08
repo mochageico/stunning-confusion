@@ -54,6 +54,7 @@ export default function ZoomablePhoto({
   isActive?: boolean;
   onZoomChange?: (zoomed: boolean) => void;
 }) {
+  // layout-ok: measured size, not a style
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [zoomed, setZoomed] = useState(false);
 

@@ -10,6 +10,10 @@ import { Dropdown } from './Dropdown';
 import type { PhotoCacheMap } from '../lib/photoCache';
 import type { ChapterPhoto } from '../types';
 
+// The viewer is always black, whatever the app's colors are, so its icon
+// colors are fixed rather than theme tokens. theme-ok
+const ON_DARK = { icon: '#FFFFFF', off: '#525252', danger: '#F87171' }; // theme-ok
+
 /** Dropdown needs a concrete value, so "no tag" gets a sentinel rather than null. */
 const UNTAGGED = 0;
 
@@ -115,7 +119,7 @@ export default function ChapterPhotoViewer({
             Icon={X}
             diameter={36}
             iconSize={18}
-            iconColor="#FFFFFF"
+            iconColor={ON_DARK.icon}
             onPress={onClose}
             className="rounded-full border border-white/25"
           />
@@ -165,15 +169,16 @@ export default function ChapterPhotoViewer({
                 onPress={() => goTo(i)}
                 hitSlop={6}
                 className={`rounded-full ${i === safeIndex ? 'bg-white' : 'bg-white/30'}`}
+                // layout-ok: a page dot, no text
                 style={{ width: 6, height: 6 }}
               />
             ))}
           </View>
         )}
 
-        <View className="bg-neutral-900 px-3 pt-3 gap-3" style={{ paddingBottom: insets.bottom + 12 }}>
+        <View className="bg-white/10 px-3 pt-3 gap-3" style={{ paddingBottom: insets.bottom + 12 }}>
           <View className="gap-1">
-            <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-white/40">
+            <AppText variant="micro" className="font-sans font-semibold text-white/60">
               Which verses are on this page?
             </AppText>
             <View className="flex-row gap-2">
@@ -219,19 +224,19 @@ export default function ChapterPhotoViewer({
                 Icon={ChevronLeft}
                 diameter={36}
                 iconSize={18}
-                iconColor={safeIndex === 0 ? '#525252' : '#FFFFFF'}
+                iconColor={safeIndex === 0 ? ON_DARK.off : ON_DARK.icon}
                 disabled={safeIndex === 0}
                 onPress={() => move(-1)}
                 className="rounded-lg border border-white/25"
               />
-              <AppText variant="micro" className="font-sans font-bold uppercase tracking-wider text-white/40">
+              <AppText variant="micro" className="font-sans font-semibold text-white/60">
                 Reorder
               </AppText>
               <AppIconButton
                 Icon={ChevronRight}
                 diameter={36}
                 iconSize={18}
-                iconColor={safeIndex === photos.length - 1 ? '#525252' : '#FFFFFF'}
+                iconColor={safeIndex === photos.length - 1 ? ON_DARK.off : ON_DARK.icon}
                 disabled={safeIndex === photos.length - 1}
                 onPress={() => move(1)}
                 className="rounded-lg border border-white/25"
@@ -243,6 +248,7 @@ export default function ChapterPhotoViewer({
                 <Pressable onPress={() => setConfirmingDelete(false)} hitSlop={8}>
                   <AppText variant="caption" className="font-sans font-bold text-white/60">Cancel</AppText>
                 </Pressable>
+                {/* button-ok: AppButton's looks are for the light app, not this always-black viewer. */}
                 <Pressable
                   onPress={() => {
                     setConfirmingDelete(false);
@@ -258,7 +264,7 @@ export default function ChapterPhotoViewer({
                 Icon={Trash2}
                 diameter={36}
                 iconSize={17}
-                iconColor="#F87171"
+                iconColor={ON_DARK.danger}
                 onPress={() => setConfirmingDelete(true)}
                 className="rounded-lg border border-danger/40"
               />

@@ -355,6 +355,7 @@ export function DiscreteSlider<T extends string | number>({
           });
         }}
       >
+        {/* layout-ok: the slider's touch strip, no text */}
         <View ref={trackRef} className="w-full justify-center" style={{ height: 28 }}>
           <View className="w-full bg-fill h-1.5 rounded-full overflow-hidden">
             <View className="bg-accent h-full rounded-full" style={{ width: `${percent}%` }} />
