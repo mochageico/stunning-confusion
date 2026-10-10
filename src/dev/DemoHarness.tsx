@@ -285,6 +285,12 @@ export function useDemoState(real: AppState): AppState {
     booted.current = true;
     if (params.get('empty') !== '1') real.setMemoryQueue(buildQueue() as any);
     real.setUserRecordings(recordings as any);
+    // The Record tab starts with no passage until one is chosen; the demo
+    // picks Romans 8 unless `nopassage=1` asks for the empty state.
+    if (params.get('nopassage') !== '1') {
+      real.setRecordingBook('Romans');
+      real.setRecordingChapter(8);
+    }
     // `paused=1` pauses reviews until resumed; `paused=<n>` for n days.
     const paused = params.get('paused');
     if (paused) {
@@ -404,6 +410,12 @@ export function useDemoState(real: AppState): AppState {
     overrides.modalVerses = q.slice(0, 2).map((x) => ({ book: x.book, chapter: x.chapter, verse: x.verseNumber, text: x.text, status: 'learning' })) as any;
   }
   if (s === 'modalSave') overrides.saveRecordingDialog = true;
+  // `recording=1` shows the Record tab mid-take, without the microphone.
+  if (params.get('recording') === '1') {
+    overrides.isRecording = true;
+    overrides.recordingSeconds = 134;
+    overrides.verseTapTimestamps = { 1: 0, 2: 6, 3: 13 };
+  }
   // `playing=1` shows the now-playing bar above the tabs, without real audio.
   if (params.get('playing') === '1') {
     overrides.playingRecordingId = recordings[0].id;

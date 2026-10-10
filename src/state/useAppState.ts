@@ -82,6 +82,7 @@ import {
   DEFAULT_RHYTHM,
   DEFAULT_TRANSLATION_ID,
   getBookByName,
+  PICKER_TRANSLATIONS,
   SUGGESTED_FEED_RECORDINGS,
 } from '../data';
 import { fetchChapterText, useChapterText } from './useScripture';
@@ -132,6 +133,7 @@ export type ScreenName =
   | 'dashboard'
   | 'settings'
   | 'recordingDetail'
+  | 'myRecordings'
   | 'findFriends'
   | 'messages'
   | 'dmThread'
@@ -1019,14 +1021,54 @@ export function useAppState() {
   // chapter's first verse at t=0 so the user only needs to tap starting from
   // the second verse onward.
   const [verseTapTimestamps, setVerseTapTimestamps] = useState<Record<number, number>>({});
-  const [recordingBook, setRecordingBook] = useState('Romans');
-  const [recordingChapter, setRecordingChapter] = useState(8);
+  // What the Record tab records. No passage until one is chosen ('' book):
+  // it used to open on Romans 8 every time. The last one chosen is kept on
+  // the device and comes back next time (RECORD_PASSAGE_KEY below).
+  const [recordingBook, setRecordingBook] = useState('');
+  const [recordingChapter, setRecordingChapter] = useState(1);
   const [recordingTranslation, setRecordingTranslation] = useState(DEFAULT_TRANSLATION_ID);
-  // Verse-range picker for partial-chapter recording/tagging — null means
-  // "not yet initialized for this chapter" and is treated as the full
-  // chapter's bounds everywhere it's read (see recordingSelectedVerses below).
+  // Verse range for a partial-chapter recording. null bounds mean the
+  // chapter's first / last verse (see recordingSelectedVerses below).
   const [recordingRangeStart, setRecordingRangeStart] = useState<number | null>(null);
   const [recordingRangeEnd, setRecordingRangeEnd] = useState<number | null>(null);
+
+  // The last passage recorded from, restored on launch. Device-local, like
+  // the other screen preferences here.
+  const RECORD_PASSAGE_KEY = 'record:lastPassage:v1';
+  const recordPassageLoaded = useRef(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(RECORD_PASSAGE_KEY);
+        const saved = raw ? JSON.parse(raw) : null;
+        if (saved && typeof saved.book === 'string' && getBookByName(saved.book)) {
+          setRecordingBook(saved.book);
+          setRecordingChapter(Number(saved.chapter) || 1);
+          // A translation that has since left the picker falls back to the default.
+          if (PICKER_TRANSLATIONS.some((t) => t.id === saved.translation)) setRecordingTranslation(saved.translation);
+          setRecordingRangeStart(typeof saved.start === 'number' ? saved.start : null);
+          setRecordingRangeEnd(typeof saved.end === 'number' ? saved.end : null);
+        }
+      } catch {
+        // Corrupt/missing -- start with no passage chosen.
+      } finally {
+        recordPassageLoaded.current = true;
+      }
+    })();
+  }, []);
+  useEffect(() => {
+    if (!recordPassageLoaded.current || !recordingBook) return;
+    AsyncStorage.setItem(
+      RECORD_PASSAGE_KEY,
+      JSON.stringify({
+        book: recordingBook,
+        chapter: recordingChapter,
+        translation: recordingTranslation,
+        start: recordingRangeStart,
+        end: recordingRangeEnd,
+      })
+    ).catch(() => {});
+  }, [recordingBook, recordingChapter, recordingTranslation, recordingRangeStart, recordingRangeEnd]);
   const [userRecordings, setUserRecordings] = useState<Recording[]>([]);
 
   // Import-audio tagging: the reverse of live recording. Instead of tapping
@@ -1535,6 +1577,7 @@ export function useAppState() {
       currentScreen === 'dashboard' ||
       currentScreen === 'settings' ||
       currentScreen === 'recordingDetail' ||
+      currentScreen === 'myRecordings' ||
       currentScreen === 'messages' ||
       currentScreen === 'dmThread' ||
       currentScreen === 'circleChat'
@@ -5962,15 +6005,10 @@ export function useAppState() {
     : [];
 
   // Picked verse range for partial-chapter recording — null bounds fall back
-  // to the full chapter. Reset whenever the book/chapter changes so a range
-  // picked on a previous chapter (e.g. 3-9) can't silently carry over onto a
-  // shorter one.
-  useEffect(() => {
-    setRecordingRangeStart(null);
-    setRecordingRangeEnd(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recordingBook, recordingChapter]);
-
+  // to the full chapter. The passage sheet sets book, chapter and range
+  // together and clears the range itself when the book or chapter changes,
+  // so a range from one chapter can't carry over to another. (An effect
+  // used to reset it here, which would also wipe a range restored on launch.)
   const recordingRangeStartClamped = recordingRangeStart ?? 1;
   const recordingRangeEndClamped = recordingRangeEnd ?? recordingChapterVerses.length;
   const recordingSelectedVerses = recordingChapterVerses.filter(

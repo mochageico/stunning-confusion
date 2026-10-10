@@ -28,6 +28,7 @@ const BACK_LABELS: Partial<Record<string, string>> = {
   profile: 'Profile',
   chapterLanding: 'Chapter',
   audioFeed: 'Recordings',
+  myRecordings: 'Your recordings',
 };
 
 const WAVEFORM_HEIGHTS = [

@@ -14,6 +14,7 @@ import { BottomBars, FloatingTabBar, PageFade } from './src/components/TabBar';
 import { RECORDING_VISIBILITY_OPTIONS } from './src/data';
 
 import RecordingDetailScreen from './src/screens/RecordingDetailScreen';
+import MyRecordingsScreen from './src/screens/MyRecordingsScreen';
 import MemberProfileScreen from './src/screens/MemberProfileScreen';
 import FullHistoryScreen from './src/screens/FullHistoryScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -85,6 +86,9 @@ const TABS = [
 function Screens({ state }: { state: AppState }) {
   if (state.currentScreen === 'recordingDetail' && state.selectedRecording) {
     return <RecordingDetailScreen state={state} />;
+  }
+  if (state.currentScreen === 'myRecordings') {
+    return <MyRecordingsScreen state={state} />;
   }
   if (state.currentScreen === 'memberProfile' && state.selectedUserProfile) {
     return <MemberProfileScreen state={state} />;
@@ -440,7 +444,9 @@ function AppShell() {
   // The bars also step aside while the keyboard is up, so a text field near
   // the bottom isn't squeezed against them. Unmounted, never hidden by style.
   const keyboardHeight = useKeyboardHeight();
-  const showBars = !chatScreenActive && keyboardHeight === 0;
+  // And while recording: the Record tab goes full screen so the text has the
+  // room, and a stray tap on a tab can't walk away from a live take.
+  const showBars = !chatScreenActive && keyboardHeight === 0 && !state.isRecording;
 
   // While Firebase resolves whether a session already exists, render nothing
   // rather than flashing the sign-in gate first. Once resolved, no user means
