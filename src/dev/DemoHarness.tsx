@@ -26,7 +26,8 @@
 // accent=<id> opens in that accent (navy, evergreen, burgundy, plum, walnut,
 // ink) without changing the one saved in Settings; scale=1.5 renders at that
 // text size, as if set in iOS Settings; notdue=1 (with modalLearn) practices
-// verses that aren't due yet.
+// verses that aren't due yet; n=3 (with modalLearn) practices the first 3
+// seeded verses, enough for the Order drill.
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
@@ -415,7 +416,7 @@ export function useDemoState(real: AppState): AppState {
     overrides.activeModal = s === 'modalLearn' ? 'learn' : 'listen';
     // notdue=1: Psalms 23:1-2, on a weekly schedule and not due for 3 days --
     // Recall shows practice, not "Count as a review".
-    const picked = params.get('notdue') === '1' ? q.filter((x) => x.book === 'Psalms' && x.chapter === 23 && x.verseNumber <= 2) : q.slice(0, 2);
+    const picked = params.get('notdue') === '1' ? q.filter((x) => x.book === 'Psalms' && x.chapter === 23 && x.verseNumber <= 2) : q.slice(0, Math.max(1, Number(params.get('n')) || 2));
     overrides.modalVerses = picked.map((x) => ({ book: x.book, chapter: x.chapter, verse: x.verseNumber, text: x.text, status: 'learning' })) as any;
   }
   if (s === 'modalSave') overrides.saveRecordingDialog = true;

@@ -8,7 +8,7 @@ export { applyWordShape } from './textScript';
  * The verse shape the drills take. `translationId` decides the writing
  * system (scriptOfVerse); without it a verse is English.
  */
-type DrillVerse = { book: string; chapter: number; verse: number; text: string; translationId?: string };
+export type DrillVerse = { book: string; chapter: number; verse: number; text: string; translationId?: string };
 
 // ============================================================================
 // SUPPLEMENTARY DRILL LOGIC
