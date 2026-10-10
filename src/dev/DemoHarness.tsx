@@ -13,7 +13,7 @@
 // It is inert in production builds whatever the flags say (__DEV__ gate).
 //
 // Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
-// activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, referenceDrill, threadDrill,
+// activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, referenceDrill, threadDrill, guided,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
@@ -143,6 +143,39 @@ function buildQueue() {
       reviewsToday: 0,
     };
   });
+}
+
+// ?s=guided: Psalm 23 as a passage mid-learning. Verses 1 and 2 have one run
+// each from earlier days (checks are ready), verse 3's run is 20 minutes old
+// (ready in 40 min), and verse 4 is new. Replaces the default Psalm 23 rows.
+function buildGuidedQueue() {
+  const base = buildQueue().filter((q) => q.book !== 'Psalms' || q.chapter !== 23);
+  const spec: [number, string, number | null][] = [
+    [1, TEXT['Psalms 23:1'], -2 * 1440],
+    [2, TEXT['Psalms 23:2'], -1 * 1440],
+    [3, TEXT['Psalms 23:3'], -20],
+    [4, 'Even though I walk through the valley of the shadow of death, I will fear no evil, for You are with me; Your rod and Your staff, they comfort me.', null],
+  ];
+  const psalm = spec.map(([verse, text, minutesAgo], i) => ({
+    ...base[0],
+    verseId: `BSB_PSA_23_${verse}`,
+    book: 'Psalms',
+    chapter: 23,
+    verseNumber: verse,
+    text,
+    orderIndex: base.length + i,
+    status: 'learning',
+    origin: 'individual',
+    originPlanId: undefined,
+    retentionPhase: 'none',
+    dateStarted: iso(-3),
+    lastReviewDate: null,
+    nextReviewDueDate: null,
+    currentStreakCount: 0,
+    totalSuccessfulReviews: 0,
+    touchLogs: minutesAgo === null ? [] : [{ timestamp: new Date(now + minutesAgo * 60000).toISOString(), drillType: 'speak' }],
+  }));
+  return [...base, ...psalm];
 }
 
 const DEMO_USER = { uid: 'demo', displayName: 'Micah', email: 'demo@example.com', photoURL: null, emailVerified: true };
@@ -288,7 +321,7 @@ export function useDemoState(real: AppState): AppState {
   useEffect(() => {
     if (!DEMO_ENABLED || booted.current || real.loadingAuth) return;
     booted.current = true;
-    if (params.get('empty') !== '1') real.setMemoryQueue(buildQueue() as any);
+    if (params.get('empty') !== '1') real.setMemoryQueue((s === 'guided' ? buildGuidedQueue() : buildQueue()) as any);
     real.setUserRecordings(recordings as any);
     // The Record tab starts with no passage until one is chosen; the demo
     // picks Romans 8 unless `nopassage=1` asks for the empty state.
@@ -322,6 +355,7 @@ export function useDemoState(real: AppState): AppState {
     else if (s === 'planDesigner') real.openActivePlanDesigner();
     // Opened the way a passing Recall opens it: preset on a verse. Romans 8:1-2
     // are due today in the seeded queue, so their credit shows.
+    else if (s === 'guided') real.openGuided('BSB|Psalms|23|1');
     else if (s === 'threadDrill') real.openThreadDrill({ book: 'Romans', chapter: 8, verse: 2, translationId: 'BSB' });
     // navigateTo, not setCurrentScreen: it also switches to the screen's tab
     // (the Verses tab's screens render only while that tab is current).

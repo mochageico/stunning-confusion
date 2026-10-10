@@ -398,9 +398,15 @@ export default function GradedRecitation({
         <AppText variant="title" className="font-sans font-bold text-ink">
           {missed === 0 ? 'Every word right' : `${missed} ${missed === 1 ? 'word' : 'words'} missed`}
         </AppText>
-        <AppText variant="caption" className="font-sans text-ink-3">
-          {mode === 'speak' && missed > 0 ? 'Tap a red word if you said it and it was misheard.' : `${right} of ${total} words`}
-        </AppText>
+        {mode === 'speak' && missed > 0 ? (
+          <AppText variant="label" className="font-sans font-medium text-ink-2">
+            Did it mishear you? Tap any word you said right.
+          </AppText>
+        ) : (
+          <AppText variant="caption" className="font-sans text-ink-3">
+            {`${right} of ${total} words`}
+          </AppText>
+        )}
       </View>
       <SpanText
         verses={verses}

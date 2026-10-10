@@ -6900,7 +6900,7 @@ export function useAppState() {
 
     // core state
     verses, setVerses,
-    memoryQueue, setMemoryQueue, updateMemoryQueue, countRangeProgress,
+    memoryQueue, memoryQueueRef, setMemoryQueue, updateMemoryQueue, countRangeProgress,
     primingLookahead, setPrimingLookahead,
     cognitiveLoadSensitivity, setCognitiveLoadSensitivity,
     selectedAddBook, setSelectedAddBook,

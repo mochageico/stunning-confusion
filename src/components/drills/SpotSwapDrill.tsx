@@ -15,9 +15,12 @@ import { useThemeColors } from '../theme';
 
 export default React.memo(function SpotSwapDrill({
   verses,
+  onlyVerse,
   onComplete,
 }: {
   verses: DrillVerse[];
+  /** Show swaps in this one verse (a verse number); the rest of `verses` only supplies decoy words. */
+  onlyVerse?: number;
   /** Fires when an attempt is checked. */
   onComplete?: () => void;
 }) {
@@ -25,12 +28,14 @@ export default React.memo(function SpotSwapDrill({
   const script = useMemo(() => (verses.length > 0 ? scriptOfVerse(verses[0]) : 'latin'), [verses]);
 
   const [swapsPerVerse, setSwapsPerVerse] = useState(DEFAULT_SWAPS_PER_VERSE);
-  const [swapVerses, setSwapVerses] = useState<SwapVerse[]>(() => buildSwapVerses(verses, DEFAULT_SWAPS_PER_VERSE));
+  const build = (perVerse: number) =>
+    buildSwapVerses(verses, perVerse).filter((sv) => onlyVerse === undefined || sv.id.endsWith(`-${onlyVerse}`));
+  const [swapVerses, setSwapVerses] = useState<SwapVerse[]>(() => build(DEFAULT_SWAPS_PER_VERSE));
   const [swapSelected, setSwapSelected] = useState<Set<number>>(new Set());
   const [swapSubmitted, setSwapSubmitted] = useState(false);
 
   const resetSwap = (perVerse: number = swapsPerVerse) => {
-    setSwapVerses(buildSwapVerses(verses, perVerse));
+    setSwapVerses(build(perVerse));
     setSwapSelected(new Set());
     setSwapSubmitted(false);
   };
