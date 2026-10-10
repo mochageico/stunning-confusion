@@ -31,6 +31,7 @@ import VerseSourcesScreen from './src/screens/VerseSourcesScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import ThreadDrillScreen from './src/screens/ThreadDrillScreen';
+import GuidedLearningScreen from './src/screens/GuidedLearningScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -145,6 +146,8 @@ function Screens({ state }: { state: AppState }) {
         return <ReferenceDrillScreen state={state} />;
       case 'threadDrill':
         return <ThreadDrillScreen state={state} />;
+      case 'guided':
+        return <GuidedLearningScreen state={state} />;
       default:
         return <HomeScreen state={state} />;
     }

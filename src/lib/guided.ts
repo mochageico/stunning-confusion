@@ -30,8 +30,8 @@ export const GUIDED_WITHIN_HOUR_LABEL = 'Counted toward learning within the last
 
 type Rng = () => number;
 
-/** A queue item, plus the one flag Guided learning adds (types.ts gets it in phase 3). */
-export type GuidedItem = QueueItem & { guidedSetAside?: true };
+/** A queue item. guidedSetAside lives on QueueItem itself (src/types.ts). */
+export type GuidedItem = QueueItem;
 
 /** The verse shape drills.ts takes. */
 export interface GuidedDrillVerse {

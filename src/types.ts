@@ -138,7 +138,7 @@ export interface ReviewLog {
   stage: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; // the stage it happened in
   refresher?: true;            // happened during a refresher stint after a miss
   drillType?: TouchLog['drillType'];
-  via?: 'thread';              // pass: earned in Pick up the thread rather than Recall or a manual log
+  via?: 'thread' | 'guided';   // pass: earned in Pick up the thread or Guided learning rather than Recall or a manual log
   cycles?: number;             // skipped: how many review dates passed
   forgiven?: true;             // skipped: resolved with no penalty
 }
@@ -233,6 +233,11 @@ export interface QueueItem {
   // shared review day. Never overwritten once set; absent on verses that
   // haven't graduated out of Daily yet (or predate this feature).
   chapterReviewAnchorDay?: string; // a DAY_ABBREVS value, e.g. 'M', 'Th'
+
+  // Guided learning set this verse aside after repeated misses, so the next
+  // sitting starts with it. Only ever true: the key is deleted to clear it,
+  // never written as false or undefined.
+  guidedSetAside?: true;
 }
 
 export interface VerseTimestamp {

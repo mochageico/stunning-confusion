@@ -131,6 +131,7 @@ export type ScreenName =
   | 'memoryCalendar'
   | 'referenceDrill'
   | 'threadDrill'
+  | 'guided'
   | 'memberProfile'
   | 'groupPlanDetail'
   | 'fullHistory'
@@ -155,6 +156,7 @@ const HOME_TAB_SCREENS: ScreenName[] = [
   'audioFeed',
   'referenceDrill',
   'threadDrill',
+  'guided',
 ];
 
 // The Verses tab replaced the My Memory Work menu (2026-10-10): My Verses is
@@ -1031,6 +1033,9 @@ export function useAppState() {
   // Set just before opening Pick up the thread from a passing Recall, so its
   // setup starts on that chapter and verse. The screen clears it once read.
   const [threadDrillPreset, setThreadDrillPreset] = useState<ThreadDrillPreset | null>(null);
+  // The passage Guided learning opens on (Passage.key in lib/guided.ts), or
+  // null to let the screen pick the most recent one.
+  const [guidedPassageKey, setGuidedPassageKey] = useState<string | null>(null);
 
   // Real, measured cumulative practice time (Dashboard's "Time Studied"),
   // in seconds. Tracked via the activeModal effect below, not an estimate.
@@ -3923,6 +3928,7 @@ export function useAppState() {
             ...(data.refresherReturnPhase !== undefined ? { refresherReturnPhase: data.refresherReturnPhase } : {}),
             ...(data.refresherReturnProgress !== undefined ? { refresherReturnProgress: data.refresherReturnProgress } : {}),
             ...(data.refresherTargetUnits !== undefined ? { refresherTargetUnits: data.refresherTargetUnits } : {}),
+            ...(data.guidedSetAside === true ? { guidedSetAside: true as const } : {}),
           });
         });
         loadedQueue.sort((a, b) => a.orderIndex - b.orderIndex);
@@ -5201,6 +5207,7 @@ export function useAppState() {
       delete base.refresherReturnPhase;
       delete base.refresherReturnProgress;
       delete base.refresherTargetUnits;
+      delete base.guidedSetAside;
 
       if (targetPhase === 'learning') {
         base.status = 'learning';
@@ -5834,6 +5841,84 @@ export function useAppState() {
     abortReviewSession();
     setThreadDrillPreset(preset);
     navigateTo('threadDrill');
+  };
+
+  // Guided learning, optionally on one passage. Closes any practice overlay
+  // first, for the same reason as openThreadDrill.
+  const openGuided = (passageKey?: string) => {
+    abortReviewSession();
+    setGuidedPassageKey(passageKey ?? null);
+    navigateTo('guided');
+  };
+
+  // Marks a verse Guided learning set aside after repeated misses, or clears
+  // the mark. The key is deleted to clear it -- never written as false or
+  // undefined (Firestore rejects undefined). The auto-sync saves it.
+  const setGuidedSetAside = (verseId: string, on: boolean) => {
+    updateMemoryQueue((prev) =>
+      prev.map((item) => {
+        if (item.verseId !== verseId) return item;
+        if (on) return item.guidedSetAside ? item : { ...item, guidedSetAside: true as const };
+        if (!item.guidedSetAside) return item;
+        const next = { ...item };
+        delete next.guidedSetAside;
+        return next;
+      })
+    );
+  };
+
+  // Guided learning's "Add verse N to Learning": moves exactly one queued
+  // verse into Learning, with the same field resets as triggerDailyPull. It
+  // ignores the daily pace and the learning-day check (the user asked for
+  // this verse), but still refuses while reviews are paused, matching
+  // triggerDailyPull. Returns whether the verse moved.
+  const pullVerseIntoLearning = (verseId: string): boolean => {
+    if (reviewsPaused) {
+      triggerToast('Reviews are paused -- resume from Settings to add new verses.');
+      return false;
+    }
+    const item = memoryQueueRef.current.find((q) => q.verseId === verseId);
+    if (!item || item.status !== 'queued') return false;
+    updateMemoryQueue((prev) =>
+      prev.map((q) =>
+        q.verseId !== verseId
+          ? q
+          : {
+              ...q,
+              status: 'learning' as const,
+              dateStarted: new Date().toISOString(),
+              lastReviewDate: null,
+              nextReviewDueDate: null,
+              currentStreakCount: 0,
+              totalSuccessfulReviews: 0,
+              gracePeriodUsedToday: false,
+            }
+      )
+    );
+    return true;
+  };
+
+  // Guided learning's credit path, the same calls Pick up the thread makes
+  // (finishRound in ThreadDrillScreen): 'touch' banks a Learning run
+  // (perfect), 'review' counts a due review. Every verse carries its
+  // translationId, so Psalm 23:1 in BSB and in Hebrew stay separate items.
+  // Resolves to the credited items as they stand afterwards, read from the
+  // live queue, so the caller can tell whether a third run graduated the
+  // verse or graduation is being held for due reviews.
+  const creditGuided = async (items: QueueItem[], kind: 'touch' | 'review', drill: 'speak' | 'type'): Promise<QueueItem[]> => {
+    if (items.length > 0) {
+      const states: VerseState[] = items.map((i) => ({
+        book: i.book,
+        chapter: i.chapter,
+        verse: i.verseNumber,
+        text: i.text,
+        status: 'memorized',
+        translationId: i.translationId,
+      }));
+      await handleUpdateVerseStatus(states, 'memorized', drill, { perfect: kind === 'touch', quiet: true, via: 'guided' });
+    }
+    const ids = new Set(items.map((i) => i.verseId));
+    return memoryQueueRef.current.filter((q) => ids.has(q.verseId));
   };
 
   // Launch practice session
@@ -6853,6 +6938,11 @@ export function useAppState() {
     modalVerses, setModalVerses,
     threadDrillPreset, setThreadDrillPreset,
     openThreadDrill,
+    guidedPassageKey, setGuidedPassageKey,
+    openGuided,
+    setGuidedSetAside,
+    pullVerseIntoLearning,
+    creditGuided,
     isRecording, setIsRecording,
     isRecordingPaused,
     recordingSeconds, setRecordingSeconds,

@@ -279,6 +279,9 @@ export function useDemoState(real: AppState): AppState {
   const booted = useRef(false);
 
   if (DEMO_ENABLED && params.get('ios') === '1') injectIosFontEmulation();
+  // The live app state, for poking at actions from the browser console
+  // (window.__demoState.setGuidedSetAside(...)). Web demo mode only.
+  if (DEMO_ENABLED && Platform.OS === 'web') (globalThis as any).__demoState = real;
 
   // Wait for the real auth listener to settle first -- its signed-out branch
   // resets the queue, which would wipe a seed applied any earlier.
