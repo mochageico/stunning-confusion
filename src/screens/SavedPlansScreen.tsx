@@ -13,7 +13,6 @@ import { useThemeColors } from '../components/theme';
 // whichever one you came from.
 const BACK_LABELS: Partial<Record<string, string>> = {
   activePlan: 'My Verses',
-  memoryDesk: 'My Memory Work',
   settings: 'Settings',
   home: 'Today',
 };

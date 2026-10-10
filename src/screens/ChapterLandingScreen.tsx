@@ -237,7 +237,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         // automatically.
         contentContainerStyle={{ gap: space(16), paddingBottom: floatingBarShowing ? floatingBarHeight + 32 : 16 }}
       >
-        {/* Back can lead to Today, the chapter grid or My Memory Work, so it
+        {/* Back can lead to Today, the chapter grid or elsewhere, so it
             says "Back" rather than naming one of them. The translation picker
             sits in the actions slot: it decides which text loads here and
             which translation gets set on any verses added from here.

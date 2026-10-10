@@ -7,7 +7,7 @@ import { SegmentedControl } from './blocks';
 // Short forms of GroupPlanDetailScreen's PRIORITY_OPTIONS, for the inline
 // control here. Same three modes, same order, same plain language -- see
 // src/lib/groupPlanScheduler.ts for what each one actually does to the pull.
-const PRIORITY_LABELS: { id: GroupPlanMembership['priority']; short: string }[] = [
+export const PRIORITY_LABELS: { id: GroupPlanMembership['priority']; short: string }[] = [
   { id: 'group', short: 'Plan first' },
   { id: 'individual', short: 'Mine first' },
   { id: 'additive', short: 'Side by side' },

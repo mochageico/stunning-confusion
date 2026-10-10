@@ -8,7 +8,6 @@ import { RhythmEditor } from '../components/RhythmEditor';
 import { QueueSources } from '../components/QueueSources';
 import PlanDesignerScreen from './PlanDesignerScreen';
 import HomeScreen from './HomeScreen';
-import MemoryDeskScreen from './MemoryDeskScreen';
 import type { AppState } from '../state/useAppState';
 import type { Rhythm, GroupPlan, GroupPlanMembership } from '../types';
 
@@ -70,11 +69,6 @@ export default function DevLayoutLab() {
               <SpecimenLabel text="Dropdown — anchored menu, short + long list" />
               <FontScaleOverrideProvider scale={scale}>
                 <LiveDropdowns />
-              </FontScaleOverrideProvider>
-
-              <SpecimenLabel text="Memory Desk — whole screen" />
-              <FontScaleOverrideProvider scale={scale}>
-                <LiveMemoryDesk />
               </FontScaleOverrideProvider>
 
               <SpecimenLabel text="Home — whole screen" />
@@ -360,29 +354,6 @@ function PhoneFrame({ children }: { children: React.ReactNode }) {
     >
       {children}
     </View>
-  );
-}
-
-/** The Memory Desk at true device width, driven by the Home mock's queue. */
-function LiveMemoryDesk() {
-  const mock = useMockHomeState();
-  const deskState = {
-    ...mock,
-    handleBack: () => {},
-    // Rhythm fields: the Queue row's detail line reads these now that the
-    // queue screen owns pacing.
-    learningDays: ['M', 'W', 'F'],
-    newVersesPace: 3,
-    openActivePlanDesigner: () => {},
-    savedPlans: [
-      { id: 'standard-plan', name: 'Standard', isActive: true, isBuiltIn: true },
-      { id: 'p2', name: 'Deep Retention', isActive: false },
-    ],
-  };
-  return (
-    <PhoneFrame>
-      <MemoryDeskScreen state={deskState as unknown as AppState} />
-    </PhoneFrame>
   );
 }
 

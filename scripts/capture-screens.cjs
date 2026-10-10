@@ -44,7 +44,7 @@ const H = 844;
 const ALL = [
   'home&noseg=1', 'home&empty=1&noseg=1', 'modalLearn&fixed=1', 'modalListen&fixed=1',
   'books&max=1500&noseg=1', 'chapters&fixed=1', 'chapterLanding&max=1900&noseg=1',
-  'memoryDesk&fixed=1', 'activePlan&noseg=1', 'memoryCalendar&noseg=1', 'fullHistory&max=1300&noseg=1',
+  'activePlan&noseg=1', 'addVerses&noseg=1', 'mySchedule&noseg=1', 'verseSources&noseg=1', 'memoryCalendar&noseg=1', 'fullHistory&max=1300&noseg=1',
   'referenceDrill&noseg=1', 'savedPlans&fixed=1', 'planDesigner&noseg=1', 'modalMissed&fixed=1',
   'record&max=1500&noseg=1', 'recordingDetail&noseg=1', 'modalSave&fixed=1', 'audioFeed&max=1500&noseg=1',
   'community&noseg=1', 'find&fixed=1', 'create&fixed=1', 'preview&fixed=1', 'groupDetail&noseg=1',

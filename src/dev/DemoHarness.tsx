@@ -13,7 +13,7 @@
 // It is inert in production builds whatever the flags say (__DEV__ gate).
 //
 // Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
-// activePlan, savedPlans, memoryDesk, memoryCalendar, referenceDrill,
+// activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, referenceDrill,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
@@ -315,8 +315,10 @@ export function useDemoState(real: AppState): AppState {
     if (s === 'chapters') real.navigateTo('chapters', 'Romans');
     else if (s === 'chapterLanding') real.navigateTo('chapterLanding', 'Romans', 8);
     else if (s === 'planDesigner') real.openActivePlanDesigner();
+    // navigateTo, not setCurrentScreen: it also switches to the screen's tab
+    // (the Verses tab's screens render only while that tab is current).
     else if (s !== 'home' && s !== 'auth' && s !== 'onboarding' && s !== 'tour' && !s.startsWith('modal'))
-      real.setCurrentScreen(s as any);
+      real.navigateTo(s as any);
   }, [real.loadingAuth]);
 
   if (!DEMO_ENABLED) return real;

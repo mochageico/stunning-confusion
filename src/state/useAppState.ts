@@ -123,8 +123,10 @@ export type ScreenName =
   | 'audioFeed'
   | 'planDesigner'
   | 'activePlan'
+  | 'addVerses'
+  | 'mySchedule'
+  | 'verseSources'
   | 'savedPlans'
-  | 'memoryDesk'
   | 'memoryCalendar'
   | 'referenceDrill'
   | 'memberProfile'
@@ -139,8 +141,8 @@ export type ScreenName =
   | 'dmThread'
   | 'circleChat';
 
-// Screens App.tsx's router only renders while currentTab === 'home' (see
-// Screens() in App.tsx). navigateTo() needs this list so it can switch tabs
+// Screens App.tsx's router only renders while their tab is current (see
+// Screens() in App.tsx). navigateTo() needs these lists so it can switch tabs
 // itself — otherwise navigating to e.g. 'activePlan' from the Profile tab
 // silently no-ops, since the router keeps showing the current tab's screen.
 const HOME_TAB_SCREENS: ScreenName[] = [
@@ -149,15 +151,26 @@ const HOME_TAB_SCREENS: ScreenName[] = [
   'chapters',
   'chapterLanding',
   'audioFeed',
-  'planDesigner',
-  'activePlan',
-  'savedPlans',
-  'memoryDesk',
-  'memoryCalendar',
   'referenceDrill',
 ];
 
-export type TabName = 'home' | 'community' | 'record' | 'profile';
+// The Verses tab replaced the My Memory Work menu (2026-10-10): My Verses is
+// its root, and everything that used to hang off that menu lives under it.
+// 'addVerses' is deliberately in neither list -- it opens over whichever tab
+// you're on (Today's Coming up next card, or My Verses), so Back returns there.
+const VERSES_TAB_SCREENS: ScreenName[] = [
+  'activePlan',
+  'mySchedule',
+  'verseSources',
+  'memoryCalendar',
+  'savedPlans',
+  'planDesigner',
+];
+
+export type TabName = 'home' | 'verses' | 'community' | 'record' | 'profile';
+
+const tabForScreen = (screen: ScreenName): TabName | null =>
+  HOME_TAB_SCREENS.includes(screen) ? 'home' : VERSES_TAB_SCREENS.includes(screen) ? 'verses' : null;
 
 // Canonical QueueItem.verseId shape, translation-prefixed so the same
 // book/chapter/verse in two different translations are two independent
@@ -608,13 +621,9 @@ export function useAppState() {
   const [primingLookahead, setPrimingLookahead] = useState<number>(30);
   const [cognitiveLoadSensitivity, setCognitiveLoadSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
 
-  // Memory queue interactive adder states
-  const [showAddQueueItemModal, setShowAddQueueItemModal] = useState(false);
+  // Add verses screen: the book and chapter it opens on (kept between visits).
   const [selectedAddBook, setSelectedAddBook] = useState('Romans');
   const [selectedAddChapter, setSelectedAddChapter] = useState(8);
-  const [selectedAddVerse, setSelectedAddVerse] = useState(11);
-  const [selectedAddEndVerse, setSelectedAddEndVerse] = useState(11);
-  const [selectedAddOrigin, setSelectedAddOrigin] = useState<'individual' | 'group'>('individual');
 
   // Firebase Auth & Sync states
   const [user, setUser] = useState<any>(null);
@@ -625,11 +634,26 @@ export function useAppState() {
   // Navigation stack helpers
   const [selectedBook, setSelectedBook] = useState<string | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
-  // Which translation's text ChapterLandingScreen's verse picker shows and
-  // adds to the queue -- a session-level browsing choice (persists across
-  // book/chapter navigation, resets on app restart), not a per-verse or
-  // per-plan setting.
-  const [selectedTranslationId, setSelectedTranslationId] = useState<string>(DEFAULT_TRANSLATION_ID);
+  // Your usual translation: what the chapter page shows and what Add verses
+  // starts on. Picking one in either place changes it for both, and it's
+  // remembered on this device (it used to reset to BSB on every launch). Not
+  // a per-verse setting -- each queued verse keeps its own translationId.
+  const [selectedTranslationId, setSelectedTranslationIdState] = useState<string>(DEFAULT_TRANSLATION_ID);
+  const PREFERRED_TRANSLATION_KEY = 'preferredTranslation:v1';
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(PREFERRED_TRANSLATION_KEY);
+        // Only a translation the picker still offers; one since removed
+        // falls back to the default.
+        if (stored && PICKER_TRANSLATIONS.some((t) => t.id === stored)) setSelectedTranslationIdState(stored);
+      } catch {}
+    })();
+  }, []);
+  const setSelectedTranslationId = (id: string) => {
+    setSelectedTranslationIdState(id);
+    AsyncStorage.setItem(PREFERRED_TRANSLATION_KEY, id).catch(() => {});
+  };
   const [backHistory, setBackHistory] = useState<
     Array<{ screen: ScreenName; book: string | null; chapter: number | null }>
   >([]);
@@ -1524,14 +1548,19 @@ export function useAppState() {
   // NAVIGATION HANDLERS
   // ==========================================
   const navigateTo = (screen: ScreenName, book: string | null = null, chapter: number | null = null) => {
-    // Record history for seamless back navigation
+    // Record history for seamless back navigation (cleared again below when
+    // this switches tabs).
     setBackHistory((prev) => [...prev, { screen: currentScreen, book: selectedBook, chapter: selectedChapter }]);
 
     if (book) setSelectedBook(book);
     if (chapter) setSelectedChapter(chapter);
 
-    if (HOME_TAB_SCREENS.includes(screen) && currentTab !== 'home') {
-      setCurrentTab('home');
+    // Crossing into another tab starts that tab's history fresh: Back never
+    // leads out of the tab you're looking at.
+    const targetTab = tabForScreen(screen);
+    if (targetTab && targetTab !== currentTab) {
+      setCurrentTab(targetTab);
+      setBackHistory([]);
     }
 
     // NOTE: navigateTo deliberately has no per-screen plan side effects any
@@ -1557,8 +1586,8 @@ export function useAppState() {
       setSelectedChapter(prev.chapter);
       setCurrentScreen(prev.screen);
     } else {
-      // Default fallback
-      setCurrentScreen('home');
+      // Default fallback: the current tab's own first screen.
+      setCurrentScreen(currentTab === 'verses' ? 'activePlan' : 'home');
     }
     setSelectedVerseNumbers([]);
   };
@@ -1580,7 +1609,8 @@ export function useAppState() {
       currentScreen === 'myRecordings' ||
       currentScreen === 'messages' ||
       currentScreen === 'dmThread' ||
-      currentScreen === 'circleChat'
+      currentScreen === 'circleChat' ||
+      currentScreen === 'addVerses'
     ) {
       setCurrentScreen('home');
       setBackHistory([]);
@@ -1588,6 +1618,10 @@ export function useAppState() {
 
     if (tab === 'home') {
       setCurrentScreen('home');
+      setBackHistory([]);
+    }
+    if (tab === 'verses') {
+      setCurrentScreen('activePlan');
       setBackHistory([]);
     }
   };
@@ -5009,8 +5043,9 @@ export function useAppState() {
   // Adds a book/chapter/verse RANGE, fetching the real chapter text first.
   // Differs from addVersesToQueue above, which takes verses whose text the
   // caller already has (a chapter the user is looking at); this one is for
-  // callers that only know a reference -- the setup flow and the "Add Verses"
-  // form on My Verses, which had this exact body inlined into its onPress.
+  // callers that only know a reference -- the setup flow and the Add verses
+  // screen. The translation defaults to your usual one (selectedTranslationId);
+  // Add verses passes the one picked on it explicitly.
   //
   // Returns a result rather than toasting, because its two callers report
   // differently: the form shows a toast, setup shows an inline confirmation
@@ -5019,7 +5054,8 @@ export function useAppState() {
     book: string,
     chapter: number,
     startVerse: number,
-    endVerse: number
+    endVerse: number,
+    translationId: string = selectedTranslationId
   ): Promise<{ added: number; alreadyThere: number; missingText: number; error?: string }> => {
     const empty = { added: 0, alreadyThere: 0, missingText: 0 };
     const bookId = getBookByName(book)?.id;
@@ -5033,12 +5069,12 @@ export function useAppState() {
     // same reason every other queue mutation does (see updateMemoryQueue).
     const existingIds = new Set(memoryQueueRef.current.map((q) => q.verseId));
     const toAdd = targets.filter(
-      (v) => !existingIds.has(buildVerseId(DEFAULT_TRANSLATION_ID, bookId, chapter, v))
+      (v) => !existingIds.has(buildVerseId(translationId, bookId, chapter, v))
     );
     const alreadyThere = targets.length - toAdd.length;
     if (toAdd.length === 0) return { ...empty, alreadyThere };
 
-    const chapterData = await fetchChapterText(DEFAULT_TRANSLATION_ID, bookId, chapter);
+    const chapterData = await fetchChapterText(translationId, bookId, chapter);
     if (!chapterData) {
       return { ...empty, alreadyThere, error: `Couldn't find ${book} ${chapter} in the scripture library yet.` };
     }
@@ -5049,8 +5085,8 @@ export function useAppState() {
     }
 
     const newItems: QueueItem[] = found.map((v, i) => ({
-      verseId: buildVerseId(DEFAULT_TRANSLATION_ID, bookId, chapter, v),
-      translationId: DEFAULT_TRANSLATION_ID,
+      verseId: buildVerseId(translationId, bookId, chapter, v),
+      translationId: translationId,
       book,
       chapter,
       verseNumber: v,
@@ -6727,12 +6763,8 @@ export function useAppState() {
     memoryQueue, setMemoryQueue, updateMemoryQueue, countRangeProgress,
     primingLookahead, setPrimingLookahead,
     cognitiveLoadSensitivity, setCognitiveLoadSensitivity,
-    showAddQueueItemModal, setShowAddQueueItemModal,
     selectedAddBook, setSelectedAddBook,
     selectedAddChapter, setSelectedAddChapter,
-    selectedAddVerse, setSelectedAddVerse,
-    selectedAddEndVerse, setSelectedAddEndVerse,
-    selectedAddOrigin, setSelectedAddOrigin,
     user, setUser,
     loadingAuth,
     currentTab, setCurrentTab,

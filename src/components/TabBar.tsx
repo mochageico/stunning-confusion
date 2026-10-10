@@ -92,11 +92,14 @@ export function FloatingTabBar<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={tab.label}
-            className={`flex-1 items-center justify-center rounded-full ${active ? 'bg-accent-soft' : 'active:bg-fill'}`}
-            style={{ gap: 2 }}
+            // grow, not flex-1: each tab starts from its own label's width and
+            // shares out what's left, so with five tabs "Community" gets the
+            // room it needs at large text on an SE (equal fifths cut it off).
+            className={`grow items-center justify-center rounded-full ${active ? 'bg-accent-soft' : 'active:bg-fill'}`}
+            style={{ gap: 2, paddingHorizontal: 4 }}
           >
             <Icon size={20} color={active ? palette.accent : palette.ink3} strokeWidth={active ? 2.4 : 2} />
-            {/* Capped, like iOS's own tab bar: four labels share a fixed row,
+            {/* Capped, like iOS's own tab bar: five labels share a fixed row,
                 and at 1.5x "Community" ran into its neighbours on an SE. */}
             <AppText
               variant="micro"

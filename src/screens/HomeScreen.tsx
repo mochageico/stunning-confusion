@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Volume2, BookMarked, ClipboardCheck, FolderOpen, Target } from 'lucide-react-native';
+import { Volume2, BookMarked, ChevronRight, ClipboardCheck, Plus, Target } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, VerseState } from '../types';
@@ -10,6 +10,7 @@ import { AppButton, AppIconButton, AppText, Card, CollapsibleCard, useFontScale,
 import { Dialog, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { formatDate } from '../lib/format';
 import { translationLabel } from '../data';
+import { useThemeColors } from '../components/theme';
 
 const LOOKAHEAD_OPTIONS = [
   { id: 10, label: '10' },
@@ -70,15 +71,43 @@ function TodayRow({
   onOpenChapter,
   actions,
   children,
+  inline = false,
 }: {
   label: string;
   first: boolean;
   onOpenChapter: () => void;
   actions: React.ReactNode;
   children?: React.ReactNode;
+  /** The reference gets its own line, and `children` share the next one
+   *  with the actions (actions on the right), wrapping onto a second line
+   *  only when they don't fit. For Learning now's progress dots: most people
+   *  learn one or two verses at a time, which fit beside the buttons. */
+  inline?: boolean;
 }) {
   const space = useScaledSpace();
   const stacked = useFontScale() >= 1.3;
+  if (inline) {
+    return (
+      <View className={first ? '' : 'border-t border-hairline'} style={{ paddingTop: first ? 0 : space(10), gap: space(6) }}>
+        <Pressable
+          onPress={onOpenChapter}
+          accessibilityRole="link"
+          accessibilityHint="Opens the chapter"
+          className="active:opacity-60 self-start"
+        >
+          <AppText variant="label" className="font-sans font-semibold text-ink">
+            {label}
+          </AppText>
+        </Pressable>
+        <View className="flex-row flex-wrap items-center" style={{ columnGap: space(12), rowGap: space(8) }}>
+          {children}
+          <View className="flex-row items-center ml-auto" style={{ gap: space(6) }}>
+            {actions}
+          </View>
+        </View>
+      </View>
+    );
+  }
   return (
     <View className={first ? '' : 'border-t border-hairline'} style={{ paddingTop: first ? 0 : space(10), gap: space(6) }}>
       <View className={stacked ? '' : 'flex-row items-center'} style={{ gap: space(stacked ? 6 : 8) }}>
@@ -192,6 +221,8 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const firstName = (user?.displayName || 'Friend').split(' ')[0];
 
   const space = useScaledSpace();
+  const scale = useFontScale();
+  const palette = useThemeColors();
 
   // Excludes verses that already banked every mastery touch -- they're done
   // learning and just waiting on their reviews to clear before promotion out
@@ -348,6 +379,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                       key={group.label}
                       label={group.label}
                       first={i === 0}
+                      inline
                       onOpenChapter={() => navigateTo('chapterLanding', group.book, group.chapter)}
                       actions={
                         <>
@@ -506,18 +538,41 @@ export default function HomeScreen({ state }: { state: AppState }) {
                   Nothing waiting — add more verses when you're ready.
                 </AppText>
               )}
+
+              {/* The shortcut into My Verses from Today: add straight from
+                  here, or open the whole list. A header button beside the
+                  greeting was tried in the sketches and dropped -- this card is
+                  where "what's next" already lives. */}
+              <View
+                className="flex-row flex-wrap items-center justify-between border-t border-hairline"
+                style={{ paddingTop: space(12), gap: space(10) }}
+              >
+                <AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => navigateTo('addVerses')} />
+                <Pressable
+                  onPress={() => navigateTo('activePlan')}
+                  accessibilityRole="link"
+                  hitSlop={8}
+                  className="flex-row items-center active:opacity-60 ml-auto"
+                  style={{ gap: space(2) }}
+                >
+                  <AppText variant="label" className="font-sans font-semibold text-accent">
+                    All on My Verses
+                  </AppText>
+                  <ChevronRight size={Math.round(18 * scale)} color={palette.accent} strokeWidth={2.2} />
+                </Pressable>
+              </View>
             </CollapsibleCard>
 
             <AppButton size="lg" variant="secondary" Icon={Volume2} label="Listen to all of today's verses" onPress={listenToEverything} />
           </>
         )}
 
-        {/* Four destinations of the same kind, as one grouped list. The one
+        {/* Destinations of the same kind, as one grouped list. (My Memory
+            Work left this list when the Verses tab replaced it.) The one
             primary action for a new user -- choosing their first verses --
             already has its own button in Start here above. */}
         <GroupedList header="More">
           <ListRow Icon={BookMarked} title="Verse Finder" onPress={() => navigateTo('books')} />
-          <ListRow Icon={FolderOpen} title="My Memory Work" onPress={() => navigateTo('memoryDesk')} />
           <ListRow Icon={Volume2} title="Find recordings" onPress={() => navigateTo('audioFeed')} />
           <ListRow Icon={Target} title="Reference practice" onPress={() => navigateTo('referenceDrill')} />
         </GroupedList>

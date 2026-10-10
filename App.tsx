@@ -5,7 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import { Check, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
+import { BookOpen, Check, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
 
 import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
@@ -25,7 +25,9 @@ import AudioFeedScreen from './src/screens/AudioFeedScreen';
 import PlanDesignerScreen from './src/screens/PlanDesignerScreen';
 import ActivePlanScreen from './src/screens/ActivePlanScreen';
 import SavedPlansScreen from './src/screens/SavedPlansScreen';
-import MemoryDeskScreen from './src/screens/MemoryDeskScreen';
+import AddVersesScreen from './src/screens/AddVersesScreen';
+import MyScheduleScreen from './src/screens/MyScheduleScreen';
+import VerseSourcesScreen from './src/screens/VerseSourcesScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -73,6 +75,9 @@ const TABS = [
   // "Today", not "Home": the tab's job is to answer "what do I do right now",
   // and naming it after that job is one less thing to figure out.
   { id: 'home' as const, label: 'Today', Icon: HomeIcon },
+  // Your verses and everything about how they're scheduled. Replaced the My
+  // Memory Work menu, which was three taps and a long scroll from Today.
+  { id: 'verses' as const, label: 'Verses', Icon: BookOpen },
   { id: 'community' as const, label: 'Community', Icon: Users },
   { id: 'record' as const, label: 'Record', Icon: Mic },
   { id: 'profile' as const, label: 'Profile', Icon: User },
@@ -98,6 +103,11 @@ function Screens({ state }: { state: AppState }) {
   }
   if (state.currentScreen === 'fullHistory') {
     return <FullHistoryScreen state={state} />;
+  }
+  // Opens over whichever tab you're on (Today or Verses), so Back returns
+  // there.
+  if (state.currentScreen === 'addVerses') {
+    return <AddVersesScreen state={state} />;
   }
   if (state.currentScreen === 'dashboard') {
     return <DashboardScreen state={state} />;
@@ -130,20 +140,27 @@ function Screens({ state }: { state: AppState }) {
         return <ChapterLandingScreen state={state} />;
       case 'audioFeed':
         return <AudioFeedScreen state={state} />;
-      case 'planDesigner':
-        return <PlanDesignerScreen state={state} />;
-      case 'activePlan':
-        return <ActivePlanScreen state={state} />;
-      case 'savedPlans':
-        return <SavedPlansScreen state={state} />;
-      case 'memoryDesk':
-        return <MemoryDeskScreen state={state} />;
-      case 'memoryCalendar':
-        return <MemoryCalendarScreen state={state} />;
       case 'referenceDrill':
         return <ReferenceDrillScreen state={state} />;
       default:
         return <HomeScreen state={state} />;
+    }
+  }
+
+  if (state.currentTab === 'verses') {
+    switch (state.currentScreen) {
+      case 'mySchedule':
+        return <MyScheduleScreen state={state} />;
+      case 'verseSources':
+        return <VerseSourcesScreen state={state} />;
+      case 'memoryCalendar':
+        return <MemoryCalendarScreen state={state} />;
+      case 'savedPlans':
+        return <SavedPlansScreen state={state} />;
+      case 'planDesigner':
+        return <PlanDesignerScreen state={state} />;
+      default:
+        return <ActivePlanScreen state={state} />;
     }
   }
 

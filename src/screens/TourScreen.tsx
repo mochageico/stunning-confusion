@@ -1,5 +1,5 @@
 import { ScrollView, View } from 'react-native';
-import { BookMarked, CalendarDays, FolderOpen, Home as HomeIcon, Mic, Users, X } from 'lucide-react-native';
+import { BookMarked, BookOpen, CalendarDays, Home as HomeIcon, Mic, Users, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
@@ -36,9 +36,9 @@ const PLACES: {
     what: 'Browse the Bible, pick any verses you want to know by heart, and add them. They wait in line until one of your chosen days comes around.',
   },
   {
-    Icon: FolderOpen,
-    name: 'My Memory Work',
-    what: 'The back room. Your full list of verses, the days you memorize on, how long verses keep coming back, and everything you\'ve finished so far.',
+    Icon: BookOpen,
+    name: 'Verses',
+    what: 'Your full list of verses in the order you\'ll learn them, the days you memorize on, how long verses keep coming back, and everything you\'ve finished so far.',
   },
   {
     Icon: CalendarDays,
@@ -72,7 +72,7 @@ const ANSWERS: { q: string; a: string }[] = [
   },
   {
     q: "Can I change how much I'm doing?",
-    a: 'Any time. My Memory Work → My Verses & Schedule sets which days you take on new verses and how many. Nothing you\'ve already learned is affected.',
+    a: 'Any time. The Verses tab → My Schedule sets which days you take on new verses and how many. Nothing you\'ve already learned is affected.',
   },
 ];
 

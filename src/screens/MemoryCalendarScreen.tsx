@@ -213,7 +213,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
           title="Memory Calendar"
           subtitle="Your reviews ahead, if every one goes well. A miss moves things, so treat this as a preview, not a promise."
           onBack={handleBack}
-          backLabel="My Memory Work"
+          backLabel="My Verses"
         />
 
         <View style={{ gap: space(12) }}>
