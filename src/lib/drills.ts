@@ -752,6 +752,9 @@ const cueSpotsIn = (
  * the end -- the joins that need the most work. Only when the range has
  * nothing before the end verse does the cue fall inside the end verse itself.
  *
+ * `beforeVerse` (exclusive) caps where the cue may start, so a caller can ask
+ * for a cue that reaches back past a window it already recited.
+ *
  * `used` holds threadCueKey()s already given this session; they're skipped
  * until every spot has been used, then they come back around. Returns null
  * only when the range has no usable words at all.
@@ -759,14 +762,14 @@ const cueSpotsIn = (
 export const pickThreadCue = (
   verses: DrillVerse[],
   endVerse: number,
-  opts: { fromVerse?: number; used?: ReadonlySet<string>; random?: () => number } = {}
+  opts: { fromVerse?: number; beforeVerse?: number; used?: ReadonlySet<string>; random?: () => number } = {}
 ): ThreadCue | null => {
-  const { fromVerse = 0, used = new Set<string>(), random = Math.random } = opts;
+  const { fromVerse = 0, beforeVerse = endVerse, used = new Set<string>(), random = Math.random } = opts;
   if (endVerse < 0 || endVerse >= verses.length) return null;
 
   const lo = Math.max(0, Math.min(fromVerse, endVerse));
   const starts: number[] = [];
-  for (let i = lo; i < endVerse; i++) starts.push(i);
+  for (let i = lo; i < Math.min(endVerse, beforeVerse); i++) starts.push(i);
   if (starts.length === 0) starts.push(endVerse);
 
   // Strictest first: a clean two-word cue. Then relax the filler and
