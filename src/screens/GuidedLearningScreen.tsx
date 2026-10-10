@@ -182,6 +182,7 @@ function GradedStage({
       endVerse={endVerse}
       mode={stage}
       shownWords={shown}
+      showHeard
       highlightWords={cueWords?.length ?? 0}
       header={<CueCard eyebrow={eyebrow} words={cueWords} caption={caption} script={script} />}
       onCancel={() => setStage('ready')}
@@ -296,6 +297,51 @@ function VerseCard({ verse, firstLettersOnly }: { verse: GuidedDrillVerse; first
       </AppText>
       <AppText variant="body" script={script} className="font-serif leading-relaxed text-ink">
         {text}
+      </AppText>
+    </View>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Progress marks: run dots for a verse, and the ladder drawn as rungs
+// ----------------------------------------------------------------------------
+
+function RunDots({ done, needed }: { done: number; needed: number }) {
+  const space = useScaledSpace();
+  const dot = Math.max(8, Math.round(space(8)));
+  return (
+    <View className="flex-row" style={{ gap: space(4) }} accessible accessibilityLabel={`${Math.min(done, needed)} of ${needed} runs`}>
+      {Array.from({ length: needed }).map((_, i) => (
+        <View
+          key={i}
+          className={`rounded-full ${i < done ? 'bg-accent' : 'bg-fill'}`}
+          // layout-ok: a dot holds no text.
+          style={{ width: dot, height: dot }}
+        />
+      ))}
+    </View>
+  );
+}
+
+const RUNG_LABEL: Record<string, string> = { read: 'Read', lookUp: 'Look up', drill: 'Drill', partly: 'Some words', fully: 'From memory' };
+
+/** One segment per rung: done, here, still to come. A drop back shows as segments emptying. */
+function RungBar({ ladder }: { ladder: Ladder }) {
+  const space = useScaledSpace();
+  return (
+    <View style={{ gap: space(6), marginBottom: space(12) }} accessible accessibilityLabel={`Step ${ladder.pos + 1} of ${ladder.rungs.length}`}>
+      <View className="flex-row" style={{ gap: space(4) }}>
+        {ladder.rungs.map((r, i) => (
+          <View
+            key={i}
+            className={`flex-1 rounded-full ${i < ladder.pos ? 'bg-accent' : i === ladder.pos ? 'bg-accent-soft border border-accent' : 'bg-fill'}`}
+            // layout-ok: a segment holds no text.
+            style={{ height: Math.max(6, Math.round(space(6))) }}
+          />
+        ))}
+      </View>
+      <AppText variant="caption" className="font-sans font-medium text-ink-3">
+        {RUNG_LABEL[ladder.rungs[ladder.pos].kind]}
       </AppText>
     </View>
   );
@@ -438,7 +484,7 @@ function Sitting({
   };
 
   const step = s.step;
-  const frame = (eyebrow: string, title: string, body: React.ReactNode, showEnd = true) => (
+  const frame = (eyebrow: string, title: string, body: React.ReactNode, top?: React.ReactNode, showEnd = true) => (
     <FadeInView style={{ flex: 1 }}>
       <View className="flex-1 bg-canvas p-5">
         <View className="flex-row items-center justify-between" style={{ marginBottom: space(12), gap: space(12) }}>
@@ -459,6 +505,7 @@ function Sitting({
             </AppText>
           </View>
         )}
+        {top}
         {body}
       </View>
     </FadeInView>
@@ -510,32 +557,26 @@ function Sitting({
             </View>
           )}
 
+          {passages.length > 1 && (
+            <Dropdown
+              value={passageKey}
+              onChange={onPickPassage}
+              options={passages.map((p) => ({ id: p.key, label: `${p.book} ${p.chapter}:${p.items[0].verseNumber}–${p.items[p.items.length - 1].verseNumber}` }))}
+              title="Passage"
+              searchable={false}
+            />
+          )}
+
           <GroupedList
             header={rangeOf(items.map(toDrillVerse))}
             footer={plan.length > 0 ? `Today: ${plan.join(' → ')}` : learnDay ? 'Nothing waiting. Start with a new verse.' : 'Not a learning day. Checks and stitches only, and you can keep going for a new verse.'}
           >
-            {passages.length > 1 && (
-              <ListRow
-                title="Passage"
-                accessory={
-                  <Dropdown
-                    value={passageKey}
-                    onChange={onPickPassage}
-                    options={passages.map((p) => ({ id: p.key, label: `${p.book} ${p.chapter}:${p.items[0].verseNumber}–${p.items[p.items.length - 1].verseNumber}` }))}
-                    title="Passage"
-                    searchable={false}
-                    compact
-                  />
-                }
-              />
-            )}
             {learning.map((i) => (
               <ListRow
                 key={i.verseId}
                 title={`Verse ${i.verseNumber}`}
-                subtitle={`${Math.min(runsBanked(i), masteryTouches)} of ${masteryTouches} runs`}
-                value={tag(i)}
-                accessory="none"
+                subtitle={tag(i)}
+                accessory={<RunDots done={runsBanked(i)} needed={masteryTouches} />}
               />
             ))}
           </GroupedList>
@@ -681,9 +722,10 @@ function Sitting({
     const rung = currentRung(ladder);
     const eyebrow = `New verse · step ${ladder.pos + 1} of ${ladder.rungs.length}`;
     const title = refOf(verse);
+    const ladderFrame = (e: string, t: string, body: React.ReactNode) => frame(e, t, body, <RungBar ladder={ladder} />);
 
     if (rung.kind === 'read') {
-      return frame(
+      return ladderFrame(
         eyebrow,
         title,
         <RoundFrame
@@ -703,7 +745,7 @@ function Sitting({
     }
 
     if (rung.kind === 'lookUp') {
-      return frame(
+      return ladderFrame(
         eyebrow,
         title,
         <RoundFrame footer={<AppButton size="lg" variant="primary" Icon={Check} label="Said it" onPress={() => dispatch({ type: 'next' })} />}>
@@ -716,7 +758,7 @@ function Sitting({
     }
 
     if (rung.kind === 'drill' && rung.drill) {
-      return frame(
+      return ladderFrame(
         eyebrow,
         `${DRILL_LABEL[rung.drill]} · ${title}`,
         <DrillStage
@@ -737,7 +779,7 @@ function Sitting({
     // Partly or fully hidden
     const partly = rung.kind === 'partly';
     const activity: GuidedActivity = partly ? 'partly' : ladder.knowIt ? 'knowIt' : 'fully';
-    return frame(
+    return ladderFrame(
       eyebrow,
       title,
       <GradedStage
@@ -839,12 +881,8 @@ function Sitting({
               <ListRow
                 key={i.verseId}
                 title={`Verse ${i.verseNumber}`}
-                value={
-                  i.status === 'learning'
-                    ? `${Math.min(runsBanked(i), masteryTouches)} of ${masteryTouches} runs`
-                    : 'In reviews'
-                }
-                accessory="none"
+                subtitle={i.status === 'learning' ? undefined : 'In reviews'}
+                accessory={<RunDots done={i.status === 'learning' ? runsBanked(i) : masteryTouches} needed={masteryTouches} />}
               />
             ))}
           </GroupedList>

@@ -383,7 +383,9 @@ const backtraceOutcomes = (
   spoken: string[],
   dp: number[][],
   startI: number,
-  startJ: number
+  startJ: number,
+  /** Optional: filled with the spoken word each expected word was paired with (null when none). */
+  heard?: (string | null)[]
 ): (WordOutcome | null)[] => {
   const outcomes: (WordOutcome | null)[] = new Array(expected.length).fill(null);
   let i = startI;
@@ -405,6 +407,7 @@ const backtraceOutcomes = (
     const cost = pairCost(expected[i - 1], spoken[j - 1]);
     if (dp[i][j] === dp[i - 1][j - 1] + cost) {
       outcomes[i - 1] = cost === MATCH_COST ? 'perfect' : cost === CLOSE_MATCH_COST ? 'close' : 'missed';
+      if (heard) heard[i - 1] = spoken[j - 1];
       i -= 1;
       j -= 1;
     } else if (dp[i][j] === dp[i - 1][j] + skipExpectedCost(expected[i - 1])) {
@@ -440,6 +443,20 @@ export const gradeTranscript = (expectedText: string, transcript: string): WordO
   const dp = buildAlignmentTable(expected, spoken);
   const outcomes = backtraceOutcomes(expected, spoken, dp, expected.length, spoken.length);
   return outcomes.map((o) => o ?? 'missed');
+};
+
+/**
+ * gradeTranscript plus, per expected word, the spoken word it was lined up
+ * with (null when the word was skipped). Lets a result say "heard 'saw' for
+ * 'say'" so the user can judge a mishearing.
+ */
+export const gradeTranscriptDetailed = (expectedText: string, transcript: string): { outcomes: WordOutcome[]; heard: (string | null)[] } => {
+  const expected = tokenizeWords(expectedText);
+  const spoken = tokenizeWords(transcript);
+  const dp = buildAlignmentTable(expected, spoken);
+  const heard: (string | null)[] = new Array(expected.length).fill(null);
+  const outcomes = backtraceOutcomes(expected, spoken, dp, expected.length, spoken.length, heard);
+  return { outcomes: outcomes.map((o) => o ?? 'missed'), heard };
 };
 
 export interface LiveAlignResult {

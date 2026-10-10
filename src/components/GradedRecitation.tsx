@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { threadSpan, ThreadSpanVerse } from '../lib/drills';
-import { getSpeechRecognizer, gradeTranscript, classifyFirstLetterAttempt, SpeechRecognizer, tokenizeWords, WordOutcome } from '../lib/recitation';
+import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, SpeechRecognizer, tokenizeWords, WordOutcome } from '../lib/recitation';
 import { joinWords, maskLetters, normalizeToken, scriptOfVerse, wordGap } from '../lib/textScript';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
 import { WaveBars } from './ui';
@@ -137,6 +137,7 @@ export default function GradedRecitation({
   header,
   gradedDetail,
   continueLabel = 'Next',
+  showHeard = false,
   onCancel,
   onResult,
 }: {
@@ -158,6 +159,8 @@ export default function GradedRecitation({
   /** Shown under the graded text, from per-verse outcomes indexed like the span. */
   gradedDetail?: (perVerse: WordOutcome[][]) => React.ReactNode;
   continueLabel?: string;
+  /** Under the graded text, list what the speech engine heard in place of each missed word. */
+  showHeard?: boolean;
   /** Listening ended with nothing heard, failed, or was cancelled. */
   onCancel: () => void;
   /** The user tapped Continue on the graded result, after any corrections. */
@@ -186,6 +189,8 @@ export default function GradedRecitation({
   const [stage, setStage] = useState<'speak' | 'type' | 'graded'>(mode);
   // Per graded word; filled by the speech grade or by typing.
   const [outcomes, setOutcomes] = useState<WordOutcome[]>([]);
+  // Per graded word, what speech heard there (speak mode only).
+  const [heard, setHeard] = useState<(string | null)[]>([]);
 
   // --- Speech -----------------------------------------------------------------
   const engineRef = useRef<SpeechRecognizer | null>(null);
@@ -197,7 +202,9 @@ export default function GradedRecitation({
     if (finishedRef.current) return;
     finishedRef.current = true;
     engineRef.current?.stop();
-    setOutcomes(gradeTranscript(expectedText, transcriptRef.current));
+    const graded = gradeTranscriptDetailed(expectedText, transcriptRef.current);
+    setOutcomes(graded.outcomes);
+    setHeard(graded.heard);
     setStage('graded');
   };
 
@@ -421,6 +428,24 @@ export default function GradedRecitation({
           };
         }}
       />
+      {showHeard && mode === 'speak' && (() => {
+        const rows = graded
+          .map((g, i) => ({ i, word: g.word, said: heard[i] }))
+          .filter((r) => outcomes[r.i] === 'missed' && r.said);
+        if (rows.length === 0) return null;
+        return (
+          <View style={{ gap: space(4) }}>
+            <AppText variant="caption" className="font-sans font-semibold text-ink-3">
+              What it heard
+            </AppText>
+            {rows.slice(0, 6).map((r) => (
+              <AppText key={r.i} variant="label" className="font-sans text-ink-2">
+                “{r.said}” for “{r.word}”
+              </AppText>
+            ))}
+          </View>
+        );
+      })()}
       {gradedDetail?.(perVerseOutcomes)}
     </RoundFrame>
   );
