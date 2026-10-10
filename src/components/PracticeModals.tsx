@@ -6,7 +6,6 @@ import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
 import {
   Check,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   ClipboardCheck,
   Eye,
@@ -45,14 +44,12 @@ import {
 } from '../lib/recitation';
 import { isRtl, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
 import {
-  buildScrambleRounds,
   buildSwapVerses,
   scoreSwapAttempt,
   DEFAULT_SWAPS_PER_VERSE,
   MIN_JIGSAW_VERSES,
   MIN_THREAD_VERSES,
   threadRunEndingAt,
-  ScrambleRound,
   SwapVerse,
 } from '../lib/drills';
 import { BounceView, ChipRow, DiscreteSlider, FadeInView, SpinView, WaveBars } from './ui';
@@ -69,6 +66,7 @@ import { formatDate } from '../lib/format';
 import { useAboveTabBar } from './TabBar';
 import BuildUpDrill from './drills/BuildUpDrill';
 import JigsawDrill from './drills/JigsawDrill';
+import ScrambleDrill from './drills/ScrambleDrill';
 /** Stable identity, so a missing photoCache prop cannot retrigger renders. */
 const EMPTY_PHOTO_CACHE: ReadonlyMap<string, string> = new Map();
 
@@ -1464,7 +1462,6 @@ function PracticeModalsInner({
     // placements, decoy positions, round index) -- all of it is meaningless
     // and potentially out of bounds against a different passage, exactly
     // like recitePointer/reciteOutcomes above.
-    resetScramble();
     resetSwap();
     // If the incoming group is too short for the jigsaw, don't leave the
     // user parked on a mode that no longer exists.
@@ -1658,38 +1655,6 @@ function PracticeModalsInner({
   const handoffToRecallRef = useRef(handoffToRecall);
   handoffToRecallRef.current = handoffToRecall;
   const onBuildUpTryBlind = useCallback(() => handoffToRecallRef.current(), []);
-
-  // --- Phrase scramble ---
-  const [scrambleRounds, setScrambleRounds] = useState<ScrambleRound[]>(() => buildScrambleRounds(verses));
-  const [scrambleIndex, setScrambleIndex] = useState(0);
-  const [scrambleSlots, setScrambleSlots] = useState<(number | null)[]>([]);
-  const [scrambleChecked, setScrambleChecked] = useState(false);
-  const [scrambleSolved, setScrambleSolved] = useState<Set<number>>(new Set());
-
-  const currentScrambleRound = scrambleRounds[scrambleIndex] ?? null;
-
-  // Slots are sized to whichever verse is on screen, so they have to be
-  // rebuilt on every round change (not just on a full reset).
-  useEffect(() => {
-    setScrambleSlots(currentScrambleRound ? currentScrambleRound.phrases.map(() => null) : []);
-    setScrambleChecked(false);
-  }, [scrambleIndex, currentScrambleRound]);
-
-  // A round confirms itself as soon as the tiles are in the right order, so
-  // the completion mark can't hang off the Check button (which the user
-  // never has to press on a correct run).
-  useEffect(() => {
-    if (!currentScrambleRound) return;
-    const complete = scrambleSlots.length > 0 && scrambleSlots.every((p, i) => p === i);
-    if (complete) setScrambleSolved((prev) => (prev.has(scrambleIndex) ? prev : new Set(prev).add(scrambleIndex)));
-  }, [scrambleSlots, scrambleIndex, currentScrambleRound]);
-
-  const resetScramble = () => {
-    setScrambleRounds(buildScrambleRounds(verses));
-    setScrambleIndex(0);
-    setScrambleChecked(false);
-    setScrambleSolved(new Set());
-  };
 
   // --- Spot-the-swap ---
   const [swapsPerVerse, setSwapsPerVerse] = useState(DEFAULT_SWAPS_PER_VERSE);
@@ -2739,141 +2704,7 @@ function PracticeModalsInner({
                   );
                 })()
               )
-            ) : learnTab === 'jigsaw' || learnTab === 'buildUp' ? null : learnTab === 'scramble' ? (
-              /* ======================================================== */
-              /* PHRASE SCRAMBLE — rebuild one verse from 3-4 word thought  */
-              /* units. Ungraded.                                           */
-              /* ======================================================== */
-              (() => {
-                if (!currentScrambleRound) {
-                  return (
-                    <View className="flex-1 items-center justify-center px-6 gap-2">
-                      <Puzzle size={28} color={palette.ink3} />
-                      <AppText variant="body" className="font-sans font-bold text-ink-2 text-center">Nothing to scramble</AppText>
-                      <AppText variant="caption" className="text-ink-3 font-sans text-center">
-                        These verses are too short to split into phrase tiles. Try Recall instead.
-                      </AppText>
-                    </View>
-                  );
-                }
-
-                const round = currentScrambleRound;
-                const bankRemaining = round.bankOrder.filter((p) => !scrambleSlots.includes(p));
-                const allPlaced = scrambleSlots.length > 0 && scrambleSlots.every((s) => s !== null);
-                const solved = allPlaced && scrambleSlots.every((p, i) => p === i);
-                const isLastRound = scrambleIndex >= scrambleRounds.length - 1;
-
-                return (
-                  <View className="flex-1 justify-between">
-                    <ScrollView className="flex-1 mb-2" contentContainerClassName="gap-2 pb-2">
-                      <View className="flex-row items-center justify-between">
-                        <AppText variant="caption" className="font-sans font-semibold text-ink-3 flex-1">
-                          {round.label} — verse {scrambleIndex + 1} of {scrambleRounds.length}
-                        </AppText>
-                        {scrambleSolved.has(scrambleIndex) && <Check size={12} color={palette.success} />}
-                      </View>
-
-                      {/* Construct box. A correct arrangement confirms itself
-                          the moment it's complete (no Check press needed) --
-                          the last tile landing IS the answer. Only a wrong
-                          arrangement waits for an explicit Check, so the
-                          drill never pre-emptively tells you you're wrong
-                          while you're still placing tiles. */}
-                      <View
-                        className={`border rounded-card p-3 min-h-[110px] ${
-                          solved
-                            ? 'border-success bg-success-soft'
-                            : scrambleChecked
-                              ? 'border-danger/60 bg-danger-soft'
-                              : 'border-line bg-surface'
-                        }`}
-                      >
-                        {scrambleSlots.every((s) => s === null) ? (
-                          <AppText variant="caption" className="text-ink-3 font-sans">Tap the phrases below to build the verse</AppText>
-                        ) : (
-                          <View className={`${passageRow} flex-wrap gap-1.5`}>
-                            {scrambleSlots.map((phraseIdx, slotIdx) =>
-                              phraseIdx === null ? null : (
-                                <Pressable
-                                  key={`s-${slotIdx}`}
-                                  onPress={() => {
-                                    // Remove this tile and close the gap, so
-                                    // the next placement always lands at the
-                                    // end rather than in a hole mid-sentence.
-                                    setScrambleSlots((prev) => {
-                                      const kept = prev.filter((p, i) => i !== slotIdx && p !== null) as number[];
-                                      return prev.map((_, i) => (i < kept.length ? kept[i] : null));
-                                    });
-                                    setScrambleChecked(false);
-                                  }}
-                                  className={`px-2 py-1 rounded-lg border ${
-                                    scrambleChecked && phraseIdx !== slotIdx ? 'bg-danger-soft border-danger/30' : 'bg-accent border-accent'
-                                  }`}
-                                >
-                                  <AppText variant="label" script={passageScript} className={`font-serif ${scrambleChecked && phraseIdx !== slotIdx ? 'text-danger' : 'text-on-accent'}`}>
-                                    {round.phrases[phraseIdx]}
-                                  </AppText>
-                                </Pressable>
-                              )
-                            )}
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Tile bank */}
-                      {bankRemaining.length > 0 && (
-                        <View className={`${passageRow} flex-wrap gap-1.5 mt-1`}>
-                          {bankRemaining.map((phraseIdx) => (
-                            <Pressable
-                              key={`b-${phraseIdx}`}
-                              onPress={() => {
-                                const firstEmpty = scrambleSlots.findIndex((s) => s === null);
-                                if (firstEmpty === -1) return;
-                                setScrambleSlots((prev) => prev.map((s, i) => (i === firstEmpty ? phraseIdx : s)));
-                                setScrambleChecked(false);
-                              }}
-                              className="px-2 py-1 rounded-lg border border-line-strong bg-surface-2"
-                            >
-                              <AppText variant="label" script={passageScript} className="font-serif text-ink-2">{round.phrases[phraseIdx]}</AppText>
-                            </Pressable>
-                          ))}
-                        </View>
-                      )}
-                    </ScrollView>
-
-                    <View className="shrink-0 gap-2">
-                      {(solved || scrambleChecked) && (
-                        <View className={`rounded-card p-2.5 ${solved ? 'bg-success-soft border border-success/30' : 'bg-warning-soft border border-warning/30'}`}>
-                          <AppText variant="caption" className={`font-sans font-bold text-center ${solved ? 'text-success' : 'text-warning'}`}>
-                            {solved
-                              ? isLastRound
-                                ? 'That’s the whole passage! Practice only — nothing logged.'
-                                : 'That’s the verse! Practice only — nothing logged.'
-                              : 'Not quite — tap a red tile to send it back.'}
-                          </AppText>
-                        </View>
-                      )}
-                      <View className="flex-row gap-2">
-                        <AppButton
-                          variant="quiet"
-                          Icon={Undo2}
-                          label="Clear"
-                          onPress={() => { setScrambleSlots(round.phrases.map(() => null)); setScrambleChecked(false); }}
-                          className="flex-1"
-                        />
-                        {solved && !isLastRound ? (
-                          <AppButton variant="primary" label="Next verse" onPress={() => setScrambleIndex((i) => i + 1)} className="flex-1">
-                            <ChevronRight size={15} color={palette.onAccent} />
-                          </AppButton>
-                        ) : (
-                          <AppButton variant="primary" Icon={Check} label="Check" onPress={() => setScrambleChecked(true)} disabled={!allPlaced} className="flex-1" />
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                );
-              })()
-            ) : (
+            ) : learnTab === 'jigsaw' || learnTab === 'buildUp' || learnTab === 'scramble' ? null : (
               /* ======================================================== */
               /* SPOT-THE-SWAP — a few words per verse are replaced with    */
               /* real words from elsewhere in the passage; tap the          */
@@ -3004,6 +2835,9 @@ function PracticeModalsInner({
             )}
             <View className="flex-1" style={{ display: learnTab === 'buildUp' ? 'flex' : 'none' }}>
               <BuildUpDrill verses={verses} onTryBlind={onBuildUpTryBlind} />
+            </View>
+            <View className="flex-1" style={{ display: learnTab === 'scramble' ? 'flex' : 'none' }}>
+              <ScrambleDrill verses={verses} />
             </View>
           </View>
         )}
