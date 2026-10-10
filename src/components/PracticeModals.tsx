@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, type AudioPlayer, type AudioStatus } from 'expo-audio';
@@ -10,7 +10,6 @@ import {
   ChevronUp,
   ClipboardCheck,
   Eye,
-  EyeOff,
   Headphones,
   Info,
   Layers,
@@ -44,19 +43,15 @@ import {
   SpeechRecognizer,
   WordOutcome,
 } from '../lib/recitation';
-import { isRtl, joinWords, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
+import { isRtl, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
 import {
   buildScrambleRounds,
   buildSwapVerses,
-  buildUpStages,
   scoreSwapAttempt,
-  BUILD_UP_REPS,
   DEFAULT_SWAPS_PER_VERSE,
   MIN_JIGSAW_VERSES,
   MIN_THREAD_VERSES,
   threadRunEndingAt,
-  BiteSize,
-  BuildDirection,
   ScrambleRound,
   SwapVerse,
 } from '../lib/drills';
@@ -72,6 +67,7 @@ import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePre
 import { useThemeColors } from './theme';
 import { formatDate } from '../lib/format';
 import { useAboveTabBar } from './TabBar';
+import BuildUpDrill from './drills/BuildUpDrill';
 import JigsawDrill from './drills/JigsawDrill';
 /** Stable identity, so a missing photoCache prop cannot retrigger renders. */
 const EMPTY_PHOTO_CACHE: ReadonlyMap<string, string> = new Map();
@@ -1384,13 +1380,6 @@ function PracticeModalsInner({
   // 'blank' hides words entirely for reciting from pure recall.
   const [gridHideMode, setGridHideMode] = useState<'firstLetter' | 'blank'>('firstLetter');
 
-  // Build Up's two settings. They live up here with the other persisted
-  // prefs rather than beside the rest of the Build Up state below, because
-  // the save effect's dependency array is evaluated during render -- a
-  // later declaration is a genuine TDZ crash, not just untidy ordering.
-  const [buildSize, setBuildSize] = useState<BiteSize>('medium');
-  const [buildDirection, setBuildDirection] = useState<BuildDirection>('forward');
-
   const [hiddenWordIndices, setHiddenWordIndices] = useState<Set<number>>(
     () => new Set(reciteWordObjects.map((_, i) => i))
   );
@@ -1441,8 +1430,6 @@ function PracticeModalsInner({
         if (isStrikeLimit(saved.strikeLimit)) setStrikeLimit(saved.strikeLimit);
         if (saved.recallDisplayMode === 'passage' || saved.recallDisplayMode === 'memoryGrid') setRecallDisplayMode(saved.recallDisplayMode);
         if (saved.gridHideMode === 'firstLetter' || saved.gridHideMode === 'blank') setGridHideMode(saved.gridHideMode);
-        if (saved.buildSize === 'short' || saved.buildSize === 'medium' || saved.buildSize === 'long') setBuildSize(saved.buildSize);
-        if (saved.buildDirection === 'forward' || saved.buildDirection === 'backward') setBuildDirection(saved.buildDirection);
         const loadedLevel = saved.hintMode === 'firstLetter' ? saved.firstLetterLevel : saved.hideLevel;
         if (typeof loadedLevel === 'number') regenerateHiddenWords(loadedLevel);
       } catch {
@@ -1461,10 +1448,8 @@ function PracticeModalsInner({
       hintMode,
       recallDisplayMode,
       gridHideMode,
-      buildSize,
-      buildDirection,
     });
-  }, [hideLevel, firstLetterLevel, hintMode, recallDisplayMode, gridHideMode, buildSize, buildDirection]);
+  }, [hideLevel, firstLetterLevel, hintMode, recallDisplayMode, gridHideMode]);
 
   // A chained review session (see advanceReviewSession in useAppState.ts)
   // swaps `verses` in place on the SAME mounted PracticeModals instance --
@@ -1481,7 +1466,6 @@ function PracticeModalsInner({
     // like recitePointer/reciteOutcomes above.
     resetScramble();
     resetSwap();
-    resetBuildUp();
     // If the incoming group is too short for the jigsaw, don't leave the
     // user parked on a mode that no longer exists.
     if (verses.length < MIN_JIGSAW_VERSES && learnTab === 'jigsaw') setLearnTab('recite');
@@ -1660,94 +1644,20 @@ function PracticeModalsInner({
   // on demand (and whenever `verses` changes, see the reset effect below).
   // ==========================================
 
-  // --- Build up (add-on / snowball) ---
-  // Two things move, and never at the same time: `buildStageIdx` is how much
-  // of the verse is stacked (only grows when a phrase is finished), and
-  // `buildRepIdx` is how much help you're getting right now (resets to 0 --
-  // full text -- every time a phrase is added). The three reps ARE the fade;
-  // there's no separate repetition counter, because three reps of identical
-  // fully-visible text is parroting rather than recall.
-  const [buildStageIdx, setBuildStageIdx] = useState(0);
-  const [buildRepIdx, setBuildRepIdx] = useState(0);
-  // A no-penalty full reveal on the hint/blind reps. Nothing is graded here,
-  // so there is nothing to penalise -- being stuck and having no way out is
-  // the only real failure state this drill has.
-  const [buildPeek, setBuildPeek] = useState(false);
-  const [buildFinished, setBuildFinished] = useState(false);
-  const [buildSettingsOpen, setBuildSettingsOpen] = useState(false);
-
-  const buildStages = useMemo(
-    () => buildUpStages(verses, { size: buildSize, direction: buildDirection }),
-    [verses, buildSize, buildDirection]
-  );
-  const buildStage = buildStages[buildStageIdx];
-  const buildRep = BUILD_UP_REPS[buildRepIdx];
-
-  const resetBuildUp = () => {
-    setBuildStageIdx(0);
-    setBuildRepIdx(0);
-    setBuildPeek(false);
-    setBuildFinished(false);
-  };
-
-  // Changing either setting re-cuts the verse underneath us, so the stage
-  // index it was pointing at no longer means anything (and may not exist).
-  const changeBuildSize = (size: BiteSize) => {
-    setBuildSize(size);
-    resetBuildUp();
-  };
-  const changeBuildDirection = (direction: BuildDirection) => {
-    setBuildDirection(direction);
-    resetBuildUp();
-  };
-
-  // The entire interaction: say it out loud (or in your head -- the app can't
-  // tell and shouldn't care), then tap. No mic, no typing, nothing graded.
-  const advanceBuildUp = () => {
-    setBuildPeek(false);
-    if (buildFinished) {
-      resetBuildUp();
-    } else if (buildRepIdx < BUILD_UP_REPS.length - 1) {
-      setBuildRepIdx(buildRepIdx + 1);
-    } else if (buildStageIdx < buildStages.length - 1) {
-      setBuildStageIdx(buildStageIdx + 1);
-      setBuildRepIdx(0);
-    } else {
-      setBuildFinished(true);
-    }
-  };
-
-  const stepBackBuildUp = () => {
-    setBuildPeek(false);
-    if (buildFinished) setBuildFinished(false);
-    else if (buildRepIdx > 0) setBuildRepIdx(buildRepIdx - 1);
-    else if (buildStageIdx > 0) {
-      setBuildStageIdx(buildStageIdx - 1);
-      setBuildRepIdx(BUILD_UP_REPS.length - 1);
-    }
-  };
-
-  // Build up can't count toward review -- the text was on screen for the
-  // first of every three reps and the user self-reported by tapping. Rather
-  // than pretend otherwise, finishing hands off to a real blind Recall run,
-  // which is where the mic and the grading already live.
+  // --- Build up ---
+  // Build up can't count toward review, so its end screen hands off to a
+  // real blind Recall run. A ref keeps the callback stable, so the memoized
+  // drill doesn't re-render on every Recall tick while it sits hidden.
   const handoffToRecall = () => {
-    resetBuildUp();
     setHintMode('percent');
     setHideLevel(100);
     resetReciteGame();
     regenerateHiddenWords(100);
     setLearnTab('recite');
   };
-
-  // Applies the current rep's support level to one segment. 'read' shows the
-  // text; 'hint' keeps each word's first letter; 'blind' shows nothing but
-  // shape and punctuation. Peeking overrides all of it.
-  const maskBuildSegment = (text: string) => {
-    if (buildRep === 'read' || buildPeek) return text;
-    const maskWord = buildRep === 'hint' ? maskExceptFirstLetter : maskLetters;
-    return joinWords(splitWords(text, passageScript).map((w) => maskWord(w, passageScript)));
-  };
+  const handoffToRecallRef = useRef(handoffToRecall);
+  handoffToRecallRef.current = handoffToRecall;
+  const onBuildUpTryBlind = useCallback(() => handoffToRecallRef.current(), []);
 
   // --- Phrase scramble ---
   const [scrambleRounds, setScrambleRounds] = useState<ScrambleRound[]>(() => buildScrambleRounds(verses));
@@ -2829,202 +2739,7 @@ function PracticeModalsInner({
                   );
                 })()
               )
-            ) : learnTab === 'jigsaw' ? null : learnTab === 'buildUp' ? (
-              /* ======================================================== */
-              /* BUILD UP — learn a verse a phrase at a time, each stage    */
-              /* adding one bite to everything already stacked, each stage  */
-              /* fading from full text to first letters to nothing.         */
-              /* Ungraded; hands off to a blind Recall run at the end.      */
-              /* ======================================================== */
-              (() => {
-                if (!buildStage && !buildFinished) {
-                  return (
-                    <View className="flex-1 items-center justify-center px-6 gap-2">
-                      <Layers size={28} color={palette.ink3} />
-                      <AppText variant="body" className="font-sans font-bold text-ink-2 text-center">Nothing to build</AppText>
-                      <AppText variant="caption" className="text-ink-3 font-sans text-center">There's no verse text here to split into phrases.</AppText>
-                    </View>
-                  );
-                }
-
-                if (buildFinished) {
-                  return (
-                    <View className="flex-1 items-center justify-center gap-3 px-4">
-                      <View className="w-12 h-12 rounded-full bg-success-soft items-center justify-center">
-                        <Check size={24} color={palette.success} />
-                      </View>
-                      <AppText variant="body" className="font-sans font-bold text-ink text-center">
-                        {verses.length > 1 ? 'The whole passage, from memory' : 'The whole verse, from memory'}
-                      </AppText>
-                      <AppText variant="caption" className="text-ink-3 font-sans text-center">
-                        Build up doesn't count toward review — the words were on screen and you graded yourself. Want to prove it cold?
-                      </AppText>
-                      <AppButton size="lg" variant="primary" Icon={Mic} label="Try it blind in Recall" onPress={handoffToRecall} className="w-full" />
-                      <AppButton variant="quiet" Icon={RefreshCw} label="Run it again" onPress={resetBuildUp} className="w-full" />
-                    </View>
-                  );
-                }
-
-                const stage = buildStage;
-                const verse = verses[stage.verseIndex];
-                const isLastRep = buildRepIdx === BUILD_UP_REPS.length - 1;
-                const isLastStage = buildStageIdx === buildStages.length - 1;
-                // The button names the one thing to do right now, so the rep
-                // ladder never has to be interpreted to know what's being
-                // asked. The exception is the blind rep, where the ladder is
-                // already saying "from memory" and the useful thing to name
-                // is what the tap commits you to next.
-                const actionLabel = !isLastRep
-                  ? buildRep === 'read'
-                    ? 'Read it aloud'
-                    : 'Say it with hints'
-                  : isLastStage
-                    ? 'Finish'
-                    : stage.step === stage.stepCount
-                      ? buildStages[buildStageIdx + 1]?.phase === 'reassemble'
-                        ? 'Put it all together'
-                        : 'Next verse'
-                      : stage.phase === 'reassemble'
-                        ? 'Add the next verse'
-                        : 'Add the next phrase';
-
-                return (
-                  <View className="flex-1 justify-between">
-                    {/* Progress: how much is stacked, and where we are. */}
-                    <View className="shrink-0 gap-1.5 mb-2">
-                      <View className="flex-row items-center justify-between">
-                        <AppText variant="caption" className="font-sans font-semibold text-ink-3 flex-1">
-                          {stage.phase === 'reassemble'
-                            ? `Putting it together — verse ${stage.step} of ${stage.stepCount}`
-                            : `${verse ? `${verse.chapter}:${verse.verse} — ` : ''}phrase ${stage.step} of ${stage.stepCount}`}
-                        </AppText>
-                        <Pressable onPress={() => setBuildSettingsOpen((p) => !p)} hitSlop={8} className="flex-row items-center gap-1">
-                          <Sliders size={12} color={palette.ink3} />
-                          <AppText variant="caption" className="font-sans font-semibold text-ink-2">
-                            {buildDirection === 'forward' ? 'Forward' : 'Backward'}
-                          </AppText>
-                        </Pressable>
-                      </View>
-
-                      <View className="flex-row gap-1">
-                        {Array.from({ length: stage.stepCount }).map((_, i) => {
-                          // Backward chaining fills from the right, so the bar
-                          // mirrors what's actually on screen.
-                          const filledFromEnd = buildDirection === 'backward';
-                          const pos = filledFromEnd ? stage.stepCount - 1 - i : i;
-                          const inPlay = pos < stage.step;
-                          const isNewest = pos === stage.step - 1;
-                          return (
-                            <View
-                              key={i}
-                              className={`h-1.5 flex-1 rounded-full ${isNewest ? 'bg-warning' : inPlay ? 'bg-accent' : 'bg-fill'}`}
-                            />
-                          );
-                        })}
-                      </View>
-                    </View>
-
-                    {/* Bite size lives behind the gear rather than on a setup
-                        screen -- it's a once-in-a-while decision, and a card
-                        between the user and phrase 1 is a tax on every
-                        session to serve the rare one. */}
-                    {buildSettingsOpen && (
-                      <View className="shrink-0 bg-surface-2 border border-line rounded-card p-2.5 gap-2 mb-2">
-                        {/* Label ABOVE the chips, not beside them. ChipRow's
-                            default chips are flex-1, so they need the full
-                            row width to divide -- sitting them next to a label
-                            in a justify-between row leaves them sizing against
-                            whatever's left over, and the labels spill out. */}
-                        <View className="gap-1">
-                          <AppText variant="caption" className="font-sans font-bold text-ink-2">Bite size</AppText>
-                          <ChipRow
-                            options={[
-                              { id: 'short' as BiteSize, label: 'Short' },
-                              { id: 'medium' as BiteSize, label: 'Medium' },
-                              { id: 'long' as BiteSize, label: 'Long' },
-                            ]}
-                            value={buildSize}
-                            onChange={changeBuildSize}
-                          />
-                        </View>
-                        <View className="gap-1">
-                          <AppText variant="caption" className="font-sans font-bold text-ink-2">Build from</AppText>
-                          <ChipRow
-                            options={[
-                              { id: 'forward' as BuildDirection, label: 'The start' },
-                              { id: 'backward' as BuildDirection, label: 'The end' },
-                            ]}
-                            value={buildDirection}
-                            onChange={changeBuildDirection}
-                          />
-                        </View>
-                        <AppText variant="caption" className="text-ink-3 font-sans">
-                          Building from the end means every repetition finishes on the words you know best. Changing either setting restarts the verse.
-                        </AppText>
-                      </View>
-                    )}
-
-                    {/* The passage. Everything in play fades together; the
-                        phrase just added is the amber one. */}
-                    <ScrollView className="flex-1" contentContainerClassName="grow justify-center py-2">
-                      <View className="border border-line bg-surface rounded-card p-4">
-                        <AppText variant="title" script={passageScript} className="font-serif leading-[30px]">
-                          {stage.segments.map((seg, i) => (
-                            <AppText variant="inherit" key={i} className={seg.isNew ? 'text-warning' : 'text-ink'}>
-                              {maskBuildSegment(seg.text)}
-                              {i < stage.segments.length - 1 ? wordGap(seg.text) : ''}
-                            </AppText>
-                          ))}
-                        </AppText>
-                      </View>
-                    </ScrollView>
-
-                    <View className="shrink-0 gap-2">
-                      {/* The rep ladder — the only other moving part. */}
-                      <View className="flex-row items-center justify-between px-1">
-                        {BUILD_UP_REPS.map((rep, i) => {
-                          const reached = i <= buildRepIdx;
-                          return (
-                            <View key={rep} className="flex-row items-center gap-1.5">
-                              <View
-                                className={`w-2 h-2 rounded-full ${reached ? 'bg-accent' : 'border border-line-strong'}`}
-                              />
-                              <AppText variant="caption" className={`font-sans ${ i === buildRepIdx ? 'font-semibold text-ink' : 'font-medium text-ink-3' }`} >
-                                {rep === 'read' ? 'Read' : rep === 'hint' ? 'Hints' : 'From memory'}
-                              </AppText>
-                            </View>
-                          );
-                        })}
-                      </View>
-
-                      <AppButton size="lg" variant="primary" label={actionLabel} onPress={advanceBuildUp} className="w-full">
-                        <ChevronRight size={17} color={palette.onAccent} />
-                      </AppButton>
-
-                      <View className="flex-row gap-2">
-                        <AppButton
-                          variant="quiet"
-                          Icon={Undo2}
-                          label="Back"
-                          onPress={stepBackBuildUp}
-                          disabled={buildStageIdx === 0 && buildRepIdx === 0}
-                          className="flex-1"
-                        />
-                        {buildRep !== 'read' && (
-                          <AppButton
-                            variant={buildPeek ? 'secondary' : 'quiet'}
-                            Icon={buildPeek ? EyeOff : Eye}
-                            label={buildPeek ? 'Hide' : 'Peek'}
-                            onPress={() => setBuildPeek((p) => !p)}
-                            className="flex-1"
-                          />
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                );
-              })()
-            ) : learnTab === 'scramble' ? (
+            ) : learnTab === 'jigsaw' || learnTab === 'buildUp' ? null : learnTab === 'scramble' ? (
               /* ======================================================== */
               /* PHRASE SCRAMBLE — rebuild one verse from 3-4 word thought  */
               /* units. Ungraded.                                           */
@@ -3287,6 +3002,9 @@ function PracticeModalsInner({
                 <JigsawDrill verses={verses} />
               </View>
             )}
+            <View className="flex-1" style={{ display: learnTab === 'buildUp' ? 'flex' : 'none' }}>
+              <BuildUpDrill verses={verses} onTryBlind={onBuildUpTryBlind} />
+            </View>
           </View>
         )}
       </View>
