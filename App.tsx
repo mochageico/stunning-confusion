@@ -30,6 +30,7 @@ import MyScheduleScreen from './src/screens/MyScheduleScreen';
 import VerseSourcesScreen from './src/screens/VerseSourcesScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
+import ThreadDrillScreen from './src/screens/ThreadDrillScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -142,6 +143,8 @@ function Screens({ state }: { state: AppState }) {
         return <AudioFeedScreen state={state} />;
       case 'referenceDrill':
         return <ReferenceDrillScreen state={state} />;
+      case 'threadDrill':
+        return <ThreadDrillScreen state={state} />;
       default:
         return <HomeScreen state={state} />;
     }
@@ -518,6 +521,7 @@ function AppShell() {
           sessionPosition={state.reviewSessionPosition}
           sessionTotal={state.reviewSessionTotal}
           onUpdateStatus={state.handleUpdateVerseStatus}
+          onPickUpThread={(v) => state.openThreadDrill({ book: v.book, chapter: v.chapter, verse: v.verse, translationId: v.translationId })}
           memoryQueue={state.memoryQueue}
           primingLookahead={state.primingLookahead}
           reviewsPaused={state.reviewsPaused}

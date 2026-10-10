@@ -13,7 +13,7 @@
 // It is inert in production builds whatever the flags say (__DEV__ gate).
 //
 // Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
-// activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, referenceDrill,
+// activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, referenceDrill, threadDrill,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
@@ -315,6 +315,9 @@ export function useDemoState(real: AppState): AppState {
     if (s === 'chapters') real.navigateTo('chapters', 'Romans');
     else if (s === 'chapterLanding') real.navigateTo('chapterLanding', 'Romans', 8);
     else if (s === 'planDesigner') real.openActivePlanDesigner();
+    // Opened the way a passing Recall opens it: preset on a verse. Romans 8:1-2
+    // are due today in the seeded queue, so their credit shows.
+    else if (s === 'threadDrill') real.openThreadDrill({ book: 'Romans', chapter: 8, verse: 2, translationId: 'BSB' });
     // navigateTo, not setCurrentScreen: it also switches to the screen's tab
     // (the Verses tab's screens render only while that tab is current).
     else if (s !== 'home' && s !== 'auth' && s !== 'onboarding' && s !== 'tour' && !s.startsWith('modal'))

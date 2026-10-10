@@ -59,6 +59,7 @@
     "check:dragselect": "node scripts/run-dragselect-check.cjs",
     "check:reviewlog": "node scripts/run-reviewlog-check.cjs",
     "check:buildup": "node scripts/run-buildup-check.cjs",
+    "check:thread": "node scripts/run-thread-check.cjs",
     "check:translations": "node scripts/run-translations-check.cjs",
     "check:textscript": "node scripts/run-textscript-check.cjs",
     "shots": "node scripts/capture-screens.cjs",

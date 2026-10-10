@@ -107,6 +107,7 @@ import {
   Rhythm,
   GroupPlan,
   GroupPlanMembership,
+  ReviewLog,
   TouchLog,
   VerseState,
   VerseTimestamp,
@@ -129,6 +130,7 @@ export type ScreenName =
   | 'savedPlans'
   | 'memoryCalendar'
   | 'referenceDrill'
+  | 'threadDrill'
   | 'memberProfile'
   | 'groupPlanDetail'
   | 'fullHistory'
@@ -152,6 +154,7 @@ const HOME_TAB_SCREENS: ScreenName[] = [
   'chapterLanding',
   'audioFeed',
   'referenceDrill',
+  'threadDrill',
 ];
 
 // The Verses tab replaced the My Memory Work menu (2026-10-10): My Verses is
@@ -506,6 +509,16 @@ const normalizeGroupPlan = (planId: string, data: any): GroupPlan => ({
 // Exported (not just hook-internal) so components importing pure helpers
 // directly from this module, like PracticeModals' resolveChapterAudio use,
 // can share it too instead of re-deriving the same date logic.
+/**
+ * Options for logging a review. `quiet` skips the toasts, for callers that
+ * show their own results; `via` records which practice produced it in the
+ * verse's review history.
+ */
+export type ReviewCompletedOpts = { perfect?: boolean; quiet?: boolean; via?: ReviewLog['via'] };
+
+/** Where Pick up the thread opens: the verse to recite through, from a Recall that just passed. */
+export type ThreadDrillPreset = { book: string; chapter: number; verse: number; translationId?: string };
+
 export function isReviewDue(dueDateISO: string | null | undefined, referenceDate: Date = new Date()): boolean {
   if (!dueDateISO) return true;
   const due = new Date(dueDateISO);
@@ -1015,6 +1028,9 @@ export function useAppState() {
   // Practice Overlays
   const [activeModal, setActiveModal] = useState<'listen' | 'learn' | null>(null);
   const [modalVerses, setModalVerses] = useState<VerseState[]>([]);
+  // Set just before opening Pick up the thread from a passing Recall, so its
+  // setup starts on that chapter and verse. The screen clears it once read.
+  const [threadDrillPreset, setThreadDrillPreset] = useState<ThreadDrillPreset | null>(null);
 
   // Real, measured cumulative practice time (Dashboard's "Time Studied"),
   // in seconds. Tracked via the activeModal effect below, not an estimate.
@@ -5316,8 +5332,13 @@ export function useAppState() {
     item: QueueItem,
     success: boolean,
     drillType?: 'speak' | 'type' | 'reveal',
-    opts?: { perfect?: boolean }
+    opts?: ReviewCompletedOpts
   ) => {
+    // A quiet caller (Pick up the thread) shows its own per-verse results, so
+    // one toast per verse would just stack up over them.
+    const toast = opts?.quiet ? (_message: string) => {} : triggerToast;
+    // Which practice produced this review, kept in the review history.
+    const via = opts?.via ? { via: opts.via } : {};
     let updatedItem = { ...item };
     updatedItem.lastReviewDate = new Date().toISOString();
 
@@ -5352,7 +5373,7 @@ export function useAppState() {
         const dailyGraduationDaysTotal = dailyPhaseWeeks * 7 + (updatedItem.dailyPhaseExtensionDays || 0);
         const message = describeMissOutcome(tag, updatedItem, dailyGraduationDaysTotal);
         if (message) {
-          triggerToast(`${missedCycles} review cycle${missedCycles > 1 ? 's' : ''} passed unattempted. ${message}`);
+          toast(`${missedCycles} review cycle${missedCycles > 1 ? 's' : ''} passed unattempted. ${message}`);
         }
       }
     }
@@ -5362,7 +5383,7 @@ export function useAppState() {
         // Perfection gate: a run with any missed words never banks a touch,
         // no matter how close — "close enough" only exists for reviews.
         if (opts?.perfect === false) {
-          triggerToast('Good recall! A run must be perfect (no missed words) to bank a mastery touch.');
+          toast('Good recall! A run must be perfect (no missed words) to bank a mastery touch.');
           return;
         }
         // 3-Touch Mastery Gate checks. PracticeModals' Recall mode and the
@@ -5378,7 +5399,7 @@ export function useAppState() {
           };
           const updatedLogs = [...(item.touchLogs || []), newTouch];
           updatedItem.touchLogs = updatedLogs;
-          appendReviewLog(updatedItem, item, 'pass', { drillType: inferredType });
+          appendReviewLog(updatedItem, item, 'pass', { drillType: inferredType, ...via });
           updatedItem.totalSuccessfulReviews += 1;
           updatedItem.currentStreakCount += 1;
 
@@ -5398,7 +5419,7 @@ export function useAppState() {
                 isReviewDue(q.nextReviewDueDate, getLogicalDate(dayStartHour))
             );
             if (dueReviewsPending) {
-              triggerToast(`Mastery touches complete (${updatedLogs.length}/${masteryTouches})! Finish today's reviews to lock this verse in.`);
+              toast(`Mastery touches complete (${updatedLogs.length}/${masteryTouches})! Finish today's reviews to lock this verse in.`);
             } else {
               updatedItem.status = 'reviewing';
               updatedItem.retentionPhase = 'daily';
@@ -5406,17 +5427,17 @@ export function useAppState() {
               updatedItem.currentStreakCount = 1;
               updatedItem.nextReviewDueDate = nextDueDateISO(1);
               updatedItem.reviewsToday = 0;
-              triggerToast('Passage mastered! Transitioned to 7-6-5 spaced review.');
+              toast('Passage mastered! Transitioned to 7-6-5 spaced review.');
             }
           } else {
-            triggerToast(`Recall logged! Mastery progress: ${updatedLogs.length}/${masteryTouches} touches.`);
+            toast(`Recall logged! Mastery progress: ${updatedLogs.length}/${masteryTouches} touches.`);
           }
         } else {
-          triggerToast('Touch logged, but within 1-hour constraint. Only 1 touch per hour counts toward Mastery!');
+          toast('Touch logged, but within 1-hour constraint. Only 1 touch per hour counts toward Mastery!');
         }
       } else if (item.status === 'reviewing') {
         // Logged against the stage as it stands before this review moves it on.
-        appendReviewLog(updatedItem, updatedItem, 'pass', drillType ? { drillType } : {});
+        appendReviewLog(updatedItem, updatedItem, 'pass', { ...(drillType ? { drillType } : {}), ...via });
         // Check reviewsRequired per day constraint
         const lastReviewDateStr = item.lastReviewDate;
         const isSameDay =
@@ -5474,12 +5495,12 @@ export function useAppState() {
                 sabbathEnabled,
                 sabbathDay
               ).toISOString();
-              triggerToast(
+              toast(
                 `Refresher complete! Back to ${returnPhase === 'monthly' ? 'Monthly' : 'Weekly'} review, resuming right where you left off, aligned to ${DAY_FULL_NAMES[returnAnchor]}. 🌟`
               );
             } else {
               updatedItem.nextReviewDueDate = nextDueDateISO(updatedItem.retentionPhase === 'weekly' ? 7 : 1);
-              triggerToast(`Refresher review complete! (${updatedItem.currentStreakCount}/${updatedItem.refresherTargetUnits})`);
+              toast(`Refresher review complete! (${updatedItem.currentStreakCount}/${updatedItem.refresherTargetUnits})`);
             }
           } else if (updatedItem.retentionPhase === 'daily') {
             if (updatedItem.currentStreakCount >= dailyGraduationDays) {
@@ -5494,10 +5515,10 @@ export function useAppState() {
                 DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()];
               updatedItem.chapterReviewAnchorDay = anchor;
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(tomorrow, anchor, 1, sabbathEnabled, sabbathDay).toISOString();
-              triggerToast(`Graduated to Weekly Review phase, aligned to ${DAY_FULL_NAMES[anchor]} with the rest of ${updatedItem.book} ${updatedItem.chapter}!`);
+              toast(`Graduated to Weekly Review phase, aligned to ${DAY_FULL_NAMES[anchor]} with the rest of ${updatedItem.book} ${updatedItem.chapter}!`);
             } else {
               updatedItem.nextReviewDueDate = nextDueDateISO(1);
-              triggerToast('Daily reviews complete! Spaced date advanced.');
+              toast('Daily reviews complete! Spaced date advanced.');
             }
           } else if (updatedItem.retentionPhase === 'weekly') {
             if (updatedItem.currentStreakCount >= weeklyGraduationReviews) {
@@ -5512,7 +5533,7 @@ export function useAppState() {
                 DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()];
               updatedItem.chapterReviewAnchorDay = anchor;
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(tomorrow, anchor, 4, sabbathEnabled, sabbathDay).toISOString();
-              triggerToast(`Graduated to Monthly Review phase, still aligned to ${DAY_FULL_NAMES[anchor]}!`);
+              toast(`Graduated to Monthly Review phase, still aligned to ${DAY_FULL_NAMES[anchor]}!`);
             } else if (updatedItem.chapterReviewAnchorDay) {
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(
                 tomorrow,
@@ -5521,19 +5542,19 @@ export function useAppState() {
                 sabbathEnabled,
                 sabbathDay
               ).toISOString();
-              triggerToast('Weekly review complete! Spaced date advanced.');
+              toast('Weekly review complete! Spaced date advanced.');
             } else {
               // Not retroactive -- a legacy weekly item with no anchor yet
               // keeps the old unanchored math until it actually transitions.
               updatedItem.nextReviewDueDate = nextDueDateISO(7);
-              triggerToast('Weekly review complete! Spaced date advanced.');
+              toast('Weekly review complete! Spaced date advanced.');
             }
           } else if (updatedItem.retentionPhase === 'monthly') {
             if (updatedItem.currentStreakCount >= monthlyGraduationReviews) {
               updatedItem.status = 'retained';
               updatedItem.retentionPhase = 'none';
               updatedItem.nextReviewDueDate = null;
-              triggerToast('Successfully RETAINED forever!');
+              toast('Successfully RETAINED forever!');
             } else if (updatedItem.chapterReviewAnchorDay) {
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(
                 tomorrow,
@@ -5542,16 +5563,16 @@ export function useAppState() {
                 sabbathEnabled,
                 sabbathDay
               ).toISOString();
-              triggerToast('Monthly review complete! Spaced date advanced.');
+              toast('Monthly review complete! Spaced date advanced.');
             } else {
               // Not retroactive -- see the Weekly same-phase branch above.
               updatedItem.nextReviewDueDate = nextDueDateISO(30);
-              triggerToast('Monthly review complete! Spaced date advanced.');
+              toast('Monthly review complete! Spaced date advanced.');
             }
           }
           updatedItem.reviewsToday = 0; // Reset for next review cycle
         } else {
-          triggerToast(`Review logged! (${currentReviewsToday}/${reviewsRequired} required for today)`);
+          toast(`Review logged! (${currentReviewsToday}/${reviewsRequired} required for today)`);
         }
       }
     } else {
@@ -5565,9 +5586,9 @@ export function useAppState() {
         }
         const dailyGraduationDaysTotal = dailyPhaseWeeks * 7 + (updatedItem.dailyPhaseExtensionDays || 0);
         const message = describeMissOutcome(tag, updatedItem, dailyGraduationDaysTotal);
-        if (message) triggerToast(message);
+        if (message) toast(message);
       } else {
-        triggerToast('Incorrect. Keep practicing!');
+        toast('Incorrect. Keep practicing!');
       }
     }
 
@@ -5610,7 +5631,7 @@ export function useAppState() {
       return finalQueue;
     });
     if (releasedCount > 0) {
-      triggerToast(
+      toast(
         `All reviews done! ${releasedCount} verse${releasedCount > 1 ? 's' : ''} locked in and moved to spaced review. 🔓`
       );
     }
@@ -5711,7 +5732,7 @@ export function useAppState() {
     versesToUpdate: VerseState[],
     newStatus: 'memorized' | 'learning',
     customDrillType?: 'speak' | 'type' | 'reveal',
-    opts?: { perfect?: boolean }
+    opts?: ReviewCompletedOpts
   ) => {
     setVerses((prev) => {
       return prev.map((v) => {
@@ -5778,7 +5799,15 @@ export function useAppState() {
         ? `${versesToUpdate[0].book} ${versesToUpdate[0].chapter}:${versesToUpdate[0].verse}`
         : `${versesToUpdate[0].book} ${versesToUpdate[0].chapter}:${versesToUpdate[0].verse}-${versesToUpdate[versesToUpdate.length - 1].verse}`;
 
-    triggerToast(`Completed practice for ${refStr}!`);
+    if (!opts?.quiet) triggerToast(`Completed practice for ${refStr}!`);
+  };
+
+  // Pick up the thread, opened on a given verse. Closes any practice overlay
+  // first: the drill is a screen, and the overlay would sit on top of it.
+  const openThreadDrill = (preset: ThreadDrillPreset | null) => {
+    abortReviewSession();
+    setThreadDrillPreset(preset);
+    navigateTo('threadDrill');
   };
 
   // Launch practice session
@@ -6796,6 +6825,8 @@ export function useAppState() {
     monthlyPhaseYears, setMonthlyPhaseYears,
     activeModal, setActiveModal,
     modalVerses, setModalVerses,
+    threadDrillPreset, setThreadDrillPreset,
+    openThreadDrill,
     isRecording, setIsRecording,
     isRecordingPaused,
     recordingSeconds, setRecordingSeconds,

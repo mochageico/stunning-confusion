@@ -56,6 +56,8 @@ import {
   BUILD_UP_REPS,
   DEFAULT_SWAPS_PER_VERSE,
   MIN_JIGSAW_VERSES,
+  MIN_THREAD_VERSES,
+  threadRunEndingAt,
   BiteSize,
   BuildDirection,
   JigsawTile,
@@ -164,6 +166,9 @@ interface PracticeModalsProps {
     customDrillType?: 'speak' | 'type' | 'reveal',
     opts?: { perfect?: boolean }
   ) => void;
+  // Opens Pick up the thread through this verse, after a passing Recall has
+  // been logged. Absent: the offer isn't shown.
+  onPickUpThread?: (target: VerseState) => void;
   // Chained-review-session progress ("2 of 5"), shown in the header when
   // sessionTotal > 1. Both default to 0/undefined for a non-session launch.
   sessionPosition?: number;
@@ -298,6 +303,7 @@ function PracticeModalsInner({
   onClose,
   onAdvance,
   onUpdateStatus,
+  onPickUpThread,
   sessionPosition,
   sessionTotal,
   memoryQueue,
@@ -1504,6 +1510,26 @@ function PracticeModalsInner({
       ] as { id: LearnMode; label: string; Icon: typeof Mic }[],
     [verses.length]
   );
+
+  // Pick up the thread is offered after a passing Recall when the last verse
+  // here has an earlier verse right before it that you've also started --
+  // a thread needs somewhere to start. Not mid chained-review: opening the
+  // drill closes the overlay, which would drop the rest of the queue.
+  const threadTarget = useMemo(() => {
+    if (!onPickUpThread || (sessionTotal ?? 0) > 1 || verses.length === 0) return null;
+    const last = verses[verses.length - 1];
+    const started = (memoryQueue || [])
+      .filter((q) => q.status !== 'queued')
+      .map((q) => ({ book: q.book, chapter: q.chapter, verse: q.verseNumber, text: q.text, translationId: q.translationId || 'ESV' }));
+    // A verse that doesn't say its translation matches on reference alone,
+    // the same rule review logging uses.
+    const item = started.find(
+      (q) => q.book === last.book && q.chapter === last.chapter && q.verse === last.verse && (!last.translationId || q.translationId === last.translationId)
+    );
+    if (!item) return null;
+    const run = threadRunEndingAt(started, item);
+    return run.length >= MIN_THREAD_VERSES ? { ...last, translationId: item.translationId } : null;
+  }, [onPickUpThread, sessionTotal, verses, memoryQueue]);
 
   // ==========================================
   // RECITE — live speech channel. Feeds the exact same recitePointer/
@@ -2759,6 +2785,16 @@ function PracticeModalsInner({
                               A review needs {passPct}% of the words right.
                             </AppText>
                           </>
+                        )}
+                        {summary.passesReview && threadTarget && (
+                          <AppButton
+                            variant="secondary"
+                            label={`Count it and pick up the thread to v${threadTarget.verse}`}
+                            onPress={() => {
+                              onUpdateStatus(verses, 'memorized', drill, { perfect: isMasteryEligible });
+                              onPickUpThread?.(threadTarget);
+                            }}
+                          />
                         )}
                         <AppButton variant="quiet" label="Practice again" onPress={resetReciteGame} />
                       </View>

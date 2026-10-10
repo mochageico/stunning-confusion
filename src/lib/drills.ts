@@ -20,9 +20,10 @@ type DrillVerse = { book: string; chapter: number; verse: number; text: string; 
 //
 // IMPORTANT: none of these drills feed the spaced-repetition engine. They
 // never call onUpdateStatus, never bank a mastery touch, and never advance a
-// review. Only real Recall (typed/spoken verbatim) and the explicit manual-log
-// action affect scheduling — these are supplementary practice, deliberately
-// kept out of the graduation path so "graduated" keeps meaning one thing.
+// review. Only real Recall (typed/spoken verbatim), the explicit manual-log
+// action, and Pick up the thread (verbatim recitation too -- see its section
+// at the end) affect scheduling — the rest are supplementary practice, kept
+// out of the graduation path so "graduated" keeps meaning one thing.
 // ============================================================================
 
 /** Fisher-Yates. Returns a new array; never mutates the input. */
@@ -622,4 +623,265 @@ export const scoreSwapAttempt = (swapVerses: SwapVerse[], selected: Set<number>)
     falseAlarms,
     totalDecoys: decoys.length,
   };
+};
+
+// ============================================================================
+// PICK UP THE THREAD
+// ----------------------------------------------------------------------------
+// Two words from an earlier verse, plus that verse's number; the user finds
+// where those words sit and recites from there through the end of a later
+// verse. It trains the joins between verses and the Bible-study reflex of
+// placing a phrase in its chapter.
+//
+// Unlike the drills above, a graded thread DOES count toward reviews (the
+// user's explicit call). That bookkeeping lives in ThreadDrillScreen; this
+// section stays pure: which verses are eligible, which cue, which words.
+// ============================================================================
+
+/** A thread needs somewhere to start before the verse it ends on. */
+export const MIN_THREAD_VERSES = 2;
+
+/** How often a cue comes from the two verses just before the end verse. */
+export const THREAD_NEAR_SHARE = 0.75;
+const THREAD_NEAR_VERSES = 2;
+
+/**
+ * Words too common to be half of a cue alongside another common word: "and
+ * the" or "in my" points nowhere. One of them beside a real word is fine
+ * ("the valley").
+ */
+const THREAD_FILLER = new Set([
+  ...HINGE_WORDS,
+  'the', 'a', 'an', 'i', 'me', 'my', 'he', 'him', 'his', 'she', 'her', 'it', 'its',
+  'we', 'us', 'our', 'you', 'your', 'they', 'them', 'their', 'is', 'are', 'was', 'were',
+  'be', 'not', 'no', 'all', 'will', 'shall', 'have', 'has', 'had', 'this', 'these', 'those',
+]);
+
+/** A cue never straddles a sentence or clause break ("want. He"). Commas are fine. */
+const breaksSentence = (word: string): boolean => {
+  const bare = word.replace(/["'’”)\]]+$/, '');
+  return /[.;:!?]$/.test(bare) || CLAUSE_END_EXTRA.has(bare.slice(-1));
+};
+
+/** Same chapter, same translation. A missing translationId matches only another missing one. */
+const sameText = (a: { book: string; chapter: number; translationId?: string }, b: typeof a) =>
+  a.book === b.book && a.chapter === b.chapter && (a.translationId || '') === (b.translationId || '');
+
+/**
+ * The unbroken run of verses from `pool` that ends at `end`, in order. A gap
+ * stops it: knowing verses 1-3 and 6 gives verse 6 a run of one, because a
+ * cue in verse 2 would mean reciting verses 4 and 5, which were never learned.
+ */
+export const threadRunEndingAt = <V extends DrillVerse>(pool: V[], end: Omit<DrillVerse, 'text'>): V[] => {
+  const byNumber = new Map<number, V>();
+  pool.forEach((v) => {
+    if (sameText(v, end)) byNumber.set(v.verse, v);
+  });
+  const run: V[] = [];
+  for (let n = end.verse; byNumber.has(n); n--) run.unshift(byNumber.get(n)!);
+  return run;
+};
+
+export interface ThreadCue {
+  /** Index into the verses the cue was built from. */
+  startVerse: number;
+  /** Index into splitWords(text) of the start verse -- where reciting begins. */
+  startWord: number;
+  /** Index of the verse the recitation runs through to its end. */
+  endVerse: number;
+  /** The cue as written, outer punctuation trimmed. Usually two words. */
+  cueWords: string[];
+}
+
+/** Identity of a cue spot, for "don't repeat until the others are used". */
+export const threadCueKey = (cue: Pick<ThreadCue, 'startVerse' | 'startWord'>) => `${cue.startVerse}:${cue.startWord}`;
+
+const trimForCue = (word: string) => word.replace(/^["'‘“(\[]+/, '').replace(/[,;:.!?—–"'’”)\]]+$/, '');
+
+/** How often each run of `length` words appears across the range, never crossing a verse boundary. */
+const sequenceCounts = (verses: DrillVerse[], length: number): Map<string, number> => {
+  const counts = new Map<string, number>();
+  verses.forEach((v) => {
+    const script = scriptOfVerse(v);
+    const norms = splitWords(v.text, script).map((w) => normalizeToken(w, script));
+    for (let j = 0; j + length <= norms.length; j++) {
+      const slice = norms.slice(j, j + length);
+      if (slice.some((n) => n.length === 0)) continue;
+      const key = slice.join(' ');
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+  });
+  return counts;
+};
+
+/**
+ * Every position in verse `verseIdx` where a cue of `length` words could
+ * start. A cue must appear exactly once in the whole range, so it has one
+ * right answer; `strict` adds the no-filler and no-sentence-break rules.
+ */
+const cueSpotsIn = (
+  verses: DrillVerse[],
+  verseIdx: number,
+  length: number,
+  counts: Map<string, number>,
+  strict: boolean
+): number[] => {
+  const v = verses[verseIdx];
+  const script = scriptOfVerse(v);
+  const words = splitWords(v.text, script);
+  const spots: number[] = [];
+  for (let j = 0; j + length <= words.length; j++) {
+    const slice = words.slice(j, j + length);
+    const norms = slice.map((w) => normalizeToken(w, script));
+    if (norms.some((n) => n.length === 0)) continue;
+    if (counts.get(norms.join(' ')) !== 1) continue;
+    if (strict) {
+      if (slice.slice(0, -1).some(breaksSentence)) continue;
+      if (norms.every((n) => THREAD_FILLER.has(n))) continue;
+    }
+    spots.push(j);
+  }
+  return spots;
+};
+
+/**
+ * Picks the next cue for a thread ending at `endVerse`.
+ *
+ * The start verse is drawn from `fromVerse`..`endVerse - 1`, with
+ * THREAD_NEAR_SHARE of picks landing on the one or two verses right before
+ * the end -- the joins that need the most work. Only when the range has
+ * nothing before the end verse does the cue fall inside the end verse itself.
+ *
+ * `used` holds threadCueKey()s already given this session; they're skipped
+ * until every spot has been used, then they come back around. Returns null
+ * only when the range has no usable words at all.
+ */
+export const pickThreadCue = (
+  verses: DrillVerse[],
+  endVerse: number,
+  opts: { fromVerse?: number; used?: ReadonlySet<string>; random?: () => number } = {}
+): ThreadCue | null => {
+  const { fromVerse = 0, used = new Set<string>(), random = Math.random } = opts;
+  if (endVerse < 0 || endVerse >= verses.length) return null;
+
+  const lo = Math.max(0, Math.min(fromVerse, endVerse));
+  const starts: number[] = [];
+  for (let i = lo; i < endVerse; i++) starts.push(i);
+  if (starts.length === 0) starts.push(endVerse);
+
+  // Strictest first: a clean two-word cue. Then relax the filler and
+  // sentence-break rules, then allow three words -- a range of short,
+  // repetitive verses can run out of unique clean pairs.
+  const attempts: { length: number; strict: boolean }[] = [
+    { length: 2, strict: true },
+    { length: 2, strict: false },
+    { length: 3, strict: true },
+    { length: 3, strict: false },
+  ];
+
+  for (const { length, strict } of attempts) {
+    const counts = sequenceCounts(verses, length);
+    const spotsByVerse = new Map<number, number[]>();
+    starts.forEach((i) => spotsByVerse.set(i, cueSpotsIn(verses, i, length, counts, strict)));
+
+    const isFresh = (i: number, j: number) => !used.has(threadCueKey({ startVerse: i, startWord: j }));
+    const openStarts = (freshOnly: boolean) =>
+      starts.filter((i) => (spotsByVerse.get(i) || []).some((j) => !freshOnly || isFresh(i, j)));
+
+    let open = openStarts(true);
+    const freshOnly = open.length > 0;
+    if (!freshOnly) open = openStarts(false);
+    if (open.length === 0) continue;
+
+    const near = open.filter((i) => i >= endVerse - THREAD_NEAR_VERSES);
+    const far = open.filter((i) => i < endVerse - THREAD_NEAR_VERSES);
+    const group = far.length === 0 ? near : near.length === 0 ? far : random() < THREAD_NEAR_SHARE ? near : far;
+    const startVerse = group[Math.floor(random() * group.length)];
+
+    const spots = (spotsByVerse.get(startVerse) || []).filter((j) => !freshOnly || isFresh(startVerse, j));
+    const startWord = spots[Math.floor(random() * spots.length)];
+    const words = splitWords(verses[startVerse].text, scriptOfVerse(verses[startVerse]));
+    return {
+      startVerse,
+      startWord,
+      endVerse,
+      cueWords: words.slice(startWord, startWord + length).map(trimForCue),
+    };
+  }
+  return null;
+};
+
+export interface ThreadSpanVerse {
+  /** Index into the verses the cue was built from. */
+  index: number;
+  /** The words to recite from this verse, as written (from the cue on, for the start verse). */
+  words: string[];
+  /** Words of the start verse before the cue -- shown dimmed when the text is revealed. */
+  before: string[];
+}
+
+/**
+ * The stretch a cue asks for, verse by verse. Joined back together it must be
+ * exactly the original text from the cue word to the end of the end verse --
+ * the check script's first assertion.
+ */
+export const threadSpan = (verses: DrillVerse[], cue: ThreadCue): ThreadSpanVerse[] => {
+  const out: ThreadSpanVerse[] = [];
+  for (let i = cue.startVerse; i <= cue.endVerse; i++) {
+    const all = splitWords(verses[i].text, scriptOfVerse(verses[i]));
+    const from = i === cue.startVerse ? cue.startWord : 0;
+    out.push({ index: i, words: all.slice(from), before: all.slice(0, from) });
+  }
+  return out;
+};
+
+/**
+ * Whether the start verse earns review credit: only when the cue lands in its
+ * first half, so at least half the verse was actually recited. Every later
+ * verse in the span is recited whole and always qualifies.
+ */
+export const threadStartVerseCounts = (verses: DrillVerse[], cue: ThreadCue): boolean => {
+  const v = verses[cue.startVerse];
+  const script = scriptOfVerse(v);
+  const graded = splitWords(v.text, script).map((w) => normalizeToken(w, script).length > 0);
+  const total = graded.filter(Boolean).length;
+  const before = graded.slice(0, cue.startWord).filter(Boolean).length;
+  return total > 0 && before < total / 2;
+};
+
+/** How many words either side of a join a miss is blamed on the join rather than the verse. */
+const JOIN_HEAD = 3;
+const JOIN_TAIL = 2;
+
+export interface ThreadSlip {
+  /** Index into the verses the cue was built from. */
+  verse: number;
+  /** 'join': stumbled getting INTO this verse. 'inside': somewhere within it. */
+  kind: 'join' | 'inside';
+}
+
+/**
+ * Where a graded thread went wrong. `missedByVerse` holds, per span verse,
+ * whether each of its graded words was missed. A miss in the first few words
+ * of a verse, or the last couple of the verse before it, is a slip at the
+ * join into that verse; anything else is a slip inside the verse. At most one
+ * slip per verse, join first -- the recap counts runs, not words.
+ */
+export const threadSlips = (span: ThreadSpanVerse[], missedByVerse: boolean[][]): ThreadSlip[] => {
+  const slips: ThreadSlip[] = [];
+  span.forEach((sv, k) => {
+    const missed = missedByVerse[k] || [];
+    if (k > 0) {
+      const prev = missedByVerse[k - 1] || [];
+      if (missed.slice(0, JOIN_HEAD).some(Boolean) || prev.slice(-JOIN_TAIL).some(Boolean)) {
+        slips.push({ verse: sv.index, kind: 'join' });
+        return;
+      }
+    }
+    // The tail belongs to the join into the next verse when there is one, so
+    // a stumble there isn't counted twice.
+    const ownWords = k < span.length - 1 ? missed.slice(0, Math.max(0, missed.length - JOIN_TAIL)) : missed;
+    if (ownWords.some(Boolean)) slips.push({ verse: sv.index, kind: 'inside' });
+  });
+  return slips;
 };

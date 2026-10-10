@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Volume2, BookMarked, ChevronRight, ClipboardCheck, Plus, Target } from 'lucide-react-native';
+import { Volume2, BookMarked, ChevronRight, ClipboardCheck, Plus, Route, Target } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, VerseState } from '../types';
@@ -575,6 +575,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
           <ListRow Icon={BookMarked} title="Verse Finder" onPress={() => navigateTo('books')} />
           <ListRow Icon={Volume2} title="Find recordings" onPress={() => navigateTo('audioFeed')} />
           <ListRow Icon={Target} title="Reference practice" onPress={() => navigateTo('referenceDrill')} />
+          <ListRow Icon={Route} title="Pick up the thread" onPress={() => state.openThreadDrill(null)} />
         </GroupedList>
       </ScrollView>
 
