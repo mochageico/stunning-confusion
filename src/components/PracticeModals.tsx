@@ -10,7 +10,6 @@ import {
   ClipboardCheck,
   Eye,
   Headphones,
-  Info,
   Layers,
   ListOrdered,
   Mic,
@@ -25,7 +24,6 @@ import {
   Shuffle,
   Sliders,
   Sparkles,
-  Undo2,
   X,
 } from 'lucide-react-native';
 
@@ -44,13 +42,9 @@ import {
 } from '../lib/recitation';
 import { isRtl, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
 import {
-  buildSwapVerses,
-  scoreSwapAttempt,
-  DEFAULT_SWAPS_PER_VERSE,
   MIN_JIGSAW_VERSES,
   MIN_THREAD_VERSES,
   threadRunEndingAt,
-  SwapVerse,
 } from '../lib/drills';
 import { BounceView, ChipRow, DiscreteSlider, FadeInView, SpinView, WaveBars } from './ui';
 import { Dropdown } from './Dropdown';
@@ -67,6 +61,7 @@ import { useAboveTabBar } from './TabBar';
 import BuildUpDrill from './drills/BuildUpDrill';
 import JigsawDrill from './drills/JigsawDrill';
 import ScrambleDrill from './drills/ScrambleDrill';
+import SpotSwapDrill from './drills/SpotSwapDrill';
 /** Stable identity, so a missing photoCache prop cannot retrigger renders. */
 const EMPTY_PHOTO_CACHE: ReadonlyMap<string, string> = new Map();
 
@@ -1458,11 +1453,7 @@ function PracticeModalsInner({
   useEffect(() => {
     resetReciteGame();
     regenerateHiddenWords(activeLevel);
-    // The supplementary drills hold per-passage puzzle state too (tile
-    // placements, decoy positions, round index) -- all of it is meaningless
-    // and potentially out of bounds against a different passage, exactly
-    // like recitePointer/reciteOutcomes above.
-    resetSwap();
+    // The drill components reset their own puzzle state on a new passage.
     // If the incoming group is too short for the jigsaw, don't leave the
     // user parked on a mode that no longer exists.
     if (verses.length < MIN_JIGSAW_VERSES && learnTab === 'jigsaw') setLearnTab('recite');
@@ -1635,13 +1626,12 @@ function PracticeModalsInner({
   }, [recitePointer, learnTab, reciteWordObjects.length]);
 
   // ==========================================
-  // SUPPLEMENTARY DRILL STATE (jigsaw / scramble / spot-the-swap)
-  // All three are ungraded — none of them ever call onUpdateStatus. Their
-  // puzzle data is built once per passage by src/lib/drills.ts and re-rolled
-  // on demand (and whenever `verses` changes, see the reset effect below).
+  // SUPPLEMENTARY DRILLS (build up / order / scramble / spot-the-swap)
+  // Ungraded -- none of them ever call onUpdateStatus. Each lives in its own
+  // component under ./drills, owns its puzzle state, and re-rolls it when
+  // `verses` changes. Guided learning renders the same components.
   // ==========================================
 
-  // --- Build up ---
   // Build up can't count toward review, so its end screen hands off to a
   // real blind Recall run. A ref keeps the callback stable, so the memoized
   // drill doesn't re-render on every Recall tick while it sits hidden.
@@ -1655,18 +1645,6 @@ function PracticeModalsInner({
   const handoffToRecallRef = useRef(handoffToRecall);
   handoffToRecallRef.current = handoffToRecall;
   const onBuildUpTryBlind = useCallback(() => handoffToRecallRef.current(), []);
-
-  // --- Spot-the-swap ---
-  const [swapsPerVerse, setSwapsPerVerse] = useState(DEFAULT_SWAPS_PER_VERSE);
-  const [swapVerses, setSwapVerses] = useState<SwapVerse[]>(() => buildSwapVerses(verses, DEFAULT_SWAPS_PER_VERSE));
-  const [swapSelected, setSwapSelected] = useState<Set<number>>(new Set());
-  const [swapSubmitted, setSwapSubmitted] = useState(false);
-
-  const resetSwap = (perVerse: number = swapsPerVerse) => {
-    setSwapVerses(buildSwapVerses(verses, perVerse));
-    setSwapSelected(new Set());
-    setSwapSubmitted(false);
-  };
 
   // ==========================================
   // MANUAL LOG — the honest replacement for the old Reveal tab's
@@ -2704,126 +2682,7 @@ function PracticeModalsInner({
                   );
                 })()
               )
-            ) : learnTab === 'jigsaw' || learnTab === 'buildUp' || learnTab === 'scramble' ? null : (
-              /* ======================================================== */
-              /* SPOT-THE-SWAP — a few words per verse are replaced with    */
-              /* real words from elsewhere in the passage; tap the          */
-              /* imposters. Ungraded.                                       */
-              /* ======================================================== */
-              (() => {
-                const score = scoreSwapAttempt(swapVerses, swapSelected);
-                const noDecoys = score.totalDecoys === 0;
-
-                return (
-                  <View className="flex-1 justify-between">
-                    <ScrollView className="flex-1 mb-2" contentContainerClassName="gap-3 pb-2">
-                      <View className="flex-row items-center gap-1">
-                        <Info size={12} color={palette.ink3} />
-                        <AppText variant="caption" className="text-ink-3 font-sans flex-1">
-                          {swapSubmitted ? 'Green = caught, red = missed, amber = wrongly flagged' : 'Tap every word that does not belong'}
-                        </AppText>
-                      </View>
-
-                      {noDecoys ? (
-                        <AppText variant="caption" className="text-ink-3 font-sans">
-                          This passage is too short to hide imposters in. Try a longer selection.
-                        </AppText>
-                      ) : (
-                        swapVerses.map((sv) => (
-                          <AppText variant="body" script={passageScript} key={sv.id} className="font-serif leading-relaxed text-ink">
-                            <AppText variant="caption" className="font-sans font-bold text-ink-3">{sv.label} </AppText>
-                            {sv.tokens.map((tok) => {
-                              const isSelected = swapSelected.has(tok.index);
-                              let cls = 'text-ink';
-                              if (swapSubmitted) {
-                                if (tok.isDecoy && isSelected) cls = 'text-success font-bold';
-                                else if (tok.isDecoy && !isSelected) cls = 'text-danger font-bold underline';
-                                else if (!tok.isDecoy && isSelected) cls = 'text-warning line-through';
-                              } else if (isSelected) {
-                                cls = 'text-accent font-bold underline';
-                              }
-                              return (
-                                <AppText variant="inherit"
-                                  key={tok.index}
-                                  onPress={
-                                    swapSubmitted
-                                      ? undefined
-                                      : () =>
-                                          setSwapSelected((prev) => {
-                                            const next = new Set(prev);
-                                            if (next.has(tok.index)) next.delete(tok.index);
-                                            else next.add(tok.index);
-                                            return next;
-                                          })
-                                  }
-                                  className={`font-serif ${cls}`}
-                                >
-                                  {tok.display}{wordGap(tok.display)}
-                                </AppText>
-                              );
-                            })}
-                          </AppText>
-                        ))
-                      )}
-
-                      {/* After submitting, show what the swapped words really were */}
-                      {swapSubmitted && score.totalDecoys > 0 && (
-                        <View className="bg-surface-2 border border-line rounded-card p-2.5 gap-1">
-                          <AppText variant="caption" className="font-sans font-semibold text-ink-3">The real words</AppText>
-                          {swapVerses.flatMap((sv) =>
-                            sv.tokens
-                              .filter((t) => t.isDecoy)
-                              .map((t) => (
-                                <AppText variant="label" script={passageScript} key={t.index} className="font-serif text-ink-2">
-                                  {/* Read right to left in Hebrew, so the arrow points left: imposter ← real word. */}
-                                  <AppText variant="inherit" className="text-danger line-through">{t.display}</AppText> {isRtl(passageScript) ? '←' : '→'} <AppText variant="inherit" className="text-success font-bold">{t.original}</AppText>
-                                </AppText>
-                              ))
-                          )}
-                        </View>
-                      )}
-                    </ScrollView>
-
-                    <View className="shrink-0 gap-2">
-                      {swapSubmitted ? (
-                        <View className="bg-surface-2 border border-line rounded-card p-2.5">
-                          <AppText variant="caption" className="font-sans font-bold text-ink text-center">
-                            Caught {score.caught} of {score.totalDecoys}
-                            {score.falseAlarms > 0 ? ` · ${score.falseAlarms} wrongly flagged` : ''} — practice only, nothing logged.
-                          </AppText>
-                        </View>
-                      ) : (
-                        // Label ABOVE the chips -- ChipRow's default chips are
-                        // flex-1, so next to a label in a justify-between row
-                        // they size against the leftovers and squash to
-                        // slivers (same fix as the Build-up settings).
-                        <View className="bg-surface-2 border border-line rounded-card px-3 py-2 gap-1">
-                          <AppText variant="caption" className="font-sans font-bold text-ink-2">Swaps per verse</AppText>
-                          <ChipRow
-                            options={[
-                              { id: 1, label: '1' },
-                              { id: 2, label: '2' },
-                              { id: 3, label: '3' },
-                            ]}
-                            value={swapsPerVerse}
-                            onChange={(n) => {
-                              setSwapsPerVerse(n);
-                              resetSwap(n);
-                            }}
-                          />
-                        </View>
-                      )}
-                      <View className="flex-row gap-2">
-                        <AppButton variant="quiet" Icon={Shuffle} label="New swaps" onPress={() => resetSwap()} className="flex-1" />
-                        {!swapSubmitted && (
-                          <AppButton variant="primary" Icon={Check} label="Check" onPress={() => setSwapSubmitted(true)} disabled={noDecoys} className="flex-1" />
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                );
-              })()
-            )}
+            ) : null}
 
             {/* Drills extracted into their own components stay mounted while
                 another tab is showing, so switching away and back keeps your
@@ -2838,6 +2697,9 @@ function PracticeModalsInner({
             </View>
             <View className="flex-1" style={{ display: learnTab === 'scramble' ? 'flex' : 'none' }}>
               <ScrambleDrill verses={verses} />
+            </View>
+            <View className="flex-1" style={{ display: learnTab === 'spotSwap' ? 'flex' : 'none' }}>
+              <SpotSwapDrill verses={verses} />
             </View>
           </View>
         )}
