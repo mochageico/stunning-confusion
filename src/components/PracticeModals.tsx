@@ -74,6 +74,7 @@ import { Badge, Dialog, EmptyState, SegmentedControl } from './blocks';
 import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePrefs, StrikeLimit } from '../lib/practicePrefs';
 
 import { useThemeColors } from './theme';
+import { formatDate } from '../lib/format';
 import { useAboveTabBar } from './TabBar';
 /** Stable identity, so a missing photoCache prop cannot retrigger renders. */
 const EMPTY_PHOTO_CACHE: ReadonlyMap<string, string> = new Map();
@@ -1531,6 +1532,38 @@ function PracticeModalsInner({
     return run.length >= MIN_THREAD_VERSES ? { ...last, translationId: item.translationId } : null;
   }, [onPickUpThread, sessionTotal, verses, memoryQueue]);
 
+  // Verses here that are on a review schedule but not due yet. Logging them
+  // changes nothing (see handleReviewCompleted), so the result screen says
+  // so instead of offering "Count as a review" for a review that won't count.
+  const notDueVerses = useMemo(
+    () =>
+      verses
+        .map((v) => ({
+          v,
+          item: (memoryQueue || []).find(
+            (q) =>
+              q.book === v.book &&
+              q.chapter === v.chapter &&
+              q.verseNumber === v.verse &&
+              (!v.translationId || (q.translationId || 'ESV') === v.translationId)
+          ),
+        }))
+        .filter(({ item }) => item?.status === 'reviewing' && !isReviewDue(item.nextReviewDueDate)),
+    [verses, memoryQueue]
+  );
+  const notDueLine = (() => {
+    if (notDueVerses.length === 0) return '';
+    const soonest = notDueVerses.map(({ item }) => item!.nextReviewDueDate || '').filter(Boolean).sort()[0];
+    const day = soonest ? formatDate(soonest, 'relative') : '';
+    const when = day === 'Tomorrow' ? 'tomorrow' : day;
+    if (notDueVerses.length === verses.length) {
+      return `Not due until ${when}, so this was practice. Your schedule stays as it is.`;
+    }
+    const list = notDueVerses.map(({ v }) => `v${v.verse}`).join(', ');
+    return `${list} ${notDueVerses.length === 1 ? "isn't" : "aren't"} due until ${when}, so ${notDueVerses.length === 1 ? 'it stays' : 'they stay'} as ${notDueVerses.length === 1 ? 'it is' : 'they are'}.`;
+  })();
+  const allNotDue = verses.length > 0 && notDueVerses.length === verses.length;
+
   // ==========================================
   // RECITE — live speech channel. Feeds the exact same recitePointer/
   // reciteOutcomes the typed channel does, so either input method advances
@@ -2745,7 +2778,14 @@ function PracticeModalsInner({
                       </View>
 
                       <View className="w-full gap-2">
-                        {isMasteryEligible ? (
+                        {allNotDue ? (
+                          <>
+                            <AppButton size="lg" variant="primary" Icon={Check} label="Done" onPress={handleGroupComplete} />
+                            <AppText variant="caption" className="text-center text-ink-3 font-sans px-4">
+                              {notDueLine}
+                            </AppText>
+                          </>
+                        ) : isMasteryEligible ? (
                           <>
                             <AppButton
                               size="lg"
@@ -2786,12 +2826,17 @@ function PracticeModalsInner({
                             </AppText>
                           </>
                         )}
+                        {!allNotDue && notDueLine !== '' && (
+                          <AppText variant="caption" className="text-center text-ink-3 font-sans px-4">
+                            {notDueLine}
+                          </AppText>
+                        )}
                         {summary.passesReview && threadTarget && (
                           <AppButton
                             variant="secondary"
-                            label={`Count it and pick up the thread to v${threadTarget.verse}`}
+                            label={allNotDue ? `Pick up the thread to v${threadTarget.verse}` : `Count it and pick up the thread to v${threadTarget.verse}`}
                             onPress={() => {
-                              onUpdateStatus(verses, 'memorized', drill, { perfect: isMasteryEligible });
+                              if (!allNotDue) onUpdateStatus(verses, 'memorized', drill, { perfect: isMasteryEligible });
                               onPickUpThread?.(threadTarget);
                             }}
                           />

@@ -114,7 +114,7 @@ import {
 } from '../types';
 import { computeDailyPull, PersonalPacingSettings } from '../lib/groupPlanScheduler';
 import { isDayPaused, isPauseInEffect } from '../lib/reviewCalendar';
-import { formatDuration } from '../lib/format';
+import { formatDate, formatDuration } from '../lib/format';
 
 export type ScreenName =
   | 'home'
@@ -5333,12 +5333,22 @@ export function useAppState() {
     success: boolean,
     drillType?: 'speak' | 'type' | 'reveal',
     opts?: ReviewCompletedOpts
-  ) => {
+  ): Promise<'early' | void> => {
     // A quiet caller (Pick up the thread) shows its own per-verse results, so
     // one toast per verse would just stack up over them.
     const toast = opts?.quiet ? (_message: string) => {} : triggerToast;
     // Which practice produced this review, kept in the review history.
     const via = opts?.via ? { via: opts.via } : {};
+
+    // Practicing ahead: a verse on a review schedule that isn't due yet is
+    // practice, pass or miss (the user's call, 2026-10-10). Before this, an
+    // early pass counted as a whole cycle -- Recalling a monthly verse a week
+    // early moved it on a month -- and an early miss demoted it for
+    // practicing ahead. Nothing changes, lastReviewDate included: "Reset
+    // today's reviews" reads that date and would pull the verse back to due
+    // today. Same due test as Home's review list.
+    if (item.status === 'reviewing' && !isReviewDue(item.nextReviewDueDate)) return 'early';
+
     let updatedItem = { ...item };
     updatedItem.lastReviewDate = new Date().toISOString();
 
@@ -5775,6 +5785,8 @@ export function useAppState() {
     // PracticeModals' Recall mode and the manual-log action always pass an
     // explicit customDrillType now; 'speak' only remains as a fallback.
     const drillType = customDrillType || 'speak';
+    // Verses that weren't due yet, so nothing was logged for them.
+    const early: QueueItem[] = [];
     for (const v of versesToUpdate) {
       // Read through the ref, not the render-time snapshot — each loop
       // iteration must see the queue updates the previous iteration made.
@@ -5790,7 +5802,8 @@ export function useAppState() {
           (!v.translationId || (q.translationId || 'ESV') === v.translationId)
       );
       if (itemInQueue) {
-        await handleReviewCompleted(itemInQueue, success, drillType, opts);
+        const outcome = await handleReviewCompleted(itemInQueue, success, drillType, opts);
+        if (outcome === 'early') early.push(itemInQueue);
       }
     }
 
@@ -5799,7 +5812,20 @@ export function useAppState() {
         ? `${versesToUpdate[0].book} ${versesToUpdate[0].chapter}:${versesToUpdate[0].verse}`
         : `${versesToUpdate[0].book} ${versesToUpdate[0].chapter}:${versesToUpdate[0].verse}-${versesToUpdate[versesToUpdate.length - 1].verse}`;
 
-    if (!opts?.quiet) triggerToast(`Completed practice for ${refStr}!`);
+    if (opts?.quiet) return;
+    if (early.length > 0) {
+      const soonest = early.map((i) => i.nextReviewDueDate || '').filter(Boolean).sort()[0];
+      const day = soonest ? formatDate(soonest, 'relative') : '';
+      const when = day === 'Tomorrow' ? 'tomorrow' : day;
+      if (early.length === versesToUpdate.length) {
+        triggerToast(`Not due until ${when}, so this was practice. Your schedule hasn't changed.`);
+      } else {
+        const list = early.map((i) => `v${i.verseNumber}`).join(', ');
+        triggerToast(`Logged. ${list} ${early.length === 1 ? "isn't" : "aren't"} due until ${when}, so ${early.length === 1 ? 'it was' : 'they were'} practice.`);
+      }
+      return;
+    }
+    triggerToast(`Completed practice for ${refStr}!`);
   };
 
   // Pick up the thread, opened on a given verse. Closes any practice overlay
