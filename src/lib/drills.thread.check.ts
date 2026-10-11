@@ -8,6 +8,7 @@
 
 import { joinWords, splitWords } from './textScript';
 import {
+  buildThreadPassages,
   pickThreadCue,
   threadCueKey,
   threadRunEndingAt,
@@ -224,6 +225,32 @@ console.log('Hebrew');
     }
   }
   check('Hebrew cues rebuild the exact text, maqaf and all', ok, detail);
+}
+
+// ----------------------------------------------------------------------------
+console.log('passages (verses per thread, and every-chapter sessions)');
+{
+  const refs = (ps: { verse: number }[][]) => ps.map((p) => p.map((v) => v.verse).join('-')).join(' | ');
+  const all = () => true;
+
+  check('whole range in one passage when no limit', refs(buildThreadPassages(PSALM_23, all)) === '1-2-3-4-5-6', refs(buildThreadPassages(PSALM_23, all)));
+  check('3 per thread: windows share a verse', refs(buildThreadPassages(PSALM_23, all, 3)) === '1-2-3 | 3-4-5 | 5-6', refs(buildThreadPassages(PSALM_23, all, 3)));
+  check('2 per thread: every join on its own', refs(buildThreadPassages(PSALM_23, all, 2)) === '1-2 | 2-3 | 3-4 | 4-5 | 5-6', refs(buildThreadPassages(PSALM_23, all, 2)));
+  check('a limit of 1 still gives two-verse passages', refs(buildThreadPassages(PSALM_23, all, 1)) === refs(buildThreadPassages(PSALM_23, all, 2)));
+
+  const due = (ns: number[]) => (v: { verse: number }) => ns.includes(v.verse);
+  check('one target: starts the verse before it', refs(buildThreadPassages(PSALM_23, due([4]))) === '3-4', refs(buildThreadPassages(PSALM_23, due([4]))));
+  check('target opening the run ends on the next verse', refs(buildThreadPassages(PSALM_23, due([1]))) === '1-2', refs(buildThreadPassages(PSALM_23, due([1]))));
+  check('close targets share a passage', refs(buildThreadPassages(PSALM_23, due([2, 4]))) === '1-2-3-4', refs(buildThreadPassages(PSALM_23, due([2, 4]))));
+  check('far targets split', refs(buildThreadPassages(PSALM_23, due([1, 6]), 3)) === '1-2 | 5-6', refs(buildThreadPassages(PSALM_23, due([1, 6]), 3)));
+  check('no targets, no passages', buildThreadPassages(PSALM_23, due([])).length === 0);
+
+  const gappy = [PSALM_23[0], PSALM_23[1], PSALM_23[3], PSALM_23[5]]; // 1, 2, 4, 6
+  check('a gap breaks runs; lone verses give nothing', refs(buildThreadPassages(gappy, all)) === '1-2', refs(buildThreadPassages(gappy, all)));
+
+  const mixed = [...PSALM_23.slice(0, 2), { ...PSALM_23[2], translationId: 'KJV' }, { ...PSALM_23[0], chapter: 24 }, { ...PSALM_23[1], chapter: 24 }];
+  check('chapters and translations never mix', refs(buildThreadPassages(mixed, all)) === '1-2 | 1-2', refs(buildThreadPassages(mixed, all)));
+  check('every passage is one unbroken run in order', buildThreadPassages(PSALM_23, all, 4).every((p) => p.every((v, i) => i === 0 || v.verse === p[i - 1].verse + 1)));
 }
 
 console.log(failures === 0 ? '\nall thread checks passed' : `\n${failures} thread check(s) FAILED`);

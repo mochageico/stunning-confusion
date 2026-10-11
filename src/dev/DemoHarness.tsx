@@ -353,10 +353,12 @@ export function useDemoState(real: AppState): AppState {
     if (s === 'chapters') real.navigateTo('chapters', 'Romans');
     else if (s === 'chapterLanding') real.navigateTo('chapterLanding', 'Romans', 8);
     else if (s === 'planDesigner') real.openActivePlanDesigner();
-    // Opened the way a passing Recall opens it: preset on a verse. Romans 8:1-2
-    // are due today in the seeded queue, so their credit shows.
     else if (s === 'guided') real.openGuided('BSB|Psalms|23|1');
-    else if (s === 'threadDrill') real.openThreadDrill({ book: 'Romans', chapter: 8, verse: 2, translationId: 'BSB' });
+    // preset=1 opens Pick up the thread the way a passing Recall does: on a
+    // verse (Romans 8:2, due today in the seeded queue, so its credit shows).
+    // Without it, setup opens on every matching chapter.
+    else if (s === 'threadDrill' && params.get('preset') === '1')
+      real.openThreadDrill({ book: 'Romans', chapter: 8, verse: 2, translationId: 'BSB' });
     // navigateTo, not setCurrentScreen: it also switches to the screen's tab
     // (the Verses tab's screens render only while that tab is current).
     else if (s !== 'home' && s !== 'auth' && s !== 'onboarding' && s !== 'tour' && !s.startsWith('modal'))

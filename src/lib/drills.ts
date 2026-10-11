@@ -682,6 +682,79 @@ export const threadRunEndingAt = <V extends DrillVerse>(pool: V[], end: Omit<Dri
   return run;
 };
 
+/** Targets further apart than this start a separate passage rather than one long thread. */
+const THREAD_TARGET_GAP = 3;
+
+/**
+ * Splits started verses into short passages that each run THROUGH the verses
+ * the user asked for ("due today", "monthly reviews"). Used both for a session
+ * that covers every chapter at once and to cut one long range into short
+ * stitches, so a thread never asks for a whole chapter from the middle.
+ *
+ * `pool` is every started verse (they're the context a cue can start from);
+ * `isTarget` marks the ones the filter picked. Per chapter and translation,
+ * each unbroken run of verses is cut into passages that:
+ *   - end on a target (or, when the only target opens the run, on the verse
+ *     after it -- a thread needs somewhere to start),
+ *   - start one verse before their first target, so that target is recited
+ *     whole rather than only from a cue partway in,
+ *   - span at most `maxSpan` verses (the user's "verses per thread"); a
+ *     longer stretch is cut into windows that share a verse, so the joins
+ *     between windows still get drilled.
+ * Targets more than THREAD_TARGET_GAP verses apart go in separate passages.
+ * Runs of one verse produce nothing. Passages come out in reading order
+ * within each chapter.
+ */
+export const buildThreadPassages = <V extends DrillVerse>(
+  pool: V[],
+  isTarget: (v: V) => boolean,
+  maxSpan: number = Infinity
+): V[][] => {
+  const span = Math.max(MIN_THREAD_VERSES, maxSpan);
+  const chapters = new Map<string, V[]>();
+  pool.forEach((v) => {
+    const key = `${v.translationId || ''}|${v.book}|${v.chapter}`;
+    chapters.set(key, [...(chapters.get(key) || []), v]);
+  });
+
+  const out: V[][] = [];
+  chapters.forEach((vs) => {
+    const sorted = [...vs].sort((a, b) => a.verse - b.verse);
+    // Unbroken runs.
+    const runs: V[][] = [];
+    sorted.forEach((v, i) => {
+      if (i > 0 && v.verse === sorted[i - 1].verse + 1) runs[runs.length - 1].push(v);
+      else runs.push([v]);
+    });
+
+    runs.forEach((run) => {
+      if (run.length < MIN_THREAD_VERSES) return;
+      const targets = run.map((v, i) => (isTarget(v) ? i : -1)).filter((i) => i >= 0);
+      if (targets.length === 0) return;
+
+      const clusters: number[][] = [];
+      targets.forEach((t, k) => {
+        if (k > 0 && t - targets[k - 1] <= THREAD_TARGET_GAP) clusters[clusters.length - 1].push(t);
+        else clusters.push([t]);
+      });
+
+      clusters.forEach((cluster) => {
+        const first = cluster[0];
+        const last = cluster[cluster.length - 1];
+        const through = Math.max(last, 1);
+        let start = Math.max(0, Math.min(first - 1, through - 1));
+        while (start < through) {
+          const end = Math.min(start + span - 1, through);
+          out.push(run.slice(start, end + 1));
+          if (end === through) break;
+          start = end;
+        }
+      });
+    });
+  });
+  return out;
+};
+
 export interface ThreadCue {
   /** Index into the verses the cue was built from. */
   startVerse: number;
