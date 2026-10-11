@@ -40,7 +40,7 @@ import {
   SpeechRecognizer,
   WordOutcome,
 } from '../lib/recitation';
-import { isRtl, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, wordGap } from '../lib/textScript';
+import { isRtl, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, typedLetters, wordGap } from '../lib/textScript';
 import {
   MIN_JIGSAW_VERSES,
   MIN_THREAD_VERSES,
@@ -1242,7 +1242,16 @@ function PracticeModalsInner({
       return;
     }
 
-    const lastChar = val.charAt(val.length - 1);
+    // Hebrew/Greek: only letters count as guesses -- a vowel point or
+    // invisible mark the keyboard sends with the letter is dropped, not
+    // graded wrong (see typedLetters). A change carrying no letter at all is
+    // just cleared. English keeps its last-character behaviour.
+    const letters = typedLetters(val, passageScript);
+    if (letters.length === 0) {
+      setTypedInput('');
+      return;
+    }
+    const lastChar = letters[letters.length - 1];
     const current = reciteWordObjects[recitePointer];
     // Near-miss forgiveness: 'close' means a QWERTY key adjacent to the
     // right letter — accepted and advanced just like 'exact', but graded
@@ -2410,7 +2419,7 @@ function PracticeModalsInner({
                       <View className="flex-row items-center gap-2">
                         {/* Short enough to fit an SE at 1.5x. Nearby keys still
                             count; that's forgiveness, not an instruction. */}
-                        <AppTextInput value={typedInput} onChangeText={handleReciteTypeChar} placeholder={showStrikeResetAlert ? 'Starting over…' : fontScale >= 1.3 ? 'First letters' : 'First letter of each word'} style={{ minWidth: 0 }} className="flex-1 bg-surface-2 border border-line rounded-btn py-2 px-3 text-center font-sans font-semibold text-ink" editable={!showStrikeResetAlert} />
+                        <AppTextInput value={typedInput} onChangeText={handleReciteTypeChar} autoCapitalize="none" autoCorrect={false} spellCheck={false} placeholder={showStrikeResetAlert ? 'Starting over…' : fontScale >= 1.3 ? 'First letters' : 'First letter of each word'} style={{ minWidth: 0 }} className="flex-1 bg-surface-2 border border-line rounded-btn py-2 px-3 text-center font-sans font-semibold text-ink" editable={!showStrikeResetAlert} />
                         {/* English only: phone speech engines know modern
                             Hebrew at best, with no vowel points, so they
                             can't grade Biblical Hebrew or Koine Greek. Typing

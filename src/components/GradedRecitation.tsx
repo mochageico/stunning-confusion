@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 
 import { threadSpan, ThreadSpanVerse } from '../lib/drills';
 import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, SpeechRecognizer, tokenizeWords, WordOutcome } from '../lib/recitation';
-import { joinWords, maskLetters, normalizeToken, scriptOfVerse, wordGap } from '../lib/textScript';
+import { joinWords, maskLetters, normalizeToken, scriptOfVerse, typedLetters, wordGap } from '../lib/textScript';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
 import { WaveBars } from './ui';
 
@@ -284,7 +284,9 @@ export default function GradedRecitation({
   // letters not yet handled -- usually one, several when typing fast.
   const handleTyped = (val: string) => {
     let wrong = false;
-    for (const ch of Array.from(val)) {
+    // Hebrew/Greek: letters only -- points and invisible marks the keyboard
+    // sends along aren't guesses (see typedLetters). English: every character.
+    for (const ch of typedLetters(val, script)) {
       const i = pointerRef.current;
       if (i >= graded.length) break;
       const verdict = classifyFirstLetterAttempt(ch, graded[i].word, script);

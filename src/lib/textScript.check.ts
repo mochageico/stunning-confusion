@@ -7,7 +7,7 @@
 // direction: textScript.ts took over helpers every English drill runs on.
 
 import { classifyFirstLetterAttempt, firstLetterLine, firstLetterOnly, normalizeToken, tokenizeWords } from './recitation';
-import { applyWordShape, joinWords, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords } from './textScript';
+import { applyWordShape, joinWords, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, typedLetters } from './textScript';
 import { buildSwapVerses, chunkIntoPhrases, splitIntoBites } from './drills';
 
 let failures = 0;
@@ -59,6 +59,23 @@ check('the right letter is exact', classifyFirstLetterAttempt('ב', 'בְּרֵ�
 check('a final-form key counts as its letter', classifyFirstLetterAttempt('ך', 'כִּי', 'hebrew') === 'exact');
 check('a different letter is wrong, never "close"', classifyFirstLetterAttempt('מ', 'כִּי', 'hebrew') === 'wrong');
 check('an English key is wrong', classifyFirstLetterAttempt('b', 'בְּרֵאשִׁית', 'hebrew') === 'wrong');
+
+// What Hebrew keyboards actually send. Before typedLetters, every one of these
+// extra characters was graded as a wrong guess (reported from a real iPhone:
+// "typing with first letter basically doesn't work... it is requiring vowels").
+const BET = String.fromCharCode(0x05d1);
+const DAGESH = String.fromCharCode(0x05bc);
+const PATAH = String.fromCharCode(0x05b7);
+const RLM = String.fromCharCode(0x200f);
+const BET_WITH_DAGESH = String.fromCharCode(0xfb31); // one precomposed character
+check('typing: a bare consonant is one guess', typedLetters(BET, 'hebrew').join('') === BET);
+check('typing: a consonant with a vowel point is one guess (the point is dropped)', typedLetters(BET + DAGESH + PATAH, 'hebrew').join('') === BET);
+check('typing: a vowel point on its own is no guess at all', typedLetters(PATAH, 'hebrew').length === 0);
+check('typing: an invisible direction mark is no guess at all', typedLetters(RLM + BET + RLM, 'hebrew').join('') === BET);
+check('typing: a precomposed letter-with-dagesh counts as its letter', classifyFirstLetterAttempt(BET_WITH_DAGESH, 'בְּרֵאשִׁית', 'hebrew') === 'exact');
+check('typing: two letters typed fast are two guesses', typedLetters('מל', 'hebrew').length === 2);
+check('typing: Greek accents typed with a letter are dropped', typedLetters('ά', 'greek').length === 1 && typedLetters(String.fromCharCode(0x0301), 'greek').length === 0);
+check('typing: English still treats every character as a guess', typedLetters('a ,', 'latin').length === 3);
 
 console.log('\nGreek');
 check('John 1:1 is 17 words', tokenizeWords(JOHN_1_1, 'greek').length === 17, tokenizeWords(JOHN_1_1, 'greek').length);

@@ -49,6 +49,28 @@ const isHebrewMark = (ch: string): boolean => {
 // counts and the two spellings compare equal.
 const HEBREW_FINALS: Record<string, string> = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
 
+// Hebrew presentation forms (U+FB1D-U+FB4F): single characters for a letter
+// already carrying a point -- בּ with dagesh, שׁ with shin dot, the wide
+// letters. Some Hebrew keyboards type these instead of letter + point, so
+// each maps to its bare letter. Generated from Unicode's compatibility
+// decompositions (NFKD); FB4F, the alef-lamed ligature, maps to its alef.
+const HEBREW_PRESENTATION: Record<number, number> = {
+  0xfb1d: 0x5d9, 0xfb20: 0x5e2, 0xfb21: 0x5d0, 0xfb22: 0x5d3, 0xfb23: 0x5d4, 0xfb24: 0x5db, 0xfb25: 0x5dc,
+  0xfb26: 0x5dd, 0xfb27: 0x5e8, 0xfb28: 0x5ea, 0xfb2a: 0x5e9, 0xfb2b: 0x5e9, 0xfb2c: 0x5e9, 0xfb2d: 0x5e9,
+  0xfb2e: 0x5d0, 0xfb2f: 0x5d0, 0xfb30: 0x5d0, 0xfb31: 0x5d1, 0xfb32: 0x5d2, 0xfb33: 0x5d3, 0xfb34: 0x5d4,
+  0xfb35: 0x5d5, 0xfb36: 0x5d6, 0xfb38: 0x5d8, 0xfb39: 0x5d9, 0xfb3a: 0x5da, 0xfb3b: 0x5db, 0xfb3c: 0x5dc,
+  0xfb3e: 0x5de, 0xfb40: 0x5e0, 0xfb41: 0x5e1, 0xfb43: 0x5e3, 0xfb44: 0x5e4, 0xfb46: 0x5e6, 0xfb47: 0x5e7,
+  0xfb48: 0x5e8, 0xfb49: 0x5e9, 0xfb4a: 0x5ea, 0xfb4b: 0x5d5, 0xfb4c: 0x5d1, 0xfb4d: 0x5db, 0xfb4e: 0x5e4,
+  0xfb4f: 0x5d0,
+};
+
+/** A Hebrew letter in its plain form: presentation forms unpacked, finals folded. '' if not a letter. */
+const hebrewBase = (ch: string): string => {
+  const unpacked = HEBREW_PRESENTATION[code(ch)];
+  const letter = unpacked ? String.fromCharCode(unpacked) : ch;
+  return isHebrewLetter(letter) ? HEBREW_FINALS[letter] ?? letter : '';
+};
+
 // ── Greek ───────────────────────────────────────────────────────────────────
 
 const GREEK_BASE: Record<string, string> = {};
@@ -78,7 +100,7 @@ const LATIN_LETTER_RE = /[a-zA-Z0-9]/;
  * letter or digit, '' for anything else.
  */
 const letterKey = (ch: string, script: TextScript): string => {
-  if (script === 'hebrew') return isHebrewLetter(ch) ? HEBREW_FINALS[ch] ?? ch : '';
+  if (script === 'hebrew') return hebrewBase(ch);
   if (script === 'greek') return greekBase(ch);
   return LATIN_LETTER_RE.test(ch) ? ch : '';
 };
@@ -166,6 +188,24 @@ export const normalizeToken = (word: string, script: TextScript = 'latin'): stri
   return Array.from(word)
     .map((ch) => letterKey(ch, script))
     .join('');
+};
+
+/**
+ * The guesses in a burst of typing, for first-letter Recall: one entry per
+ * letter, in order.
+ *
+ * English keeps every character, exactly as before -- a stray space or comma
+ * is a wrong guess there, as it always has been. Hebrew and Greek keep only
+ * letters and drop everything else: vowel points, dagesh, accents, and the
+ * invisible direction marks some keyboards add. A Hebrew keyboard that types
+ * a point along with (or right after) the consonant would otherwise have that
+ * point graded as a wrong guess at the next word -- which made typing feel
+ * like it demanded vowels. The hint is the consonant; only the consonant is
+ * graded.
+ */
+export const typedLetters = (text: string, script: TextScript = 'latin'): string[] => {
+  if (script === 'latin') return Array.from(text);
+  return Array.from(text).filter((ch) => letterKey(ch, script) !== '');
 };
 
 /**
