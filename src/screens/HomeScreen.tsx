@@ -580,7 +580,6 @@ export default function HomeScreen({ state }: { state: AppState }) {
           <ListRow Icon={Volume2} title="Find recordings" onPress={() => navigateTo('audioFeed')} />
           <ListRow Icon={Target} title="Reference practice" onPress={() => navigateTo('referenceDrill')} />
           <ListRow Icon={Route} title="Pick up the thread" onPress={() => state.openThreadDrill(null)} />
-          <ListRow Icon={Compass} title="Guided learning" onPress={() => state.openGuided()} />
         </GroupedList>
       </ScrollView>
 
