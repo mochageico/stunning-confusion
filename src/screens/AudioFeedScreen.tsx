@@ -6,7 +6,7 @@ import { Recording } from '../types';
 import { FadeInView } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
-import { BIBLE_TRANSLATIONS, getBookByName } from '../data';
+import { BIBLE_TRANSLATIONS, getBookByName, translationLabel } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
 import { formatDate, formatDuration } from '../lib/format';
 import { AppButton, AppIconButton, AppTextInput, AppText, useFontScale, useScaledSpace } from '../components/design';
@@ -79,7 +79,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
   });
   const translationOptions = [
     { id: '', label: 'All' },
-    ...presentTranslations.map((t) => ({ id: t, label: t })),
+    ...presentTranslations.map((t) => ({ id: t, label: translationLabel(t) })),
   ];
 
   const selectedBookMeta = feedBookFilter ? getBookByName(feedBookFilter) : undefined;
@@ -133,7 +133,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
         (r.user && r.user.toLowerCase().includes(q)) ||
         r.title.toLowerCase().includes(q) ||
         r.book.toLowerCase().includes(q) ||
-        r.translation.toLowerCase().includes(q)
+        (r.translation.toLowerCase().includes(q) || translationLabel(r.translation).toLowerCase().includes(q))
     );
   }
 
@@ -274,7 +274,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                     ur.id === rec.id ||
                     (ur.book === rec.book && ur.chapter === rec.chapter && ur.user === rec.user && ur.translation === rec.translation)
                 );
-              const meta = [rec.user || 'Someone', formatDate(rec.date), rec.translation, formatDuration(rec.duration)]
+              const meta = [rec.user || 'Someone', formatDate(rec.date), translationLabel(rec.translation), formatDuration(rec.duration)]
                 .filter(Boolean)
                 .join(' · ');
 
