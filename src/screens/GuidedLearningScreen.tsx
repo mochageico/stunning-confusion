@@ -186,6 +186,10 @@ function GradedStage({
       highlightWords={cueWords?.length ?? 0}
       header={<CueCard eyebrow={eyebrow} words={cueWords} caption={caption} script={script} />}
       onCancel={() => setStage('ready')}
+      onSwitchMode={(to) => {
+        setStage(to);
+        setAttempt((a) => a + 1);
+      }}
       onResult={finish}
       gradedDetail={(perVerse) => {
         const results: StageResult = {
@@ -248,6 +252,8 @@ function DrillStage({
 }) {
   const space = useScaledSpace();
   const [completed, setCompleted] = useState(false);
+  // First letters is typed by default; it can be said aloud instead. Ungraded either way.
+  const [lettersMode, setLettersMode] = useState<RecitationMode>('type');
   const single = useMemo(() => [verse], [verse]);
   const done = () => setCompleted(true);
 
@@ -266,18 +272,20 @@ function DrillStage({
         {drill === 'swap' && <SpotSwapDrill verses={passage} onlyVerse={verse.verse} onComplete={done} />}
         {drill === 'firstLetters' && (
           <GradedRecitation
+            key={lettersMode}
             verses={single}
             startVerse={0}
             startWord={0}
             endVerse={0}
-            mode="type"
+            mode={lettersMode}
             continueLabel="Next"
-            onCancel={onNext}
+            onCancel={() => setLettersMode('type')}
+            onSwitchMode={setLettersMode}
             onResult={onNext}
           />
         )}
       </View>
-      {drill !== 'firstLetters' && footer}
+      {drill !== 'firstLetters' ? footer : canReroll && <AppButton variant="quiet" Icon={RefreshCw} label="Different drill" onPress={onReroll} />}
     </View>
   );
 }
@@ -299,6 +307,52 @@ function VerseCard({ verse, firstLettersOnly }: { verse: GuidedDrillVerse; first
         {text}
       </AppText>
     </View>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Look up and say it -- or type it, with the first letters as hints. Ungraded.
+// ----------------------------------------------------------------------------
+
+function LookUpStage({ verse, onNext }: { verse: GuidedDrillVerse; onNext: () => void }) {
+  const space = useScaledSpace();
+  const [mode, setMode] = useState<'say' | 'type'>('say');
+  const single = useMemo(() => [verse], [verse]);
+  if (mode === 'type') {
+    return (
+      <GradedRecitation
+        verses={single}
+        startVerse={0}
+        startWord={0}
+        endVerse={0}
+        mode="type"
+        hintFirstLetters
+        continueLabel="Next"
+        header={
+          <AppText variant="label" className="font-sans text-ink-2">
+            Type the first letter of each word. The hints stay up.
+          </AppText>
+        }
+        onCancel={() => setMode('say')}
+        onSwitchMode={() => setMode('say')}
+        onResult={onNext}
+      />
+    );
+  }
+  return (
+    <RoundFrame
+      footer={
+        <View style={{ gap: space(8) }}>
+          <AppButton size="lg" variant="primary" Icon={Check} label="Said it" onPress={onNext} />
+          <AppButton variant="quiet" label="Type it instead" onPress={() => setMode('type')} />
+        </View>
+      }
+    >
+      <AppText variant="label" className="font-sans text-ink-2">
+        Look at the first letters and say the verse out loud.
+      </AppText>
+      <VerseCard verse={verse} firstLettersOnly />
+    </RoundFrame>
   );
 }
 
@@ -478,6 +532,31 @@ function Sitting({
     verseIds.map(verseOf).filter((v): v is GuidedDrillVerse => !!v);
   const passageVerses = (): GuidedDrillVerse[] => liveItems().map(toDrillVerse);
 
+  /** The new verse a jump would start, if any is left. */
+  const newAvailable = () => nextNewVerse(liveItems(), new Set([...s.setAside, ...s.finishedThisSitting]));
+
+  /**
+   * Above a check, stitch or thread: move past it (no credit, no penalty),
+   * or go straight to the new verse.
+   */
+  const skipBar = (skipLabel: string) => {
+    const next = newAvailable();
+    return (
+      <View style={{ marginBottom: space(12) }}>
+        <ButtonPair
+          left={<AppButton size="sm" variant="quiet" label={skipLabel} onPress={() => dispatch({ type: 'skip' })} />}
+          right={
+            next ? (
+              <AppButton size="sm" variant="quiet" label={`Go to verse ${next.verseNumber}`} onPress={() => dispatch({ type: 'startNew' })} />
+            ) : (
+              <View />
+            )
+          }
+        />
+      </View>
+    );
+  };
+
   const onLeave = () => {
     if (s.step.kind === 'opening') navigateTo('home');
     else dispatch({ type: 'finish' });
@@ -571,17 +650,31 @@ function Sitting({
             header={rangeOf(items.map(toDrillVerse))}
             footer={plan.length > 0 ? `Today: ${plan.join(' → ')}` : learnDay ? 'Nothing waiting. Start with a new verse.' : 'Not a learning day. Checks and stitches only, and you can keep going for a new verse.'}
           >
-            {learning.map((i) => (
-              <ListRow
-                key={i.verseId}
-                title={`Verse ${i.verseNumber}`}
-                subtitle={tag(i)}
-                accessory={<RunDots done={runsBanked(i)} needed={masteryTouches} />}
-              />
-            ))}
+            {learning.map((i) => {
+              const startable = runsBanked(i) === 0;
+              return (
+                <ListRow
+                  key={i.verseId}
+                  title={`Verse ${i.verseNumber}`}
+                  subtitle={startable ? `${tag(i)} · tap to start it now` : tag(i)}
+                  accessory={<RunDots done={runsBanked(i)} needed={masteryTouches} />}
+                  onPress={startable ? () => dispatch({ type: 'startNew', verseId: i.verseId }) : undefined}
+                />
+              );
+            })}
           </GroupedList>
 
-          <AppButton size="lg" variant="primary" Icon={Compass} label="Begin" onPress={() => dispatch({ type: 'begin' })} />
+          <View style={{ gap: space(8) }}>
+            <AppButton size="lg" variant="primary" Icon={Compass} label="Begin" onPress={() => dispatch({ type: 'begin' })} />
+            {next && (ready.length > 0 || window.length >= 2) && (
+              <AppButton variant="secondary" label={`Start with verse ${next.verseNumber} instead`} onPress={() => dispatch({ type: 'startNew' })} />
+            )}
+          </View>
+          {next && (ready.length > 0 || window.length >= 2) && (
+            <AppText variant="caption" className="font-sans text-ink-3">
+              Starting with the new verse saves the checks for after it. You can also skip any check or stitch along the way.
+            </AppText>
+          )}
         </ScrollView>
       </FadeInView>
     );
@@ -612,7 +705,8 @@ function Sitting({
             dispatch({ type: 'reroll' });
           }}
           canReroll
-        />
+        />,
+        skipBar('Skip this check')
       );
     }
     const refresh = step.stage === 'refreshRecite';
@@ -639,7 +733,8 @@ function Sitting({
           bank([{ id: step.verseId, outcome: { activity, passed: r.passed, perfect: r.perfect, mode } }], mode);
           dispatch({ type: 'result', perfect: r.perfect });
         }}
-      />
+      />,
+      skipBar('Skip this check')
     );
   }
 
@@ -664,7 +759,8 @@ function Sitting({
             <JigsawDrill verses={verses} />
           </View>
           <AppButton size="lg" variant="primary" label="Next" onPress={() => dispatch({ type: 'next' })} />
-        </View>
+        </View>,
+        skipBar('Skip the stitch')
       );
     }
 
@@ -705,7 +801,8 @@ function Sitting({
           const slip = perVerse.find((r) => !r.perfect);
           dispatch({ type: 'result', perfect: !slip, firstSlip: slip ? slip.index : undefined });
         }}
-      />
+      />,
+      skipBar(kind === 'thread' ? 'Skip the thread' : 'Skip the stitch')
     );
   }
 
@@ -748,12 +845,7 @@ function Sitting({
       return ladderFrame(
         eyebrow,
         title,
-        <RoundFrame footer={<AppButton size="lg" variant="primary" Icon={Check} label="Said it" onPress={() => dispatch({ type: 'next' })} />}>
-          <AppText variant="label" className="font-sans text-ink-2">
-            Look at the first letters and say the verse out loud.
-          </AppText>
-          <VerseCard verse={verse} firstLettersOnly />
-        </RoundFrame>
+        <LookUpStage key={`${ladder.pos}:${ladder.misses}`} verse={verse} onNext={() => dispatch({ type: 'next' })} />
       );
     }
 
@@ -845,6 +937,16 @@ function Sitting({
                 }}
               />
             ) : null}
+            {s.coldQueue.length > 0 && (
+              <AppButton
+                variant="secondary"
+                label={`Check ${s.coldQueue.length === 1 ? 'verse' : 'verses'} ${s.coldQueue
+                  .map((id) => itemOf(id)?.verseNumber)
+                  .filter(Boolean)
+                  .join(', ')}`}
+                onPress={() => dispatch({ type: 'doChecks' })}
+              />
+            )}
             <AppButton variant={next || queued ? 'secondary' : 'primary'} size={next || queued ? 'md' : 'lg'} label="Finish" onPress={() => dispatch({ type: 'finish' })} />
           </View>
         </ScrollView>

@@ -331,6 +331,55 @@ console.log('Sitting');
     }
     check('Three misses set the verse aside and the sitting moves on', s.setAside.join() === 'BSB_PSA_23_1' && s.step.kind === 'doneToday', { setAside: s.setAside, step: s.step.kind });
   }
+
+  // ---- flexibility: skip and jump ----
+  {
+    // Verses 1-3 have a run from yesterday, 4 is new.
+    const its = () => [item(1, { runsAgo: [60 * 24] }), item(2, { runsAgo: [60 * 24] }), item(3, { runsAgo: [60 * 24] }), item(4)];
+    const env = mk(its());
+    let s = send(startSession(env), { type: 'startNew' }, env);
+    check('Start new from the opening skips checks and stitch for the new verse', s.step.kind === 'ladder' && s.step.verseId === 'BSB_PSA_23_4', s.step);
+    check('...and keeps the skipped checks for later', s.coldQueue.length === 3, s.coldQueue);
+
+    const zero = mk(its(), { pace: 0 });
+    const z = send(startSession(zero), { type: 'startNew' }, zero);
+    check('Start new works on a non-learning day (pace 0)', z.step.kind === 'ladder', z.step);
+
+    const two = mk([item(1, { runsAgo: [60 * 24] }), item(2), item(3)]);
+    const picked = send(startSession(two), { type: 'startNew', verseId: 'BSB_PSA_23_3' }, two);
+    check('Start new can pick a verse other than the lowest', picked.step.kind === 'ladder' && picked.step.verseId === 'BSB_PSA_23_3', picked.step);
+    const bad = send(startSession(two), { type: 'startNew', verseId: 'BSB_PSA_23_1' }, two);
+    check('A verse that already has a run is not started as new', bad.step.kind === 'ladder' && bad.step.verseId === 'BSB_PSA_23_2', bad.step);
+
+    let c = send(startSession(env), { type: 'begin' }, env);
+    c = send(c, { type: 'skip' }, env);
+    check('Skip on a cold check moves to the next check with nothing logged', c.step.kind === 'cold' && c.step.verseId === 'BSB_PSA_23_2' && c.log.length === 0, c.step);
+    c = send(c, { type: 'startNew' }, env);
+    check('Start new from a cold check goes to the new verse', c.step.kind === 'ladder' && c.step.verseId === 'BSB_PSA_23_4', c.step);
+
+    let st = send(startSession(env), { type: 'begin' }, env);
+    st = send(send(send(st, { type: 'skip' }, env), { type: 'skip' }, env), { type: 'skip' }, env);
+    check('Skipping every check reaches the stitch', st.step.kind === 'stitch', st.step);
+    st = send(st, { type: 'skip' }, env);
+    check('Skip on the stitch moves on (here to the new verse)', st.step.kind === 'ladder', st.step);
+    check('A skipped ladder step does nothing', send(st, { type: 'skip' }, env) === st);
+    check('Start new does nothing on a ladder', send(st, { type: 'startNew' }, env) === st);
+  }
+  {
+    // Done for today offers the checks a jump skipped.
+    const env = mk([item(1, { runsAgo: [60 * 24] }), item(2)], { pace: 1 });
+    let s = send(startSession(env), { type: 'startNew' }, env);
+    let guard = 0;
+    while (s.step.kind === 'ladder' && guard++ < 30) {
+      const kind = s.step.ladder.rungs[s.step.ladder.pos].kind;
+      s = send(s, kind === 'partly' || kind === 'fully' ? { type: 'result', perfect: true } : { type: 'next' }, env);
+    }
+    // The stitch of 1-2 runs after the new verse; skip it.
+    if (s.step.kind === 'stitch') s = send(s, { type: 'skip' }, env);
+    check('After a jump the sitting reaches Done for today with the check still waiting', s.step.kind === 'doneToday' && s.coldQueue.join() === 'BSB_PSA_23_1', { step: s.step.kind, q: s.coldQueue });
+    s = send(s, { type: 'doChecks' }, env);
+    check('Do checks runs the waiting cold check', s.step.kind === 'cold' && s.step.verseId === 'BSB_PSA_23_1', s.step);
+  }
 }
 
 console.log(failures === 0 ? '\nall guided checks passed' : `\n${failures} guided check(s) FAILED`);

@@ -567,6 +567,17 @@ export type SessionEvent =
   | { type: 'reroll' }
   | { type: 'knowIt' }
   | { type: 'keepGoing' }
+  /** Skip the current check, stitch, seam or thread: no credit, no penalty. */
+  | { type: 'skip' }
+  /**
+   * Jump straight to a new verse from anywhere before a ladder (opening,
+   * checks, stitch, thread, done for today). `verseId` picks which one;
+   * otherwise nextNewVerse's choice. Counts against the pace, but always
+   * allows at least one: the user asked for it.
+   */
+  | { type: 'startNew'; verseId?: string }
+  /** Done for today: run the cold checks that a jump to a new verse skipped. */
+  | { type: 'doChecks' }
   | { type: 'finish' };
 
 export const startSession = (env: SessionEnv): SessionState => ({
@@ -619,9 +630,13 @@ const enterThread = (s: SessionState, env: SessionEnv): SessionState => {
   return enterNew(s, env);
 };
 
-const enterNew = (s: SessionState, env: SessionEnv): SessionState => {
+const enterNew = (s: SessionState, env: SessionEnv, preferId?: string): SessionState => {
   if (s.budget <= 0) return { ...s, step: { kind: 'doneToday' } };
-  const item = nextNewVerse(env.items, new Set([...s.setAside, ...s.finishedThisSitting]));
+  const exclude = new Set([...s.setAside, ...s.finishedThisSitting]);
+  const preferred = preferId
+    ? env.items.find((i) => i.verseId === preferId && i.status === 'learning' && runsBanked(i) === 0 && !exclude.has(i.verseId))
+    : undefined;
+  const item = preferred ?? nextNewVerse(env.items, exclude);
   if (!item) return { ...s, step: { kind: 'doneToday' } };
   const passage = buildPassages(env.items).find((p) => p.items.some((i) => i.verseId === item.verseId));
   const ladder = createLadder(toDrillVerse(item), (passage?.items ?? [item]).map(toDrillVerse), { lastDrill: s.lastDrill }, env.rng);
@@ -636,12 +651,18 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
 
   if (event.type === 'finish') return { ...s, step: { kind: 'summary' } };
 
+  if (event.type === 'startNew') {
+    if (step.kind === 'ladder' || step.kind === 'summary') return s;
+    return enterNew({ ...s, budget: Math.max(s.budget, 1) }, env, event.verseId);
+  }
+
   switch (step.kind) {
     case 'opening':
       return event.type === 'begin' ? enterCold(s, env) : s;
 
     case 'cold': {
       const popCold = () => ({ ...s, coldQueue: s.coldQueue.slice(1) });
+      if (event.type === 'skip') return enterCold(popCold(), env);
       if (step.stage === 'recite' && event.type === 'result') {
         const logged = pushLog(s, { step: 'cold', verseIds: [step.verseId], perfect: event.perfect });
         if (event.perfect) return enterCold({ ...logged, coldQueue: logged.coldQueue.slice(1) }, env);
@@ -669,6 +690,7 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
     }
 
     case 'stitch': {
+      if (event.type === 'skip') return enterThread({ ...s, stitchCount: s.stitchCount + 1 }, env);
       if (step.stage === 'jigsaw') return event.type === 'next' ? { ...s, step: { ...step, stage: 'recite' } } : s;
       if (event.type !== 'result') return s;
       const logged = pushLog(s, { step: 'stitch', verseIds: step.verseIds, perfect: event.perfect });
@@ -683,6 +705,7 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
     }
 
     case 'seam': {
+      if (event.type === 'skip') return enterThread({ ...s, stitchCount: s.stitchCount + 1 }, env);
       if (event.type !== 'result') return s;
       const window = drillVersesOf(env, step.verseIds);
       return {
@@ -692,6 +715,7 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
     }
 
     case 'thread':
+      if (event.type === 'skip') return enterNew(s, env);
       return event.type === 'result'
         ? enterNew(pushLog(s, { step: 'thread', verseIds: step.verseIds, perfect: event.perfect }), env)
         : s;
@@ -727,6 +751,11 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
     }
 
     case 'doneToday':
+      if (event.type === 'doChecks') {
+        // Only the checks: whatever follows them (a stitch, a thread) may
+        // run too, but no new verse unless asked for again.
+        return s.coldQueue.length > 0 ? enterCold({ ...s, budget: 0 }, env) : s;
+      }
       return event.type === 'keepGoing' ? enterNew({ ...s, budget: s.budget + 1 }, env) : s;
 
     case 'summary':

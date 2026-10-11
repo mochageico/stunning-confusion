@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 
 import { threadSpan, ThreadSpanVerse } from '../lib/drills';
 import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, SpeechRecognizer, tokenizeWords, WordOutcome } from '../lib/recitation';
-import { joinWords, maskLetters, normalizeToken, scriptOfVerse, typedLetters, wordGap } from '../lib/textScript';
+import { joinWords, maskExceptFirstLetter, maskLetters, normalizeToken, scriptOfVerse, typedLetters, wordGap } from '../lib/textScript';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
 import { WaveBars } from './ui';
 
@@ -138,6 +138,8 @@ export default function GradedRecitation({
   gradedDetail,
   continueLabel = 'Next',
   showHeard = false,
+  hintFirstLetters = false,
+  onSwitchMode,
   onCancel,
   onResult,
 }: {
@@ -161,6 +163,13 @@ export default function GradedRecitation({
   continueLabel?: string;
   /** Under the graded text, list what the speech engine heard in place of each missed word. */
   showHeard?: boolean;
+  /** Typing: hidden words show their first letter (an ungraded look-up, not a test). */
+  hintFirstLetters?: boolean;
+  /**
+   * Offers "Type instead" while listening and "Recite instead" while typing.
+   * The caller remounts with the other mode; this attempt is dropped unscored.
+   */
+  onSwitchMode?: (to: RecitationMode) => void;
   /** Listening ended with nothing heard, failed, or was cancelled. */
   onCancel: () => void;
   /** The user tapped Continue on the graded result, after any corrections. */
@@ -316,15 +325,27 @@ export default function GradedRecitation({
   // Speech mishears words people said right; tapping one marks it right, as in Recall.
   const markRight = (flatIdx: number) => setOutcomes((prev) => prev.map((o, i) => (i === flatIdx ? 'perfect' : o)));
 
+  // Switching drops this attempt: stop listening first so the engine's own
+  // end callback can't report a cancel after the switch.
+  const switchTo = (to: RecitationMode) => {
+    finishedRef.current = true;
+    engineRef.current?.stop();
+    onSwitchMode?.(to);
+  };
+  const canRecite = !!onSwitchMode && canSpeakVerses([verses[endVerse]]);
+
   // ---- Listening ---------------------------------------------------------------
   if (stage === 'speak') {
     return (
       <RoundFrame
         footer={
-          <ButtonPair
-            left={<AppButton variant="secondary" label="Cancel" onPress={cancelSpeaking} />}
-            right={<AppButton variant="primary" label="Done" onPress={finishSpeaking} />}
-          />
+          <View style={{ gap: space(8) }}>
+            {onSwitchMode && <AppButton variant="quiet" label="Type instead" onPress={() => switchTo('type')} />}
+            <ButtonPair
+              left={<AppButton variant="secondary" label="Cancel" onPress={cancelSpeaking} />}
+              right={<AppButton variant="primary" label="Done" onPress={finishSpeaking} />}
+            />
+          </View>
         }
       >
         {header}
@@ -358,11 +379,14 @@ export default function GradedRecitation({
       <RoundFrame
         footer={
           <View style={{ gap: space(8) }}>
-            <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
+            <View className="flex-row flex-wrap items-center justify-between" style={{ gap: space(8) }}>
               <AppText variant="caption" className="font-sans font-medium text-ink-3 px-1">
                 {pointer} of {graded.length}
               </AppText>
-              <AppButton size="sm" variant="secondary" label="Show this word" onPress={showWord} />
+              <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
+                {canRecite && <AppButton size="sm" variant="quiet" label="Recite instead" onPress={() => switchTo('speak')} />}
+                <AppButton size="sm" variant="secondary" label="Show this word" onPress={showWord} />
+              </View>
             </View>
             <AppTextInput
               value=""
@@ -388,7 +412,7 @@ export default function GradedRecitation({
             }
             if (shownWords?.has(i)) return { text: w, className: `font-serif ${i === pointer ? 'bg-accent-soft text-accent' : 'text-ink-2'}` };
             return {
-              text: maskLetters(w, script),
+              text: hintFirstLetters ? maskExceptFirstLetter(w, script) : maskLetters(w, script),
               className: `font-sans font-bold rounded px-1 ${i === pointer ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-ink-3'}`,
             };
           }}

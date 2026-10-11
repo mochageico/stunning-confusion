@@ -120,6 +120,7 @@ export default function ThreadRound({
         highlightWords={cue.cueWords.length}
         header={cueCard(true)}
         onCancel={() => setStage('cue')}
+        onSwitchMode={setStage}
         onResult={finishGraded}
         gradedDetail={(perVerse) => (
           <View className="border-t border-line" style={{ paddingTop: space(10), gap: space(6) }}>
