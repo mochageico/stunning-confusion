@@ -213,9 +213,6 @@ export const BIBLE_TRANSLATIONS: BibleTranslation[] = [
     name: 'Original languages (WLC + SBLGNT)',
     shortLabel: 'Hebrew/Greek',
     scripts: { ot: 'hebrew', nt: 'greek' },
-    // Until right-to-left display and Hebrew/Greek-aware drills land
-    // (plan phases 2-3), and the text is imported to Firestore.
-    inDevelopment: true,
     testamentCopyright: { nt: SBLGNT_COPYRIGHT_NOTICE },
     isPublicDomain: true,
     source: 'firestore',

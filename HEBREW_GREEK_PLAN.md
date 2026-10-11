@@ -240,6 +240,13 @@ long), all script-aware:
 
 ## Phase 4 — Walk every mode
 
+**Status (2026-10-10): shipped.** Tested on the user's iPhone. One bug found there:
+first-letter typing graded every character the Hebrew keyboard sent (vowel points,
+presentation forms, direction marks) as a guess. Fixed with `typedLetters()`, commit
+228f46b. `inDevelopment` removed from the HEBGRK entry, so Hebrew/Greek is in every
+picker in every build. Still open: `AudioFeedScreen`'s translation filter shows the
+raw id `HEBGRK` rather than `translationLabel()`.
+
 Add a Hebrew and a Greek passage to demo mode (`src/dev/DemoHarness.tsx`) so
 this can be checked with `?s=<screen>` on web and `npm run shots` without an
 account. Then go through, in both scripts: reading, memory grid, printed grid,
