@@ -109,6 +109,8 @@ function GradedStage({
   caption,
   hiddenShare,
   creditLines,
+  easierLabel,
+  onEasier,
   onDone,
 }: {
   verses: GuidedDrillVerse[];
@@ -122,6 +124,9 @@ function GradedStage({
   hiddenShare?: number;
   /** One line per verse in the stretch, shown under the graded text. */
   creditLines?: (results: StageResult) => { index: number; text: string }[];
+  /** A step down offered before reciting (no miss counted). */
+  easierLabel?: string;
+  onEasier?: () => void;
   onDone: (result: StageResult) => void;
 }) {
   const space = useScaledSpace();
@@ -168,6 +173,7 @@ function GradedStage({
             label="Type first letters"
             onPress={() => setStage('type')}
           />
+          {onEasier && easierLabel && <AppButton variant="quiet" label={easierLabel} onPress={onEasier} />}
         </View>
       </RoundFrame>
     );
@@ -412,11 +418,14 @@ function Sitting({
   passageKey,
   passages,
   onPickPassage,
+  jigsawWarmUp,
 }: {
   state: AppState;
   passageKey: string;
   passages: Passage[];
   onPickPassage: (key: string) => void;
+  /** The saved warm-up setting; the warm-up step can turn it off mid-sitting. */
+  jigsawWarmUp: boolean;
 }) {
   const space = useScaledSpace();
   const { navigateTo, masteryTouches, newVersesPace, learningDays, dayStartHour, reviewsPaused, memoryQueueRef } = state;
@@ -429,6 +438,7 @@ function Sitting({
     idsRef.current.map((id) => memoryQueueRef.current.find((q) => q.verseId === id)).filter((q): q is QueueItem => !!q);
   const itemOf = (id: string) => memoryQueueRef.current.find((q) => q.verseId === id);
 
+  const jigsawRef = useRef(jigsawWarmUp);
   const makeEnv = (): SessionEnv => {
     const shift = dayStartHour * 3600000;
     const toLogical = (iso: string) => dayKey(new Date(new Date(iso).getTime() - shift));
@@ -439,6 +449,7 @@ function Sitting({
       masteryTouches,
       pace: learnDay ? newVersesPace : 0,
       newToday: newVersesFinishedToday(memoryQueueRef.current, dayKey(new Date(Date.now() - shift)), toLogical),
+      jigsawWarmUp: jigsawRef.current,
       rng: Math.random,
     };
   };
@@ -719,6 +730,8 @@ function Sitting({
         startVerse={0}
         startWord={0}
         endVerse={0}
+        easierLabel={refresh ? undefined : 'Not ready? Refresh it first'}
+        onEasier={refresh ? undefined : () => dispatch({ type: 'easier' })}
         eyebrow={refresh ? 'Once more' : 'Check from memory'}
         caption={refresh ? 'Say it again. This one doesn’t count.' : 'Say the verse with nothing in front of you.'}
         creditLines={({ perVerse }) => [
@@ -759,6 +772,16 @@ function Sitting({
             <JigsawDrill verses={verses} />
           </View>
           <AppButton size="lg" variant="primary" label="Next" onPress={() => dispatch({ type: 'next' })} />
+          <AppButton
+            variant="quiet"
+            label="Turn off warm-ups"
+            onPress={() => {
+              jigsawRef.current = false;
+              savePracticePrefs({ guidedJigsaw: false });
+              dispatch({ type: 'next' });
+              setTimeout(() => setNotice('Warm-ups are off. Turn them back on in Settings, under Practice.'), 0);
+            }}
+          />
         </View>,
         skipBar('Skip the stitch')
       );
@@ -881,6 +904,8 @@ function Sitting({
         startWord={0}
         endVerse={0}
         hiddenShare={partly ? GUIDED_PARTLY_HIDDEN : undefined}
+        easierLabel={partly ? 'Easier: one more drill first' : 'Easier: show some words'}
+        onEasier={() => dispatch({ type: 'easier' })}
         eyebrow={partly ? 'Some words showing' : 'From memory'}
         caption={partly ? 'Say the verse. The shown words won’t count toward a run.' : 'Say the verse with nothing in front of you.'}
         creditLines={({ perVerse }) => [
@@ -1023,10 +1048,12 @@ export default function GuidedLearningScreen({ state }: { state: AppState }) {
   // Pick up where you left off: the last passage opened on this device.
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [jigsawWarmUp, setJigsawWarmUp] = useState(true);
   useEffect(() => {
     (async () => {
       const prefs: any = await loadPracticePrefs();
       if (typeof prefs.guidedLastPassage === 'string') setSavedKey(prefs.guidedLastPassage);
+      if (prefs.guidedJigsaw === false) setJigsawWarmUp(false);
       setPrefsLoaded(true);
     })();
   }, []);
@@ -1084,7 +1111,7 @@ export default function GuidedLearningScreen({ state }: { state: AppState }) {
     );
   }
 
-  return <Sitting key={resolved.key} state={state} passageKey={resolved.key} passages={passages} onPickPassage={(k) => {
+  return <Sitting key={resolved.key} state={state} passageKey={resolved.key} passages={passages} jigsawWarmUp={jigsawWarmUp} onPickPassage={(k) => {
     setChosen(k);
     setLocked(k);
   }} />;

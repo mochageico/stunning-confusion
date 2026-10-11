@@ -18,7 +18,7 @@ import {
   STRIKE_LIMITS,
   StrikeLimit,
 } from '../lib/practicePrefs';
-import { AppButton, AppText, AppTextInput, ChoiceCard, useScaledSpace } from '../components/design';
+import { AppButton, AppText, AppTextInput, ChoiceCard, ToggleRow, useScaledSpace } from '../components/design';
 import { Dialog, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { ACCENTS, useAccent, useThemeColors } from '../components/theme';
 
@@ -60,9 +60,13 @@ const PAUSE_DURATIONS: { id: '1w' | '2w' | '1m' | 'indefinite'; label: string; d
 function PracticeSettings() {
   const space = useScaledSpace();
   const [strikeLimit, setStrikeLimit] = useState<StrikeLimit>(DEFAULT_STRIKE_LIMIT);
+  // Guided learning's jigsaw warm-up before stitches. Off is saved as false;
+  // anything else (never set) means on.
+  const [jigsaw, setJigsaw] = useState(true);
   useEffect(() => {
     loadPracticePrefs().then((saved) => {
       if (isStrikeLimit(saved.strikeLimit)) setStrikeLimit(saved.strikeLimit);
+      if (saved.guidedJigsaw === false) setJigsaw(false);
     });
   }, []);
   return (
@@ -80,6 +84,17 @@ function PracticeSettings() {
       <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
         In Recall, missing this many words in one verse starts that verse over from the top.
       </AppText>
+      <View style={{ paddingTop: space(10), paddingHorizontal: space(4) }}>
+        <ToggleRow
+          label="Jigsaw warm-up in Guided learning"
+          hint="Before every second stitch of three verses, put them in order first."
+          value={jigsaw}
+          onChange={(on) => {
+            setJigsaw(on);
+            savePracticePrefs({ guidedJigsaw: on });
+          }}
+        />
+      </View>
     </View>
   );
 }

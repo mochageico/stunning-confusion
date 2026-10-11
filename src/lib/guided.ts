@@ -158,7 +158,7 @@ export interface Ladder {
   knowIt: boolean;
 }
 
-export type LadderEvent = 'done' | 'pass' | 'miss' | 'reroll' | 'knowIt';
+export type LadderEvent = 'done' | 'pass' | 'miss' | 'reroll' | 'knowIt' | 'easier';
 
 /** Drills that work inside a single verse. Jigsaw and threads are stitch-only. */
 export const eligibleDrills = (verse: GuidedDrillVerse, passageVerses: GuidedDrillVerse[]): GuidedDrillId[] => {
@@ -273,6 +273,23 @@ export const ladderAfter = (ladder: Ladder, event: LadderEvent, rng: Rng): Ladde
   if (event === 'knowIt') {
     if (rung.kind !== 'read') return ladder;
     return { ...ladder, pos: ladder.rungs.length - 1, knowIt: true };
+  }
+
+  if (event === 'easier') {
+    // Asked for before reciting: one rung down, never a miss or an activity.
+    if (!isGradedRung(rung)) return ladder;
+    if (ladder.knowIt) {
+      // Backing out of "I know this one" lands on the partly hidden rung.
+      return { ...ladder, pos: ladder.rungs.length - 2, knowIt: false, passedPartly: false };
+    }
+    const pos = Math.max(firstDrillIndex, ladder.pos - 1);
+    return {
+      ...ladder,
+      // Back onto a drill: a fresh one, so it doesn't feel like a replay.
+      rungs: ladder.rungs[pos].kind === 'drill' ? pickDrillRungs(ladder.rungs, pos, ladder.eligible, ladder.avoid, rng) : ladder.rungs,
+      pos,
+      passedPartly: false,
+    };
   }
 
   if (event === 'reroll') {
@@ -555,6 +572,8 @@ export interface SessionEnv {
   pace: number;
   /** New verses already finished today before this sitting. */
   newToday: number;
+  /** Jigsaw warm-up before every second 3-verse stitch (a setting; default on). */
+  jigsawWarmUp?: boolean;
   rng: Rng;
 }
 
@@ -566,6 +585,11 @@ export type SessionEvent =
   | { type: 'result'; perfect: boolean; /** Stitch: index in the window of the first slipped verse. */ firstSlip?: number }
   | { type: 'reroll' }
   | { type: 'knowIt' }
+  /**
+   * Before reciting: a cold check goes straight to its refresh (no slip
+   * logged); a ladder recitation steps down one rung (no miss counted).
+   */
+  | { type: 'easier' }
   | { type: 'keepGoing' }
   /** Skip the current check, stitch, seam or thread: no credit, no penalty. */
   | { type: 'skip' }
@@ -606,7 +630,7 @@ const enterStitch = (s: SessionState, env: SessionEnv): SessionState => {
   const window = stitchWindow(env.items, new Set(s.finishedThisSitting));
   if (window.length < 2) return enterThread(s, env);
   const verseIds = window.map((i) => i.verseId);
-  const jigsaw = window.length === 3 && s.stitchCount % 2 === 1;
+  const jigsaw = env.jigsawWarmUp !== false && window.length === 3 && s.stitchCount % 2 === 1;
   return {
     ...s,
     step: { kind: 'stitch', verseIds, stage: jigsaw ? 'jigsaw' : 'recite', fails: 0, cue: stitchCue(window.map(toDrillVerse)) },
@@ -663,6 +687,11 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
     case 'cold': {
       const popCold = () => ({ ...s, coldQueue: s.coldQueue.slice(1) });
       if (event.type === 'skip') return enterCold(popCold(), env);
+      if (step.stage === 'recite' && event.type === 'easier') {
+        const item = findItem(env, step.verseId);
+        const eligible = item ? eligibleDrills(toDrillVerse(item), drillVersesOf(env, buildPassageIds(env, step.verseId))) : (['firstLetters'] as GuidedDrillId[]);
+        return { ...s, step: { ...step, stage: 'refreshDrill', drill: pickDrill(eligible, [], s.lastDrill, undefined, env.rng) } };
+      }
       if (step.stage === 'recite' && event.type === 'result') {
         const logged = pushLog(s, { step: 'cold', verseIds: [step.verseId], perfect: event.perfect });
         if (event.perfect) return enterCold({ ...logged, coldQueue: logged.coldQueue.slice(1) }, env);
@@ -721,7 +750,7 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
         : s;
 
     case 'ladder': {
-      const map: Partial<Record<SessionEvent['type'], LadderEvent>> = { knowIt: 'knowIt', reroll: 'reroll', next: 'done' };
+      const map: Partial<Record<SessionEvent['type'], LadderEvent>> = { knowIt: 'knowIt', reroll: 'reroll', next: 'done', easier: 'easier' };
       let ladderEvent: LadderEvent | undefined = map[event.type];
       if (event.type === 'result') ladderEvent = event.perfect ? 'pass' : 'miss';
       if (!ladderEvent) return s;

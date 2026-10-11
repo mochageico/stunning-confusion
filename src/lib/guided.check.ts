@@ -380,6 +380,42 @@ console.log('Sitting');
     s = send(s, { type: 'doChecks' }, env);
     check('Do checks runs the waiting cold check', s.step.kind === 'cold' && s.step.verseId === 'BSB_PSA_23_1', s.step);
   }
+
+  // ---- easier and the jigsaw setting ----
+  {
+    const run = (l: Ladder, events: LadderEvent[], r = seeded(7)) => events.reduce((acc, e) => ladderAfter(acc, e, r), l);
+    const base = createLadder(long30, passageVerses, {}, seeded(3)); // read, look, A, B, C, partly, fully
+    const atFully = run(base, ['done', 'done', 'done', 'done', 'done', 'pass']);
+    const down = ladderAfter(atFully, 'easier', seeded(9));
+    check('Easier on fully hidden steps down to partly hidden', down.rungs[down.pos].kind === 'partly', down.pos);
+    check('...with no miss and no activity counted', down.misses === 0 && down.activities === atFully.activities, { m: down.misses, a: down.activities });
+    check('...and partly hidden has to be passed again', down.passedPartly === false);
+    const down2 = ladderAfter(down, 'easier', seeded(9));
+    check('Easier on partly hidden steps down to a drill', down2.rungs[down2.pos].kind === 'drill' && down2.misses === 0, down2.pos);
+    const atDrill = run(base, ['done', 'done']);
+    check('Easier does nothing on a drill', ladderAfter(atDrill, 'easier', seeded(9)) === atDrill);
+    const known = ladderAfter(base, 'knowIt', seeded(9));
+    const backed = ladderAfter(known, 'easier', seeded(9));
+    check('Easier after "I know this one" lands on partly hidden, shortcut dropped', backed.rungs[backed.pos].kind === 'partly' && !backed.knowIt && backed.misses === 0, backed);
+
+    const env = mk([item(1, { runsAgo: [60 * 24] }), item(2)]);
+    let s = send(startSession(env), { type: 'begin' }, env);
+    s = send(s, { type: 'easier' }, env);
+    check('Easier on a cold check goes to the refresh drill with nothing logged', s.step.kind === 'cold' && s.step.stage === 'refreshDrill' && s.log.length === 0, s.step);
+
+    // Every second 3-verse stitch gets a jigsaw warm-up unless the setting is off.
+    const three = [item(1, { runsAgo: [60 * 24] }), item(2, { runsAgo: [60 * 24] }), item(3, { runsAgo: [60 * 24] })];
+    const second = (on: boolean) => {
+      const e = mk(three, { jigsawWarmUp: on });
+      let st: SessionState = { ...startSession(e), coldQueue: [], stitchCount: 1 };
+      st = send(st, { type: 'begin' }, e);
+      return st.step;
+    };
+    const onStep = second(true);
+    const offStep = second(false);
+    check('Second 3-verse stitch opens with a jigsaw when the warm-up is on', onStep.kind === 'stitch' && onStep.stage === 'jigsaw', onStep);
+    check('...and goes straight to reciting when it is off', offStep.kind === 'stitch' && offStep.stage === 'recite', offStep);
+  }
 }
 
 console.log(failures === 0 ? '\nall guided checks passed' : `\n${failures} guided check(s) FAILED`);
