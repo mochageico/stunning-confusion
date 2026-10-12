@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { ArrowUp, CalendarDays, CalendarClock, ChevronRight, GripVertical, History, Plus, Trash2 } from 'lucide-react-native';
+import { ArrowUp, CalendarDays, ChevronRight, GripVertical, History, Plus, Trash2 } from 'lucide-react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import { AppState } from '../state/useAppState';
@@ -13,7 +13,7 @@ import { CompleteChips, StageDot, StageStrip, VerseStageRow, stageCaption } from
 import VersesByBook from '../components/VersesByBook';
 import { reorderQueueGroups } from '../lib/queueReorder';
 import { STAGE_LABEL, STAGE_ORDER, StageGroup, VerseStage, groupByStage, referenceFor, stageCounts } from '../lib/stageProgress';
-import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, learnedCount, projectStartDates, waitingRunsOut } from '../lib/forecast';
+import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, learnedCount, projectStartDates } from '../lib/forecast';
 import { translationLabel } from '../data';
 
 import { useThemeColors } from '../components/theme';
@@ -62,6 +62,7 @@ function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
 }
 
 type VersesView = 'stage' | 'book';
+const EMPTY_STARTS = new Map<string, Date>();
 // Remembered for the session, so coming back from a verse page lands on the
 // view you left. Not saved to the device: By stage is the right place to open.
 let lastView: VersesView = 'stage';
@@ -102,7 +103,19 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   };
 
   const plan = { dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches };
-  const now = new Date();
+  // One clock per visit, so the memoized rows below don't all redraw
+  // because a fresh Date was handed to them.
+  const now = useMemo(() => new Date(), []);
+
+  // The header, switch and strip draw on the first frame; the stage lists
+  // (every verse row, and the drag-to-reorder list) follow a frame later.
+  // Mounting them all before the tab could appear is what made opening the
+  // tab feel laggy.
+  const [listsReady, setListsReady] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setListsReady(true), 0);
+    return () => clearTimeout(id);
+  }, []);
   // Everything but Waiting, bucketed by stage. Waiting keeps its own
   // drag-to-reorder list below, because its order is the learning order.
   const byStage = useMemo(
@@ -128,10 +141,13 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     pausedAt,
     pausedUntil,
   };
+  // Simulating the daily pull is the costliest sum on this screen, and only
+  // the look-ahead switch and By book use it -- so skip it until one is open.
+  const needStarts = horizon !== 'now' || view === 'book';
   const starts = useMemo(
-    () => projectStartDates(memoryQueue, forecastPlan, now),
+    () => (needStarts ? projectStartDates(memoryQueue, forecastPlan, now) : EMPTY_STARTS),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [memoryQueue, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil]
+    [needStarts, memoryQueue, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil]
   );
   const ahead = horizon !== 'now';
   const shownCounts = useMemo(
@@ -156,20 +172,6 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
       }.`
     : `${learnedNow} of your ${total} verses learned so far${counts.complete > 0 ? `, ${counts.complete} Complete` : ''}.`;
 
-  // When the last waiting verse starts. With group plans in the mix the pull
-  // isn't simply "N a day", so the sentence doesn't claim a pace.
-  const runsOut = waitingRunsOut(memoryQueue, starts);
-  const runsOutLabel = runsOut
-    ? runsOut.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        ...(runsOut.getFullYear() === now.getFullYear() ? null : { year: 'numeric' }),
-      })
-    : null;
-  const paceText =
-    joinedGroupPlanMemberships.length > 0
-      ? 'At your current pace'
-      : `At ${newVersesPace} a day, ${learningDays.length} ${learningDays.length === 1 ? 'day' : 'days'} a week`;
 
   // Waiting verses, in learning order. Sorted by orderIndex BEFORE grouping,
   // because orderIndex is the real source of truth for queue position -- not
@@ -239,8 +241,14 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     setTimeout(() => scrollToStage(stage), 150);
   };
 
-  const openGroup = (g: StageGroup) =>
-    openVersePage({ book: g.book, chapter: g.chapter, verses: g.verses, translationId: g.translationId });
+  // Stable across renders (the app state hands out a new openVersePage every
+  // render), so the memoized rows don't redraw when something unrelated changes.
+  const openVersePageRef = useRef(openVersePage);
+  openVersePageRef.current = openVersePage;
+  const openGroup = useCallback(
+    (g: StageGroup) => openVersePageRef.current({ book: g.book, chapter: g.chapter, verses: g.verses, translationId: g.translationId }),
+    []
+  );
 
   // Nothing has moved past Learning yet: teach the road instead of showing
   // four empty sections with no explanation.
@@ -260,7 +268,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
       </View>
       {counts[stage] > 0 && (
         <AppText variant="caption" className="font-sans text-ink-2" style={{ paddingLeft: space(22), paddingRight: space(4) }}>
-          {stageCaption(stage, plan)}
+          {stage === 'waiting' && !waitingSections.some((sec) => sec.groups.length > 1)
+            ? "In the order you'll learn them."
+            : stageCaption(stage, plan)}
         </AppText>
       )}
     </View>
@@ -294,23 +304,25 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     </View>
   );
 
+  const waitingRow = (group: GroupedQueueItem, drag?: () => void, isActive = false) => (
+    <VerseGroupRow
+      key={group.id}
+      group={group}
+      drag={drag}
+      isActive={isActive}
+      onStart={() => promoteToLearning(group.items.map((item) => item.verseId))}
+      onRemove={() => {
+        // removeQueueItems, not a raw filter: deleting from
+        // Firestore now requires recorded intent, so this is
+        // the only route that actually removes documents.
+        removeQueueItems(group.items.map((item) => item.verseId));
+        triggerToast('Removed those verses from your list.');
+      }}
+    />
+  );
+
   const waitingBody = (
     <View style={{ gap: space(12) }}>
-      {runsOutLabel && (
-        <View
-          className="flex-row items-start bg-surface-2 border border-line rounded-btn"
-          style={{ paddingVertical: space(10), paddingHorizontal: space(12), gap: space(10) }}
-        >
-          <CalendarClock size={Math.round(18 * scale)} color={palette.accent} />
-          <AppText variant="label" className="font-sans text-ink flex-1">
-            {paceText}, these run out around{' '}
-            <AppText variant="label" className="font-sans font-semibold text-ink">
-              {runsOutLabel}
-            </AppText>
-            .
-          </AppText>
-        </View>
-      )}
       {waitingGroups.length === 0 ? (
         <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
           Nothing waiting. Tap Add verses to choose what you learn next.
@@ -323,6 +335,11 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
               <AppText variant="label" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
                 None waiting.
               </AppText>
+            ) : section.groups.length === 1 ? (
+              // One row has nothing to reorder against, so it skips the
+              // drag list: setting one up was the slowest part of opening
+              // this tab.
+              waitingRow(section.groups[0])
             ) : (
               // Real drag-to-reorder. scrollEnabled={false} because this
               // always nests inside the screen's own ScrollView -- same
@@ -345,21 +362,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                   updateMemoryQueue((prev) => reorderQueueGroups(prev, section.groups, from, to));
                   triggerToast('Reordered.');
                 }}
-                renderItem={({ item: group, drag, isActive }: RenderItemParams<GroupedQueueItem>) => (
-                  <VerseGroupRow
-                    group={group}
-                    drag={drag}
-                    isActive={isActive}
-                    onStart={() => promoteToLearning(group.items.map((item) => item.verseId))}
-                    onRemove={() => {
-                      // removeQueueItems, not a raw filter: deleting from
-                      // Firestore now requires recorded intent, so this is
-                      // the only route that actually removes documents.
-                      removeQueueItems(group.items.map((item) => item.verseId));
-                      triggerToast('Removed those verses from your list.');
-                    }}
-                  />
-                )}
+                renderItem={({ item: group, drag, isActive }: RenderItemParams<GroupedQueueItem>) => waitingRow(group, drag, isActive)}
               />
             )}
           </View>
@@ -371,7 +374,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const rows = (stage: 'learning' | 'daily' | 'weekly' | 'monthly') => (
     <View style={{ gap: space(8) }}>
       {byStage[stage].map((g) => (
-        <VerseStageRow key={g.key} group={g} now={now} onPress={() => openGroup(g)} />
+        <VerseStageRow key={g.key} group={g} now={now} onOpen={openGroup} />
       ))}
     </View>
   );
@@ -491,7 +494,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
               </View>
             )}
 
-            {view === 'stage' ? (
+            {!listsReady ? null : view === 'stage' ? (
               <View style={{ gap: space(24) }} onLayout={(e) => (listY.current = e.nativeEvent.layout.y)}>
                 {stageSection('waiting', 'Waiting to start', waitingBody)}
                 {stageSection('learning', 'Learning now', rows('learning'))}
@@ -505,7 +508,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                 queue={memoryQueue}
                 plan={plan}
                 starts={starts}
-                onOpenChapter={(book, chapter) => navigateTo('chapterLanding', book, chapter)}
+                onOpenChapter={(book, chapter) => navigateTo('chapterLanding', book, chapter, { keepBack: true })}
               />
             )}
           </>
@@ -561,7 +564,8 @@ function VerseGroupRow({
   onRemove,
 }: {
   group: GroupedQueueItem;
-  drag: () => void;
+  /** Absent when the row is alone in its list: there's nothing to move it past. */
+  drag?: () => void;
   isActive: boolean;
   onStart: () => void;
   onRemove: () => void;
@@ -577,16 +581,18 @@ function VerseGroupRow({
       onLongPress={drag}
       delayLongPress={250}
       accessibilityRole="button"
-      accessibilityLabel={`${reference}. Press and hold to move.`}
+      accessibilityLabel={drag ? `${reference}. Press and hold to move.` : reference}
       className={`flex-row items-start rounded-card border ${isActive ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
       style={{ padding: space(12), gap: space(10) }}
     >
       {/* Drag affordance. The whole row is the drag target (a small handle
           is a hard thing to hit), but the grip is what makes that
           discoverable. */}
-      <View className="shrink-0" style={{ paddingTop: space(2) }}>
-        <GripVertical size={Math.round(16 * scale)} color={isActive ? palette.accent : palette.ink3} />
-      </View>
+      {drag && (
+        <View className="shrink-0" style={{ paddingTop: space(2) }}>
+          <GripVertical size={Math.round(16 * scale)} color={isActive ? palette.accent : palette.ink3} />
+        </View>
+      )}
 
       <View className="flex-1" style={{ gap: space(6), minWidth: 0 }}>
         <View className="flex-row items-start" style={{ gap: space(8) }}>

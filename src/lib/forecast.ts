@@ -7,8 +7,7 @@ import { STAGE_ORDER, StagePlan, VerseStage, roadEstimates, stageCounts, verseSt
 // LOOKING AHEAD
 // ----------------------------------------------------------------------------
 // Where the verses already on your list will be at a future date: the time
-// switch on My Verses' strip, "these run out around…" under Waiting, and each
-// chapter's "all learned" date on By book.
+// switch on My Verses' strip, and each chapter's "all learned" date on By book.
 //
 // Two promises, both stated in the UI:
 //   - only verses already on the list. It never assumes you'll add more.
@@ -122,19 +121,6 @@ export function forecastCounts(
 
 /** Learned means past Learning: in review or Complete. */
 export const learnedCount = (c: Record<VerseStage, number>) => c.daily + c.weekly + c.monthly + c.complete;
-
-/** The day the last waiting verse starts. Null when nothing is waiting, or it doesn't all start within the window. */
-export function waitingRunsOut(queue: QueueItem[], starts: Map<string, Date>): Date | null {
-  const waiting = queue.filter((q) => q.status === 'queued');
-  if (waiting.length === 0) return null;
-  let last: Date | null = null;
-  for (const q of waiting) {
-    const d = starts.get(q.verseId);
-    if (!d) return null;
-    if (!last || d.getTime() > last.getTime()) last = d;
-  }
-  return last;
-}
 
 /**
  * When every one of these verses (say, a chapter's) will be learned. 'done'

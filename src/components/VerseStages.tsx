@@ -172,7 +172,15 @@ function rowBadges(group: StageGroup, now: Date): { label: string; tone: 'succes
  * One row on My Verses for a Learning, Daily, Weekly or Monthly verse (or a
  * run of neighbours at the same point). Tapping opens the verse page.
  */
-export function VerseStageRow({ group, onPress, now = new Date() }: { group: StageGroup; onPress: () => void; now?: Date }) {
+export const VerseStageRow = React.memo(function VerseStageRow({
+  group,
+  onOpen,
+  now,
+}: {
+  group: StageGroup;
+  onOpen: (group: StageGroup) => void;
+  now: Date;
+}) {
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
@@ -187,7 +195,7 @@ export function VerseStageRow({ group, onPress, now = new Date() }: { group: Sta
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => onOpen(group)}
       accessibilityRole="button"
       accessibilityLabel={[reference, STAGE_LABEL[p.stage], position, nextLabel, ...badges.map((b) => b.label)].filter(Boolean).join('. ')}
       className="flex-row items-center bg-surface border border-line rounded-card active:opacity-70"
@@ -237,7 +245,7 @@ export function VerseStageRow({ group, onPress, now = new Date() }: { group: Sta
       <ChevronRight size={Math.round(18 * scale)} color={palette.ink3} />
     </Pressable>
   );
-}
+});
 
 /** Filled for each perfect recall banked, hollow for each still needed. */
 export function LearningDots({ done, total }: { done: number; total: number }) {
@@ -258,7 +266,7 @@ export function LearningDots({ done, total }: { done: number; total: number }) {
 }
 
 /** Complete verses as compact chips, so a long list of them stays short. */
-export function CompleteChips({ groups, onPress }: { groups: StageGroup[]; onPress: (group: StageGroup) => void }) {
+export const CompleteChips = React.memo(function CompleteChips({ groups, onPress }: { groups: StageGroup[]; onPress: (group: StageGroup) => void }) {
   const space = useScaledSpace();
   return (
     <View className="bg-surface border border-line rounded-card flex-row flex-wrap" style={{ padding: space(12), gap: space(8) }}>
@@ -282,4 +290,4 @@ export function CompleteChips({ groups, onPress }: { groups: StageGroup[]; onPre
       })}
     </View>
   );
-}
+});

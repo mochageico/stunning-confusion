@@ -2,7 +2,7 @@
 
 import { QueueItem } from '../types';
 import { arrivalDates, groupByStage, roadEstimates, stageCounts, stageProgress, verseStage } from './stageProgress';
-import { allLearnedBy, forecastCounts, horizonDate, learnedCount, projectStartDates, stageOn, waitingRunsOut } from './forecast';
+import { allLearnedBy, forecastCounts, horizonDate, learnedCount, projectStartDates, stageOn } from './forecast';
 
 let failures = 0;
 function check(label: string, condition: boolean, detail?: unknown) {
@@ -146,9 +146,6 @@ const fq = [...waiting, item({ verseId: 'd1', dateStarted: '2026-10-01T12:00:00Z
 const starts = projectStartDates(fq, FPLAN, FTODAY);
 const startDay = (id: string) => starts.get(id)?.getDate();
 check('2 a day on Mon, Wed, Fri', startDay('w1') === 12 && startDay('w2') === 12 && startDay('w3') === 14 && startDay('w4') === 14 && startDay('w5') === 16, Array.from(starts.entries()));
-const out = waitingRunsOut(fq, starts);
-check('runs out on the Friday', !!out && out.getDate() === 16 && out.getMonth() === 9, out);
-check('nothing waiting, no run-out date', waitingRunsOut([fq[5]], new Map()) === null);
 check('no learning days, nothing starts', projectStartDates(fq, { ...FPLAN, learningDays: [] }, FTODAY).size === 0);
 check('an open-ended pause starts nothing', projectStartDates(fq, { ...FPLAN, pausedAt: '2026-10-01T00:00:00Z', pausedUntil: null }, FTODAY).size === 0);
 const now = forecastCounts(fq, FPLAN, FTODAY, starts, FTODAY);

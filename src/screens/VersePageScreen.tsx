@@ -368,7 +368,7 @@ export default function VersePageScreen({ state }: { state: AppState }) {
           <ListRow
             title={`${ref.book} ${ref.chapter}`}
             value="Open chapter"
-            onPress={() => navigateTo('chapterLanding', ref.book, ref.chapter)}
+            onPress={() => navigateTo('chapterLanding', ref.book, ref.chapter, { keepBack: true })}
           />
         </GroupedList>
 

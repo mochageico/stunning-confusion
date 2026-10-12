@@ -686,7 +686,7 @@ export function useAppState() {
     AsyncStorage.setItem(PREFERRED_TRANSLATION_KEY, id).catch(() => {});
   };
   const [backHistory, setBackHistory] = useState<
-    Array<{ screen: ScreenName; book: string | null; chapter: number | null }>
+    Array<{ screen: ScreenName; book: string | null; chapter: number | null; tab?: TabName }>
   >([]);
 
   // Selection state for Chapter Landing
@@ -1590,10 +1590,19 @@ export function useAppState() {
     navigateTo('versePage');
   };
 
-  const navigateTo = (screen: ScreenName, book: string | null = null, chapter: number | null = null) => {
+  const navigateTo = (
+    screen: ScreenName,
+    book: string | null = null,
+    chapter: number | null = null,
+    // Keep the way back when this crosses into another tab: My Verses' By
+    // book view and the verse page open a chapter page (a Today-tab screen),
+    // and Back should return to them, not to Today.
+    options: { keepBack?: boolean } = {}
+  ) => {
     // Record history for seamless back navigation (cleared again below when
-    // this switches tabs).
-    setBackHistory((prev) => [...prev, { screen: currentScreen, book: selectedBook, chapter: selectedChapter }]);
+    // this switches tabs, unless keepBack). The tab is recorded so Back can
+    // cross back into it.
+    setBackHistory((prev) => [...prev, { screen: currentScreen, book: selectedBook, chapter: selectedChapter, tab: currentTab }]);
 
     if (book) setSelectedBook(book);
     if (chapter) setSelectedChapter(chapter);
@@ -1603,7 +1612,7 @@ export function useAppState() {
     const targetTab = tabForScreen(screen);
     if (targetTab && targetTab !== currentTab) {
       setCurrentTab(targetTab);
-      setBackHistory([]);
+      if (!options.keepBack) setBackHistory([]);
     }
 
     // NOTE: navigateTo deliberately has no per-screen plan side effects any
@@ -1627,6 +1636,7 @@ export function useAppState() {
 
       setSelectedBook(prev.book);
       setSelectedChapter(prev.chapter);
+      if (prev.tab && prev.tab !== currentTab) setCurrentTab(prev.tab);
       setCurrentScreen(prev.screen);
     } else {
       // Default fallback: the current tab's own first screen.
