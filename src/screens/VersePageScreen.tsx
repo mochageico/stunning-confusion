@@ -9,7 +9,8 @@ import { Dialog, EmptyState, GroupedList, ListRow, ScreenHeader } from '../compo
 import { Dropdown } from '../components/Dropdown';
 import { useThemeColors } from '../components/theme';
 import { STAGE_FILL, StageBar, dayWord } from '../components/VerseStages';
-import { translationLabel } from '../data';
+import { textScriptFor, translationLabel } from '../data';
+import { isRtl } from '../lib/textScript';
 import { QueueItem, ReviewLog, VerseState } from '../types';
 import {
   STAGE_LABEL,
@@ -111,6 +112,8 @@ export default function VersePageScreen({ state }: { state: AppState }) {
   const currentIdx = ROAD.indexOf(stage); // -1 while waiting
   const next = first.nextReviewDueDate ? new Date(first.nextReviewDueDate) : null;
   const ids = items.map((i) => i.verseId);
+  const script = textScriptFor(ref.translationId, ref.book);
+  const rtl = isRtl(script);
 
   const verseStates: VerseState[] = items.map((item) => ({
     book: item.book,
@@ -143,7 +146,6 @@ export default function VersePageScreen({ state }: { state: AppState }) {
 
   // ---- history ----
   const logs: ReviewLog[] = first.reviewLogs || [];
-  const reviewMarks = logs.filter((l) => l.result !== 'placed').slice(-84);
   // The log only goes back to 2026-09-26; the running total covers older verses.
   const passes = Math.max(first.totalSuccessfulReviews || 0, logs.filter((l) => l.result === 'pass').length);
   const misses = logs.filter((l) => l.result === 'miss' || l.result === 'grace').length;
@@ -167,22 +169,6 @@ export default function VersePageScreen({ state }: { state: AppState }) {
     else if (l.result === 'placed') story.push({ at, text: `Placed in ${STAGE_LABEL[l.stage === 'retained' ? 'complete' : l.stage]} by hand.` });
   }
   story.sort((a, b) => b.at.getTime() - a.at.getTime());
-
-  const markClass = (r: ReviewLog['result']) =>
-    r === 'pass'
-      ? 'bg-success'
-      : r === 'grace'
-        ? 'bg-warning-soft border-2 border-warning'
-        : r === 'miss'
-          ? 'bg-surface border-2 border-danger'
-          : 'bg-fill';
-  const kinds = Array.from(new Set(reviewMarks.map((l) => l.result)));
-  const KIND_LABEL: Partial<Record<ReviewLog['result'], string>> = {
-    pass: 'Good review',
-    grace: 'Missed, covered by grace',
-    miss: 'Missed',
-    skipped: 'No review that day',
-  };
 
   // ---- the road across the top ----
   const vertical = scale > 1.15;
@@ -224,20 +210,27 @@ export default function VersePageScreen({ state }: { state: AppState }) {
           </AppText>
         )}
 
-        <View className="bg-surface border border-line rounded-card" style={{ padding: space(18) }}>
-          <AppText variant="title" className="font-serif text-ink" style={{ lineHeight: Math.round(30 * scale) }}>
-            {items.map((item, i) => (
-              <React.Fragment key={item.verseId}>
-                {items.length > 1 && (
-                  <AppText variant="caption" className="font-sans font-semibold text-ink-3">
-                    {`${item.verseNumber} `}
-                  </AppText>
-                )}
+        {/* The verse itself, set the way the chapter page sets it: body size
+            serif with relaxed spacing, the verse number in its own column
+            (not nested in the text, where it clipped the first line on iOS),
+            and Hebrew right to left. */}
+        <View className="bg-surface border border-line rounded-card" style={{ paddingVertical: space(14), paddingHorizontal: space(16), gap: space(10) }}>
+          {items.map((item) => (
+            <View key={item.verseId} className={rtl ? 'flex-row-reverse' : 'flex-row'} style={{ gap: space(10) }}>
+              {items.length > 1 && (
+                <AppText
+                  variant="caption"
+                  className="font-sans font-semibold text-ink-3"
+                  style={{ minWidth: space(18), paddingTop: space(3), fontVariant: ['tabular-nums'] }}
+                >
+                  {item.verseNumber}
+                </AppText>
+              )}
+              <AppText variant="body" script={script} className="font-serif leading-relaxed text-ink flex-1">
                 {item.text}
-                {i < items.length - 1 ? ' ' : ''}
-              </React.Fragment>
-            ))}
-          </AppText>
+              </AppText>
+            </View>
+          ))}
         </View>
 
         {/* Where it is on the road */}
@@ -352,45 +345,6 @@ export default function VersePageScreen({ state }: { state: AppState }) {
               </View>
             ))}
           </View>
-        )}
-
-        {stage !== 'waiting' && (
-          <GroupedList header="Every review so far">
-            <View style={{ padding: space(14), gap: space(10) }}>
-              {reviewMarks.length === 0 ? (
-                <AppText variant="label" className="font-sans text-ink-2">
-                  No reviews recorded yet. They'll fill in here as you go.
-                </AppText>
-              ) : (
-                <>
-                  <View className="flex-row flex-wrap" style={{ gap: 4 }}>
-                    {reviewMarks.map((l, i) => (
-                      <View
-                        key={`${l.at}_${i}`}
-                        className={`rounded-sm ${markClass(l.result)}`}
-                        // layout-ok: a mark holds no text.
-                        style={{ width: Math.round(14 * Math.min(scale, 1.3)), height: Math.round(14 * Math.min(scale, 1.3)) }}
-                      />
-                    ))}
-                  </View>
-                  <View className="flex-row flex-wrap" style={{ columnGap: space(14), rowGap: space(6) }}>
-                    {kinds.map((k) => (
-                      <View key={k} className="flex-row items-center" style={{ gap: space(5) }}>
-                        <View
-                          className={`rounded-sm ${markClass(k)}`}
-                          // layout-ok: a legend swatch.
-                          style={{ width: 12, height: 12 }}
-                        />
-                        <AppText variant="caption" className="font-sans text-ink-2">
-                          {KIND_LABEL[k]}
-                        </AppText>
-                      </View>
-                    ))}
-                  </View>
-                </>
-              )}
-            </View>
-          </GroupedList>
         )}
 
         {story.length > 0 && (
