@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { ArrowUp, CalendarDays, ChevronRight, GripVertical, History, Plus, Trash2 } from 'lucide-react-native';
+import { ArrowUp, CalendarDays, CalendarClock, ChevronRight, GripVertical, History, Plus, Trash2 } from 'lucide-react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import { AppState } from '../state/useAppState';
@@ -13,6 +13,7 @@ import { CompleteChips, StageDot, StageStrip, VerseStageRow, stageCaption } from
 import VersesByBook from '../components/VersesByBook';
 import { reorderQueueGroups } from '../lib/queueReorder';
 import { STAGE_LABEL, STAGE_ORDER, StageGroup, VerseStage, groupByStage, referenceFor, stageCounts } from '../lib/stageProgress';
+import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, learnedCount, projectStartDates, waitingRunsOut } from '../lib/forecast';
 import { translationLabel } from '../data';
 
 import { useThemeColors } from '../components/theme';
@@ -85,6 +86,10 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     weeklyPhaseMonths,
     monthlyPhaseYears,
     masteryTouches,
+    sabbathEnabled,
+    sabbathDay,
+    pausedAt,
+    pausedUntil,
   } = state;
 
   const space = useScaledSpace();
@@ -107,6 +112,64 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   );
   const counts = useMemo(() => stageCounts(memoryQueue), [memoryQueue]);
   const total = memoryQueue.length;
+
+  // ---- Looking ahead ----
+  // Only verses already on your list, and every review going well. Waiting
+  // verses start when the real daily pull would start them (forecast.ts).
+  const [horizon, setHorizon] = useState<Horizon>('now');
+  const forecastPlan: ForecastPlan = {
+    ...plan,
+    learningDays,
+    newVersesPace,
+    sabbathEnabled,
+    sabbathDay,
+    joinedPlans: joinedGroupPlanDetails,
+    memberships: joinedGroupPlanMemberships,
+    pausedAt,
+    pausedUntil,
+  };
+  const starts = useMemo(
+    () => projectStartDates(memoryQueue, forecastPlan, now),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [memoryQueue, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil]
+  );
+  const ahead = horizon !== 'now';
+  const shownCounts = useMemo(
+    () => (ahead ? forecastCounts(memoryQueue, forecastPlan, horizonDate(horizon, now), starts, now) : counts),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [horizon, counts, starts, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches]
+  );
+  const deltas = ahead
+    ? (Object.fromEntries(STAGE_ORDER.map((st) => [st, shownCounts[st] - counts[st]])) as Record<VerseStage, number>)
+    : undefined;
+  const horizonDay = horizonDate(horizon, now);
+  const horizonDayLabel = horizonDay.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(horizonDay.getFullYear() === now.getFullYear() ? null : { year: 'numeric' }),
+  });
+  const learnedNow = learnedCount(counts);
+  const learnedThen = learnedCount(shownCounts);
+  const forecastLine = ahead
+    ? `By ${horizonDayLabel}, ${learnedThen === total ? `all ${total}` : `${learnedThen} of your ${total}`} verses learned${
+        shownCounts.complete > 0 ? `, ${shownCounts.complete} Complete` : ''
+      }.`
+    : `${learnedNow} of your ${total} verses learned so far${counts.complete > 0 ? `, ${counts.complete} Complete` : ''}.`;
+
+  // When the last waiting verse starts. With group plans in the mix the pull
+  // isn't simply "N a day", so the sentence doesn't claim a pace.
+  const runsOut = waitingRunsOut(memoryQueue, starts);
+  const runsOutLabel = runsOut
+    ? runsOut.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        ...(runsOut.getFullYear() === now.getFullYear() ? null : { year: 'numeric' }),
+      })
+    : null;
+  const paceText =
+    joinedGroupPlanMemberships.length > 0
+      ? 'At your current pace'
+      : `At ${newVersesPace} a day, ${learningDays.length} ${learningDays.length === 1 ? 'day' : 'days'} a week`;
 
   // Waiting verses, in learning order. Sorted by orderIndex BEFORE grouping,
   // because orderIndex is the real source of truth for queue position -- not
@@ -233,6 +296,21 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 
   const waitingBody = (
     <View style={{ gap: space(12) }}>
+      {runsOutLabel && (
+        <View
+          className="flex-row items-start bg-surface-2 border border-line rounded-btn"
+          style={{ paddingVertical: space(10), paddingHorizontal: space(12), gap: space(10) }}
+        >
+          <CalendarClock size={Math.round(18 * scale)} color={palette.accent} />
+          <AppText variant="label" className="font-sans text-ink flex-1">
+            {paceText}, these run out around{' '}
+            <AppText variant="label" className="font-sans font-semibold text-ink">
+              {runsOutLabel}
+            </AppText>
+            .
+          </AppText>
+        </View>
+      )}
       {waitingGroups.length === 0 ? (
         <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
           Nothing waiting. Tap Add verses to choose what you learn next.
@@ -324,10 +402,33 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
               onChange={setView}
             />
 
-            {/* Every stage at a glance; tap one to jump to it. */}
-            <View className="bg-surface border border-line rounded-card" style={{ paddingTop: space(16), paddingBottom: space(12), paddingHorizontal: space(4), gap: space(12) }}>
-              <StageStrip counts={counts} onPressStage={jumpTo} />
-              {!isNew && (
+            {/* Every stage at a glance; tap one to jump to it. The switch
+                redraws the same strip for a date ahead, with the change from
+                today under each count. */}
+            <View
+              className={`border rounded-card ${ahead ? 'bg-surface-2 border-line-strong' : 'bg-surface border-line'}`}
+              style={{ paddingTop: space(10), paddingBottom: space(12), paddingHorizontal: space(4), gap: space(14) }}
+            >
+              <View style={{ paddingHorizontal: space(6) }}>
+                <SegmentedControl
+                  accessibilityLabel="When"
+                  options={(['now', 'm1', 'm3', 'y1'] as Horizon[]).map((h) => ({ id: h, label: HORIZON_LABEL[h] }))}
+                  value={horizon}
+                  onChange={setHorizon}
+                />
+              </View>
+              <StageStrip counts={shownCounts} onPressStage={ahead ? undefined : jumpTo} deltas={deltas} />
+              <View className="border-t border-hairline" style={{ paddingTop: space(12), paddingHorizontal: space(10), gap: space(4) }}>
+                <AppText variant="label" className="font-sans text-ink">
+                  {forecastLine}
+                </AppText>
+                {ahead && (
+                  <AppText variant="caption" className="font-sans text-ink-3">
+                    If every review goes well. Only verses already on your list.
+                  </AppText>
+                )}
+              </View>
+              {!isNew && !ahead && (
                 <Pressable
                   onPress={() => navigateTo('verseRoad')}
                   accessibilityRole="button"
@@ -402,6 +503,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             ) : (
               <VersesByBook
                 queue={memoryQueue}
+                plan={plan}
+                starts={starts}
                 onOpenChapter={(book, chapter) => navigateTo('chapterLanding', book, chapter)}
               />
             )}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { ChevronRight } from 'lucide-react-native';
+import { Check, ChevronRight, Flag } from 'lucide-react-native';
 
 import { AppText, useFontScale, useScaledSpace } from './design';
 import { Badge } from './blocks';
@@ -9,7 +9,8 @@ import { STAGE_FILL } from './VerseStages';
 import { ALL_BIBLE_BOOKS, BOOKS, getBookByName } from '../data';
 import { fetchChapterText } from '../state/useScripture';
 import { QueueItem } from '../types';
-import { STAGE_LABEL, STAGE_ORDER, VerseStage, bookIndex, verseStage } from '../lib/stageProgress';
+import { STAGE_LABEL, STAGE_ORDER, StagePlan, VerseStage, bookIndex, verseStage } from '../lib/stageProgress';
+import { allLearnedBy } from '../lib/forecast';
 
 // ============================================================================
 // My Verses › By book. The whole Bible at a glance (which books you have
@@ -30,6 +31,7 @@ interface ChapterSummary {
   translationId: string;
   /** Verse number -> the furthest stage it has reached in any translation. */
   stages: Map<number, VerseStage>;
+  items: QueueItem[];
 }
 
 const rank = (s: VerseStage) => STAGE_ORDER.indexOf(s);
@@ -43,9 +45,10 @@ function summarize(queue: QueueItem[]) {
     const key = `${book.id}_${item.chapter}`;
     let ch = chapters.get(key);
     if (!ch) {
-      ch = { key, book: book.name, bookId: book.id, chapter: item.chapter, translationId: item.translationId || 'ESV', stages: new Map() };
+      ch = { key, book: book.name, bookId: book.id, chapter: item.chapter, translationId: item.translationId || 'ESV', stages: new Map(), items: [] };
       chapters.set(key, ch);
     }
+    ch.items.push(item);
     const stage = verseStage(item);
     const prev = ch.stages.get(item.verseNumber);
     if (!prev || rank(stage) > rank(prev)) ch.stages.set(item.verseNumber, stage);
@@ -95,13 +98,25 @@ function useVerseCounts(chapters: ChapterSummary[]) {
 }
 
 /** 'GEN' -> 'Gen', '1SA' -> '1Sa'. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Near dates get a day; far ones only a month, since a few misses move them by weeks. */
+function learnedDate(d: Date, now: Date = new Date()): string {
+  if (d.getTime() - now.getTime() < 60 * DAY_MS) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
 const abbrev = (id: string) => (/\d/.test(id[0]) ? id.slice(0, 2) + id.slice(2).toLowerCase() : id[0] + id.slice(1).toLowerCase());
 
 export default function VersesByBook({
   queue,
+  plan,
+  starts,
   onOpenChapter,
 }: {
   queue: QueueItem[];
+  plan: StagePlan;
+  /** When each waiting verse starts learning (forecast.ts), for the "all learned" dates. */
+  starts: Map<string, Date>;
   onOpenChapter: (book: string, chapter: number) => void;
 }) {
   const space = useScaledSpace();
@@ -191,6 +206,7 @@ export default function VersesByBook({
                 key={ch.key}
                 chapter={ch}
                 verseCount={verseCounts[ch.key]}
+                learnedBy={allLearnedBy(ch.items, plan, starts)}
                 first={i === 0}
                 onPress={() => onOpenChapter(ch.book, ch.chapter)}
               />
@@ -205,11 +221,14 @@ export default function VersesByBook({
 function ChapterRow({
   chapter,
   verseCount,
+  learnedBy,
   first,
   onPress,
 }: {
   chapter: ChapterSummary;
   verseCount: number | undefined;
+  /** When every verse of this chapter on your list is learned: 'done', a date, or unknown. */
+  learnedBy: Date | 'done' | null;
   first: boolean;
   onPress: () => void;
 }) {
@@ -279,6 +298,25 @@ function ChapterRow({
       )}
 
       {badge && <Badge label={badge.label} tone={badge.tone} />}
+
+      {/* Only "all learned": the Complete date is years off for most
+          chapters, which read as discouraging rather than motivating. */}
+      {learnedBy && (
+        <View className="flex-row items-center bg-surface-2 rounded-btn" style={{ paddingVertical: space(8), paddingHorizontal: space(10), gap: space(8) }}>
+          {learnedBy === 'done' ? (
+            <Check size={Math.round(16 * scale)} color={palette.success} strokeWidth={3} />
+          ) : (
+            <Flag size={Math.round(16 * scale)} color={palette.ink2} />
+          )}
+          <AppText variant="caption" className="font-sans text-ink flex-1">
+            {verseCount !== undefined && held >= verseCount ? 'Whole chapter' : held === 1 ? 'Your verse' : `All ${held} on your list`}
+            {learnedBy === 'done' ? ' learned' : ' learned around'}
+          </AppText>
+          <AppText variant="caption" className={`font-sans font-semibold ${learnedBy === 'done' ? 'text-success' : 'text-ink'}`}>
+            {learnedBy === 'done' ? 'Done' : learnedDate(learnedBy)}
+          </AppText>
+        </View>
+      )}
     </Pressable>
   );
 }

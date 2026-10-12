@@ -93,9 +93,12 @@ export function StageBar({ stage, fraction, faded = false, thick = false }: { st
 export function StageStrip({
   counts,
   onPressStage,
+  deltas,
 }: {
   counts: Record<VerseStage, number>;
   onPressStage?: (stage: VerseStage) => void;
+  /** Looking ahead: the change from today under each count ("+25", "−24"). */
+  deltas?: Record<VerseStage, number>;
 }) {
   const scale = useFontScale();
   const space = useScaledSpace();
@@ -119,7 +122,7 @@ export function StageStrip({
               onPress={onPressStage ? () => onPressStage(stage) : undefined}
               disabled={!onPressStage}
               accessibilityRole={onPressStage ? 'button' : undefined}
-              accessibilityLabel={`${STAGE_LABEL[stage]}: ${n} ${n === 1 ? 'verse' : 'verses'}`}
+              accessibilityLabel={`${STAGE_LABEL[stage]}: ${n} ${n === 1 ? 'verse' : 'verses'}${deltas && deltas[stage] ? `, ${deltas[stage] > 0 ? 'up' : 'down'} ${Math.abs(deltas[stage])} from today` : ''}`}
               className="items-center active:opacity-60"
               style={{ width: oneRow ? `${100 / 6}%` : `${100 / 3}%`, gap: space(4) }}
             >
@@ -136,6 +139,13 @@ export function StageStrip({
               <AppText variant="micro" className="font-sans font-medium text-ink-2" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {STAGE_LABEL[stage]}
               </AppText>
+              {deltas && (
+                // Gains in green; a shrinking count (Waiting emptying out) is
+                // progress too, so it's grey rather than red.
+                <AppText variant="micro" className={`font-sans font-semibold ${deltas[stage] > 0 ? 'text-success' : 'text-ink-3'}`}>
+                  {deltas[stage] === 0 ? ' ' : deltas[stage] > 0 ? `+${deltas[stage]}` : `−${Math.abs(deltas[stage])}`}
+                </AppText>
+              )}
             </Pressable>
           );
         })}

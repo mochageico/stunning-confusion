@@ -2,6 +2,7 @@
 
 import { QueueItem } from '../types';
 import { arrivalDates, groupByStage, roadEstimates, stageCounts, stageProgress, verseStage } from './stageProgress';
+import { allLearnedBy, forecastCounts, horizonDate, learnedCount, projectStartDates, stageOn, waitingRunsOut } from './forecast';
 
 let failures = 0;
 function check(label: string, condition: boolean, detail?: unknown) {
@@ -133,6 +134,37 @@ check('complete verses group too', g.complete.length === 1 && g.complete[0].vers
 check('waiting verses are left to the reorder list', g.waiting.length === 0);
 const counts = stageCounts(q);
 check('counts every verse', counts.daily === 4 && counts.complete === 2 && counts.waiting === 1, counts);
+
+console.log('forecast');
+const FPLAN = { ...PLAN, learningDays: ['M', 'W', 'F'], newVersesPace: 2, sabbathEnabled: false, sabbathDay: 'Su' };
+const local = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12);
+const FTODAY = local(2026, 10, 11); // a Sunday
+const waiting = [1, 2, 3, 4, 5].map((v) =>
+  item({ verseId: `w${v}`, book: 'Romans', chapter: 8, verseNumber: 30 + v, status: 'queued', retentionPhase: 'none', orderIndex: v, dateStarted: null, nextReviewDueDate: null, currentStreakCount: 0 })
+);
+const fq = [...waiting, item({ verseId: 'd1', dateStarted: '2026-10-01T12:00:00Z' }), item({ verseId: 'k1', status: 'retained', retentionPhase: 'none' })];
+const starts = projectStartDates(fq, FPLAN, FTODAY);
+const startDay = (id: string) => starts.get(id)?.getDate();
+check('2 a day on Mon, Wed, Fri', startDay('w1') === 12 && startDay('w2') === 12 && startDay('w3') === 14 && startDay('w4') === 14 && startDay('w5') === 16, Array.from(starts.entries()));
+const out = waitingRunsOut(fq, starts);
+check('runs out on the Friday', !!out && out.getDate() === 16 && out.getMonth() === 9, out);
+check('nothing waiting, no run-out date', waitingRunsOut([fq[5]], new Map()) === null);
+check('no learning days, nothing starts', projectStartDates(fq, { ...FPLAN, learningDays: [] }, FTODAY).size === 0);
+check('an open-ended pause starts nothing', projectStartDates(fq, { ...FPLAN, pausedAt: '2026-10-01T00:00:00Z', pausedUntil: null }, FTODAY).size === 0);
+const now = forecastCounts(fq, FPLAN, FTODAY, starts, FTODAY);
+check('now is the counts as they stand', now.waiting === 5 && now.daily === 1 && now.complete === 1, now);
+const m1 = forecastCounts(fq, FPLAN, horizonDate('m1', FTODAY), starts, FTODAY);
+check('in a month all five are in Daily', m1.waiting === 0 && m1.learning === 0 && m1.daily === 5, m1);
+check('the Daily verse due to move up is Weekly by then', m1.weekly === 1, m1);
+check('the total never changes', Object.values(m1).reduce((a, b) => a + b, 0) === fq.length);
+check('learned counts Daily onward', learnedCount(m1) === 7, learnedCount(m1));
+const y1 = forecastCounts(fq, FPLAN, horizonDate('y1', FTODAY), starts, FTODAY);
+check('in a year the five and the Daily verse are in Monthly', y1.monthly === 6, y1);
+check('a waiting verse with no start stays waiting', stageOn(waiting[0], PLAN, horizonDate('y1', FTODAY), undefined, FTODAY) === 'waiting');
+const learnedBy = allLearnedBy(waiting, PLAN, starts, FTODAY);
+check('all learned the day after the last starts', learnedBy instanceof Date && learnedBy.getDate() === 17, learnedBy);
+check('already learned is done', allLearnedBy([fq[5], fq[6]], PLAN, starts, FTODAY) === 'done');
+check('unknown start gives no date', allLearnedBy(waiting, PLAN, new Map(), FTODAY) === null);
 
 if (failures > 0) {
   console.log(`\n${failures} failed`);
