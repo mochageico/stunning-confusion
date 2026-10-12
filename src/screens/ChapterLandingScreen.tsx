@@ -24,7 +24,7 @@ const OVERRIDE_PHASE_OPTIONS: { id: 'learning' | 'daily' | 'weekly' | 'monthly' 
   { id: 'daily', label: 'Daily' },
   { id: 'weekly', label: 'Weekly' },
   { id: 'monthly', label: 'Monthly' },
-  { id: 'retained', label: 'Retained' },
+  { id: 'retained', label: 'Complete' },
 ];
 const OVERRIDE_WEEKDAY_OPTIONS = [
   { id: 'M', label: 'Mon' },

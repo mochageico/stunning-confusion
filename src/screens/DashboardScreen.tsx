@@ -137,7 +137,7 @@ const STAGE_DOT: Record<string, string> = {
   daily: 'bg-stage-daily',
   weekly: 'bg-stage-weekly',
   monthly: 'bg-stage-monthly',
-  completed: 'bg-success',
+  completed: 'bg-ink',
 };
 
 export default function DashboardScreen({ state }: { state: AppState }) {
@@ -165,7 +165,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
     { key: 'daily', label: 'Daily', items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'daily') },
     { key: 'weekly', label: 'Weekly', items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'weekly') },
     { key: 'monthly', label: 'Monthly', items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'monthly') },
-    { key: 'completed', label: 'Completed', items: memoryQueue.filter((item) => item.status === 'retained') },
+    { key: 'completed', label: 'Complete', items: memoryQueue.filter((item) => item.status === 'retained') },
   ];
 
   // "Verses memorized" means verses learned -- anything that's graduated out
@@ -262,7 +262,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
             })}
           </View>
           <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-            Daily, Weekly and Monthly verses come back for review on that rhythm. Completed verses have graduated and no longer come back.
+            Daily, Weekly and Monthly verses come back for review on that schedule. Complete verses have finished the road and no longer come back.
           </AppText>
         </View>
 

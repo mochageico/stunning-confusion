@@ -29,6 +29,8 @@ import AddVersesScreen from './src/screens/AddVersesScreen';
 import MyScheduleScreen from './src/screens/MyScheduleScreen';
 import VerseSourcesScreen from './src/screens/VerseSourcesScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
+import VerseRoadScreen from './src/screens/VerseRoadScreen';
+import VersePageScreen from './src/screens/VersePageScreen';
 import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import ThreadDrillScreen from './src/screens/ThreadDrillScreen';
 import GuidedLearningScreen from './src/screens/GuidedLearningScreen';
@@ -161,6 +163,10 @@ function Screens({ state }: { state: AppState }) {
         return <VerseSourcesScreen state={state} />;
       case 'memoryCalendar':
         return <MemoryCalendarScreen state={state} />;
+      case 'verseRoad':
+        return <VerseRoadScreen state={state} />;
+      case 'versePage':
+        return <VersePageScreen state={state} />;
       case 'savedPlans':
         return <SavedPlansScreen state={state} />;
       case 'planDesigner':

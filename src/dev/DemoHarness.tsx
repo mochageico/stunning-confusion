@@ -13,7 +13,8 @@
 // It is inert in production builds whatever the flags say (__DEV__ gate).
 //
 // Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
-// activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, referenceDrill, threadDrill, guided,
+// activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, verseRoad, versePage,
+// referenceDrill, threadDrill, guided,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
@@ -117,6 +118,26 @@ const SPECS: Spec[] = [
   { ref: 'Romans 8:39', status: 'queued' },
 ];
 
+/**
+ * A plausible review log for a seeded verse, so the verse page has history to
+ * show: three Learning passes, then Daily every day (one grace-covered miss),
+ * then Weekly every week, up to the stage the verse is in now.
+ */
+function demoLogs(s: (typeof SPECS)[number]) {
+  if (s.status === 'queued') return [];
+  if (s.status === 'learning') return (s.touches ?? []).map((d) => ({ at: iso(-d, 8 + (d % 5)), result: 'pass', stage: 'learning' }));
+  const phase = s.status === 'retained' ? 'retained' : s.phase;
+  const dailyDays = phase === 'daily' ? 40 : 49;
+  const weeklyWeeks = phase === 'weekly' ? 10 : phase === 'daily' ? 0 : 26;
+  const start = -(dailyDays + weeklyWeeks * 7 + 3);
+  const logs: { at: string; result: string; stage: string }[] = [];
+  for (let i = 0; i < 3; i++) logs.push({ at: iso(start + i, 8 + i * 3), result: 'pass', stage: 'learning' });
+  for (let d = 0; d < dailyDays; d++) logs.push({ at: iso(start + 3 + d, 8), result: d === 18 ? 'grace' : 'pass', stage: 'daily' });
+  for (let w = 0; w < weeklyWeeks; w++) logs.push({ at: iso(start + 3 + dailyDays + w * 7, 8), result: 'pass', stage: 'weekly' });
+  if (phase === 'monthly' || phase === 'retained') logs.push({ at: iso(-5, 8), result: 'pass', stage: phase });
+  return logs.filter((l) => new Date(l.at).getTime() < now);
+}
+
 function buildQueue() {
   return SPECS.map((s, i) => {
     const [book, cv] = [s.ref.slice(0, s.ref.lastIndexOf(' ')), s.ref.slice(s.ref.lastIndexOf(' ') + 1)];
@@ -140,6 +161,7 @@ function buildQueue() {
       totalSuccessfulReviews: (s.touches?.length ?? 0) + (s.streak ?? 0),
       gracePeriodUsedToday: false,
       touchLogs: (s.touches ?? []).map((d) => ({ timestamp: iso(-d, 8 + (d % 5)), drillType: d % 2 ? 'speak' : 'type' })),
+      reviewLogs: demoLogs(s),
       reviewsToday: 0,
     };
   });
@@ -354,6 +376,7 @@ export function useDemoState(real: AppState): AppState {
     else if (s === 'chapterLanding') real.navigateTo('chapterLanding', 'Romans', 8);
     else if (s === 'planDesigner') real.openActivePlanDesigner();
     else if (s === 'guided') real.openGuided('BSB|Psalms|23|1');
+    else if (s === 'versePage') real.openVersePage({ book: 'Philippians', chapter: 4, verses: [6, 7], translationId: 'BSB' });
     // preset=1 opens Pick up the thread the way a passing Recall does: on a
     // verse (Romans 8:2, due today in the seeded queue, so its credit shows).
     // Without it, setup opens on every matching chapter.

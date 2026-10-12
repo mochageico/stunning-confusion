@@ -333,7 +333,7 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
       if (!isReviewDue(item.nextReviewDueDate)) return { kind: null, label: 'Not due yet, so practice only' };
       return { kind: 'review', label: mode === 'self' ? 'Counts as a review, checked by you' : 'Counts as a review' };
     }
-    return { kind: null, label: 'Retained, so practice only' };
+    return { kind: null, label: 'Complete, so practice only' };
   };
 
   const toVerseState = (v: PoolVerse): VerseState => ({

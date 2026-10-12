@@ -58,6 +58,7 @@
     "check:queue": "node scripts/run-queue-check.cjs",
     "check:dragselect": "node scripts/run-dragselect-check.cjs",
     "check:reviewlog": "node scripts/run-reviewlog-check.cjs",
+    "check:stages": "node scripts/run-stages-check.cjs",
     "check:buildup": "node scripts/run-buildup-check.cjs",
     "check:thread": "node scripts/run-thread-check.cjs",
     "check:guided": "node scripts/run-guided-check.cjs",

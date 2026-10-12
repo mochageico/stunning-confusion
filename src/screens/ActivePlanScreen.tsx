@@ -1,14 +1,18 @@
+import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { CalendarDays, GripVertical, History, Plus, Trash2 } from 'lucide-react-native';
+import { ArrowUp, CalendarDays, ChevronRight, GripVertical, History, Plus, Trash2 } from 'lucide-react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
-import { Badge, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
+import { EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { PRIORITY_LABELS } from '../components/QueueSources';
+import { CompleteChips, StageDot, StageStrip, VerseStageRow, stageCaption } from '../components/VerseStages';
+import VersesByBook from '../components/VersesByBook';
 import { reorderQueueGroups } from '../lib/queueReorder';
+import { STAGE_LABEL, STAGE_ORDER, StageGroup, VerseStage, groupByStage, referenceFor, stageCounts } from '../lib/stageProgress';
 import { translationLabel } from '../data';
 
 import { useThemeColors } from '../components/theme';
@@ -56,9 +60,15 @@ function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
   return groups;
 }
 
+type VersesView = 'stage' | 'book';
+// Remembered for the session, so coming back from a verse page lands on the
+// view you left. Not saved to the device: By stage is the right place to open.
+let lastView: VersesView = 'stage';
+
 export default function ActivePlanScreen({ state }: { state: AppState }) {
   const {
     navigateTo,
+    openVersePage,
     learningDays,
     newVersesPace,
     memoryQueue,
@@ -71,51 +81,49 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     removeQueueItems,
     isReviewDue,
     reviewsPaused,
+    dailyPhaseWeeks,
+    weeklyPhaseMonths,
+    monthlyPhaseYears,
+    masteryTouches,
   } = state;
 
   const space = useScaledSpace();
+  const palette = useThemeColors();
+  const scale = useFontScale();
+  const [view, setViewState] = useState<VersesView>(lastView);
+  const setView = (v: VersesView) => {
+    lastView = v;
+    setViewState(v);
+  };
 
-  // Verses in spaced review ('reviewing') are deliberately excluded here --
-  // the Memory Calendar shows that half of the picture (which verses are
-  // due which day, Daily/Weekly/Monthly), so listing them again in a flat
-  // queue too was redundant and confusing. Fully-memorized verses
-  // ('retained') are excluded for the same reason -- they're done, there's
-  // nothing to start/reorder/manage about them here, and they're already
-  // browsable in History. Only queued/learning verses -- the ones actually
-  // being actively managed -- show.
-  // Sorted by orderIndex BEFORE grouping, because orderIndex is the real
-  // source of truth for queue position -- not the array's own order.
-  //
-  // This is what made reordering appear to do nothing. `memoryQueue` is sorted
-  // by orderIndex exactly once, when it loads (see loadUserData); every
-  // reorder after that goes through reorderQueueGroups, which rewrites
-  // orderIndex values but deliberately maps over the queue in place, so the
-  // ARRAY order never changes. Grouping straight off the array therefore
-  // rebuilt the identical list, and the row visibly snapped back to where it
-  // started the moment the drag was released.
-  //
-  // Sorting here makes what's rendered a pure function of orderIndex, so any
-  // future path that sets orderIndex shows up correctly without having to also
-  // remember to reshuffle the array.
-  const grouped = groupQueueItems(
-    [...memoryQueue]
-      .sort((a, b) => a.orderIndex - b.orderIndex)
-      .filter((item) => item.status === 'queued' || item.status === 'learning')
+  const plan = { dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches };
+  const now = new Date();
+  // Everything but Waiting, bucketed by stage. Waiting keeps its own
+  // drag-to-reorder list below, because its order is the learning order.
+  const byStage = useMemo(
+    () => groupByStage(memoryQueue, plan, now),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches]
+  );
+  const counts = useMemo(() => stageCounts(memoryQueue), [memoryQueue]);
+  const total = memoryQueue.length;
+
+  // Waiting verses, in learning order. Sorted by orderIndex BEFORE grouping,
+  // because orderIndex is the real source of truth for queue position -- not
+  // the array's own order. reorderQueueGroups rewrites orderIndex but maps
+  // over the queue in place, so grouping straight off the array rebuilt the
+  // identical list and a dragged row snapped back to where it started.
+  const waitingGroups = groupQueueItems(
+    [...memoryQueue].sort((a, b) => a.orderIndex - b.orderIndex).filter((item) => item.status === 'queued')
   );
 
-  const count = (status: QueueItem['status']) => memoryQueue.filter((item) => item.status === status).length;
-  const learningCount = count('learning');
-  const waitingCount = count('queued');
-  const reviewingCount = count('reviewing');
-  const retainedCount = count('retained');
   // Nothing is due while reviews are paused -- same as Today.
   const dueTodayCount = reviewsPaused
     ? 0
     : memoryQueue.filter((item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate)).length;
   const summary = [
-    `${learningCount} learning`,
-    `${waitingCount} waiting`,
-    reviewingCount > 0 ? `${reviewingCount} in review` : null,
+    `${total} ${total === 1 ? 'verse' : 'verses'}`,
+    reviewsPaused ? 'reviews paused' : dueTodayCount > 0 ? `${dueTodayCount} due today` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -134,106 +142,275 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
       ? PRIORITY_LABELS.find((o) => o.id === joinedGroupPlanMemberships[0].priority)?.short ?? ''
       : `${joinedGroupPlanMemberships.length + 1} sources`;
 
-  // Your own verses and each group plan's verses as separate lists (ui
+  // Your own waiting verses and each group plan's as separate lists (ui
   // overhaul bucket 3). Which source goes first each learning day is set in
   // "Where verses come from", so mixing them in one list implied an order
   // the scheduler doesn't follow. Each list reorders only among itself:
   // reorderQueueGroups reuses the orderIndex slots of the groups it's given,
   // so moving one of your verses never shifts a plan's verses or vice versa.
   const planIds = Array.from(
-    new Set(grouped.filter((g) => g.origin === 'group').map((g) => g.items[0].originPlanId || ''))
+    new Set(waitingGroups.filter((g) => g.origin === 'group').map((g) => g.items[0].originPlanId || ''))
   );
-  const sections = [
-    { key: 'mine', title: 'My own verses', groups: grouped.filter((g) => g.origin !== 'group') },
+  const waitingSections = [
+    { key: 'mine', title: 'My own verses', groups: waitingGroups.filter((g) => g.origin !== 'group') },
     ...planIds.map((id) => ({
       key: id || 'group',
       title: planNameFor(id || undefined),
-      groups: grouped.filter((g) => g.origin === 'group' && (g.items[0].originPlanId || '') === id),
+      groups: waitingGroups.filter((g) => g.origin === 'group' && (g.items[0].originPlanId || '') === id),
     })),
   ].filter((s) => s.key === 'mine' || s.groups.length > 0);
 
+  // The strip jumps to a stage's section. Each section reports where it sits
+  // inside the scroll content as it lays out.
+  const scrollRef = useRef<ScrollView>(null);
+  const sectionY = useRef<Partial<Record<VerseStage, number>>>({});
+  const listY = useRef(0);
+  const scrollToStage = (stage: VerseStage) => {
+    const y = sectionY.current[stage];
+    if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, listY.current + y - space(12)), animated: true });
+  };
+  const jumpTo = (stage: VerseStage) => {
+    if (view === 'stage') return scrollToStage(stage);
+    // From By book the sections aren't on screen yet: switch, then scroll once they've laid out.
+    setView('stage');
+    setTimeout(() => scrollToStage(stage), 150);
+  };
+
+  const openGroup = (g: StageGroup) =>
+    openVersePage({ book: g.book, chapter: g.chapter, verses: g.verses, translationId: g.translationId });
+
+  // Nothing has moved past Learning yet: teach the road instead of showing
+  // four empty sections with no explanation.
+  const isNew = counts.daily + counts.weekly + counts.monthly + counts.complete === 0;
+  const nextUp = byStage.learning.length > 0 ? [...byStage.learning].sort((a, b) => a.progress.remaining - b.progress.remaining)[0] : null;
+
+  const sectionHeader = (stage: VerseStage, title: string) => (
+    <View style={{ gap: space(4) }}>
+      <View className="flex-row items-center" style={{ gap: space(8), paddingHorizontal: space(4) }}>
+        <StageDot stage={stage} />
+        <AppText variant="title" className="font-sans font-bold text-ink flex-1" accessibilityRole="header">
+          {title}
+        </AppText>
+        <AppText variant="label" className="font-sans font-semibold text-ink-2">
+          {counts[stage]} {counts[stage] === 1 ? 'verse' : 'verses'}
+        </AppText>
+      </View>
+      {counts[stage] > 0 && (
+        <AppText variant="caption" className="font-sans text-ink-2" style={{ paddingLeft: space(22), paddingRight: space(4) }}>
+          {stageCaption(stage, plan)}
+        </AppText>
+      )}
+    </View>
+  );
+
+  const emptyStage = (stage: VerseStage) => (
+    <View
+      className="flex-row items-center border border-dashed border-line-strong rounded-card"
+      style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(10) }}
+    >
+      <StageDot stage={stage} />
+      <AppText variant="label" className="font-sans font-semibold text-ink">
+        {STAGE_LABEL[stage]}
+      </AppText>
+      <AppText variant="caption" className="font-sans text-ink-2 flex-1">
+        {stage === 'daily' ? 'None yet. Verses come here after Learning.' : 'None yet'}
+      </AppText>
+    </View>
+  );
+
+  const stageSection = (stage: VerseStage, title: string, body: React.ReactNode) => (
+    <View key={stage} style={{ gap: space(10) }} onLayout={(e) => (sectionY.current[stage] = e.nativeEvent.layout.y)}>
+      {counts[stage] === 0 && stage !== 'waiting' ? (
+        emptyStage(stage)
+      ) : (
+        <>
+          {sectionHeader(stage, title)}
+          {body}
+        </>
+      )}
+    </View>
+  );
+
+  const waitingBody = (
+    <View style={{ gap: space(12) }}>
+      {waitingGroups.length === 0 ? (
+        <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
+          Nothing waiting. Tap Add verses to choose what you learn next.
+        </AppText>
+      ) : (
+        waitingSections.map((section) => (
+          <View key={section.key} style={{ gap: space(6) }}>
+            {waitingSections.length > 1 && <SectionHeader title={section.title} />}
+            {section.groups.length === 0 ? (
+              <AppText variant="label" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
+                None waiting.
+              </AppText>
+            ) : (
+              // Real drag-to-reorder. scrollEnabled={false} because this
+              // always nests inside the screen's own ScrollView -- same
+              // pattern as the recording list on the chapter page.
+              //
+              // onDragEnd uses `from`/`to` rather than the reordered
+              // `data` array: reorderQueueGroups permutes orderIndex
+              // among this section's items only and maps over the full
+              // queue, so every other verse is carried through untouched.
+              // Rebuilding the queue from `data` would drop every verse
+              // this list doesn't show -- the bug queueReorder.ts
+              // exists to prevent.
+              <DraggableFlatList
+                data={section.groups}
+                scrollEnabled={false}
+                keyExtractor={(group) => group.id || `${group.book}_${group.chapter}_${group.verses[0]}`}
+                contentContainerStyle={{ gap: space(8) }}
+                onDragEnd={({ from, to }) => {
+                  if (from === to) return;
+                  updateMemoryQueue((prev) => reorderQueueGroups(prev, section.groups, from, to));
+                  triggerToast('Reordered.');
+                }}
+                renderItem={({ item: group, drag, isActive }: RenderItemParams<GroupedQueueItem>) => (
+                  <VerseGroupRow
+                    group={group}
+                    drag={drag}
+                    isActive={isActive}
+                    onStart={() => promoteToLearning(group.items.map((item) => item.verseId))}
+                    onRemove={() => {
+                      // removeQueueItems, not a raw filter: deleting from
+                      // Firestore now requires recorded intent, so this is
+                      // the only route that actually removes documents.
+                      removeQueueItems(group.items.map((item) => item.verseId));
+                      triggerToast('Removed those verses from your list.');
+                    }}
+                  />
+                )}
+              />
+            )}
+          </View>
+        ))
+      )}
+    </View>
+  );
+
+  const rows = (stage: 'learning' | 'daily' | 'weekly' | 'monthly') => (
+    <View style={{ gap: space(8) }}>
+      {byStage[stage].map((g) => (
+        <VerseStageRow key={g.key} group={g} now={now} onPress={() => openGroup(g)} />
+      ))}
+    </View>
+  );
+
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-        {/* The Verses tab's first screen, so no back link. It replaced the My
-            Memory Work menu: the list comes first, and that menu's other rows
-            sit underneath it. */}
+      <ScrollView ref={scrollRef} className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        {/* The Verses tab's first screen, so no back link. Every verse you
+            have is here, in every stage -- it used to stop at Learning and
+            send you to the Memory Calendar for the rest. */}
         <ScreenHeader
           title="My Verses"
           subtitle={summary}
           actions={<AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => navigateTo('addVerses')} />}
         />
 
-        {/* THE VERSES -- queued and learning only. Verses in spaced review
-            live on the Memory Calendar (see the `grouped` filter above). */}
-        <View style={{ gap: space(12) }}>
-          {grouped.length > 0 && (
-            <AppText variant="caption" className="font-sans text-ink-3">
-              In the order you'll learn them. Press and hold one to move it.
-            </AppText>
-          )}
-
-          {grouped.length === 0 ? (
-            <EmptyState
-              title="Nothing waiting to start"
-              message="Tap Add verses, or add them from a chapter's page. Verses you're already reviewing are on the Memory Calendar."
+        {total === 0 ? (
+          <EmptyState title="No verses yet" message="Tap Add verses, or add them from a chapter's page." />
+        ) : (
+          <>
+            <SegmentedControl
+              accessibilityLabel="Show verses"
+              options={[
+                { id: 'stage', label: 'By stage' },
+                { id: 'book', label: 'By book' },
+              ]}
+              value={view}
+              onChange={setView}
             />
-          ) : (
-            sections.map((section) => (
-              <View key={section.key} style={{ gap: space(6) }}>
-                {sections.length > 1 && <SectionHeader title={section.title} />}
-                {section.groups.length === 0 ? (
-                  <AppText variant="label" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-                    None waiting.
-                  </AppText>
-                ) : (
-                  // Real drag-to-reorder. scrollEnabled={false} because this
-                  // always nests inside the screen's own ScrollView -- same
-                  // pattern as the recording list on the chapter page.
-                  //
-                  // onDragEnd uses `from`/`to` rather than the reordered
-                  // `data` array: reorderQueueGroups permutes orderIndex
-                  // among this section's items only and maps over the full
-                  // queue, so every other verse is carried through untouched.
-                  // Rebuilding the queue from `data` would drop every verse
-                  // this list doesn't show -- the bug queueReorder.ts
-                  // exists to prevent.
-                  <DraggableFlatList
-                    data={section.groups}
-                    scrollEnabled={false}
-                    keyExtractor={(group) => group.id || `${group.book}_${group.chapter}_${group.verses[0]}`}
-                    contentContainerStyle={{ gap: space(8) }}
-                    onDragEnd={({ from, to }) => {
-                      if (from === to) return;
-                      updateMemoryQueue((prev) => reorderQueueGroups(prev, section.groups, from, to));
-                      triggerToast('Reordered.');
-                    }}
-                    renderItem={({ item: group, drag, isActive }: RenderItemParams<GroupedQueueItem>) => (
-                      <VerseGroupRow
-                        group={group}
-                        drag={drag}
-                        isActive={isActive}
-                        onStart={() => promoteToLearning(group.items.map((item) => item.verseId))}
-                        onRemove={() => {
-                          // removeQueueItems, not a raw filter: deleting from
-                          // Firestore now requires recorded intent, so this is
-                          // the only route that actually removes documents.
-                          removeQueueItems(group.items.map((item) => item.verseId));
-                          triggerToast('Removed those verses from your list.');
-                        }}
-                      />
-                    )}
-                  />
-                )}
-              </View>
-            ))
-          )}
-        </View>
 
-        {/* How the list above gets worked through. Each opens its own screen;
-            My Schedule used to sit open above the list, which put the verses
-            two screens down at large text. "Where verses come from" only
-            appears once a group plan competes with your own verses. */}
+            {/* Every stage at a glance; tap one to jump to it. */}
+            <View className="bg-surface border border-line rounded-card" style={{ paddingTop: space(16), paddingBottom: space(12), paddingHorizontal: space(4), gap: space(12) }}>
+              <StageStrip counts={counts} onPressStage={jumpTo} />
+              {!isNew && (
+                <Pressable
+                  onPress={() => navigateTo('verseRoad')}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  className="flex-row items-center self-center active:opacity-60"
+                  style={{ gap: space(2) }}
+                >
+                  <AppText variant="label" className="font-sans font-semibold text-accent">
+                    See them on the road
+                  </AppText>
+                  <ChevronRight size={Math.round(16 * scale)} color={palette.accent} />
+                </Pressable>
+              )}
+            </View>
+
+            {isNew && (
+              <View className="bg-surface border border-line rounded-card" style={{ padding: space(16), gap: space(12) }}>
+                <AppText variant="title" className="font-sans font-bold text-ink" accessibilityRole="header">
+                  The road every verse travels
+                </AppText>
+                <View style={{ gap: space(8) }}>
+                  {(
+                    [
+                      ['learning', 'a few days'],
+                      ['daily', `every day for ${dailyPhaseWeeks} ${dailyPhaseWeeks === 1 ? 'week' : 'weeks'}`],
+                      ['weekly', `once a week for ${weeklyPhaseMonths} ${weeklyPhaseMonths === 1 ? 'month' : 'months'}`],
+                      ['monthly', `once a month for ${monthlyPhaseYears} ${monthlyPhaseYears === 1 ? 'year' : 'years'}`],
+                      ['complete', 'yours for good'],
+                    ] as [VerseStage, string][]
+                  ).map(([stage, length]) => (
+                    <View key={stage} className="flex-row items-center" style={{ gap: space(10) }}>
+                      <StageDot stage={stage} />
+                      <AppText variant="label" className="font-sans font-semibold text-ink" style={{ minWidth: space(80) }}>
+                        {STAGE_LABEL[stage]}
+                      </AppText>
+                      <AppText variant="label" className="font-sans text-ink-2 flex-1">
+                        {length}
+                      </AppText>
+                    </View>
+                  ))}
+                </View>
+                {nextUp && (
+                  <View className="flex-row items-start border-t border-hairline" style={{ paddingTop: space(12), gap: space(10) }}>
+                    <ArrowUp size={Math.round(18 * scale)} color={palette.success} />
+                    <AppText variant="label" className="font-sans text-ink flex-1">
+                      <AppText variant="label" className="font-sans font-semibold text-ink">
+                        {referenceFor(nextUp.book, nextUp.chapter, nextUp.verses)}
+                      </AppText>
+                      {nextUp.progress.remaining > 0
+                        ? ` reaches Daily after ${nextUp.progress.remaining} more perfect ${nextUp.progress.remaining === 1 ? 'recall' : 'recalls'}.`
+                        : ' reaches Daily once today’s reviews are done.'}
+                    </AppText>
+                  </View>
+                )}
+                <Pressable onPress={() => navigateTo('savedPlans')} accessibilityRole="button" className="active:opacity-60 self-start">
+                  <AppText variant="label" className="font-sans font-semibold text-accent">
+                    Change how long each stage lasts
+                  </AppText>
+                </Pressable>
+              </View>
+            )}
+
+            {view === 'stage' ? (
+              <View style={{ gap: space(24) }} onLayout={(e) => (listY.current = e.nativeEvent.layout.y)}>
+                {stageSection('waiting', 'Waiting to start', waitingBody)}
+                {stageSection('learning', 'Learning now', rows('learning'))}
+                {stageSection('daily', 'Daily', rows('daily'))}
+                {stageSection('weekly', 'Weekly', rows('weekly'))}
+                {stageSection('monthly', 'Monthly', rows('monthly'))}
+                {stageSection('complete', 'Complete', <CompleteChips groups={byStage.complete} onPress={openGroup} />)}
+              </View>
+            ) : (
+              <VersesByBook
+                queue={memoryQueue}
+                onOpenChapter={(book, chapter) => navigateTo('chapterLanding', book, chapter)}
+              />
+            )}
+          </>
+        )}
+
+        {/* How the list above gets worked through. Each opens its own screen.
+            "Where verses come from" only appears once a group plan competes
+            with your own verses. */}
         <GroupedList header="How these verses are scheduled">
           <ListRow
             title="My Schedule"
@@ -260,7 +437,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           <ListRow
             Icon={History}
             title="History"
-            value={retainedCount === 1 ? '1 retained' : `${retainedCount} retained`}
+            value={`${counts.complete} complete`}
             onPress={() => navigateTo('fullHistory')}
           />
         </GroupedList>
@@ -270,10 +447,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 }
 
 /**
- * One run of consecutive verses on My Verses. The reference gets the full
- * width of the first line (it used to share it with three badges and a
- * button, which crushed it to a wrapped column); status and the Start button
- * sit on their own line underneath.
+ * One run of consecutive waiting verses. The reference gets the full width of
+ * the first line; the translation and the Start button sit underneath.
  */
 function VerseGroupRow({
   group,
@@ -292,8 +467,7 @@ function VerseGroupRow({
   const scale = useFontScale();
   const space = useScaledSpace();
   const hasMultiple = group.verses.length > 1;
-  const versesStr = hasMultiple ? `${group.verses[0]}-${group.verses[group.verses.length - 1]}` : `${group.verses[0]}`;
-  const reference = `${group.book} ${group.chapter}:${versesStr}`;
+  const reference = referenceFor(group.book, group.chapter, group.verses);
 
   return (
     <Pressable
@@ -329,19 +503,15 @@ function VerseGroupRow({
           {group.items[0].text}
         </AppText>
         <View className="flex-row flex-wrap items-center" style={{ gap: space(8) }}>
-          {/* Only 'queued'/'learning' groups reach this list. */}
-          <Badge label={group.status === 'learning' ? 'Learning' : 'Waiting'} tone={group.status === 'learning' ? 'accent' : 'neutral'} />
           {/* The translation matters once your list can mix them: the same
               verse in two translations is two separate entries. */}
           <AppText variant="caption" className="font-sans text-ink-3">
             {translationLabel(group.items[0].translationId || 'ESV')}
             {hasMultiple ? ` · ${group.verses.length} verses` : ''}
           </AppText>
-          {group.status === 'queued' && (
-            <View className="ml-auto">
-              <AppButton size="sm" variant="secondary" label="Start learning" onPress={onStart} />
-            </View>
-          )}
+          <View className="ml-auto">
+            <AppButton size="sm" variant="secondary" label="Start learning" onPress={onStart} />
+          </View>
         </View>
       </View>
     </Pressable>

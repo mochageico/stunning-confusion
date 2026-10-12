@@ -129,6 +129,8 @@ export type ScreenName =
   | 'verseSources'
   | 'savedPlans'
   | 'memoryCalendar'
+  | 'verseRoad'
+  | 'versePage'
   | 'referenceDrill'
   | 'threadDrill'
   | 'guided'
@@ -168,9 +170,23 @@ const VERSES_TAB_SCREENS: ScreenName[] = [
   'mySchedule',
   'verseSources',
   'memoryCalendar',
+  'verseRoad',
+  'versePage',
   'savedPlans',
   'planDesigner',
 ];
+
+/**
+ * Which verse the verse page shows: a single verse, or a run of neighbouring
+ * verses that sit at the same point on the road (one row on My Verses). The
+ * page's translation dropdown switches `translationId`.
+ */
+export interface VersePageRef {
+  book: string;
+  chapter: number;
+  verses: number[];
+  translationId: string;
+}
 
 export type TabName = 'home' | 'verses' | 'community' | 'record' | 'profile';
 
@@ -1568,6 +1584,12 @@ export function useAppState() {
   // ==========================================
   // NAVIGATION HANDLERS
   // ==========================================
+  const [versePageRef, setVersePageRef] = useState<VersePageRef | null>(null);
+  const openVersePage = (ref: VersePageRef) => {
+    setVersePageRef(ref);
+    navigateTo('versePage');
+  };
+
   const navigateTo = (screen: ScreenName, book: string | null = null, chapter: number | null = null) => {
     // Record history for seamless back navigation (cleared again below when
     // this switches tabs).
@@ -5444,7 +5466,7 @@ export function useAppState() {
               updatedItem.currentStreakCount = 1;
               updatedItem.nextReviewDueDate = nextDueDateISO(1);
               updatedItem.reviewsToday = 0;
-              toast('Passage mastered! Transitioned to 7-6-5 spaced review.');
+              toast('Learned! It moves up to Daily review.');
             }
           } else {
             toast(`Recall logged! Mastery progress: ${updatedLogs.length}/${masteryTouches} touches.`);
@@ -5532,7 +5554,7 @@ export function useAppState() {
                 DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()];
               updatedItem.chapterReviewAnchorDay = anchor;
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(tomorrow, anchor, 1, sabbathEnabled, sabbathDay).toISOString();
-              toast(`Graduated to Weekly Review phase, aligned to ${DAY_FULL_NAMES[anchor]} with the rest of ${updatedItem.book} ${updatedItem.chapter}!`);
+              toast(`Moved up to Weekly! It's reviewed on ${DAY_FULL_NAMES[anchor]} with the rest of ${updatedItem.book} ${updatedItem.chapter}.`);
             } else {
               updatedItem.nextReviewDueDate = nextDueDateISO(1);
               toast('Daily reviews complete! Spaced date advanced.');
@@ -5550,7 +5572,7 @@ export function useAppState() {
                 DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()];
               updatedItem.chapterReviewAnchorDay = anchor;
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(tomorrow, anchor, 4, sabbathEnabled, sabbathDay).toISOString();
-              toast(`Graduated to Monthly Review phase, still aligned to ${DAY_FULL_NAMES[anchor]}!`);
+              toast(`Moved up to Monthly! Still reviewed on ${DAY_FULL_NAMES[anchor]}.`);
             } else if (updatedItem.chapterReviewAnchorDay) {
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(
                 tomorrow,
@@ -5571,7 +5593,7 @@ export function useAppState() {
               updatedItem.status = 'retained';
               updatedItem.retentionPhase = 'none';
               updatedItem.nextReviewDueDate = null;
-              toast('Successfully RETAINED forever!');
+              toast('Complete! No more scheduled reviews for this one.');
             } else if (updatedItem.chapterReviewAnchorDay) {
               updatedItem.nextReviewDueDate = nthOccurrenceOfWeekday(
                 tomorrow,
@@ -7061,6 +7083,8 @@ export function useAppState() {
     // navigation
     navigateTo,
     handleBack,
+    versePageRef, setVersePageRef,
+    openVersePage,
     selectTab,
     viewMemberProfileById,
 
