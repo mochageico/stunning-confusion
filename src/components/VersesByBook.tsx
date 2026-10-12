@@ -71,8 +71,15 @@ function summarize(queue: QueueItem[]) {
  * from the chapter's text -- cached on the device, and usually already there
  * because the verses were added from that chapter's page.
  */
+/**
+ * Chapter lengths already looked up, kept for the session so coming back to
+ * By book draws every row at full size at once (the list's scroll position is
+ * restored, and rows growing afterwards would throw it off).
+ */
+const verseCountCache: Record<string, number> = {};
+
 function useVerseCounts(chapters: ChapterSummary[]) {
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [counts, setCounts] = useState<Record<string, number>>(() => ({ ...verseCountCache }));
   const wanted = chapters.map((c) => `${c.translationId}|${c.bookId}|${c.chapter}|${c.key}`).join(',');
   useEffect(() => {
     let cancelled = false;
@@ -83,7 +90,10 @@ function useVerseCounts(chapters: ChapterSummary[]) {
           const text = await fetchChapterText(c.translationId, c.bookId, c.chapter);
           if (cancelled) return;
           const n = text?.verseCount || (text ? Object.keys(text.verses).length : 0);
-          if (n > 0) setCounts((prev) => ({ ...prev, [c.key]: n }));
+          if (n > 0) {
+            verseCountCache[c.key] = n;
+            setCounts((prev) => ({ ...prev, [c.key]: n }));
+          }
         } catch {
           // Offline or not found: the row falls back to showing just your verses.
         }

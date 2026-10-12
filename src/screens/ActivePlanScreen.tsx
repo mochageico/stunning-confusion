@@ -66,6 +66,10 @@ const EMPTY_STARTS = new Map<string, Date>();
 // Remembered for the session, so coming back from a verse page lands on the
 // view you left. Not saved to the device: By stage is the right place to open.
 let lastView: VersesView = 'stage';
+// Where the list was scrolled when you left it for one of its own pages (a
+// verse, a chapter, the road...). Coming back puts you there again; opening
+// the tab fresh starts at the top.
+let returnScroll: { view: VersesView; y: number } | null = null;
 
 export default function ActivePlanScreen({ state }: { state: AppState }) {
   const {
@@ -228,6 +232,43 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   // The strip jumps to a stage's section. Each section reports where it sits
   // inside the scroll content as it lays out.
   const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const rememberScroll = () => {
+    returnScroll = { view: viewRef.current, y: scrollY.current };
+  };
+  // navigateTo for links off this screen: remembers where the list was first.
+  const go: typeof navigateTo = (...args) => {
+    rememberScroll();
+    navigateTo(...args);
+  };
+
+  // Put the list back where it was. The lists mount a frame late (listsReady)
+  // and By book's rows can grow as chapter lengths arrive, so this waits for
+  // the content to be tall enough rather than scrolling once and hoping.
+  const restoreY = useRef<number | null>(returnScroll && returnScroll.view === lastView ? returnScroll.y : null);
+  useEffect(() => {
+    returnScroll = null;
+    if (restoreY.current === null) return;
+    // Stop trying after a moment, so later growth never yanks the list.
+    const giveUp = setTimeout(() => (restoreY.current = null), 1500);
+    return () => clearTimeout(giveUp);
+  }, []);
+  const tryRestore = (contentHeight?: number) => {
+    const y = restoreY.current;
+    if (y === null || !listsReady) return;
+    if (contentHeight !== undefined && contentHeight < y) return;
+    scrollRef.current?.scrollTo({ y, animated: false });
+    restoreY.current = null;
+  };
+  useEffect(() => {
+    if (!listsReady) return;
+    // Web never reports content size here, so try once the lists are in.
+    const id = setTimeout(() => tryRestore(), 60);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listsReady]);
   const sectionY = useRef<Partial<Record<VerseStage, number>>>({});
   const listY = useRef(0);
   const scrollToStage = (stage: VerseStage) => {
@@ -246,7 +287,10 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const openVersePageRef = useRef(openVersePage);
   openVersePageRef.current = openVersePage;
   const openGroup = useCallback(
-    (g: StageGroup) => openVersePageRef.current({ book: g.book, chapter: g.chapter, verses: g.verses, translationId: g.translationId }),
+    (g: StageGroup) => {
+      rememberScroll();
+      openVersePageRef.current({ book: g.book, chapter: g.chapter, verses: g.verses, translationId: g.translationId });
+    },
     []
   );
 
@@ -381,14 +425,19 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView ref={scrollRef} className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+      <ScrollView
+        ref={scrollRef}
+        onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={32}
+        onContentSizeChange={(_, h) => tryRestore(h)}
+        className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
         {/* The Verses tab's first screen, so no back link. Every verse you
             have is here, in every stage -- it used to stop at Learning and
             send you to the Memory Calendar for the rest. */}
         <ScreenHeader
           title="My Verses"
           subtitle={summary}
-          actions={<AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => navigateTo('addVerses')} />}
+          actions={<AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => go('addVerses')} />}
         />
 
         {total === 0 ? (
@@ -433,7 +482,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
               </View>
               {!isNew && !ahead && (
                 <Pressable
-                  onPress={() => navigateTo('verseRoad')}
+                  onPress={() => go('verseRoad')}
                   accessibilityRole="button"
                   hitSlop={8}
                   className="flex-row items-center self-center active:opacity-60"
@@ -486,7 +535,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     </AppText>
                   </View>
                 )}
-                <Pressable onPress={() => navigateTo('savedPlans')} accessibilityRole="button" className="active:opacity-60 self-start">
+                <Pressable onPress={() => go('savedPlans')} accessibilityRole="button" className="active:opacity-60 self-start">
                   <AppText variant="label" className="font-sans font-semibold text-accent">
                     Change how long each stage lasts
                   </AppText>
@@ -508,7 +557,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                 queue={memoryQueue}
                 plan={plan}
                 starts={starts}
-                onOpenChapter={(book, chapter) => navigateTo('chapterLanding', book, chapter, { keepBack: true })}
+                onOpenChapter={(book, chapter) => go('chapterLanding', book, chapter, { keepBack: true })}
               />
             )}
           </>
@@ -521,15 +570,15 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           <ListRow
             title="My Schedule"
             value={`${learningDays.length} days · ${newVersesPace} a day`}
-            onPress={() => navigateTo('mySchedule')}
+            onPress={() => go('mySchedule')}
           />
           {joinedGroupPlanMemberships.length > 0 && (
-            <ListRow title="Where verses come from" value={sourcesValue} onPress={() => navigateTo('verseSources')} />
+            <ListRow title="Where verses come from" value={sourcesValue} onPress={() => go('verseSources')} />
           )}
           <ListRow
             title="Review Settings"
             value={activePlan ? activePlan.name : 'None chosen'}
-            onPress={() => navigateTo('savedPlans')}
+            onPress={() => go('savedPlans')}
           />
         </GroupedList>
 
@@ -538,13 +587,13 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             Icon={CalendarDays}
             title="Memory Calendar"
             value={reviewsPaused ? 'Paused' : dueTodayCount === 1 ? '1 due today' : `${dueTodayCount} due today`}
-            onPress={() => navigateTo('memoryCalendar')}
+            onPress={() => go('memoryCalendar')}
           />
           <ListRow
             Icon={History}
             title="History"
             value={`${counts.complete} complete`}
-            onPress={() => navigateTo('fullHistory')}
+            onPress={() => go('fullHistory')}
           />
         </GroupedList>
       </ScrollView>
