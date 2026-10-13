@@ -355,8 +355,12 @@ function PracticeModalsInner({
         });
 
         dbLearning = memoryQueue.filter((item) => item.status === 'learning').map(mapQueueItemToVerse);
+        // Today's whole review set: still due, or already reviewed today. A
+        // verse shouldn't vanish from the playlist the moment it's reviewed.
+        const today = new Date().toDateString();
+        const reviewedToday = (iso: string | null) => !!iso && new Date(iso).toDateString() === today;
         dbReviewing = reviewsPaused ? [] : memoryQueue
-          .filter((item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate))
+          .filter((item) => item.status === 'reviewing' && (isReviewDue(item.nextReviewDueDate) || reviewedToday(item.lastReviewDate)))
           .map(mapQueueItemToVerse);
         dbPriming = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead).map(mapQueueItemToVerse);
       } else {

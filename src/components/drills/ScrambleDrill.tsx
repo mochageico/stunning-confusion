@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Check, ChevronRight, Puzzle, Undo2 } from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight, Puzzle, Undo2 } from 'lucide-react-native';
 
 import { buildScrambleRounds, DrillVerse, ScrambleRound } from '../../lib/drills';
 import { isRtl, scriptOfVerse } from '../../lib/textScript';
@@ -26,18 +26,11 @@ export default React.memo(function ScrambleDrill({
 
   const [scrambleRounds, setScrambleRounds] = useState<ScrambleRound[]>(() => buildScrambleRounds(verses));
   const [scrambleIndex, setScrambleIndex] = useState(0);
-  const [scrambleSlots, setScrambleSlots] = useState<(number | null)[]>([]);
+  const [scrambleSlots, setScrambleSlots] = useState<(number | null)[]>(() => scrambleRounds[0]?.phrases.map(() => null) ?? []);
   const [scrambleChecked, setScrambleChecked] = useState(false);
   const [scrambleSolved, setScrambleSolved] = useState<Set<number>>(new Set());
 
   const currentScrambleRound = scrambleRounds[scrambleIndex] ?? null;
-
-  // Slots are sized to whichever verse is on screen, so they have to be
-  // rebuilt on every round change (not just on a full reset).
-  useEffect(() => {
-    setScrambleSlots(currentScrambleRound ? currentScrambleRound.phrases.map(() => null) : []);
-    setScrambleChecked(false);
-  }, [scrambleIndex, currentScrambleRound]);
 
   // A round confirms itself as soon as the tiles are in the right order, so
   // the completion mark can't hang off the Check button (which the user
@@ -45,25 +38,28 @@ export default React.memo(function ScrambleDrill({
   useEffect(() => {
     if (!currentScrambleRound) return;
     const complete = scrambleSlots.length > 0 && scrambleSlots.every((p, i) => p === i);
-    if (!complete) return;
-    setScrambleSolved((prev) => (prev.has(scrambleIndex) ? prev : new Set(prev).add(scrambleIndex)));
+    // Revisiting a solved round shows it finished again; that isn't a new solve.
+    if (!complete || scrambleSolved.has(scrambleIndex)) return;
+    setScrambleSolved((prev) => new Set(prev).add(scrambleIndex));
     if (scrambleIndex >= scrambleRounds.length - 1) onComplete?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrambleSlots, scrambleIndex, currentScrambleRound]);
 
-  // Moving to another round empties the slots in the same update. Left to
-  // the effect above, the last round's finished tiles would count as solving
-  // the new round for one render.
-  const goToRound = (rounds: ScrambleRound[], index: number) => {
+  // Slots are sized to whichever verse is on screen, so they're rebuilt in
+  // the same update as the index -- otherwise the last round's finished tiles
+  // would count as solving the new round for one render. A round already
+  // solved comes back finished; anything else starts empty.
+  const goToRound = (rounds: ScrambleRound[], index: number, solvedSet: Set<number> = scrambleSolved) => {
+    const target = rounds[index];
     setScrambleIndex(index);
-    setScrambleSlots(rounds[index] ? rounds[index].phrases.map(() => null) : []);
+    setScrambleSlots(target ? target.phrases.map((_, i) => (solvedSet.has(index) ? i : null)) : []);
+    setScrambleChecked(false);
   };
 
   const resetScramble = () => {
     const rounds = buildScrambleRounds(verses);
     setScrambleRounds(rounds);
-    goToRound(rounds, 0);
-    setScrambleChecked(false);
+    goToRound(rounds, 0, new Set());
     setScrambleSolved(new Set());
   };
 
@@ -105,6 +101,29 @@ export default React.memo(function ScrambleDrill({
             {round.label} — verse {scrambleIndex + 1} of {scrambleRounds.length}
           </AppText>
           {scrambleSolved.has(scrambleIndex) && <Check size={12} color={palette.success} />}
+          {/* Free movement between verses, solved or not. */}
+          {scrambleRounds.length > 1 && (
+            <View className="flex-row items-center ml-2">
+              <Pressable
+                onPress={() => goToRound(scrambleRounds, scrambleIndex - 1)}
+                disabled={scrambleIndex === 0}
+                accessibilityLabel="Previous verse"
+                hitSlop={8}
+                className={`p-1.5 ${scrambleIndex === 0 ? 'opacity-30' : ''}`}
+              >
+                <ChevronLeft size={18} color={palette.ink2} />
+              </Pressable>
+              <Pressable
+                onPress={() => goToRound(scrambleRounds, scrambleIndex + 1)}
+                disabled={isLastRound}
+                accessibilityLabel="Next verse"
+                hitSlop={8}
+                className={`p-1.5 ${isLastRound ? 'opacity-30' : ''}`}
+              >
+                <ChevronRight size={18} color={palette.ink2} />
+              </Pressable>
+            </View>
+          )}
         </View>
 
         {/* Construct box. A correct arrangement confirms itself the moment
