@@ -96,6 +96,7 @@ check('memory-grid line', firstLetterLine('In the beginning, God') === 'I t b, G
 check('first-letter mask', maskExceptFirstLetter('beginning,') === 'b••••••••,', maskExceptFirstLetter('beginning,'));
 check('near-key forgiveness still works', classifyFirstLetterAttempt('s', 'and') === 'close');
 check('swap shape restores capitals', applyWordShape('"Light,', 'darkness') === '"Darkness,', applyWordShape('"Light,', 'darkness'));
+check('swap shape keeps all caps', applyWordShape('LORD;', 'god') === 'GOD;', applyWordShape('LORD;', 'god'));
 
 console.log('\ndrills');
 const phrases = chunkIntoPhrases(GEN_1_2, 'hebrew');

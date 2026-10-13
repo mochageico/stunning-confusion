@@ -1,6 +1,7 @@
 import { TextScript } from '../types';
 import { normalizeToken } from './recitation';
 import { applyWordShape, joinWords, scriptOfVerse, splitWords, wordCore } from './textScript';
+import { BIBLE_DECOY_WORDS, SwapWordClass } from './swapDecoyWords';
 
 export { applyWordShape } from './textScript';
 
@@ -195,63 +196,260 @@ export interface SwapVerse {
 }
 
 /**
- * Replaces a few words per verse with real words pulled from elsewhere in the
- * same passage.
+ * Never swapped and never used as decoys, whatever the tagger calls them.
+ * These are 4+ letter function words -- the tagger labels most of them as
+ * such already, but it reads "together" and "beside" as adjectives and
+ * "according" as a verb, and a swap involving one of them is a grammar
+ * puzzle, not a memory test.
+ */
+const SWAP_STOPWORDS = new Set(
+  `about above according after again against also among away because been
+   before behind being beside between both cannot could does each even every
+   everyone from have here into just like many more most much must only
+   other over shall should some such than that their them then there
+   therefore these they this those through together toward towards under
+   unto upon very were what when where which while whom whose will with
+   within without would your yours`.split(/\s+/)
+);
+
+/** One word as compromise reports it. Only the fields used here. */
+type TaggedTerm = { text: string; tags: string[]; offset: { start: number }; confidence?: number | null };
+type Tagger = (text: string) => { json: (opts: object) => { terms: TaggedTerm[] }[] };
+
+let cachedTagger: Tagger | null = null;
+/**
+ * The part-of-speech tagger, loaded on first use: its lexicon is a few
+ * hundred KB of script, so only someone who opens Spot the swap pays to
+ * load it. (metro.config.js maps `compromise/two` to its file -- Metro has
+ * package "exports" turned off, which that entry point relies on.)
+ */
+const tagger = (): Tagger => {
+  if (!cachedTagger) cachedTagger = require('compromise/two') as Tagger;
+  return cachedTagger;
+};
+
+/** Tags that mark a word as grammar glue rather than content. */
+const FUNCTION_TAGS = [
+  'Pronoun', 'Possessive', 'Determiner', 'Preposition', 'Conjunction', 'Auxiliary',
+  'Modal', 'Copula', 'QuestionWord', 'Negative', 'Value', 'Particle', 'Expression',
+];
+
+/** Words before a past participle: "had walked", "was chosen". */
+const PARTICIPLE_HELPERS = new Set(['have', 'has', 'had', 'having', 'be', 'been', 'being', 'is', 'am', 'are', 'was', 'were']);
+/** Words before an adjective used as a noun: "the good of those". */
+const NOUN_DETERMINERS = new Set(['the', 'a', 'an', 'his', 'her', 'my', 'your', 'our', 'their', 'its', 'thy']);
+
+/**
+ * compromise's tags -> the class two words must share to swap. Null for
+ * anything not worth swapping. `prev` and `next` are the neighbouring
+ * words (normalized) -- the tagger leaves two readings to settle by hand.
+ */
+const swapClassOfTags = (tags: string[], prev: string, next: string): SwapWordClass | null => {
+  const has = (t: string) => tags.includes(t);
+  if (FUNCTION_TAGS.some(has)) return null;
+  if (has('Verb')) {
+    if (has('Gerund')) return 'verb-ing';
+    // "taken" and "had walked" take participles; "walked" alone takes a past
+    // tense. "Enoch taken with God" or "had spoke" would give a decoy away.
+    if (has('Participle') || has('Passive') || (has('PastTense') && PARTICIPLE_HELPERS.has(prev))) return 'verb-en';
+    if (has('PastTense')) return 'verb-ed';
+    if (has('Infinitive') || has('Imperative')) return 'verb';
+    // A present-tense verb that isn't also the base form is the -s form.
+    if (has('PresentTense')) return 'verb-s';
+    return null;
+  }
+  // "the good of those who love Him" -- an adjective standing in for a noun.
+  if (has('Adjective') && next === 'of' && NOUN_DETERMINERS.has(prev)) return 'noun';
+  if (has('Adjective')) return has('Comparative') ? 'adj-er' : has('Superlative') ? 'adj-est' : 'adj';
+  if (has('Adverb')) return 'adv';
+  if (has('Noun')) return has('Plural') ? 'nouns' : 'noun';
+  return null;
+};
+
+/** Below this, the tagger's tag is a guess (see tagVerseWords). */
+const MIN_TAG_CONFIDENCE = 0.15;
+
+/**
+ * The tagger's reading of each word, in context: "love" in "those who love
+ * Him" is a verb, in "love is patient" a noun. A word the tagger split into
+ * pieces ("fear—I", "don't") gets null, as does anything it can't line up,
+ * and any word the tagger only guessed at: it calls an unknown word like
+ * "foreknew" a noun with confidence 0.1, and a verb swapped in for a noun
+ * is exactly the giveaway this is meant to prevent.
+ */
+const tagVerseWords = (text: string, words: string[]): (string[] | null)[] => {
+  const terms = tagger()(text)
+    .json({ offset: true, terms: { offset: true, confidence: true } })
+    .flatMap((s) => s.terms)
+    .filter((t) => t.text.length > 0);
+  let cursor = 0;
+  return words.map((w) => {
+    const start = text.indexOf(w, cursor);
+    if (start === -1) return null;
+    cursor = start + w.length;
+    const inside = terms.filter((t) => t.offset.start >= start && t.offset.start < cursor);
+    if (inside.length !== 1 || normalizeToken(inside[0].text) !== normalizeToken(w)) return null;
+    const { tags, confidence } = inside[0];
+    return confidence != null && confidence < MIN_TAG_CONFIDENCE ? null : tags;
+  });
+};
+
+/**
+ * True when two English words look like forms of one word -- "love" /
+ * "loved", "believe" / "believing", "faith" / "faithful". Swapping one for
+ * the other would be a grammar test, and often barely a change at all.
+ */
+export const isSameWordFamily = (a: string, b: string): boolean => {
+  let shared = 0;
+  while (shared < a.length && shared < b.length && a[shared] === b[shared]) shared++;
+  return shared >= 3 && shared >= Math.min(a.length, b.length) - 1;
+};
+
+/** How far a decoy's length may stray from the word it replaces, in letters. */
+export const SWAP_LENGTH_TOLERANCE = 2;
+
+/** What a word is, as far as choosing its decoy goes. */
+interface SwapSlot {
+  /** English only: the word's class where it appeared. Null for Hebrew/Greek. */
+  cls: SwapWordClass | null;
+  /** A name ("God", "Jesus", "LORD"); only trades with another name. */
+  proper: boolean;
+}
+
+/** A word that can be dropped in as a decoy. */
+interface DecoyWord extends SwapSlot {
+  /** Comparable form, as normalizeToken gives it. */
+  key: string;
+  /** What gets shown -- see buildSwapVerses for why it differs by script. */
+  display: string;
+  script: TextScript;
+}
+
+/** Word `i` of an English verse, read in context -- its slot, or null when it isn't swappable at all. */
+const englishSlot = (words: string[], i: number, tags: string[] | null): SwapSlot | null => {
+  const word = words[i];
+  const key = normalizeToken(word);
+  // A word with an apostrophe or hyphen inside ("LORD's", "burnt-offering")
+  // can't be replaced without losing that piece.
+  if (!tags || key.length < MIN_SWAP_WORD_LENGTH || SWAP_STOPWORDS.has(key) || !/^[a-z]+$/i.test(wordCore(word, 'latin'))) {
+    return null;
+  }
+  const cls = swapClassOfTags(tags, normalizeToken(words[i - 1] ?? ''), normalizeToken(words[i + 1] ?? ''));
+  if (!cls) return null;
+  // The tagger doesn't know "LORD" (small caps in print) as a name; all caps marks it.
+  const core = wordCore(word, 'latin');
+  const isName = /^[A-Z]/.test(core) && (tags.includes('ProperNoun') || core === core.toUpperCase());
+  return { cls, proper: cls === 'noun' && isName };
+};
+
+/** Each word's swap class in its English verse, or null where it can't be swapped. For the check script. */
+export const englishSwapClasses = (text: string): (SwapWordClass | null)[] => {
+  const words = splitWords(text);
+  const tags = tagVerseWords(text, words);
+  return words.map((_, i) => englishSlot(words, i, tags[i])?.cls ?? null);
+};
+
+const FALLBACK_DECOYS: DecoyWord[] = BIBLE_DECOY_WORDS.map(({ word, cls }) => ({
+  key: word,
+  display: word,
+  script: 'latin',
+  cls,
+  proper: false,
+}));
+
+/**
+ * Replaces a few words per verse with believable imposters.
  *
- * Using the passage's own vocabulary (rather than a curated
- * synonym/confusables list) means zero content authoring and decoys that are
- * always plausible scripture language in the same register. The tradeoff: a
- * decoy occasionally lands somewhere obviously wrong grammatically. A curated
- * confusables dictionary would read better and is the natural upgrade — it
- * would only need to replace how `pool` is built below.
+ * A decoy has to pass for the real thing at a glance, or the drill tests
+ * grammar instead of memory. So in English it is the same kind of word in
+ * the same form -- a past-tense verb for a past-tense verb ("walked" ->
+ * "spoke", never "speaking"), a plural noun for a plural noun -- as read by
+ * a part-of-speech tagger in the context of its verse. In every script it
+ * is within SWAP_LENGTH_TOLERANCE letters of the original's length.
+ *
+ * Decoys come from the passage's own vocabulary first (same register, same
+ * subject), then from a short list of common Bible words. When neither has
+ * a fit, that word is left alone and another one in the verse is tried --
+ * one fewer decoy beats a bad one.
+ *
+ * Hebrew and Greek aren't tagged: decoys match by length only, from the
+ * passage, in the same script.
  */
 export const buildSwapVerses = (
   verses: DrillVerse[],
   swapsPerVerse: number = DEFAULT_SWAPS_PER_VERSE
 ): SwapVerse[] => {
-  // Every substantial word in the group, deduped by its comparable form --
-  // the decoy vocabulary. `display` is what gets dropped into the verse: for
-  // English the normalized word (applyWordShape restores its case); for
+  // Each verse's words, and what each one is (null = never swapped).
+  const prepared = verses.map((v) => {
+    const script = scriptOfVerse(v);
+    const words = splitWords(v.text, script);
+    let slots: (SwapSlot | null)[];
+    if (script === 'latin') {
+      const tags = tagVerseWords(v.text, words);
+      slots = words.map((_, i) => englishSlot(words, i, tags[i]));
+    } else {
+      slots = words.map((w) =>
+        normalizeToken(w, script).length >= minSwapLength(script) ? { cls: null, proper: false } : null
+      );
+    }
+    return { v, script, words, slots };
+  });
+
+  // Every swappable word in the group, deduped by comparable form and class
+  // -- the decoy vocabulary. `display` is what gets dropped into the verse:
+  // for English the normalized word (applyWordShape restores its case); for
   // Hebrew/Greek the word's real letters with punctuation trimmed, because a
   // normalized Hebrew decoy has no vowel points and would be the one
   // unpointed word on screen.
-  const poolByKey = new Map<string, { key: string; display: string }>();
-  verses.forEach((v) => {
-    const script = scriptOfVerse(v);
-    splitWords(v.text, script).forEach((w) => {
+  const poolById = new Map<string, DecoyWord>();
+  prepared.forEach(({ script, words, slots }) => {
+    words.forEach((w, i) => {
+      const slot = slots[i];
+      if (!slot) return;
       const key = normalizeToken(w, script);
-      if (key.length < minSwapLength(script) || poolByKey.has(key)) return;
-      poolByKey.set(key, { key, display: script === 'latin' ? key : wordCore(w, script) });
+      const id = `${script}:${key}:${slot.cls ?? ''}`;
+      if (poolById.has(id)) return;
+      poolById.set(id, { key, display: script === 'latin' ? key : wordCore(w, script), script, ...slot });
     });
   });
-  const pool = Array.from(poolByKey.values());
+  const pool = Array.from(poolById.values());
+
+  // `avoid`: decoys already used in this verse, and the words on either side
+  // -- "in Christ Christ Jesus" gives itself away.
+  const findDecoy = (key: string, script: TextScript, slot: SwapSlot, avoid: Set<string>): DecoyWord | null => {
+    const fits = (d: DecoyWord) =>
+      d.script === script &&
+      d.key !== key &&
+      !avoid.has(d.key) &&
+      Math.abs(d.key.length - key.length) <= SWAP_LENGTH_TOLERANCE &&
+      (script !== 'latin' || (d.cls === slot.cls && d.proper === slot.proper && !isSameWordFamily(d.key, key)));
+    const fromPassage = pool.filter(fits);
+    const candidates = fromPassage.length > 0 || script !== 'latin' ? fromPassage : FALLBACK_DECOYS.filter(fits);
+    return candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : null;
+  };
 
   let flatIndex = 0;
 
-  return verses.map((v) => {
-    const script = scriptOfVerse(v);
-    const words = splitWords(v.text, script);
+  return prepared.map(({ v, script, words, slots }) => {
+    const eligible = words.map((_, i) => i).filter((i) => slots[i] !== null);
 
-    // Which positions in this verse are even eligible to be swapped.
-    const eligible = words
-      .map((w, i) => ({ w, i }))
-      .filter(({ w }) => normalizeToken(w, script).length >= minSwapLength(script))
-      .map(({ i }) => i);
-
-    // Never swap so much of a short verse that it stops being recognizable;
-    // and with a thin pool there may be nothing valid to swap in at all.
-    const swapCount = Math.min(swapsPerVerse, Math.floor(eligible.length / 2), Math.max(pool.length - 1, 0));
-    const chosen = new Set(shuffleArray(eligible).slice(0, Math.max(swapCount, 0)));
+    // Never swap so much of a short verse that it stops being recognizable.
+    const swapCount = Math.min(swapsPerVerse, Math.floor(eligible.length / 2));
+    const decoyAt = new Map<number, DecoyWord>();
+    const usedInVerse = new Set<string>();
+    for (const i of shuffleArray(eligible)) {
+      if (decoyAt.size >= swapCount) break;
+      const neighbours = [words[i - 1], words[i + 1]].filter((w) => w !== undefined).map((w) => normalizeToken(w, script));
+      const decoy = findDecoy(normalizeToken(words[i], script), script, slots[i]!, new Set([...usedInVerse, ...neighbours]));
+      if (!decoy) continue;
+      decoyAt.set(i, decoy);
+      usedInVerse.add(decoy.key);
+    }
 
     const tokens: SwapToken[] = words.map((word, i) => {
       const index = flatIndex++;
-      if (!chosen.has(i)) return { display: word, isDecoy: false, index };
-
-      const realWord = normalizeToken(word, script);
-      const candidates = pool.filter((p) => p.key !== realWord);
-      if (candidates.length === 0) return { display: word, isDecoy: false, index };
-
-      const decoy = candidates[Math.floor(Math.random() * candidates.length)];
+      const decoy = decoyAt.get(i);
+      if (!decoy) return { display: word, isDecoy: false, index };
       return {
         display: applyWordShape(word, decoy.display, script),
         isDecoy: true,

@@ -268,7 +268,7 @@ export const maskExceptFirstLetter = (word: string, script: TextScript = 'latin'
 
 /**
  * Puts a replacement word into the original's punctuation (and, for English,
- * its capitalization), so a spot-the-swap decoy never gives itself away by
+ * its capitalization -- all caps too, so a decoy for "LORD" is in caps), so a spot-the-swap decoy never gives itself away by
  * being the only word missing its comma or maqaf. `replacement` is a bare
  * core: normalized for English (the shape restores case), and for Hebrew/Greek
  * the real pointed/accented letters, since a decoy stripped of its vowels
@@ -281,10 +281,14 @@ export const applyWordShape = (original: string, replacement: string, script: Te
     const lastAlnum = original.search(/[a-zA-Z0-9][^a-zA-Z0-9]*$/);
     const prefix = original.slice(0, firstAlnum);
     const suffix = lastAlnum === -1 ? '' : original.slice(lastAlnum + 1);
+    const originalCore = original.slice(firstAlnum, lastAlnum + 1);
+    const wasAllCaps = /[A-Z].*[A-Z]/.test(originalCore) && originalCore === originalCore.toUpperCase();
     const wasCapitalized = original[firstAlnum] === original[firstAlnum].toUpperCase();
-    const core = wasCapitalized
-      ? replacement.charAt(0).toUpperCase() + replacement.slice(1)
-      : replacement.toLowerCase();
+    const core = wasAllCaps
+      ? replacement.toUpperCase()
+      : wasCapitalized
+        ? replacement.charAt(0).toUpperCase() + replacement.slice(1)
+        : replacement.toLowerCase();
     return `${prefix}${core}${suffix}`;
   }
   const { prefix, core, suffix } = wordShape(original, script);
