@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { spawn } from 'child_process';
 import { chmodSync, existsSync, mkdtempSync, rmSync, statSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 
 import ffmpegStatic from 'ffmpeg-static';
 import ffprobeStatic from 'ffprobe-static';
@@ -58,94 +58,66 @@ const MAX_DURATION_DRIFT_SEC = 0.5;
 // hear in a car or on a phone speaker without clipping on good headphones.
 const LOUDNORM_TARGET = 'I=-16:TP=-1.5:LRA=11';
 
-// Everything ahead of loudnorm, in order:
-//   highpass    — drops desk rumble/handling noise below speech fundamentals
-//   adeclick    — removes mouth clicks / saliva ticks (see below)
-//   acompressor — evens out lean-in/lean-back level swings WITHIN a take
+// ── DENOISE: DeepFilterNet ────────────────────────────────────────────────
 //
-// adeclick is an interpolator, not a filter in the EQ sense: it finds samples
-// that are impulsive outliers against an autoregressive prediction of the
-// waveform and redraws them from their neighbours. That is exactly what a
-// mouth click is — a few milliseconds of broadband tick with no harmonic
-// relationship to the speech around it — so it is removed rather than merely
-// turned down, and sustained speech is left untouched because sustained speech
-// is predictable. `threshold` is the sensitivity knob and is INVERTED: lower
-// detects more.
+// WHY NOT FFMPEG FILTERS. Two and a half months of tuning an ffmpeg-only chain
+// (adeclick, arnndn, compressor, gate, EQ) ended in a blind listening test on
+// 2026-10-16 where the best ffmpeg render was judged "almost identical to the
+// original", and anything stronger sounded muffled or robotic. Those filters
+// can only turn parts of the existing sound up or down.
 //
-// Started at 3.5 (deliberately conservative, to avoid smoothing consonant
-// transients) and that did essentially nothing — mouth clicks were reported as
-// "very much still there". Now 1.6, below the vinyl-tuned default of 2, plus a
-// shorter window so short events are localized better and a wider burst fusion
-// so a cluster of ticks is treated as one event.
+// DeepFilterNet3 is a speech-enhancement network that is far better at telling
+// voice from noise than RNNoise (arnndn). In the same test it beat RNNoise,
+// Resemble's denoiser, and its own full-strength setting. Resemble Enhance
+// (generative "studio" rebuild) sounded best most of the time but garbled
+// words occasionally — unacceptable for recitation, where the words are the
+// point. DeepFilterNet only removes; it never invents audio.
 //
-// HONEST LIMIT: adeclick was written for vinyl, where a click is a large,
-// very short impulse. Mouth clicks are low-level and slightly longer, so they
-// sit much closer to the detector's noise floor and some will always survive.
-// If this pass still isn't enough, the answer is a speech-aware model
-// (arnndn), not a lower threshold — below ~1.2 it starts audibly dulling
-// consonants for very little extra click removal.
+// It runs as the upstream Rust CLI (statically linked, CPU only, ~20x faster
+// than real time), fetched at install time by scripts/fetch-deep-filter.js.
 //
-// It is the most expensive filter in the chain by a wide margin (overlapping
-// windowed autoregression). Budgeted against the 300s timeout it is fine for
-// recitation-length audio, but it is the first thing to look at if renders
-// ever start timing out.
+//   -a 12  ATTENUATION LIMIT. Noise comes down at most 12dB, by blending the
+//          enhanced signal with the original. "Gentle" won the listening test
+//          over full strength (-a 100): some room tone is what keeps it from
+//          sounding robotic or like the speaker is in a vacuum.
+//   -D     Compensate the model's lookahead delay. WITHOUT THIS every verse
+//          tap mark would be off by the STFT+lookahead latency. Measured: zero
+//          sample offset vs the input, output ~30ms shorter at the tail (well
+//          inside MAX_DURATION_DRIFT_SEC).
 //
-// acompressor: threshold/ratio raised from -20dB/2.5 because the first
-// listenable render "barely sounded different from the original, just louder".
-// Loudness normalization alone doesn't read as "produced" — evening out the
-// dynamics within a phrase is what does.
-//
-// DENOISE: arnndn, never afftdn. This distinction is the whole reason the
-// first version sounded worse than the raw take.
-//
-// afftdn is a spectral subtractor: it estimates a noise floor per FFT bin and
-// pulls everything near it down, with no idea what speech is. Low-level
-// high-frequency content — breath, air, presence — looks exactly like noise to
-// it, so it went first. Measured cost was ~2.7dB across 10-16kHz.
-//
-// arnndn runs a recurrent network trained to distinguish voice from
-// everything else, so it removes the noise floor without flattening quiet
-// treble. Measured here against the two candidate models (5s each, mean
-// volume, dB change vs dry):
-//                       pink noise    harmonic complex    10-16kHz band
-//   bd.rnnn                  -6.7            -0.4              -1.8
-//   sh.rnnn                 -22.6            -4.4              -2.2
-// sh removes ~16dB more noise for essentially the same treble cost, which is
-// the trade the whole chain has been trying to make. The -4.4dB on the
-// harmonic complex is NOT a real speech figure — a synthetic tone stack is
-// legitimately "not speech" to the model, and the more aggressive model
-// suppresses it harder. Real voice should see far less.
-//
-// TUNING: swapping to bd.rnnn is a one-word change below. Do that first if
-// the voice ever sounds thinned or "underwater" rather than merely cleaner.
-//
-// The model is REQUIRED — ffmpeg ships no default weights — so the filter is
-// included only when the file is actually present. A missing model degrades
-// to the previous chain instead of failing every render, which is the failure
-// mode this function has already been through once.
-const RNNOISE_MODEL = join(__dirname, '..', 'models', 'sh.rnnn');
-const hasRnnoiseModel = existsSync(RNNOISE_MODEL);
+// A missing or failing binary degrades to "no denoise" with an error log,
+// never a failed render — the same rule the rest of this file follows.
+const DEEP_FILTER_PATH = join(__dirname, '..', 'bin', process.platform === 'win32' ? 'deep-filter.exe' : 'deep-filter');
+const DEEP_FILTER_ARGS = ['-D', '-a', '12'];
 
-// arnndn is fixed at 48kHz internally, so ffmpeg inserts resamplers around it
-// on 44.1k input. OUTPUT_SAMPLE_RATE follows it to 48k so the audio is
-// resampled once on the way in rather than twice (in and back out again).
-const OUTPUT_SAMPLE_RATE = hasRnnoiseModel ? '48000' : '44100';
-// adeclick runs BEFORE arnndn: its autoregressive prediction works on the
-// unmodified waveform, and denoising first would smear the very transients it
-// is looking for. Both run before the compressor, so neither click nor noise
-// floor gets amplified on the way through.
-const PRE_FILTERS = [
-  'highpass=f=70',
-  'adeclick=window=45:overlap=80:arorder=8:threshold=1.6:burst=4',
-  ...(hasRnnoiseModel ? [`arnndn=m=${RNNOISE_MODEL.replace(/\\/g, '/')}`] : []),
-  // Backed off from -24dB/3.5:1. Compression is part of why the esses got
-  // WORSE: sibilants sit below the vowel peaks, so a low threshold and high
-  // ratio lift them relative to everything else. Measured on a real take, the
-  // 5-8kHz band came out 1.5-2.2dB hotter than the source. 2.5:1 still evens
-  // out lean-in/lean-back swings without amplifying the problem the de-esser
-  // then has to undo.
-  'acompressor=threshold=-22dB:ratio=2.5:attack=20:release=240:makeup=1',
-].join(',');
+// DeepFilterNet only works at 48kHz, so the whole pipeline runs at 48k.
+const OUTPUT_SAMPLE_RATE = '48000';
+
+// ── BOOM TRIM: PER-RECORDING PROXIMITY CORRECTION ─────────────────────────
+//
+// Holding the phone close to your mouth piles up 100-200Hz (the "proximity
+// effect"). That boom is most of what makes a take sound like the speaker is
+// "eating the mic" rather than across the table. It varies enormously between
+// takes — measured across eight real recitations, the 90-220Hz band sat
+// anywhere from +0.1dB to +14.4dB above the 800-2000Hz band — so a fixed cut
+// would thin out the good takes to fix the bad ones.
+//
+// So it is measured per recording and only the excess is removed. The target
+// (+1dB) is the take the user picked as having "a great feel where it doesn't
+// sound like I'm eating the microphone". Each dB of excess gets 1.5dB of cut
+// because a broad bell at 150Hz removes less than its nominal gain from the
+// whole 90-220Hz band; 1.5 was what brought a +4.9dB take level with the
+// target. Capped at 10dB.
+const BOOM_TARGET_DB = 1;
+const BOOM_CUT_PER_DB = 1.5;
+const BOOM_MAX_CUT_DB = 10;
+
+/** Everything ahead of loudnorm. */
+function preFilters(boomCutDb: number): string {
+  const filters = ['highpass=f=70'];
+  if (boomCutDb > 0.1) filters.push(`equalizer=f=150:width_type=q:w=0.8:g=-${boomCutDb.toFixed(1)}`);
+  return filters.join(',');
+}
 
 // ── ONLY LONG-STABLE FILTERS BELOW THIS LINE ──────────────────────────────
 //
@@ -167,177 +139,106 @@ const PRE_FILTERS = [
 // The chain therefore parsed clean locally and died on EVERY Cloud Functions
 // invocation for two weeks. LOCAL TESTING CANNOT VALIDATE FILTER OPTIONS FOR
 // THE DEPLOYED ENVIRONMENT. Anything added here must stick to filters whose
-// options have been stable for years — `equalizer`, `treble`/`bass`,
-// `highpass`, `acompressor`, `agate`, `adeclick`, `loudnorm`, `alimiter` all
-// qualify. Two further rules earned the hard way:
+// options have been stable for years — `equalizer`, `highpass`/`lowpass`,
+// `acompressor`, `asplit`, `amix`, `loudnorm`, `alimiter` all qualify. Two
+// further rules earned the hard way:
 //   • Don't name an enum constant you don't need. Every option spelled out is
 //     a chance to hit a renamed constant; defaults don't have that problem.
 //   • The startup probe (logEnvironmentOnce) dry-runs the real chain, so a
 //     parse failure shows up once in the logs rather than silently per-render.
 //
-// Downward expander, NOT a hard gate. Runs after loudnorm so its threshold
-// means the same thing on every recording (the same reason the de-esser does).
-//
-// This is the "noise cancellation" that is actually safe to apply. A spectral
-// denoiser works on the speech as well as the silence and takes the top octave
-// with it; an expander only ever pulls DOWN material that is already far below
-// speech level, i.e. room tone in the gaps between phrases. Silent gaps are
-// most of what makes a recording read as "studio" rather than "phone in a
-// room", and this costs nothing in the parts you can hear.
-//
-// Deliberately gentle: ratio 2 and range 0.15 cap the reduction at about
-// -16dB, so pauses go quiet rather than dead — an abruptly digital-black gap
-// sounds worse and more artificial than light room tone. The slow-ish release
-// (250ms) keeps word tails and breaths from being chopped off.
-const GATE = 'agate=threshold=0.02:ratio=2:range=0.15:attack=20:release=250:knee=4';
+// No gate and no compressor any more: DeepFilterNet handles the pauses, and
+// both were part of what made earlier renders sound close-miked and boxed in.
 
-// ── DE-ESSER: CAPABILITY-PROBED, NOT ASSUMED ──────────────────────────────
+// ── DE-ESSER: SPLIT-BAND COMPRESSOR ───────────────────────────────────────
 //
-// A static bell is the safe option but it is strictly worse than a dynamic
-// one: it cuts 6.8k on every vowel, so the only way to get more sibilance
-// control is to make the whole recording duller. At -6.5dB the esses were
-// still reported as too loud, and -8 is about where speech starts to lisp, so
-// the static approach has run out of room.
+// WHAT SHIPPED BEFORE THIS, AND WHY IT SOUNDED BAD (measured 2026-10-16 on
+// two real recitations, raw upload vs the studio file production made):
+//   • adynamicequalizer never worked on the deployed 7.0.2 build — one
+//     spelling doesn't parse, the other parses and does nothing — so every
+//     render fell back to fixed EQ bells.
+//   • Fixed bells cut on EVERY sound, not just on esses. The deployed version
+//     (-10dB at 5500 + 7200) took 5-8kHz down ~9-13dB on plain vowels: that
+//     is the "muffled" complaint.
+//   • Meanwhile on the esses themselves it gutted 4-9kHz (the part that makes
+//     an /s/ sound like an /s/) and barely touched 9-12kHz, while the AIR
+//     shelf lifted the very top. What was left of each "s" was a thin,
+//     piercing hiss: the "still sharp" complaint. Both complaints, one cause.
+//   • Retuned bells (7000/9000, -6dB) were committed on 2026-08-24 but never
+//     deployed, so none of that tuning was ever heard.
 //
-// A dynamic EQ cuts only while the band is actually loud, which is what
-// de-essing is supposed to mean — it can take 12dB off an "s" and leave the
-// vowel either side completely untouched. The reason the chain isn't simply
-// using one is that adynamicequalizer's option names differ between ffmpeg
-// builds, and guessing wrong took studio mode down for two weeks.
+// THE FIX: split the signal at 4.5kHz, compress ONLY the top band, add it
+// back. On a vowel the top band sits well under the threshold and passes
+// through untouched; on an "s" it jumps 15-20dB, crosses the threshold, and
+// gets pulled down — evenly across the whole sibilance range, so the
+// consonant keeps its shape and just gets quieter. That is what de-essing
+// actually means, and it is built only from filters whose options have been
+// stable for years (asplit, lowpass/highpass, acompressor, amix).
 //
-// So: don't guess. List the candidates best-first and let the startup probe
-// dry-run each against this specific binary (see resolveDeesser). The static
-// bell is last and universal, so there is always a working answer — the worst
-// case is that we land back exactly where we are today, with a log line
-// saying so, instead of failing every render.
+// The crossover is two cascaded 2nd-order Butterworths per side, i.e. a
+// Linkwitz-Riley 4th-order pair: the two halves sum back flat, so with the
+// compressor idle the band split is inaudible (measured within ~0.5dB).
+//
+// Measured on the same two recitations (dB relative to a 1-2kHz anchor; the
+// "s-peak" column is how far loud esses stand above the voice):
+//                         vowels 5-8kHz   esses 4-6k   esses 6-9k   s-peak
+//   raw take A                 -11.9          +6.1        +4.9        10.6
+//   deployed bells A           -25.3          -4.9        -5.3        -2.3
+//   split-band A               -11.7          +4.6        +1.3         4.9
+//   raw take B                 -23.2          -1.1        -1.7         2.5
+//   deployed bells B           -32.1         -10.9       -10.9        -7.3
+//   split-band B               -19.8          -1.0        -2.9        -0.5
+//
+// TUNING: `threshold` on the high-band compressor is the strength knob, and
+// it is an ABSOLUTE level (which is why this runs after loudnorm). Lower it
+// for more de-essing — at -26dB vowels start to lose ~1dB of top end, at -30
+// it is audibly duller. `ratio` matters much less than threshold here.
+const DEESS_CROSSOVER_HZ = 4500;
+const SPLIT_BAND_DEESSER =
+  `asplit[deess_lo][deess_hi];` +
+  `[deess_lo]lowpass=f=${DEESS_CROSSOVER_HZ},lowpass=f=${DEESS_CROSSOVER_HZ}[deess_l];` +
+  `[deess_hi]highpass=f=${DEESS_CROSSOVER_HZ},highpass=f=${DEESS_CROSSOVER_HZ},` +
+  `acompressor=threshold=-22dB:ratio=8:attack=1:release=50:knee=2[deess_h];` +
+  `[deess_l][deess_h]amix=inputs=2:normalize=0`;
+
+// Still probed at startup rather than assumed — the 7.0.2 lesson stands. The
+// static bell is the fallback only if the split-band graph is ever rejected;
+// it is the committed-but-never-deployed 7000/9000 pair, which is at least
+// far gentler than what production actually ran.
 interface DeesserCandidate {
   label: string;
   expr: string;
 }
-// TUNING — `threshold` IS THE STRENGTH KNOB, AND IT READS BACKWARDS.
-//
-// It is NOT "the level above which de-essing starts". Raising it produces MORE
-// cut, not less. This was worth 0.9dB of actual de-essing when it was set to
-// 0.10 on the assumption that a lower number meant a more sensitive trigger —
-// the esses came back as "still extremely sharp, almost identical to the
-// unprocessed take", which is exactly what -0.9dB sounds like.
-//
-// Measured on a voiced/sibilant burst signal at -16 LUFS (mean level in band,
-// dB change vs no de-esser). Note how little the voiced band moves — that
-// selectivity is the entire reason for using a dynamic EQ over a static cut:
-//   threshold   0.10   0.20   0.30   0.50   0.80   1.20
-//   5.5-9kHz    -1.1   -3.6   -5.2   -7.6  -10.3  -12.9
-//   200-1200Hz   0.0   -0.1   -0.1   -0.2   -0.3   -0.5
-//
-// 1.0 sits at about -11.7dB on sibilance for -0.4dB on the voice. Dial DOWN
-// toward 0.5 if speech starts sounding lisped; UP toward 1.2 if esses are
-// still sharp.
-//
-// dqfactor (detection) is deliberately WIDER than tqfactor (cut): listen
-// across the whole sibilance region, but only cut where it actually is.
-// Widening tqfactor cuts more esses but starts pulling 10-16kHz air down with
-// it, which is the complaint this chain started with — leave it narrow.
-//
-// CAVEAT: this curve was measured on the local 6.1.1 build via the `mode=cut`
-// spelling. Production runs 7.0.2 via `mode=cutabove`. Same filter, same
-// intent — cut while the detected band is ABOVE threshold — but the two
-// spellings were never measured side by side, so treat the absolute dB as
-// indicative and the direction as certain.
 const DEESSER_CANDIDATES: ReadonlyArray<DeesserCandidate> = [
+  { label: 'split-band', expr: SPLIT_BAND_DEESSER },
   {
-    // ffmpeg >= 6.1 spelling: mode + separate direction.
-    label: 'dynamic-modern',
-    expr:
-      'adynamicequalizer=dfrequency=7500:dqfactor=1.6:tfrequency=7500:tqfactor=2' +
-      ':threshold=1.0:ratio=8:attack=1:release=35:range=16:mode=cut:direction=downward',
-  },
-  {
-    // Pre-6.1 spelling: direction folded into the mode constant. THIS IS THE
-    // ONE PRODUCTION ACTUALLY USES — the 7.0.2 build rejects `mode=cut`.
-    label: 'dynamic-legacy',
-    expr:
-      'adynamicequalizer=dfrequency=7500:dqfactor=1.6:tfrequency=7500:tqfactor=2' +
-      ':threshold=1.0:ratio=8:attack=1:release=35:range=16:mode=cutabove',
-  },
-  {
-    // Neither dynamic spelling measurably works — fall back to plain static
-    // EQ, which behaves identically on every ffmpeg ever built.
-    //
-    // TWO bells, positioned by measurement against a real recitation.
-    //
-    // THE KEY LESSON, learned by getting it wrong: "de-ess harder" and "cut
-    // where the energy is" are not the same instruction. The measured
-    // sibilance plateau on a real take spans 5000-8000Hz and peaks near 6000,
-    // so the obvious move was a deep cut centred there. That produced an
-    // audible LISP — "esses" came back sounding like "esth".
-    //
-    // The reason is that the plateau is not all one thing. The 5-6kHz end is
-    // what MAKES an /s/ an /s/: strip it and the consonant loses its identity
-    // and degrades toward /θ/. The 7-9kHz end is what people actually hear as
-    // "sharp" or "harsh". Cutting the whole plateau evenly removes the
-    // harshness and the consonant together.
-    //
-    // So the bells sit at 7000 and 9000, ABOVE the identity band, and the
-    // second is narrow (Q3) to keep it off the air above it.
-    //
-    // Two metrics, both relative to a 3500Hz anchor, measured on the real file:
-    //   s-identity = 5500Hz - 3500Hz   (keep HIGH — low means lisp)
-    //   harshness  = 8000Hz - 3500Hz   (pull DOWN — this is the complaint)
-    //
-    //                                    s-identity   harshness    air
-    //   raw (untouched)                      +5.8        +4.6      -1.7
-    //   -10 @5500+7200  (lisped)             -0.8        -2.4      -5.1
-    //    -7 @5500+7200                       +1.2        -0.3      -4.5
-    //    -6 @7000 Q2 + -6 @9000 Q3           +4.0        +0.3      -4.6  <- this
-    //
-    // TUNING: to soften the esses further, deepen the 9000 bell first and the
-    // 7000 bell only if that isn't enough — 7000 is the one that costs
-    // consonant clarity. If a lisp EVER reappears, raise both centres before
-    // reducing gain; the frequency is what causes it, not the depth.
     label: 'static-split-bells',
     expr: 'equalizer=f=7000:width_type=q:w=2:g=-6,equalizer=f=9000:width_type=q:w=3:g=-6',
   },
 ];
 
-// Where the efficacy probe injects test energy. MUST track the band the
+// Where the efficacy probe injects test energy. MUST sit inside the band the
 // candidates actually cut — measuring attenuation at a frequency the filters
 // don't touch would reject a perfectly good de-esser as inert.
 const SIBILANCE_PROBE_HZ = 7500;
 
 // A candidate has to attenuate the sibilance band by at least this much to
 // count as working. This is a "does it do ANYTHING" gate, not a quality bar —
-// an inert filter measures ~0.0dB, while the shallowest candidate we would
-// actually ship measures 3.7dB on a broadband probe signal. 2.5 sits cleanly
-// between those with room for build-to-build variation in either direction.
+// an inert filter measures ~0.0dB.
 //
 // If every candidate is rejected, activeDeesser keeps its initial value (the
 // static bells, the last entry) and an error is logged — so the worst case is
-// a loud complaint plus the known-good fallback, never a silent no-op.
+// a loud complaint plus the fallback, never a silent no-op.
 const MIN_DEESS_ATTENUATION_DB = 2.5;
 
 // Which candidate this binary actually accepts. Starts at the universal
 // fallback so a render before/without a successful probe still works.
 let activeDeesser: DeesserCandidate = DEESSER_CANDIDATES[DEESSER_CANDIDATES.length - 1];
 
-// Presence. The 2–3kHz band is where speech reads as "forward, in the room"
-// rather than "behind a curtain" — well below sibilance, so it costs nothing
-// in harshness. Absent entirely from the old chain, which is part of why a
-// render only ever sounded louder rather than better.
-// Moved down from 2800Hz. At Q1.2 a 2800Hz bell reaches well into 4-5kHz,
-// i.e. straight into the bottom of the sibilance plateau it now has to sit
-// alongside. 2300 keeps the forwardness while staying clear of it, and it
-// also lands on a genuine dip in the measured source spectrum.
-const PRESENCE = 'equalizer=f=2300:width_type=q:w=1.4:g=2';
-
-// Puts back the air the de-ess bell takes out, well above the sibilance the
-// bell is there to control. Centred high enough (11k) that its skirt does not
-// meaningfully re-lift 6.8k — the old chain had no compensation at all, which
-// is why every render came out darker than its source.
-// Raised to +4dB and moved down to 10.5k. The de-ess bells cost real air —
-// measured against the raw take, 13kHz sits ~2.9dB lower relative to the
-// 3.5kHz anchor than it started even after this compensation. 10.5k is as low
-// as the shelf can go before its skirt starts re-lifting the 9k bell's work.
-const AIR = 'treble=g=4:f=10500:width_type=q:w=0.7';
+// NO TONE SHAPING BEYOND THIS. Earlier chains added a presence bell and an
+// air shelf to "sound produced"; on real takes both re-sharpened the esses and
+// made the voice sound closer to the mic, and the version the user chose in
+// the listening test had neither.
 
 // Holds the true-peak ceiling after de-essing nudges levels around. loudnorm
 // already targeted -1.5dBTP; this just guarantees nothing sneaks above it.
@@ -354,13 +255,12 @@ const LIMITER = 'alimiter=limit=0.841:level=disabled';
 // real recordings if playback feels quiet.
 
 /**
- * Full chain for the apply pass. Order is load-bearing: everything whose
- * threshold is an ABSOLUTE level (the gate, and the tone shaping that follows
- * it) has to sit downstream of loudnorm so it behaves identically on a quiet
+ * Full chain for the apply pass. Order is load-bearing: the de-esser's
+ * threshold is an ABSOLUTE level, so it has to sit downstream of loudnorm so it behaves identically on a quiet
  * take and a hot one.
  */
-function buildFilterChain(loudnormArgs: string, deesser: string = activeDeesser.expr): string {
-  return `${PRE_FILTERS},${loudnormArgs},${GATE},${deesser},${PRESENCE},${AIR},${LIMITER}`;
+function buildFilterChain(pre: string, loudnormArgs: string, deesser: string = activeDeesser.expr): string {
+  return `${pre},${loudnormArgs},${deesser},${LIMITER}`;
 }
 
 const ffmpegPath = ffmpegStatic as unknown as string | null;
@@ -510,17 +410,7 @@ async function logEnvironmentOnce(): Promise<void> {
     // `-filters` is the direct answer to "does this build even have the
     // filters the chain names?" — the most likely way a render dies here.
     const { stdout: filters } = await run(ffmpegPath!, ['-hide_banner', '-filters']);
-    const named = [
-      'highpass',
-      'adeclick',
-      'arnndn',
-      'agate',
-      'acompressor',
-      'loudnorm',
-      'equalizer',
-      'treble',
-      'alimiter',
-    ];
+    const named = ['highpass', 'lowpass', 'equalizer', 'asplit', 'amix', 'acompressor', 'loudnorm', 'alimiter'];
 
     // Filter EXISTENCE is not the failure mode that bit us — option parsing is.
     // So dry-run the real chain against 100ms of silence, once per de-esser
@@ -542,7 +432,7 @@ async function logEnvironmentOnce(): Promise<void> {
           '-t',
           '0.1',
           '-af',
-          buildFilterChain(`loudnorm=${LOUDNORM_TARGET}`, candidate.expr),
+          buildFilterChain(preFilters(3), `loudnorm=${LOUDNORM_TARGET}`, candidate.expr),
           '-f',
           'null',
           '-',
@@ -571,6 +461,18 @@ async function logEnvironmentOnce(): Promise<void> {
     }
     if (chosen) activeDeesser = chosen;
 
+    // A missing denoiser is silent degradation — renders still succeed, just
+    // without denoising — so it has to be visible here or nobody would know.
+    let deepFilter = '<MISSING — denoise disabled>';
+    if (existsSync(DEEP_FILTER_PATH)) {
+      try {
+        ensureExecutable(DEEP_FILTER_PATH);
+        deepFilter = (await run(DEEP_FILTER_PATH, ['--version'])).stdout.trim() || DEEP_FILTER_PATH;
+      } catch (dfErr) {
+        deepFilter = `<PRESENT BUT WON'T RUN — denoise disabled> ${describeError(dfErr).errMessage.slice(0, 300)}`;
+      }
+    }
+
     logger.info('ffmpeg environment', {
       ffmpegPath,
       ffprobePath,
@@ -580,9 +482,7 @@ async function logEnvironmentOnce(): Promise<void> {
       deesser: chosen?.label ?? '<none accepted>',
       deesserAttenuationDb: chosenAttenuationDb?.toFixed(1) ?? null,
       deesserRejected: rejected,
-      // A missing model is silent degradation — the chain still renders, just
-      // without denoising — so it has to be visible here or nobody would know.
-      rnnoiseModel: hasRnnoiseModel ? RNNOISE_MODEL : '<MISSING — denoise disabled>',
+      deepFilter,
       outputSampleRate: OUTPUT_SAMPLE_RATE,
     });
     if (!chosen) {
@@ -628,13 +528,13 @@ interface LoudnormMeasurement {
  * first lets pass 2 apply one linear gain, which is what actually sounds
  * "produced" rather than just "louder".
  */
-async function measureLoudness(inputPath: string): Promise<LoudnormMeasurement | null> {
+async function measureLoudness(inputPath: string, pre: string): Promise<LoudnormMeasurement | null> {
   const { stderr } = await run(ffmpegPath!, [
     '-hide_banner',
     '-i',
     inputPath,
     '-af',
-    `${PRE_FILTERS},loudnorm=${LOUDNORM_TARGET}:print_format=json`,
+    `${pre},loudnorm=${LOUDNORM_TARGET}:print_format=json`,
     '-f',
     'null',
     '-',
@@ -657,8 +557,68 @@ async function measureLoudness(inputPath: string): Promise<LoudnormMeasurement |
   }
 }
 
+/**
+ * How far the 90-220Hz "boom" band sits above the 800-2000Hz voice band, in dB.
+ * Both bands are measured over the whole file with the same silences in them,
+ * so the difference is a fair measure of tonal balance. Null if unmeasurable.
+ */
+async function measureBoomDb(inputPath: string): Promise<number | null> {
+  const band = async (lo: number, hi: number): Promise<number | null> => {
+    const { stderr } = await run(ffmpegPath!, [
+      '-hide_banner',
+      '-i',
+      inputPath,
+      '-af',
+      // Doubled 2nd-order filters: steep enough that neighbouring bands don't
+      // leak into the measurement.
+      `highpass=f=${lo},highpass=f=${lo},lowpass=f=${hi},lowpass=f=${hi},volumedetect`,
+      '-f',
+      'null',
+      '-',
+    ]);
+    const match = stderr.match(/mean_volume:\s*(-?[\d.]+) dB/);
+    return match ? Number.parseFloat(match[1]) : null;
+  };
+  const [boom, voice] = await Promise.all([band(90, 220), band(800, 2000)]);
+  return boom === null || voice === null ? null : boom - voice;
+}
+
+/**
+ * Decode to 48k mono WAV and run DeepFilterNet over it. Returns the path of
+ * the denoised WAV, or of the plain decoded WAV if the denoiser is unavailable
+ * or fails (logged — see DEEP_FILTER_PATH).
+ */
+async function denoise(inputPath: string, workDir: string): Promise<string> {
+  const decoded = join(workDir, 'decoded.wav');
+  await run(ffmpegPath!, ['-hide_banner', '-y', '-i', inputPath, '-ac', '1', '-ar', OUTPUT_SAMPLE_RATE, decoded]);
+
+  if (!existsSync(DEEP_FILTER_PATH)) {
+    logger.error('DeepFilterNet binary missing — rendering without denoise', { DEEP_FILTER_PATH });
+    return decoded;
+  }
+  const outDir = join(workDir, 'denoised');
+  try {
+    await run(ensureExecutable(DEEP_FILTER_PATH), [...DEEP_FILTER_ARGS, '-o', outDir, decoded]);
+    const denoised = join(outDir, 'decoded.wav');
+    if (!existsSync(denoised)) throw new Error(`deep-filter produced no output at ${denoised}`);
+    return denoised;
+  } catch (err) {
+    logger.error('DeepFilterNet failed — rendering without denoise', describeError(err));
+    return decoded;
+  }
+}
+
 async function renderStudioAudio(inputPath: string, outputPath: string): Promise<void> {
-  const measured = await measureLoudness(inputPath);
+  const workDir = dirname(outputPath);
+  const cleanPath = await denoise(inputPath, workDir);
+
+  // Measured AFTER denoising, so room noise doesn't count as boom.
+  const boomDb = await measureBoomDb(cleanPath);
+  const boomCutDb =
+    boomDb === null ? 0 : Math.min(BOOM_MAX_CUT_DB, Math.max(0, (boomDb - BOOM_TARGET_DB) * BOOM_CUT_PER_DB));
+  const pre = preFilters(boomCutDb);
+
+  const measured = await measureLoudness(cleanPath, pre);
 
   // Fall back to single-pass dynamic normalization when measurement is
   // unusable (silent take, or an exotic imported container ffmpeg measured
@@ -672,14 +632,15 @@ async function renderStudioAudio(inputPath: string, outputPath: string): Promise
   if (!measured) {
     logger.warn('Loudness measurement unusable — falling back to single-pass loudnorm', { inputPath });
   }
+  logger.info('Studio render settings', { inputPath, boomDb, boomCutDb, denoised: cleanPath !== join(workDir, 'decoded.wav') });
 
   await run(ffmpegPath!, [
     '-hide_banner',
     '-y',
     '-i',
-    inputPath,
+    cleanPath,
     '-af',
-    buildFilterChain(loudnormArgs),
+    buildFilterChain(pre, loudnormArgs),
     '-c:a',
     'aac',
     // 128k rather than 96k: at 96k mono, AAC's internal lowpass starts eating
@@ -692,8 +653,7 @@ async function renderStudioAudio(inputPath: string, outputPath: string): Promise
     '-ac',
     '1',
     // loudnorm resamples internally to 192kHz; pinning the output rate stops
-    // ffmpeg from carrying that through into the encoded file. Tracks arnndn's
-    // fixed 48kHz when the denoiser is active (see OUTPUT_SAMPLE_RATE).
+    // ffmpeg from carrying that through into the encoded file.
     '-ar',
     OUTPUT_SAMPLE_RATE,
     '-movflags',
@@ -711,9 +671,9 @@ export const processStudioAudio = onObjectFinalized(
     // default most Firebase samples assume.
     region: 'us-east1',
     memory: '1GiB',
-    // Raised from 300s. The chain now runs at roughly 3.8x realtime, almost
-    // all of it adeclick's windowed autoregression — a 10 minute recitation is
-    // ~160s of CPU before arnndn is added on top. 300s left too little room.
+    // Sized for the old adeclick chain (~160s of CPU per 10 minutes). The
+    // DeepFilterNet chain is several times faster, but a long recitation on a
+    // slow instance is the case that matters, so the headroom stays.
     timeoutSeconds: 540,
     // One concurrent render per instance — ffmpeg is CPU-bound and two of
     // them sharing 1GiB is how you get OOM kills instead of throughput.
