@@ -58,7 +58,6 @@ import {
 } from '../data';
 import { fetchChapterText, useChapterText } from './useScripture';
 import {
-  AccountabilityNudge,
   ActivityEvent,
   ChatMessage,
   Challenge,
@@ -97,6 +96,7 @@ import { useSocial } from './useSocial';
 import { useLocalPrefs } from './useLocalPrefs';
 import { useChapterPhotos } from './useChapterPhotos';
 import { useAudioDownloads } from './useAudioDownloads';
+import { useAccountabilityNudges } from './useAccountabilityNudges';
 import { PushTarget, ReminderDay, usePushNotifications } from './usePushNotifications';
 import * as Linking from 'expo-linking';
 import { parseInviteCode } from '../lib/invites';
@@ -210,13 +210,7 @@ export type TabName = 'home' | 'verses' | 'community' | 'record' | 'profile';
 const tabForScreen = (screen: ScreenName): TabName | null =>
   HOME_TAB_SCREENS.includes(screen) ? 'home' : VERSES_TAB_SCREENS.includes(screen) ? 'verses' : null;
 
-// Default cap on accountability nudges a user will receive per logical day
-// (from any friend, combined) before senders are told they've hit it —
-// applies unless the recipient has set UserProfile.accountabilityDailyCap.
-const ACCOUNTABILITY_DEFAULT_DAILY_CAP = 5;
-// Text caps, mirrored in firestore.rules (accountabilityNudges and
-// isValidMessageText) -- change both together.
-const NUDGE_MAX_CHARS = 500;
+// Mirrored in firestore.rules (isValidMessageText) -- change both together.
 const CHAT_MESSAGE_MAX_CHARS = 2000;
 
 /**
@@ -570,14 +564,21 @@ export function useAppState() {
   const [searchingUsers, setSearchingUsers] = useState(false);
   const userSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Accountability nudges -- see AccountabilityNudge in types.ts. Own daily
-  // received cap defaults to ACCOUNTABILITY_DEFAULT_DAILY_CAP until loaded
-  // from profiles/{uid}.accountabilityDailyCap in loadUserData.
-  const [accountabilityDailyCap, setAccountabilityDailyCapState] = useState<number>(ACCOUNTABILITY_DEFAULT_DAILY_CAP);
-  // My own private "when did I last nudge this friend" log -- keyed by friendUid.
-  const [accountabilitySentLog, setAccountabilitySentLog] = useState<Record<string, string>>({});
-  const [receivedAccountabilityNudges, setReceivedAccountabilityNudges] = useState<AccountabilityNudge[]>([]);
-  const [loadingAccountabilityNudges, setLoadingAccountabilityNudges] = useState(false);
+  // Accountability nudges between friends (see useAccountabilityNudges).
+  const {
+    accountabilityDailyCap,
+    receivedAccountabilityNudges,
+    loadingAccountabilityNudges,
+    loadAccountabilitySentLog,
+    loadReceivedAccountabilityNudges,
+    canSendAccountabilityNudge,
+    sendAccountabilityNudge,
+    markAccountabilityNudgeRead,
+    dismissAccountabilityNudge,
+    updateAccountabilityDailyCap,
+    applyAccountabilityDailyCap,
+    resetAccountabilityNudges,
+  } = useAccountabilityNudges({ friends, dayStartHour, triggerToast: (message) => triggerToast(message) });
 
   // Messaging: DM inbox (dmThreads) + whichever thread/circle chat is
   // currently open. Both message lists are live (onSnapshot), unlike the
@@ -1390,164 +1391,6 @@ export function useAppState() {
       triggerToast(`Removed ${friend.displayName} from friends.`);
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `profiles/${myUid}/friends/${friend.uid}`);
-    }
-  };
-
-  // ==========================================
-  // ACCOUNTABILITY NUDGES -- friend-only, custom-message notification,
-  // deliberately separate from any messaging/DM system. Two independent
-  // daily limits, both keyed to the current user's dayStartHour setting:
-  //   - Sender: at most 1 nudge to a given friend per logical day (hard,
-  //     not configurable) -- enforced via canSendAccountabilityNudge below,
-  //     which the UI uses to grey out the button before a tap is even
-  //     attempted.
-  //   - Receiver: a configurable daily cap (any sender combined), checked
-  //     at send time against profiles/{toUid}.accountabilityDailyCap and
-  //     profiles/{toUid}/accountabilityMeta/counter.
-  // No Cloud Functions in this project (see firestore.rules comment on the
-  // counter doc) -- this is read-then-write from the sender's client, same
-  // "reasonable trust, not airtight" posture as the rest of the app. The
-  // counter's day-rollover uses the SENDER's own logical day as a stand-in
-  // for the receiver's, a deliberate simplification (the two would only
-  // disagree for a few hours around midnight if their dayStartHour settings
-  // differ), rather than plumbing the receiver's private setting to the
-  // sender's client just for this.
-  // ==========================================
-  const loadAccountabilitySentLog = async () => {
-    if (!auth.currentUser) {
-      setAccountabilitySentLog({});
-      return;
-    }
-    try {
-      const snap = await getDocs(collection(db, 'profiles', auth.currentUser.uid, 'accountabilitySentLog'));
-      const log: Record<string, string> = {};
-      snap.docs.forEach((d) => {
-        log[d.id] = (d.data().lastSentAt as string) || '';
-      });
-      setAccountabilitySentLog(log);
-    } catch (err) {
-      console.error('Failed to load accountability sent log:', err);
-    }
-  };
-
-  const loadReceivedAccountabilityNudges = async () => {
-    if (!auth.currentUser) {
-      setReceivedAccountabilityNudges([]);
-      return;
-    }
-    setLoadingAccountabilityNudges(true);
-    try {
-      const snap = await getDocs(
-        query(collection(db, 'accountabilityNudges'), where('toUid', '==', auth.currentUser.uid), orderBy('createdAt', 'desc'), limit(50))
-      );
-      setReceivedAccountabilityNudges(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AccountabilityNudge));
-    } catch (err) {
-      console.error('Failed to load accountability nudges:', err);
-    } finally {
-      setLoadingAccountabilityNudges(false);
-    }
-  };
-
-  // Pure/cheap -- the UI calls this to decide whether a friend's nudge
-  // button is greyed out, without any Firestore round-trip.
-  const canSendAccountabilityNudge = (friendUid: string): boolean => {
-    const lastSentAt = accountabilitySentLog[friendUid];
-    if (!lastSentAt) return true;
-    return localDayKey(getLogicalDate(dayStartHour, new Date(lastSentAt))) !== localDayKey(getLogicalDate(dayStartHour));
-  };
-
-  const sendAccountabilityNudge = async (friend: Friend, message: string) => {
-    if (!auth.currentUser) return;
-    const myUid = auth.currentUser.uid;
-    if (!friends.some((f) => f.uid === friend.uid)) {
-      triggerToast('You can only send accountability nudges to friends.');
-      return;
-    }
-    if (!canSendAccountabilityNudge(friend.uid)) {
-      triggerToast(`Accountability notification already sent for today -- you can send another tomorrow!`);
-      return;
-    }
-    const trimmedMessage = message.trim();
-    if (!trimmedMessage) {
-      triggerToast('Write a quick message before sending.');
-      return;
-    }
-    // Same cap firestore.rules enforces on accountabilityNudges.
-    if (trimmedMessage.length > NUDGE_MAX_CHARS) {
-      triggerToast(`Keep nudges under ${NUDGE_MAX_CHARS} characters.`);
-      return;
-    }
-    try {
-      const todayKey = localDayKey(getLogicalDate(dayStartHour));
-      const counterRef = doc(db, 'profiles', friend.uid, 'accountabilityMeta', 'counter');
-      const [counterSnap, friendProfileSnap] = await Promise.all([getDoc(counterRef), getDoc(doc(db, 'profiles', friend.uid))]);
-
-      if (friendProfileSnap.data()?.isPaused) {
-        triggerToast(`${friend.displayName} is on a break right now -- accountability nudges are paused until they're back.`);
-        return;
-      }
-
-      const cap = (friendProfileSnap.data()?.accountabilityDailyCap as number) ?? ACCOUNTABILITY_DEFAULT_DAILY_CAP;
-      const counterData = counterSnap.data() as { dateKey?: string; count?: number } | undefined;
-      const isSameDay = counterData?.dateKey === todayKey;
-      const countSoFar = isSameDay ? counterData?.count || 0 : 0;
-
-      if (isSameDay && countSoFar >= cap) {
-        triggerToast(`${friend.displayName} has reached their daily accountability-notification limit -- try again tomorrow.`);
-        return;
-      }
-
-      if (isSameDay) {
-        await updateDoc(counterRef, { count: increment(1), dateKey: todayKey });
-      } else {
-        await setDoc(counterRef, { count: 1, dateKey: todayKey });
-      }
-
-      const nowISO = new Date().toISOString();
-      await addDoc(collection(db, 'accountabilityNudges'), {
-        fromUid: myUid,
-        fromName: auth.currentUser.displayName || 'Anonymous Disciple',
-        fromAvatarUrl: '',
-        toUid: friend.uid,
-        message: trimmedMessage,
-        createdAt: nowISO,
-        read: false,
-      });
-      await setDoc(doc(db, 'profiles', myUid, 'accountabilitySentLog', friend.uid), { lastSentAt: nowISO });
-
-      setAccountabilitySentLog((prev) => ({ ...prev, [friend.uid]: nowISO }));
-      triggerToast(`Nudge sent to ${friend.displayName}.`);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'accountabilityNudges');
-      triggerToast('Could not send that nudge -- please try again.');
-    }
-  };
-
-  const markAccountabilityNudgeRead = async (nudgeId: string) => {
-    setReceivedAccountabilityNudges((prev) => prev.map((n) => (n.id === nudgeId ? { ...n, read: true } : n)));
-    try {
-      await updateDoc(doc(db, 'accountabilityNudges', nudgeId), { read: true });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `accountabilityNudges/${nudgeId}`);
-    }
-  };
-
-  const dismissAccountabilityNudge = async (nudgeId: string) => {
-    setReceivedAccountabilityNudges((prev) => prev.filter((n) => n.id !== nudgeId));
-    try {
-      await deleteDoc(doc(db, 'accountabilityNudges', nudgeId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `accountabilityNudges/${nudgeId}`);
-    }
-  };
-
-  const updateAccountabilityDailyCap = async (cap: number) => {
-    setAccountabilityDailyCapState(cap);
-    if (!auth.currentUser) return;
-    try {
-      await setDoc(doc(db, 'profiles', auth.currentUser.uid), { accountabilityDailyCap: cap }, { merge: true });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `profiles/${auth.currentUser.uid}`);
     }
   };
 
@@ -3188,7 +3031,7 @@ export function useAppState() {
         setDefaultRecordingVisibility(profileSnap.data().defaultRecordingVisibility || null);
         setMemoryQueueVisibility(profileSnap.data().memoryQueueVisibility === 'friends' ? 'friends' : 'private');
         setTotalStudySeconds(profileSnap.data().totalStudySeconds || 0);
-        setAccountabilityDailyCapState(profileSnap.data().accountabilityDailyCap ?? ACCOUNTABILITY_DEFAULT_DAILY_CAP);
+        applyAccountabilityDailyCap(profileSnap.data().accountabilityDailyCap);
         // Covers both a brand-new profile (never set, so !== true) and
         // anyone who dismissed the app mid-onboarding without finishing it.
         setShowOnboarding(profileSnap.data().onboardingCompleted !== true);
@@ -3625,9 +3468,7 @@ export function useAppState() {
         setCircleFriends([]);
         setDefaultRecordingVisibility(null);
         setMemoryQueueVisibility('private');
-        setAccountabilityDailyCapState(ACCOUNTABILITY_DEFAULT_DAILY_CAP);
-        setAccountabilitySentLog({});
-        setReceivedAccountabilityNudges([]);
+        resetAccountabilityNudges();
         setActiveDMThread(null);
         setActiveDMMessages([]);
         setActiveDMSharedCircleIds([]);
