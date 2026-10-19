@@ -361,6 +361,10 @@ const localDayKey = (d: Date) =>
 // (from any friend, combined) before senders are told they've hit it —
 // applies unless the recipient has set UserProfile.accountabilityDailyCap.
 const ACCOUNTABILITY_DEFAULT_DAILY_CAP = 5;
+// Text caps, mirrored in firestore.rules (accountabilityNudges and
+// isValidMessageText) -- change both together.
+const NUDGE_MAX_CHARS = 500;
+const CHAT_MESSAGE_MAX_CHARS = 2000;
 
 const advancePastSabbath = (date: Date, sabbathEnabled: boolean, sabbathDay: string): Date => {
   if (!sabbathEnabled) return date;
@@ -1272,7 +1276,7 @@ export function useAppState() {
   const [outgoingFriendRequests, setOutgoingFriendRequests] = useState<FriendRequest[]>([]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState<
-    Array<{ uid: string; displayName: string; avatarUrl: string; email: string }>
+    Array<{ uid: string; displayName: string; avatarUrl: string }>
   >([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const userSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1666,16 +1670,15 @@ export function useAppState() {
   const generateInviteCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
 
   // generateInviteCode() alone had no collision check -- two circles could
-  // theoretically land on the same code. Retries against a real Firestore
-  // uniqueness query (the same one joinCircleByCode already runs) before
-  // accepting one; if genuinely unlucky enough to collide every attempt,
-  // appends a timestamp fragment rather than ever failing circle creation.
+  // theoretically land on the same code. Retries against the circleInvites
+  // lookup (the same one joinCircleByCode reads) before accepting one; if
+  // genuinely unlucky enough to collide every attempt, appends a timestamp
+  // fragment rather than ever failing circle creation.
   const generateUniqueInviteCode = async (): Promise<string> => {
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = generateInviteCode();
-      const q = query(collection(db, 'circles'), where('inviteCode', '==', code));
-      const snap = await getDocs(q);
-      if (snap.empty) return code;
+      const snap = await getDoc(doc(db, 'circleInvites', code));
+      if (!snap.exists()) return code;
     }
     return `${generateInviteCode()}${Date.now().toString(36).slice(-4).toUpperCase()}`;
   };
@@ -1693,15 +1696,16 @@ export function useAppState() {
 
       const results = await Promise.all(
         circleIds.map(async (id) => {
-          const [circleSnap, memberSnap] = await Promise.all([
-            getDoc(doc(db, 'circles', id)),
-            getDoc(doc(db, 'circles', id, 'members', uid)),
-          ]);
+          // Member doc first: once kicked from a PRIVATE circle, its doc is
+          // no longer readable at all (permission-denied, not "missing").
+          const memberSnap = await getDoc(doc(db, 'circles', id, 'members', uid));
           // Self-heal: a circle may have been disbanded, or this user kicked
           // from it, since circleIds was last written — neither of those can
           // update this user's OTHER-side data (disbanding can't touch every
           // member's profile; kicking can't either), so prune stale ids here.
-          if (!circleSnap.exists() || !memberSnap.exists()) return null;
+          if (!memberSnap.exists()) return null;
+          const circleSnap = await getDoc(doc(db, 'circles', id));
+          if (!circleSnap.exists()) return null;
           return { id: circleSnap.id, ...circleSnap.data() } as Circle;
         })
       );
@@ -1884,7 +1888,10 @@ export function useAppState() {
 
   // No backend/search service in this project, so this is the standard
   // Firestore-only approach: exact match on email, or a prefix range-query
-  // on the lowercased name (see displayNameLower in loadUserData).
+  // on the lowercased name (see displayNameLower in loadUserData). Email is
+  // no longer on profiles (anyone could list them) -- an exact address is
+  // resolved through emailLookup/{email} -> uid instead, and results never
+  // carry anyone's email back to the searcher.
   const searchUsers = async (rawQuery: string) => {
     const q = rawQuery.trim();
     if (!q || !auth.currentUser) {
@@ -1893,12 +1900,16 @@ export function useAppState() {
     }
     setSearchingUsers(true);
     try {
-      let snap;
+      let profileDocs: Array<{ id: string; data: () => any }>;
       if (q.includes('@')) {
-        snap = await getDocs(query(collection(db, 'profiles'), where('email', '==', q.toLowerCase()), limit(10)));
+        const email = q.toLowerCase();
+        const lookupSnap = email.includes('/') ? null : await getDoc(doc(db, 'emailLookup', email));
+        const foundUid = lookupSnap?.exists() ? (lookupSnap.data().uid as string) : null;
+        const profileSnap = foundUid ? await getDoc(doc(db, 'profiles', foundUid)) : null;
+        profileDocs = profileSnap?.exists() ? [profileSnap] : [];
       } else {
         const lower = q.toLowerCase();
-        snap = await getDocs(
+        const snap = await getDocs(
           query(
             collection(db, 'profiles'),
             orderBy('displayNameLower'),
@@ -1907,8 +1918,9 @@ export function useAppState() {
             limit(10)
           )
         );
+        profileDocs = snap.docs;
       }
-      const results = snap.docs
+      const results = profileDocs
         .filter((d) => d.id !== auth.currentUser?.uid)
         .map((d) => {
           const data = d.data();
@@ -1916,7 +1928,6 @@ export function useAppState() {
             uid: d.id,
             displayName: data.displayName || 'Anonymous Disciple',
             avatarUrl: data.avatarUrl || '',
-            email: data.email || '',
           };
         });
       setUserSearchResults(results);
@@ -1974,7 +1985,10 @@ export function useAppState() {
     const myUid = auth.currentUser.uid;
     try {
       const batch = writeBatch(db);
-      batch.update(doc(db, 'friendRequests', request.id), { status: 'accepted' });
+      // respondedAt must be the server's clock and land in this same batch:
+      // firestore.rules only lets the two friends docs be created by the
+      // write that accepts the request.
+      batch.update(doc(db, 'friendRequests', request.id), { status: 'accepted', respondedAt: serverTimestamp() });
       const friendsSince = new Date().toISOString();
       batch.set(doc(db, 'profiles', myUid, 'friends', request.fromUid), {
         uid: request.fromUid,
@@ -1999,7 +2013,7 @@ export function useAppState() {
 
   const declineFriendRequest = async (request: FriendRequest) => {
     try {
-      await updateDoc(doc(db, 'friendRequests', request.id), { status: 'declined' });
+      await updateDoc(doc(db, 'friendRequests', request.id), { status: 'declined', respondedAt: serverTimestamp() });
       setIncomingFriendRequests((prev) => prev.filter((r) => r.id !== request.id));
       triggerToast('Request declined.');
     } catch (err) {
@@ -2020,9 +2034,20 @@ export function useAppState() {
     if (!auth.currentUser) return;
     const myUid = auth.currentUser.uid;
     try {
+      // Also clear the request that made this friendship (whichever way it
+      // went), so either side can send a fresh one later -- an 'accepted'
+      // leftover would otherwise block the sender's re-send flow.
+      const requestRefs = [
+        doc(db, 'friendRequests', `${myUid}_${friend.uid}`),
+        doc(db, 'friendRequests', `${friend.uid}_${myUid}`),
+      ];
+      const requestSnaps = await Promise.all(requestRefs.map((r) => getDoc(r)));
       const batch = writeBatch(db);
       batch.delete(doc(db, 'profiles', myUid, 'friends', friend.uid));
       batch.delete(doc(db, 'profiles', friend.uid, 'friends', myUid));
+      requestSnaps.forEach((s) => {
+        if (s.exists()) batch.delete(s.ref);
+      });
       await batch.commit();
       setFriends((prev) => prev.filter((f) => f.uid !== friend.uid));
       triggerToast(`Removed ${friend.displayName} from friends.`);
@@ -2110,6 +2135,11 @@ export function useAppState() {
       triggerToast('Write a quick message before sending.');
       return;
     }
+    // Same cap firestore.rules enforces on accountabilityNudges.
+    if (trimmedMessage.length > NUDGE_MAX_CHARS) {
+      triggerToast(`Keep nudges under ${NUDGE_MAX_CHARS} characters.`);
+      return;
+    }
     try {
       const todayKey = localDayKey(getLogicalDate(dayStartHour));
       const counterRef = doc(db, 'profiles', friend.uid, 'accountabilityMeta', 'counter');
@@ -2193,16 +2223,30 @@ export function useAppState() {
   // ==========================================
 
   // Whichever friend/circle relationship justified opening the DM is
-  // re-verified every render against live friends/myCircles + the other
-  // person's circleIds snapshotted at open time -- purely a UI hint for the
-  // read-only banner; the real enforcement is the Firestore rule re-checking
-  // dmGated() on every message create, so this can never be used to bypass
-  // anything even if it drifts stale.
-  const [activeDMOtherCircleIds, setActiveDMOtherCircleIds] = useState<string[]>([]);
+  // re-verified every render against live friends/myCircles + the circles
+  // verified (by real member docs) at open time to contain both people --
+  // purely a UI hint for the read-only banner; the real enforcement is the
+  // Firestore rule re-checking dmGated() on every message create, so this
+  // can never be used to bypass anything even if it drifts stale.
+  const [activeDMSharedCircleIds, setActiveDMSharedCircleIds] = useState<string[]>([]);
   const activeDMThreadActive =
     !!activeDMThread &&
     (friends.some((f) => f.uid === activeDMThread.otherUid) ||
-      myCircles.some((c) => activeDMOtherCircleIds.includes(c.id)));
+      myCircles.some((c) => activeDMSharedCircleIds.includes(c.id)));
+
+  // Which of MY circles the other person is really in, checked against each
+  // circle's member list (readable to me as a member) rather than their
+  // self-written profile circleIds, which the rules no longer trust.
+  const findSharedCircleIds = async (otherUid: string): Promise<string[]> => {
+    const checks = await Promise.all(
+      myCircles.map((c) =>
+        getDoc(doc(db, 'circles', c.id, 'members', otherUid))
+          .then((s) => (s.exists() ? c.id : null))
+          .catch(() => null)
+      )
+    );
+    return checks.filter((id): id is string => id !== null);
+  };
 
   const openDMThread = async (otherUid: string, otherName: string, otherAvatarUrl: string) => {
     if (!auth.currentUser || otherUid === auth.currentUser.uid) return;
@@ -2210,14 +2254,12 @@ export function useAppState() {
     const threadId = [myUid, otherUid].sort().join('_');
     const threadRef = doc(db, 'dmThreads', threadId);
     try {
-      const [threadSnap, theirProfileSnap] = await Promise.all([getDoc(threadRef), getDoc(doc(db, 'profiles', otherUid))]);
-      const theirCircleIds: string[] = theirProfileSnap.data()?.circleIds || [];
+      const [threadSnap, sharedCircleIds] = await Promise.all([getDoc(threadRef), findSharedCircleIds(otherUid)]);
       const isFriend = friends.some((f) => f.uid === otherUid);
-      const sharesCircle = myCircles.some((c) => theirCircleIds.includes(c.id));
 
       let data = threadSnap.data();
       if (!data) {
-        if (!isFriend && !sharesCircle) {
+        if (!isFriend && sharedCircleIds.length === 0) {
           triggerToast('You can only message friends or people who share a community with you.');
           return;
         }
@@ -2230,11 +2272,26 @@ export function useAppState() {
           lastMessage: '',
           lastMessageAt: nowISO,
           createdAt: nowISO,
+          // The rules can only check ONE circle per thread (no loops), so
+          // record the one we verified. Friends need none.
+          ...(sharedCircleIds.length > 0 ? { viaCircleId: sharedCircleIds[0] } : {}),
         };
         await setDoc(threadRef, data);
+      } else if (sharedCircleIds.length > 0 && !sharedCircleIds.includes(data.viaCircleId)) {
+        // The circle this thread was opened through may have been left or
+        // disbanded while the two still share another -- re-point it so the
+        // thread doesn't go read-only for no reason. Best effort: if it
+        // fails, friendship (if any) still gates the thread on its own.
+        const viaCircleId = sharedCircleIds[0];
+        try {
+          await updateDoc(threadRef, { viaCircleId });
+          data = { ...data, viaCircleId };
+        } catch (err) {
+          console.error('Failed to re-point DM thread circle:', err);
+        }
       }
 
-      setActiveDMOtherCircleIds(theirCircleIds);
+      setActiveDMSharedCircleIds(sharedCircleIds);
       setActiveDMThread({
         id: threadId,
         participantUids: data.participantUids,
@@ -2255,13 +2312,17 @@ export function useAppState() {
   const closeDMThread = () => {
     setActiveDMThread(null);
     setActiveDMMessages([]);
-    setActiveDMOtherCircleIds([]);
+    setActiveDMSharedCircleIds([]);
   };
 
   const sendDMMessage = async (text: string) => {
     if (!auth.currentUser || !activeDMThread) return;
     const trimmed = text.trim();
     if (!trimmed) return;
+    if (trimmed.length > CHAT_MESSAGE_MAX_CHARS) {
+      triggerToast(`Messages can be up to ${CHAT_MESSAGE_MAX_CHARS} characters.`);
+      return;
+    }
     const nowISO = new Date().toISOString();
     try {
       await addDoc(collection(db, 'dmThreads', activeDMThread.id, 'messages'), {
@@ -2437,6 +2498,10 @@ export function useAppState() {
     if (!auth.currentUser || !activeCircleChatId) return;
     const trimmed = text.trim();
     if (!trimmed) return;
+    if (trimmed.length > CHAT_MESSAGE_MAX_CHARS) {
+      triggerToast(`Messages can be up to ${CHAT_MESSAGE_MAX_CHARS} characters.`);
+      return;
+    }
     try {
       await addDoc(collection(db, 'circles', activeCircleChatId, 'messages'), {
         fromUid: auth.currentUser.uid,
@@ -2660,8 +2725,20 @@ export function useAppState() {
         getDocs(collection(db, 'circles', circleId, 'groupPlans')),
         getDocs(collection(db, 'circles', circleId, 'challenges')),
       ]);
-      setActiveCircle(circleSnap.exists() ? ({ id: circleSnap.id, ...circleSnap.data() } as Circle) : null);
+      const circle = circleSnap.exists() ? ({ id: circleSnap.id, ...circleSnap.data() } as Circle) : null;
+      setActiveCircle(circle);
       setActiveCircleMembers(membersSnap.docs.map((d) => d.data() as CircleMember));
+      // Circles made before join-by-code moved to circleInvites/{code} have
+      // no lookup doc yet, so their code wouldn't work. Any member opening
+      // the circle backfills it (firestore.rules only accepts the circle's
+      // real code). Best effort -- never blocks loading the circle.
+      const myUid = auth.currentUser?.uid;
+      if (circle?.inviteCode && myUid && membersSnap.docs.some((d) => d.id === myUid)) {
+        const inviteRef = doc(db, 'circleInvites', circle.inviteCode);
+        getDoc(inviteRef)
+          .then((s) => (s.exists() ? undefined : setDoc(inviteRef, { circleId: circle.id })))
+          .catch((err) => console.error('Failed to backfill circle invite code:', err));
+      }
       setActiveCircleGroupPlans(plansSnap.docs.map((d) => normalizeGroupPlan(d.id, d.data())));
       setActiveCircleChallenges(challengesSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as GroupChallenge));
     } catch (err) {
@@ -2718,6 +2795,7 @@ export function useAppState() {
       const batch = writeBatch(db);
       batch.set(circleRef, newCircle);
       batch.set(doc(db, 'circles', circleRef.id, 'members', uid), newMember);
+      batch.set(doc(db, 'circleInvites', inviteCode), { circleId: circleRef.id });
       batch.set(doc(db, 'profiles', uid), { circleIds: arrayUnion(circleRef.id) }, { merge: true });
       await batch.commit();
       setMyCircles((prev) => [...prev, newCircle]);
@@ -2728,7 +2806,9 @@ export function useAppState() {
     }
   };
 
-  const joinCircle = async (circleId: string, circleName?: string) => {
+  // inviteCode is required for a PRIVATE circle (firestore.rules checks it
+  // against the circle's real code) and ignored for a public one.
+  const joinCircle = async (circleId: string, circleName?: string, inviteCode?: string) => {
     if (!auth.currentUser) {
       triggerToast('Sign in to join a circle.');
       return;
@@ -2736,10 +2816,17 @@ export function useAppState() {
     const uid = auth.currentUser.uid;
     const memberRef = doc(db, 'circles', circleId, 'members', uid);
     try {
-      const existing = await getDoc(memberRef);
+      const [existing, bannedSnap] = await Promise.all([
+        getDoc(memberRef),
+        getDoc(doc(db, 'circles', circleId, 'banned', uid)),
+      ]);
       if (existing.exists()) {
         openCircle(circleId);
         triggerToast("You're already in this circle.");
+        return;
+      }
+      if (bannedSnap.exists()) {
+        triggerToast("The circle's leader removed you, so you can't rejoin this one.");
         return;
       }
 
@@ -2750,6 +2837,7 @@ export function useAppState() {
         avatarUrl: user?.photoURL || '',
         role: 'member',
         joinedAt: now,
+        ...(inviteCode ? { inviteCode } : {}),
       };
 
       const batch = writeBatch(db);
@@ -2757,14 +2845,27 @@ export function useAppState() {
       batch.set(doc(db, 'profiles', uid), { circleIds: arrayUnion(circleId) }, { merge: true });
       await batch.commit();
 
+      // A private circle's doc only becomes readable once we're a member,
+      // so the name comes from here when the caller couldn't know it.
+      let name = circleName;
+      if (!name) {
+        const circleSnap = await getDoc(doc(db, 'circles', circleId)).catch(() => null);
+        name = (circleSnap?.data() as Circle | undefined)?.name;
+      }
+
       await loadMyCircles();
       openCircle(circleId);
-      triggerToast(`Joined "${circleName || 'the circle'}".`);
+      triggerToast(`Joined "${name || 'the circle'}".`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/members/${uid}`);
     }
   };
 
+  // Codes resolve through circleInvites/{code} -> circleId. Circles made
+  // before that lookup existed get one the first time any member opens them
+  // (see loadActiveCircleData); until then, a public one is still found by
+  // the old query on the circle doc itself, which only works for public
+  // circles now that private circle docs are members-only.
   const joinCircleByCode = async (codeInput: string) => {
     const code = codeInput.trim().toUpperCase();
     if (!code) {
@@ -2772,14 +2873,25 @@ export function useAppState() {
       return;
     }
     try {
-      const q = query(collection(db, 'circles'), where('inviteCode', '==', code));
-      const snap = await getDocs(q);
-      if (snap.empty) {
+      let circleId: string | null = null;
+      let circleName: string | undefined;
+      const inviteSnap = /^[A-Z0-9]+$/.test(code) ? await getDoc(doc(db, 'circleInvites', code)) : null;
+      if (inviteSnap?.exists()) {
+        circleId = inviteSnap.data().circleId as string;
+      } else {
+        const snap = await getDocs(
+          query(collection(db, 'circles'), where('isPublic', '==', true), where('inviteCode', '==', code), limit(1))
+        );
+        if (!snap.empty) {
+          circleId = snap.docs[0].id;
+          circleName = (snap.docs[0].data() as Circle).name;
+        }
+      }
+      if (!circleId) {
         triggerToast(`No circle found for code "${code}".`);
         return;
       }
-      const circleDoc = snap.docs[0];
-      await joinCircle(circleDoc.id, (circleDoc.data() as Circle).name);
+      await joinCircle(circleId, circleName, code);
       setInviteCodeInput('');
     } catch (err) {
       console.error('Failed to join by code:', err);
@@ -2806,15 +2918,48 @@ export function useAppState() {
   const disbandCircle = async (circleId: string) => {
     if (!auth.currentUser) return;
     try {
-      const [membersSnap, plansSnap] = await Promise.all([
-        getDocs(collection(db, 'circles', circleId, 'members')),
-        getDocs(collection(db, 'circles', circleId, 'groupPlans')),
-      ]);
-      const batch = writeBatch(db);
-      membersSnap.docs.forEach((d) => batch.delete(d.ref));
-      plansSnap.docs.forEach((d) => batch.delete(d.ref));
-      batch.delete(doc(db, 'circles', circleId));
-      await batch.commit();
+      // Firestore has no cascading delete, so every subcollection has to be
+      // cleared by hand or it lingers forever, unreachable. Everything is
+      // READ first, while we're still a member (most of these are
+      // members-only), then deleted.
+      const circleRef = doc(db, 'circles', circleId);
+      const [circleSnap, membersSnap, plansSnap, messagesSnap, reactionsSnap, challengesSnap, bannedSnap] =
+        await Promise.all([
+          getDoc(circleRef),
+          getDocs(collection(db, 'circles', circleId, 'members')),
+          getDocs(collection(db, 'circles', circleId, 'groupPlans')),
+          getDocs(collection(db, 'circles', circleId, 'messages')),
+          getDocs(collection(db, 'circles', circleId, 'reactions')),
+          getDocs(collection(db, 'circles', circleId, 'challenges')),
+          getDocs(collection(db, 'circles', circleId, 'banned')),
+        ]);
+      const participantSnaps = await Promise.all(
+        challengesSnap.docs.map((c) => getDocs(collection(c.ref, 'participants')))
+      );
+      const inviteCode = (circleSnap.data() as Circle | undefined)?.inviteCode;
+      const inviteSnap = inviteCode ? await getDoc(doc(db, 'circleInvites', inviteCode)) : null;
+
+      // Order matters: participants before their challenge (their delete
+      // rule reads the challenge), and the member docs + circle doc go in
+      // the very last batch, because every delete rule here checks the
+      // circle's ownerId.
+      const refs = [
+        ...participantSnaps.flatMap((s) => s.docs.map((d) => d.ref)),
+        ...challengesSnap.docs.map((d) => d.ref),
+        ...reactionsSnap.docs.map((d) => d.ref),
+        ...messagesSnap.docs.map((d) => d.ref),
+        ...plansSnap.docs.map((d) => d.ref),
+        ...bannedSnap.docs.map((d) => d.ref),
+        ...(inviteSnap?.exists() && inviteSnap.data().circleId === circleId ? [inviteSnap.ref] : []),
+        ...membersSnap.docs.map((d) => d.ref),
+        circleRef,
+      ];
+      const BATCH_LIMIT = 450; // Firestore caps a batch at 500 writes
+      for (let i = 0; i < refs.length; i += BATCH_LIMIT) {
+        const batch = writeBatch(db);
+        refs.slice(i, i + BATCH_LIMIT).forEach((r) => batch.delete(r));
+        await batch.commit();
+      }
 
       // Other members' profiles/{uid}.circleIds still reference this circle —
       // we can't write their profile docs (owner-only), so loadMyCircles()
@@ -2829,9 +2974,17 @@ export function useAppState() {
     }
   };
 
+  // The ban doc rides in the same batch: without it the removed member
+  // could simply rejoin (firestore.rules' join rule checks banned/{uid}).
   const removeCircleMember = async (circleId: string, memberUid: string) => {
     try {
-      await deleteDoc(doc(db, 'circles', circleId, 'members', memberUid));
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'circles', circleId, 'members', memberUid));
+      batch.set(doc(db, 'circles', circleId, 'banned', memberUid), {
+        uid: memberUid,
+        bannedAt: new Date().toISOString(),
+      });
+      await batch.commit();
       setActiveCircleMembers((prev) => prev.filter((m) => m.uid !== memberUid));
       triggerToast('Member removed.');
     } catch (error) {
@@ -3677,7 +3830,8 @@ export function useAppState() {
           // the standard Firestore-only trick (range query on a normalized
           // field). updateDisplayName keeps this in sync on rename.
           displayNameLower: resolvedDisplayName.toLowerCase(),
-          email: currentUser.email || '',
+          // No email here: profiles are listable by every signed-in user.
+          // Exact-email search goes through emailLookup (written below).
           avatarUrl: currentUser.photoURL || '',
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -3692,6 +3846,21 @@ export function useAppState() {
         }
         // Brand-new account, never seen the Getting Started checklist.
         setShowOnboarding(true);
+      }
+
+      // Exact-email friend search (see searchUsers). Profiles written before
+      // emailLookup existed still carry `email`, readable by anyone, so it
+      // is stripped here too. Best effort -- never blocks sign-in.
+      const myEmail = (currentUser.email || '').toLowerCase();
+      if (myEmail && !myEmail.includes('/')) {
+        setDoc(doc(db, 'emailLookup', myEmail), { uid: currentUser.uid }).catch((err) =>
+          console.error('Failed to write email lookup:', err)
+        );
+      }
+      if (profileSnap?.exists() && 'email' in profileSnap.data()) {
+        updateDoc(profileRef, { email: deleteField() }).catch((err) =>
+          console.error('Failed to strip email from profile:', err)
+        );
       }
 
       // Tracks whichever plan ends up active, whether from an existing doc
@@ -4081,7 +4250,7 @@ export function useAppState() {
         setReceivedAccountabilityNudges([]);
         setActiveDMThread(null);
         setActiveDMMessages([]);
-        setActiveDMOtherCircleIds([]);
+        setActiveDMSharedCircleIds([]);
         setActiveCircleChatId(null);
         setActiveCircleMessages([]);
         setUserRecordings([]);
@@ -4214,10 +4383,12 @@ export function useAppState() {
       }
 
       const uid = auth.currentUser.uid;
-      const [queueSnap, versesSnap, recordingsSnap] = await Promise.all([
+      const myEmail = (auth.currentUser.email || '').toLowerCase();
+      const [queueSnap, versesSnap, recordingsSnap, emailLookupSnap] = await Promise.all([
         getDocs(collection(db, 'users', uid, 'memoryQueue')),
         getDocs(collection(db, 'users', uid, 'verses')),
         getDocs(collection(db, 'users', uid, 'recordings')),
+        myEmail && !myEmail.includes('/') ? getDoc(doc(db, 'emailLookup', myEmail)) : Promise.resolve(null),
       ]);
 
       const batch = writeBatch(db);
@@ -4225,6 +4396,9 @@ export function useAppState() {
       versesSnap.docs.forEach((d) => batch.delete(d.ref));
       recordingsSnap.docs.forEach((d) => batch.delete(d.ref));
       batch.delete(doc(db, 'memoryPlans', uid));
+      // Only if it's really ours -- the rule reads the existing doc's uid,
+      // so deleting a missing one would fail the whole batch.
+      if (emailLookupSnap?.exists() && emailLookupSnap.data().uid === uid) batch.delete(emailLookupSnap.ref);
       // Known limitation, documented rather than solved this pass: if this
       // member owns/leads any of these circles, its ownerId is simply left
       // pointing at the now-deleted uid -- same "orphaned reference, self-
