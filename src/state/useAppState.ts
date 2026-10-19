@@ -34,14 +34,10 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import {
-  RecordingPresets,
-  requestRecordingPermissionsAsync,
   setAudioModeAsync,
   useAudioPlayer,
   useAudioPlayerStatus,
-  useAudioRecorder,
 } from 'expo-audio';
-import * as DocumentPicker from 'expo-document-picker';
 
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { pendingSignUpDisplayName } from './useEmailAuth';
@@ -53,7 +49,6 @@ import {
   DEFAULT_RHYTHM,
   DEFAULT_TRANSLATION_ID,
   getBookByName,
-  PICKER_TRANSLATIONS,
   SUGGESTED_FEED_RECORDINGS,
 } from '../data';
 import { fetchChapterText, useChapterText } from './useScripture';
@@ -97,6 +92,9 @@ import { useLocalPrefs } from './useLocalPrefs';
 import { useChapterPhotos } from './useChapterPhotos';
 import { useAudioDownloads } from './useAudioDownloads';
 import { useAccountabilityNudges } from './useAccountabilityNudges';
+import { useRecorder } from './useRecorder';
+import { useImportAudio } from './useImportAudio';
+import { buildVerseTimestamps } from '../lib/verseTimestamps';
 import { PushTarget, ReminderDay, usePushNotifications } from './usePushNotifications';
 import * as Linking from 'expo-linking';
 import { parseInviteCode } from '../lib/invites';
@@ -337,83 +335,54 @@ export function useAppState() {
   const [reviewSessionPosition, setReviewSessionPosition] = useState(0);
   const [reviewSessionTotal, setReviewSessionTotal] = useState(0);
 
-  // Teleprompter / Recording State (fully simulated — no real microphone capture in the web original)
-  const [isRecording, setIsRecording] = useState(false);
-  const [isRecordingPaused, setIsRecordingPaused] = useState(false);
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
-  // Snapshot of recordingSeconds taken the instant recording stops — the Save
-  // Recitation dialog reads this (not recordingSeconds directly), since the
-  // recording timer effect zeroes recordingSeconds out as soon as isRecording
-  // flips false, well before the dialog is dismissed.
-  const [lastRecordingDuration, setLastRecordingDuration] = useState(0);
-  // Tap-to-mark verse timestamps (Option 1 of timestamp automation): verse
-  // number -> audioRecorder.currentTime at the moment the user tapped that
-  // verse in the teleprompter. Reset on every new recording, seeded with the
-  // chapter's first verse at t=0 so the user only needs to tap starting from
-  // the second verse onward.
-  const [verseTapTimestamps, setVerseTapTimestamps] = useState<Record<number, number>>({});
-  // What the Record tab records. No passage until one is chosen ('' book):
-  // it used to open on Romans 8 every time. The last one chosen is kept on
-  // the device and comes back next time (RECORD_PASSAGE_KEY below).
-  const [recordingBook, setRecordingBook] = useState('');
-  const [recordingChapter, setRecordingChapter] = useState(1);
-  const [recordingTranslation, setRecordingTranslation] = useState(DEFAULT_TRANSLATION_ID);
-  // Verse range for a partial-chapter recording. null bounds mean the
-  // chapter's first / last verse (see recordingSelectedVerses below).
-  const [recordingRangeStart, setRecordingRangeStart] = useState<number | null>(null);
-  const [recordingRangeEnd, setRecordingRangeEnd] = useState<number | null>(null);
-
-  // The last passage recorded from, restored on launch. Device-local, like
-  // the other screen preferences here.
-  const RECORD_PASSAGE_KEY = 'record:lastPassage:v1';
-  const recordPassageLoaded = useRef(false);
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(RECORD_PASSAGE_KEY);
-        const saved = raw ? JSON.parse(raw) : null;
-        if (saved && typeof saved.book === 'string' && getBookByName(saved.book)) {
-          setRecordingBook(saved.book);
-          setRecordingChapter(Number(saved.chapter) || 1);
-          // A translation that has since left the picker falls back to the default.
-          if (PICKER_TRANSLATIONS.some((t) => t.id === saved.translation)) setRecordingTranslation(saved.translation);
-          setRecordingRangeStart(typeof saved.start === 'number' ? saved.start : null);
-          setRecordingRangeEnd(typeof saved.end === 'number' ? saved.end : null);
-        }
-      } catch {
-        // Corrupt/missing -- start with no passage chosen.
-      } finally {
-        recordPassageLoaded.current = true;
-      }
-    })();
-  }, []);
-  useEffect(() => {
-    if (!recordPassageLoaded.current || !recordingBook) return;
-    AsyncStorage.setItem(
-      RECORD_PASSAGE_KEY,
-      JSON.stringify({
-        book: recordingBook,
-        chapter: recordingChapter,
-        translation: recordingTranslation,
-        start: recordingRangeStart,
-        end: recordingRangeEnd,
-      })
-    ).catch(() => {});
-  }, [recordingBook, recordingChapter, recordingTranslation, recordingRangeStart, recordingRangeEnd]);
+  // The Record tab's passage and live mic capture (see useRecorder).
+  const {
+    isRecording,
+    setIsRecording,
+    isRecordingPaused,
+    recordingSeconds,
+    setRecordingSeconds,
+    lastRecordingDuration,
+    verseTapTimestamps,
+    recordingBook,
+    setRecordingBook,
+    recordingChapter,
+    setRecordingChapter,
+    recordingTranslation,
+    setRecordingTranslation,
+    recordingRangeStart,
+    setRecordingRangeStart,
+    recordingRangeEnd,
+    setRecordingRangeEnd,
+    audioRecorder,
+    capturedDurationRef,
+    handleStartRecording,
+    handleStopRecording,
+    handlePauseRecording,
+    handleResumeRecording,
+    handleResetRecording,
+    handleMarkVerseTap,
+  } = useRecorder({
+    triggerToast: (message) => triggerToast(message),
+    getFirstVerse: () => recordingSelectedVerses[0]?.verse,
+    onStopped: () => openSaveRecordingDialog('live'),
+  });
   const [userRecordings, setUserRecordings] = useState<Recording[]>([]);
 
-  // Import-audio tagging: the reverse of live recording. Instead of tapping
-  // each verse while the mic records, the user picks an existing audio file
-  // and taps each verse while LISTENING BACK to it. Reuses the exact same
-  // teleprompter + buildVerseTimestamps mechanism as live recording — only
-  // the time source differs (playback position instead of recorder position).
-  const [importedAudioUri, setImportedAudioUri] = useState<string | null>(null);
-  const [importedAudioName, setImportedAudioName] = useState<string | null>(null);
-  // Deliberately NOT seeded with verse 1 at t=0 the way live recording is:
-  // a live recording's t=0 IS the moment the user hit Start, but an imported
-  // file may have lead-in silence or an intro before verse 1 actually
-  // begins, so verse 1 needs its own real tap like every other verse.
-  const [importTapTimestamps, setImportTapTimestamps] = useState<Record<number, number>>({});
+  // Imported audio being tagged verse by verse (see useImportAudio).
+  const {
+    importedAudioUri,
+    importedAudioName,
+    importTapTimestamps,
+    importPlayer,
+    importPlayerStatus,
+    pickImportAudio,
+    clearImportedAudio,
+    toggleImportPlayback,
+    seekImportAudioBy,
+    handleMarkImportTap,
+    resetImportTaps,
+  } = useImportAudio({ triggerToast: (message) => triggerToast(message) });
   // Which flow the open Save dialog belongs to — set right before opening
   // it, read by saveRecordedAudio to route to the matching persist path and
   // by App.tsx's dialog to label the "Scope" row correctly.
@@ -432,6 +401,12 @@ export function useAppState() {
     'private'
   );
   const [typedRecordingName, setTypedRecordingName] = useState('');
+  // Opens the Save dialog for a finished take, pre-picking your usual visibility.
+  const openSaveRecordingDialog = (source: 'live' | 'import') => {
+    setPendingRecordingSource(source);
+    setPickedRecordingVisibility(defaultRecordingVisibility || 'private');
+    setSaveRecordingDialog(true);
+  };
 
   // Profile-sharing visibility: whether this user's verse list is shown to
   // friends on their member profile. Defaults to 'private' (only you). When
@@ -672,14 +647,6 @@ export function useAppState() {
   // that wasn't already playing — consumed once playback actually starts.
   const pendingSeekSecondsRef = useRef<number | null>(null);
 
-  // Real audio recorder (mic capture) for the Record tab.
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  // Captured the instant recording stops — audioRecorder.currentTime resets
-  // once stop() resolves, and recordingSeconds gets zeroed by the recording
-  // timer effect (below) well before the user taps "Confirm & Save" in the
-  // dialog, so neither is safe to read directly inside saveRecordedAudio.
-  const capturedDurationRef = useRef(0);
-
   // Real audio player for saved recordings that have a Storage-backed audioUrl.
   // Recordings without one (e.g. the illustrative community feed placeholders)
   // fall back to the simulated progress timer below.
@@ -716,13 +683,6 @@ export function useAppState() {
   const nowPlayingUrl = resolvePlaybackUrl(nowPlayingRecording, studioPlaybackActive, audioCache.map);
   const recordingPlayer = useAudioPlayer(nowPlayingUrl);
   const recordingPlayerStatus = useAudioPlayerStatus(recordingPlayer);
-
-  // Separate player for the import-audio tagging flow above — kept distinct
-  // from recordingPlayer (which is reserved for "now playing a saved
-  // Recording" everywhere else in the app: Profile, RecordingDetail, the
-  // floating now-playing bar) so tagging playback can't collide with those.
-  const importPlayer = useAudioPlayer(importedAudioUri ?? undefined);
-  const importPlayerStatus = useAudioPlayerStatus(importPlayer);
 
   // Memory Queue auto-sync bookkeeping (debounce timer + last-synced verseIds, for deletion diffing)
   const queueSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3688,23 +3648,6 @@ export function useAppState() {
   // container; here each screen is its own mounted component, so its ScrollView
   // naturally starts at the top on mount and no equivalent effect is needed.
 
-  // Recording Timer -- keeps ticking while recording and not paused. Only
-  // resets to 0 when recording stops entirely, not when merely paused, so
-  // resuming continues from where the elapsed time left off.
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (isRecording && !isRecordingPaused) {
-      interval = setInterval(() => {
-        setRecordingSeconds((prev) => prev + 1);
-      }, 1000);
-    } else if (!isRecording) {
-      setRecordingSeconds(0);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRecording, isRecordingPaused]);
-
   // Saved Recording Playback — real audio (via expo-audio) for recordings with
   // a Storage-backed audioUrl; falls back to a simulated progress timer for
   // mock entries that don't have one (e.g. the illustrative community feed).
@@ -5389,208 +5332,6 @@ export function useAppState() {
     }
   };
 
-  // ==========================================
-  // VOICE RECORDER FLOW — real mic capture via expo-audio, uploaded to
-  // Firebase Storage (recordings/{uid}/{id}.<ext>) with metadata written to
-  // Firestore (users/{uid}/recordings/{id}). Private to the recording user —
-  // no circle/group sharing yet (see firestore.rules + storage.rules).
-  // ==========================================
-  const handleStartRecording = async () => {
-    try {
-      const { granted } = await requestRecordingPermissionsAsync();
-      if (!granted) {
-        triggerToast('Microphone permission is required to record.');
-        return;
-      }
-      // Required on iOS — expo-audio refuses to record until the audio
-      // session is explicitly switched into recording mode.
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
-      setIsRecording(true);
-      setIsRecordingPaused(false);
-      setRecordingSeconds(0);
-      // Seed the selected range's first verse at t=0 — recording always
-      // starts on the first verse of the picked range (which may not be
-      // verse 1 of the chapter), so the user only needs to tap from the
-      // next verse in the range onward.
-      const firstVerse = recordingSelectedVerses[0]?.verse;
-      setVerseTapTimestamps(firstVerse !== undefined ? { [firstVerse]: 0 } : {});
-      triggerToast('Recording started — tap each verse number as you reach it.');
-    } catch (err) {
-      console.error('Failed to start recording:', err);
-      triggerToast('Could not start recording — check microphone permissions.');
-    }
-  };
-
-  const handleStopRecording = async () => {
-    capturedDurationRef.current = Math.round(audioRecorder.currentTime) || recordingSeconds || 1;
-    setLastRecordingDuration(capturedDurationRef.current);
-    try {
-      await audioRecorder.stop();
-    } catch (err) {
-      console.error('Failed to stop recording:', err);
-    }
-    try {
-      // Switch back out of recording mode immediately, so anything played
-      // back before the next recording starts doesn't inherit a session
-      // still configured for recording.
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-    } catch (err) {
-      console.error('Failed to reset audio mode after recording:', err);
-    }
-    setIsRecording(false);
-    setIsRecordingPaused(false);
-    setPendingRecordingSource('live');
-    setPickedRecordingVisibility(defaultRecordingVisibility || 'private');
-    setSaveRecordingDialog(true);
-  };
-
-  // Pauses mid-recording without finalizing it -- the recording timer holds
-  // at its current value (see the Recording Timer effect) rather than
-  // resetting, since only a real stop should do that.
-  const handlePauseRecording = () => {
-    if (!isRecording || isRecordingPaused) return;
-    audioRecorder.pause();
-    setIsRecordingPaused(true);
-    triggerToast('Recording paused.');
-  };
-
-  const handleResumeRecording = () => {
-    if (!isRecording || !isRecordingPaused) return;
-    audioRecorder.record();
-    setIsRecordingPaused(false);
-    triggerToast('Recording resumed.');
-  };
-
-  // Discards the in-progress recording entirely (no save dialog) and
-  // returns to the idle state so the user can start a fresh take.
-  const handleResetRecording = async () => {
-    try {
-      await audioRecorder.stop();
-    } catch (err) {
-      console.error('Failed to stop recording during reset:', err);
-    }
-    try {
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-    } catch (err) {
-      console.error('Failed to reset audio mode after resetting recording:', err);
-    }
-    setIsRecording(false);
-    setIsRecordingPaused(false);
-    setVerseTapTimestamps({});
-    triggerToast('Recording discarded — tap to start again.');
-  };
-
-  // Tap-to-mark: called when the user taps a verse in the teleprompter while
-  // recording. Re-tapping the same verse overwrites its mark with the newer
-  // time, so an accidental early tap can just be corrected with another tap.
-  const handleMarkVerseTap = (verseNumber: number) => {
-    if (!isRecording || isRecordingPaused) return;
-    setVerseTapTimestamps((prev) => ({ ...prev, [verseNumber]: audioRecorder.currentTime }));
-  };
-
-  // ==========================================
-  // IMPORT-AUDIO TAGGING FLOW — pick an existing audio file, then tap each
-  // verse while LISTENING BACK to it (mirrors handleMarkVerseTap above, but
-  // keyed to playback position instead of recorder position).
-  // ==========================================
-  const pickImportAudio = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*', copyToCacheDirectory: true });
-      if (result.canceled || !result.assets?.[0]) return;
-      const asset = result.assets[0];
-      // Switch to playback mode up front -- picking a file mid-recording
-      // isn't a real flow, but if audio mode were ever left in "recording"
-      // from a previous take, playback would be silent/misrouted otherwise.
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      setImportedAudioUri(asset.uri);
-      setImportedAudioName(asset.name || 'Imported audio');
-      setImportTapTimestamps({});
-      triggerToast('Audio loaded — press play and tap each verse as you hear it start.');
-    } catch (err) {
-      console.error('Failed to pick import audio:', err);
-      triggerToast('Could not open that file — please try another.');
-    }
-  };
-
-  // Clears the picked file and any taps so far, returning to the "choose a
-  // file" state. Does NOT touch anything already saved.
-  const clearImportedAudio = () => {
-    // .pause() can throw if the native player was already released (same
-    // race the saved-recording player guards against elsewhere) — pausing
-    // an already-idle/released player is a no-op either way.
-    try {
-      importPlayer.pause();
-    } catch {
-      // already released — nothing to pause
-    }
-    setImportedAudioUri(null);
-    setImportedAudioName(null);
-    setImportTapTimestamps({});
-  };
-
-  const toggleImportPlayback = () => {
-    if (!importedAudioUri) return;
-    if (importPlayerStatus.playing) {
-      importPlayer.pause();
-    } else {
-      importPlayer.play();
-    }
-  };
-
-  const seekImportAudioBy = (deltaSeconds: number) => {
-    if (!importedAudioUri) return;
-    const total = importPlayerStatus.duration || 0;
-    const next = Math.max(0, Math.min(total, importPlayerStatus.currentTime + deltaSeconds));
-    importPlayer.seekTo(next);
-  };
-
-  // Re-tapping the same verse overwrites its mark with the newer time, same
-  // forgiving behavior as the live-recording version.
-  const handleMarkImportTap = (verseNumber: number) => {
-    if (!importedAudioUri) return;
-    setImportTapTimestamps((prev) => ({ ...prev, [verseNumber]: importPlayerStatus.currentTime }));
-  };
-
-  const resetImportTaps = () => {
-    setImportTapTimestamps({});
-    triggerToast('Verse tags cleared — tap through again from the top.');
-  };
-
-  // Turns the sparse verse->tap-time map into a contiguous per-verse
-  // start/end range: a verse's start is its own tap (or the previous verse's
-  // end, if it was never tapped), and its end is the next tapped verse found
-  // ahead of it (or the total recording duration, if none of the remaining
-  // verses were tapped). Returns [] if nothing was tapped at all, rather than
-  // producing a single verse spanning the whole recording followed by
-  // degenerate zero-length ones — that's just "the feature wasn't used."
-  const buildVerseTimestamps = (
-    verseNumbers: number[],
-    tapTimestamps: Record<number, number>,
-    totalDurationSec: number
-  ): VerseTimestamp[] => {
-    if (Object.keys(tapTimestamps).length === 0) return [];
-
-    const sorted = [...verseNumbers].sort((a, b) => a - b);
-    const result: VerseTimestamp[] = [];
-    let cursor = 0;
-    for (let i = 0; i < sorted.length; i++) {
-      const v = sorted[i];
-      const start = tapTimestamps[v] !== undefined ? tapTimestamps[v] : cursor;
-      let end = totalDurationSec;
-      for (let j = i + 1; j < sorted.length; j++) {
-        if (tapTimestamps[sorted[j]] !== undefined) {
-          end = tapTimestamps[sorted[j]];
-          break;
-        }
-      }
-      result.push({ verse: v, startSec: Math.round(start), endSec: Math.round(end) });
-      cursor = end;
-    }
-    return result;
-  };
-
   // Shared upload + Firestore write for a finished recitation, used by both
   // the live-record flow and the import-audio flow below — so visibility
   // defaults, the sharedRecordings ACL snapshot, and the profile
@@ -6106,9 +5847,7 @@ export function useAppState() {
     } catch {
       // already released — nothing to pause
     }
-    setPendingRecordingSource('import');
-    setPickedRecordingVisibility(defaultRecordingVisibility || 'private');
-    setSaveRecordingDialog(true);
+    openSaveRecordingDialog('import');
   };
 
   const deleteRecording = async (recording: Recording) => {
