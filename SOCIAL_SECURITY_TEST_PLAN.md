@@ -8,13 +8,17 @@ updated so every normal flow still passes the new rules.
 
 1. Ship the new app build first (or at the same time). **Old builds break against the
    new rules** in these places: accepting a friend request, creating a circle,
-   joining a private circle by code, and DMs between circle-mates (not friends).
+   joining a private circle by code, DMs and race challenges between circle-mates
+   (not friends), and -- for anyone with "Friends" verse sharing on -- the profile
+   stats sync (old builds still write the verse list onto the profile, which is now
+   refused).
 2. Deploy the rules: `firebase deploy --only firestore:rules`.
 3. Run the one-off cleanup in `scripts/import-bible/`:
    `node migrate-social-security.js` (dry run), read the output, then
    `node migrate-social-security.js --apply`. It removes emails from old profiles,
-   backfills invite-code lookups for old circles, and lists/deletes friendships that
-   have no accepted request behind them.
+   backfills invite-code lookups for old circles, lists/deletes friendships that
+   have no accepted request behind them, and moves each "Friends" verse list off the
+   profile into its friends-only `shared/memoryQueue` doc.
 
 ## Happy paths — two test accounts, A and B, on the new build
 
@@ -35,6 +39,10 @@ updated so every normal flow still passes the new rules.
 | 13 | A disbands a circle that has messages, reactions, a challenge with participants | Disbands without error; B's circle list drops it |
 | 14 | Old circle (made before this change): a member opens it, then someone joins by its code | Join works |
 | 15 | Delete account (test account) | Succeeds |
+| 16 | A challenges friend B to a race (DM or B's profile) | B gets the challenge card |
+| 17 | A and B in a circle, NOT friends: A challenges B | Challenge sends |
+| 18 | B sets Settings > verse visibility to Friends; A (friend) opens B's profile | A sees B's verse list |
+| 19 | B flips visibility back to Private; A reopens B's profile | List is gone |
 
 ## Attack checks — each must be refused (permission-denied)
 
@@ -57,6 +65,10 @@ with the client SDK. These are what the holes allowed before.
 | 5 | List `emailLookup` | `list: false` |
 | 6 | Nudge a non-friend | needs a real friends doc |
 | 6 | 501-char nudge / 2001-char DM or circle message | length caps |
+| 7 | Create `challenges/{x}` aimed at a stranger (not friend, no shared circle) | create needs `dmGated` (friend or real co-member in `viaCircleId`) |
+| 7 | Create a challenge with a third uid in `participantUids` | must be exactly sender + recipient |
+| 8 | Non-friend gets `profiles/{B}/shared/memoryQueue` | friends-only read |
+| 8 | List `profiles` and read `sharedMemoryQueue` | field gone after cleanup; profile writes can't add it back |
 
 ## How this was verified so far
 

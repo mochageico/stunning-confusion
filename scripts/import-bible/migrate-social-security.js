@@ -17,6 +17,10 @@
 //      direction), and with --apply deletes both sides of each such pair.
 //      Review the dry-run list first: a real friendship only shows up here
 //      if its accepted request was deleted by hand.
+//   4. Shared verse lists. The "Friends" verse snapshot used to sit on the
+//      listable profile doc as `sharedMemoryQueue`. Moves each one to
+//      profiles/{uid}/shared/memoryQueue -> { items } (friends-only) when
+//      sharing is still on, and deletes the profile field either way.
 //
 // Safety: dry run by default -- prints what it would do, writes nothing.
 //
@@ -100,6 +104,29 @@ async function pruneUnbackedFriendships(db) {
   if (apply && ops.length) await commitInChunks(db, ops);
 }
 
+async function moveSharedQueues(db) {
+  const profiles = await db.collection('profiles').get();
+  const ops = [];
+  let count = 0;
+  profiles.forEach((p) => {
+    const data = p.data();
+    if (!('sharedMemoryQueue' in data)) return;
+    count++;
+    if (data.memoryQueueVisibility === 'friends' && Array.isArray(data.sharedMemoryQueue)) {
+      ops.push((b) =>
+        b.set(p.ref.collection('shared').doc('memoryQueue'), {
+          items: data.sharedMemoryQueue,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+    }
+    ops.push((b) => b.update(p.ref, { sharedMemoryQueue: FieldValue.delete() }));
+  });
+  console.log(`
+[4] Profiles still carrying a shared verse list: ${count} (of ${profiles.size})`);
+  if (apply && ops.length) await commitInChunks(db, ops);
+}
+
 async function main() {
   const app = admin.initializeApp({ credential: admin.credential.applicationDefault() });
   const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -107,6 +134,7 @@ async function main() {
   await migrateEmails(db);
   await backfillInvites(db);
   await pruneUnbackedFriendships(db);
+  await moveSharedQueues(db);
   console.log(apply ? '\nDone.' : '\nDry run complete.');
 }
 

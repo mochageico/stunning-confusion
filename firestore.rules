@@ -38,6 +38,28 @@ service cloud.firestore {
     // access (see dmGated, which checks real member docs instead).
     match /profiles/{userId} {
       allow read: if isSignedIn();
+      // sharedMemoryQueue may no longer be written here (it moved to
+      // shared/memoryQueue, below) -- this stops an old app build from
+      // putting the friends-only list back on the listable profile.
+      // On update only adding/changing it is refused, so a profile that
+      // still has the old field can be written (and the field deleted).
+      allow create: if isOwner(userId)
+        && !request.resource.data.keys().hasAny(['sharedMemoryQueue']);
+      allow update: if isOwner(userId)
+        && !request.resource.data.diff(resource.data).addedKeys()
+             .union(request.resource.data.diff(resource.data).changedKeys())
+             .hasAny(['sharedMemoryQueue']);
+      allow delete: if isOwner(userId);
+    }
+
+    // The "Friends" verse-list snapshot (Settings > who can see my verses).
+    // It used to sit on the profile doc above as sharedMemoryQueue, but that
+    // doc is listable by anyone signed in, so "friends only" wasn't true.
+    // It lives here instead, readable only by the owner and by people who
+    // really are their friend (a friends doc, which only an accepted
+    // request can create). isFriendOf is defined further down.
+    match /profiles/{userId}/shared/memoryQueue {
+      allow read: if isOwner(userId) || (isSignedIn() && isFriendOf(request.auth.uid, userId));
       allow write: if isOwner(userId);
     }
 
@@ -204,9 +226,20 @@ service cloud.firestore {
       // rejects a list query outright unless the rule is provably satisfied
       // by the query's own filters, so the rule must reference the same field.
       allow read: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || request.auth.uid in resource.data.participantUids);
+      // Same gate as starting a DM (dmGated): you can only challenge a real
+      // friend, or someone in a circle you're both really members of --
+      // named on the challenge as viaCircleId, since a rule can't loop over
+      // every circle. participantUids must be exactly the two people, so a
+      // sender can't slip a third uid in and give them read access.
       allow create: if isSignedIn()
         && request.resource.data.fromUid == request.auth.uid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.toUid is string
+        && request.resource.data.toUid != request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.participantUids.size() == 2
+        && request.resource.data.participantUids.hasAll([request.auth.uid, request.resource.data.toUid])
+        && dmGated(request.auth.uid, request.resource.data.toUid,
+                   request.resource.data.get('viaCircleId', null));
       allow update: if isSignedIn()
         && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid)
         && (

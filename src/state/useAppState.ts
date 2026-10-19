@@ -1153,10 +1153,11 @@ export function useAppState() {
 
   // Profile-sharing visibility: whether this user's verse list is shown to
   // friends on their member profile. Defaults to 'private' (only you). When
-  // set to 'friends', a denormalized snapshot (sharedMemoryQueue) is written
-  // onto the profiles/{uid} doc so friends can read it without access to this
-  // user's private memoryQueue — kept fresh by the debounced profile sync
-  // effect below, and cleared back to null when flipped to 'private'.
+  // set to 'friends', a denormalized snapshot is written to
+  // profiles/{uid}/shared/memoryQueue (friends-only per the rules) so friends
+  // can read it without access to this user's private memoryQueue — kept
+  // fresh by the debounced profile sync effect below, and deleted when
+  // flipped to 'private'.
   //
   // There is deliberately no equivalent for Review Settings: sharing your
   // retention method was removed outright (see the note above the group-plan
@@ -2361,6 +2362,15 @@ export function useAppState() {
     // id and the pending card just shows up.
     const dmThreadId = [myUid, toUid].sort().join('_');
     try {
+      // Same gate as opening a DM: friends, or a circle both are really in.
+      // Checked before fetching verses so a refused challenge doesn't quietly
+      // add the range to my own queue.
+      const isFriend = friends.some((f) => f.uid === toUid);
+      const sharedCircleIds = isFriend ? [] : await findSharedCircleIds(toUid);
+      if (!isFriend && sharedCircleIds.length === 0) {
+        triggerToast('You can only challenge friends or people who share a community with you.');
+        return;
+      }
       const { verses, totalVerses } = await fetchRangeVerses(selectedTranslationId, range);
       if (totalVerses === 0) {
         triggerToast("Couldn't find any verses in that range.");
@@ -2384,6 +2394,9 @@ export function useAppState() {
         createdAt: nowISO,
         fromProgress: 0,
         toProgress: 0,
+        // The rules can only check ONE circle (no loops), so record the one
+        // we verified. Friends need none.
+        ...(sharedCircleIds.length > 0 ? { viaCircleId: sharedCircleIds[0] } : {}),
       };
       if (range.startVerse != null) data.startVerse = range.startVerse;
       if (range.endVerse != null) data.endVerse = range.endVerse;
@@ -3318,6 +3331,18 @@ export function useAppState() {
       const data = snap.data();
       const theirCircleIds: string[] = data.circleIds || [];
       const sharedCircleNames = myCircles.filter((c) => theirCircleIds.includes(c.id)).map((c) => c.name);
+      const memoryQueueVisibility = data.memoryQueueVisibility === 'friends' ? 'friends' : 'private';
+      // The snapshot lives in profiles/{uid}/shared/memoryQueue, readable
+      // only by real friends -- only ask for it when we are one, since
+      // anyone else just gets permission-denied.
+      let sharedMemoryQueue = null;
+      if (memoryQueueVisibility === 'friends' && friends.some((f) => f.uid === uid)) {
+        const sharedSnap = await getDoc(doc(db, 'profiles', uid, 'shared', 'memoryQueue')).catch((err) => {
+          console.error("Failed to load member's shared verses:", err);
+          return null;
+        });
+        sharedMemoryQueue = sharedSnap?.exists() ? sharedSnap.data().items || null : null;
+      }
       setSelectedUserProfile({
         uid,
         name: data.displayName || 'Anonymous Disciple',
@@ -3331,8 +3356,8 @@ export function useAppState() {
         // Friend-visible sharing (surfaced in MemberProfileScreen only when the
         // viewer is actually a friend). The snapshot is null unless the owner
         // set this visibility to 'friends' in Settings.
-        memoryQueueVisibility: data.memoryQueueVisibility === 'friends' ? 'friends' : 'private',
-        sharedMemoryQueue: data.sharedMemoryQueue || null,
+        memoryQueueVisibility,
+        sharedMemoryQueue,
       });
       navigateTo('memberProfile');
     } catch (err) {
@@ -3862,6 +3887,14 @@ export function useAppState() {
           console.error('Failed to strip email from profile:', err)
         );
       }
+      // Same for the friends-only verse snapshot, which used to sit on the
+      // (listable) profile too. If sharing is on, the profile-sync effect
+      // rewrites it to profiles/{uid}/shared/memoryQueue shortly after.
+      if (profileSnap?.exists() && 'sharedMemoryQueue' in profileSnap.data()) {
+        updateDoc(profileRef, { sharedMemoryQueue: deleteField() }).catch((err) =>
+          console.error('Failed to strip shared verses from profile:', err)
+        );
+      }
 
       // Tracks whichever plan ends up active, whether from an existing doc
       // or the freshly-created DEFAULT_PLANS[0] -- used after step 3 below
@@ -4315,20 +4348,27 @@ export function useAppState() {
       orderIndex: item.orderIndex,
     }));
 
+  // The snapshot lives in its own friends-only doc, not on the profile
+  // (which anyone signed in can list) -- see firestore.rules.
+  const sharedQueueDocRef = (uid: string) => doc(db, 'profiles', uid, 'shared', 'memoryQueue');
+  const writeSharedQueueSnapshot = (uid: string) =>
+    setDoc(sharedQueueDocRef(uid), { items: buildSharedQueueSnapshot(), updatedAt: new Date().toISOString() });
+
   // Settings toggle: show/hide this user's verse list on their member profile
   // for friends. Writes the visibility flag + (when 'friends') a fresh
-  // snapshot; clears the snapshot back to null when set to 'private'. The
-  // debounced profile-sync effect keeps the snapshot current afterward.
+  // snapshot; deletes the snapshot doc when set to 'private'. The debounced
+  // profile-sync effect keeps the snapshot current afterward.
   const updateMemoryQueueVisibility = async (vis: 'private' | 'friends') => {
     setMemoryQueueVisibility(vis);
     if (!auth.currentUser) return;
+    const uid = auth.currentUser.uid;
     try {
+      if (vis === 'friends') await writeSharedQueueSnapshot(uid);
+      else await deleteDoc(sharedQueueDocRef(uid));
       await setDoc(
-        doc(db, 'profiles', auth.currentUser.uid),
-        {
-          memoryQueueVisibility: vis,
-          sharedMemoryQueue: vis === 'friends' ? buildSharedQueueSnapshot() : null,
-        },
+        doc(db, 'profiles', uid),
+        // Also clears the old on-profile copy, in case it's still there.
+        { memoryQueueVisibility: vis, sharedMemoryQueue: deleteField() },
         { merge: true }
       );
       triggerToast(vis === 'friends' ? 'Your verses are now visible to friends.' : 'Your verses are now private.');
@@ -4396,6 +4436,7 @@ export function useAppState() {
       versesSnap.docs.forEach((d) => batch.delete(d.ref));
       recordingsSnap.docs.forEach((d) => batch.delete(d.ref));
       batch.delete(doc(db, 'memoryPlans', uid));
+      batch.delete(sharedQueueDocRef(uid));
       // Only if it's really ours -- the rule reads the existing doc's uid,
       // so deleting a missing one would fail the whole batch.
       if (emailLookupSnap?.exists() && emailLookupSnap.data().uid === uid) batch.delete(emailLookupSnap.ref);
@@ -6265,19 +6306,18 @@ export function useAppState() {
     profileStatsSyncTimerRef.current = setTimeout(() => {
       const uid = auth.currentUser?.uid;
       if (!uid) return;
-      // Keep the friend-visible snapshots fresh alongside the public stats.
-      // Only written while the matching visibility is 'friends' -- flipping to
-      // 'private' clears them in updateMemory*Visibility, and this effect
-      // leaves them null rather than re-adding them.
-      const payload: Record<string, any> = {
+      // Keep the friend-visible snapshot fresh alongside the public stats.
+      // Only written while visibility is 'friends' -- flipping to 'private'
+      // deletes it in updateMemoryQueueVisibility, and this effect doesn't
+      // re-add it.
+      updateDoc(doc(db, 'profiles', uid), {
         memorizedCount: publicMemorizedCount,
         learningCount,
         streakDays: memoryStreak,
-      };
-      if (memoryQueueVisibility === 'friends') payload.sharedMemoryQueue = buildSharedQueueSnapshot();
-      updateDoc(doc(db, 'profiles', uid), payload).catch((err) =>
-        console.error('Failed to sync profile stats:', err)
-      );
+      }).catch((err) => console.error('Failed to sync profile stats:', err));
+      if (memoryQueueVisibility === 'friends') {
+        writeSharedQueueSnapshot(uid).catch((err) => console.error('Failed to sync shared verses:', err));
+      }
     }, 800);
 
     return () => {
