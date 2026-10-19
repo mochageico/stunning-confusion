@@ -79,6 +79,58 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
+    // Who I've blocked. Owner-only: the person blocked is never told, and
+    // can't find out by reading. The rules below still see it -- exists()
+    // inside a rule isn't subject to these read permissions -- and use it to
+    // stop a blocked person from DMing, nudging, friend-requesting or
+    // challenging the person who blocked them (see hasBlocked / dmGated).
+    // Doc body is just { uid, displayName, blockedAt } for the Settings list.
+    match /profiles/{userId}/blocked/{blockedUid} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && blockedUid != userId
+        && request.resource.data.uid == blockedUid;
+      allow delete: if isOwner(userId);
+    }
+
+    // Moderation reports (App Store guideline 1.2). Write-only from the app:
+    // nobody can read, edit or delete a report from a client, including the
+    // person who filed it -- they're read in the Firebase console (and
+    // trigger an email/push to the app owner, see functions/src/social.ts).
+    // contentSnapshot copies the reported text at report time, because the
+    // author can delete their message afterwards.
+    match /reports/{reportId} {
+      allow create: if isSignedIn()
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.kind in ['user', 'dmMessage', 'circleMessage', 'recording', 'circle']
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() <= 40
+        && request.resource.data.get('note', '') is string
+        && request.resource.data.get('note', '').size() <= 1000
+        && request.resource.data.get('contentSnapshot', '') is string
+        && request.resource.data.get('contentSnapshot', '').size() <= 2000;
+      allow read, update, delete: if false;
+    }
+
+    // Per-user private settings and bookkeeping for the social features:
+    //   pushTokens/{tokenId}   -- this person's devices, read by the
+    //                             notification Cloud Functions (admin)
+    //   settings/{docId}       -- notification preferences, accepted
+    //                             community guidelines
+    //   readMarkers/{key}      -- "read up to" time per DM thread / circle
+    //                             chat, for unread dots
+    // None of it is anyone else's business, so owner-only throughout.
+    match /users/{userId}/pushTokens/{tokenId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/settings/{docId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/readMarkers/{key} {
+      allow read, write: if isOwner(userId);
+    }
+
     // Memory plans collection
     match /memoryPlans/{userId} {
       allow read, write: if isOwner(userId);
@@ -193,7 +245,8 @@ service cloud.firestore {
         && request.resource.data.toUid is string
         && request.resource.data.toUid != request.auth.uid
         && requestId == request.auth.uid + '_' + request.resource.data.toUid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.status == 'pending'
+        && !hasBlocked(request.resource.data.toUid, request.auth.uid);
       allow update: if isSignedIn() && (
         // Recipient accepting/declining -- nothing else on the doc may change.
         (resource.data.toUid == request.auth.uid
@@ -272,6 +325,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid
         && request.resource.data.toUid is string
         && isFriendOf(request.auth.uid, request.resource.data.toUid)
+        && !hasBlocked(request.resource.data.toUid, request.auth.uid)
         && request.resource.data.message is string
         && request.resource.data.message.size() > 0
         && request.resource.data.message.size() <= 500;
@@ -327,14 +381,44 @@ service cloud.firestore {
         && isCircleMember(circleId, b);
     }
 
+    // a has blocked b (see profiles/{uid}/blocked above).
+    function hasBlocked(a, b) {
+      return exists(/databases/$(database)/documents/profiles/$(a)/blocked/$(b));
+    }
+
+    // A block in EITHER direction closes the 1:1 channel -- the person who
+    // blocked can't message the blocked person either, so a block can't be
+    // used to harass someone who can't answer back.
     function dmGated(a, b, circleId) {
-      return isFriendOf(a, b) || sharesCircle(a, b, circleId);
+      return (isFriendOf(a, b) || sharesCircle(a, b, circleId))
+        && !hasBlocked(a, b) && !hasBlocked(b, a);
     }
 
     // Text cap for DM and circle chat messages (sendDMMessage /
     // sendCircleMessage enforce the same 2000 before sending).
     function isValidMessageText(text) {
       return text is string && text.size() > 0 && text.size() <= 2000;
+    }
+
+    // Optional card on a chat message (src/lib/chatAttachments.ts): a verse
+    // reference, a shared recording, a recording request, or a quiz. Only
+    // the shape is checked -- what it points at is gated by its own rules
+    // (a recording card is useless unless sharedRecordings lets you read it).
+    function isValidAttachment(data) {
+      return !('attachment' in data)
+        || (data.attachment is map
+          && data.attachment.kind in ['verse', 'recording', 'recordingRequest', 'quiz']
+          && data.attachment.size() <= 16);
+    }
+
+    // Answers to a recording request or quiz card, one per person per
+    // message, stored flat like reactions (`${messageId}_${uid}`) so one
+    // listener covers the whole chat. status: 'willDo' | 'notNow' | 'done'.
+    function isValidResponse(responseId) {
+      return request.resource.data.uid == request.auth.uid
+        && responseId == request.resource.data.messageId + '_' + request.auth.uid
+        && request.resource.data.status in ['willDo', 'notNow', 'done']
+        && request.resource.data.size() <= 12;
     }
 
     match /dmThreads/{threadId} {
@@ -360,7 +444,7 @@ service cloud.firestore {
       // (e.g. the circle it named was left, but the two still share
       // another), but only to a circle both really belong to.
       allow update: if isSignedIn() && request.auth.uid in resource.data.participantUids
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'viaCircleId'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'lastMessageFromUid', 'viaCircleId'])
         && request.resource.data.get('lastMessage', '') is string
         && request.resource.data.get('lastMessage', '').size() <= 2000
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['viaCircleId'])
@@ -371,11 +455,26 @@ service cloud.firestore {
           && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids;
         allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid
           && isValidMessageText(request.resource.data.text)
+          && isValidAttachment(request.resource.data)
           && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids
           && dmGated(get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[0],
                      get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[1],
                      get(/databases/$(database)/documents/dmThreads/$(threadId)).data.get('viaCircleId', null));
-        allow update, delete: if false;
+        // You can unsend your own message; nobody can edit one.
+        allow delete: if isSignedIn() && resource.data.fromUid == request.auth.uid;
+        allow update: if false;
+      }
+
+      match /responses/{responseId} {
+        allow read: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids;
+        allow create, update: if isSignedIn()
+          && isValidResponse(responseId)
+          && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids
+          && dmGated(get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[0],
+                     get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[1],
+                     get(/databases/$(database)/documents/dmThreads/$(threadId)).data.get('viaCircleId', null));
+        allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
       }
 
       // Emoji reactions -- a flat sibling of messages/ (not nested per-
@@ -399,16 +498,28 @@ service cloud.firestore {
       }
     }
 
-    // Group chat auto-tied to a Circle -- members only, immutable messages.
-    // The one exception to "immutable" is the leader deleting them, purely
-    // so disbandCircle can clear the chat instead of leaving it orphaned.
+    // Group chat auto-tied to a Circle -- members only, messages can't be
+    // edited. The author can unsend their own, and the leader can remove
+    // any (moderating their circle, and so disbandCircle can clear the chat
+    // instead of leaving it orphaned). Blocking someone in a circle only
+    // hides them on the blocker's own screen -- it can't stop them posting
+    // to everyone else, which is what reporting and the leader are for.
     match /circles/{circleId}/messages/{messageId} {
       allow read: if isSignedIn() && isCircleMember(circleId, request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid
         && isValidMessageText(request.resource.data.text)
+        && isValidAttachment(request.resource.data)
         && isCircleMember(circleId, request.auth.uid);
-      allow delete: if isSignedIn() && isCircleOwner(circleId);
+      allow delete: if isSignedIn() && (resource.data.fromUid == request.auth.uid || isCircleOwner(circleId));
       allow update: if false;
+    }
+
+    match /circles/{circleId}/responses/{responseId} {
+      allow read: if isSignedIn() && isCircleMember(circleId, request.auth.uid);
+      allow create, update: if isSignedIn()
+        && isValidResponse(responseId)
+        && isCircleMember(circleId, request.auth.uid);
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isCircleOwner(circleId));
     }
 
     // Same reaction shape as dmThreads' above, flat sibling of circles/{id}/messages.

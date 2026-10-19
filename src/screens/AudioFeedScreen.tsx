@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Check, Pause, Play, Plus, Search, Volume2, X } from 'lucide-react-native';
+import { Check, MoreHorizontal, Pause, Play, Plus, Search, Volume2, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { Recording } from '../types';
@@ -12,6 +13,8 @@ import { formatDate, formatDuration } from '../lib/format';
 import { AppButton, AppIconButton, AppTextInput, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Avatar, Badge, EmptyState, ScreenHeader, SegmentedControl, type BadgeTone } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+import { Dialog } from '../components/blocks';
+import { BlockConfirmDialog, ReportSheet } from '../components/chat/ReportSheet';
 
 // Opens from Today and from a chapter's page; the back link names which.
 const BACK_LABELS: Partial<Record<string, string>> = {
@@ -59,6 +62,12 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     saveSharedRecordingToLibrary,
     triggerToast,
   } = state;
+
+  // Report / block a recording's owner (App Store 1.2: anything people post
+  // must be reportable, and its author blockable).
+  const [menuFor, setMenuFor] = useState<Recording | null>(null);
+  const [reportFor, setReportFor] = useState<Recording | null>(null);
+  const [blockFor, setBlockFor] = useState<Recording | null>(null);
 
 
   // Translation options are derived from what the feed ACTUALLY contains
@@ -317,6 +326,15 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                       )}
                     </View>
                   </View>
+                  {!isOwn && ownerUidOf(rec) ? (
+                    <AppIconButton
+                      Icon={MoreHorizontal}
+                      variant="bare"
+                      diameter={38}
+                      accessibilityLabel={`More about ${recordingLabel(rec)}`}
+                      onPress={() => setMenuFor(rec)}
+                    />
+                  ) : null}
                   {/* Plays in place; the now-playing bar above the tabs shows
                       progress and keeps going if you leave. */}
                   <AppIconButton
@@ -339,6 +357,58 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
           </View>
         )}
       </ScrollView>
+
+      <Dialog visible={!!menuFor} onClose={() => setMenuFor(null)} placement="sheet" title={menuFor ? recordingLabel(menuFor) : ''}>
+        <View style={{ gap: space(8) }}>
+          <AppButton
+            variant="secondary"
+            label="Report recording"
+            onPress={() => {
+              setReportFor(menuFor);
+              setMenuFor(null);
+            }}
+          />
+          <AppButton
+            variant="destructive"
+            label={`Block ${(menuFor?.user || 'this person').split(' ')[0]}`}
+            onPress={() => {
+              setBlockFor(menuFor);
+              setMenuFor(null);
+            }}
+          />
+        </View>
+      </Dialog>
+      <ReportSheet
+        visible={!!reportFor}
+        title="Report recording"
+        subjectName={reportFor?.user?.split(' ')[0]}
+        onClose={() => setReportFor(null)}
+        onSubmit={async ({ reason, note, alsoBlock }) => {
+          if (!reportFor) return;
+          await state.reportContent({
+            kind: 'recording',
+            targetUid: ownerUidOf(reportFor) || undefined,
+            targetPath: `sharedRecordings/${reportFor.id}`,
+            contentSnapshot: `${recordingLabel(reportFor)} · ${reportFor.audioUrl || ''}`,
+            reason,
+            note,
+          });
+          const owner = ownerUidOf(reportFor);
+          if (alsoBlock && owner) await state.blockUser(owner, reportFor.user || 'Someone');
+        }}
+      />
+      <BlockConfirmDialog
+        visible={!!blockFor}
+        name={(blockFor?.user || 'this person').split(' ')[0]}
+        onClose={() => setBlockFor(null)}
+        onConfirm={() => {
+          const owner = blockFor && ownerUidOf(blockFor);
+          if (owner) state.blockUser(owner, blockFor?.user || 'Someone');
+        }}
+      />
     </FadeInView>
   );
 }
+
+/** Who posted a shared recording: sharedRecordings docs always carry ownerId; userId is usually there too. */
+const ownerUidOf = (rec: Recording): string | null => rec.userId || (rec as Recording & { ownerId?: string }).ownerId || null;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -113,8 +113,20 @@ import {
   VerseTimestamp,
 } from '../types';
 import { computeDailyPull, PersonalPacingSettings } from '../lib/groupPlanScheduler';
-import { isDayPaused, isPauseInEffect } from '../lib/reviewCalendar';
+import { getMemoryCalendarProjection, isDayPaused, isPauseInEffect } from '../lib/reviewCalendar';
 import { formatDate, formatDuration } from '../lib/format';
+import {
+  attachmentFallbackText,
+  ChatAttachment,
+  cleanAttachment,
+  QuizAttachment,
+  RecordingAttachment,
+  RecordingRequestAttachment,
+} from '../lib/chatAttachments';
+import { useSocial } from './useSocial';
+import { PushTarget, ReminderDay, usePushNotifications } from './usePushNotifications';
+import * as Linking from 'expo-linking';
+import { parseInviteCode } from '../lib/invites';
 
 export type ScreenName =
   | 'home'
@@ -144,7 +156,8 @@ export type ScreenName =
   | 'findFriends'
   | 'messages'
   | 'dmThread'
-  | 'circleChat';
+  | 'circleChat'
+  | 'quiz';
 
 // Screens App.tsx's router only renders while their tab is current (see
 // Screens() in App.tsx). navigateTo() needs these lists so it can switch tabs
@@ -1848,6 +1861,9 @@ export function useAppState() {
       ]);
       const byId = new Map<string, Recording>();
       [...publicSnap.docs, ...circleSnap.docs].forEach((d) => {
+        // 'direct' copies exist only so a recording sent in a chat can play
+        // there (see shareRecordingInto) -- they're not posts for the feed.
+        if (d.data().visibility === 'direct') return;
         byId.set(d.id, { id: d.id, ...d.data() } as Recording);
       });
       setFeedRecordings(Array.from(byId.values()));
@@ -1880,11 +1896,19 @@ export function useAppState() {
       // own docs) -- same "orphaned reference, self-heals on next load"
       // tolerance used for circle ownerId elsewhere. Verify each friend's
       // profile still exists here and prune any that don't.
-      const stillExists = await Promise.all(
-        rawFriends.map((f) => getDoc(doc(db, 'profiles', f.uid)).then((s) => s.exists()))
+      const profiles = await Promise.all(
+        rawFriends.map((f) => getDoc(doc(db, 'profiles', f.uid)).then((s) => (s.exists() ? s.data() : null)))
       );
-      const liveFriends = rawFriends.filter((_, i) => stillExists[i]);
-      const staleFriends = rawFriends.filter((_, i) => !stillExists[i]);
+      // Name and photo come from the live profile, not the friends doc: the
+      // friends doc is a snapshot from the day you became friends, so a
+      // later name change or new photo never reached it.
+      const liveFriends = rawFriends
+        .map((f, i) => {
+          const p = profiles[i];
+          return p ? { ...f, displayName: p.displayName || f.displayName, avatarUrl: p.avatarUrl || f.avatarUrl || '' } : null;
+        })
+        .filter((f): f is Friend => f !== null);
+      const staleFriends = rawFriends.filter((_, i) => !profiles[i]);
 
       setFriends(liveFriends);
 
@@ -2026,13 +2050,13 @@ export function useAppState() {
       batch.set(doc(db, 'profiles', myUid, 'friends', request.fromUid), {
         uid: request.fromUid,
         displayName: request.fromName,
-        avatarUrl: '',
+        avatarUrl: '', // filled from their live profile by loadFriends
         friendsSince,
       });
       batch.set(doc(db, 'profiles', request.fromUid, 'friends', myUid), {
         uid: myUid,
         displayName: auth.currentUser.displayName || 'Anonymous Disciple',
-        avatarUrl: '',
+        avatarUrl: auth.currentUser.photoURL || '',
         friendsSince,
       });
       await batch.commit();
@@ -2301,7 +2325,7 @@ export function useAppState() {
         data = {
           participantUids: [myUid, otherUid].sort(),
           participantNames: { [myUid]: myName, [otherUid]: otherName },
-          participantAvatars: { [myUid]: '', [otherUid]: otherAvatarUrl },
+          participantAvatars: { [myUid]: auth.currentUser.photoURL || '', [otherUid]: otherAvatarUrl },
           lastMessage: '',
           lastMessageAt: nowISO,
           createdAt: nowISO,
@@ -2348,28 +2372,60 @@ export function useAppState() {
     setActiveDMSharedCircleIds([]);
   };
 
-  const sendDMMessage = async (text: string) => {
-    if (!auth.currentUser || !activeDMThread) return;
+  /**
+   * Posts to any chat -- not only the open one -- so a recording made for a
+   * request can be delivered back into the conversation it was asked in.
+   * `attachment` is an optional card (src/lib/chatAttachments.ts); `text`
+   * is always its readable fallback.
+   */
+  const postChatMessage = async (
+    scope: 'dm' | 'circle',
+    containerId: string,
+    text: string,
+    attachment?: ChatAttachment
+  ): Promise<boolean> => {
+    if (!auth.currentUser) return false;
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
     if (trimmed.length > CHAT_MESSAGE_MAX_CHARS) {
       triggerToast(`Messages can be up to ${CHAT_MESSAGE_MAX_CHARS} characters.`);
-      return;
+      return false;
     }
     const nowISO = new Date().toISOString();
+    const message = {
+      fromUid: auth.currentUser.uid,
+      fromName: auth.currentUser.displayName || 'Anonymous Disciple',
+      fromAvatarUrl: auth.currentUser.photoURL || '',
+      text: trimmed,
+      createdAt: nowISO,
+      ...(attachment ? { attachment: cleanAttachment(attachment) } : {}),
+    };
     try {
-      await addDoc(collection(db, 'dmThreads', activeDMThread.id, 'messages'), {
-        fromUid: auth.currentUser.uid,
-        fromName: auth.currentUser.displayName || 'Anonymous Disciple',
-        fromAvatarUrl: '',
-        text: trimmed,
-        createdAt: nowISO,
-      });
-      await updateDoc(doc(db, 'dmThreads', activeDMThread.id), { lastMessage: trimmed, lastMessageAt: nowISO });
+      if (scope === 'dm') {
+        await addDoc(collection(db, 'dmThreads', containerId, 'messages'), message);
+        await updateDoc(doc(db, 'dmThreads', containerId), {
+          lastMessage: trimmed,
+          lastMessageAt: nowISO,
+          lastMessageFromUid: auth.currentUser.uid,
+        });
+      } else {
+        await addDoc(collection(db, 'circles', containerId, 'messages'), message);
+      }
+      return true;
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `dmThreads/${activeDMThread.id}/messages`);
-      triggerToast("You're no longer connected, so this can't be sent -- send a friend request to keep the conversation going.");
+      handleFirestoreError(err, OperationType.CREATE, `${scope === 'dm' ? 'dmThreads' : 'circles'}/${containerId}/messages`);
+      triggerToast(
+        scope === 'dm'
+          ? "This can't be sent -- you're no longer connected. Send a friend request to keep the conversation going."
+          : "Couldn't send that message -- please try again."
+      );
+      return false;
     }
+  };
+
+  const sendDMMessage = async (text: string, attachment?: ChatAttachment) => {
+    if (!activeDMThread) return false;
+    return postChatMessage('dm', activeDMThread.id, text, attachment);
   };
 
   // ==========================================
@@ -2539,26 +2595,9 @@ export function useAppState() {
     setActiveCircleMessages([]);
   };
 
-  const sendCircleMessage = async (text: string) => {
-    if (!auth.currentUser || !activeCircleChatId) return;
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    if (trimmed.length > CHAT_MESSAGE_MAX_CHARS) {
-      triggerToast(`Messages can be up to ${CHAT_MESSAGE_MAX_CHARS} characters.`);
-      return;
-    }
-    try {
-      await addDoc(collection(db, 'circles', activeCircleChatId, 'messages'), {
-        fromUid: auth.currentUser.uid,
-        fromName: auth.currentUser.displayName || 'Anonymous Disciple',
-        fromAvatarUrl: '',
-        text: trimmed,
-        createdAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `circles/${activeCircleChatId}/messages`);
-      triggerToast("Couldn't send that message -- please try again.");
-    }
+  const sendCircleMessage = async (text: string, attachment?: ChatAttachment) => {
+    if (!activeCircleChatId) return false;
+    return postChatMessage('circle', activeCircleChatId, text, attachment);
   };
 
   // Live DM inbox -- reloads automatically on sign-in/out.
@@ -2589,6 +2628,7 @@ export function useAppState() {
               otherAvatarUrl: data.participantAvatars?.[otherUid] || '',
               lastMessage: data.lastMessage || '',
               lastMessageAt: data.lastMessageAt,
+              lastMessageFromUid: data.lastMessageFromUid,
               createdAt: data.createdAt,
             } as DMThread;
           })
@@ -2968,7 +3008,7 @@ export function useAppState() {
       // READ first, while we're still a member (most of these are
       // members-only), then deleted.
       const circleRef = doc(db, 'circles', circleId);
-      const [circleSnap, membersSnap, plansSnap, messagesSnap, reactionsSnap, challengesSnap, bannedSnap] =
+      const [circleSnap, membersSnap, plansSnap, messagesSnap, reactionsSnap, challengesSnap, bannedSnap, responsesSnap] =
         await Promise.all([
           getDoc(circleRef),
           getDocs(collection(db, 'circles', circleId, 'members')),
@@ -2977,6 +3017,7 @@ export function useAppState() {
           getDocs(collection(db, 'circles', circleId, 'reactions')),
           getDocs(collection(db, 'circles', circleId, 'challenges')),
           getDocs(collection(db, 'circles', circleId, 'banned')),
+          getDocs(collection(db, 'circles', circleId, 'responses')),
         ]);
       const participantSnaps = await Promise.all(
         challengesSnap.docs.map((c) => getDocs(collection(c.ref, 'participants')))
@@ -2992,6 +3033,7 @@ export function useAppState() {
         ...participantSnaps.flatMap((s) => s.docs.map((d) => d.ref)),
         ...challengesSnap.docs.map((d) => d.ref),
         ...reactionsSnap.docs.map((d) => d.ref),
+        ...responsesSnap.docs.map((d) => d.ref),
         ...messagesSnap.docs.map((d) => d.ref),
         ...plansSnap.docs.map((d) => d.ref),
         ...bannedSnap.docs.map((d) => d.ref),
@@ -4326,6 +4368,9 @@ export function useAppState() {
   }, []);
 
   const signOut = async () => {
+    // Before signing out, while we still may: this phone shouldn't keep
+    // getting the old account's messages.
+    await push.unregisterPushToken();
     await firebaseSignOut(auth);
   };
 
@@ -4376,6 +4421,9 @@ export function useAppState() {
       book: item.book,
       chapter: item.chapter,
       verseNumber: item.verseNumber,
+      // Lets a friend's quiz (src/lib/chatAttachments.ts) name the exact
+      // translation this verse is being learned in.
+      translationId: item.translationId,
       status: item.status,
       orderIndex: item.orderIndex,
     }));
@@ -6944,10 +6992,189 @@ export function useAppState() {
       // this the studio render wouldn't appear until the next app launch.
       watchStudioRender(uid, id);
       triggerToast(`${titleSuffix} saved!`);
+      // Made for someone's request? Deliver it back into that chat.
+      void fulfillRecordingRequest(savedRec);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${uid}/recordings/${id}`);
     }
   };
+
+  // ==========================================
+  // CHAT CARDS: sharing a recording into a chat, recording requests, quizzes
+  // (see src/lib/chatAttachments.ts for the card shapes).
+  // ==========================================
+
+  /** Everyone in a chat except me: the other DM participant, or the circle's members. */
+  const chatAudienceUids = async (scope: 'dm' | 'circle', containerId: string): Promise<string[]> => {
+    const me = auth.currentUser?.uid;
+    if (scope === 'dm') return containerId.split('_').filter((uid) => uid !== me);
+    const snap = await getDocs(collection(db, 'circles', containerId, 'members'));
+    return snap.docs.map((d) => d.id).filter((uid) => uid !== me);
+  };
+
+  /**
+   * Makes one of my recordings playable by everyone in a chat, by adding
+   * them to its sharedRecordings copy (creating a 'direct' copy if the
+   * recording was private -- direct copies never show in anyone's feed).
+   * Merge-write, so it works whether or not a shared copy already exists.
+   */
+  const shareRecordingInto = async (rec: Recording, scope: 'dm' | 'circle', containerId: string): Promise<boolean> => {
+    if (!auth.currentUser) return false;
+    const uid = auth.currentUser.uid;
+    try {
+      const audience = await chatAudienceUids(scope, containerId);
+      const published = rec.sharedVisibility === 'circle' || rec.sharedVisibility === 'public';
+      await setDoc(
+        doc(db, 'sharedRecordings', rec.id),
+        stripUndefined({
+          ...rec,
+          ownerId: uid,
+          visibility: published ? rec.sharedVisibility : 'direct',
+          sharedWithUids: arrayUnion(...audience),
+          ...(published ? {} : { createdAt: serverTimestamp() }),
+        }),
+        { merge: true }
+      );
+      return true;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `sharedRecordings/${rec.id}`);
+      triggerToast("Couldn't share that recording -- please try again.");
+      return false;
+    }
+  };
+
+  const sendRecordingToChat = async (rec: Recording, scope: 'dm' | 'circle', containerId: string) => {
+    if (!rec.audioUrl) {
+      triggerToast('That recording is still uploading.');
+      return false;
+    }
+    if (!(await shareRecordingInto(rec, scope, containerId))) return false;
+    const attachment: RecordingAttachment = {
+      kind: 'recording',
+      sharedRecordingId: rec.id,
+      book: rec.book,
+      chapter: rec.chapter,
+      startVerse: rec.startVerse,
+      endVerse: rec.endVerse,
+      translation: rec.translation,
+      duration: rec.duration,
+      ownerName: auth.currentUser?.displayName || 'Someone',
+    };
+    return postChatMessage(scope, containerId, attachmentFallbackText(attachment, attachment.ownerName), attachment);
+  };
+
+  /** Opens a shared recording from a chat card in the normal player. */
+  const playChatRecording = async (sharedRecordingId: string) => {
+    const known = [...userRecordings, ...feedRecordings].find((r) => r.id === sharedRecordingId);
+    if (known) {
+      setSelectedRecording(known);
+      navigateTo('recordingDetail');
+      return;
+    }
+    try {
+      const snap = await getDoc(doc(db, 'sharedRecordings', sharedRecordingId));
+      if (!snap.exists()) {
+        triggerToast('That recording was removed.');
+        return;
+      }
+      const rec = { id: snap.id, ...snap.data() } as Recording;
+      setFeedRecordings((prev) => (prev.some((r) => r.id === rec.id) ? prev : [rec, ...prev]));
+      setSelectedRecording(rec);
+      navigateTo('recordingDetail');
+    } catch (err) {
+      console.error('Failed to open shared recording:', err);
+      triggerToast("You don't have access to that recording.");
+    }
+  };
+
+  // The request I said "I will" to and am now recording for. Held in a ref
+  // too, because persistRecording reads it from inside an async save.
+  type ActiveRecordingRequest = {
+    scope: 'dm' | 'circle';
+    containerId: string;
+    messageId: string;
+    requesterName: string;
+    attachment: RecordingRequestAttachment;
+  };
+  const [activeRecordingRequest, setActiveRecordingRequestState] = useState<ActiveRecordingRequest | null>(null);
+  const activeRecordingRequestRef = useRef<ActiveRecordingRequest | null>(null);
+  const setActiveRecordingRequest = (req: ActiveRecordingRequest | null) => {
+    activeRecordingRequestRef.current = req;
+    setActiveRecordingRequestState(req);
+  };
+
+  /** "I will": point the Record tab at the requested passage and go there. */
+  const startRecordingForRequest = (scope: 'dm' | 'circle', containerId: string, message: ChatMessage) => {
+    const a = message.attachment;
+    if (!a || a.kind !== 'recordingRequest') return;
+    void social.respondToCard(scope, containerId, message.id, 'willDo');
+    setRecordingBook(a.book);
+    setRecordingChapter(a.chapter);
+    setRecordingRangeStart(a.startVerse ?? null);
+    setRecordingRangeEnd(a.endVerse ?? a.startVerse ?? null);
+    setActiveRecordingRequest({ scope, containerId, messageId: message.id, requesterName: message.fromName, attachment: a });
+    if (scope === 'dm') closeDMThread();
+    else closeCircleChat();
+    selectTab('record');
+  };
+
+  const cancelRecordingRequest = () => setActiveRecordingRequest(null);
+
+  const fulfillRecordingRequest = async (rec: Recording) => {
+    const req = activeRecordingRequestRef.current;
+    if (!req) return;
+    // Only a recording of the asked-for chapter counts; anything else is
+    // just a normal save and the request stays open.
+    if (rec.book.toLowerCase() !== req.attachment.book.toLowerCase() || rec.chapter !== req.attachment.chapter) return;
+    setActiveRecordingRequest(null);
+    const sent = await sendRecordingToChat(rec, req.scope, req.containerId);
+    if (!sent) return;
+    await social.respondToCard(req.scope, req.containerId, req.messageId, 'done', { sharedRecordingId: rec.id });
+    triggerToast(`Sent to ${req.scope === 'dm' ? req.requesterName : 'the circle'}.`);
+  };
+
+  // Quizzes: the friend's shared verse list (only exists if they share it
+  // with friends) and whichever quiz I'm taking right now.
+  const loadFriendQuizVerses = async (friendUid: string) => {
+    try {
+      const snap = await getDoc(doc(db, 'profiles', friendUid, 'shared', 'memoryQueue'));
+      if (!snap.exists()) return null;
+      const items = (snap.data().items || []) as Array<{
+        book: string;
+        chapter: number;
+        verseNumber: number;
+        status: string;
+        translationId?: string;
+      }>;
+      // Only verses they've actually started -- you can't quiz someone on a
+      // verse still waiting in their queue.
+      return items.filter((i) => i.status !== 'queued');
+    } catch {
+      return null;
+    }
+  };
+
+  const [activeQuiz, setActiveQuiz] = useState<{
+    threadId: string;
+    messageId: string;
+    fromName: string;
+    attachment: QuizAttachment;
+  } | null>(null);
+
+  const openQuiz = (threadId: string, message: ChatMessage) => {
+    const a = message.attachment;
+    if (!a || a.kind !== 'quiz') return;
+    setActiveQuiz({ threadId, messageId: message.id, fromName: message.fromName, attachment: a });
+    navigateTo('quiz');
+  };
+
+  /** Records the score on the quiz card. Practice only -- never touches the review schedule. */
+  const finishQuiz = async (score: number) => {
+    if (!activeQuiz) return;
+    await social.respondToCard('dm', activeQuiz.threadId, activeQuiz.messageId, 'done', { score });
+  };
+
+  const closeQuiz = () => setActiveQuiz(null);
 
   const saveLiveRecordedAudio = async () => {
     const uri = audioRecorder.uri;
@@ -7140,7 +7367,154 @@ export function useAppState() {
     }
   };
 
+  const social = useSocial({
+    user,
+    friends,
+    myCircles,
+    dmThreads,
+    activeDMThread,
+    activeDMMessages,
+    activeCircleChatId,
+    activeCircleMessages,
+    triggerToast,
+    reloadFriends: () => {
+      loadFriends();
+      loadFriendRequests();
+    },
+  });
+  // Review reminders: the next week from the review engine's own calendar
+  // projection (the same one My Verses' calendar draws), so a reminder never
+  // promises reviews the app won't actually show. Today uses the live queue
+  // instead, so finishing today's reviews cancels today's reminder.
+  const reminderDays: ReminderDay[] = useMemo(() => {
+    if (!user || memoryQueue.length === 0) return [];
+    try {
+      const days = getMemoryCalendarProjection(
+        memoryQueue,
+        {
+          dailyPhaseWeeks,
+          weeklyPhaseMonths,
+          monthlyPhaseYears,
+          learningDays,
+          newVersesPace,
+          sabbathEnabled,
+          sabbathDay,
+          joinedPlans: joinedGroupPlanDetails,
+          memberships: joinedGroupPlanMemberships,
+          pausedAt,
+          pausedUntil,
+        },
+        7
+      );
+      const logicalToday = getLogicalDate(dayStartHour);
+      const dueNow = reviewsPaused
+        ? 0
+        : memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate, logicalToday)).length;
+      return days.map((d, i) =>
+        i === 0
+          ? { date: d.date, reviews: dueNow, learning: dueNow > 0 ? d.learningCount : 0 }
+          : { date: d.date, reviews: d.dueReviews.length, learning: d.learningCount + d.newVersesPulled }
+      );
+    } catch (err) {
+      console.error('Failed to project review reminders:', err);
+      return [];
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil, dayStartHour, reviewsPaused]);
+
+  const openPushTarget = (target: PushTarget) => {
+    switch (target.type) {
+      case 'dm':
+        void openDMThread(target.otherUid, target.otherName, '');
+        break;
+      case 'circle':
+        selectTab('community');
+        openCircle(target.circleId);
+        openCircleChat(target.circleId);
+        break;
+      case 'friendRequest':
+        navigateTo('findFriends');
+        break;
+      case 'nudge':
+        selectTab('profile');
+        break;
+      case 'reviewReminder':
+        selectTab('home');
+        break;
+    }
+  };
+
+  const push = usePushNotifications({
+    user,
+    onScreenChatKey:
+      currentScreen === 'dmThread' && activeDMThread
+        ? `dm_${activeDMThread.id}`
+        : currentScreen === 'circleChat' && activeCircleChatId
+          ? `circle_${activeCircleChatId}`
+          : null,
+    reminderDays,
+    onOpenTarget: openPushTarget,
+    triggerToast,
+  });
+
+  // Circle invite links (src/lib/invites.ts). A link that opens the app is
+  // acted on as soon as someone is signed in; before that (a brand-new
+  // person signing up from the invite), the code is kept on the device so
+  // the join still happens once their account exists.
+  const PENDING_INVITE_KEY = 'pendingCircleInvite';
+  const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(null);
+  useEffect(() => {
+    const take = (url: string | null) => {
+      const code = parseInviteCode(url);
+      if (!code) return;
+      setPendingInviteCode(code);
+      AsyncStorage.setItem(PENDING_INVITE_KEY, code).catch(() => undefined);
+    };
+    Linking.getInitialURL().then(take).catch(() => undefined);
+    AsyncStorage.getItem(PENDING_INVITE_KEY)
+      .then((code) => code && setPendingInviteCode((cur) => cur ?? code))
+      .catch(() => undefined);
+    const sub = Linking.addEventListener('url', (e) => take(e.url));
+    return () => sub.remove();
+  }, []);
+  useEffect(() => {
+    if (!user || !pendingInviteCode || showOnboarding) return;
+    const code = pendingInviteCode;
+    setPendingInviteCode(null);
+    AsyncStorage.removeItem(PENDING_INVITE_KEY).catch(() => undefined);
+    selectTab('community');
+    void joinCircleByCode(code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, pendingInviteCode, showOnboarding]);
+
+  // Blocked people vanish from every list on my own screens. (The rules
+  // separately stop them reaching me 1:1; in a circle's shared spaces this
+  // hiding is all a block can do.)
+  const { blockedUids } = social;
+  const visibleDmThreads = dmThreads.filter((t) => !blockedUids.has(t.otherUid));
+  const visibleActivityEvents = activityEvents.filter((e) => !blockedUids.has(e.uid));
+  const visibleFeedRecordings = feedRecordings.filter((r) => {
+    const owner = r.userId || (r as Recording & { ownerId?: string }).ownerId;
+    return !owner || !blockedUids.has(owner);
+  });
+  const visibleIncomingFriendRequests = incomingFriendRequests.filter((r) => !blockedUids.has(r.fromUid));
+  const visibleUserSearchResults = userSearchResults.filter((r) => !blockedUids.has(r.uid));
+  const visibleCircleMessages = activeCircleMessages.filter((m) => !blockedUids.has(m.fromUid));
+
   return {
+    ...social,
+    ...push,
+    // chat cards
+    sendRecordingToChat,
+    playChatRecording,
+    activeRecordingRequest,
+    startRecordingForRequest,
+    cancelRecordingRequest,
+    loadFriendQuizVerses,
+    activeQuiz,
+    openQuiz,
+    finishQuiz,
+    closeQuiz,
     // static reference data
     BOOKS,
 
@@ -7227,7 +7601,7 @@ export function useAppState() {
     handleMarkImportTap,
     resetImportTaps,
     handleFinishImportTagging,
-    feedRecordings, setFeedRecordings, loadingFeedRecordings, loadSharedRecordings, saveSharedRecordingToLibrary,
+    feedRecordings: visibleFeedRecordings, setFeedRecordings, loadingFeedRecordings, loadSharedRecordings, saveSharedRecordingToLibrary,
     audioSearchQuery, setAudioSearchQuery,
     activeFeedFilter, setActiveFeedFilter,
     feedBookFilter, setFeedBookFilter,
@@ -7261,17 +7635,18 @@ export function useAppState() {
     publicCircles, loadingPublicCircles,
     activeCircle, activeCircleMembers, activeCircleGroupPlans, loadingActiveCircle,
     circleFriends, loadCircleFriends,
-    activityEvents, loadingActivityEvents, loadActivityFeed,
+    activityEvents: visibleActivityEvents, loadingActivityEvents, loadActivityFeed,
     friends, loadingFriends, loadFriends,
-    incomingFriendRequests, outgoingFriendRequests, loadFriendRequests,
-    userSearchQuery, setUserSearchQuery, userSearchResults, searchingUsers, searchUsers,
+    incomingFriendRequests: visibleIncomingFriendRequests, outgoingFriendRequests, loadFriendRequests,
+    userSearchQuery, setUserSearchQuery, userSearchResults: visibleUserSearchResults, searchingUsers, searchUsers,
     sendFriendRequest, acceptFriendRequest, declineFriendRequest, cancelFriendRequest, removeFriend,
     accountabilityDailyCap, updateAccountabilityDailyCap,
     receivedAccountabilityNudges, loadingAccountabilityNudges, loadReceivedAccountabilityNudges,
     canSendAccountabilityNudge, sendAccountabilityNudge, markAccountabilityNudgeRead, dismissAccountabilityNudge,
-    dmThreads, loadingDmThreads, activeDMThread, activeDMMessages, loadingActiveDMMessages, activeDMThreadActive,
-    openDMThread, closeDMThread, sendDMMessage,
-    activeCircleChatId, activeCircleMessages, loadingActiveCircleMessages,
+    dmThreads: visibleDmThreads, loadingDmThreads, activeDMThread, activeDMMessages, loadingActiveDMMessages,
+    activeDMThreadActive: activeDMThreadActive && !blockedUids.has(activeDMThread?.otherUid ?? ''),
+    openDMThread, closeDMThread, sendDMMessage, postChatMessage,
+    activeCircleChatId, activeCircleMessages: visibleCircleMessages, loadingActiveCircleMessages,
     openCircleChat, closeCircleChat, sendCircleMessage,
     reactionsByMessageId, toggleReaction,
     activeChallenges, loadingActiveChallenges, myChallengeBadges,

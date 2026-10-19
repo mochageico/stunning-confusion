@@ -271,6 +271,7 @@ const dmThread: DMThread = {
   otherAvatarUrl: '',
   lastMessage: 'Did you finish Romans 8 yet?',
   lastMessageAt: iso(0, 8),
+  lastMessageFromUid: 'u2',
   createdAt: iso(-30),
 };
 const msgs = (who: [string, string][]) =>
@@ -395,7 +396,15 @@ export function useDemoState(real: AppState): AppState {
     ['u2', 'Morning all! Anyone else stuck on verse 38?'],
     ['demo', 'Yes — the list of "neither… nor" is brutal.'],
     ['u2', 'I sing it. Helps a lot.'],
-  ]);
+    ['demo', 'Asked for a recording of Romans 8:31-39'],
+    ['u3', 'Shared a recording of Psalms 23'],
+  ]).map((m, i) => ({
+    ...m,
+    id: `cm${i}`,
+    fromName: m.fromUid === 'demo' ? 'Micah' : m.fromUid === 'u3' ? 'David Kim' : 'Sarah Miller',
+  }));
+  (circleMsgs[3] as any).attachment = { kind: 'recordingRequest', book: 'Romans', chapter: 8, startVerse: 31, endVerse: 39 };
+  (circleMsgs[4] as any).attachment = { kind: 'recording', sharedRecordingId: 'r1', book: 'Psalms', chapter: 23, translation: 'BSB', duration: 95, ownerName: 'David Kim' };
   const overrides: Partial<AppState> & Record<string, unknown> = {
     user: DEMO_USER,
     loadingAuth: false,
@@ -440,6 +449,29 @@ export function useDemoState(real: AppState): AppState {
     ],
     myChallengeBadges: [],
     circleFriends: members.slice(1),
+    // Social additions (block/report, unread, chat cards). Sarah's thread and
+    // the first circle's chat show as unread; the guidelines are accepted so
+    // the sheet doesn't cover every screen (?guidelines=1 shows it).
+    guidelinesAcceptedAt: params.get('guidelines') === '1' ? null : iso(-10),
+    guidelinesPromptOpen: params.get('guidelines') === '1',
+    isDMThreadUnread: (t: DMThread) => t.id === 'dm1',
+    isCircleChatUnread: (id: string) => id === 'c1',
+    unreadDMCount: 1,
+    unreadCircleCount: 1,
+    readMarkerFor: () => new Date(now - 2.5 * 3600000).toISOString(),
+    blockedUsers: params.get('blocked') === '1' ? [{ uid: 'u9', displayName: 'Chris Stone', blockedAt: iso(-2) }] : [],
+    blockedUids: new Set<string>(),
+    notificationPermission: params.get('notif') === 'off' ? 'undetermined' : 'granted',
+    notificationPrefs: { messages: true, circleChat: true, friendActivity: true, reviewReminder: true, reminderHour: 8, reminderMinute: 0, mutedCircleIds: [] },
+    notificationAskReason: params.get('ask') === '1' ? 'Know when Sarah replies?' : null,
+    responsesByMessageId: {
+      m3: [{ id: 'm3_demo', messageId: 'm3', uid: 'demo', name: 'Micah', status: 'willDo', updatedAt: iso(0, 9) }],
+      m4: [{ id: 'm4_demo', messageId: 'm4', uid: 'demo', name: 'Micah', status: 'done', score: 92, updatedAt: iso(0, 9) }],
+      cm3: [
+        { id: 'cm3_u3', messageId: 'cm3', uid: 'u3', name: 'David Kim', status: 'done', sharedRecordingId: 'r1', updatedAt: iso(0, 9) },
+        { id: 'cm3_u7', messageId: 'cm3', uid: 'u7', name: 'Tom Alvarez', status: 'willDo', updatedAt: iso(0, 9) },
+      ],
+    },
   };
   if (s === 'onboarding') overrides.showOnboarding = true;
   if (s === 'tour') overrides.showTour = true;
@@ -449,11 +481,18 @@ export function useDemoState(real: AppState): AppState {
   if (s === 'recordingDetail') overrides.selectedRecording = recordings[0] as any;
   if (s === 'dmThread') {
     overrides.activeDMThread = dmThread;
-    overrides.activeDMMessages = msgs([
+    const base: any[] = msgs([
       ['u2', 'Did you finish Romans 8 yet?'],
       ['demo', 'Up to verse 29! 28 took me forever.'],
       ['u2', 'Ha. Want to race me to the end?'],
+      ['u2', 'Asked for a recording of Psalms 23'],
+      ['u2', 'Sarah Miller quizzed you on John 15:5'],
+      ['demo', 'Shared Romans 8:28 (BSB)'],
     ]);
+    base[3].attachment = { kind: 'recordingRequest', book: 'Psalms', chapter: 23 } as any;
+    base[4].attachment = { kind: 'quiz', toUid: 'demo', translationId: 'BSB', book: 'John', bookId: 'JHN', chapter: 15, verse: 5, hidePercent: 50 } as any;
+    base[5].attachment = { kind: 'verse', translationId: 'BSB', book: 'Romans', bookId: 'ROM', chapter: 8, startVerse: 28, endVerse: 28 } as any;
+    overrides.activeDMMessages = base;
     overrides.loadingActiveDMMessages = false;
     overrides.activeDMThreadActive = true;
   }
@@ -461,6 +500,24 @@ export function useDemoState(real: AppState): AppState {
     overrides.activeCircleChatId = 'c1';
     overrides.activeCircleMessages = circleMsgs;
     overrides.loadingActiveCircleMessages = false;
+  }
+  if (s === 'quiz') {
+    overrides.activeQuiz = {
+      threadId: 'dm1',
+      messageId: 'm4',
+      fromName: 'Sarah Miller',
+      attachment: { kind: 'quiz', toUid: 'demo', translationId: 'BSB', book: 'John', bookId: 'JHN', chapter: 15, verse: 5, hidePercent: 50 },
+    } as any;
+  }
+  // `request=1` shows the Record tab while recording for someone's request.
+  if (params.get('request') === '1') {
+    overrides.activeRecordingRequest = {
+      scope: 'dm',
+      containerId: 'dm1',
+      messageId: 'm3',
+      requesterName: 'Sarah Miller',
+      attachment: { kind: 'recordingRequest', book: 'Psalms', chapter: 23 },
+    } as any;
   }
   if (s === 'memberProfile') {
     overrides.selectedUserProfile = {

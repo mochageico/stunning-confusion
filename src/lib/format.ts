@@ -105,3 +105,10 @@ export function formatDuration(totalSeconds: number, style: 'clock' | 'words' | 
   if (hours === 0 && (seconds > 0 || parts.length === 0)) parts.push(`${seconds}${sec}`);
   return parts.join(' ');
 }
+
+/** Time of day for chat messages: "9:41 AM". */
+export function formatClockTime(value: Date | string | number): string {
+  const d = toDate(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}

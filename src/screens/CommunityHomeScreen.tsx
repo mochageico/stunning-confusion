@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Award, Check, ChevronRight, MessageCircle, Plus, Search, UserPlus, Users } from 'lucide-react-native';
 
@@ -23,7 +24,18 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
     friends,
     incomingFriendRequests,
     navigateTo,
+    unreadDMCount,
+    isCircleChatUnread,
+    guidelinesAcceptedAt,
+    requireCommunityGuidelines,
   } = state;
+
+  // First visit: ask once for the community guidelines (App Store 1.2).
+  // undefined means still loading -- don't flash the sheet.
+  useEffect(() => {
+    if (guidelinesAcceptedAt === null) requireCommunityGuidelines();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guidelinesAcceptedAt]);
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -35,13 +47,26 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
           title="Community"
           subtitle="Memorize alongside friends and circles."
           actions={
-            <AppIconButton
-              Icon={MessageCircle}
-              variant="outline"
-              diameter={36}
-              accessibilityLabel="Messages"
-              onPress={() => navigateTo('messages')}
-            />
+            <View>
+              <AppIconButton
+                Icon={MessageCircle}
+                variant="outline"
+                diameter={36}
+                accessibilityLabel={unreadDMCount > 0 ? `Messages, ${unreadDMCount} unread` : 'Messages'}
+                onPress={() => navigateTo('messages')}
+              />
+              {unreadDMCount > 0 ? (
+                <View
+                  pointerEvents="none"
+                  className="bg-accent rounded-full items-center justify-center border-2 border-canvas"
+                  style={{ position: 'absolute', top: -6, right: -6, minWidth: space(20), height: space(20), paddingHorizontal: space(4) }}
+                >
+                  <AppText variant="micro" maxScale={1.15} className="font-sans font-bold text-on-accent">
+                    {unreadDMCount > 9 ? '9+' : unreadDMCount}
+                  </AppText>
+                </View>
+              ) : null}
+            </View>
           }
         />
 
@@ -73,6 +98,14 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
                   title={c.name}
                   subtitle={`${c.ownerId === user?.uid ? 'Leader' : 'Member'} · ${c.isPublic ? 'Public' : 'Private'}`}
                   onPress={() => openCircle(c.id)}
+                  accessory={
+                    isCircleChatUnread(c.id) ? (
+                      <View className="flex-row items-center" style={{ gap: space(6) }}>
+                        <Badge label="New messages" tone="accent" />
+                        <ChevronRight size={18} color={palette.ink3} strokeWidth={2.4} />
+                      </View>
+                    ) : undefined
+                  }
                 />
               ))}
             </GroupedList>

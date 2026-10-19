@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { Bell, MessageCircle, Trophy, UserMinus, UserPlus, Users } from 'lucide-react-native';
+import { Ban, Bell, Flag, MessageCircle, Trophy, UserMinus, UserPlus, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { ChallengeCreateSheet } from '../components/ChallengeCard';
+import { BlockConfirmDialog, ReportSheet } from '../components/chat/ReportSheet';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
 import { Avatar, Badge, Dialog, GroupedList, ListRow, ScreenHeader, SectionHeader, StatRow } from '../components/blocks';
 
@@ -45,8 +46,11 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
   const [nudgeMessage, setNudgeMessage] = useState('');
   const [showRemoveFriendConfirm, setShowRemoveFriendConfirm] = useState(false);
   const [showChallengeSheet, setShowChallengeSheet] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [showBlock, setShowBlock] = useState(false);
 
   if (!selectedUserProfile) return null;
+  const blocked = state.blockedUids.has(selectedUserProfile.uid);
 
   const prevScreen = backHistory[backHistory.length - 1]?.screen;
   const isSelf = selectedUserProfile.uid === user?.uid;
@@ -229,12 +233,44 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
 
         {/* Removing a friend sits on its own at the foot, well away from the
             buttons you use on a friend. */}
-        {!isSelf && isFriend && (
+        {!isSelf && (
           <GroupedList>
-            <ListRow Icon={UserMinus} title="Remove friend" destructive accessory="none" onPress={() => setShowRemoveFriendConfirm(true)} />
+            {isFriend ? (
+              <ListRow Icon={UserMinus} title="Remove friend" destructive accessory="none" onPress={() => setShowRemoveFriendConfirm(true)} />
+            ) : null}
+            <ListRow Icon={Flag} title={`Report ${selectedUserProfile.name.split(' ')[0]}`} accessory="none" onPress={() => setShowReport(true)} />
+            {blocked ? (
+              <ListRow Icon={Ban} title="Unblock" accessory="none" onPress={() => state.unblockUser(selectedUserProfile.uid)} />
+            ) : (
+              <ListRow Icon={Ban} title={`Block ${selectedUserProfile.name.split(' ')[0]}`} destructive accessory="none" onPress={() => setShowBlock(true)} />
+            )}
           </GroupedList>
         )}
       </ScrollView>
+
+      <ReportSheet
+        visible={showReport}
+        title={`Report ${selectedUserProfile.name}`}
+        subjectName={blocked ? undefined : selectedUserProfile.name.split(' ')[0]}
+        onClose={() => setShowReport(false)}
+        onSubmit={async ({ reason, note, alsoBlock }) => {
+          await state.reportContent({
+            kind: 'user',
+            targetUid: selectedUserProfile.uid,
+            targetPath: `profiles/${selectedUserProfile.uid}`,
+            contentSnapshot: selectedUserProfile.name,
+            reason,
+            note,
+          });
+          if (alsoBlock) await state.blockUser(selectedUserProfile.uid, selectedUserProfile.name);
+        }}
+      />
+      <BlockConfirmDialog
+        visible={showBlock}
+        name={selectedUserProfile.name.split(' ')[0]}
+        onClose={() => setShowBlock(false)}
+        onConfirm={() => state.blockUser(selectedUserProfile.uid, selectedUserProfile.name)}
+      />
 
       {!isSelf && isFriend && (
         <ChallengeCreateSheet

@@ -44,9 +44,12 @@ const referenceLabel = (c: Pick<ChallengeRange, 'book' | 'startChapter' | 'endCh
 // -- the same shape as the New Group Plan form directly above it on that
 // screen. A panel that slides over the whole page to collect four fields is
 // heavier than the page it covers.
-function ChallengeRangeForm({
+// Also exported as PassageRangeForm for the chat sheets that pick a passage
+// (sharing a verse, asking for a recording) -- same fields, its own hint.
+export function ChallengeRangeForm({
   inline,
   submitLabel,
+  hint = 'Leave the verses blank to race through the whole chapter.',
   accessoryID,
   onSubmit,
   onCancel,
@@ -54,6 +57,8 @@ function ChallengeRangeForm({
   /** Cancel + confirm on one row, for the panel that expands in place on the circle page. */
   inline?: boolean;
   submitLabel: string;
+  /** The line under the verse fields. */
+  hint?: string;
   accessoryID?: string;
   onSubmit: (range: ChallengeRange) => void;
   onCancel: () => void;
@@ -147,7 +152,7 @@ function ChallengeRangeForm({
         </View>
       </View>
       <AppText variant="caption" className="font-sans text-ink-3">
-        Leave the verses blank to race through the whole chapter.
+        {hint}
       </AppText>
 
       {inline ? (
@@ -344,3 +349,5 @@ export function ChallengeCard({
     </View>
   );
 }
+
+export { ChallengeRangeForm as PassageRangeForm };

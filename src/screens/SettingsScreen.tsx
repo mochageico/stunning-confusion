@@ -21,6 +21,7 @@ import {
 import { AppButton, AppText, AppTextInput, ChoiceCard, ToggleRow, useScaledSpace } from '../components/design';
 import { Dialog, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { ACCENTS, useAccent, useThemeColors } from '../components/theme';
+import { BlockedPeopleSettings, GuidelinesRow, NotificationSettings } from '../components/SocialSettings';
 
 const formatMB = (bytes: number) => {
   const mb = bytes / (1024 * 1024);
@@ -311,6 +312,8 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           <ListRow title="Signed in with" value={providerLabel} />
         </GroupedList>
 
+        <NotificationSettings state={state} />
+
         <AccentColorPicker />
 
         <PracticeSettings />
@@ -383,6 +386,10 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           ]}
           caption="The most nudges you'll get in a day, from all friends together. A friend is told if you've reached it."
         />
+
+        <BlockedPeopleSettings state={state} />
+
+        <GuidelinesRow state={state} />
 
         <GroupedList footer="Away for a while? Pausing stops reviews from coming due and from counting as missed until you resume.">
           <ListRow

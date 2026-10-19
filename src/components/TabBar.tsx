@@ -66,10 +66,13 @@ export function FloatingTabBar<T extends string>({
   tabs,
   current,
   onSelect,
+  dots,
 }: {
   tabs: TabItem<T>[];
   current: T;
   onSelect: (id: T) => void;
+  /** Tabs with something new (unread messages, a friend request): a small accent dot. */
+  dots?: Partial<Record<T, boolean>>;
 }) {
   const palette = useThemeColors();
   return (
@@ -91,14 +94,20 @@ export function FloatingTabBar<T extends string>({
             onPress={() => onSelect(tab.id)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={tab.label}
+            accessibilityLabel={dots?.[tab.id] ? `${tab.label}, new activity` : tab.label}
             // grow, not flex-1: each tab starts from its own label's width and
             // shares out what's left, so with five tabs "Community" gets the
             // room it needs at large text on an SE (equal fifths cut it off).
             className={`grow items-center justify-center rounded-full ${active ? 'bg-accent-soft' : 'active:bg-fill'}`}
             style={{ gap: 2, paddingHorizontal: 4 }}
           >
-            <Icon size={20} color={active ? palette.accent : palette.ink3} strokeWidth={active ? 2.4 : 2} />
+            <View>
+              <Icon size={20} color={active ? palette.accent : palette.ink3} strokeWidth={active ? 2.4 : 2} />
+              {dots?.[tab.id] ? (
+                // layout-ok: a fixed 8pt dot pinned to the icon's corner
+                <View className="bg-danger rounded-full border border-surface" style={{ position: 'absolute', top: -2, right: -4, width: 9, height: 9 }} />
+              ) : null}
+            </View>
             {/* Capped, like iOS's own tab bar: five labels share a fixed row,
                 and at 1.5x "Community" ran into its neighbours on an SE. */}
             <AppText

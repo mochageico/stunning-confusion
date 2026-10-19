@@ -1,3 +1,4 @@
+import type { ChatAttachment } from './lib/chatAttachments';
 export interface VerseState {
   book: string;
   chapter: number;
@@ -456,6 +457,8 @@ export interface DMThread {
   otherAvatarUrl: string;
   lastMessage: string;
   lastMessageAt: string;
+  /** Who sent lastMessage -- absent on threads from before unread dots. */
+  lastMessageFromUid?: string;
   createdAt: string;
 }
 
@@ -470,6 +473,8 @@ export interface ChatMessage {
   fromAvatarUrl: string;
   text: string;
   createdAt: string;
+  /** Optional card (verse, recording, request, quiz) -- see src/lib/chatAttachments.ts. */
+  attachment?: ChatAttachment;
 }
 
 // One emoji reaction from one user on one message -- doc id is always

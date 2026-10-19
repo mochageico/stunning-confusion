@@ -22,7 +22,7 @@ export default function MessagesScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
-  const { dmThreads, loadingDmThreads, openDMThread, handleBack, user, friends, myChallengeBadges } = state;
+  const { dmThreads, loadingDmThreads, openDMThread, handleBack, user, friends, myChallengeBadges, isDMThreadUnread } = state;
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -52,12 +52,25 @@ export default function MessagesScreen({ state }: { state: AppState }) {
               const hasChallenge = myChallengeBadges.some((c) => c.dmThreadId === thread.id);
               // The badges drop out past 1.3x: they'd squeeze the name.
               const showBadge = scale < 1.3 && (hasChallenge || !isFriend);
+              const unread = isDMThreadUnread(thread);
+              const mine = thread.lastMessageFromUid === user?.uid;
               return (
                 <ListRow
                   key={thread.id}
-                  leading={<Avatar name={thread.otherName} photoUri={thread.otherAvatarUrl || null} size={40} />}
-                  title={thread.otherName}
-                  subtitle={thread.lastMessage || "No messages yet"}
+                  leading={
+                    <View>
+                      <Avatar name={thread.otherName} photoUri={thread.otherAvatarUrl || null} size={40} />
+                      {unread ? (
+                        <View
+                          accessibilityLabel="Unread"
+                          className="bg-accent rounded-full border-2 border-surface"
+                          style={{ position: 'absolute', top: -1, right: -1, width: space(13), height: space(13) }}
+                        />
+                      ) : null}
+                    </View>
+                  }
+                  title={unread ? `${thread.otherName} · new` : thread.otherName}
+                  subtitle={thread.lastMessage ? `${mine ? 'You: ' : ''}${thread.lastMessage}` : 'No messages yet'}
                   subtitleLines={1}
                   value={timeAgo(thread.lastMessageAt)}
                   onPress={() => openDMThread(thread.otherUid, thread.otherName, thread.otherAvatarUrl)}

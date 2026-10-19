@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join a circle · Scripture Memory</title>
+  <meta name="description" content="You're invited to memorize Scripture together.">
+  <!--
+    Circle invite page (see src/lib/invites.ts). Served by Firebase Hosting at
+    /join?code=ABC123. It can't look the circle up -- private circles are
+    members-only -- so it just shows the code and hands off to the app.
+    Fill in the store links below once the app is listed.
+  -->
+  <style>
+    :root { --bg:#F6F3EC; --card:#FFFFFF; --ink:#1B1B1B; --ink2:#55524C; --line:#E4DFD4; --accent:#1F3A5F; --on:#FFFFFF; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#151514; --card:#1F1E1C; --ink:#F2EFE8; --ink2:#B7B2A8; --line:#34322E; --accent:#8FB0DA; --on:#10161F; } }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    main { max-width:420px; margin:0 auto; padding:48px 16px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:24px; text-align:center; }
+    h1 { font-size:26px; line-height:1.2; margin:0 0 8px; }
+    p { color:var(--ink2); margin:0 0 20px; }
+    .code { font-size:30px; font-weight:700; letter-spacing:6px; padding:14px; border:1px dashed var(--line); border-radius:12px; margin:0 0 20px; }
+    a.btn { display:block; padding:14px 16px; border-radius:12px; text-decoration:none; font-weight:600; margin-top:10px; }
+    a.primary { background:var(--accent); color:var(--on); }
+    a.secondary { border:1px solid var(--line); color:var(--ink); }
+    .small { font-size:14px; margin-top:20px; }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>You're invited to a circle</h1>
+      <p>Memorize Scripture together in Scripture Memory: shared plans, challenges and a group chat.</p>
+      <div class="code" id="code">——</div>
+      <a class="btn primary" id="open" href="#">Open in Scripture Memory</a>
+      <a class="btn secondary hidden" id="ios" href="#">Get it on the App Store</a>
+      <a class="btn secondary hidden" id="android" href="#">Get it on Google Play</a>
+      <p class="small">Already have the app? You can also enter the code under Community &gt; Find a circle.</p>
+    </div>
+  </main>
+  <script>
+    // Fill these in once the app is in the stores; the buttons stay hidden until then.
+    var APP_STORE_URL = '';
+    var PLAY_STORE_URL = '';
+
+    var raw = new URLSearchParams(location.search).get('code') || '';
+    var code = raw.replace(/[^A-Za-z0-9_-]/g, '').toUpperCase().slice(0, 32);
+    document.getElementById('code').textContent = code || 'No code';
+    var open = document.getElementById('open');
+    if (code) open.href = 'scripturememory://join?code=' + encodeURIComponent(code);
+    else open.classList.add('hidden');
+    if (APP_STORE_URL) { var i = document.getElementById('ios'); i.href = APP_STORE_URL; i.classList.remove('hidden'); }
+    if (PLAY_STORE_URL) { var a = document.getElementById('android'); a.href = PLAY_STORE_URL; a.classList.remove('hidden'); }
+  </script>
+</body>
+</html>

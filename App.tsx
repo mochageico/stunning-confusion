@@ -57,6 +57,9 @@ import FindFriendsScreen from './src/screens/FindFriendsScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import DMThreadScreen from './src/screens/DMThreadScreen';
 import CircleChatScreen from './src/screens/CircleChatScreen';
+import QuizScreen from './src/screens/QuizScreen';
+import { CommunityGuidelinesSheet } from './src/components/CommunityGuidelinesSheet';
+import { NotificationAskSheet } from './src/components/NotificationAskSheet';
 import { APP_FONTS, AppButton, AppIconButton, AppText, ChoiceCard, FontScaleOverrideProvider, useScaledSpace } from './src/components/design';
 import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from './src/components/blocks';
 import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
@@ -130,6 +133,9 @@ function Screens({ state }: { state: AppState }) {
   }
   if (state.currentScreen === 'circleChat' && state.activeCircleChatId) {
     return <CircleChatScreen state={state} />;
+  }
+  if (state.currentScreen === 'quiz' && state.activeQuiz) {
+    return <QuizScreen state={state} />;
   }
 
   if (state.currentTab === 'home') {
@@ -469,7 +475,7 @@ function AppShell() {
   // bottom edge is the true physical screen bottom instead of sitting above
   // a sibling bar it doesn't know about, which was undershooting how far the
   // composer needs to rise above the keyboard.
-  const chatScreenActive = state.currentScreen === 'dmThread' || state.currentScreen === 'circleChat';
+  const chatScreenActive = state.currentScreen === 'dmThread' || state.currentScreen === 'circleChat' || state.currentScreen === 'quiz';
   // The bars also step aside while the keyboard is up, so a text field near
   // the bottom isn't squeezed against them. Unmounted, never hidden by style.
   const keyboardHeight = useKeyboardHeight();
@@ -515,7 +521,12 @@ function AppShell() {
       {showBars && (
         <BottomBars>
           <NowPlayingBar state={state} />
-          <FloatingTabBar tabs={TABS} current={state.currentTab} onSelect={state.selectTab} />
+          <FloatingTabBar
+            tabs={TABS}
+            current={state.currentTab}
+            onSelect={state.selectTab}
+            dots={{ community: state.unreadDMCount + state.unreadCircleCount + state.incomingFriendRequests.length > 0 }}
+          />
         </BottomBars>
       )}
 
@@ -587,6 +598,9 @@ function AppShell() {
           </SafeAreaView>
         </View>
       )}
+
+      <CommunityGuidelinesSheet state={state} />
+      <NotificationAskSheet state={state} />
 
       <ToastLayer state={state} />
 

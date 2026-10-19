@@ -106,6 +106,11 @@ module.exports = {
           iosUrlScheme: 'com.googleusercontent.apps.280157168827-1b1uhb645h0g3kevfc551v9426ftprpd',
         },
       ],
+      // Push for messages/friend activity and the local review reminder.
+      // Remote push also needs credentials: EAS sets up the iOS push key on
+      // the next `eas build`; Android needs a google-services.json (FCM) --
+      // see SOCIAL_FEATURES.md.
+      ['expo-notifications', { color: '#1F3A5F' }],
       './plugins/withPodfileModularHeaders.js',
     ],
     extra: {

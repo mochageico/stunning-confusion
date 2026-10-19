@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, Share, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import * as Clipboard from 'expo-clipboard';
 import { BookOpen, ChevronRight, Link as LinkIcon, LogOut, MessageCircle, Share2, Sliders, Trash2, Trophy } from 'lucide-react-native';
 
@@ -10,6 +11,7 @@ import { ChallengeCreateInline } from '../components/ChallengeCard';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
 import { Avatar, Badge, CollapsibleSection, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SegmentedControl } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+import { buildInviteUrl } from '../lib/invites';
 
 const PRIVACY_OPTIONS = [
   { id: 'public' as const, label: 'Public' },
@@ -109,7 +111,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setIsEditingCircleSettings(false);
   };
 
-  const shareUrl = activeCircle ? `https://scripturepacing.app/join?circleId=${activeCircle.id}&code=${activeCircle.inviteCode}` : '';
+  const shareUrl = activeCircle ? buildInviteUrl(activeCircle.inviteCode) : '';
 
   const closeConsole = () => {
     setViewingGroupDetail(false);
@@ -216,7 +218,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           size="lg"
           variant="secondary"
           Icon={MessageCircle}
-          label="Open group chat"
+          label={state.isCircleChatUnread(activeCircle.id) ? 'Open group chat · new messages' : 'Open group chat'}
           onPress={() => openCircleChat(activeCircle.id)}
         />
 
@@ -512,17 +514,18 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         }
       />
 
-      {/* Invite */}
+      {/* Invite: the link (to text or email), a QR code (to show someone
+          in person -- their camera opens the invite page), and the code. */}
       <Dialog
         visible={showInvite}
         onClose={() => setShowInvite(false)}
+        placement="sheet"
         title="Invite people"
-        message="Anyone with this code or link can join from Find a circle."
+        message="Send the link, or let someone scan the code with their phone's camera. Either one brings them straight into this circle."
         actions={
           <>
-            <AppButton variant="quiet" label="Done" onPress={() => setShowInvite(false)} />
             <AppButton
-              variant="primary"
+              variant="secondary"
               label="Copy link"
               Icon={LinkIcon}
               onPress={async () => {
@@ -530,14 +533,32 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                 triggerToast('Link copied.');
               }}
             />
+            <AppButton
+              variant="primary"
+              label="Share"
+              Icon={Share2}
+              onPress={() =>
+                Share.share({
+                  message: `Join "${activeCircle.name}" on Scripture Memory, so we can memorize together: ${shareUrl}
+
+Or enter code ${activeCircle.inviteCode} under Community > Find a circle.`,
+                }).catch(() => undefined)
+              }
+            />
           </>
         }
       >
-        <View className="bg-surface-2 border border-line rounded-card items-center" style={{ padding: space(14), gap: space(2) }}>
-          <AppText variant="caption" className="font-sans text-ink-3">Invite code</AppText>
-          <AppText variant="title" className="font-sans font-bold text-ink" style={{ letterSpacing: 3 }} selectable>
-            {activeCircle.inviteCode}
-          </AppText>
+        <View className="items-center" style={{ gap: space(12) }}>
+          {/* White behind the code whatever the theme: scanners need contrast. */}
+          <View className="rounded-card border border-line" style={{ padding: space(14), backgroundColor: '#FFFFFF' }}>
+            <QRCode value={shareUrl} size={space(180)} color="#111111" backgroundColor="#FFFFFF" />
+          </View>
+          <View className="bg-surface-2 border border-line rounded-card items-center self-stretch" style={{ padding: space(12), gap: space(2) }}>
+            <AppText variant="caption" className="font-sans text-ink-3">Invite code</AppText>
+            <AppText variant="title" className="font-sans font-bold text-ink" style={{ letterSpacing: 3 }} selectable>
+              {activeCircle.inviteCode}
+            </AppText>
+          </View>
         </View>
       </Dialog>
 

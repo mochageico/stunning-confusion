@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookOpen, Check, FileAudio, ListMusic, Mic, Pause, Play, RotateCcw, Square } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
+import { passageLabel } from '../lib/chatAttachments';
 import { FadeInView } from '../components/ui';
 import { RecordPassageSheet, type RecordPassage } from '../components/RecordPassageSheet';
 import { textScriptFor, translationLabel } from '../data';
@@ -219,6 +220,22 @@ export default function RecordScreen({ state }: { state: AppState }) {
         />
 
         <SegmentedControl value={subMode} onChange={setSubMode} accessibilityLabel="Record or import" options={SUB_MODES} />
+
+        {/* Recording for someone's request (said "I will" in a chat). Saving
+            a recording of this chapter sends it back to them automatically. */}
+        {state.activeRecordingRequest ? (
+          <View className="bg-accent-soft border border-accent rounded-card flex-row items-center" style={{ padding: space(12), gap: space(10) }}>
+            <View className="flex-1" style={{ gap: space(2) }}>
+              <AppText variant="label" className="font-sans font-semibold text-ink">
+                Recording for {state.activeRecordingRequest.scope === 'dm' ? state.activeRecordingRequest.requesterName : 'your circle'}
+              </AppText>
+              <AppText variant="caption" className="font-sans text-ink-2">
+                Save a recording of {passageLabel(state.activeRecordingRequest.attachment)} and it's sent to the chat for you.
+              </AppText>
+            </View>
+            <AppButton size="sm" variant="quiet" label="Cancel" onPress={state.cancelRecordingRequest} />
+          </View>
+        ) : null}
 
         {/* The passage, as one row. Its pickers are in a sheet. */}
         <GroupedList>

@@ -17,6 +17,19 @@ import { logger } from 'firebase-functions';
 // would bury it in 700 lines of ffmpeg argument construction.
 export { fetchApiBibleChapter, purgeApiBibleCache } from './apiBible';
 
+// Social push notifications (messages, friend activity, reports) -- also
+// their own module; they share only the Firebase app with this file.
+export {
+  notifyDmMessage,
+  notifyCircleMessage,
+  notifyFriendRequest,
+  notifyNudge,
+  notifyChallenge,
+  notifyDmCardAnswer,
+  notifyCircleCardAnswer,
+  notifyReport,
+} from './social';
+
 const app = initializeApp();
 
 // The app does NOT use the (default) Firestore database — see
