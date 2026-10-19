@@ -1,0 +1,444 @@
+BOOKS: { ot: BibleBook[]; nt: BibleBook[]; }
+abortReviewSession: () => void
+acceptChallenge: (challenge: Challenge) => Promise<void>
+acceptCommunityGuidelines: () => Promise<void>
+acceptFriendRequest: (request: FriendRequest) => Promise<void>
+accountabilityDailyCap: number
+activeChallenges: Challenge[]
+activeChapterTextError: string | null
+activeChapterTextLoading: boolean
+activeChapterVerses: VerseState[]
+activeCircle: Circle | null
+activeCircleChallenges: GroupChallenge[]
+activeCircleChatId: string | null
+activeCircleGroupPlans: GroupPlan[]
+activeCircleMembers: CircleMember[]
+activeCircleMessages: ChatMessage[]
+activeDMMessages: ChatMessage[]
+activeDMThread: DMThread | null
+activeDMThreadActive: boolean
+activeFeedFilter: "friends" | "global" | "group"
+activeGroupId: string
+activeModal: "listen" | "learn" | null
+activeQuiz: { threadId: string; messageId: string; fromName: string; attachment: QuizAttachment; } | null
+activeRecordingRequest: ActiveRecordingRequest | null
+activityEvents: ActivityEvent[]
+activityLast15Days: { day: string; count: number; }[]
+activityLast90Days: { day: string; count: number; }[]
+addChapterPhoto: (book: string, chapter: number, source: PhotoSource) => Promise<boolean>
+addVerseRangeToQueue: (book: string, chapter: number, startVerse: number, endVerse: number, translationId?: string) => Promise<{ added: number; alreadyThere: number; missingText: number; error?: string | undefined; }>
+addVersesToGroupPlan: (circleId: string, planId: string, book: string, chapter: number, startVerse: number, endVerse: number) => Promise<void>
+addVersesToQueue: (versesToAdd: VerseState[], translationId: string) => void
+advanceReviewSession: () => void
+audioCache: AudioCacheSnapshot
+audioSearchQuery: string
+backHistory: { screen: ScreenName; book: string | null; chapter: number | null; tab?: TabName | undefined; }[]
+blockUser: (uid: string, displayName: string) => Promise<void>
+blockedUids: Set<string>
+blockedUsers: BlockedUser[]
+buildVerseTimestamps: (verseNumbers: number[], tapTimestamps: Record<number, number>, totalDurationSec: number) => VerseTimestamp[]
+cacheChapterPhoto: (photo: ChapterPhoto) => Promise<void>
+cacheRecordingAudio: (recording: Recording | null | undefined) => void
+canSendAccountabilityNudge: (friendUid: string) => boolean
+cancelFriendRequest: (request: FriendRequest) => Promise<void>
+cancelRecordingRequest: () => void
+chapterPhotos: ChapterPhoto[]
+chapterViewMode: "list" | "grid" | "memoryGrid"
+circleFriends: CircleMember[]
+clearAudioDownloads: () => Promise<void>
+clearGroupChallengeMembershipsForCircle: (circleId: string) => void
+clearGroupPlanMembershipsForCircle: (circleId: string) => void
+clearImportedAudio: () => void
+closeChallengeLeaderboard: () => void
+closeCircleChat: () => void
+closeCirclePreview: () => void
+closeCommunityGuidelines: () => void
+closeDMThread: () => void
+closeQuiz: () => void
+cognitiveLoadSensitivity: "low" | "medium" | "high"
+communitySubView: "home" | "find" | "create" | "preview"
+countRangeProgress: (queue: QueueItem[], range: VerseRange) => number
+createCircle: (name: string, description: string, isPublic: boolean) => Promise<void>
+createGroupChallenge: (circleId: string, title: string, range: { book: string; startChapter: number; endChapter: number; startVerse?: number | undefined; endVerse?: number | undefined; }) => Promise<void>
+createGroupDesc: string
+createGroupName: string
+createGroupPlan: (circleId: string, input: { name: string; description: string; }) => Promise<void>
+createGroupPrivacy: "private" | "public"
+creditGuided: (items: QueueItem[], kind: "touch" | "review", drill: "speak" | "type") => Promise<QueueItem[]>
+currentScreen: "home" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "planDesigner" | "activePlan" | "addVerses" | "mySchedule" | "verseSources" | "savedPlans" | "memoryCalendar" | "verseRoad" | "versePage" | "referenceDrill" | "threadDrill" | "guided" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
+currentTab: "home" | "verses" | "community" | "record" | "profile"
+customPlanName: string
+dailyPhaseWeeks: number
+dayStartHour: number
+declineChallenge: (challenge: Challenge) => Promise<void>
+declineFriendRequest: (request: FriendRequest) => Promise<void>
+defaultRecordingVisibility: "circle" | "private" | "public" | null
+deleteAccount: (reauthPassword?: string | undefined) => Promise<{ ok: true; } | { ok: false; requiresReauth: boolean; message: string; }>
+deleteChallenge: (challenge: Challenge) => Promise<void>
+deleteChapterPhoto: (photo: ChapterPhoto) => Promise<void>
+deleteChatMessage: (scope: ChatScope, containerId: string, message: ChatMessage) => Promise<void>
+deleteGroupChallenge: (challenge: GroupChallenge) => Promise<void>
+deleteGroupPlan: (circleId: string, planId: string) => Promise<void>
+deleteRecording: (recording: Recording) => Promise<void>
+disbandCircle: (circleId: string) => Promise<void>
+dismissAccountabilityNudge: (nudgeId: string) => Promise<void>
+dismissNotificationAsk: () => void
+dismissOnboarding: () => Promise<void>
+dmThreads: DMThread[]
+downloadingRecordingIds: Set<string>
+editingPlanId: string | null
+endGroupChallenge: (challenge: GroupChallenge, status?: "completed" | "cancelled") => Promise<void>
+feedBookFilter: string
+feedChapterFilter: string
+feedRecordings: Recording[]
+feedTranslationFilter: string
+findSearchQuery: string
+finishQuiz: (score: number) => Promise<void>
+formatTime: (totalSec: number) => string
+friends: Friend[]
+getEstimatedReviewTime: (queue: QueueItem[], sensitivity: "low" | "medium" | "high") => number
+getGreeting: () => "Good night" | "Good morning" | "Good afternoon" | "Good evening"
+getMemoryLoadForecast: (queue: QueueItem[], sensitivity: "low" | "medium" | "high", learningDaysList: string[], pace: number, days: number) => { date: Date; isLearnDay: boolean; loadMins: number; versesCount: number; }[]
+getNextPullPreview: () => DailyPullResult
+getTodayAbbreviation: () => string
+getTodayDateString: () => string
+graceCount: number
+guidedPassageKey: string | null
+guidelinesAcceptedAt: string | null | undefined
+guidelinesPromptOpen: boolean
+handleActivatePlan: (planId: string) => Promise<void>
+handleBack: () => void
+handleCreateNewPlan: () => void
+handleDeletePlan: (planId: string) => Promise<void>
+handleEditPlan: (plan: MemoryPlan) => void
+handleFinishImportTagging: () => void
+handleMarkImportTap: (verseNumber: number) => void
+handleMarkVerseTap: (verseNumber: number) => void
+handlePauseRecording: () => void
+handleResetRecording: () => Promise<void>
+handleResumeRecording: () => void
+handleReviewCompleted: (item: QueueItem, success: boolean, drillType?: "speak" | "type" | "reveal" | undefined, opts?: ReviewCompletedOpts | undefined) => Promise<void | "early">
+handleSavePlan: () => Promise<void>
+handleStartRecording: () => Promise<void>
+handleStopRecording: () => Promise<void>
+handleUpdateVerseStatus: (versesToUpdate: VerseState[], newStatus: "learning" | "memorized", customDrillType?: "speak" | "type" | "reveal" | undefined, opts?: ReviewCompletedOpts | undefined) => Promise<void>
+highlightedVerses: Set<string>
+importPlayerStatus: { id: string; currentTime: number; playbackState: string; timeControlStatus: string; reasonForWaitingToPlay: string; mute: boolean; duration: number; playing: boolean; loop: boolean; didJustFinish: boolean; isBuffering: boolean; isLoaded: boolean; playbackRate: number; shouldCorrectPitch: boolean; mediaServicesDidReset?: boolean | undefined; isLive: boolean; currentOffsetFromLive: number | null; error: string | null; }
+importTapTimestamps: { [x: number]: number; }
+importedAudioName: string | null
+importedAudioUri: string | null
+incomingFriendRequests: FriendRequest[]
+inviteCodeInput: string
+isCircleChatUnread: (circleId: string) => boolean
+isDMThreadUnread: (t: DMThread) => boolean
+isEditingBuiltInPlan: boolean
+isEditingCircleSettings: boolean
+isEditingSync: boolean
+isRecording: boolean
+isRecordingFullChapterRange: boolean
+isRecordingPaused: boolean
+isReviewDue: (dueDateISO: string | null | undefined, referenceDate?: Date) => boolean
+isTodayLearningDay: () => boolean
+isVerseSelected: (vNum: number) => boolean
+joinCircle: (circleId: string, circleName?: string | undefined, inviteCode?: string | undefined) => Promise<void>
+joinCircleByCode: (codeInput: string) => Promise<void>
+joinGroupChallenge: (challenge: GroupChallenge) => Promise<void>
+joinGroupPlan: (plan: GroupPlan, priority?: "group" | "individual" | "additive") => Promise<void>
+joinedGroupChallenges: GroupChallengeMembership[]
+joinedGroupPlanDetails: GroupPlan[]
+joinedGroupPlanMemberships: GroupPlanMembership[]
+lastRecordingDuration: number
+learningCount: number
+learningDays: string[]
+leaveCircle: (circleId: string) => Promise<void>
+leaveGroupChallenge: (challenge: GroupChallenge) => Promise<void>
+leaveGroupPlan: (planId: string) => Promise<void>
+loadActiveCircleData: (circleId: string) => Promise<void>
+loadActivityFeed: () => Promise<void>
+loadCircleFriends: (circles: Circle[]) => Promise<void>
+loadFriendQuizVerses: (friendUid: string) => Promise<{ book: string; chapter: number; verseNumber: number; status: string; translationId?: string | undefined; }[] | null>
+loadFriendRequests: () => Promise<void>
+loadFriends: () => Promise<void>
+loadMyCircles: () => Promise<void>
+loadPublicCircles: () => Promise<void>
+loadReceivedAccountabilityNudges: () => Promise<void>
+loadSharedRecordings: () => Promise<void>
+loadUserData: (currentUser: any) => Promise<void>
+loadingAccountabilityNudges: boolean
+loadingActiveChallenges: boolean
+loadingActiveCircle: boolean
+loadingActiveCircleChallenges: boolean
+loadingActiveCircleMessages: boolean
+loadingActiveDMMessages: boolean
+loadingActivityEvents: boolean
+loadingAuth: boolean
+loadingChallengeLeaderboard: boolean
+loadingDmThreads: boolean
+loadingFeedRecordings: boolean
+loadingFriends: boolean
+loadingMyCircles: boolean
+loadingPublicCircles: boolean
+markAccountabilityNudgeRead: (nudgeId: string) => Promise<void>
+masteryTouches: number
+maxReviewCap: number
+maybeAskForNotifications: (reason: string) => Promise<void>
+memorizedCount: number
+memorizedPercent: number
+memoryGridColumns: 2 | 4
+memoryQueue: QueueItem[]
+memoryQueueRef: RefObject<QueueItem[]>
+memoryQueueVisibility: "private" | "friends"
+memoryStreak: number
+missPolicy: "standard" | "custom" | "lenient" | "graceDiscretion"
+missPolicyAskEveryTime: boolean
+missedReviewQueue: { item: QueueItem; missedCycles: number; }[]
+modalVerses: VerseState[]
+monthlyPhaseYears: number
+myChallengeBadges: Challenge[]
+myCircles: Circle[]
+navigateTo: (screen: ScreenName, book?: string | null, chapter?: number | null, options?: { keepBack?: boolean | undefined; }) => void
+newPlanDesc: string
+newPlanName: string
+newVersesPace: number
+notificationAskReason: string | null
+notificationPermission: "granted" | "denied" | "undetermined" | "unsupported"
+notificationPrefs: NotificationPrefs
+nowPlayingRecording: Recording | null
+openActivePlanDesigner: () => void
+openChallengeLeaderboard: GroupChallengeParticipant[]
+openChallengeLeaderboardId: string | null
+openChallengeLeaderboardModal: (challenge: GroupChallenge) => Promise<void>
+openCircle: (circleId: string) => void
+openCircleChat: (circleId: string) => void
+openCirclePreview: (circle: Circle) => void
+openDMThread: (otherUid: string, otherName: string, otherAvatarUrl: string) => Promise<void>
+openGuided: (passageKey?: string | undefined) => void
+openQuiz: (threadId: string, message: ChatMessage) => void
+openThreadDrill: (preset: ThreadDrillPreset | null) => void
+openVersePage: (ref: VersePageRef) => void
+outgoingFriendRequests: FriendRequest[]
+overrideVerseMemoryStatus: (versesToOverride: VerseState[], targetPhase: "learning" | "daily" | "weekly" | "monthly" | "retained", translationId: string, targetWeekday?: string | undefined, progressCount?: number | undefined) => void
+pauseReviews: (untilISO: string | null) => void
+pausedAt: string | null
+pausedUntil: string | null
+pendingRecordingSource: "live" | "import"
+photoCache: ReadonlyMap<string, string>
+photosForChapter: (book: string, chapter: number) => ChapterPhoto[]
+pickImportAudio: () => Promise<void>
+pickedRecordingVisibility: "circle" | "private" | "public"
+playChatRecording: (sharedRecordingId: string) => Promise<void>
+playingRecProgress: number
+playingRecordingId: string | null
+postChatMessage: (scope: "circle" | "dm", containerId: string, text: string, attachment?: ChatAttachment | undefined) => Promise<boolean>
+previewCircle: Circle | null
+primingLookahead: number
+promoteToLearning: (verseIds: string[]) => void
+publicCircles: Circle[]
+pullVerseIntoLearning: (verseId: string) => boolean
+reactionsByMessageId: { [x: string]: MessageReaction[]; }
+readMarkerFor: (scope: ChatScope, containerId: string) => string | undefined
+receivedAccountabilityNudges: AccountabilityNudge[]
+recordingBook: string
+recordingChapter: number
+recordingChapterVerses: { verse: number; text: string; }[]
+recordingRangeEnd: number | null
+recordingRangeStart: number | null
+recordingSeconds: number
+recordingSelectedVerses: { verse: number; text: string; }[]
+recordingTranslation: string
+refresherDailyDays: number
+refresherWeeklyWeeks: number
+removeCircleMember: (circleId: string, memberUid: string) => Promise<void>
+removeFriend: (friend: Friend) => Promise<void>
+removeQueueItems: (verseIds: string[]) => void
+removeRecordingDownload: (recording: Recording) => Promise<void>
+reorderChapterPhotos: (orderedIds: string[]) => Promise<void>
+reorderChapterRecordings: (orderedIds: string[]) => Promise<void>
+reportContent: (input: { kind: ReportKind; targetUid?: string | undefined; targetPath?: string | undefined; contentSnapshot?: string | undefined; reason: string; note?: string | undefined; }) => Promise<boolean>
+requestNotificationPermission: () => Promise<boolean>
+requireCommunityGuidelines: () => void
+resetImportTaps: () => void
+resolveMissedReviewChoice: (choice: "grace" | "escalate" | "reset", overrides?: Record<string, "grace" | "escalate" | "reset"> | undefined) => void
+respondToCard: (scope: ChatScope, containerId: string, messageId: string, status: "willDo" | "notNow" | "done", extra?: { sharedRecordingId?: string | undefined; score?: number | undefined; }) => Promise<void>
+responsesByMessageId: { [x: string]: ChatResponse[]; }
+resumeReviews: () => void
+retentionRigor: "light" | "standard" | "deep" | "custom"
+reviewSessionPosition: number
+reviewSessionTotal: number
+reviewsPaused: boolean
+reviewsRequired: number
+sabbathDay: string
+sabbathEnabled: boolean
+saveChapterOffline: (recordings: Recording[]) => Promise<void>
+saveRecordedAudio: () => Promise<void>
+saveRecordingDialog: boolean
+saveRecordingOffline: (recording: Recording) => Promise<boolean>
+saveSharedRecordingToLibrary: (rec: Recording) => Promise<void>
+saveVerseDoodle: (key: string, strokes: string[]) => void
+saveVerseSyncOffsets: (verseTimestamps: VerseTimestamp[]) => Promise<void>
+savedPlans: MemoryPlan[]
+searchUsers: (rawQuery: string) => Promise<void>
+searchingUsers: boolean
+seekImportAudioBy: (deltaSeconds: number) => void
+seekRecordingBy: (deltaSeconds: number) => Promise<void>
+seekRecordingToTime: (recording: Recording, seconds: number) => Promise<void>
+selectTab: (tab: TabName) => void
+selectedAddBook: string
+selectedAddChapter: number
+selectedBook: string | null
+selectedChapter: number | null
+selectedChapterAudios: { [x: string]: Recording | null; }
+selectedRecording: Recording | null
+selectedRecordingChapterTextData: ChapterText | null
+selectedTranslationId: string
+selectedUserProfile: any
+selectedVerseNumbers: number[]
+sendAccountabilityNudge: (friend: Friend, message: string) => Promise<void>
+sendChallenge: (toUid: string, toName: string, toAvatarUrl: string, range: { book: string; startChapter: number; endChapter: number; startVerse?: number | undefined; endVerse?: number | undefined; }) => Promise<void>
+sendCircleMessage: (text: string, attachment?: ChatAttachment | undefined) => Promise<boolean>
+sendDMMessage: (text: string, attachment?: ChatAttachment | undefined) => Promise<boolean>
+sendFriendRequest: (toUid: string, toName: string) => Promise<void>
+sendRecordingToChat: (rec: Recording, scope: "circle" | "dm", containerId: string) => Promise<boolean>
+setActiveFeedFilter: (value: SetStateAction<"friends" | "global" | "group">) => void
+setActiveModal: (value: SetStateAction<"listen" | "learn" | null>) => void
+setAudioCacheCap: (bytes: number) => Promise<void>
+setAudioSearchQuery: (value: SetStateAction<string>) => void
+setBackHistory: (value: SetStateAction<{ screen: ScreenName; book: string | null; chapter: number | null; tab?: TabName | undefined; }[]>) => void
+setChapterPhotoVerseRange: (photo: ChapterPhoto, verseStart: number | null, verseEnd: number | null) => Promise<void>
+setChapterViewMode: (value: SetStateAction<"list" | "grid" | "memoryGrid">) => void
+setCognitiveLoadSensitivity: (value: SetStateAction<"low" | "medium" | "high">) => void
+setCommunitySubView: (value: SetStateAction<"home" | "find" | "create" | "preview">) => void
+setCreateGroupDesc: (value: SetStateAction<string>) => void
+setCreateGroupName: (value: SetStateAction<string>) => void
+setCreateGroupPrivacy: (value: SetStateAction<"private" | "public">) => void
+setCurrentScreen: (value: SetStateAction<ScreenName>) => void
+setCurrentTab: (value: SetStateAction<TabName>) => void
+setCustomPlanName: (value: SetStateAction<string>) => void
+setDailyPhaseWeeks: (value: SetStateAction<number>) => void
+setDayStartHour: (value: SetStateAction<number>) => void
+setEditingPlanId: (value: SetStateAction<string | null>) => void
+setFeedBookFilter: (value: SetStateAction<string>) => void
+setFeedChapterFilter: (value: SetStateAction<string>) => void
+setFeedRecordings: (value: SetStateAction<Recording[]>) => void
+setFeedTranslationFilter: (value: SetStateAction<string>) => void
+setFindSearchQuery: (value: SetStateAction<string>) => void
+setGraceCount: (value: SetStateAction<number>) => void
+setGroupPlanPriority: (planId: string, priority: "group" | "individual" | "additive") => Promise<void>
+setGuidedPassageKey: (value: SetStateAction<string | null>) => void
+setGuidedSetAside: (verseId: string, on: boolean) => void
+setInviteCodeInput: (value: SetStateAction<string>) => void
+setIsEditingCircleSettings: (value: SetStateAction<boolean>) => void
+setIsEditingSync: (value: SetStateAction<boolean>) => void
+setIsRecording: (value: SetStateAction<boolean>) => void
+setLearningDays: (value: SetStateAction<string[]>) => void
+setListenModePlaying: (value: SetStateAction<boolean>) => void
+setMasteryTouches: (value: SetStateAction<number>) => void
+setMaxReviewCap: (value: SetStateAction<number>) => void
+setMemoryGridColumns: (columns: 2 | 4) => void
+setMemoryQueue: (value: SetStateAction<QueueItem[]>) => void
+setMissPolicy: (value: SetStateAction<"standard" | "custom" | "lenient" | "graceDiscretion">) => void
+setMissPolicyAskEveryTime: (value: SetStateAction<boolean>) => void
+setModalVerses: (value: SetStateAction<VerseState[]>) => void
+setMonthlyPhaseYears: (value: SetStateAction<number>) => void
+setNewPlanDesc: (value: SetStateAction<string>) => void
+setNewPlanName: (value: SetStateAction<string>) => void
+setNewVersesPace: (value: SetStateAction<number>) => void
+setPausedAt: (value: SetStateAction<string | null>) => void
+setPausedUntil: (value: SetStateAction<string | null>) => void
+setPickedRecordingVisibility: (value: SetStateAction<"circle" | "private" | "public">) => void
+setPlayingRecProgress: (value: SetStateAction<number>) => void
+setPlayingRecordingId: (value: SetStateAction<string | null>) => void
+setPrimingLookahead: (value: SetStateAction<number>) => void
+setRecordingBook: (value: SetStateAction<string>) => void
+setRecordingChapter: (value: SetStateAction<number>) => void
+setRecordingRangeEnd: (value: SetStateAction<number | null>) => void
+setRecordingRangeStart: (value: SetStateAction<number | null>) => void
+setRecordingSeconds: (value: SetStateAction<number>) => void
+setRecordingTranslation: (value: SetStateAction<string>) => void
+setRefresherDailyDays: (value: SetStateAction<number>) => void
+setRefresherWeeklyWeeks: (value: SetStateAction<number>) => void
+setRetentionRigor: (value: SetStateAction<"light" | "standard" | "deep" | "custom">) => void
+setReviewsRequired: (value: SetStateAction<number>) => void
+setSabbathDay: (value: SetStateAction<string>) => void
+setSabbathEnabled: (value: SetStateAction<boolean>) => void
+setSaveRecordingDialog: (value: SetStateAction<boolean>) => void
+setSavedPlans: (value: SetStateAction<MemoryPlan[]>) => void
+setSelectedAddBook: (value: SetStateAction<string>) => void
+setSelectedAddChapter: (value: SetStateAction<number>) => void
+setSelectedBook: (value: SetStateAction<string | null>) => void
+setSelectedChapter: (value: SetStateAction<number | null>) => void
+setSelectedChapterAudios: (value: SetStateAction<Record<string, Recording | null>>) => void
+setSelectedRecording: (value: SetStateAction<Recording | null>) => void
+setSelectedTranslationId: (id: string) => void
+setSelectedUserProfile: (value: any) => void
+setSelectedVerseNumbers: (value: SetStateAction<number[]>) => void
+setShowAudioSelector: (value: SetStateAction<boolean>) => void
+setShowCreatePlanForm: (value: SetStateAction<boolean>) => void
+setShowMissedReviewPrompt: (value: SetStateAction<boolean>) => void
+setShowOnboarding: (value: SetStateAction<boolean>) => void
+setShowTour: (value: SetStateAction<boolean>) => void
+setStudioAbOverride: (value: SetStateAction<boolean | null>) => void
+setStudioPlaybackEnabled: (enabled: boolean) => void
+setThreadDrillPreset: (value: SetStateAction<ThreadDrillPreset | null>) => void
+setToastMessage: (value: SetStateAction<string | null>) => void
+setTypedRecordingName: (value: SetStateAction<string>) => void
+setUser: (value: any) => void
+setUserRecordings: (value: SetStateAction<Recording[]>) => void
+setUserSearchQuery: (value: SetStateAction<string>) => void
+setVersePageRef: (value: SetStateAction<VersePageRef | null>) => void
+setVerses: (value: SetStateAction<VerseState[]>) => void
+setViewingGroupDetail: (value: SetStateAction<boolean>) => void
+setViewingGroupPlan: (value: SetStateAction<GroupPlan | null>) => void
+setWeeklyPhaseMonths: (value: SetStateAction<number>) => void
+showAudioSelector: boolean
+showCreatePlanForm: boolean
+showMissedReviewPrompt: boolean
+showOnboarding: boolean
+showTour: boolean
+signOut: () => Promise<void>
+startPractice: (mode: "listen" | "learn", passageVerses: VerseState[]) => void
+startRecordingForRequest: (scope: "circle" | "dm", containerId: string, message: ChatMessage) => void
+startReviewSession: (groups: QueueItem[][]) => void
+studioAbOverride: boolean | null
+studioPlaybackEnabled: boolean
+threadDrillPreset: ThreadDrillPreset | null
+toastMessage: string | null
+toggleImportPlayback: () => void
+toggleReaction: (scope: "circle" | "dm", containerId: string, messageId: string, emoji: string) => Promise<void>
+toggleSelectAll: () => void
+toggleVerseHighlight: (key: string) => void
+toggleVerseSelection: (vNum: number) => void
+totalStudySeconds: number
+totalVersesCount: number
+triggerDailyPull: (opts?: { bypassShield?: boolean | undefined; } | undefined) => Promise<void>
+triggerMockDueReviews: () => Promise<void>
+triggerToast: (msg: string) => void
+typedRecordingName: string
+unblockUser: (uid: string) => Promise<void>
+unreadCircleCount: number
+unreadDMCount: number
+unregisterPushToken: () => Promise<void>
+untouchedCount: number
+updateAccountabilityDailyCap: (cap: number) => Promise<void>
+updateCircleSettings: (circleId: string, fields: Partial<Pick<Circle, "name" | "description" | "isPublic">>) => Promise<void>
+updateDefaultRecordingVisibility: (vis: "circle" | "private" | "public") => Promise<void>
+updateDisplayName: (name: string) => Promise<void>
+updateGroupPlan: (circleId: string, planId: string, fields: Partial<Pick<GroupPlan, "name" | "description" | "versesPerWeek">>) => Promise<void>
+updateMemoryQueue: (updater: (prev: QueueItem[]) => QueueItem[]) => void
+updateMemoryQueueVisibility: (vis: "private" | "friends") => Promise<void>
+updateNotificationPrefs: (patch: Partial<NotificationPrefs>) => Promise<void>
+updateRecordingSpeaker: (recording: Recording, newSpeaker: string) => Promise<void>
+updateRhythm: (patch: Partial<Rhythm>) => void
+user: any
+userRecordings: Recording[]
+userSearchQuery: string
+userSearchResults: { uid: string; displayName: string; avatarUrl: string; }[]
+validateTouch: (item: QueueItem, _type: "speak" | "type" | "reveal") => boolean
+verseDoodles: { [x: string]: string[]; }
+versePageRef: VersePageRef | null
+verseTapTimestamps: { [x: number]: number; }
+verses: VerseState[]
+viewMemberProfileById: (uid: string) => Promise<void>
+viewingGroupDetail: boolean
+viewingGroupPlan: GroupPlan | null
+weeklyPhaseMonths: number

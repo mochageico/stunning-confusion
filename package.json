@@ -71,6 +71,8 @@
     "check:guided": "node scripts/run-guided-check.cjs",
     "check:translations": "node scripts/run-translations-check.cjs",
     "check:textscript": "node scripts/run-textscript-check.cjs",
+    "check:retention": "node scripts/run-retention-check.cjs",
+    "check:appstate": "node scripts/check-appstate-keys.cjs",
     "shots": "node scripts/capture-screens.cjs",
     "scan:fonts": "node scripts/scan-fonts.cjs",
     "scan:copy": "node scripts/scan-copy.cjs"

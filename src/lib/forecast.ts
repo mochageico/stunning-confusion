@@ -1,6 +1,7 @@
 import { QueueItem } from '../types';
 import { computeDailyPull } from './groupPlanScheduler';
 import { CalendarPlanSettings, isDayPaused } from './reviewCalendar';
+import { DAY_ABBREVS } from './logicalDate';
 import { STAGE_ORDER, StagePlan, VerseStage, roadEstimates, stageCounts, verseStage } from './stageProgress';
 
 // ============================================================================
@@ -22,7 +23,6 @@ import { STAGE_ORDER, StagePlan, VerseStage, roadEstimates, stageCounts, verseSt
 export type ForecastPlan = StagePlan & CalendarPlanSettings;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DAY_ABBREVS = ['Su', 'M', 'T', 'W', 'Th', 'F', 'S']; // index matches Date.getDay()
 /** Far enough for a long Waiting list; past it a verse counts as "not started in the window". */
 export const PULL_WINDOW_DAYS = 2 * 365;
 

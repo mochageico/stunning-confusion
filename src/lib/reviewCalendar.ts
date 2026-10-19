@@ -1,5 +1,6 @@
 import { QueueItem, GroupPlan, GroupPlanMembership } from '../types';
 import { computeDailyPull } from './groupPlanScheduler';
+import { advancePastSabbath, DAY_ABBREVS, nthOccurrenceOfWeekday } from './logicalDate';
 
 // ============================================================================
 // MEMORY CALENDAR — RECURRING REVIEW PROJECTION
@@ -87,49 +88,9 @@ export interface CalendarDayProjection {
   newVerseItems: QueueItem[];
 }
 
-// Duplicated from useAppState.ts's private DAY_ABBREVS/advancePastSabbath
-// rather than imported -- src/lib must not depend on the mega state-hook
-// file (the hook/screens depend on src/lib, never the reverse; same
-// direction recitation.ts already established). Kept in sync by hand; both
-// are tiny and change rarely (Sabbath support was a one-time addition).
-const DAY_ABBREVS = ['Su', 'M', 'T', 'W', 'Th', 'F', 'S']; // index matches Date.getDay()
-
-const advancePastSabbath = (date: Date, sabbathEnabled: boolean, sabbathDay: string): Date => {
-  if (!sabbathEnabled) return date;
-  const result = new Date(date);
-  while (DAY_ABBREVS[result.getDay()] === sabbathDay) {
-    result.setDate(result.getDate() + 1);
-  }
-  return result;
-};
-
 const addDays = (date: Date, days: number, sabbathEnabled: boolean, sabbathDay: string): Date => {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
-  return advancePastSabbath(result, sabbathEnabled, sabbathDay);
-};
-
-// Chapter review-day anchoring ("Snap-to-Grid" -- see QueueItem.
-// chapterReviewAnchorDay in types.ts and the matching helpers in
-// useAppState.ts, duplicated here for the same src/lib-must-not-import-the-
-// state-hook reason as DAY_ABBREVS/advancePastSabbath above). Nth future
-// occurrence of `weekday` on/after `from`; n=1 is the very next one.
-const nextOccurrenceOfWeekday = (from: Date, weekday: string, sabbathEnabled: boolean, sabbathDay: string): Date => {
-  const result = new Date(from);
-  result.setHours(0, 0, 0, 0);
-  let scanned = 0;
-  while (DAY_ABBREVS[result.getDay()] !== weekday && scanned < 7) {
-    result.setDate(result.getDate() + 1);
-    scanned++;
-  }
-  return advancePastSabbath(result, sabbathEnabled, sabbathDay);
-};
-
-const nthOccurrenceOfWeekday = (from: Date, weekday: string, n: number, sabbathEnabled: boolean, sabbathDay: string): Date => {
-  const first = nextOccurrenceOfWeekday(from, weekday, sabbathEnabled, sabbathDay);
-  if (n <= 1) return first;
-  const result = new Date(first);
-  result.setDate(result.getDate() + (n - 1) * 7);
   return advancePastSabbath(result, sabbathEnabled, sabbathDay);
 };
 

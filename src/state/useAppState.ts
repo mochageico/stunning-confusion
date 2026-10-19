@@ -113,7 +113,7 @@ import {
   VerseTimestamp,
 } from '../types';
 import { computeDailyPull, PersonalPacingSettings } from '../lib/groupPlanScheduler';
-import { getMemoryCalendarProjection, isDayPaused, isPauseInEffect } from '../lib/reviewCalendar';
+import { getMemoryCalendarProjection, isPauseInEffect } from '../lib/reviewCalendar';
 import { formatDate, formatDuration } from '../lib/format';
 import {
   attachmentFallbackText,
@@ -127,6 +127,37 @@ import { useSocial } from './useSocial';
 import { PushTarget, ReminderDay, usePushNotifications } from './usePushNotifications';
 import * as Linking from 'expo-linking';
 import { parseInviteCode } from '../lib/invites';
+import {
+  buildVerseId,
+  JOINED_GROUP_PLANS_FIELD,
+  mapQueueItemsToVerseStates,
+  normalizeAdoptedPlan,
+  normalizeGroupPlan,
+  resolveChapterAudio,
+  stripUndefined,
+} from '../lib/appData';
+import {
+  DAY_ABBREVS,
+  DAY_FULL_NAMES,
+  getLogicalDate,
+  localDayKey,
+  nextOccurrenceOfWeekday,
+  nthOccurrenceOfWeekday,
+} from '../lib/logicalDate';
+import { applyMissToItem, computeMissedCycles, describeMissOutcome, resolveMissedCycles } from '../lib/missPolicy';
+import {
+  computeNextDueDate,
+  estimateReviewMinutes,
+  findChapterReviewAnchor,
+  forecastMemoryLoad,
+  isReviewDue,
+  isTouchSpaced,
+  nextDueDateISO as nextDueDateISOFor,
+} from '../lib/retention';
+
+// Pure helpers that used to live in this file; re-exported so the screens
+// and components that import them from here keep working unchanged.
+export { buildVerseId, isReviewDue, mapQueueItemsToVerseStates, resolveChapterAudio };
 
 export type ScreenName =
   | 'home'
@@ -206,186 +237,6 @@ export type TabName = 'home' | 'verses' | 'community' | 'record' | 'profile';
 const tabForScreen = (screen: ScreenName): TabName | null =>
   HOME_TAB_SCREENS.includes(screen) ? 'home' : VERSES_TAB_SCREENS.includes(screen) ? 'verses' : null;
 
-// Canonical QueueItem.verseId shape, translation-prefixed so the same
-// book/chapter/verse in two different translations are two independent
-// queue items with independent progress (e.g. "ESV_EPH_2_5" vs
-// "KJV_EPH_2_5"). Every site that constructs a QueueItem's verseId should
-// go through this instead of an ad-hoc template literal, since it must stay
-// consistent across every call site or two code paths adding "the same"
-// verse could silently create duplicate, non-deduplicating queue items.
-// Pre-existing items from before translations existed keep their old
-// translation-less id ("EPH_2_5") rather than being migrated -- see
-// loadUserData's translationId default-to-'ESV' fallback.
-export const buildVerseId = (translationId: string, bookId: string, chapter: number, verse: number): string =>
-  `${translationId}_${bookId}_${chapter}_${verse}`;
-
-// Demotion softening: default length of a temporary "refresher" stint,
-// matching the "Standard" miss-policy preset (see MemoryPlan.missPolicy in
-// types.ts). A miss out of Weekly drops to Daily for this many days; a miss
-// out of Monthly drops to Weekly for this many weeks. Each additional
-// consecutive non-grace miss adds one more base unit (7, then 14, then 21
-// days, etc.), matching how Daily's own graduation target grows by a day
-// per miss. Plans carry their own graceCount/refresherDailyDays/
-// refresherWeeklyWeeks now (see MissPolicyConfig) -- these remain only as
-// the DEFAULT_PLANS/back-compat fallback values.
-const REFRESHER_BASE_DAILY_DAYS = 7;
-const REFRESHER_BASE_WEEKLY_WEEKS = 4;
-
-type MissTag = 'grace' | 'daily-extended' | 'refresher-start' | 'refresher-extended' | 'frozen' | 'streak-reset' | 'none';
-
-interface MissPolicyConfig {
-  graceCount: number;
-  refresherDailyDays: number;
-  refresherWeeklyWeeks: number;
-}
-
-// Applies exactly one "miss" to a draft QueueItem (mutated in place) and
-// returns a tag describing what happened, so callers can build a toast.
-// Called once per real failed review, and once per calendar cycle silently
-// skipped while the app wasn't opened (see the catch-up loop in
-// handleReviewCompleted) -- both are the same kind of "miss" to this engine.
-// `policy` comes from the active plan's missPolicy settings (Plan Designer
-// Advanced tab); a plan on the 'graceDiscretion' preset never reaches this
-// function at all for catch-up misses -- see resolveMissedCycles below,
-// which freezes the whole gap before looping ever starts.
-const applyMissToItem = (draft: QueueItem, policy: MissPolicyConfig): MissTag => {
-  const graceUsed = draft.graceMissesUsed || 0;
-  if (graceUsed < policy.graceCount) {
-    draft.graceMissesUsed = graceUsed + 1;
-    draft.gracePeriodUsedToday = true;
-    return 'grace';
-  }
-
-  const priorStreak = draft.currentStreakCount;
-  draft.currentStreakCount = 0;
-  // graceMissesUsed stays at its cap here -- grace only refills on an actual
-  // success (handled in handleReviewCompleted's success branch). Otherwise
-  // consecutive misses would each get fresh grace instead of escalating.
-
-  if (draft.refresherActive) {
-    const extension = draft.refresherReturnPhase === 'monthly' ? policy.refresherWeeklyWeeks : policy.refresherDailyDays;
-    draft.refresherTargetUnits = (draft.refresherTargetUnits || 0) + extension;
-    return 'refresher-extended';
-  }
-
-  if (draft.retentionPhase === 'daily') {
-    draft.dailyPhaseExtensionDays = (draft.dailyPhaseExtensionDays || 0) + 1;
-    return 'daily-extended';
-  }
-
-  if (draft.retentionPhase === 'weekly') {
-    draft.refresherActive = true;
-    draft.refresherReturnPhase = 'weekly';
-    draft.refresherReturnProgress = priorStreak;
-    draft.refresherTargetUnits = policy.refresherDailyDays;
-    draft.retentionPhase = 'daily';
-    return 'refresher-start';
-  }
-
-  if (draft.retentionPhase === 'monthly') {
-    draft.refresherActive = true;
-    draft.refresherReturnPhase = 'monthly';
-    draft.refresherReturnProgress = priorStreak;
-    draft.refresherTargetUnits = policy.refresherWeeklyWeeks;
-    draft.retentionPhase = 'weekly';
-    return 'refresher-start';
-  }
-
-  return 'none';
-};
-
-// Builds the toast copy for a single miss tag (see applyMissToItem). Shared
-// between the "silently missed cycles while away" catch-up and today's own
-// failed attempt, so both describe the same outcomes the same way.
-const describeMissOutcome = (tag: MissTag, draft: QueueItem, dailyGraduationDaysTotal: number): string | null => {
-  const returnLabel = draft.refresherReturnPhase === 'monthly' ? 'Monthly' : 'Weekly';
-  const unitLabel = draft.refresherReturnPhase === 'monthly' ? 'weeks' : 'days';
-  switch (tag) {
-    case 'grace':
-      return 'Grace period used! Get it right next time to avoid falling back. 🛡️';
-    case 'daily-extended':
-      return `Missed after your grace period was already used -- streak reset, and Daily now needs ${dailyGraduationDaysTotal} days total instead of fewer. Still Daily, just a bit longer. 🔄`;
-    case 'refresher-start':
-      return `Missed after your grace period was already used -- sent to a ${draft.refresherTargetUnits}-${
-        unitLabel === 'weeks' ? 'week' : 'day'
-      } refresher, then back to ${returnLabel} review right where you left off. 🔄`;
-    case 'refresher-extended':
-      return `Missed again during the refresher -- it's now ${draft.refresherTargetUnits} ${unitLabel} before you return to ${returnLabel} review. 🔄`;
-    case 'frozen':
-      return "No penalty -- streak and progress are untouched, right where you left off. 🕊️";
-    case 'streak-reset':
-      return 'Streak reset, but no refresher detour -- staying right where you are. 🔄';
-    default:
-      return null;
-  }
-};
-
-// Resolves a full catch-up event (missedCycles worth of silently-skipped
-// cycles) for one item in a single call, so both the reactive per-item
-// catch-up in handleReviewCompleted and the proactive missed-review popup
-// (shown on app open) can share the exact same outcomes instead of two
-// hand-written copies drifting apart.
-//
-// `forcedOutcome` is the user's explicit popup choice for this item, if any:
-//   - 'grace'    -- freeze the whole gap, as if it never happened.
-//   - 'escalate' -- run the normal per-cycle miss loop (today's default).
-//   - 'reset'    -- lose streak progress only, no phase/refresher change.
-// With no forcedOutcome (the reactive fallback path, or auto-apply when
-// missPolicyAskEveryTime is off), a plan on the 'graceDiscretion' preset
-// always resolves to 'grace'; every other preset resolves to 'escalate'.
-const resolveMissedCycles = (
-  item: QueueItem,
-  missedCycles: number,
-  missPolicy: MemoryPlan['missPolicy'],
-  policy: MissPolicyConfig,
-  forcedOutcome?: 'grace' | 'escalate' | 'reset'
-): { updatedItem: QueueItem; tag: MissTag } => {
-  const outcome = forcedOutcome || (missPolicy === 'graceDiscretion' ? 'grace' : 'escalate');
-  const updatedItem = { ...item };
-
-  if (outcome === 'grace') {
-    return { updatedItem, tag: 'frozen' };
-  }
-
-  if (outcome === 'reset') {
-    updatedItem.currentStreakCount = 0;
-    return { updatedItem, tag: 'streak-reset' };
-  }
-
-  let lastTag: MissTag = 'none';
-  for (let i = 0; i < missedCycles; i++) {
-    lastTag = applyMissToItem(updatedItem, policy);
-  }
-  return { updatedItem, tag: lastTag };
-};
-
-// Sabbath support: a plan can designate one weekday as a full day off from
-// both learning and review. The engine treats it as not existing for
-// scheduling purposes -- due dates never land on it, and time spent on it
-// doesn't count as elapsed when detecting silently-missed review cycles.
-const DAY_ABBREVS = ['Su', 'M', 'T', 'W', 'Th', 'F', 'S']; // index matches Date.getDay()
-
-// "What day is it, logically, right now" -- lets a user whose day-start-hour
-// is 1am/2am (MemoryPlan.dayStartHour) have their "today" not flip over at
-// real midnight. Every place that asks "what day/weekday is it" for
-// scheduling or notification-limit purposes should use this instead of a
-// bare `new Date()` -- genuine event TIMESTAMPS (createdAt/updatedAt/etc.)
-// must keep using real `new Date()`, never this. At dayStartHour=0 (the
-// default) this returns exactly `new Date()`, so existing behavior is
-// unchanged unless a user opts into a later day-start hour.
-const getLogicalDate = (dayStartHour: number, base: Date = new Date()): Date => {
-  if (!dayStartHour) return base;
-  return new Date(base.getTime() - dayStartHour * 60 * 60 * 1000);
-};
-
-// Days are keyed in LOCAL time, not UTC (toISOString): for anyone west of
-// Greenwich, an evening practice session's UTC date is already "tomorrow",
-// which would shift the activity grid and break streaks at the day
-// boundary. Pure/pair with getLogicalDate -- pass a logical date in, get a
-// stable per-logical-day string key out.
-const localDayKey = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
 // Default cap on accountability nudges a user will receive per logical day
 // (from any friend, combined) before senders are told they've hit it —
 // applies unless the recipient has set UserProfile.accountabilityDailyCap.
@@ -395,155 +246,6 @@ const ACCOUNTABILITY_DEFAULT_DAILY_CAP = 5;
 const NUDGE_MAX_CHARS = 500;
 const CHAT_MESSAGE_MAX_CHARS = 2000;
 
-const advancePastSabbath = (date: Date, sabbathEnabled: boolean, sabbathDay: string): Date => {
-  if (!sabbathEnabled) return date;
-  const result = new Date(date);
-  while (DAY_ABBREVS[result.getDay()] === sabbathDay) {
-    result.setDate(result.getDate() + 1);
-  }
-  return result;
-};
-
-// Finds the next date (today counts) whose day-of-week matches `weekday`,
-// then nudges off the Sabbath if it happens to land there. Used by manual
-// memory-status overrides to let a batch's weekly/monthly review cycle
-// consistently land on a chosen weekday -- a phase's due date always
-// recurs by a fixed number of days from wherever it first starts (7 for
-// weekly, 30 for monthly), so picking which day the FIRST one lands on is
-// all that's needed; no scheduling-engine changes required.
-const nextOccurrenceOfWeekday = (from: Date, weekday: string, sabbathEnabled: boolean, sabbathDay: string): Date => {
-  const result = new Date(from);
-  result.setHours(0, 0, 0, 0);
-  let scanned = 0;
-  while (DAY_ABBREVS[result.getDay()] !== weekday && scanned < 7) {
-    result.setDate(result.getDate() + 1);
-    scanned++;
-  }
-  return advancePastSabbath(result, sabbathEnabled, sabbathDay);
-};
-
-// Chapter review-day anchoring ("Snap-to-Grid" -- see QueueItem.
-// chapterReviewAnchorDay in types.ts): the Nth future occurrence of
-// `weekday` on/after `from` (n=1 is the very next one). Weekday is
-// invariant under a +7 shift, so jumping whole weeks from the first
-// occurrence keeps this exactly on the anchor day for any n -- this is what
-// lets Monthly reuse the same weekday as Weekly by just asking for n=4.
-const nthOccurrenceOfWeekday = (from: Date, weekday: string, n: number, sabbathEnabled: boolean, sabbathDay: string): Date => {
-  const first = nextOccurrenceOfWeekday(from, weekday, sabbathEnabled, sabbathDay);
-  if (n <= 1) return first;
-  const result = new Date(first);
-  result.setDate(result.getDate() + (n - 1) * 7);
-  return advancePastSabbath(result, sabbathEnabled, sabbathDay);
-};
-
-// Has any OTHER verse of this book+chapter already established a shared
-// review-anchor weekday? Undefined if no chunk of this chapter has ever
-// graduated out of Daily review.
-const findChapterReviewAnchor = (book: string, chapter: number, queue: QueueItem[]): string | undefined =>
-  queue.find((q) => q.book === book && q.chapter === chapter && q.chapterReviewAnchorDay)?.chapterReviewAnchorDay;
-
-const DAY_FULL_NAMES: Record<string, string> = {
-  Su: 'Sundays',
-  M: 'Mondays',
-  T: 'Tuesdays',
-  W: 'Wednesdays',
-  Th: 'Thursdays',
-  F: 'Fridays',
-  S: 'Saturdays',
-};
-
-// Shared iteration cap for the day-by-day scans below, so a corrupted or
-// mistyped date (e.g. a garbled year from a date picker, or a stale due-date
-// far in the past) can't turn a bounded loop into a multi-million-iteration
-// scan that hangs the JS thread for a very long time -- past the cap, the
-// range is treated as unreasonable and scanning just stops early.
-const MAX_LEARNING_DAY_SCAN = 18250; // ~50 years
-
-const countSabbathDaysInRange = (from: Date, to: Date, sabbathDay: string): number => {
-  let count = 0;
-  const cursor = new Date(from);
-  cursor.setDate(cursor.getDate() + 1);
-  let scanned = 0;
-  while (cursor <= to && scanned < MAX_LEARNING_DAY_SCAN) {
-    if (DAY_ABBREVS[cursor.getDay()] === sabbathDay) count++;
-    cursor.setDate(cursor.getDate() + 1);
-    scanned++;
-  }
-  return count;
-};
-
-// Pause support: like Sabbath, but a date range instead of a single weekday
-// (see MemoryPlan.pausedAt/pausedUntil in types.ts). Counts the overlap
-// between [from, to] and the paused window [pausedAt, pausedUntil] -- an
-// open-ended pause (pausedUntil === null) treats every day from pausedAt
-// through `to` as paused, so an indefinite pause excludes all elapsed time
-// for as long as it's active.
-const countPausedDaysInRange = (from: Date, to: Date, pausedAt: string | null, pausedUntil: string | null): number => {
-  if (!pausedAt) return 0;
-  const pauseStart = new Date(pausedAt);
-  const pauseEnd = pausedUntil ? new Date(pausedUntil) : to;
-  const rangeStart = pauseStart > from ? pauseStart : from;
-  const rangeEnd = pauseEnd < to ? pauseEnd : to;
-  if (rangeStart >= rangeEnd) return 0;
-  return Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / (24 * 3600 * 1000));
-};
-
-// How many full review cycles have been silently missed for this item, net
-// of Sabbath and Pause days (neither counts as elapsed time). Shared by the
-// reactive per-item catch-up in handleReviewCompleted and the proactive
-// missed-review popup scan in loadUserData, so both agree on what counts as
-// "missed" -- see resolveMissedCycles for what happens once this is > 0.
-const computeMissedCycles = (
-  item: QueueItem,
-  dayStartHour: number,
-  sabbathEnabled: boolean,
-  sabbathDay: string,
-  pausedAt: string | null,
-  pausedUntil: string | null
-): number => {
-  if (item.status !== 'reviewing' || !item.nextReviewDueDate) return 0;
-  const cycleLengthDays = item.retentionPhase === 'weekly' ? 7 : item.retentionPhase === 'monthly' ? 30 : 1;
-  const dueDate = new Date(item.nextReviewDueDate);
-  const now = getLogicalDate(dayStartHour);
-  const rawElapsedDays = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 3600 * 1000));
-  const sabbathDaysElapsed = sabbathEnabled ? countSabbathDaysInRange(dueDate, now, sabbathDay) : 0;
-  const pausedDaysElapsed = countPausedDaysInRange(dueDate, now, pausedAt, pausedUntil);
-  const adjustedElapsedDays = Math.max(0, rawElapsedDays - sabbathDaysElapsed - pausedDaysElapsed);
-  return Math.max(0, Math.floor(adjustedElapsedDays / cycleLengthDays));
-};
-
-// Back-compat: normalizes a raw Firestore 'groupPlans' doc into the current
-// GroupPlan shape. Docs created before the group-plan revamp (the old
-// single-plan model) have `scriptureRange`/`pacingPerWeek` instead of
-// `verseIds`/`versesPerWeek`, and no `description`/`createdAt`/`updatedAt` --
-// reading one of those directly as a GroupPlan left `verseIds` undefined,
-// crashing any `plan.verseIds.length` in the UI. Same pattern already used
-// for old MemoryPlan docs missing retention-rigor/mastery-touches fields.
-const normalizeGroupPlan = (planId: string, data: any): GroupPlan => ({
-  planId,
-  circleId: data.circleId,
-  name: data.name || 'Untitled Plan',
-  description: data.description || '',
-  managerId: data.managerId,
-  managerName: data.managerName,
-  versesPerWeek: data.versesPerWeek ?? data.pacingPerWeek ?? 3,
-  verseIds: data.verseIds || data.scriptureRange || [],
-  createdAt: data.createdAt || data.startDate || new Date().toISOString(),
-  updatedAt: data.updatedAt || data.startDate || new Date().toISOString(),
-});
-
-// Due-ness is calendar-day granularity, not exact-clock-time -- a review
-// whose nextReviewDueDate falls anywhere on today's calendar date is due
-// NOW, not only once the clock reaches that same time-of-day. Reviews are
-// never day-gated (see project philosophy); comparing exact timestamps
-// silently reintroduced a day-boundary-like gate (a verse graduated at
-// 9pm wouldn't show as due again until 9pm the next day), which is what
-// caused Home's Due Reviews to disagree with the Memory Calendar (which
-// already compared by date, not exact time). Also treats any date whose
-// day has already fully passed as due, matching the old "overdue" case.
-// Exported (not just hook-internal) so components importing pure helpers
-// directly from this module, like PracticeModals' resolveChapterAudio use,
-// can share it too instead of re-deriving the same date logic.
 /**
  * Options for logging a review. `quiet` skips the toasts, for callers that
  * show their own results; `via` records which practice produced it in the
@@ -553,105 +255,6 @@ export type ReviewCompletedOpts = { perfect?: boolean; quiet?: boolean; via?: Re
 
 /** Where Pick up the thread opens: the verse to recite through, from a Recall that just passed. */
 export type ThreadDrillPreset = { book: string; chapter: number; verse: number; translationId?: string };
-
-export function isReviewDue(dueDateISO: string | null | undefined, referenceDate: Date = new Date()): boolean {
-  if (!dueDateISO) return true;
-  const due = new Date(dueDateISO);
-  return due.toDateString() === referenceDate.toDateString() || due.getTime() < referenceDate.getTime();
-}
-
-// Resolves which of the user's own recordings represents a given chapter's
-// narration, mirroring the precedence ChapterLandingScreen's "Change"
-// selector already used inline: an explicit user choice always wins;
-// otherwise fall back to the first of this user's own recordings of that
-// chapter. Shared (rather than duplicated) so PracticeModals' real-audio
-// Listen mode and ChapterLandingScreen's audio card can never quietly
-// disagree about which recording is "the" audio for a chapter.
-export function resolveChapterAudio(
-  userRecordings: Recording[],
-  selectedChapterAudios: Record<string, Recording | null>,
-  book: string,
-  chapter: number
-): Recording | null {
-  const key = `${book}_${chapter}`;
-  const assigned = selectedChapterAudios[key];
-  if (assigned) return assigned;
-  const matches = userRecordings.filter((r) => r.book.toLowerCase() === book.toLowerCase() && r.chapter === chapter);
-  if (matches.length === 0) return null;
-  // Lowest priority number wins (top of the drag-reorderable list on
-  // ChapterLandingScreen); legacy recordings without a priority sort last.
-  const sorted = [...matches].sort((a, b) => (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER));
-  return sorted[0];
-}
-
-// Shared QueueItem -> VerseState mapper for launching a practice session --
-// mirrors the same shape HomeScreen/PracticeModals already build inline, but
-// startReviewSession needs its own copy (below) since it isn't a React
-// component and can't reach a screen-local helper.
-export function mapQueueItemsToVerseStates(items: QueueItem[]): VerseState[] {
-  return items.map((item) => ({
-    book: item.book,
-    chapter: item.chapter,
-    verse: item.verseNumber,
-    text: item.text,
-    status: item.status === 'retained' ? 'memorized' : 'learning',
-    translationId: item.translationId || 'ESV',
-  }));
-}
-
-/**
- * Drops keys whose value is `undefined` before a Firestore write.
- *
- * Firestore rejects an explicit `undefined` field value outright — "Unsupported
- * field value: undefined (found in field X)" — and this app's
- * initializeFirestore() call doesn't enable `ignoreUndefinedProperties`, so a
- * single optional field left unset fails the ENTIRE save. That already cost a
- * real recording once (full-chapter takes wrote `startVerse: undefined`).
- *
- * Optional fields on Recording are all "absent means default" by design, so
- * omitting them is the correct semantics, not a workaround. Applied at the
- * write sites rather than globally via ignoreUndefinedProperties, so a stray
- * undefined elsewhere in the app still surfaces loudly instead of being
- * silently dropped.
- */
-function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
-  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
-}
-
-// Normalizes a loosely-typed shared/friend plan doc into a real MemoryPlan.
-// Retention fields only: adopting someone else's plan must never touch the
-// adopter's Rhythm, and pre-split shared docs still carry the author's
-// learningDays/newVersesPace/maxReviewCap, which are deliberately ignored
-// here rather than copied over.
-//
-// `isActive`/`updatedAt` are set for the adopter; callers supply id + name.
-// Wire name for the membership list on memoryPlans/{uid}. These were called
-// "study plans" before the rename to "group plans", but this key is already
-// written into every existing user's document -- renaming it would orphan
-// every membership on the next load and silently un-join everyone. The
-// Firestore COLLECTION was always 'groupPlans' (circles/{id}/groupPlans), so
-// this single field is the only place the old wording survives.
-const JOINED_GROUP_PLANS_FIELD = 'joinedStudyPlans';
-
-function normalizeAdoptedPlan(plan: any): MemoryPlan {
-  return {
-    id: '',
-    name: plan.name || 'Custom Plan',
-    retentionRigor: plan.retentionRigor || 'standard',
-    dailyPhaseWeeks: plan.dailyPhaseWeeks ?? 7,
-    weeklyPhaseMonths: plan.weeklyPhaseMonths ?? 6,
-    monthlyPhaseYears: plan.monthlyPhaseYears ?? 5,
-    masteryTouches: plan.masteryTouches ?? 3,
-    reviewsRequired: plan.reviewsRequired ?? 1,
-    missPolicy: plan.missPolicy || 'standard',
-    missPolicyAskEveryTime: plan.missPolicyAskEveryTime ?? false,
-    graceCount: plan.graceCount ?? 1,
-    refresherDailyDays: plan.refresherDailyDays ?? 7,
-    refresherWeeklyWeeks: plan.refresherWeeklyWeeks ?? 4,
-    isActive: true,
-    updatedAt: new Date().toISOString(),
-  };
-}
 
 /**
  * Centralizes every piece of state and business-logic handler from the original
@@ -4917,32 +4520,15 @@ export function useAppState() {
     return learningDays.includes(todayAbbr);
   };
 
-  // Wraps setDate + sabbath-adjustment + toISOString for the many places
-  // handleReviewCompleted schedules a next-due date, so a sabbath day never
-  // ends up as a scheduled due date.
-  const nextDueDateISO = (days: number) => {
-    const d = getLogicalDate(dayStartHour);
-    d.setDate(d.getDate() + days);
-    return advancePastSabbath(d, sabbathEnabled, sabbathDay).toISOString();
-  };
+  // The scheduling math itself lives in src/lib/retention.ts; these bind it
+  // to the active plan's settings.
+  const reviewClock = { dayStartHour, sabbathEnabled, sabbathDay, pausedAt, pausedUntil };
 
-  // Recomputes a "starting fresh from now" due date for an item whose
-  // catch-up has just been resolved (any of the three missed-review popup
-  // outcomes needs this -- even 'grace'/frozen leaves the old due date in
-  // the past, so it must still move forward). Mirrors the anchor-day logic
-  // used when a Weekly/Monthly item's own cycle completes normally.
-  const computeNextDueDateForItem = (item: QueueItem): string => {
-    const tomorrow = getLogicalDate(dayStartHour);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    if (item.retentionPhase === 'weekly' && item.chapterReviewAnchorDay) {
-      return nthOccurrenceOfWeekday(tomorrow, item.chapterReviewAnchorDay, 1, sabbathEnabled, sabbathDay).toISOString();
-    }
-    if (item.retentionPhase === 'monthly' && item.chapterReviewAnchorDay) {
-      return nthOccurrenceOfWeekday(tomorrow, item.chapterReviewAnchorDay, 4, sabbathEnabled, sabbathDay).toISOString();
-    }
-    const cycleLengthDays = item.retentionPhase === 'weekly' ? 7 : item.retentionPhase === 'monthly' ? 30 : 1;
-    return nextDueDateISO(cycleLengthDays);
-  };
+  // Next-due date `days` from today, nudged off the Sabbath.
+  const nextDueDateISO = (days: number) => nextDueDateISOFor(days, reviewClock);
+
+  // "Starting fresh from now" due date after a missed-review catch-up.
+  const computeNextDueDateForItem = (item: QueueItem): string => computeNextDueDate(item, reviewClock);
 
   // Applies the user's missed-review popup choice. `choice` is the bulk
   // default; `overrides` (verseId -> choice) lets "Customize per verse"
@@ -4981,88 +4567,18 @@ export function useAppState() {
     );
   };
 
-  const validateTouch = (item: QueueItem, _type: 'speak' | 'type' | 'reveal'): boolean => {
-    if (!item.touchLogs || item.touchLogs.length === 0) return true;
-    const lastTouch = item.touchLogs[item.touchLogs.length - 1];
-    const lastTime = new Date(lastTouch.timestamp).getTime();
-    const now = Date.now();
-    const ONE_HOUR = 60 * 60 * 1000;
-    return now - lastTime >= ONE_HOUR;
-  };
+  const validateTouch = (item: QueueItem, _type: 'speak' | 'type' | 'reveal'): boolean => isTouchSpaced(item);
 
-  // A quick spaced-repetition review (you already know the verse, you're
-  // just confirming recall) is fast -- flat per-verse, not tiered by phase.
-  // A fresh Learning-phase touch is real, unhurried practice, so it costs
-  // much more per verse. (2026-07: the old 30/45/60s daily/weekly/monthly
-  // tiering plus 120s/learning verse was making the estimate feel wildly
-  // inflated in practice -- simplified to these two flat numbers, then
-  // trimmed again from 25s/180s after the estimate still read long against
-  // real practice sessions.)
-  const REVIEW_SECONDS_PER_VERSE = 15;
-  const LEARNING_SECONDS_PER_VERSE = 90;
+  const getEstimatedReviewTime = (queue: QueueItem[], sensitivity: 'low' | 'medium' | 'high') =>
+    estimateReviewMinutes(queue, sensitivity, reviewClock);
 
-  // Shared by getEstimatedReviewTime (today only) and getMemoryLoadForecast
-  // (today + future days), so both always price a "due review" the same
-  // way and never quietly disagree. For today, a missing due date or one
-  // whose calendar day is today-or-earlier counts as due; for a future day,
-  // only an exact due-date match counts.
-  const computeDayReviewLoad = (queue: QueueItem[], date: Date, isToday: boolean) => {
-    let seconds = 0;
-    let count = 0;
-    // Nothing is due while reviews are paused, so a paused day costs nothing
-    // -- the same rule Home's review list and the calendar follow.
-    if (isDayPaused(date, isToday, pausedAt, pausedUntil)) return { seconds, count };
-    queue.forEach((item) => {
-      if (item.status !== 'reviewing') return;
-      const due = item.nextReviewDueDate ? new Date(item.nextReviewDueDate) : null;
-      const isDue = isToday ? isReviewDue(item.nextReviewDueDate, date) : !!due && due.toDateString() === date.toDateString();
-      if (!isDue) return;
-      count += 1;
-      seconds += REVIEW_SECONDS_PER_VERSE;
-    });
-    return { seconds, count };
-  };
-
-  const getEstimatedReviewTime = (queue: QueueItem[], sensitivity: 'low' | 'medium' | 'high') => {
-    const learningSeconds = queue.filter((item) => item.status === 'learning').length * LEARNING_SECONDS_PER_VERSE;
-    const { seconds: reviewSeconds } = computeDayReviewLoad(queue, getLogicalDate(dayStartHour), true);
-    const multiplier = sensitivity === 'low' ? 0.75 : sensitivity === 'high' ? 1.5 : 1.0;
-    return Math.ceil(((learningSeconds + reviewSeconds) * multiplier) / 60);
-  };
-
-  // Projects daily memorization workload for the next `days` days, sharing
-  // computeDayReviewLoad's math with getEstimatedReviewTime so "today" here
-  // always matches Home's real today-estimate, and using the plan's actual
-  // learningDays instead of a fake "every other day" guess. Learning-phase
-  // items are treated as an ongoing cost that doesn't shrink (this doesn't
-  // simulate future mastery graduations); verses newly pulled on a future
-  // learning day join that ongoing cost starting the day they're pulled.
   const getMemoryLoadForecast = (
     queue: QueueItem[],
     sensitivity: 'low' | 'medium' | 'high',
     learningDaysList: string[],
     pace: number,
     days: number
-  ) => {
-    const baseLearningCount = queue.filter((item) => item.status === 'learning').length;
-    const multiplier = sensitivity === 'low' ? 0.75 : sensitivity === 'high' ? 1.5 : 1.0;
-    let cumulativeNewVerses = 0;
-
-    return Array.from({ length: days }, (_, i) => {
-      const date = getLogicalDate(dayStartHour);
-      date.setDate(date.getDate() + i);
-      const isLearnDay = learningDaysList.includes(DAY_ABBREVS[date.getDay()]);
-      // Today's own pull, if any, is already reflected in the real queue
-      // (baseLearningCount) -- only project pulls for days after today.
-      if (i > 0 && isLearnDay) cumulativeNewVerses += pace;
-
-      const { seconds: reviewSeconds, count: dueReviewCount } = computeDayReviewLoad(queue, date, i === 0);
-      const learningCount = baseLearningCount + cumulativeNewVerses;
-      const loadMins = Math.ceil(((reviewSeconds + learningCount * LEARNING_SECONDS_PER_VERSE) * multiplier) / 60);
-
-      return { date, isLearnDay, loadMins, versesCount: learningCount + dueReviewCount };
-    });
-  };
+  ) => forecastMemoryLoad(queue, sensitivity, learningDaysList, pace, days, reviewClock);
 
   // `bypassShield`: the caller (HomeScreen) already showed an "are you
   // sure?" confirm card explaining the shield is active and re-invokes with
