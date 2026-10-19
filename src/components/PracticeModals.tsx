@@ -134,6 +134,26 @@ const HIDE_LEVELS = Array.from({ length: 21 }, (_, i) => i * 5).map((n) => ({
   label: n === 100 ? 'All' : `${n}%`,
 }));
 
+/**
+ * Listen playlists keep each passage in one piece. The memory queue is in
+ * due/priority order, so built straight from it a playlist hops between
+ * chapters (Isaiah 55, Romans 8, Isaiah 55 again) and a verse being learned
+ * plays apart from the verses before it that are under review. Here every
+ * chapter's verses are pulled together and played in verse order; chapters
+ * keep the order they first appear in, so whatever leads the list (learning,
+ * in Today's Verses) still comes first.
+ */
+function groupPassages(list: VerseState[]): VerseState[] {
+  const groups = new Map<string, VerseState[]>();
+  for (const v of list) {
+    const key = `${v.translationId ?? ''}|${v.book}|${v.chapter}`;
+    const group = groups.get(key);
+    if (group) group.push(v);
+    else groups.set(key, [v]);
+  }
+  return [...groups.values()].flatMap((group) => group.sort((a, b) => a.verse - b.verse));
+}
+
 interface PracticeModalsProps {
   type: 'listen' | 'learn';
   verses: VerseState[];
@@ -371,18 +391,20 @@ function PracticeModalsInner({
       }
 
       if (playSource === 'memorization') {
-        setActivePlayVerses(dbLearning.length > 0 ? dbLearning : verses);
+        setActivePlayVerses(dbLearning.length > 0 ? groupPassages(dbLearning) : verses);
       } else if (playSource === 'reviewing') {
-        setActivePlayVerses(dbReviewing.length > 0 ? dbReviewing : verses);
+        setActivePlayVerses(dbReviewing.length > 0 ? groupPassages(dbReviewing) : verses);
       } else if (playSource === 'priming') {
-        setActivePlayVerses(dbPriming.length > 0 ? dbPriming : verses);
+        setActivePlayVerses(dbPriming.length > 0 ? groupPassages(dbPriming) : verses);
       } else if (playSource === 'all') {
         // "Today's Verses" -- everything actually relevant today (still
         // being learned, due for review, or coming up in the priming
         // lookahead), NOT the entire cached Bible text. A QueueItem only
         // ever has one status at a time, so these three lists are already
-        // mutually exclusive -- no dedup needed.
-        const dbToday = [...dbLearning, ...dbReviewing, ...dbPriming];
+        // mutually exclusive -- no dedup needed. Grouping merges across the
+        // three, so Isaiah 55:1-8 under review plays straight into 55:9
+        // being learned.
+        const dbToday = groupPassages([...dbLearning, ...dbReviewing, ...dbPriming]);
         setActivePlayVerses(dbToday.length > 0 ? dbToday : verses);
       }
     }
