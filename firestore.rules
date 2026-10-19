@@ -29,10 +29,54 @@ service cloud.firestore {
 
     // Users and Profiles collection. Read is open to any signed-in user (not
     // just the owner) so real circle co-members can see each other's name,
-    // avatar, and streak — write stays owner-only.
+    // avatar, and streak — write stays owner-only. Because anyone can list
+    // this collection, nothing private may live here: email used to, and
+    // was dumpable by any signed-in user. It now lives only in emailLookup
+    // (below), which can be fetched by exact address but never listed.
+    // circleIds is still written here by each user for their own
+    // bookkeeping, but it is self-reported -- no rule may trust it for
+    // access (see dmGated, which checks real member docs instead).
     match /profiles/{userId} {
       allow read: if isSignedIn();
+      // sharedMemoryQueue may no longer be written here (it moved to
+      // shared/memoryQueue, below) -- this stops an old app build from
+      // putting the friends-only list back on the listable profile.
+      // On update only adding/changing it is refused, so a profile that
+      // still has the old field can be written (and the field deleted).
+      allow create: if isOwner(userId)
+        && !request.resource.data.keys().hasAny(['sharedMemoryQueue']);
+      allow update: if isOwner(userId)
+        && !request.resource.data.diff(resource.data).addedKeys()
+             .union(request.resource.data.diff(resource.data).changedKeys())
+             .hasAny(['sharedMemoryQueue']);
+      allow delete: if isOwner(userId);
+    }
+
+    // The "Friends" verse-list snapshot (Settings > who can see my verses).
+    // It used to sit on the profile doc above as sharedMemoryQueue, but that
+    // doc is listable by anyone signed in, so "friends only" wasn't true.
+    // It lives here instead, readable only by the owner and by people who
+    // really are their friend (a friends doc, which only an accepted
+    // request can create). isFriendOf is defined further down.
+    match /profiles/{userId}/shared/memoryQueue {
+      allow read: if isOwner(userId) || (isSignedIn() && isFriendOf(request.auth.uid, userId));
       allow write: if isOwner(userId);
+    }
+
+    // Find Friends' exact-email search. Doc id is the lowercased address,
+    // body is just the owner's uid. `get` only, never `list`: you can look
+    // up someone whose address you already know, but you can't enumerate
+    // addresses. Only the account holding that address (per the auth
+    // token, not anything client-written) can claim it.
+    match /emailLookup/{email} {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create, update: if isSignedIn()
+        && request.auth.token.email is string
+        && email == request.auth.token.email.lower()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
     // Memory plans collection
@@ -82,7 +126,13 @@ service cloud.firestore {
         (resource.data.visibility == 'public' ||
          isOwner(resource.data.ownerId) ||
          resource.data.sharedWithUids.hasAny([request.auth.uid]));
-      allow create, update: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      // Update checks the EXISTING doc's owner too, not just the incoming
+      // one -- otherwise anyone could overwrite someone else's shared copy
+      // simply by writing their own uid into ownerId.
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
     }
 
@@ -98,18 +148,66 @@ service cloud.firestore {
     // together by whichever side accepts — allow create/delete by either the
     // path owner (userId) or the referenced friend (friendUid) so one
     // client-side batch can write/remove both sides atomically.
+    //
+    // Create additionally requires that the SAME write accepts a friend
+    // request between the two (see acceptedInThisWrite). Without that, being
+    // "either side" was enough, so anyone could make themselves anyone's
+    // friend -- and friendship unlocks DMs, nudges, and friends-only shares.
+    // Delete stays either-side with no extra check: unfriending never needs
+    // the other person's consent.
+    function acceptedInThisWrite(requestId) {
+      let path = /databases/$(database)/documents/friendRequests/$(requestId);
+      return existsAfter(path)
+        && getAfter(path).data.status == 'accepted'
+        && getAfter(path).data.respondedAt == request.time;
+    }
+
     match /profiles/{userId}/friends/{friendUid} {
       allow read: if isSignedIn();
-      allow create, delete: if isOwner(userId) || isOwner(friendUid);
+      allow create: if (isOwner(userId) || isOwner(friendUid))
+        && userId != friendUid
+        && request.resource.data.uid == friendUid
+        && (acceptedInThisWrite(userId + '_' + friendUid) || acceptedInThisWrite(friendUid + '_' + userId));
+      allow delete: if isOwner(userId) || isOwner(friendUid);
       allow update: if false;
     }
 
     // Friend requests: created by the sender, only the recipient can
     // accept/decline (update), either side can read or cancel/clear it.
+    // Doc id is always `${fromUid}_${toUid}` (checked) so a request can't be
+    // planted under an id that impersonates a different pair.
+    //
+    // Accepting/declining must stamp respondedAt with the server's clock
+    // (serverTimestamp() == request.time). That stamp is what the friends
+    // rule above checks, so an old 'accepted' request lying around after an
+    // unfriend can't be replayed later to re-create the friendship -- only a
+    // fresh accept by the recipient can.
+    //
+    // Read allows a nonexistent doc for the same reason dmThreads does
+    // (getDoc of a missing doc must not come back permission-denied):
+    // removeFriend checks both possible request ids before deleting them.
     match /friendRequests/{requestId} {
-      allow read: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
-      allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.toUid == request.auth.uid;
+      allow read: if isSignedIn() && (resource == null || resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid is string
+        && request.resource.data.toUid != request.auth.uid
+        && requestId == request.auth.uid + '_' + request.resource.data.toUid
+        && request.resource.data.status == 'pending';
+      allow update: if isSignedIn() && (
+        // Recipient accepting/declining -- nothing else on the doc may change.
+        (resource.data.toUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt'])
+          && request.resource.data.status in ['accepted', 'declined']
+          && request.resource.data.respondedAt == request.time)
+        // Sender re-sending over their own old request (declined, or left
+        // over from an earlier friendship) -- always lands back on pending,
+        // which by itself grants nothing.
+        || (resource.data.fromUid == request.auth.uid
+          && request.resource.data.fromUid == request.auth.uid
+          && request.resource.data.toUid == resource.data.toUid
+          && request.resource.data.status == 'pending')
+      );
       allow delete: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
     }
 
@@ -128,9 +226,20 @@ service cloud.firestore {
       // rejects a list query outright unless the rule is provably satisfied
       // by the query's own filters, so the rule must reference the same field.
       allow read: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || request.auth.uid in resource.data.participantUids);
+      // Same gate as starting a DM (dmGated): you can only challenge a real
+      // friend, or someone in a circle you're both really members of --
+      // named on the challenge as viaCircleId, since a rule can't loop over
+      // every circle. participantUids must be exactly the two people, so a
+      // sender can't slip a third uid in and give them read access.
       allow create: if isSignedIn()
         && request.resource.data.fromUid == request.auth.uid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.toUid is string
+        && request.resource.data.toUid != request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.participantUids.size() == 2
+        && request.resource.data.participantUids.hasAll([request.auth.uid, request.resource.data.toUid])
+        && dmGated(request.auth.uid, request.resource.data.toUid,
+                   request.resource.data.get('viaCircleId', null));
       allow update: if isSignedIn()
         && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid)
         && (
@@ -154,9 +263,18 @@ service cloud.firestore {
     // Accountability nudges (friend-only, sender-composed custom message,
     // deliberately separate from any messaging system). Immutable log except
     // the recipient may mark their own copy read, or delete it from their inbox.
+    // "Friend-only" is enforced here, not just in the client: the sender must
+    // really be friends with the recipient (a friends doc can only come from
+    // an accepted request, see above), and the message is capped at
+    // NUDGE_MAX (500 chars, matching sendAccountabilityNudge).
     match /accountabilityNudges/{nudgeId} {
       allow read: if isSignedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
-      allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid is string
+        && isFriendOf(request.auth.uid, request.resource.data.toUid)
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 500;
       allow update: if isSignedIn() && resource.data.toUid == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow delete: if isSignedIn() && resource.data.toUid == request.auth.uid;
@@ -176,11 +294,12 @@ service cloud.firestore {
     // exactly 1 per write (or reset to 1 on a new dateKey) -- no Cloud
     // Functions in this project, so this is the same "reasonable client trust,
     // not paranoid" posture as the rest of this file, not airtight server
-    // enforcement.
+    // enforcement. Writes are limited to the owner's real friends, so a
+    // stranger can't burn through someone's daily cap to silence them.
     match /profiles/{userId}/accountabilityMeta/counter {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.count == 1;
-      allow update: if isSignedIn()
+      allow create: if isSignedIn() && isFriendOf(request.auth.uid, userId) && request.resource.data.count == 1;
+      allow update: if isSignedIn() && isFriendOf(request.auth.uid, userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count', 'dateKey'])
         && (request.resource.data.count == 1 || request.resource.data.count == resource.data.count + 1);
     }
@@ -190,17 +309,32 @@ service cloud.firestore {
     // this is what makes a thread go read-only the moment that gating
     // relationship disappears, with no separate "active" flag to trust.
     // threadId is the two participant uids sorted + joined with '_'.
+    //
+    // The shared-circle half of the gate used to compare the two profiles'
+    // circleIds arrays -- but each user writes their own circleIds freely,
+    // so anyone could copy a target's ids into their own profile and DM
+    // them. It now checks real member docs (which only the join rules can
+    // create) in ONE specific circle named on the thread (viaCircleId): a
+    // rule can't loop over every circle, so the client picks the circle it
+    // verified both people are in and records it on the thread.
     function isFriendOf(a, b) {
       return exists(/databases/$(database)/documents/profiles/$(a)/friends/$(b));
     }
 
-    function sharesCircleWith(a, b) {
-      return get(/databases/$(database)/documents/profiles/$(a)).data.get('circleIds', [])
-        .hasAny(get(/databases/$(database)/documents/profiles/$(b)).data.get('circleIds', []));
+    function sharesCircle(a, b, circleId) {
+      return circleId is string
+        && isCircleMember(circleId, a)
+        && isCircleMember(circleId, b);
     }
 
-    function dmGated(a, b) {
-      return isFriendOf(a, b) || sharesCircleWith(a, b);
+    function dmGated(a, b, circleId) {
+      return isFriendOf(a, b) || sharesCircle(a, b, circleId);
+    }
+
+    // Text cap for DM and circle chat messages (sendDMMessage /
+    // sendCircleMessage enforce the same 2000 before sending).
+    function isValidMessageText(text) {
+      return text is string && text.size() > 0 && text.size() <= 2000;
     }
 
     match /dmThreads/{threadId} {
@@ -212,22 +346,35 @@ service cloud.firestore {
       // nonexistent thread (resource == null) must be explicitly readable.
       // A thread that DOES exist stays participant-only.
       allow read: if isSignedIn() && (resource == null || request.auth.uid in resource.data.participantUids);
+      // The id must be exactly the two participants joined, so a thread
+      // can't be planted under some other pair's id.
       allow create: if isSignedIn()
         && request.resource.data.participantUids.size() == 2
         && request.auth.uid in request.resource.data.participantUids
-        && dmGated(request.resource.data.participantUids[0], request.resource.data.participantUids[1]);
+        && request.resource.data.participantUids[0] != request.resource.data.participantUids[1]
+        && threadId == request.resource.data.participantUids[0] + '_' + request.resource.data.participantUids[1]
+        && dmGated(request.resource.data.participantUids[0], request.resource.data.participantUids[1],
+                   request.resource.data.get('viaCircleId', null));
       // Only the thread preview fields change after creation -- participants
-      // never change on an existing thread.
+      // never change on an existing thread. viaCircleId may be re-pointed
+      // (e.g. the circle it named was left, but the two still share
+      // another), but only to a circle both really belong to.
       allow update: if isSignedIn() && request.auth.uid in resource.data.participantUids
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'viaCircleId'])
+        && request.resource.data.get('lastMessage', '') is string
+        && request.resource.data.get('lastMessage', '').size() <= 2000
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['viaCircleId'])
+          || sharesCircle(resource.data.participantUids[0], resource.data.participantUids[1], request.resource.data.viaCircleId));
 
       match /messages/{messageId} {
         allow read: if isSignedIn()
           && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids;
         allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid
+          && isValidMessageText(request.resource.data.text)
           && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids
           && dmGated(get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[0],
-                     get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[1]);
+                     get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[1],
+                     get(/databases/$(database)/documents/dmThreads/$(threadId)).data.get('viaCircleId', null));
         allow update, delete: if false;
       }
 
@@ -245,36 +392,39 @@ service cloud.firestore {
           && reactionId == request.resource.data.messageId + '_' + request.auth.uid
           && request.auth.uid in get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids
           && dmGated(get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[0],
-                     get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[1]);
+                     get(/databases/$(database)/documents/dmThreads/$(threadId)).data.participantUids[1],
+                     get(/databases/$(database)/documents/dmThreads/$(threadId)).data.get('viaCircleId', null));
         allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
         allow update: if false;
       }
     }
 
     // Group chat auto-tied to a Circle -- members only, immutable messages.
+    // The one exception to "immutable" is the leader deleting them, purely
+    // so disbandCircle can clear the chat instead of leaving it orphaned.
     match /circles/{circleId}/messages/{messageId} {
-      allow read: if isSignedIn()
-        && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
+      allow read: if isSignedIn() && isCircleMember(circleId, request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid
-        && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
-      allow update, delete: if false;
+        && isValidMessageText(request.resource.data.text)
+        && isCircleMember(circleId, request.auth.uid);
+      allow delete: if isSignedIn() && isCircleOwner(circleId);
+      allow update: if false;
     }
 
     // Same reaction shape as dmThreads' above, flat sibling of circles/{id}/messages.
     match /circles/{circleId}/reactions/{reactionId} {
-      allow read: if isSignedIn()
-        && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
+      allow read: if isSignedIn() && isCircleMember(circleId, request.auth.uid);
       allow create: if isSignedIn()
         && request.resource.data.uid == request.auth.uid
         && reactionId == request.resource.data.messageId + '_' + request.auth.uid
-        && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
-      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+        && isCircleMember(circleId, request.auth.uid);
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isCircleOwner(circleId));
       allow update: if false;
     }
 
     // Real memorization-milestone activity feed (Community). Read is open to
-    // any signed-in user (matches profiles' posture — nothing in this app is
-    // friend-scoped at the rule level, just at the client query level).
+    // any signed-in user (matches profiles' posture — the feed is
+    // friend-scoped at the client query level, not at the rule level).
     // Immutable event log: only the author can create their own event, and
     // nobody can edit/delete one after the fact.
     match /activityEvents/{eventId} {
@@ -283,28 +433,114 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Scripture Circles: community/small-group pacing circles. No Cloud
-    // Functions in this project, so private-circle invite codes are checked
-    // client-side, not server-side — acceptable at this app's small-group
-    // trust level. Only the original creator is ever a 'leader' (ownerId) —
-    // there's no promote/demote feature yet, so member docs are immutable
-    // after creation.
+    // --- Circle helpers ---
+    // getAfter (not get) for the circle doc: createCircle writes the circle,
+    // its leader's member doc and its invite-code doc in ONE batch, and the
+    // member/invite rules need to see the circle that batch is creating.
+    // Outside that batch getAfter and get read the same thing.
+    function circleAfter(circleId) {
+      return getAfter(/databases/$(database)/documents/circles/$(circleId));
+    }
+
+    function isCircleMember(circleId, uid) {
+      return exists(/databases/$(database)/documents/circles/$(circleId)/members/$(uid));
+    }
+
+    function isCircleOwner(circleId) {
+      return get(/databases/$(database)/documents/circles/$(circleId)).data.ownerId == request.auth.uid;
+    }
+
+    // Public circles are browsable by anyone signed in; a private circle's
+    // doc, member list and plans are visible only to its members.
+    function canSeeCircle(circleId) {
+      return get(/databases/$(database)/documents/circles/$(circleId)).data.isPublic == true
+        || isCircleMember(circleId, request.auth.uid);
+    }
+
+    // Invite-code lookup for "join by code": doc id is the code, body is
+    // just the circleId. Like emailLookup, `get` only and never `list`, so
+    // knowing a code finds its circle but codes can't be enumerated -- the
+    // circle docs themselves are no longer readable to non-members of a
+    // private circle, so the old "query circles by inviteCode" lookup can't
+    // work (and was exactly what leaked every code to everyone). Only a
+    // member can create one, and only for the code the circle doc really
+    // has, so nobody can squat a code or point it elsewhere. existsAfter
+    // because createCircle writes the leader's member doc in the same batch;
+    // any member may also backfill one for a circle made before this
+    // collection existed (see loadActiveCircleData).
+    match /circleInvites/{code} {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isValidId(code)
+        && request.resource.data.keys().hasOnly(['circleId'])
+        && request.resource.data.circleId is string
+        && circleAfter(request.resource.data.circleId).data.inviteCode == code
+        && existsAfter(/databases/$(database)/documents/circles/$(request.resource.data.circleId)/members/$(request.auth.uid));
+      allow delete: if isSignedIn() && isCircleOwner(resource.data.circleId);
+      allow update: if false;
+    }
+
+    // Scripture Circles: community/small-group pacing circles. Only the
+    // original creator is ever a 'leader' (ownerId) — there's no
+    // promote/demote feature yet, so member docs are immutable after
+    // creation.
+    //
+    // Joining is enforced HERE, not just client-side: a public circle is
+    // self-join, a private one needs its invite code written onto the new
+    // member doc (checked against the circle's real inviteCode), and anyone
+    // the leader removed is blocked by a banned/{uid} doc. Before this,
+    // self-join worked on ANY circle and a kick could simply be undone by
+    // rejoining.
+    //
+    // Read allows a nonexistent doc (resource == null) for the same reason
+    // as dmThreads: a stale id in someone's own circleIds must come back
+    // "not found", not permission-denied, so loadMyCircles can prune it.
     match /circles/{circleId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource == null
+        || resource.data.isPublic == true
+        || resource.data.ownerId == request.auth.uid
+        || isCircleMember(circleId, request.auth.uid)
+      );
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
 
       match /members/{memberId} {
-        allow read: if isSignedIn();
-        allow create: if isOwner(memberId); // self-service join
+        // Your own member doc is always readable (joinCircle checks it
+        // before joining, even for a circle you can't otherwise see yet).
+        // (canSeeCircle first: a list query can't bind memberId, so the
+        // check that doesn't need it has to be the one that can pass.)
+        allow read: if isSignedIn() && (canSeeCircle(circleId) || isOwner(memberId));
+        // Self-service join -- see the block comment above.
+        allow create: if isOwner(memberId)
+          && request.resource.data.uid == memberId
+          && !exists(/databases/$(database)/documents/circles/$(circleId)/banned/$(memberId))
+          && (
+            // The creator's own leader row, written alongside the circle.
+            (request.resource.data.role == 'leader' && circleAfter(circleId).data.ownerId == memberId)
+            || (request.resource.data.role == 'member'
+              && (circleAfter(circleId).data.isPublic == true
+                || request.resource.data.get('inviteCode', '') == circleAfter(circleId).data.inviteCode))
+          );
         allow delete: if isOwner(memberId) // self-service leave
-          || get(/databases/$(database)/documents/circles/$(circleId)).data.ownerId == request.auth.uid; // or owner kicks
+          || isCircleOwner(circleId); // or owner kicks
+        allow update: if false;
+      }
+
+      // Written by the leader in the same batch as a kick (removeCircleMember)
+      // and checked by the join rule above, so a removed member stays out.
+      // The removed person may read their own entry (so the app can explain
+      // why a rejoin failed); only the leader can lift it.
+      match /banned/{bannedUid} {
+        allow read: if isSignedIn() && (isCircleOwner(circleId) || isOwner(bannedUid));
+        allow create, delete: if isSignedIn() && isCircleOwner(circleId) && bannedUid != request.auth.uid;
         allow update: if false;
       }
 
       match /groupPlans/{planId} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn() && get(/databases/$(database)/documents/circles/$(circleId)).data.ownerId == request.auth.uid;
+        allow read: if isSignedIn() && canSeeCircle(circleId);
+        allow write: if isSignedIn() && isCircleOwner(circleId);
       }
 
       // Open-enrollment group challenges -- unlike groupPlans/studyPlans
@@ -318,7 +554,9 @@ service cloud.firestore {
         allow update: if isSignedIn()
           && resource.data.createdByUid == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
-        allow delete: if isSignedIn() && resource.data.createdByUid == request.auth.uid;
+        // The circle's leader may also delete, so disbandCircle can clear
+        // every challenge instead of orphaning them.
+        allow delete: if isSignedIn() && (resource.data.createdByUid == request.auth.uid || isCircleOwner(circleId));
 
         // Self-owned participant doc, same shape/trust model as
         // profiles/{uid}/friends/{friendUid} -- each member can only ever
@@ -327,12 +565,14 @@ service cloud.firestore {
         // doc, purely so deleteGroupChallenge can clear the subcollection
         // before removing its parent (Firestore has no cascading delete, and
         // an orphaned participants collection is unreachable-but-permanent).
+        // The circle's leader gets the same delete right, for disbandCircle.
         match /participants/{uid} {
           allow read: if isSignedIn() && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
           allow create: if isOwner(uid) && exists(/databases/$(database)/documents/circles/$(circleId)/members/$(request.auth.uid));
           allow update: if isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['progress']);
           allow delete: if isOwner(uid)
-            || get(/databases/$(database)/documents/circles/$(circleId)/challenges/$(challengeId)).data.createdByUid == request.auth.uid;
+            || get(/databases/$(database)/documents/circles/$(circleId)/challenges/$(challengeId)).data.createdByUid == request.auth.uid
+            || isCircleOwner(circleId);
         }
       }
     }

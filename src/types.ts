@@ -401,6 +401,7 @@ export interface CircleMember {
   avatarUrl: string;
   role: 'leader' | 'member';    // set once at creation, immutable in v1
   joinedAt: string;
+  inviteCode?: string;          // the code presented when joining a private circle -- firestore.rules checks it
 }
 
 // Real, mutual, persistent friend connection — independent of circle

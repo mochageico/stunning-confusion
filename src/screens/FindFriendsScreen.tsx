@@ -131,7 +131,6 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
                   key={person.uid}
                   leading={avatar(person.displayName)}
                   title={person.displayName}
-                  subtitle={person.email || undefined}
                   onPress={() => viewMemberProfileById(person.uid)}
                   accessory={
                     isFriend ? (
