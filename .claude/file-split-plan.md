@@ -6,7 +6,26 @@ Scoped 2026-10-19 on `translation-sources` (tip `74f92c7`).
 the AppState shape and `npm run check:retention` tests the moved scheduling math.
 The pure helpers now live in `src/lib/logicalDate.ts`, `missPolicy.ts`, `retention.ts`
 and `appData.ts`. `reviewCalendar.ts` and `forecast.ts` now import the shared day math
-instead of keeping their own copies. Next up: stage 2.
+instead of keeping their own copies.
+
+Stage 2 is done (2026-10-19, one commit per hook): `useLocalPrefs`, `useChapterPhotos`,
+`useAudioDownloads`, `useAccountabilityNudges`, `useRecorder`, `useImportAudio` and
+`useChatCards` in `src/state/`, plus `buildVerseTimestamps` in `src/lib/verseTimestamps.ts`.
+useAppState went from 7,319 to 6,264 lines. Patterns that worked:
+- useAppState **destructures** each hook's result by name. It doesn't spread it, so
+  hook-internal helpers (`loadChapterPhotos`, `wipeAudioCache`, `resetAccountabilityNudges`,
+  `audioRecorder`, …) never leak into AppState.
+- Functions declared later in useAppState (`triggerToast`, `social.respondToCard`,
+  `recordingSelectedVerses`) are passed as small arrow wrappers. They only run after
+  render, so the order they're declared in doesn't matter.
+- `loadUserData` / sign-out / `deleteAccount` call a hook's own load/reset/wipe function
+  instead of reaching into its state.
+- `npx tsc --noEmit -p . --noUnusedLocals | grep src/state/` lists the imports a move
+  left behind (useAppState had none unused before).
+- Saving a take (`persistRecording`, the Save dialog, the recordings library) stayed in
+  useAppState. It's closer to stage 3 work than stage 2.
+
+Next up: stage 3, or the PracticeModals split.
 
 | File | Lines | What it is |
 |---|---|---|
