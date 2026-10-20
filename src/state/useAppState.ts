@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  arrayRemove,
-  arrayUnion,
   collection,
   deleteDoc,
   deleteField,
@@ -52,10 +50,6 @@ import {
 } from '../data';
 import { fetchChapterText, useChapterText } from './useScripture';
 import {
-  ActivityEvent,
-  Circle,
-  CircleMember,
-  GroupChallenge,
   GroupChallengeMembership,
   MemoryPlan,
   QueueItem,
@@ -82,6 +76,7 @@ import { useChatCards } from './useChatCards';
 import { useFriends } from './useFriends';
 import { useMessaging } from './useMessaging';
 import { useChallenges } from './useChallenges';
+import { useCircles } from './useCircles';
 import { countRangeProgress, VerseRange } from '../lib/verseRange';
 import { buildVerseTimestamps } from '../lib/verseTimestamps';
 import { PushTarget, ReminderDay, usePushNotifications } from './usePushNotifications';
@@ -488,29 +483,7 @@ export function useAppState() {
   const [joinedGroupPlanMemberships, setJoinedGroupPlanMemberships] = useState<GroupPlanMembership[]>([]);
   const [joinedGroupPlanDetails, setJoinedGroupPlanDetails] = useState<GroupPlan[]>([]);
   const [viewingGroupPlan, setViewingGroupPlan] = useState<GroupPlan | null>(null);
-  const [viewingGroupDetail, setViewingGroupDetail] = useState<boolean>(false);
-
-  // Scripture Circles (real Firestore-backed community groups — see circles/{id}
-  // in firestore.rules). myCircles/publicCircles/activeCircle* replace the old
-  // local-only joinedGroups/groupMembersMap/groupAnnouncements/groupPlansList mocks.
-  const [myCircles, setMyCircles] = useState<Circle[]>([]);
-  const [loadingMyCircles, setLoadingMyCircles] = useState(false);
-  const [publicCircles, setPublicCircles] = useState<Circle[]>([]);
-  const [loadingPublicCircles, setLoadingPublicCircles] = useState(false);
-
-  const [activeCircle, setActiveCircle] = useState<Circle | null>(null);
-  const [activeCircleMembers, setActiveCircleMembers] = useState<CircleMember[]>([]);
   const [activeCircleGroupPlans, setActiveCircleGroupPlans] = useState<GroupPlan[]>([]);
-  const [loadingActiveCircle, setLoadingActiveCircle] = useState(false);
-
-  // "Friends" = real co-members across every circle the user belongs to
-  // (deduped, self excluded) — there's no separate friend-request system.
-  const [circleFriends, setCircleFriends] = useState<CircleMember[]>([]);
-
-  // Real memorization-milestone activity feed (Community) — events from the
-  // signed-in user and their real circleFriends.
-  const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
-  const [loadingActivityEvents, setLoadingActivityEvents] = useState(false);
 
   // Friends: list, requests, search (see useFriends).
   const {
@@ -531,6 +504,52 @@ export function useAppState() {
     cancelFriendRequest,
     removeFriend,
   } = useFriends({ triggerToast: (message) => triggerToast(message) });
+
+  // Circles, the activity feed and the Community tab's navigation (see useCircles).
+  const {
+    myCircles,
+    loadingMyCircles,
+    publicCircles,
+    loadingPublicCircles,
+    activeCircle,
+    activeCircleMembers,
+    loadingActiveCircle,
+    circleFriends,
+    activityEvents,
+    loadingActivityEvents,
+    viewingGroupDetail,
+    setViewingGroupDetail,
+    communitySubView,
+    setCommunitySubView,
+    activeGroupId,
+    previewCircle,
+    openCirclePreview,
+    closeCirclePreview,
+    inviteCodeInput,
+    setInviteCodeInput,
+    loadMyCircles,
+    loadCircleFriends,
+    loadActivityFeed,
+    loadPublicCircles,
+    loadActiveCircleData,
+    openCircle,
+    createCircle,
+    joinCircle,
+    joinCircleByCode,
+    leaveCircle,
+    disbandCircle,
+    removeCircleMember,
+    updateCircleSettings,
+    resetActiveCircle,
+    resetMyCircles,
+  } = useCircles({
+    user,
+    friends,
+    applyCircleGroupPlans: (plans) => setActiveCircleGroupPlans(plans),
+    setActiveCircleChallenges: (value) => setActiveCircleChallenges(value),
+    setLoadingActiveCircleChallenges: (loading) => setLoadingActiveCircleChallenges(loading),
+    triggerToast: (message) => triggerToast(message),
+  });
 
   // Accountability nudges between friends (see useAccountabilityNudges).
   const {
@@ -620,23 +639,6 @@ export function useAppState() {
   // Selected Recording for Chapter Recording Landing Page
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
 
-  // Community Sub-views and Custom Search/Join state
-  const [communitySubView, setCommunitySubView] = useState<'home' | 'find' | 'create' | 'preview'>('home');
-  const [activeGroupId, setActiveGroupId] = useState<string>('');
-
-  // Read-only public preview of a circle (name/description/owner only) --
-  // reachable by tapping a card on the Find Circles screen without joining
-  // or loading the full members/study-plans dashboard.
-  const [previewCircle, setPreviewCircle] = useState<Circle | null>(null);
-  const openCirclePreview = (circle: Circle) => {
-    setPreviewCircle(circle);
-    setCommunitySubView('preview');
-  };
-  const closeCirclePreview = () => {
-    setPreviewCircle(null);
-    setCommunitySubView('find');
-  };
-
   const [isEditingCircleSettings, setIsEditingCircleSettings] = useState<boolean>(false);
   // Group Plan creation only asks for a title + description -- pacing and
   // the verse queue itself are set/built from the plan's own landing page
@@ -648,8 +650,6 @@ export function useAppState() {
 
   // Community Search, Filters & Creation inputs
   const [findSearchQuery, setFindSearchQuery] = useState<string>('');
-  const [inviteCodeInput, setInviteCodeInput] = useState<string>('');
-
   const [createGroupName, setCreateGroupName] = useState<string>('');
   const [createGroupDesc, setCreateGroupDesc] = useState<string>('');
   const [createGroupPrivacy, setCreateGroupPrivacy] = useState<'public' | 'private'>('public');
@@ -967,132 +967,6 @@ export function useAppState() {
     toastTimerRef.current = setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // ==========================================
-  // SCRIPTURE CIRCLES (real Firestore community groups)
-  // ==========================================
-  const generateInviteCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
-
-  // generateInviteCode() alone had no collision check -- two circles could
-  // theoretically land on the same code. Retries against the circleInvites
-  // lookup (the same one joinCircleByCode reads) before accepting one; if
-  // genuinely unlucky enough to collide every attempt, appends a timestamp
-  // fragment rather than ever failing circle creation.
-  const generateUniqueInviteCode = async (): Promise<string> => {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const code = generateInviteCode();
-      const snap = await getDoc(doc(db, 'circleInvites', code));
-      if (!snap.exists()) return code;
-    }
-    return `${generateInviteCode()}${Date.now().toString(36).slice(-4).toUpperCase()}`;
-  };
-
-  const loadMyCircles = async () => {
-    if (!auth.currentUser) {
-      setMyCircles([]);
-      return;
-    }
-    const uid = auth.currentUser.uid;
-    setLoadingMyCircles(true);
-    try {
-      const profileSnap = await getDoc(doc(db, 'profiles', uid));
-      const circleIds: string[] = profileSnap.exists() ? profileSnap.data().circleIds || [] : [];
-
-      const results = await Promise.all(
-        circleIds.map(async (id) => {
-          // Member doc first: once kicked from a PRIVATE circle, its doc is
-          // no longer readable at all (permission-denied, not "missing").
-          const memberSnap = await getDoc(doc(db, 'circles', id, 'members', uid));
-          // Self-heal: a circle may have been disbanded, or this user kicked
-          // from it, since circleIds was last written — neither of those can
-          // update this user's OTHER-side data (disbanding can't touch every
-          // member's profile; kicking can't either), so prune stale ids here.
-          if (!memberSnap.exists()) return null;
-          const circleSnap = await getDoc(doc(db, 'circles', id));
-          if (!circleSnap.exists()) return null;
-          return { id: circleSnap.id, ...circleSnap.data() } as Circle;
-        })
-      );
-
-      const staleIds = circleIds.filter((id, idx) => results[idx] === null);
-      if (staleIds.length > 0) {
-        updateDoc(doc(db, 'profiles', uid), { circleIds: arrayRemove(...staleIds) }).catch((err) =>
-          console.error('Failed to prune stale circleIds:', err)
-        );
-      }
-
-      const validCircles = results.filter((c): c is Circle => c !== null);
-      setMyCircles(validCircles);
-      loadCircleFriends(validCircles);
-    } catch (err) {
-      console.error('Failed to load my circles:', err);
-    } finally {
-      setLoadingMyCircles(false);
-    }
-  };
-
-  // Gathers real co-members across every circle in myCircles (deduped, self
-  // excluded) for ProfileScreen's "Friends" section. Call after myCircles is
-  // populated/changes — e.g. right after loadMyCircles(), or on-demand from a
-  // screen if circle membership might have changed since the last load.
-  const loadCircleFriends = async (circles: Circle[]) => {
-    if (circles.length === 0) {
-      setCircleFriends([]);
-      return;
-    }
-    try {
-      const results = await Promise.all(circles.map((c) => getDocs(collection(db, 'circles', c.id, 'members'))));
-      const byUid = new Map<string, CircleMember>();
-      results.forEach((snap) => {
-        snap.docs.forEach((d) => {
-          const m = d.data() as CircleMember;
-          if (m.uid !== auth.currentUser?.uid) byUid.set(m.uid, m);
-        });
-      });
-      setCircleFriends(Array.from(byUid.values()));
-    } catch (err) {
-      console.error('Failed to load circle friends:', err);
-    }
-  };
-
-  // Real activity feed: events from the signed-in user and their real
-  // circleFriends. Re-run this (not just rely on the reactive effect below)
-  // after actions that might change circleFriends but wouldn't otherwise
-  // trigger it quickly enough, e.g. a manual refresh button.
-  const loadActivityFeed = async () => {
-    if (!auth.currentUser) {
-      setActivityEvents([]);
-      return;
-    }
-    const uids = Array.from(
-      new Set([auth.currentUser.uid, ...circleFriends.map((f) => f.uid), ...friends.map((f) => f.uid)])
-    ).slice(0, 30);
-    setLoadingActivityEvents(true);
-    try {
-      const snap = await getDocs(
-        query(collection(db, 'activityEvents'), where('uid', 'in', uids), orderBy('createdAt', 'desc'), limit(20))
-      );
-      const events: ActivityEvent[] = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          uid: data.uid,
-          authorName: data.authorName,
-          book: data.book,
-          chapter: data.chapter,
-          type: data.type,
-          verse: data.verse,
-          verseCount: data.verseCount,
-          createdAtMs: data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now(),
-        };
-      });
-      setActivityEvents(events);
-    } catch (err) {
-      console.error('Failed to load activity feed:', err);
-    } finally {
-      setLoadingActivityEvents(false);
-    }
-  };
-
   // Real Community audio feed: every 'public' sharedRecordings doc, plus
   // every 'circle' one whose snapshot sharedWithUids includes the signed-in
   // user (see firestore.rules for why that's a snapshot, not a live check).
@@ -1128,308 +1002,6 @@ export function useAppState() {
       console.error('Failed to load shared recordings feed:', err);
     } finally {
       setLoadingFeedRecordings(false);
-    }
-  };
-
-  const loadPublicCircles = async () => {
-    setLoadingPublicCircles(true);
-    try {
-      const q = query(collection(db, 'circles'), where('isPublic', '==', true));
-      const snap = await getDocs(q);
-      setPublicCircles(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Circle));
-    } catch (err) {
-      console.error('Failed to load public circles:', err);
-    } finally {
-      setLoadingPublicCircles(false);
-    }
-  };
-
-  const loadActiveCircleData = async (circleId: string) => {
-    setLoadingActiveCircle(true);
-    setLoadingActiveCircleChallenges(true);
-    try {
-      const [circleSnap, membersSnap, plansSnap, challengesSnap] = await Promise.all([
-        getDoc(doc(db, 'circles', circleId)),
-        getDocs(collection(db, 'circles', circleId, 'members')),
-        getDocs(collection(db, 'circles', circleId, 'groupPlans')),
-        getDocs(collection(db, 'circles', circleId, 'challenges')),
-      ]);
-      const circle = circleSnap.exists() ? ({ id: circleSnap.id, ...circleSnap.data() } as Circle) : null;
-      setActiveCircle(circle);
-      setActiveCircleMembers(membersSnap.docs.map((d) => d.data() as CircleMember));
-      // Circles made before join-by-code moved to circleInvites/{code} have
-      // no lookup doc yet, so their code wouldn't work. Any member opening
-      // the circle backfills it (firestore.rules only accepts the circle's
-      // real code). Best effort -- never blocks loading the circle.
-      const myUid = auth.currentUser?.uid;
-      if (circle?.inviteCode && myUid && membersSnap.docs.some((d) => d.id === myUid)) {
-        const inviteRef = doc(db, 'circleInvites', circle.inviteCode);
-        getDoc(inviteRef)
-          .then((s) => (s.exists() ? undefined : setDoc(inviteRef, { circleId: circle.id })))
-          .catch((err) => console.error('Failed to backfill circle invite code:', err));
-      }
-      setActiveCircleGroupPlans(plansSnap.docs.map((d) => normalizeGroupPlan(d.id, d.data())));
-      setActiveCircleChallenges(challengesSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as GroupChallenge));
-    } catch (err) {
-      console.error('Failed to load circle detail:', err);
-    } finally {
-      setLoadingActiveCircle(false);
-      setLoadingActiveCircleChallenges(false);
-    }
-  };
-
-  // Opens a circle's detail console and (re)loads its live data — the one
-  // entry point screens should use instead of juggling several setters.
-  const openCircle = (circleId: string) => {
-    setActiveGroupId(circleId);
-    setViewingGroupDetail(true);
-    setCommunitySubView('home');
-    loadActiveCircleData(circleId);
-  };
-
-  const createCircle = async (name: string, description: string, isPublic: boolean) => {
-    if (!auth.currentUser) {
-      triggerToast('Sign in to create a circle.');
-      return;
-    }
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      triggerToast('Give the circle a name first.');
-      return;
-    }
-    const uid = auth.currentUser.uid;
-    const circleRef = doc(collection(db, 'circles'));
-    const now = new Date().toISOString();
-    const inviteCode = await generateUniqueInviteCode();
-    const newCircle: Circle = {
-      id: circleRef.id,
-      name: trimmedName,
-      description: description.trim() || 'A new Scripture Circle — pacing to be set by shared plans.',
-      isPublic,
-      ownerId: uid,
-      ownerName: user?.displayName || 'Anonymous Disciple',
-      inviteCode,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const newMember: CircleMember = {
-      uid,
-      displayName: user?.displayName || 'Anonymous Disciple',
-      avatarUrl: user?.photoURL || '',
-      role: 'leader',
-      joinedAt: now,
-    };
-
-    try {
-      const batch = writeBatch(db);
-      batch.set(circleRef, newCircle);
-      batch.set(doc(db, 'circles', circleRef.id, 'members', uid), newMember);
-      batch.set(doc(db, 'circleInvites', inviteCode), { circleId: circleRef.id });
-      batch.set(doc(db, 'profiles', uid), { circleIds: arrayUnion(circleRef.id) }, { merge: true });
-      await batch.commit();
-      setMyCircles((prev) => [...prev, newCircle]);
-      openCircle(circleRef.id);
-      triggerToast(`Created "${trimmedName}".`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `circles/${circleRef.id}`);
-    }
-  };
-
-  // inviteCode is required for a PRIVATE circle (firestore.rules checks it
-  // against the circle's real code) and ignored for a public one.
-  const joinCircle = async (circleId: string, circleName?: string, inviteCode?: string) => {
-    if (!auth.currentUser) {
-      triggerToast('Sign in to join a circle.');
-      return;
-    }
-    const uid = auth.currentUser.uid;
-    const memberRef = doc(db, 'circles', circleId, 'members', uid);
-    try {
-      const [existing, bannedSnap] = await Promise.all([
-        getDoc(memberRef),
-        getDoc(doc(db, 'circles', circleId, 'banned', uid)),
-      ]);
-      if (existing.exists()) {
-        openCircle(circleId);
-        triggerToast("You're already in this circle.");
-        return;
-      }
-      if (bannedSnap.exists()) {
-        triggerToast("The circle's leader removed you, so you can't rejoin this one.");
-        return;
-      }
-
-      const now = new Date().toISOString();
-      const newMember: CircleMember = {
-        uid,
-        displayName: user?.displayName || 'Anonymous Disciple',
-        avatarUrl: user?.photoURL || '',
-        role: 'member',
-        joinedAt: now,
-        ...(inviteCode ? { inviteCode } : {}),
-      };
-
-      const batch = writeBatch(db);
-      batch.set(memberRef, newMember);
-      batch.set(doc(db, 'profiles', uid), { circleIds: arrayUnion(circleId) }, { merge: true });
-      await batch.commit();
-
-      // A private circle's doc only becomes readable once we're a member,
-      // so the name comes from here when the caller couldn't know it.
-      let name = circleName;
-      if (!name) {
-        const circleSnap = await getDoc(doc(db, 'circles', circleId)).catch(() => null);
-        name = (circleSnap?.data() as Circle | undefined)?.name;
-      }
-
-      await loadMyCircles();
-      openCircle(circleId);
-      triggerToast(`Joined "${name || 'the circle'}".`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/members/${uid}`);
-    }
-  };
-
-  // Codes resolve through circleInvites/{code} -> circleId. Circles made
-  // before that lookup existed get one the first time any member opens them
-  // (see loadActiveCircleData); until then, a public one is still found by
-  // the old query on the circle doc itself, which only works for public
-  // circles now that private circle docs are members-only.
-  const joinCircleByCode = async (codeInput: string) => {
-    const code = codeInput.trim().toUpperCase();
-    if (!code) {
-      triggerToast('Enter an invite code first.');
-      return;
-    }
-    try {
-      let circleId: string | null = null;
-      let circleName: string | undefined;
-      const inviteSnap = /^[A-Z0-9]+$/.test(code) ? await getDoc(doc(db, 'circleInvites', code)) : null;
-      if (inviteSnap?.exists()) {
-        circleId = inviteSnap.data().circleId as string;
-      } else {
-        const snap = await getDocs(
-          query(collection(db, 'circles'), where('isPublic', '==', true), where('inviteCode', '==', code), limit(1))
-        );
-        if (!snap.empty) {
-          circleId = snap.docs[0].id;
-          circleName = (snap.docs[0].data() as Circle).name;
-        }
-      }
-      if (!circleId) {
-        triggerToast(`No circle found for code "${code}".`);
-        return;
-      }
-      await joinCircle(circleId, circleName, code);
-      setInviteCodeInput('');
-    } catch (err) {
-      console.error('Failed to join by code:', err);
-      triggerToast("Couldn't join with that code. Please try again.");
-    }
-  };
-
-  const leaveCircle = async (circleId: string) => {
-    if (!auth.currentUser) return;
-    const uid = auth.currentUser.uid;
-    try {
-      const batch = writeBatch(db);
-      batch.delete(doc(db, 'circles', circleId, 'members', uid));
-      batch.update(doc(db, 'profiles', uid), { circleIds: arrayRemove(circleId) });
-      await batch.commit();
-      setMyCircles((prev) => prev.filter((c) => c.id !== circleId));
-      setViewingGroupDetail(false);
-      triggerToast('You left the circle.');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/members`);
-    }
-  };
-
-  const disbandCircle = async (circleId: string) => {
-    if (!auth.currentUser) return;
-    try {
-      // Firestore has no cascading delete, so every subcollection has to be
-      // cleared by hand or it lingers forever, unreachable. Everything is
-      // READ first, while we're still a member (most of these are
-      // members-only), then deleted.
-      const circleRef = doc(db, 'circles', circleId);
-      const [circleSnap, membersSnap, plansSnap, messagesSnap, reactionsSnap, challengesSnap, bannedSnap, responsesSnap] =
-        await Promise.all([
-          getDoc(circleRef),
-          getDocs(collection(db, 'circles', circleId, 'members')),
-          getDocs(collection(db, 'circles', circleId, 'groupPlans')),
-          getDocs(collection(db, 'circles', circleId, 'messages')),
-          getDocs(collection(db, 'circles', circleId, 'reactions')),
-          getDocs(collection(db, 'circles', circleId, 'challenges')),
-          getDocs(collection(db, 'circles', circleId, 'banned')),
-          getDocs(collection(db, 'circles', circleId, 'responses')),
-        ]);
-      const participantSnaps = await Promise.all(
-        challengesSnap.docs.map((c) => getDocs(collection(c.ref, 'participants')))
-      );
-      const inviteCode = (circleSnap.data() as Circle | undefined)?.inviteCode;
-      const inviteSnap = inviteCode ? await getDoc(doc(db, 'circleInvites', inviteCode)) : null;
-
-      // Order matters: participants before their challenge (their delete
-      // rule reads the challenge), and the member docs + circle doc go in
-      // the very last batch, because every delete rule here checks the
-      // circle's ownerId.
-      const refs = [
-        ...participantSnaps.flatMap((s) => s.docs.map((d) => d.ref)),
-        ...challengesSnap.docs.map((d) => d.ref),
-        ...reactionsSnap.docs.map((d) => d.ref),
-        ...responsesSnap.docs.map((d) => d.ref),
-        ...messagesSnap.docs.map((d) => d.ref),
-        ...plansSnap.docs.map((d) => d.ref),
-        ...bannedSnap.docs.map((d) => d.ref),
-        ...(inviteSnap?.exists() && inviteSnap.data().circleId === circleId ? [inviteSnap.ref] : []),
-        ...membersSnap.docs.map((d) => d.ref),
-        circleRef,
-      ];
-      const BATCH_LIMIT = 450; // Firestore caps a batch at 500 writes
-      for (let i = 0; i < refs.length; i += BATCH_LIMIT) {
-        const batch = writeBatch(db);
-        refs.slice(i, i + BATCH_LIMIT).forEach((r) => batch.delete(r));
-        await batch.commit();
-      }
-
-      // Other members' profiles/{uid}.circleIds still reference this circle —
-      // we can't write their profile docs (owner-only), so loadMyCircles()
-      // self-heals for them next time they load. We can clean up our own.
-      await updateDoc(doc(db, 'profiles', auth.currentUser.uid), { circleIds: arrayRemove(circleId) });
-
-      setMyCircles((prev) => prev.filter((c) => c.id !== circleId));
-      setViewingGroupDetail(false);
-      triggerToast('Circle disbanded.');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}`);
-    }
-  };
-
-  // The ban doc rides in the same batch: without it the removed member
-  // could simply rejoin (firestore.rules' join rule checks banned/{uid}).
-  const removeCircleMember = async (circleId: string, memberUid: string) => {
-    try {
-      const batch = writeBatch(db);
-      batch.delete(doc(db, 'circles', circleId, 'members', memberUid));
-      batch.set(doc(db, 'circles', circleId, 'banned', memberUid), {
-        uid: memberUid,
-        bannedAt: new Date().toISOString(),
-      });
-      await batch.commit();
-      setActiveCircleMembers((prev) => prev.filter((m) => m.uid !== memberUid));
-      triggerToast('Member removed.');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/members/${memberUid}`);
-    }
-  };
-
-  const updateCircleSettings = async (circleId: string, fields: Partial<Pick<Circle, 'name' | 'description' | 'isPublic'>>) => {
-    try {
-      await updateDoc(doc(db, 'circles', circleId), { ...fields, updatedAt: new Date().toISOString() });
-      setActiveCircle((prev) => (prev ? { ...prev, ...fields } : prev));
-      setMyCircles((prev) => prev.map((c) => (c.id === circleId ? { ...c, ...fields } : c)));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}`);
     }
   };
 
@@ -2425,16 +1997,12 @@ export function useAppState() {
       // it to a newly-signed-in different user would be stale and incorrect
       // (e.g. an old "Active" plan badge that doesn't reflect their real
       // membership). Reset on every auth transition, not just sign-out.
-      setActiveCircle(null);
-      setActiveCircleMembers([]);
+      resetActiveCircle();
       setActiveCircleGroupPlans([]);
       setJoinedGroupPlanMemberships([]);
       setJoinedGroupPlanDetails([]);
       resetGroupChallenges();
       setViewingGroupPlan(null);
-      setViewingGroupDetail(false);
-      setActiveGroupId('');
-      setCommunitySubView('home');
 
       // Same reasoning -- a new sign-in shouldn't show the previous
       // account's (or guest session's) cumulative practice time.
@@ -2482,8 +2050,7 @@ export function useAppState() {
         setCognitiveLoadSensitivity(DEFAULT_RHYTHM.cognitiveLoadSensitivity);
         setPausedAt(null);
         setPausedUntil(null);
-        setMyCircles([]);
-        setCircleFriends([]);
+        resetMyCircles();
         setDefaultRecordingVisibility(null);
         setMemoryQueueVisibility('private');
         resetAccountabilityNudges();
