@@ -11,7 +11,7 @@ import { fetchChapterText } from './useScripture';
 // GROUP PLANS
 // ----------------------------------------------------------------------------
 // A circle's curated list of verses plus a target pace (not a retention
-// method -- see the note on Review Settings sharing in useAppState). The open
+// method -- see the note on Review Settings sharing in usePlanSettings). The open
 // circle's plans, the plans I've joined, and adding a plan's verses to my
 // queue. Split out of useAppState (see .claude/file-split-plan.md).
 // ============================================================================
