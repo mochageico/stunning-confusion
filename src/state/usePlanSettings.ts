@@ -492,3 +492,5 @@ export function usePlanSettings({ navigateTo, triggerToast }: UsePlanSettingsDep
     resumeReviews,
   };
 }
+
+export type PlanSettings = ReturnType<typeof usePlanSettings>;
