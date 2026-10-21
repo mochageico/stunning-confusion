@@ -925,3 +925,5 @@ export function useListenPlayback({
     segmentStatusLabel,
   };
 }
+
+export type ListenPlayback = ReturnType<typeof useListenPlayback>;

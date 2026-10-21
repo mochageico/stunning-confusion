@@ -660,3 +660,5 @@ export function useRecall({
     onBuildUpTryBlind,
   };
 }
+
+export type RecallState = ReturnType<typeof useRecall>;
