@@ -23,7 +23,6 @@ import {
   resolveMissedCycles,
 } from '../lib/missPolicy';
 import {
-  computeNextDueDate,
   estimateReviewMinutes,
   findChapterReviewAnchor,
   forecastMemoryLoad,
@@ -125,14 +124,13 @@ export function useReviewEngine({
   // Next-due date `days` from today, nudged off the Sabbath.
   const nextDueDateISO = (days: number) => nextDueDateISOFor(days, reviewClock);
 
-  // "Starting fresh from now" due date after a missed-review catch-up.
-  const computeNextDueDateForItem = (item: QueueItem): string => computeNextDueDate(item, reviewClock);
-
   // Applies the user's missed-review popup choice. `choice` is the bulk
   // default; `overrides` (verseId -> choice) lets "Customize per verse"
   // pick something different for specific items. Every affected item's due
-  // date moves to "starting fresh from now" regardless of choice -- even
-  // 'grace' leaves the old (past) due date behind otherwise.
+  // date moves to today regardless of choice, so the verse is still due now
+  // (the user just opened the app to review -- pushing it to tomorrow made
+  // Daily verses vanish from today's list) and the old past due date can't
+  // be counted as missed a second time by handleReviewCompleted's catch-up.
   const resolveMissedReviewChoice = (
     choice: 'grace' | 'escalate' | 'reset',
     overrides?: Record<string, 'grace' | 'escalate' | 'reset'>
@@ -152,7 +150,7 @@ export function useReviewEngine({
         if (tag !== 'grace' && tag !== 'frozen' && tag !== 'none') {
           updatedItem.reviewsToday = 0;
         }
-        updatedItem.nextReviewDueDate = computeNextDueDateForItem(updatedItem);
+        updatedItem.nextReviewDueDate = nextDueDateISO(0);
         return [item.verseId, updatedItem];
       })
     );
