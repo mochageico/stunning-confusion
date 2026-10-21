@@ -58,7 +58,25 @@ at 1.5× text on an SE width. What changed from the plan above:
 - Still to check on a real phone: lock-screen controls and background audio (Listen), and
   speech recognition (Recall).
 
-Next up: stage 4 (optional), or stop here.
+Stage 4 is done (2026-10-20, one commit per hook): `usePlanSettings` (Review Settings
++ Rhythm), `usePracticeSession` (the open overlay, chained Review All Due, study time),
+`useReviewEngine` (due/missed handling, the daily pull, adding verses, status
+overrides, `handleReviewCompleted`) and `useAccount` (profile settings, sign-out,
+deletion). useAppState went from 4,539 to 2,773 lines; from 7,803 at the start.
+- The review engine takes the settings as one object (`plan: PlanSettings`, the whole
+  usePlanSettings result) and unpacks what it uses at its top, instead of 19 inputs.
+- **Deliberately left in useAppState:** `loadUserData` and the auth listener. Their job
+  is to fill in every other hook on sign-in, so moved out they'd need ~35 inputs
+  (mostly other hooks' load/reset functions). That's the same wiring with an extra layer
+  on top. useAppState is now the place where the hooks get put together: core state,
+  navigation, toast, the queue mirror and auto-sync, playback, the computed metrics,
+  the recordings library, and the sign-in wiring.
+- Checked by hand in the demo: logging a review from Home (5 due → 3 due) and a
+  chained Review All Due session advancing 1 of 2 → 2 of 2.
+
+The split program is finished. If useAppState grows again, the next natural pieces are
+the recordings library (persistRecording, the Save dialog, deleteRecording, …) and the
+queue auto-sync.
 
 | File | Lines | What it is |
 |---|---|---|
