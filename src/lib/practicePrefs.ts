@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Practice preferences live on the device (AsyncStorage), not in the user's
 // account: they're how someone likes to drill, not data anyone else sees.
 //
-// Three places touch them. PracticeModals owns most of the blob (words
+// Three places touch them. practice/useRecall owns most of the blob (words
 // hidden, hint mode, display). BuildUpDrill owns its bite size and direction.
 // Settings owns "Restart after", which moved there because it's set once and
 // rarely touched, unlike words hidden. All merge into the same key rather

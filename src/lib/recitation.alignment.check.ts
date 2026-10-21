@@ -52,7 +52,7 @@ const scenario = (name: string, fn: () => void) => {
 };
 
 // ============================================================================
-// Session simulation helpers -- mirror exactly what PracticeModals.tsx does
+// Session simulation helpers -- mirror exactly what practice/useRecall.ts does
 // with reconcileSpeechWindow's return value, so these tests exercise the
 // real reconciliation contract, not a reimplementation of it.
 // ============================================================================
@@ -95,7 +95,7 @@ const markProtected = (session: Session, idx: number, outcome: WordOutcome): Ses
   pointer: Math.max(session.pointer, idx + 1),
 });
 
-/** Simulates the strike-limit reset branch in PracticeModals.tsx. */
+/** Simulates the strike-limit reset branch in practice/useRecall.ts. */
 const resetToVerseStart = (session: Session, verseStart: number, spokenTokenCountAtReset: number): Session => ({
   ...session,
   pointer: verseStart,

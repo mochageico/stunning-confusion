@@ -478,7 +478,7 @@ export interface LiveAlignResult {
  * would charge for "not having said the rest of the passage yet," which
  * mid-recitation isn't a real mistake.
  *
- * The caller (PracticeModals) owns the actual window position/size and is
+ * The caller (practice/useRecall) owns the actual window position/size and is
  * expected to re-run this on every transcript update. There is no ratchet
  * here -- the result can legitimately revise a previous call's decision
  * (e.g. resolve a repetition-driven ambiguity) once more words arrive; the
@@ -619,7 +619,7 @@ export interface SpeechRecognizer {
    * rewritten) -- interim segments routinely get revised as more audio
    * context arrives (a word, or even the token COUNT, can change between
    * calls), so anything that needs a stable position to remember across
-   * calls (see PracticeModals.tsx's strike-limit reset) must anchor to this
+   * calls (see practice/useRecall.ts's strike-limit reset) must anchor to this
    * count, never to the full transcript's current token count.
    */
   start(callbacks: {

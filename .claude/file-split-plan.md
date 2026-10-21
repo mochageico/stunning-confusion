@@ -44,7 +44,21 @@ useAppState went from 6,264 to 4,539 lines. Notes:
   "before" shots, then `git checkout HEAD -- src/state/useAppState.ts`. Dates on Home
   otherwise differ.
 
-Next up: the PracticeModals split, or stage 4 (optional).
+The PracticeModals split is done (2026-10-20, three commits). PracticeModals.tsx went
+from 2,744 to 378 lines: the shell (header, manual-log sheet, minimized bar) plus
+`src/components/practice/` → `shared.tsx`, `useListenPlayback.ts`, `useRecall.ts`,
+`ListenPanel.tsx`, `RecallPanel.tsx`. Every screenshot matches, including both modes
+at 1.5× text on an SE width. What changed from the plan above:
+- **Both hooks still run in every mode.** The screen calls `useListenPlayback` and then
+  `useRecall` every render, as before, so hook and effect order didn't change at all.
+  Having only the open mode's hook run is a real behavior change. If it's wanted, it's
+  its own job, with the audio-session and `onListenPlayingChange` checks the plan lists.
+- The panels take the hook result objects (`listen`, `recall`) plus the props their
+  layout uses. They call no hooks of their own.
+- Still to check on a real phone: lock-screen controls and background audio (Listen), and
+  speech recognition (Recall).
+
+Next up: stage 4 (optional), or stop here.
 
 | File | Lines | What it is |
 |---|---|---|
