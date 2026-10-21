@@ -34,7 +34,7 @@ export function usePracticeSession({ navigateTo }: UsePracticeSessionDeps) {
   const studySessionStartRef = useRef<number | null>(null);
 
   // Chained review session ("Review All Due") -- groups still to come after
-  // the one currently showing in the overlay above. A ref (not state) since
+  // the one currently showing in the overlay. A ref (not state) since
   // it's only ever read/written by the session functions below, never
   // rendered directly; reviewSessionPosition/Total ARE state because
   // PracticeModals shows them as a "2 of 5" progress badge.

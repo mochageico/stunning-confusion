@@ -391,7 +391,7 @@ export function usePlanSettings({ navigateTo, triggerToast }: UsePlanSettingsDep
 
   // Persists pausedAt/pausedUntil to whichever plan is currently active, and
   // mirrors a plain isPaused flag onto the public profile doc so a friend's
-  // accountability-nudge flow (sendAccountabilityNudge below) can check
+  // accountability-nudge flow (sendAccountabilityNudge in useAccountabilityNudges) can check
   // pause status without needing read access to this private plan doc.
   // Immediate, not gated behind Plan Designer's Save button -- pausing is a
   // "I'm leaving right now" action, same urgency as the rest of Settings.
