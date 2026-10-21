@@ -106,8 +106,9 @@ export interface BibleTranslation {
 /**
  * A Listen playlist: a named set of verses to play, built from My Verses or
  * picked straight from the Bible. Stored on this device (see useLocalPrefs).
- * Verses carry their text so a playlist plays without fetching anything;
- * Listen groups them by chapter in verse order (groupPassages).
+ * Verses carry their text so a playlist plays without fetching anything.
+ * They're stored in play order: passage by passage, as arranged in the
+ * editor's Reorder view.
  */
 export interface ListenPlaylist {
   id: string;

@@ -93,8 +93,10 @@ export function useListenPlayback({
     if (playSource === 'selection') {
       setActivePlayVerses(groupPassages(verses));
     } else if (playSource.startsWith('playlist:')) {
-      // A deleted playlist falls back to the verses this session opened on.
-      setActivePlayVerses(groupPassages(activePlaylist && activePlaylist.verses.length > 0 ? activePlaylist.verses : verses));
+      // A playlist plays in the order it was saved -- the editor lets you
+      // reorder its passages, so it isn't regrouped here. A deleted playlist
+      // falls back to the verses this session opened on.
+      setActivePlayVerses(activePlaylist && activePlaylist.verses.length > 0 ? activePlaylist.verses : groupPassages(verses));
     } else {
       let dbLearning: VerseState[] = [];
       let dbReviewing: VerseState[] = [];

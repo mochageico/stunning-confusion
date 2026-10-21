@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronDown, ChevronUp, Search, Square, SquareCheck, SquareMinus, Trash2, X } from 'lucide-react-native';
+import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, GripVertical, Search, Square, SquareCheck, SquareMinus, Trash2, X } from 'lucide-react-native';
 
 import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, PICKER_TRANSLATIONS, getBookByName, translationLabel } from '../../data';
 import type { ListenPlaylist, QueueItem, VerseState } from '../../types';
@@ -14,7 +15,6 @@ import { Dropdown } from '../Dropdown';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../design';
 import { Badge, SegmentedControl, type BadgeTone } from '../blocks';
 import { useThemeColors } from '../theme';
-import { groupPassages } from './shared';
 
 // ============================================================================
 // PLAYLIST EDITOR
@@ -25,7 +25,9 @@ import { groupPassages } from './shared';
 //     passage to take all of it; open it to tick single verses.
 //   - Browse the Bible: any chapter, any verse, with the chapter page's
 //     hold-and-drag select.
-// The tray at the bottom lists what's in the playlist, by passage.
+// The tray at the bottom lists what's in the playlist, by passage, in play
+// order. Reorder swaps the picker for a list of those passages to drag (or
+// nudge with the arrows) into the order they should play.
 // ============================================================================
 
 type Stage = QueueItem['status'];
@@ -97,6 +99,22 @@ function splitIntoPassages(verses: VerseState[], stageOf?: (v: VerseState) => St
   });
 }
 
+/**
+ * The picked verses as passages in play order. `picked` is a Map, so it keeps
+ * insertion order; each passage sits where its earliest-added verse does.
+ * New picks go to the end, and a verse added next to an existing passage
+ * joins it in place.
+ */
+function orderedPassages(picked: Map<string, VerseState>): Passage[] {
+  const position = new Map<string, number>();
+  [...picked.keys()].forEach((key, i) => position.set(key, i));
+  const first = (p: Passage) => Math.min(...p.verses.map((v) => position.get(verseKey(v)) ?? Infinity));
+  return splitIntoPassages([...picked.values()])
+    .map((p) => ({ p, at: first(p) }))
+    .sort((a, b) => a.at - b.at)
+    .map(({ p }) => p);
+}
+
 /** A default name from the first passages picked: "Romans 8 + Isaiah 55". */
 function suggestedName(passages: Passage[]) {
   const chapters: string[] = [];
@@ -137,6 +155,7 @@ export function PlaylistEditor({
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   // Fresh state each time the editor opens.
   useEffect(() => {
@@ -147,10 +166,23 @@ export function PlaylistEditor({
     setQuery('');
     setExpanded(null);
     setConfirmDelete(false);
+    setReordering(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  const pickedPassages = useMemo(() => splitIntoPassages([...picked.values()]), [picked]);
+  const pickedPassages = useMemo(() => orderedPassages(picked), [picked]);
+
+  // Rebuilds `picked` in the given passage order, which is what play order
+  // is read from.
+  const setPassageOrder = (passages: Passage[]) =>
+    setPicked(new Map(passages.flatMap((p) => p.verses.map((v) => [verseKey(v), v] as const))));
+  const movePassage = (from: number, to: number) => {
+    if (to < 0 || to >= pickedPassages.length) return;
+    const next = [...pickedPassages];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setPassageOrder(next);
+  };
 
   const addVerses = (verses: VerseState[]) =>
     setPicked((prev) => {
@@ -166,7 +198,7 @@ export function PlaylistEditor({
     });
 
   const save = () => {
-    const verses = groupPassages([...picked.values()]);
+    const verses = pickedPassages.flatMap((p) => p.verses);
     if (verses.length === 0) return;
     onSave({
       id: playlist?.id ?? `pl_${Date.now().toString(36)}`,
@@ -214,6 +246,7 @@ export function PlaylistEditor({
             returnKeyType="done"
           />
 
+          {!reordering && (
           <SegmentedControl
             value={tab}
             onChange={setTab}
@@ -223,9 +256,12 @@ export function PlaylistEditor({
               { id: 'browse' as const, label: 'Browse the Bible' },
             ]}
           />
+          )}
 
           <View className="flex-1">
-            {tab === 'mine' ? (
+            {reordering ? (
+              <PassageOrder passages={pickedPassages} onReorder={setPassageOrder} onMove={movePassage} />
+            ) : tab === 'mine' ? (
               <MyVersesPicker
                 memoryQueue={memoryQueue}
                 picked={picked}
@@ -256,7 +292,17 @@ export function PlaylistEditor({
                   ? 'Nothing picked yet'
                   : `${verseCount} ${verseCount === 1 ? 'verse' : 'verses'} · ${pickedPassages.length} ${pickedPassages.length === 1 ? 'passage' : 'passages'}`}
               </AppText>
-              {playlist && onDelete && (
+              <View className="flex-row items-center" style={{ gap: space(6) }}>
+              {(pickedPassages.length > 1 || reordering) && (
+                <AppButton
+                  size="sm"
+                  variant={reordering ? 'primary' : 'quiet'}
+                  Icon={reordering ? undefined : GripVertical}
+                  label={reordering ? 'Done' : 'Reorder'}
+                  onPress={() => setReordering(!reordering)}
+                />
+              )}
+              {playlist && onDelete && !reordering && (
                 <AppButton
                   size="sm"
                   variant={confirmDelete ? 'destructive' : 'quiet'}
@@ -265,8 +311,9 @@ export function PlaylistEditor({
                   onPress={() => (confirmDelete ? onDelete(playlist.id) : setConfirmDelete(true))}
                 />
               )}
+              </View>
             </View>
-            {pickedPassages.length > 0 && (
+            {pickedPassages.length > 0 && !reordering && (
               <ScrollView style={{ maxHeight: space(96) }} contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: space(6) }}>
                 {pickedPassages.map((p) => (
                   <Pressable
@@ -289,6 +336,85 @@ export function PlaylistEditor({
         </View>
       </GestureHandlerRootView>
     </Modal>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Reorder: the playlist's passages in play order. Hold the grip to drag, or
+// use the arrows (which also work where dragging is awkward, and with a
+// screen reader).
+// ----------------------------------------------------------------------------
+function PassageOrder({
+  passages,
+  onReorder,
+  onMove,
+}: {
+  passages: Passage[];
+  onReorder: (passages: Passage[]) => void;
+  onMove: (from: number, to: number) => void;
+}) {
+  const palette = useThemeColors();
+  const space = useScaledSpace();
+  const scale = useFontScale();
+  const iconSize = Math.round(18 * scale);
+  return (
+    <View className="flex-1" style={{ gap: space(8) }}>
+      <AppText variant="caption" className="font-sans text-ink-3">
+        Plays top to bottom. Hold the handle to drag a passage, or use the arrows.
+      </AppText>
+      <DraggableFlatList
+        data={passages}
+        keyExtractor={(p) => p.key}
+        containerStyle={{ flex: 1 }}
+        contentContainerStyle={{ gap: space(6), paddingBottom: space(8) }}
+        onDragEnd={({ data }) => onReorder(data)}
+        renderItem={({ item, drag, isActive, getIndex }: RenderItemParams<Passage>) => {
+          const index = getIndex() ?? 0;
+          return (
+            <View
+              className={`rounded-btn border flex-row items-center ${isActive ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
+              style={{ paddingVertical: space(6), paddingLeft: space(6), paddingRight: space(4), gap: space(6) }}
+            >
+              <Pressable
+                onLongPress={drag}
+                delayLongPress={200}
+                hitSlop={10}
+                accessibilityLabel={`Hold to move ${item.label}`}
+                style={{ padding: space(6) }}
+              >
+                <GripVertical size={iconSize} color={palette.ink3} />
+              </Pressable>
+              <AppText
+                variant="caption"
+                className="font-sans font-semibold text-ink-3"
+                style={{ minWidth: space(18), fontVariant: ['tabular-nums'] }}
+              >
+                {index + 1}
+              </AppText>
+              <AppText variant="label" className="font-sans font-semibold text-ink flex-1" numberOfLines={1}>
+                {item.label}
+              </AppText>
+              <AppIconButton
+                variant="bare"
+                Icon={ArrowUp}
+                diameter={iconSize + 22}
+                iconColor={index === 0 ? palette.line : palette.ink2}
+                accessibilityLabel={`Move ${item.label} up`}
+                onPress={() => onMove(index, index - 1)}
+              />
+              <AppIconButton
+                variant="bare"
+                Icon={ArrowDown}
+                diameter={iconSize + 22}
+                iconColor={index === passages.length - 1 ? palette.line : palette.ink2}
+                accessibilityLabel={`Move ${item.label} down`}
+                onPress={() => onMove(index, index + 1)}
+              />
+            </View>
+          );
+        }}
+      />
+    </View>
   );
 }
 
