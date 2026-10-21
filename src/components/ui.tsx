@@ -465,16 +465,27 @@ export function NumericKeyboardAccessory({ nativeID = NUMERIC_ACCESSORY_ID }: { 
   );
 }
 
-// Drop-in replacement for a numeric <AppTextInput>. Props spread last so a
-// caller can still override keyboardType (e.g. 'decimal-pad').
+// Drop-in replacement for a whole-number <AppTextInput>. Props spread last
+// so a caller can override keyboardType, but onChangeText always receives
+// digits only -- so this is not the input for decimals.
 export function NumericInput({
   accessoryID = NUMERIC_ACCESSORY_ID,
+  onChangeText,
   ...props
 }: TextInputProps & { accessoryID?: string }) {
+  // The accessory bar alone proved unreliable: inside a Modal iOS often
+  // shows it for only the first-focused field (or not at all), stranding
+  // the user behind the keypad. So on iOS use the numbers-and-punctuation
+  // keyboard, which has a real return key ("Done") that always dismisses,
+  // and strip anything that isn't a digit. The accessory stays as a bonus.
+  const ios = Platform.OS === 'ios';
   return (
     <AppTextInput
-      keyboardType="number-pad"
-      inputAccessoryViewID={Platform.OS === 'ios' ? accessoryID : undefined}
+      keyboardType={ios ? 'numbers-and-punctuation' : 'number-pad'}
+      returnKeyType="done"
+      submitBehavior="blurAndSubmit"
+      inputAccessoryViewID={ios ? accessoryID : undefined}
+      onChangeText={onChangeText ? (t) => onChangeText(t.replace(/[^0-9]/g, '')) : undefined}
       {...props} />
   );
 }

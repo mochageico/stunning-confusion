@@ -1,0 +1,61 @@
+# What `eas build` leaves out of the upload.
+#
+# Once this file exists, EAS uses it INSTEAD of .gitignore, so the first block
+# repeats everything .gitignore already excludes. Keep the two in step when
+# you add to .gitignore.
+
+# ---- Copied from .gitignore ----
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.pem
+.env
+.env*.local
+*.tsbuildinfo
+/ios
+/android
+.vscode/
+.shots/
+
+# ---- Not needed to build the app ----
+# Claude Code's local files, including its worktrees (whole copies of the
+# project).
+.claude/
+
+# Audio-voice testing workspace (about 2.3 GB).
+bakeoff/
+
+# Firebase server code, the web invite page and deploy config. These are
+# deployed with `firebase deploy`, never inside the app.
+functions/
+hosting/
+firebase.json
+.firebaserc
+firestore.rules
+storage.rules
+firebase-blueprint.json
+
+# The old web version of the app.
+legacy-web/
+
+# Dev tools: Bible import data, test checks, screenshot scripts.
+scripts/
+
+# Plans, notes and other documents.
+*.md
+*.txt
+studio-samples.html
