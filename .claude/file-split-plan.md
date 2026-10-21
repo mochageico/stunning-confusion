@@ -25,7 +25,26 @@ useAppState went from 7,319 to 6,264 lines. Patterns that worked:
 - Saving a take (`persistRecording`, the Save dialog, the recordings library) stayed in
   useAppState. It's closer to stage 3 work than stage 2.
 
-Next up: stage 3, or the PracticeModals split.
+Stage 3 is done (2026-10-20, one commit per hook): `useFriends`, `useMessaging`
+(DMs, circle chat, reactions), `useChallenges` (1:1 + group, plus the progress sync),
+`useCircles` (circles, activity feed, the Community tab's navigation state) and
+`useGroupPlans`. `countRangeProgress`/`VerseRange` moved to `src/lib/verseRange.ts`.
+useAppState went from 6,264 to 4,539 lines. Notes:
+- Each hook exposes its own reset/load functions for the auth listener and loadUserData
+  (`resetActiveCircle`, `resetMyCircles`, `resetGroupPlans`, `resetGroupChallenges`,
+  `applyJoinedGroupChallenges`, `loadJoinedGroupPlans`). Sign-out clears the open chats
+  through `closeDMThread` + `closeCircleChat`.
+- `loadActiveCircleData` (useCircles) fills in the group plans and challenges it loads
+  through `applyCircleGroupPlans` and the challenge setters, which are passed in.
+- Left in useAppState on purpose: `loadSharedRecordings` (the audio feed, with the
+  recordings), `viewMemberProfileById`, the "Review Settings aren't shareable" note, and
+  the community form inputs (find/create circle fields, new-plan form).
+- To compare screenshots on a later day, swap in the previous commit's useAppState.ts
+  (`git show <sha>:src/state/useAppState.ts > src/state/useAppState.ts`), take the
+  "before" shots, then `git checkout HEAD -- src/state/useAppState.ts`. Dates on Home
+  otherwise differ.
+
+Next up: the PracticeModals split, or stage 4 (optional).
 
 | File | Lines | What it is |
 |---|---|---|
