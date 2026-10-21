@@ -546,6 +546,11 @@ function AppShell() {
           primingLookahead={state.primingLookahead}
           reviewsPaused={state.reviewsPaused}
           setPrimingLookahead={state.setPrimingLookahead}
+          initialListenSource={state.listenSource}
+          listenPlaylists={state.listenPlaylists}
+          onSaveListenPlaylist={state.saveListenPlaylist}
+          onDeleteListenPlaylist={state.deleteListenPlaylist}
+          preferredTranslationId={state.selectedTranslationId}
           userRecordings={state.userRecordings}
           selectedChapterAudios={state.selectedChapterAudios}
           studioPlaybackEnabled={state.studioPlaybackEnabled}

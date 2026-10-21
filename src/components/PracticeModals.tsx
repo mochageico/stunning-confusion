@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronUp, ClipboardCheck, Headphones, Pause, Play, X } from 'lucide-react-native';
 
-import { VerseState, QueueItem, Recording, ChapterPhoto } from '../types';
+import { VerseState, QueueItem, Recording, ChapterPhoto, ListenPlaylist } from '../types';
 import { isRtl, scriptOfVerse } from '../lib/textScript';
 import { WaveBars } from './ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from './design';
@@ -11,7 +11,7 @@ import { Badge, Dialog } from './blocks';
 
 import { useThemeColors } from './theme';
 import { useAboveTabBar } from './TabBar';
-import { useListenPlayback } from './practice/useListenPlayback';
+import { useListenPlayback, type ListenSource } from './practice/useListenPlayback';
 import { useRecall } from './practice/useRecall';
 import ListenPanel from './practice/ListenPanel';
 import RecallPanel from './practice/RecallPanel';
@@ -48,6 +48,15 @@ export interface PracticeModalsProps {
   // "Today's Verses" playlists leave due reviews out, same as Home.
   reviewsPaused?: boolean;
   setPrimingLookahead?: (val: number) => void;
+  // Which list Listen opens on (see usePracticeSession). Defaults to the
+  // verses handed in.
+  initialListenSource?: ListenSource;
+  // Listen playlists (see useLocalPrefs) and the editor's save/delete. The
+  // editor's Browse the Bible view starts on your usual translation.
+  listenPlaylists?: ListenPlaylist[];
+  onSaveListenPlaylist?: (playlist: ListenPlaylist) => void;
+  onDeleteListenPlaylist?: (id: string) => void;
+  preferredTranslationId?: string;
   // Listen mode only — real audio playback needs to resolve which of the
   // user's saved recordings represents each verse's chapter, exactly the
   // way ChapterLandingScreen's audio card already does.
@@ -89,6 +98,10 @@ export interface PracticeModalsProps {
   onAddChapterPhoto?: (book: string, chapter: number) => void;
 }
 
+// Stable default, so the playlist effect in useListenPlayback doesn't rerun
+// (and reset playback) on every render when no playlists are passed.
+const EMPTY_PLAYLISTS: ListenPlaylist[] = [];
+
 // Guard wrapper: the early "nothing to practice" return must happen OUTSIDE
 // the component that declares hooks. Returning before the useState/useEffect
 // calls below meant that if `verses` ever became empty while the modal was
@@ -113,6 +126,11 @@ function PracticeModalsInner({
   primingLookahead = 30,
   reviewsPaused = false,
   setPrimingLookahead,
+  initialListenSource = 'selection',
+  listenPlaylists = EMPTY_PLAYLISTS,
+  onSaveListenPlaylist,
+  onDeleteListenPlaylist,
+  preferredTranslationId,
   userRecordings = [],
   selectedChapterAudios = {},
   studioPlaybackEnabled = true,
@@ -143,6 +161,8 @@ function PracticeModalsInner({
     memoryQueue,
     primingLookahead,
     reviewsPaused,
+    initialSource: initialListenSource,
+    playlists: listenPlaylists,
     userRecordings,
     selectedChapterAudios,
     studioPlaybackEnabled,
@@ -339,6 +359,10 @@ function PracticeModalsInner({
             memoryQueue={memoryQueue}
             primingLookahead={primingLookahead}
             setPrimingLookahead={setPrimingLookahead}
+            playlists={listenPlaylists}
+            onSavePlaylist={onSaveListenPlaylist}
+            onDeletePlaylist={onDeleteListenPlaylist}
+            preferredTranslationId={preferredTranslationId}
             highlightedVerses={highlightedVerses}
             onToggleVerseHighlight={onToggleVerseHighlight}
             verseDoodles={verseDoodles}

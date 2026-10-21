@@ -287,6 +287,9 @@ export function useAppState() {
     studioAbOverride,
     setStudioAbOverride,
     studioPlaybackActive,
+    listenPlaylists,
+    saveListenPlaylist,
+    deleteListenPlaylist,
   } = useLocalPrefs();
   const [backHistory, setBackHistory] = useState<
     Array<{ screen: ScreenName; book: string | null; chapter: number | null; tab?: TabName }>
@@ -323,6 +326,7 @@ export function useAppState() {
     setActiveModal,
     modalVerses,
     setModalVerses,
+    listenSource,
     threadDrillPreset,
     setThreadDrillPreset,
     guidedPassageKey,
@@ -2506,6 +2510,7 @@ export function useAppState() {
     chapterViewMode, setChapterViewMode,
     highlightedVerses, toggleVerseHighlight,
     verseDoodles, saveVerseDoodle,
+    listenPlaylists, saveListenPlaylist, deleteListenPlaylist,
     memoryGridColumns, setMemoryGridColumns,
     studioPlaybackEnabled, setStudioPlaybackEnabled,
     studioAbOverride, setStudioAbOverride,
@@ -2525,7 +2530,7 @@ export function useAppState() {
     weeklyPhaseMonths, setWeeklyPhaseMonths,
     monthlyPhaseYears, setMonthlyPhaseYears,
     activeModal, setActiveModal,
-    modalVerses, setModalVerses,
+    modalVerses, setModalVerses, listenSource,
     threadDrillPreset, setThreadDrillPreset,
     openThreadDrill,
     guidedPassageKey, setGuidedPassageKey,

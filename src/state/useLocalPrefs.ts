@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { DEFAULT_TRANSLATION_ID, PICKER_TRANSLATIONS } from '../data';
+import type { ListenPlaylist } from '../types';
 
 // ============================================================================
 // DEVICE PREFERENCES
 // ----------------------------------------------------------------------------
 // Settings that live on this device only (AsyncStorage, never Firestore):
 // your usual translation, Memory Grid highlights, doodles and column count,
-// and Studio playback. Split out of useAppState (see
+// Studio playback, and Listen playlists. Split out of useAppState (see
 // .claude/file-split-plan.md); useAppState passes these through to AppState
 // unchanged.
 // ============================================================================
@@ -18,6 +19,7 @@ const HIGHLIGHTED_VERSES_KEY = 'memoryGrid:highlightedVerses:v1';
 const VERSE_DOODLES_KEY = 'memoryGrid:doodles:v1';
 const MEMORY_GRID_COLUMNS_KEY = 'memoryGrid:columns:v1';
 const STUDIO_PLAYBACK_KEY = 'studio:playbackEnabled:v1';
+const LISTEN_PLAYLISTS_KEY = 'listen:playlists:v1';
 
 export function useLocalPrefs() {
   // Your usual translation: what the chapter page shows and what Add verses
@@ -134,7 +136,36 @@ export function useLocalPrefs() {
   const [studioAbOverride, setStudioAbOverride] = useState<boolean | null>(null);
   const studioPlaybackActive = studioAbOverride ?? studioPlaybackEnabled;
 
+  // Listen playlists. Device-local like highlights: the profile doc is
+  // readable by every signed-in user, so they can't live there, and they're a
+  // listening preference rather than progress. Newest edit first.
+  const [listenPlaylists, setListenPlaylists] = useState<ListenPlaylist[]>([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(LISTEN_PLAYLISTS_KEY);
+        if (raw) setListenPlaylists(JSON.parse(raw));
+      } catch {
+        // Corrupt/missing -- just start with none.
+      }
+    })();
+  }, []);
+  const writePlaylists = (update: (prev: ListenPlaylist[]) => ListenPlaylist[]) => {
+    setListenPlaylists((prev) => {
+      const next = update(prev);
+      AsyncStorage.setItem(LISTEN_PLAYLISTS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+  /** Adds a new playlist, or replaces the one with the same id. */
+  const saveListenPlaylist = (playlist: ListenPlaylist) =>
+    writePlaylists((prev) => [playlist, ...prev.filter((p) => p.id !== playlist.id)]);
+  const deleteListenPlaylist = (id: string) => writePlaylists((prev) => prev.filter((p) => p.id !== id));
+
   return {
+    listenPlaylists,
+    saveListenPlaylist,
+    deleteListenPlaylist,
     selectedTranslationId,
     setSelectedTranslationId,
     highlightedVerses,

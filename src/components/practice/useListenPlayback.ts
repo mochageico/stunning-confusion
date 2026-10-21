@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer, type AudioPlayer, type AudioStatus } from 'expo-audio';
 import { hasPlayableAudio, resolvePlaybackUrl } from '../../lib/studioAudio';
-import { VerseState, QueueItem, Recording, ChapterPhoto } from '../../types';
+import { VerseState, QueueItem, Recording, ChapterPhoto, ListenPlaylist } from '../../types';
 import { resolveChapterAudio, isReviewDue } from '../../state/useAppState';
 import { chapterPhotoKey, sortChapterPhotos } from '../../lib/chapterPhotos';
 import { groupPassages } from './shared';
@@ -17,6 +17,14 @@ import { groupPassages } from './shared';
 // (see .claude/file-split-plan.md).
 // ============================================================================
 
+/**
+ * The lists Listen can play, as named in its "Which verses play" picker. A
+ * saved playlist is `playlist:<id>`.
+ */
+export type ListenSource = 'selection' | 'memorization' | 'reviewing' | 'priming' | 'all' | `playlist:${string}`;
+
+export const playlistSource = (id: string): ListenSource => `playlist:${id}`;
+
 export interface UseListenPlaybackParams {
   type: 'listen' | 'learn';
   verses: VerseState[];
@@ -24,6 +32,8 @@ export interface UseListenPlaybackParams {
   memoryQueue?: QueueItem[];
   primingLookahead: number;
   reviewsPaused: boolean;
+  initialSource?: ListenSource;
+  playlists: ListenPlaylist[];
   userRecordings: Recording[];
   selectedChapterAudios: Record<string, Recording | null>;
   studioPlaybackEnabled: boolean;
@@ -42,6 +52,8 @@ export function useListenPlayback({
   memoryQueue,
   primingLookahead,
   reviewsPaused,
+  initialSource = 'selection',
+  playlists,
   userRecordings,
   selectedChapterAudios,
   studioPlaybackEnabled,
@@ -55,7 +67,7 @@ export function useListenPlayback({
   // ==========================================
   // PLAYLIST / PLAY-SOURCE STATE (Listen mode only)
   // ==========================================
-  const [playSource, setPlaySource] = useState<'selection' | 'memorization' | 'reviewing' | 'priming' | 'all'>('selection');
+  const [playSource, setPlaySource] = useState<ListenSource>(initialSource);
 
   const [activePlayVerses, setActivePlayVerses] = useState<VerseState[]>(verses);
 
@@ -70,10 +82,19 @@ export function useListenPlayback({
 
   const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
 
+  // The playlist playing, if any. Looked up here so the effect below depends
+  // on that one playlist: saving a different one doesn't restart playback.
+  const activePlaylist = playSource.startsWith('playlist:')
+    ? playlists.find((p) => playSource === playlistSource(p.id))
+    : undefined;
+
   // Sync / load different playlists based on selected source
   useEffect(() => {
     if (playSource === 'selection') {
-      setActivePlayVerses(verses);
+      setActivePlayVerses(groupPassages(verses));
+    } else if (playSource.startsWith('playlist:')) {
+      // A deleted playlist falls back to the verses this session opened on.
+      setActivePlayVerses(groupPassages(activePlaylist && activePlaylist.verses.length > 0 ? activePlaylist.verses : verses));
     } else {
       let dbLearning: VerseState[] = [];
       let dbReviewing: VerseState[] = [];
@@ -129,7 +150,7 @@ export function useListenPlayback({
     setSelectionStart(null);
     setSelectionEnd(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playSource, verses, allVerses, memoryQueue, primingLookahead, reviewsPaused]);
+  }, [playSource, verses, allVerses, memoryQueue, primingLookahead, reviewsPaused, activePlaylist]);
 
   // Header reference text
   const referenceText = useMemo(() => {
@@ -501,7 +522,7 @@ export function useListenPlayback({
   // (caller decides whether that means "loop back to the start" or "stop").
   const findNextPlayableIndex = (from: number): number | null => {
     const inRange = (i: number) => {
-      if (!(playSource === 'selection' && selectionStart !== null)) return true;
+      if (selectionStart === null) return true;
       const end = selectionEnd ?? selectionStart;
       return i >= selectionStart && i <= end;
     };
@@ -513,7 +534,7 @@ export function useListenPlayback({
 
   const firstPlayableIndexInRange = (): number => {
     const inRange = (i: number) => {
-      if (!(playSource === 'selection' && selectionStart !== null)) return true;
+      if (selectionStart === null) return true;
       const end = selectionEnd ?? selectionStart;
       return i >= selectionStart && i <= end;
     };
@@ -843,17 +864,11 @@ export function useListenPlayback({
     }
   };
 
-  // Tapping a verse in the reading pane either jumps playback straight to it
-  // (normal playlist modes), or -- in Selection mode -- marks the start/end
-  // of the loop range, exactly like the old word-tap mechanic but at verse
-  // granularity. Tapping the SAME verse twice is a one-verse loop: end ===
+  // Tapping a verse in the reading pane jumps playback to it and marks the
+  // start of a loop range; a second tap marks the end. Every list loops this
+  // way, not just Selected verses. Tapping the SAME verse twice is a one-verse loop: end ===
   // start is just the shortest valid range, not a special case.
   const handleVerseClick = (index: number) => {
-    if (playSource !== 'selection') {
-      setCurrentVerseIndex(index);
-      return;
-    }
-
     if (selectionStart === null || (selectionStart !== null && selectionEnd !== null)) {
       setSelectionStart(index);
       setSelectionEnd(null);
@@ -875,7 +890,7 @@ export function useListenPlayback({
   // in the JSX, so TypeScript keeps the narrowing on selectionStart/End.
   let segmentStatusLabel: string | null = null;
 
-  if (playSource === 'selection' && selectionStart !== null) {
+  if (selectionStart !== null) {
     if (selectionEnd === null) {
       segmentStatusLabel = 'Tap end verse';
     } else {

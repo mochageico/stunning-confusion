@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { MoveVertical, Pause, Play, RefreshCw, Repeat, Sliders } from 'lucide-react-native';
+import { MoveVertical, Pause, Pencil, Play, RefreshCw, Repeat, Sliders } from 'lucide-react-native';
 import { scriptOfVerse } from '../../lib/textScript';
 import { ChipRow } from '../ui';
 import { Dropdown } from '../Dropdown';
@@ -10,7 +11,12 @@ import { EmptyState, SegmentedControl } from '../blocks';
 import { EMPTY_PHOTO_CACHE, LISTEN_REPEATS, LISTEN_SPEEDS, ListenProgress } from './shared';
 import type { PracticeModalsProps } from '../PracticeModals';
 import type { useThemeColors } from '../theme';
-import type { ListenPlayback } from './useListenPlayback';
+import { playlistSource, type ListenPlayback, type ListenSource } from './useListenPlayback';
+import { PlaylistEditor } from './PlaylistEditor';
+import type { ListenPlaylist } from '../../types';
+
+/** The picker's Create playlist row: opens the editor rather than playing anything. */
+const CREATE_PLAYLIST = 'create-playlist' as const;
 
 // The practice screen's Listen layout: playlist and display pickers, the verse
 // list / memory grid / page photo, segment status, and the transport and
@@ -24,6 +30,10 @@ interface ListenPanelProps {
   memoryQueue: PracticeModalsProps['memoryQueue'];
   primingLookahead: NonNullable<PracticeModalsProps['primingLookahead']>;
   setPrimingLookahead: PracticeModalsProps['setPrimingLookahead'];
+  playlists: ListenPlaylist[];
+  onSavePlaylist: PracticeModalsProps['onSaveListenPlaylist'];
+  onDeletePlaylist: PracticeModalsProps['onDeleteListenPlaylist'];
+  preferredTranslationId: PracticeModalsProps['preferredTranslationId'];
   highlightedVerses: PracticeModalsProps['highlightedVerses'];
   onToggleVerseHighlight: PracticeModalsProps['onToggleVerseHighlight'];
   verseDoodles: PracticeModalsProps['verseDoodles'];
@@ -43,6 +53,10 @@ export default function ListenPanel({
   memoryQueue,
   primingLookahead,
   setPrimingLookahead,
+  playlists,
+  onSavePlaylist,
+  onDeletePlaylist,
+  preferredTranslationId,
   highlightedVerses,
   onToggleVerseHighlight,
   verseDoodles,
@@ -94,6 +108,19 @@ export default function ListenPanel({
     segmentStatusLabel,
   } = listen;
 
+  // Playlist editor: closed, a new playlist (null), or one being edited.
+  const [editing, setEditing] = useState<ListenPlaylist | null | undefined>(undefined);
+  const playingPlaylist = playlists.find((p) => playSource === playlistSource(p.id));
+  const sourceOptions: { id: ListenSource | typeof CREATE_PLAYLIST; label: string }[] = [
+    { id: 'all', label: "Today's verses" },
+    { id: 'memorization', label: 'Learning now' },
+    { id: 'reviewing', label: 'Review' },
+    { id: 'priming', label: 'Coming up next' },
+    { id: 'selection', label: 'Selected verses' },
+    ...playlists.map((p) => ({ id: playlistSource(p.id), label: p.name })),
+    ...(onSavePlaylist ? [{ id: CREATE_PLAYLIST, label: '+ Create playlist' }] : []),
+  ];
+
   return (
     <View className="flex-1 justify-between">
       {/* Which verses play, and how they're shown. The verse picker
@@ -102,23 +129,25 @@ export default function ListenPanel({
           two or three short choices, all visible at once. They wrap
           onto two lines at large text sizes. */}
       <View className="flex-row flex-wrap items-center mb-2.5 shrink-0" style={{ gap: 8 }}>
-        {((memoryQueue && memoryQueue.length > 0) || (allVerses && allVerses.length > 0)) && (
-          <View style={{ flexGrow: 1, flexBasis: space(150) }}>
+        <View className="flex-row items-center" style={{ flexGrow: 1, flexBasis: space(150), gap: 8 }}>
+          <View className="flex-1">
             <Dropdown
-              value={playSource}
-              onChange={setPlaySource}
-              options={[
-                { id: 'all', label: "Today's verses" },
-                { id: 'memorization', label: 'Learning now' },
-                { id: 'reviewing', label: 'Review' },
-                { id: 'priming', label: 'Coming up next' },
-                { id: 'selection', label: 'Selected verses' },
-              ]}
+              value={playSource as ListenSource | typeof CREATE_PLAYLIST}
+              onChange={(id) => (id === CREATE_PLAYLIST ? setEditing(null) : setPlaySource(id))}
+              options={sourceOptions}
               title="Which verses play"
               searchable={false}
             />
           </View>
-        )}
+          {playingPlaylist && onSavePlaylist && (
+            <AppIconButton
+              variant="outline"
+              Icon={Pencil}
+              accessibilityLabel={`Edit ${playingPlaylist.name}`}
+              onPress={() => setEditing(playingPlaylist)}
+            />
+          )}
+        </View>
         <View style={{ flexGrow: 1, flexBasis: space(150) }}>
           <SegmentedControl
             value={listenViewMode}
@@ -196,9 +225,8 @@ export default function ListenPanel({
             // (we're waiting on an end verse); green = the segment is
             // closed and is what will actually loop. Two colours, so
             // "half-selected" never looks like a finished selection.
-            const segmentClosed = playSource === 'selection' && selectionStart !== null && selectionEnd !== null;
+            const segmentClosed = selectionStart !== null && selectionEnd !== null;
             const inSelectionRange =
-              playSource === 'selection' &&
               selectionStart !== null &&
               (selectionEnd !== null ? index >= selectionStart && index <= selectionEnd : index === selectionStart);
 
@@ -210,7 +238,7 @@ export default function ListenPanel({
             let cardClassName = 'rounded-btn px-3 py-2.5 ';
             if (isActive) {
               cardClassName += 'bg-accent-soft';
-            } else if (playSource === 'selection' && selectionStart !== null) {
+            } else if (selectionStart !== null) {
               if (!inSelectionRange) {
                 cardClassName += 'opacity-40';
               } else {
@@ -290,7 +318,7 @@ export default function ListenPanel({
             verse list rather than a fourth stacked band of chrome. */}
         <View className="border-t border-line px-3 py-2 flex-row justify-between items-center gap-2 z-10">
           <View className="flex-row items-center gap-2 flex-1">
-            {playSource === 'selection' && selectionStart !== null ? (
+            {selectionStart !== null ? (
               <>
                 <AppButton
                   size="sm"
@@ -311,7 +339,7 @@ export default function ListenPanel({
               </>
             ) : (
               <AppText variant="caption" className="font-sans text-ink-3 flex-1">
-                {playSource === 'selection' ? 'Tap the first verse to loop' : 'Tap a verse to play from there'}
+                Tap the first verse to loop
               </AppText>
             )}
           </View>
@@ -473,6 +501,29 @@ export default function ListenPanel({
           </>
         )}
       </View>
+      {onSavePlaylist && (
+        <PlaylistEditor
+          visible={editing !== undefined}
+          playlist={editing ?? null}
+          memoryQueue={memoryQueue ?? []}
+          preferredTranslationId={preferredTranslationId}
+          onClose={() => setEditing(undefined)}
+          onSave={(saved) => {
+            onSavePlaylist(saved);
+            setPlaySource(playlistSource(saved.id));
+            setEditing(undefined);
+          }}
+          onDelete={
+            onDeletePlaylist
+              ? (id) => {
+                  onDeletePlaylist(id);
+                  if (playSource === playlistSource(id)) setPlaySource('selection');
+                  setEditing(undefined);
+                }
+              : undefined
+          }
+        />
+      )}
     </View>
   );
 }

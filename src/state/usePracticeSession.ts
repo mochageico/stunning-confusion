@@ -3,6 +3,7 @@ import { doc, increment, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { QueueItem, VerseState } from '../types';
 import { mapQueueItemsToVerseStates } from '../lib/appData';
+import type { ListenSource } from '../components/practice/useListenPlayback';
 import type { ScreenName, ThreadDrillPreset } from './useAppState';
 
 // ============================================================================
@@ -21,6 +22,10 @@ export function usePracticeSession({ navigateTo }: UsePracticeSessionDeps) {
   // Practice Overlays
   const [activeModal, setActiveModal] = useState<'listen' | 'learn' | null>(null);
   const [modalVerses, setModalVerses] = useState<VerseState[]>([]);
+  // Which list Listen opens on. 'selection' plays the verses handed in;
+  // Home's "Listen to all of today's verses" opens on 'all' instead, so the
+  // picker reads Today's verses rather than Selected verses.
+  const [listenSource, setListenSource] = useState<ListenSource>('selection');
   // Set just before opening Pick up the thread from a passing Recall, so its
   // setup starts on that chapter and verse. The screen clears it once read.
   const [threadDrillPreset, setThreadDrillPreset] = useState<ThreadDrillPreset | null>(null);
@@ -59,7 +64,12 @@ export function usePracticeSession({ navigateTo }: UsePracticeSessionDeps) {
   };
 
   // Launch practice session
-  const startPractice = (mode: 'listen' | 'learn', passageVerses: VerseState[]) => {
+  const startPractice = (
+    mode: 'listen' | 'learn',
+    passageVerses: VerseState[],
+    opts?: { listenSource?: ListenSource }
+  ) => {
+    setListenSource(opts?.listenSource ?? 'selection');
     setModalVerses(passageVerses);
     setActiveModal(mode);
   };
@@ -155,6 +165,7 @@ export function usePracticeSession({ navigateTo }: UsePracticeSessionDeps) {
     setActiveModal,
     modalVerses,
     setModalVerses,
+    listenSource,
     threadDrillPreset,
     setThreadDrillPreset,
     guidedPassageKey,

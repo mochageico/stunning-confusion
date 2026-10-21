@@ -321,7 +321,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const listenToEverything = () => {
     const allDashItems = [...learningItems, ...dueReviewItems, ...queuedLookahead];
     if (allDashItems.length > 0) {
-      handleGroupPractice('listen', allDashItems);
+      // Opens on Today's verses, so Listen builds (and names) the list
+      // itself rather than showing these as "Selected verses".
+      startPractice('listen', mapQueueToVerseStates(allDashItems), { listenSource: 'all' });
     } else {
       triggerToast('Nothing on Today to listen to yet.');
     }

@@ -103,6 +103,19 @@ export interface BibleTranslation {
   capabilities: TranslationCapabilities;
 }
 
+/**
+ * A Listen playlist: a named set of verses to play, built from My Verses or
+ * picked straight from the Bible. Stored on this device (see useLocalPrefs).
+ * Verses carry their text so a playlist plays without fetching anything;
+ * Listen groups them by chapter in verse order (groupPassages).
+ */
+export interface ListenPlaylist {
+  id: string;
+  name: string;
+  verses: VerseState[];
+  updatedAt: string; // ISO
+}
+
 export interface ChapterText {
   translationId: string;
   bookId: string;
