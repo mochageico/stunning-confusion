@@ -49,3 +49,9 @@ yarn-error.*
 
 # Screenshots from `npm run shots` (local review only)
 .shots/
+
+# Audio-voice testing workspace (about 2.3 GB, holds its own .env)
+bakeoff/
+
+# Studio audio sample page (generated, about 9 MB)
+studio-samples.html
