@@ -43,6 +43,7 @@ canSendAccountabilityNudge: (friendUid: string) => boolean
 cancelFriendRequest: (request: FriendRequest) => Promise<void>
 cancelRecordingRequest: () => void
 chapterPhotos: ChapterPhoto[]
+chapterSections: { [x: string]: ChapterSections; }
 chapterViewMode: "list" | "grid" | "memoryGrid"
 circleFriends: CircleMember[]
 clearAudioDownloads: () => Promise<void>
@@ -79,6 +80,7 @@ deleteChapterPhoto: (photo: ChapterPhoto) => Promise<void>
 deleteChatMessage: (scope: ChatScope, containerId: string, message: ChatMessage) => Promise<void>
 deleteGroupChallenge: (challenge: GroupChallenge) => Promise<void>
 deleteGroupPlan: (circleId: string, planId: string) => Promise<void>
+deleteListenPlaylist: (id: string) => void
 deleteRecording: (recording: Recording) => Promise<void>
 disbandCircle: (circleId: string) => Promise<void>
 dismissAccountabilityNudge: (nudgeId: string) => Promise<void>
@@ -129,6 +131,7 @@ importedAudioName: string | null
 importedAudioUri: string | null
 incomingFriendRequests: FriendRequest[]
 inviteCodeInput: string
+isChatRecordingSaved: (sharedRecordingId: string) => boolean
 isCircleChatUnread: (circleId: string) => boolean
 isDMThreadUnread: (t: DMThread) => boolean
 isEditingBuiltInPlan: boolean
@@ -153,6 +156,8 @@ learningDays: string[]
 leaveCircle: (circleId: string) => Promise<void>
 leaveGroupChallenge: (challenge: GroupChallenge) => Promise<void>
 leaveGroupPlan: (planId: string) => Promise<void>
+listenPlaylists: ListenPlaylist[]
+listenSource: "all" | "selection" | "memorization" | "reviewing" | "priming" | `playlist:${string}`
 loadActiveCircleData: (circleId: string) => Promise<void>
 loadActivityFeed: () => Promise<void>
 loadCircleFriends: (circles: Circle[]) => Promise<void>
@@ -270,6 +275,9 @@ reviewsRequired: number
 sabbathDay: string
 sabbathEnabled: boolean
 saveChapterOffline: (recordings: Recording[]) => Promise<void>
+saveChapterSections: (book: string, chapter: number, draft: SectionDraft) => Promise<void>
+saveChatRecording: (sharedRecordingId: string) => Promise<void>
+saveListenPlaylist: (playlist: ListenPlaylist) => void
 saveRecordedAudio: () => Promise<void>
 saveRecordingDialog: boolean
 saveRecordingOffline: (recording: Recording) => Promise<boolean>
@@ -279,6 +287,7 @@ saveVerseSyncOffsets: (verseTimestamps: VerseTimestamp[]) => Promise<void>
 savedPlans: MemoryPlan[]
 searchUsers: (rawQuery: string) => Promise<void>
 searchingUsers: boolean
+sectionsForChapter: (book: string, chapter: number) => ChapterSections | null
 seekImportAudioBy: (deltaSeconds: number) => void
 seekRecordingBy: (deltaSeconds: number) => Promise<void>
 seekRecordingToTime: (recording: Recording, seconds: number) => Promise<void>
@@ -396,7 +405,7 @@ showMissedReviewPrompt: boolean
 showOnboarding: boolean
 showTour: boolean
 signOut: () => Promise<void>
-startPractice: (mode: "listen" | "learn", passageVerses: VerseState[]) => void
+startPractice: (mode: "listen" | "learn", passageVerses: VerseState[], opts?: { listenSource?: ListenSource | undefined; } | undefined) => void
 startRecordingForRequest: (scope: "circle" | "dm", containerId: string, message: ChatMessage) => void
 startReviewSession: (groups: QueueItem[][]) => void
 studioAbOverride: boolean | null

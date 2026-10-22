@@ -41,6 +41,13 @@ module.exports = {
         'stage-daily': 'rgb(var(--stage-daily) / <alpha-value>)',
         'stage-weekly': 'rgb(var(--stage-weekly) / <alpha-value>)',
         'stage-monthly': 'rgb(var(--stage-monthly) / <alpha-value>)',
+        // Section brackets: their own set, never the stage colors (theme.tsx).
+        'bracket-1': 'rgb(var(--bracket-1) / <alpha-value>)',
+        'bracket-2': 'rgb(var(--bracket-2) / <alpha-value>)',
+        'bracket-3': 'rgb(var(--bracket-3) / <alpha-value>)',
+        'bracket-4': 'rgb(var(--bracket-4) / <alpha-value>)',
+        'bracket-5': 'rgb(var(--bracket-5) / <alpha-value>)',
+        'bracket-6': 'rgb(var(--bracket-6) / <alpha-value>)',
       },
       // Corner radius by role: cards 14, buttons and inputs 12, segmented
       // control tray 9 with 7 on the selected segment inside it.

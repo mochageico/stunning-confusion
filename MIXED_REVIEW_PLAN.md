@@ -7,7 +7,9 @@ Each stage is one session. Run them in order: every stage builds on the ones bef
 Stage by name when committing (never `git add -A`; other sessions edit this folder).
 After each stage, update the **Progress** line below and note anything that changed.
 
-**Progress:** nothing started.
+**Progress:** stage 1 built 2026-10-22 (sections on the chapter page). The
+chapterSections Firestore rule is **not deployed yet**: build first, then rules.
+Stage 2 is next.
 
 ---
 
@@ -123,6 +125,23 @@ against the banned-jargon list in the memory note "three-concept naming" (no "qu
   on SE width. Sections survive sign-out/sign-in.
 - **Deploy note:** the new rule must reach Firestore before this ships. The memory note
   "social rules deploy" has the order (new app build first, then rules).
+- **As built (notes for later stages):**
+  - Code: `src/lib/sections.ts` (helpers, `SectionDraft`, `chapterStretches`),
+    `src/state/useChapterSections.ts` (`sectionsForChapter`, `saveChapterSections`;
+    a blank draft deletes the doc), `src/components/ChapterSections.tsx` (brackets,
+    header rows, the handle), `src/lib/formatNames.ts` (`FORMATS` with labels and the
+    `counts` flag, `MIX_NAMES` for Mixed review / Last to first / Counts / Practice).
+  - Bracket colors are `bracket1`..`bracket6` in theme.tsx (`bracketColor(palette, i)`),
+    also as `bg-bracket-1`.. classes.
+  - Merge rule: the joined section keeps the upper label/word, or takes the lower one's
+    when the upper had none. Stretches overlap by one verse (buildThreadPassages).
+  - The user's phrase matches **ESV** first letters (Judge not, Do not give, Ask, So,
+    Enter, Beware, Not, Everyone, And). In the BSB the letters are D D A I E B N T W.
+    The app shows the user's words and never checks them against the letters.
+  - Drag handles: gesture callbacks are worklets with copied closures, so no flags in
+    them; the screen keeps drag state in a ref. Row positions are measured at drag
+    start (web's onLayout misses rows that only move). Not yet tried on a real phone.
+  - Demo: `?s=sections`, plus `&edit=1` to open Edit sections.
 
 ## Stage 2 — First words (Outline) and Last to first
 

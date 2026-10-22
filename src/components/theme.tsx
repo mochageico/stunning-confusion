@@ -86,6 +86,21 @@ const STAGES = {
   dark: { stageLearning: '#B79CF0', stageDaily: '#4CC38A', stageWeekly: '#7BA1F2', stageMonthly: '#E3B04B' },
 } as const;
 
+/**
+ * Chapter section brackets (the colored bars on the chapter page and, later,
+ * mixed review and the takeaways path). Their own set, deliberately apart from
+ * the stage colors above -- a bracket must never read as "this is Weekly".
+ * Teal, rose, olive, orchid, slate, copper: none shares a hue with a stage or
+ * status color. Bars and stripes only; labels stay ink, as with stages.
+ * Section i uses bracket (i mod 6) + 1 -- see bracketColor.
+ */
+const BRACKETS = {
+  light: { bracket1: '#1D7F78', bracket2: '#C04A6B', bracket3: '#6B7D24', bracket4: '#9A4797', bracket5: '#56677A', bracket6: '#B4622B' },
+  dark: { bracket1: '#5FC2BA', bracket2: '#EE8FA9', bracket3: '#B5C76A', bracket4: '#D894D5', bracket5: '#A5B4C6', bracket6: '#EBA477' },
+} as const;
+
+export const BRACKET_COUNT = 6;
+
 export interface ThemeColors {
   canvas: string;
   surface: string;
@@ -113,6 +128,18 @@ export interface ThemeColors {
   stageDaily: string;
   stageWeekly: string;
   stageMonthly: string;
+  bracket1: string;
+  bracket2: string;
+  bracket3: string;
+  bracket4: string;
+  bracket5: string;
+  bracket6: string;
+}
+
+/** The bracket color for section `index` (0-based), cycling through the six. */
+export function bracketColor(palette: ThemeColors, index: number): string {
+  const n = ((index % BRACKET_COUNT) + BRACKET_COUNT) % BRACKET_COUNT;
+  return palette[`bracket${n + 1}` as 'bracket1'];
 }
 
 const hexToRgb = (hex: string) => {
@@ -154,6 +181,7 @@ export function buildThemeColors(accentId: AccentId, scheme: ColorScheme): Theme
     danger: s.danger,
     dangerSoft: mix(s.danger, n.surface, softAmount),
     ...STAGES[scheme],
+    ...BRACKETS[scheme],
   };
 }
 
@@ -187,6 +215,12 @@ const CSS_VARS: Record<keyof ThemeColors, string> = {
   stageDaily: '--stage-daily',
   stageWeekly: '--stage-weekly',
   stageMonthly: '--stage-monthly',
+  bracket1: '--bracket-1',
+  bracket2: '--bracket-2',
+  bracket3: '--bracket-3',
+  bracket4: '--bracket-4',
+  bracket5: '--bracket-5',
+  bracket6: '--bracket-6',
 };
 
 /** Space-separated channels, the form `rgb(var(--x) / <alpha-value>)` needs. */

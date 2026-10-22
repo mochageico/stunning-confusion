@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureDetector } from 'react-native-gesture-handler';
@@ -17,6 +17,28 @@ import { isRtl, joinWords, splitWords } from '../lib/textScript';
 import { AppButton, AppIconButton, AppText, RangeCaption, useFontScale, useScaledSpace } from '../components/design';
 import { Dialog, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { useDragSelect } from '../components/useDragSelect';
+import {
+  BracketGutter,
+  DropLine,
+  phraseSummary,
+  SectionHeaderRow,
+  SectionsEditIntro,
+  useGutterWidth,
+} from '../components/ChapterSections';
+import {
+  emptyDraft,
+  isBlankDraft,
+  mergeAt,
+  moveStart,
+  normalizeDraft,
+  phraseLetters,
+  sameDraft,
+  SectionDraft,
+  sectionIndexOf,
+  sectionsFromStarts,
+  setSectionText,
+  splitAt,
+} from '../lib/sections';
 
 import { useThemeColors } from '../components/theme';
 const OVERRIDE_PHASE_OPTIONS: { id: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; label: string }[] = [
@@ -100,6 +122,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     dailyPhaseWeeks,
     weeklyPhaseMonths,
     monthlyPhaseYears,
+    sectionsForChapter,
+    saveChapterSections,
   } = state;
 
   // Manual memory-status override panel — for verses already memorized
@@ -197,6 +221,133 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const oneVerse = selectedVerseNumbers.length === 1;
   const them = oneVerse ? 'it' : 'them';
 
+  // ── Sections ──────────────────────────────────────────────────────────────
+  // The user's own sections for this chapter, drawn as colored brackets down
+  // the left of the list (MIXED_REVIEW_PLAN.md, stage 1). Edit sections is a
+  // mode of its own: taps split instead of select, and the hold-and-drag
+  // selection is off, so the two gestures never compete.
+  const firstVerse = activeChapterVerses[0]?.verse ?? 1;
+  const lastVerse = activeChapterVerses[activeChapterVerses.length - 1]?.verse ?? firstVerse;
+  const savedSections = selectedBook && selectedChapter ? sectionsForChapter(selectedBook, selectedChapter) : null;
+  const savedDraft = savedSections && activeChapterVerses.length > 0 ? normalizeDraft(savedSections, firstVerse, lastVerse) : null;
+  // Non-null while editing: the sections as edited so far, saved on Done.
+  const [editDraft, setEditDraft] = useState<SectionDraft | null>(null);
+  const editing = editDraft !== null;
+  const shownDraft = editDraft ?? savedDraft;
+  const sections = shownDraft ? sectionsFromStarts(shownDraft, lastVerse) : [];
+  const letters = phraseLetters(sections, activeChapterVerses, chapterScript);
+  const phrase = sections.length > 0 ? phraseSummary(sections, letters, chapterScript) : null;
+  const gutterForMode = useGutterWidth(editing);
+  const gutterWidth = shownDraft ? gutterForMode : 0;
+
+  // A handle mid-drag: which start, and the verse it would land on. The list
+  // doesn't reflow until the finger lifts (the handle would move out from
+  // under it); the bars recolor and a line marks the landing verse instead.
+  const [drag, setDrag] = useState<{ index: number; to: number } | null>(null);
+  const dragRef = useRef<{ index: number; to: number } | null>(null);
+  const barDraft = shownDraft && drag ? moveStart(shownDraft, drag.index, drag.to, lastVerse) : shownDraft;
+  // Verse rows by index, and their on-screen spans measured when a drag
+  // starts. Measured fresh rather than kept from onLayout: inserting a header
+  // row moves the rows below it without resizing them, and web reports only
+  // size changes. The page can't scroll mid-drag, so the spans hold until the
+  // finger lifts.
+  const rowRefs = useRef<(View | null)[]>([]);
+  const rowSpans = useRef<({ y: number; height: number } | undefined)[]>([]);
+  const spansReady = useRef(false);
+  const lastFingerY = useRef(0);
+
+  useEffect(() => {
+    setEditDraft(null);
+    setDrag(null);
+    dragRef.current = null;
+  }, [selectedBook, selectedChapter]);
+
+  // The verse under a finger (screen y). Over a section's header row, that's
+  // the verse the header sits on.
+  const verseAtY = (y: number) => {
+    for (let i = 0; i < activeChapterVerses.length; i++) {
+      const r = rowSpans.current[i];
+      if (r && r.y + r.height > y) return activeChapterVerses[i].verse;
+    }
+    return lastVerse;
+  };
+  const setDragTo = (next: { index: number; to: number } | null) => {
+    dragRef.current = next;
+    setDrag(next);
+  };
+  const followFinger = (absoluteY: number) => {
+    lastFingerY.current = absoluteY;
+    const d = dragRef.current;
+    if (!d || !spansReady.current) return;
+    const to = verseAtY(absoluteY);
+    if (to !== d.to) setDragTo({ ...d, to });
+  };
+  const handleFor = (index: number) => ({
+    onDragStart: (absoluteY: number) => {
+      setDragTo({ index, to: editDraft?.starts[index] ?? firstVerse });
+      spansReady.current = false;
+      lastFingerY.current = absoluteY;
+      const rows = activeChapterVerses.map((_, i) => rowRefs.current[i]);
+      let left = rows.length;
+      rowSpans.current = [];
+      rows.forEach((row, i) => {
+        const done = () => {
+          if (--left > 0) return;
+          spansReady.current = true;
+          followFinger(lastFingerY.current);
+        };
+        if (!row) return done();
+        row.measureInWindow((_x, y, _w, height) => {
+          rowSpans.current[i] = { y, height };
+          done();
+        });
+      });
+    },
+    onDragMove: followFinger,
+    onDragEnd: (commit: boolean) => {
+      const d = dragRef.current;
+      if (d && commit) setEditDraft((prev) => prev && moveStart(prev, d.index, d.to, lastVerse));
+      setDragTo(null);
+    },
+    onJoin: () => setEditDraft((prev) => prev && mergeAt(prev, index)),
+    onStep: (delta: 1 | -1) => setEditDraft((prev) => prev && moveStart(prev, index, prev.starts[index] + delta, lastVerse)),
+  });
+
+  const startEditingSections = () => {
+    setSelectedVerseNumbers([]);
+    setEditDraft(savedDraft ?? emptyDraft(firstVerse));
+  };
+  const finishEditingSections = () => {
+    if (editDraft && selectedBook && selectedChapter) {
+      const next = normalizeDraft(editDraft, firstVerse, lastVerse);
+      if (!sameDraft(next, savedDraft ?? emptyDraft(firstVerse))) {
+        void saveChapterSections(selectedBook, selectedChapter, next);
+        triggerToast(isBlankDraft(next) ? 'Sections removed' : 'Sections saved');
+      }
+    }
+    setEditDraft(null);
+    setDragTo(null);
+  };
+  // Hold-and-drag selection wraps the list, except while editing sections.
+  const withDragSelect = (child: React.ReactElement) =>
+    editing ? child : <GestureDetector gesture={dragSelect.gesture}>{child}</GestureDetector>;
+  const cancelEditingSections = () => {
+    setEditDraft(null);
+    setDragTo(null);
+  };
+  const tapVerseWhileEditing = (verse: number) => {
+    if (!editDraft) return;
+    if (editDraft.starts.includes(verse)) {
+      triggerToast(
+        verse === firstVerse
+          ? 'The first section always starts here.'
+          : 'A section already starts here. Double-tap its handle to join it to the one above.'
+      );
+      return;
+    }
+    setEditDraft(splitAt(editDraft, verse, lastVerse));
+  };
+
   // Grid tiles fill each row exactly: as many columns as fit at the smallest
   // comfortable tile (which grows with text size), sharing the leftover room.
   const [gridWidth, setGridWidth] = useState(0);
@@ -227,6 +378,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
       <ScrollView
         ref={scrollRef}
         {...dragSelect.scrollProps}
+        // Frozen while a section handle is dragged, like a drag-select.
+        scrollEnabled={dragSelect.scrollProps.scrollEnabled && !drag}
         className="flex-1 bg-canvas"
         contentContainerClassName="p-5"
         // Extra bottom padding whenever the floating selection bar is
@@ -235,7 +388,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         // underneath -- the bar itself no longer takes up real space in
         // the scroll flow (see below), so nothing pushes content up for it
         // automatically.
-        contentContainerStyle={{ gap: space(16), paddingBottom: floatingBarShowing ? floatingBarHeight + 32 : 16 }}
+        contentContainerStyle={{ gap: space(16), paddingBottom: floatingBarShowing || editing ? floatingBarHeight + 32 : 16 }}
       >
         {/* Back can lead to Today, the chapter grid or elsewhere, so it
             says "Back" rather than naming one of them. The translation picker
@@ -432,19 +585,61 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         <ChapterPhotoStrip state={state} book={selectedBook || ''} chapter={selectedChapter ?? 0} />
 
         {/* How the verses are laid out, then the verses. Select all lives
-            here, beside the thing it selects. */}
-        <SegmentedControl
-          value={chapterViewMode}
-          onChange={setChapterViewMode}
-          accessibilityLabel="Verse layout"
-          options={[
-            { id: 'list', label: 'List' },
-            { id: 'grid', label: 'Grid' },
-            { id: 'memoryGrid', label: 'Memory grid' },
-          ]}
-        />
+            here, beside the thing it selects. Edit sections always shows the
+            list, so the layout switch steps aside while it's open. */}
+        {!editing && (
+          <SegmentedControl
+            value={chapterViewMode}
+            onChange={setChapterViewMode}
+            accessibilityLabel="Verse layout"
+            options={[
+              { id: 'list', label: 'List' },
+              { id: 'grid', label: 'Grid' },
+              { id: 'memoryGrid', label: 'Memory grid' },
+            ]}
+          />
+        )}
 
-        {activeChapterVerses.length > 0 && (
+        {/* The chapter's memory phrase, and the way into Edit sections. Past
+            1.3x the button moves under the phrase rather than squeeze it. */}
+        {activeChapterVerses.length > 0 && !editing && (
+          <View
+            className={scale >= 1.3 ? 'items-start' : 'flex-row items-center'}
+            style={{ gap: scale >= 1.3 ? space(8) : space(12) }}
+          >
+            <View className={scale >= 1.3 ? 'self-stretch' : 'flex-1'} style={{ minWidth: 0 }}>
+              {phrase ? (
+                <>
+                  <AppText variant="caption" className="font-sans text-ink-3">
+                    Memory phrase
+                  </AppText>
+                  <AppText variant="label" className="font-sans font-medium text-ink">
+                    {phrase}
+                  </AppText>
+                </>
+              ) : (
+                <AppText variant="caption" className="font-sans text-ink-3">
+                  Split this chapter into sections to learn and review it a part at a time.
+                </AppText>
+              )}
+            </View>
+            <AppButton
+              size="sm"
+              variant="secondary"
+              label={savedDraft ? 'Edit sections' : 'Add sections'}
+              onPress={startEditingSections}
+            />
+          </View>
+        )}
+
+        {editing && (
+          <SectionsEditIntro
+            canStartOver={!!editDraft && !isBlankDraft(editDraft)}
+            onStartOver={() => setEditDraft(emptyDraft(firstVerse))}
+          />
+        )}
+
+        {activeChapterVerses.length > 0 && !editing && (
           <SectionHeader
             title={selectedVerseNumbers.length > 0 ? `${selectedVerseNumbers.length} selected` : 'Tap a verse to select it'}
             actionLabel={selectedVerseNumbers.length === activeChapterVerses.length ? 'Deselect all' : 'Select all'}
@@ -467,51 +662,97 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             <View className="py-10 items-center">
               <AppText variant="label" className="font-sans text-ink-3">No text available for {selectedBook} {selectedChapter} yet.</AppText>
             </View>
-          ) : chapterViewMode === 'list' ? (
+          ) : chapterViewMode === 'list' || editing ? (
             /* LIST VIEW -- one continuous card, a row per verse: the number
-               and its status dot in a narrow column, the text beside them. */
-            <GestureDetector gesture={dragSelect.gesture}>
+               and its status dot in a narrow column, the text beside them.
+               With sections, each section opens with a header row and a
+               colored bracket runs down the gutter beside its verses. While
+               editing sections there's no drag-select: taps split instead. */
+            withDragSelect(
             <View className="bg-surface border border-line rounded-card overflow-hidden" collapsable={false}>
               {activeChapterVerses.map((v, index) => {
-                const isSelected = isVerseSelected(v.verse);
+                const isSelected = !editing && isVerseSelected(v.verse);
                 const due = dueLabel(v.dueDate);
+                const next = activeChapterVerses[index + 1];
+                // Header rows follow the sections as they are; the bars follow
+                // a handle mid-drag (barDraft), so the change shows before it lands.
+                const sIdx = shownDraft ? sectionIndexOf(shownDraft.starts, v.verse) : -1;
+                const section = sIdx >= 0 ? sections[sIdx] : null;
+                const opensSection =
+                  !!section && (index === 0 || sectionIndexOf(shownDraft!.starts, activeChapterVerses[index - 1].verse) !== sIdx);
+                const bIdx = barDraft ? sectionIndexOf(barDraft.starts, v.verse) : -1;
+                const closesBar = !!barDraft && (!next || sectionIndexOf(barDraft.starts, next.verse) !== bIdx);
+                const dropHere = !!drag && drag.to === v.verse && drag.to !== shownDraft?.starts[drag.index];
 
                 return (
-                  <Pressable
-                    key={v.verse}
-                    onLayout={dragSelect.itemLayout(index)}
-                    onPress={() => dragSelect.handleTap(v.verse)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`Verse ${v.verse}, ${STATUS_WORD[v.status] ?? 'not started'}`}
-                    className={`${rtl ? 'flex-row-reverse' : 'flex-row'} ${index > 0 ? 'border-t border-hairline' : ''} ${isSelected ? 'bg-accent-soft' : ''}`}
-                    style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(10) }}
-                  >
-                    <View className="items-center" style={{ minWidth: space(22), gap: space(6), paddingTop: space(2) }}>
-                      <AppText
-                        variant="caption"
-                        className={`font-sans font-semibold ${isSelected ? 'text-accent' : 'text-ink-3'}`}
-                        style={{ fontVariant: ['tabular-nums'] }}
+                  <Fragment key={v.verse}>
+                    {opensSection && section ? (
+                      <SectionHeaderRow
+                        section={section}
+                        letter={letters[sIdx] ?? ''}
+                        script={chapterScript}
+                        rtl={rtl}
+                        editing={editing}
+                        gutter={gutterWidth}
+                        first={index === 0}
+                        labelText={editDraft?.labels[section.start]}
+                        wordText={editDraft?.phraseWords[section.start]}
+                        onLabel={(t) => setEditDraft((prev) => prev && setSectionText(prev, 'labels', section.start, t))}
+                        onPhraseWord={(t) => setEditDraft((prev) => prev && setSectionText(prev, 'phraseWords', section.start, t))}
+                        handle={editing ? handleFor(sIdx) : undefined}
+                      />
+                    ) : null}
+                    <Pressable
+                      ref={(el) => {
+                        rowRefs.current[index] = el;
+                      }}
+                      onLayout={dragSelect.itemLayout(index)}
+                      onPress={() => (editing ? tapVerseWhileEditing(v.verse) : dragSelect.handleTap(v.verse))}
+                      accessibilityRole="button"
+                      accessibilityState={editing ? undefined : { selected: isSelected }}
+                      accessibilityLabel={`Verse ${v.verse}, ${STATUS_WORD[v.status] ?? 'not started'}`}
+                      accessibilityHint={editing ? 'Starts a new section at this verse.' : undefined}
+                      className={`${rtl ? 'flex-row-reverse' : 'flex-row'} ${isSelected ? 'bg-accent-soft' : ''}`}
+                    >
+                      <BracketGutter index={bIdx} width={gutterWidth} bottom={closesBar} rtl={rtl} />
+                      <View
+                        className={`flex-1 ${rtl ? 'flex-row-reverse' : 'flex-row'} ${index > 0 && !opensSection ? 'border-t border-hairline' : ''}`}
+                        style={{
+                          paddingVertical: space(12),
+                          paddingHorizontal: space(14),
+                          // The bracket gutter already spaces the text from the edge.
+                          ...(gutterWidth > 0 ? (rtl ? { paddingRight: space(4) } : { paddingLeft: space(4) }) : null),
+                          gap: space(10),
+                        }}
                       >
-                        {v.verse}
-                      </AppText>
-                      <View className={`w-2 h-2 rounded-full ${STATUS_DOT[v.status] ?? 'bg-fill'}`} />
-                    </View>
-                    <View className="flex-1" style={{ gap: space(4) }}>
-                      <AppText variant="body" script={chapterScript} className="font-serif leading-relaxed text-ink">
-                        {v.text}
-                      </AppText>
-                      {due ? (
-                        <AppText variant="caption" className="font-sans text-ink-3">
-                          {due}
-                        </AppText>
-                      ) : null}
-                    </View>
-                  </Pressable>
+                        <View className="items-center" style={{ minWidth: space(22), gap: space(6), paddingTop: space(2) }}>
+                          <AppText
+                            variant="caption"
+                            className={`font-sans font-semibold ${isSelected ? 'text-accent' : 'text-ink-3'}`}
+                            style={{ fontVariant: ['tabular-nums'] }}
+                          >
+                            {v.verse}
+                          </AppText>
+                          <View className={`w-2 h-2 rounded-full ${STATUS_DOT[v.status] ?? 'bg-fill'}`} />
+                        </View>
+                        <View className="flex-1" style={{ gap: space(4) }}>
+                          <AppText variant="body" script={chapterScript} className="font-serif leading-relaxed text-ink">
+                            {v.text}
+                          </AppText>
+                          {due ? (
+                            <AppText variant="caption" className="font-sans text-ink-3">
+                              {due}
+                            </AppText>
+                          ) : null}
+                        </View>
+                      </View>
+                      {dropHere ? <DropLine /> : null}
+                    </Pressable>
+                  </Fragment>
                 );
               })}
             </View>
-            </GestureDetector>
+            )
           ) : chapterViewMode === 'grid' ? (
             /* GRID VIEW -- the first few words of each verse. Tiles are sized
                to fill each row: three across normally, two at large text. */
@@ -656,7 +897,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           and the copyright notice from ever being hidden underneath it.
           The shadow is on a view that mounts and unmounts whole, never
           toggled by a class (see ios-fabric-shadow-deadlock). */}
-      {floatingBarShowing && (
+      {floatingBarShowing && !editing && (
         <View
           className="absolute left-4 right-4 bg-surface border border-line rounded-card shadow-lg"
           style={{ bottom: 16, padding: space(12), gap: space(10) }}
@@ -689,6 +930,26 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 <AppButton size="sm" variant={b.variant} label={b.label} accessibilityLabel={b.a11y} onPress={b.onPress} />
               </View>
             ))}
+          </View>
+        </View>
+      )}
+
+      {/* Edit sections' own bar: how many sections, Cancel, Done. Same
+          mount-whole rule for its shadow as the selection bar above. */}
+      {editing && (
+        <View
+          className="absolute left-4 right-4 bg-surface border border-line rounded-card shadow-lg"
+          style={{ bottom: 16, padding: space(12) }}
+          onLayout={(e) => setFloatingBarHeight(e.nativeEvent.layout.height)}
+        >
+          <View className="flex-row flex-wrap items-center justify-between" style={{ gap: space(8) }}>
+            <AppText variant="label" className="font-sans font-semibold text-ink shrink">
+              {sections.length} {sections.length === 1 ? 'section' : 'sections'}
+            </AppText>
+            <View className="flex-row" style={{ gap: space(8) }}>
+              <AppButton size="sm" variant="quiet" label="Cancel" onPress={cancelEditingSections} />
+              <AppButton size="sm" variant="primary" label="Done" onPress={finishEditingSections} />
+            </View>
           </View>
         </View>
       )}

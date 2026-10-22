@@ -228,10 +228,11 @@ export function useAccount({
 
       const uid = auth.currentUser.uid;
       const myEmail = (auth.currentUser.email || '').toLowerCase();
-      const [queueSnap, versesSnap, recordingsSnap, emailLookupSnap] = await Promise.all([
+      const [queueSnap, versesSnap, recordingsSnap, sectionsSnap, emailLookupSnap] = await Promise.all([
         getDocs(collection(db, 'users', uid, 'memoryQueue')),
         getDocs(collection(db, 'users', uid, 'verses')),
         getDocs(collection(db, 'users', uid, 'recordings')),
+        getDocs(collection(db, 'users', uid, 'chapterSections')),
         myEmail && !myEmail.includes('/') ? getDoc(doc(db, 'emailLookup', myEmail)) : Promise.resolve(null),
       ]);
 
@@ -239,6 +240,7 @@ export function useAccount({
       queueSnap.docs.forEach((d) => batch.delete(d.ref));
       versesSnap.docs.forEach((d) => batch.delete(d.ref));
       recordingsSnap.docs.forEach((d) => batch.delete(d.ref));
+      sectionsSnap.docs.forEach((d) => batch.delete(d.ref));
       batch.delete(doc(db, 'memoryPlans', uid));
       batch.delete(sharedQueueDocRef(uid));
       // Only if it's really ours -- the rule reads the existing doc's uid,

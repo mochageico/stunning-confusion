@@ -47,7 +47,8 @@ if (process.argv.includes('--update') || !fs.existsSync(SNAPSHOT)) {
   process.exit(0);
 }
 
-const expected = fs.readFileSync(SNAPSHOT, 'utf8').split('\n').filter(Boolean);
+// \r?: a Windows checkout gets the snapshot with CRLF line endings.
+const expected = fs.readFileSync(SNAPSHOT, 'utf8').split(/\r?\n/).filter(Boolean);
 const expectedSet = new Set(expected);
 const currentSet = new Set(lines);
 const missing = expected.filter((l) => !currentSet.has(l));

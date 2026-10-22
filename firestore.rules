@@ -165,6 +165,15 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
+    // The user's own sections for a chapter (where each starts, labels,
+    // memory-phrase words), keyed by book|chapter. Owner-only. Sections may
+    // one day be shown to a circle alongside shared takeaways; if so that is
+    // a copy written elsewhere, like sharedRecordings, never this collection
+    // opened up.
+    match /users/{userId}/chapterSections/{sectionsId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // Denormalized, read-only-to-others copy of a recording once its owner
     // sets sharedVisibility to 'circle' or 'public'. Firestore rules can't
     // cheaply check "is this reader a co-member of ANY of the owner's

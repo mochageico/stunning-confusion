@@ -55,6 +55,7 @@ import { formatDuration } from '../lib/format';
 import { useSocial } from './useSocial';
 import { useLocalPrefs } from './useLocalPrefs';
 import { useChapterPhotos } from './useChapterPhotos';
+import { useChapterSections } from './useChapterSections';
 import { useAudioDownloads } from './useAudioDownloads';
 import { useAccountabilityNudges } from './useAccountabilityNudges';
 import { useRecorder } from './useRecorder';
@@ -313,6 +314,9 @@ export function useAppState() {
     setChapterPhotoVerseRange,
     reorderChapterPhotos,
   } = useChapterPhotos({ user, triggerToast: (message) => triggerToast(message) });
+
+  // The user's own sections per chapter (see useChapterSections).
+  const { chapterSections, loadChapterSections, sectionsForChapter, saveChapterSections } = useChapterSections({ user });
 
   // Whether RecordingDetailScreen's verse-sync timeline is in edit mode.
   // The draft marker positions themselves live as local component state in
@@ -1305,6 +1309,9 @@ export function useAppState() {
 
       // 5. Bible page photos (private to this user)
       await loadChapterPhotos(currentUser.uid);
+
+      // 6. Chapter sections (private to this user)
+      await loadChapterSections(currentUser.uid);
 
       triggerToast('Cloud profile and scripture data synchronized!');
     } catch (err) {
@@ -2778,6 +2785,9 @@ export function useAppState() {
     setChapterPhotoVerseRange,
     reorderChapterPhotos,
     cacheChapterPhoto,
+    chapterSections,
+    sectionsForChapter,
+    saveChapterSections,
     buildVerseTimestamps,
   };
 }

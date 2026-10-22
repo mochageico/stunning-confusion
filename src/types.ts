@@ -641,3 +641,33 @@ export interface ChapterPhoto {
   width: number;
   height: number;
 }
+
+/**
+ * The user's own sections for one chapter: where each starts, an optional
+ * label, and an optional memory-phrase word. Mixed review, Outline and the
+ * takeaways path all walk a chapter section by section.
+ *
+ * Keyed by book and chapter, not translation: sections describe the
+ * passage's structure, which is the same in every translation. That holds for
+ * Hebrew/Greek too, because the app keeps those on English verse numbering.
+ *
+ * Stored at users/{uid}/chapterSections/{key}; owner-only (firestore.rules).
+ * Helpers that read and change it live in src/lib/sections.ts.
+ */
+export interface ChapterSections {
+  /** `${book}|${chapter}` -- see chapterSectionsKey in src/lib/sections.ts. */
+  key: string;
+  book: string;
+  chapter: number;
+  /** The verse each section opens on, ascending. The first is the chapter's first verse. */
+  starts: number[];
+  /** Section label by the verse the section starts on. Moves with the start. */
+  labels: Record<number, string>;
+  /**
+   * The user's memory-phrase word for a section, by its start verse. The app
+   * never makes one up; with none written it shows the opening letter.
+   */
+  phraseWords: Record<number, string>;
+  /** ISO time of the last save. */
+  updatedAt: string;
+}

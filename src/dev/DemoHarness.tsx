@@ -14,7 +14,7 @@
 //
 // Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
 // activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, verseRoad, versePage,
-// referenceDrill, threadDrill, guided,
+// referenceDrill, threadDrill, guided, sections,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
@@ -28,7 +28,9 @@
 // ink) without changing the one saved in Settings; scale=1.5 renders at that
 // text size, as if set in iOS Settings; notdue=1 (with modalLearn) practices
 // verses that aren't due yet; n=3 (with modalLearn) practices the first 3
-// seeded verses, enough for the Order drill.
+// seeded verses, enough for the Order drill. sections: Matthew 7 with the
+// user's nine sections and memory phrase; edit=1 (with sections) opens Edit
+// sections.
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
@@ -198,6 +200,40 @@ function buildGuidedQueue() {
     touchLogs: minutesAgo === null ? [] : [{ timestamp: new Date(now + minutesAgo * 60000).toISOString(), drillType: 'speak' }],
   }));
   return [...base, ...psalm];
+}
+
+// ?s=sections: Matthew 7 split the way the user split it, with the user's
+// memory phrase (MIXED_REVIEW_PLAN.md). The last section has no label, to show
+// the verse-range fallback.
+const MATT7_STARTS = [1, 6, 7, 12, 13, 15, 21, 24, 28];
+const MATT7_LABELS = [
+  'Judging others',
+  'Pearls before pigs',
+  'Ask, seek, knock',
+  'The golden rule',
+  'The narrow gate',
+  'Known by their fruit',
+  'I never knew you',
+  'Two builders',
+];
+const MATT7_PHRASE = 'john doe ate some edamame but not every apple'.split(' ');
+const matt7Sections = () => ({
+  starts: MATT7_STARTS,
+  labels: Object.fromEntries(MATT7_LABELS.map((label, i) => [MATT7_STARTS[i], label])),
+  phraseWords: Object.fromEntries(MATT7_PHRASE.map((word, i) => [MATT7_STARTS[i], word])),
+});
+
+/** Web only: taps a button by its exact text once it shows up (gives up after ~10s). */
+function tapWhenShown(text: string) {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  let tries = 0;
+  const timer = setInterval(() => {
+    const el = Array.from(document.querySelectorAll('[role="button"]')).find(
+      (node) => (node as HTMLElement).innerText?.trim().toLowerCase() === text.toLowerCase()
+    ) as HTMLElement | undefined;
+    if (el || ++tries > 40) clearInterval(timer);
+    el?.click();
+  }, 250);
 }
 
 const DEMO_USER = { uid: 'demo', displayName: 'Micah', email: 'demo@example.com', photoURL: null, emailVerified: true };
@@ -375,6 +411,13 @@ export function useDemoState(real: AppState): AppState {
     }
     if (s === 'chapters') real.navigateTo('chapters', 'Romans');
     else if (s === 'chapterLanding') real.navigateTo('chapterLanding', 'Romans', 8);
+    else if (s === 'sections') {
+      // Saved through the real hook: with no Firebase user it stays local, so
+      // editing in the demo works and writes nothing.
+      void real.saveChapterSections('Matthew', 7, matt7Sections());
+      real.navigateTo('chapterLanding', 'Matthew', 7);
+      if (params.get('edit') === '1') tapWhenShown('Edit sections');
+    }
     else if (s === 'planDesigner') real.openActivePlanDesigner();
     else if (s === 'guided') real.openGuided('BSB|Psalms|23|1');
     else if (s === 'versePage') real.openVersePage({ book: 'Philippians', chapter: 4, verses: [6, 7], translationId: 'BSB' });
