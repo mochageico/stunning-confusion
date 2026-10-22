@@ -8,6 +8,7 @@ import { MIN_JIGSAW_VERSES, MIN_THREAD_VERSES, threadRunEndingAt } from '../../l
 import { verseAnnotationKey } from '../MemoryGrid';
 import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePrefs, StrikeLimit } from '../../lib/practicePrefs';
 import { formatDate } from '../../lib/format';
+import { buildReciteOrder, positionsToWords, verseStartPosition } from '../../lib/reciteOrder';
 
 // ============================================================================
 // RECALL (LEARN MODE)
@@ -77,9 +78,24 @@ export function useRecall({
     return list;
   }, [verses, passageScript]);
 
-  // How many words have been confirmed so far (either channel), and each
-  // confirmed word's grade. Both persist across a tab switch away and back
-  // within the same modal instance since the recording is the same passage.
+  // "Last to first": verses in reverse, each verse still said forward. Words
+  // keep their passage-order index everywhere (outcomes, hidden sample, grid,
+  // crediting); only the pointer below walks recite positions, and
+  // lib/reciteOrder translates between the two.
+  const [lastToFirst, setLastToFirst] = useState(false);
+
+  const reciteOrder = useMemo(
+    () => buildReciteOrder(reciteWordObjects.map((w) => w.verseIdx), verses.length, lastToFirst),
+    [reciteWordObjects, verses.length, lastToFirst]
+  );
+
+  const wordVerse = (pos: number) => reciteWordObjects[reciteOrder.order[pos]]?.verseIdx;
+
+  // How many words have been confirmed so far (either channel) -- a recite
+  // position, not a word index (see reciteOrder) -- and each confirmed
+  // word's grade, keyed by word index. Both persist across a tab switch away
+  // and back within the same modal instance since the recording is the same
+  // passage.
   const [recitePointer, setRecitePointer] = useState(0);
 
   const [reciteOutcomes, setReciteOutcomes] = useState<Record<number, WordOutcome>>({});
@@ -167,19 +183,20 @@ export function useRecall({
     }, 2500);
   };
 
-  // Records one word's grade and advances the shared pointer -- used by
-  // both the typed-letter path and the hint/reveal path. Resets the
-  // per-verse strike count when the advance crosses into a new verse.
-  // Tagged 'protected' -- a deliberate typed answer or an explicitly
-  // revealed hint must never be silently reverted by a later speech
-  // reconciliation pass.
-  const commitReciteOutcome = (idx: number, outcome: WordOutcome, nextPointer: number) => {
+  // Records the grade of the word at recite position `pos` and advances the
+  // shared pointer -- used by both the typed-letter path and the hint/reveal
+  // path. Resets the per-verse strike count when the advance crosses into a
+  // new verse. Tagged 'protected' -- a deliberate typed answer or an
+  // explicitly revealed hint must never be silently reverted by a later
+  // speech reconciliation pass.
+  const commitReciteOutcome = (pos: number, outcome: WordOutcome) => {
+    const idx = reciteOrder.order[pos];
     setReciteOutcomes((prev) => ({ ...prev, [idx]: outcome }));
     setReciteSource((prev) => ({ ...prev, [idx]: 'protected' }));
-    if (reciteWordObjects[nextPointer] && reciteWordObjects[nextPointer].verseIdx !== reciteWordObjects[idx].verseIdx) {
+    if (pos + 1 < reciteOrder.order.length && wordVerse(pos + 1) !== wordVerse(pos)) {
       setVerseStrikes(0);
     }
-    setRecitePointer(nextPointer);
+    setRecitePointer(pos + 1);
   };
 
   // NOTE: onChangeText passes the string directly (unlike web's onChange event).
@@ -201,7 +218,8 @@ export function useRecall({
       return;
     }
     const lastChar = letters[letters.length - 1];
-    const current = reciteWordObjects[recitePointer];
+    const currentIdx = reciteOrder.order[recitePointer];
+    const current = reciteWordObjects[currentIdx];
     // Near-miss forgiveness: 'close' means a QWERTY key adjacent to the
     // right letter — accepted and advanced just like 'exact', but graded
     // separately so a perfect-run check can still see the difference
@@ -209,9 +227,9 @@ export function useRecall({
     const verdict = classifyFirstLetterAttempt(lastChar, current.word, passageScript);
 
     if (verdict !== 'wrong') {
-      const alreadyMissed = reciteOutcomes[recitePointer] === 'missed';
+      const alreadyMissed = reciteOutcomes[currentIdx] === 'missed';
       const outcome: WordOutcome = alreadyMissed ? 'missed' : verdict === 'close' ? 'close' : 'perfect';
-      commitReciteOutcome(recitePointer, outcome, recitePointer + 1);
+      commitReciteOutcome(recitePointer, outcome);
       setTypedInput('');
     } else {
       const nextStrikes = verseStrikes + 1;
@@ -221,12 +239,11 @@ export function useRecall({
       // One wrong attempt permanently marks this word missed for the session
       // (getting it right on the next try lets you continue, but the
       // accuracy score keeps the miss).
-      setReciteOutcomes((prev) => ({ ...prev, [recitePointer]: 'missed' }));
+      setReciteOutcomes((prev) => ({ ...prev, [currentIdx]: 'missed' }));
 
       if (strikeLimit !== 'unlimited' && nextStrikes >= strikeLimit) {
         setShowStrikeResetAlert(true);
-        const verseIdx = current.verseIdx;
-        const verseStartPointer = reciteWordObjects.findIndex((w) => w.verseIdx === verseIdx);
+        const verseStartPointer = verseStartPosition(reciteOrder, reciteWordObjects.map((w) => w.verseIdx), recitePointer);
         setRecitePointer(verseStartPointer);
         setVerseStrikes(0);
         // The spoken transcript isn't cleared by this reset -- the engine
@@ -264,7 +281,7 @@ export function useRecall({
   // recall it.
   const handleReciteHint = () => {
     if (recitePointer >= reciteWordObjects.length) return;
-    commitReciteOutcome(recitePointer, 'missed', recitePointer + 1);
+    commitReciteOutcome(recitePointer, 'missed');
   };
 
   const resetReciteGame = () => {
@@ -365,13 +382,13 @@ export function useRecall({
       map[key] = words.map((w) => {
         if (normalizeToken(w, passageScript).length === 0) return undefined;
         const g = flatIdx++;
-        if (g >= recitePointer) return undefined;
+        if (reciteOrder.posOf[g] >= recitePointer) return undefined;
         const outcome = reciteOutcomes[g];
         return outcome === 'missed' ? 'incorrect' : outcome === 'close' ? 'close' : 'correct';
       });
     });
     return map;
-  }, [verses, recitePointer, reciteOutcomes, passageScript]);
+  }, [verses, recitePointer, reciteOutcomes, passageScript, reciteOrder]);
 
   // Words Hidden / First Letter / Strike Limit prefs persist across sessions
   // (AsyncStorage, same mechanism useScripture.ts uses for its verse cache)
@@ -387,6 +404,7 @@ export function useRecall({
         if (isStrikeLimit(saved.strikeLimit)) setStrikeLimit(saved.strikeLimit);
         if (saved.recallDisplayMode === 'passage' || saved.recallDisplayMode === 'memoryGrid') setRecallDisplayMode(saved.recallDisplayMode);
         if (saved.gridHideMode === 'firstLetter' || saved.gridHideMode === 'blank') setGridHideMode(saved.gridHideMode);
+        if (typeof saved.lastToFirst === 'boolean') setLastToFirst(saved.lastToFirst);
         const loadedLevel = saved.hintMode === 'firstLetter' ? saved.firstLetterLevel : saved.hideLevel;
         if (typeof loadedLevel === 'number') regenerateHiddenWords(loadedLevel);
       } catch {
@@ -406,8 +424,18 @@ export function useRecall({
       hintMode,
       recallDisplayMode,
       gridHideMode,
+      lastToFirst,
     });
-  }, [hideLevel, firstLetterLevel, hintMode, recallDisplayMode, gridHideMode]);
+  }, [hideLevel, firstLetterLevel, hintMode, recallDisplayMode, gridHideMode, lastToFirst]);
+
+  // Flipping the order mid-run would leave graded words on both sides of the
+  // pointer, so it starts the run over, like switching how words are hidden.
+  const switchLastToFirst = (on: boolean) => {
+    if (on === lastToFirst) return;
+    setLastToFirst(on);
+    resetReciteGame();
+    regenerateHiddenWords(activeLevel);
+  };
 
   // A chained review session (see advanceReviewSession in useAppState.ts)
   // swaps `verses` in place on the SAME mounted PracticeModals instance --
@@ -504,9 +532,13 @@ export function useRecall({
   // reciteOutcomes the typed channel does, so either input method advances
   // the same passage together.
   // ==========================================
-  const speakExpectedTokens = useMemo(() => verses.flatMap((v) => tokenizeWords(v.text)), [verses]);
+  // In recite order, so token N lines up with recite position N.
+  const speakExpectedTokens = useMemo(
+    () => reciteOrder.verseOrder.flatMap((vi) => tokenizeWords(verses[vi].text)),
+    [verses, reciteOrder]
+  );
 
-  const fullPassageText = useMemo(() => verses.map((v) => v.text).join(' '), [verses]);
+  const fullPassageText = useMemo(() => reciteOrder.verseOrder.map((vi) => verses[vi].text).join(' '), [verses, reciteOrder]);
 
   const startListening = () => {
     const engine = speechEngineRef.current;
@@ -548,9 +580,10 @@ export function useRecall({
   useEffect(() => {
     if (learnTab !== 'recite' || isFinishedRecite) return;
 
+    // The reconciler works in recite positions; outcomes are keyed by word.
     const protectedIndices = new Set<number>();
     for (const key of Object.keys(reciteSource)) {
-      if (reciteSource[Number(key)] === 'protected') protectedIndices.add(Number(key));
+      if (reciteSource[Number(key)] === 'protected') protectedIndices.add(reciteOrder.posOf[Number(key)]);
     }
 
     const patch = reconcileSpeechWindow(
@@ -564,14 +597,15 @@ export function useRecall({
     alignAnchorRef.current = patch.nextAlignAnchor;
     if (Object.keys(patch.outcomes).length === 0 && patch.pointer === recitePointer) return;
 
-    setReciteOutcomes((prev) => ({ ...prev, ...patch.outcomes }));
+    const wordOutcomes = positionsToWords(reciteOrder, patch.outcomes);
+    setReciteOutcomes((prev) => ({ ...prev, ...wordOutcomes }));
     setReciteSource((prev) => {
       const next = { ...prev };
-      for (const key of Object.keys(patch.outcomes)) next[Number(key)] = 'speech';
+      for (const key of Object.keys(wordOutcomes)) next[Number(key)] = 'speech';
       return next;
     });
     if (patch.pointer !== recitePointer) {
-      if (reciteWordObjects[patch.pointer]?.verseIdx !== reciteWordObjects[recitePointer]?.verseIdx) {
+      if (wordVerse(patch.pointer) !== wordVerse(recitePointer)) {
         setVerseStrikes(0);
       }
       setRecitePointer(patch.pointer);
@@ -621,6 +655,9 @@ export function useRecall({
     learnTab,
     reciteWordObjects,
     recitePointer,
+    reciteOrder,
+    lastToFirst,
+    switchLastToFirst,
     reciteOutcomes,
     verseStrikes,
     strikeLimit,

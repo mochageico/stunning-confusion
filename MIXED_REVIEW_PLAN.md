@@ -9,7 +9,8 @@ After each stage, update the **Progress** line below and note anything that chan
 
 **Progress:** stage 1 built 2026-10-22 (sections on the chapter page). The
 chapterSections Firestore rule is **not deployed yet**: build first, then rules.
-Stage 2 is next.
+Stage 2: Last to first in Recall built 2026-10-22 (branch `claude/last-to-first`);
+Outline (First words) is still to do.
 
 ---
 
@@ -165,6 +166,17 @@ it's a small change in a delicate place).
 - **Demo:** `?s=outline` (Matthew 7, sections on).
 - **Done when:** tsc, checks, screenshots both directions; recite in reverse credits the
   right verses (add a check for the reverse mapping).
+- **As built (Last to first in Recall):**
+  - `src/lib/reciteOrder.ts`: words keep their passage-order index everywhere
+    (outcomes, hidden sample, grid colors, `finalOutcomes`, crediting). Only
+    `recitePointer` is a *recite position*; `reciteOrder.order[pos]` gives the word,
+    `reciteOrder.posOf[word]` the position. Speech gets its expected tokens in recite
+    order and its patch is re-keyed with `positionsToWords`.
+  - The setting is a "Verse order" row in Recall's settings card (2+ verses), saved as
+    `lastToFirst` in practice prefs. Changing it starts the run over. Passage and grid
+    both show the verses in recite order. Crediting still passes `verses` unchanged.
+  - `MIX_NAMES.firstToLast` added beside `lastToFirst` for the other side of the switch.
+  - Check: `npm run check:reciteorder` (typed and spoken reverse runs, strike reset).
 
 ## Stage 3 — Put in order, Which section, Teach-It
 
