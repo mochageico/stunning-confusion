@@ -3,6 +3,7 @@ import { Check, Eye, Mic, MicOff, RefreshCw, Shuffle, Sparkles } from 'lucide-re
 import { normalizeToken, summarizeOutcomes, REVIEW_PASS_ACCURACY } from '../../lib/recitation';
 import { maskExceptFirstLetter, maskLetters, splitWords, wordGap } from '../../lib/textScript';
 import { MIN_JIGSAW_VERSES } from '../../lib/drills';
+import { MIX_NAMES } from '../../lib/formatNames';
 import { BounceView, DiscreteSlider, FadeInView, SpinView, WaveBars } from '../ui';
 import MemoryGrid from '../MemoryGrid';
 import { AppButton, AppIconButton, AppTextInput, AppText, RangeCaption } from '../design';
@@ -63,6 +64,9 @@ export default function RecallPanel({
     learnTab,
     reciteWordObjects,
     recitePointer,
+    reciteOrder,
+    lastToFirst,
+    switchLastToFirst,
     reciteOutcomes,
     verseStrikes,
     strikeLimit,
@@ -188,7 +192,7 @@ export default function RecallPanel({
               {recallDisplayMode === 'memoryGrid' ? (
                 <ScrollView className="flex-1 mb-2">
                   <MemoryGrid
-                    verses={verses.map((v) => ({ book: v.book, chapter: v.chapter, verse: v.verse, text: v.text, translationId: v.translationId }))}
+                    verses={reciteOrder.verseOrder.map((vi) => verses[vi]).map((v) => ({ book: v.book, chapter: v.chapter, verse: v.verse, text: v.text, translationId: v.translationId }))}
                     columns={memoryGridColumns}
                     highlightedKeys={highlightedVerses}
                     onToggleHighlight={onToggleVerseHighlight ? (key) => onToggleVerseHighlight(key) : undefined}
@@ -202,8 +206,18 @@ export default function RecallPanel({
               <ScrollView className="flex-1 mb-2">
                 <View className="gap-3">
                   {(() => {
-                    let flatIdx = 0;
-                    return verses.map((v) => {
+                    // Verses show in recite order (last verse on top for
+                    // Last to first), but each word keeps its passage-order
+                    // index g; isPast/isCurrent compare its recite position.
+                    const firstWord: number[] = [];
+                    let count = 0;
+                    verses.forEach((v) => {
+                      firstWord.push(count);
+                      count += splitWords(v.text, passageScript).filter((w) => normalizeToken(w, passageScript).length > 0).length;
+                    });
+                    return reciteOrder.verseOrder.map((vi) => {
+                      const v = verses[vi];
+                      let flatIdx = firstWord[vi];
                       const words = splitWords(v.text, passageScript);
                       return (
                         <AppText variant="body" script={passageScript} key={`${v.book}-${v.chapter}-${v.verse}`} className="font-serif leading-relaxed text-ink">
@@ -211,8 +225,8 @@ export default function RecallPanel({
                           {words.map((w, idx) => {
                             const isCountedWord = normalizeToken(w, passageScript).length > 0;
                             const g = isCountedWord ? flatIdx++ : -1;
-                            const isPast = g >= 0 && g < recitePointer;
-                            const isCurrent = g === recitePointer;
+                            const isPast = g >= 0 && reciteOrder.posOf[g] < recitePointer;
+                            const isCurrent = g >= 0 && reciteOrder.posOf[g] === recitePointer;
                             const isGivenHint = g >= 0 && !hiddenWordIndices.has(g);
 
                             if (isPast) {
@@ -424,6 +438,30 @@ export default function RecallPanel({
                     { id: 'blank' as const, label: 'Nothing' },
                   ]}
                 />
+              </DrillSetting>
+            )}
+
+            {/* Last to first: the verses in reverse, each one still said
+                forward. Speaking and typing both follow it, and it counts
+                like any other run. Changing it starts the run over. */}
+            {verses.length >= 2 && (
+              <DrillSetting
+                storageKey="recall.order"
+                label="Verse order"
+                value={lastToFirst ? MIX_NAMES.lastToFirst : MIX_NAMES.firstToLast}
+              >
+                <SegmentedControl
+                  value={lastToFirst ? 'lastToFirst' : 'firstToLast'}
+                  onChange={(id) => switchLastToFirst(id === 'lastToFirst')}
+                  accessibilityLabel="Verse order"
+                  options={[
+                    { id: 'firstToLast' as const, label: MIX_NAMES.firstToLast },
+                    { id: 'lastToFirst' as const, label: MIX_NAMES.lastToFirst },
+                  ]}
+                />
+                <AppText variant="caption" className="text-ink-3 font-sans">
+                  Each verse is still said start to finish. Counts as a review the same way.
+                </AppText>
               </DrillSetting>
             )}
             </DrillSettings>

@@ -44,7 +44,7 @@ export const MIX_NAMES = {
   mixedReview: 'Mixed review',
   /** The option on Recite that runs verses last to first, each verse forward. */
   lastToFirst: 'Last to first',
-  /** Its partner: verses in reading order. */
+  /** The usual order, the other side of the Last to first switch. */
   firstToLast: 'First to last',
   /** The tag on a format that counts as a review. */
   countsTag: 'Counts',

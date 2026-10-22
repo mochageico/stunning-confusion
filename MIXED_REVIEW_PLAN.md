@@ -9,9 +9,8 @@ After each stage, update the **Progress** line below and note anything that chan
 
 **Progress:** stage 1 built 2026-10-22 (sections on the chapter page). The
 chapterSections Firestore rule is **not deployed yet**: build first, then rules.
-Stage 2, First words (Outline), built 2026-10-22. **Still open from stage 2:** the
-"Last to first" option on Recall's normal recite and type (`useRecall`'s word
-pointer, Opus-only); First words' own last-to-first is done. Stage 3 is next.
+Stage 2 built 2026-10-22: First words (Outline), and Last to first on Recall's
+normal recite and type. Stage 3 is next.
 
 ---
 
@@ -167,7 +166,7 @@ it's a small change in a delicate place).
 - **Demo:** `?s=outline` (Matthew 7, sections on).
 - **Done when:** tsc, checks, screenshots both directions; recite in reverse credits the
   right verses (add a check for the reverse mapping).
-- **As built (First words only; Recall's Last to first is NOT built):**
+- **As built (First words):**
   - Pure logic `src/lib/outline.ts` + `outline.check.ts` (`npm run check:outline`):
     words shown, tap wrap (`bumpExtra`: slider + taps, back to the slider's number
     past 4), rows, grouping by section, grading, and `OutlineRun` (`recordRunResult`
@@ -197,6 +196,17 @@ it's a small change in a delicate place).
   - Demo: `?s=outline` opens Matthew 7 (sections on) straight into First words.
   - Not tried: on a real phone (speech grading, the hold on a row); crediting a real
     due verse end to end (the demo queue has no Matthew 7).
+- **As built (Last to first in Recall):**
+  - `src/lib/reciteOrder.ts`: words keep their passage-order index everywhere
+    (outcomes, hidden sample, grid colors, `finalOutcomes`, crediting). Only
+    `recitePointer` is a *recite position*; `reciteOrder.order[pos]` gives the word,
+    `reciteOrder.posOf[word]` the position. Speech gets its expected tokens in recite
+    order and its patch is re-keyed with `positionsToWords`.
+  - The setting is a "Verse order" row in Recall's settings card (2+ verses), saved as
+    `lastToFirst` in practice prefs. Changing it starts the run over. Passage and grid
+    both show the verses in recite order. Crediting still passes `verses` unchanged.
+  - `MIX_NAMES.firstToLast` added beside `lastToFirst` for the other side of the switch.
+  - Check: `npm run check:reciteorder` (typed and spoken reverse runs, strike reset).
 
 ## Stage 3 — Put in order, Which section, Teach-It
 
