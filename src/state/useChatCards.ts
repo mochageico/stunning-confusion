@@ -32,8 +32,16 @@ interface ChatCardsDeps {
   respondToCard: ReturnType<typeof useSocial>['respondToCard'];
   closeDMThread: () => void;
   closeCircleChat: () => void;
-  /** Points the Record tab at a passage (a recording request's). */
-  setRecordingPassage: (book: string, chapter: number, startVerse: number | null, endVerse: number | null) => void;
+  /** Points the Record tab at a passage (a recording request's), and its translation when the request names one. */
+  setRecordingPassage: (
+    book: string,
+    chapter: number,
+    startVerse: number | null,
+    endVerse: number | null,
+    translationId?: string
+  ) => void;
+  /** Copies someone else's shared recording into my own recordings. */
+  saveSharedRecordingToLibrary: (rec: Recording) => Promise<void>;
   triggerToast: (message: string) => void;
 }
 
@@ -49,6 +57,7 @@ export function useChatCards({
   closeDMThread,
   closeCircleChat,
   setRecordingPassage,
+  saveSharedRecordingToLibrary,
   triggerToast,
 }: ChatCardsDeps) {
   // ==========================================
@@ -115,28 +124,49 @@ export function useChatCards({
     return postChatMessage(scope, containerId, attachmentFallbackText(attachment, attachment.ownerName), attachment);
   };
 
-  /** Opens a shared recording from a chat card in the normal player. */
-  const playChatRecording = async (sharedRecordingId: string) => {
+  /** The shared recording behind a chat card -- from memory if it's already loaded, else fetched. */
+  const loadChatRecording = async (sharedRecordingId: string): Promise<Recording | null> => {
     const known = [...userRecordings, ...feedRecordings].find((r) => r.id === sharedRecordingId);
-    if (known) {
-      setSelectedRecording(known);
-      navigateTo('recordingDetail');
-      return;
-    }
+    if (known) return known;
     try {
       const snap = await getDoc(doc(db, 'sharedRecordings', sharedRecordingId));
       if (!snap.exists()) {
         triggerToast('That recording was removed.');
-        return;
+        return null;
       }
       const rec = { id: snap.id, ...snap.data() } as Recording;
       setFeedRecordings((prev) => (prev.some((r) => r.id === rec.id) ? prev : [rec, ...prev]));
-      setSelectedRecording(rec);
-      navigateTo('recordingDetail');
+      return rec;
     } catch (err) {
       console.error('Failed to open shared recording:', err);
       triggerToast("You don't have access to that recording.");
+      return null;
     }
+  };
+
+  /** Opens a shared recording from a chat card in the normal player. */
+  const playChatRecording = async (sharedRecordingId: string) => {
+    const rec = await loadChatRecording(sharedRecordingId);
+    if (!rec) return;
+    setSelectedRecording(rec);
+    navigateTo('recordingDetail');
+  };
+
+  /** Whether a chat card's recording is already in my recordings (mine, or saved before). */
+  const isChatRecordingSaved = (sharedRecordingId: string) =>
+    userRecordings.some((r) => r.id === sharedRecordingId || r.savedFromRecordingId === sharedRecordingId);
+
+  /**
+   * Save straight from the chat card -- the recording someone made for me
+   * shouldn't need hunting down in Find recordings first.
+   */
+  const saveChatRecording = async (sharedRecordingId: string) => {
+    if (isChatRecordingSaved(sharedRecordingId)) {
+      triggerToast('Already in your recordings.');
+      return;
+    }
+    const rec = await loadChatRecording(sharedRecordingId);
+    if (rec) await saveSharedRecordingToLibrary(rec);
   };
 
   // The request I said "I will" to and am now recording for. Held in a ref
@@ -160,7 +190,7 @@ export function useChatCards({
     const a = message.attachment;
     if (!a || a.kind !== 'recordingRequest') return;
     void respondToCard(scope, containerId, message.id, 'willDo');
-    setRecordingPassage(a.book, a.chapter, a.startVerse ?? null, a.endVerse ?? a.startVerse ?? null);
+    setRecordingPassage(a.book, a.chapter, a.startVerse ?? null, a.endVerse ?? a.startVerse ?? null, a.translationId);
     setActiveRecordingRequest({ scope, containerId, messageId: message.id, requesterName: message.fromName, attachment: a });
     if (scope === 'dm') closeDMThread();
     else closeCircleChat();
@@ -175,6 +205,12 @@ export function useChatCards({
     // Only a recording of the asked-for chapter counts; anything else is
     // just a normal save and the request stays open.
     if (rec.book.toLowerCase() !== req.attachment.book.toLowerCase() || rec.chapter !== req.attachment.chapter) return;
+    // Same for the translation, when the request names one. Said out loud,
+    // because a quietly unsent recording looks like a bug.
+    if (req.attachment.translationId && rec.translation !== req.attachment.translationId) {
+      triggerToast(`Saved, but not sent: ${req.requesterName.split(' ')[0]} asked for the ${req.attachment.translationId}.`);
+      return;
+    }
     setActiveRecordingRequest(null);
     const sent = await sendRecordingToChat(rec, req.scope, req.containerId);
     if (!sent) return;
@@ -228,6 +264,8 @@ export function useChatCards({
   return {
     sendRecordingToChat,
     playChatRecording,
+    isChatRecordingSaved,
+    saveChatRecording,
     activeRecordingRequest,
     startRecordingForRequest,
     cancelRecordingRequest,

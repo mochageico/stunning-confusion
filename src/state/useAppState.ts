@@ -35,6 +35,7 @@ import {
   DEFAULT_PLANS,
   DEFAULT_RHYTHM,
   getBookByName,
+  PICKER_TRANSLATIONS,
   SUGGESTED_FEED_RECORDINGS,
 } from '../data';
 import { useChapterText } from './useScripture';
@@ -2123,6 +2124,8 @@ export function useAppState() {
   const {
     sendRecordingToChat,
     playChatRecording,
+    isChatRecordingSaved,
+    saveChatRecording,
     activeRecordingRequest,
     startRecordingForRequest,
     cancelRecordingRequest,
@@ -2143,12 +2146,14 @@ export function useAppState() {
     respondToCard: (...args) => social.respondToCard(...args),
     closeDMThread,
     closeCircleChat,
-    setRecordingPassage: (book, chapter, startVerse, endVerse) => {
+    setRecordingPassage: (book, chapter, startVerse, endVerse, translationId) => {
       setRecordingBook(book);
       setRecordingChapter(chapter);
       setRecordingRangeStart(startVerse);
       setRecordingRangeEnd(endVerse);
+      if (translationId && PICKER_TRANSLATIONS.some((t) => t.id === translationId)) setRecordingTranslation(translationId);
     },
+    saveSharedRecordingToLibrary: (rec) => saveSharedRecordingToLibrary(rec),
     triggerToast: (message) => triggerToast(message),
   });
 
@@ -2481,6 +2486,8 @@ export function useAppState() {
     // chat cards
     sendRecordingToChat,
     playChatRecording,
+    isChatRecordingSaved,
+    saveChatRecording,
     activeRecordingRequest,
     startRecordingForRequest,
     cancelRecordingRequest,

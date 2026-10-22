@@ -4,7 +4,8 @@ import { BookOpen, Mic, Play, Shuffle, Target, Trophy } from 'lucide-react-nativ
 
 import type { AppState } from '../../state/useAppState';
 import type { ChatScope } from '../../state/useSocial';
-import { getBookByName } from '../../data';
+import { DEFAULT_TRANSLATION_ID, PICKER_TRANSLATIONS, getBookByName, translationLabel } from '../../data';
+import { Dropdown } from '../Dropdown';
 import { fetchChapterText } from '../../state/useScripture';
 import {
   attachmentFallbackText,
@@ -20,6 +21,7 @@ import { Dialog, EmptyState, GroupedList, ListRow } from '../blocks';
 import { PassageRangeForm } from '../ChallengeCard';
 
 // Its own Modal, so its number fields need their own "Done" bar (see ui.tsx).
+const TRANSLATION_OPTIONS = PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }));
 const ATTACH_ACCESSORY_ID = 'chatAttachNumericDoneBar';
 
 type Step = 'menu' | 'verse' | 'recording' | 'request' | 'quiz';
@@ -62,8 +64,19 @@ export function AttachMenu({
   const otherIsFriend = !!other && state.friends.some((f) => f.uid === other.otherUid);
   const myName = state.user?.displayName || 'Someone';
 
+  // The translation a recording request asks for. Starts on the one I'm
+  // reading in, so asking for "my" translation is one tap.
+  const defaultTranslation = PICKER_TRANSLATIONS.some((t) => t.id === state.selectedTranslationId)
+    ? state.selectedTranslationId
+    : DEFAULT_TRANSLATION_ID;
+  const [requestTranslation, setRequestTranslation] = useState(defaultTranslation);
+
   useEffect(() => {
-    if (visible) setStep('menu');
+    if (visible) {
+      setStep('menu');
+      setRequestTranslation(defaultTranslation);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const post = async (text: string, attachment: Parameters<AppState['postChatMessage']>[3]) => {
@@ -152,6 +165,12 @@ export function AttachMenu({
 
       {step === 'request' ? (
         <>
+          <View style={{ gap: space(4) }}>
+            <AppText variant="caption" className="font-sans font-medium text-ink-2">
+              Translation
+            </AppText>
+            <Dropdown value={requestTranslation} options={TRANSLATION_OPTIONS} title="Translation" onChange={setRequestTranslation} />
+          </View>
           <PassageRangeForm
             submitLabel="Ask"
             hint="Leave the verses blank to ask for the whole chapter."
@@ -164,6 +183,7 @@ export function AttachMenu({
                 chapter: range.startChapter,
                 startVerse: range.startVerse,
                 endVerse: range.endVerse ?? range.startVerse,
+                translationId: requestTranslation,
               };
               await post(attachmentFallbackText(attachment, myName), attachment);
             }}

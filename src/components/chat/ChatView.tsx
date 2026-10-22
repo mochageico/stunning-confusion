@@ -107,6 +107,8 @@ export function ChatView({
   const cardActions: CardActions = {
     onOpenChapter: (book, chapter) => state.navigateTo('chapterLanding', book, chapter, { keepBack: true }),
     onPlayRecording: (id) => void state.playChatRecording(id),
+    onSaveRecording: (id) => void state.saveChatRecording(id),
+    isRecordingSaved: (id) => state.isChatRecordingSaved(id),
     onWillRecord: (message) => state.startRecordingForRequest(scope, containerId, message),
     onNotNow: (message) => void state.respondToCard(scope, containerId, message.id, 'notNow'),
     onOpenQuiz: (message) => state.openQuiz(containerId, message),

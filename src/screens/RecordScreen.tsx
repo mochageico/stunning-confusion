@@ -230,7 +230,8 @@ export default function RecordScreen({ state }: { state: AppState }) {
                 Recording for {state.activeRecordingRequest.scope === 'dm' ? state.activeRecordingRequest.requesterName : 'your circle'}
               </AppText>
               <AppText variant="caption" className="font-sans text-ink-2">
-                Save a recording of {passageLabel(state.activeRecordingRequest.attachment)} and it's sent to the chat for you.
+                Save a recording of {passageLabel(state.activeRecordingRequest.attachment)}
+                {state.activeRecordingRequest.attachment.translationId ? ` in the ${state.activeRecordingRequest.attachment.translationId}` : ''} and it's sent to the chat for you.
               </AppText>
             </View>
             <AppButton size="sm" variant="quiet" label="Cancel" onPress={state.cancelRecordingRequest} />

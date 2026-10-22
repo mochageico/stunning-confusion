@@ -403,8 +403,8 @@ export function useDemoState(real: AppState): AppState {
     id: `cm${i}`,
     fromName: m.fromUid === 'demo' ? 'Micah' : m.fromUid === 'u3' ? 'David Kim' : 'Sarah Miller',
   }));
-  (circleMsgs[3] as any).attachment = { kind: 'recordingRequest', book: 'Romans', chapter: 8, startVerse: 31, endVerse: 39 };
-  (circleMsgs[4] as any).attachment = { kind: 'recording', sharedRecordingId: 'r1', book: 'Psalms', chapter: 23, translation: 'BSB', duration: 95, ownerName: 'David Kim' };
+  (circleMsgs[3] as any).attachment = { kind: 'recordingRequest', book: 'Romans', chapter: 8, startVerse: 31, endVerse: 39, translationId: 'BSB' };
+  (circleMsgs[4] as any).attachment = { kind: 'recording', sharedRecordingId: 'shared_r9', book: 'Psalms', chapter: 23, translation: 'BSB', duration: 95, ownerName: 'David Kim' };
   const overrides: Partial<AppState> & Record<string, unknown> = {
     user: DEMO_USER,
     loadingAuth: false,
@@ -468,7 +468,7 @@ export function useDemoState(real: AppState): AppState {
       m3: [{ id: 'm3_demo', messageId: 'm3', uid: 'demo', name: 'Micah', status: 'willDo', updatedAt: iso(0, 9) }],
       m4: [{ id: 'm4_demo', messageId: 'm4', uid: 'demo', name: 'Micah', status: 'done', score: 92, updatedAt: iso(0, 9) }],
       cm3: [
-        { id: 'cm3_u3', messageId: 'cm3', uid: 'u3', name: 'David Kim', status: 'done', sharedRecordingId: 'r1', updatedAt: iso(0, 9) },
+        { id: 'cm3_u3', messageId: 'cm3', uid: 'u3', name: 'David Kim', status: 'done', sharedRecordingId: 'shared_r9', updatedAt: iso(0, 9) },
         { id: 'cm3_u7', messageId: 'cm3', uid: 'u7', name: 'Tom Alvarez', status: 'willDo', updatedAt: iso(0, 9) },
       ],
     },
@@ -489,7 +489,7 @@ export function useDemoState(real: AppState): AppState {
       ['u2', 'Sarah Miller quizzed you on John 15:5'],
       ['demo', 'Shared Romans 8:28 (BSB)'],
     ]);
-    base[3].attachment = { kind: 'recordingRequest', book: 'Psalms', chapter: 23 } as any;
+    base[3].attachment = { kind: 'recordingRequest', book: 'Psalms', chapter: 23, translationId: 'KJV' } as any;
     base[4].attachment = { kind: 'quiz', toUid: 'demo', translationId: 'BSB', book: 'John', bookId: 'JHN', chapter: 15, verse: 5, hidePercent: 50 } as any;
     base[5].attachment = { kind: 'verse', translationId: 'BSB', book: 'Romans', bookId: 'ROM', chapter: 8, startVerse: 28, endVerse: 28 } as any;
     overrides.activeDMMessages = base;

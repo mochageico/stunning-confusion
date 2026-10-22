@@ -206,7 +206,7 @@ async function notifyCardAnswer(scope: 'dm' | 'circle', containerId: string, bef
       : { type: 'circle', circleId: containerId };
   const chatKey = `${scope}_${containerId}`;
   if (a.kind === 'recordingRequest' && after.status === 'willDo') {
-    await sendPush([message.fromUid], { title: `${after.name} will record it`, body: `${passage(a)} -- they said "I will".`, target, chatKey }, 'friendActivity', after.uid);
+    await sendPush([message.fromUid], { title: `${after.name} will record it`, body: `${passage(a)}${a.translationId ? ` (${a.translationId})` : ''} -- they said "I will".`, target, chatKey }, 'friendActivity', after.uid);
   } else if (a.kind === 'quiz' && after.status === 'done' && typeof after.score === 'number') {
     await sendPush([message.fromUid], { title: `${after.name} took your quiz`, body: `${after.score}% on ${passage(a)}.`, target, chatKey }, 'friendActivity', after.uid);
   }

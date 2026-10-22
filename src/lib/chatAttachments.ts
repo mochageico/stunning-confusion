@@ -42,6 +42,8 @@ export interface RecordingRequestAttachment {
   chapter: number;
   startVerse?: number;
   endVerse?: number;
+  /** Which translation to read from. Absent on requests from before 2026-10-21 (any translation). */
+  translationId?: string;
 }
 
 /** A friend quizzing you on one of your own verses. Practice only. */
@@ -92,7 +94,7 @@ export function attachmentFallbackText(a: ChatAttachment, senderName: string): s
     case 'recording':
       return `Shared a recording of ${passageLabel(a)}`;
     case 'recordingRequest':
-      return `Asked for a recording of ${passageLabel(a)}`;
+      return `Asked for a recording of ${passageLabel(a)}${a.translationId ? ` (${a.translationId})` : ''}`;
     case 'quiz':
       return `${senderName} quizzed you on ${a.book} ${a.chapter}:${a.verse}`;
   }

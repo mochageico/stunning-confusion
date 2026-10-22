@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { BookOpen, Check, Mic, Play, Target } from 'lucide-react-native';
+import { BookOpen, Check, Download, Mic, Play, Target } from 'lucide-react-native';
 
 import type { ChatMessage } from '../../types';
 import type { ChatResponse } from '../../lib/chatAttachments';
@@ -12,6 +12,9 @@ import { useThemeColors } from '../theme';
 export interface CardActions {
   onOpenChapter: (book: string, chapter: number) => void;
   onPlayRecording: (sharedRecordingId: string) => void;
+  /** Copies a recording someone shared into my own recordings. */
+  onSaveRecording: (sharedRecordingId: string) => void;
+  isRecordingSaved: (sharedRecordingId: string) => boolean;
   onWillRecord: (message: ChatMessage) => void;
   onNotNow: (message: ChatMessage) => void;
   onOpenQuiz: (message: ChatMessage) => void;
@@ -45,6 +48,7 @@ export function AttachmentCard({
       return (
         <CardShell Icon={Play} eyebrow={`Recording · ${a.translation}`} title={passageLabel(a)} caption={`${a.ownerName} · ${formatDuration(a.duration)}`}>
           <AppButton variant="secondary" Icon={Play} label="Play" onPress={() => actions.onPlayRecording(a.sharedRecordingId)} />
+          {message.fromUid !== myUid ? <SaveButton id={a.sharedRecordingId} actions={actions} /> : null}
         </CardShell>
       );
     case 'recordingRequest':
@@ -52,6 +56,21 @@ export function AttachmentCard({
     case 'quiz':
       return <QuizCard message={message} myUid={myUid} responses={responses} actions={actions} />;
   }
+}
+
+/** Save / Saved, for a recording someone else shared. */
+function SaveButton({ id, actions, label = 'Save' }: { id: string; actions: CardActions; label?: string }) {
+  const saved = actions.isRecordingSaved(id);
+  return (
+    <AppButton
+      variant={saved ? 'quiet' : 'secondary'}
+      Icon={saved ? Check : Download}
+      label={saved ? 'Saved' : label}
+      disabled={saved}
+      accessibilityLabel={saved ? 'Saved to your recordings' : 'Save to your recordings'}
+      onPress={() => actions.onSaveRecording(id)}
+    />
+  );
 }
 
 function CardShell({
@@ -163,7 +182,7 @@ function RequestCard({
   const mine = responses.find((r) => r.uid === myUid);
   const done = responses.filter((r) => r.status === 'done' && r.sharedRecordingId);
   const willDo = responses.filter((r) => r.status === 'willDo');
-  const title = passageLabel(a);
+  const title = a.translationId ? `${passageLabel(a)} · ${a.translationId}` : passageLabel(a);
   const eyebrow = asker ? 'You asked for a recording' : `${message.fromName} asked for a recording`;
 
   let caption: string;
@@ -175,7 +194,10 @@ function RequestCard({
   return (
     <CardShell Icon={Mic} eyebrow={eyebrow} title={title} caption={caption}>
       {done.map((r) => (
-        <AppButton key={r.id} variant="secondary" Icon={Play} label={r.uid === myUid ? 'Play yours' : `Play ${r.name.split(' ')[0]}'s`} onPress={() => actions.onPlayRecording(r.sharedRecordingId!)} />
+        <View key={r.id} className="flex-row flex-wrap" style={{ gap: space(8) }}>
+          <AppButton variant="secondary" Icon={Play} label={r.uid === myUid ? 'Play yours' : `Play ${r.name.split(' ')[0]}'s`} onPress={() => actions.onPlayRecording(r.sharedRecordingId!)} />
+          {r.uid !== myUid ? <SaveButton id={r.sharedRecordingId!} actions={actions} /> : null}
+        </View>
       ))}
       {!asker && mine?.status !== 'done' ? (
         mine?.status === 'willDo' ? (
