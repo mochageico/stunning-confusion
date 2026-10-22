@@ -11,9 +11,11 @@ import BuildUpDrill from '../drills/BuildUpDrill';
 import JigsawDrill from '../drills/JigsawDrill';
 import ScrambleDrill from '../drills/ScrambleDrill';
 import SpotSwapDrill from '../drills/SpotSwapDrill';
+import OutlineDrill from '../drills/OutlineDrill';
+import type { OutlineVerseResult } from '../../lib/outline';
 import { DrillSetting, DrillSettings, HIDE_LEVELS } from './shared';
 import type { PracticeModalsProps } from '../PracticeModals';
-import type { TextScript } from '../../types';
+import type { TextScript, VerseState } from '../../types';
 import type { useThemeColors } from '../theme';
 import type { RecallState } from './useRecall';
 
@@ -36,6 +38,8 @@ interface RecallPanelProps {
   fontScale: number;
   handleGroupComplete: () => void;
   passageScript: TextScript;
+  sectionsForChapter: PracticeModalsProps['sectionsForChapter'];
+  onSaveOutlineExtra: PracticeModalsProps['onSaveOutlineExtra'];
 }
 
 export default function RecallPanel({
@@ -52,6 +56,8 @@ export default function RecallPanel({
   fontScale,
   handleGroupComplete,
   passageScript,
+  sectionsForChapter,
+  onSaveOutlineExtra,
 }: RecallPanelProps) {
   const {
     learnTab,
@@ -91,10 +97,27 @@ export default function RecallPanel({
     threadTarget,
     notDueLine,
     allNotDue,
+    isDueForReview,
     startListening,
     stopListening,
     onBuildUpTryBlind,
   } = recall;
+
+  // First words counts as a review: a verse said from its first words that
+  // clears the same 90% a review needs, and is due, is logged quietly (the
+  // drill marks the verse itself). Anything else was practice.
+  const creditOutlineVerse = (r: OutlineVerseResult) => {
+    if (!r.passed || !isDueForReview(r.verse)) return;
+    const verse: VerseState = {
+      book: r.verse.book,
+      chapter: r.verse.chapter,
+      verse: r.verse.verse,
+      text: r.verse.text,
+      status: 'memorized',
+      translationId: r.verse.translationId,
+    };
+    onUpdateStatus([verse], 'memorized', r.mode, { perfect: false, quiet: true, via: 'outline' });
+  };
 
   return (
     <View className="flex-1 justify-between relative">
@@ -119,6 +142,7 @@ export default function RecallPanel({
           value={learnTab}
           onChange={switchLearnTab}
           accessibilityLabel="Practice mode"
+          wrap={fontScale >= 1.3}
           options={learnModes.map(({ id, label }) => ({ id, label }))}
         />
       </View>
@@ -589,6 +613,14 @@ export default function RecallPanel({
       </View>
       <View className="flex-1" style={{ display: learnTab === 'spotSwap' ? 'flex' : 'none' }}>
         <SpotSwapDrill verses={verses} />
+      </View>
+      <View className="flex-1" style={{ display: learnTab === 'outline' ? 'flex' : 'none' }}>
+        <OutlineDrill
+          verses={verses}
+          sections={verses[0] ? sectionsForChapter?.(verses[0].book, verses[0].chapter) ?? null : null}
+          onSaveExtra={onSaveOutlineExtra}
+          onVerseGraded={creditOutlineVerse}
+        />
       </View>
     </View>
   );

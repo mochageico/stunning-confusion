@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureDetector } from 'react-native-gesture-handler';
-import { Check, Download, GripVertical, Pause, Play, Printer, Search } from 'lucide-react-native';
+import { Check, Download, GripVertical, ListTree, Pause, Play, Printer, Search } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { cacheableTarget } from '../lib/audioCache';
@@ -11,6 +11,7 @@ import { Dropdown } from '../components/Dropdown';
 import ChapterPhotoStrip from '../components/ChapterPhotoStrip';
 import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { printMemoryGrid } from '../lib/printMemoryGrid';
+import { formatLabel } from '../lib/formatNames';
 import { Recording } from '../types';
 import { BIBLE_TRANSLATIONS, PICKER_TRANSLATIONS, copyrightFor, textScriptFor, translationLabel } from '../data';
 import { isRtl, joinWords, splitWords } from '../lib/textScript';
@@ -229,7 +230,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const firstVerse = activeChapterVerses[0]?.verse ?? 1;
   const lastVerse = activeChapterVerses[activeChapterVerses.length - 1]?.verse ?? firstVerse;
   const savedSections = selectedBook && selectedChapter ? sectionsForChapter(selectedBook, selectedChapter) : null;
-  const savedDraft = savedSections && activeChapterVerses.length > 0 ? normalizeDraft(savedSections, firstVerse, lastVerse) : null;
+  // A doc that holds only First words taps (nothing written for sections)
+  // counts as no sections here.
+  const normalizedSaved = savedSections && activeChapterVerses.length > 0 ? normalizeDraft(savedSections, firstVerse, lastVerse) : null;
+  const savedDraft = normalizedSaved && !isBlankDraft(normalizedSaved) ? normalizedSaved : null;
   // Non-null while editing: the sections as edited so far, saved on Done.
   const [editDraft, setEditDraft] = useState<SectionDraft | null>(null);
   const editing = editDraft !== null;
@@ -628,6 +632,23 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               variant="secondary"
               label={savedDraft ? 'Edit sections' : 'Add sections'}
               onPress={startEditingSections}
+            />
+          </View>
+        )}
+
+        {/* First words: say each verse from its first few words. The verses
+            picked, or the whole chapter when none are. */}
+        {activeChapterVerses.length > 0 && !editing && (
+          <View className="flex-row">
+            <AppButton
+              size="sm"
+              variant="secondary"
+              Icon={ListTree}
+              label={formatLabel('firstWords')}
+              accessibilityLabel={`${formatLabel('firstWords')}: ${selectedVerseNumbers.length > 0 ? 'the verses you picked' : 'the whole chapter'}`}
+              onPress={() =>
+                startPractice('learn', selectedVerseNumbers.length > 0 ? selectedVerses() : activeChapterVerses, { learnTab: 'outline' })
+              }
             />
           </View>
         )}

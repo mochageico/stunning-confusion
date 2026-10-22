@@ -369,7 +369,9 @@ export function ListRow({
 }
 
 // ============================================================
-// SegmentedControl — two to five short labels, exactly one chosen.
+// SegmentedControl — two to five short labels, exactly one chosen. A sixth fits
+// at normal text size; at large text pass `wrap`, and segments that no longer
+// fit drop to a second row of the same tray instead of running into each other.
 //
 // A fill-colored tray with the chosen segment raised in it. The raised look
 // is a card color and a thin edge rather than a shadow: a shadow that moved
@@ -386,11 +388,14 @@ export function SegmentedControl<T extends string | number>({
   value,
   onChange,
   accessibilityLabel,
+  wrap = false,
 }: {
   options: SegmentOption<T>[];
   value: T;
   onChange: (id: T) => void;
   accessibilityLabel?: string;
+  /** Let segments that don't fit move to a second row (for six labels at large text). */
+  wrap?: boolean;
 }) {
   const scale = useFontScale();
   const space = useScaledSpace();
@@ -398,7 +403,7 @@ export function SegmentedControl<T extends string | number>({
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={accessibilityLabel}
-      className="flex-row bg-fill rounded-seg"
+      className={`flex-row bg-fill rounded-seg ${wrap ? 'flex-wrap' : ''}`}
       style={{ padding: 2, gap: 2 }}
     >
       {options.map((opt) => {
@@ -419,7 +424,7 @@ export function SegmentedControl<T extends string | number>({
             // apportionsSegmentWidthsByContent).
             style={{
               flexGrow: 1,
-              flexShrink: 1,
+              flexShrink: wrap ? 0 : 1,
               flexBasis: 'auto',
               minHeight: Math.round(32 * scale),
               paddingVertical: space(5),

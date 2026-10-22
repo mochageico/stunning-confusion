@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Layers, ListOrdered, Mic, Puzzle, SearchCheck } from 'lucide-react-native';
+import { Layers, ListOrdered, ListTree, Mic, Puzzle, SearchCheck } from 'lucide-react-native';
 import { VerseState, QueueItem, TextScript } from '../../types';
 import { isReviewDue } from '../../state/useAppState';
 import { classifyFirstLetterAttempt, getSpeechRecognizer, normalizeToken, reconcileSpeechWindow, tokenizeWords, SpeechRecognizer, WordOutcome } from '../../lib/recitation';
@@ -8,6 +8,7 @@ import { MIN_JIGSAW_VERSES, MIN_THREAD_VERSES, threadRunEndingAt } from '../../l
 import { verseAnnotationKey } from '../MemoryGrid';
 import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePrefs, StrikeLimit } from '../../lib/practicePrefs';
 import { formatDate } from '../../lib/format';
+import { formatLabel } from '../../lib/formatNames';
 
 // ============================================================================
 // RECALL (LEARN MODE)
@@ -19,7 +20,7 @@ import { formatDate } from '../../lib/format';
 // .claude/file-split-plan.md).
 // ============================================================================
 
-export type LearnMode = 'recite' | 'buildUp' | 'jigsaw' | 'scramble' | 'spotSwap';
+export type LearnMode = 'recite' | 'buildUp' | 'jigsaw' | 'scramble' | 'spotSwap' | 'outline';
 
 export interface UseRecallParams {
   verses: VerseState[];
@@ -27,6 +28,10 @@ export interface UseRecallParams {
   sessionTotal?: number;
   memoryQueue?: QueueItem[];
   passageScript: TextScript;
+  /** The tab to open on instead of Recall (the chapter page's First words button). */
+  initialLearnTab?: LearnMode;
+  /** Settings -> Pause Reviews is on: nothing is due. */
+  reviewsPaused?: boolean;
 }
 
 export function useRecall({
@@ -35,6 +40,8 @@ export function useRecall({
   sessionTotal,
   memoryQueue,
   passageScript,
+  initialLearnTab,
+  reviewsPaused = false,
 }: UseRecallParams) {
   // ==========================================
   // LEARN MODE — Recall (typed + spoken, either channel advances the same
@@ -43,8 +50,9 @@ export function useRecall({
   // Internal value 'recite' is kept for the graded mode (labeled "Recall" in
   // the UI) to avoid touching every reference below.
   //
-  // Recall is the ONLY mode here that can advance a review or bank a mastery
-  // touch. The three supplementary drills are deliberately ungraded — they
+  // Recall is the only mode here that can bank a mastery touch, and with First
+  // words (the Outline tab: say each verse from its first words) the only one
+  // that can count a review. The other supplementary drills are deliberately ungraded — they
   // exercise different memory skills (sequence, phrasing, error-spotting)
   // that word-accuracy grading doesn't model, and letting them feed the
   // graduation engine would blur what "graduated" means. The manual-log
@@ -58,7 +66,7 @@ export function useRecall({
   // action now does, without pretending to be a drill.
   // ==========================================
 
-  const [learnTab, setLearnTab] = useState<LearnMode>('recite');
+  const [learnTab, setLearnTab] = useState<LearnMode>(initialLearnTab ?? 'recite');
 
   // Flat word list across the whole passage -- the single shared "position"
   // both input channels advance, instead of maintaining two separate
@@ -441,6 +449,7 @@ export function useRecall({
         ...(verses.length >= MIN_JIGSAW_VERSES ? [{ id: 'jigsaw' as const, label: 'Order', Icon: ListOrdered }] : []),
         { id: 'scramble' as const, label: 'Scramble', Icon: Puzzle },
         { id: 'spotSwap' as const, label: 'Spot', Icon: SearchCheck },
+        { id: 'outline' as const, label: formatLabel('firstWords'), Icon: ListTree },
       ] as { id: LearnMode; label: string; Icon: typeof Mic }[],
     [verses.length]
   );
@@ -498,6 +507,23 @@ export function useRecall({
   })();
 
   const allNotDue = verses.length > 0 && notDueVerses.length === verses.length;
+
+  // First words credits a verse that is on a review schedule and due (the
+  // engine would refuse an early one anyway; checking here keeps it from
+  // writing anything for it). A verse still being learned needs a perfect,
+  // graded run an hour apart, which a partly-shown verse can't give, so it is
+  // practice only there; Recall and Guided learning are how it gets learned.
+  const isDueForReview = (v: { book: string; chapter: number; verse: number; translationId?: string }) =>
+    !reviewsPaused &&
+    (memoryQueue || []).some(
+      (q) =>
+        q.status === 'reviewing' &&
+        isReviewDue(q.nextReviewDueDate) &&
+        q.book === v.book &&
+        q.chapter === v.chapter &&
+        q.verseNumber === v.verse &&
+        (!v.translationId || (q.translationId || 'ESV') === v.translationId)
+    );
 
   // ==========================================
   // RECITE — live speech channel. Feeds the exact same recitePointer/
@@ -655,6 +681,7 @@ export function useRecall({
     threadTarget,
     notDueLine,
     allNotDue,
+    isDueForReview,
     startListening,
     stopListening,
     onBuildUpTryBlind,

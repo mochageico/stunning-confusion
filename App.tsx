@@ -567,6 +567,9 @@ function AppShell() {
           chapterPhotos={state.chapterPhotos}
           photoCache={state.photoCache}
           onCacheChapterPhoto={state.cacheChapterPhoto}
+          initialLearnTab={state.practiceLearnTab ?? undefined}
+          sectionsForChapter={state.sectionsForChapter}
+          onSaveOutlineExtra={state.saveOutlineExtra}
           // Camera rather than a source chooser: the placeholder only appears
           // for a chapter you are listening to right now, and the useful move
           // in that moment is photographing the Bible in front of you. The

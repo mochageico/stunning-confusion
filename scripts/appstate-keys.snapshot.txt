@@ -235,6 +235,7 @@ playChatRecording: (sharedRecordingId: string) => Promise<void>
 playingRecProgress: number
 playingRecordingId: string | null
 postChatMessage: (scope: "circle" | "dm", containerId: string, text: string, attachment?: ChatAttachment | undefined) => Promise<boolean>
+practiceLearnTab: LearnMode | null
 previewCircle: Circle | null
 primingLookahead: number
 promoteToLearning: (verseIds: string[]) => void
@@ -278,6 +279,7 @@ saveChapterOffline: (recordings: Recording[]) => Promise<void>
 saveChapterSections: (book: string, chapter: number, draft: SectionDraft) => Promise<void>
 saveChatRecording: (sharedRecordingId: string) => Promise<void>
 saveListenPlaylist: (playlist: ListenPlaylist) => void
+saveOutlineExtra: (book: string, chapter: number, extra: OutlineExtra) => Promise<void>
 saveRecordedAudio: () => Promise<void>
 saveRecordingDialog: boolean
 saveRecordingOffline: (recording: Recording) => Promise<boolean>
@@ -405,7 +407,7 @@ showMissedReviewPrompt: boolean
 showOnboarding: boolean
 showTour: boolean
 signOut: () => Promise<void>
-startPractice: (mode: "listen" | "learn", passageVerses: VerseState[], opts?: { listenSource?: ListenSource | undefined; } | undefined) => void
+startPractice: (mode: "listen" | "learn", passageVerses: VerseState[], opts?: { listenSource?: ListenSource | undefined; learnTab?: LearnMode | undefined; } | undefined) => void
 startRecordingForRequest: (scope: "circle" | "dm", containerId: string, message: ChatMessage) => void
 startReviewSession: (groups: QueueItem[][]) => void
 studioAbOverride: boolean | null

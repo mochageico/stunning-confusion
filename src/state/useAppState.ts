@@ -316,7 +316,7 @@ export function useAppState() {
   } = useChapterPhotos({ user, triggerToast: (message) => triggerToast(message) });
 
   // The user's own sections per chapter (see useChapterSections).
-  const { chapterSections, loadChapterSections, sectionsForChapter, saveChapterSections } = useChapterSections({ user });
+  const { chapterSections, loadChapterSections, sectionsForChapter, saveChapterSections, saveOutlineExtra } = useChapterSections({ user });
 
   // Whether RecordingDetailScreen's verse-sync timeline is in edit mode.
   // The draft marker positions themselves live as local component state in
@@ -332,6 +332,7 @@ export function useAppState() {
     modalVerses,
     setModalVerses,
     listenSource,
+    practiceLearnTab,
     threadDrillPreset,
     setThreadDrillPreset,
     guidedPassageKey,
@@ -2544,7 +2545,7 @@ export function useAppState() {
     weeklyPhaseMonths, setWeeklyPhaseMonths,
     monthlyPhaseYears, setMonthlyPhaseYears,
     activeModal, setActiveModal,
-    modalVerses, setModalVerses, listenSource,
+    modalVerses, setModalVerses, listenSource, practiceLearnTab,
     threadDrillPreset, setThreadDrillPreset,
     openThreadDrill,
     guidedPassageKey, setGuidedPassageKey,
@@ -2788,6 +2789,7 @@ export function useAppState() {
     chapterSections,
     sectionsForChapter,
     saveChapterSections,
+    saveOutlineExtra,
     buildVerseTimestamps,
   };
 }

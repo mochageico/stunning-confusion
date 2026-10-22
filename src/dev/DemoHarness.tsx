@@ -14,7 +14,7 @@
 //
 // Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
 // activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, verseRoad, versePage,
-// referenceDrill, threadDrill, guided, sections,
+// referenceDrill, threadDrill, guided, sections, outline,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
@@ -30,7 +30,8 @@
 // verses that aren't due yet; n=3 (with modalLearn) practices the first 3
 // seeded verses, enough for the Order drill. sections: Matthew 7 with the
 // user's nine sections and memory phrase; edit=1 (with sections) opens Edit
-// sections.
+// sections. outline: the same chapter, opened straight into First words in the
+// practice screen (the Order setting there flips it to last to first).
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
@@ -417,6 +418,11 @@ export function useDemoState(real: AppState): AppState {
       void real.saveChapterSections('Matthew', 7, matt7Sections());
       real.navigateTo('chapterLanding', 'Matthew', 7);
       if (params.get('edit') === '1') tapWhenShown('Edit sections');
+    } else if (s === 'outline') {
+      // The chapter page's own First words button, once the chapter has loaded.
+      void real.saveChapterSections('Matthew', 7, matt7Sections());
+      real.navigateTo('chapterLanding', 'Matthew', 7);
+      tapWhenShown('First words');
     }
     else if (s === 'planDesigner') real.openActivePlanDesigner();
     else if (s === 'guided') real.openGuided('BSB|Psalms|23|1');

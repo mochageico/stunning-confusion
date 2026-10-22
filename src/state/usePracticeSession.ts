@@ -4,6 +4,7 @@ import { auth, db } from '../firebase';
 import { QueueItem, VerseState } from '../types';
 import { mapQueueItemsToVerseStates } from '../lib/appData';
 import type { ListenSource } from '../components/practice/useListenPlayback';
+import type { LearnMode } from '../components/practice/useRecall';
 import type { ScreenName, ThreadDrillPreset } from './useAppState';
 
 // ============================================================================
@@ -26,6 +27,9 @@ export function usePracticeSession({ navigateTo }: UsePracticeSessionDeps) {
   // Home's "Listen to all of today's verses" opens on 'all' instead, so the
   // picker reads Today's verses rather than Selected verses.
   const [listenSource, setListenSource] = useState<ListenSource>('selection');
+  // Which Learn tab the overlay opens on, or null for Recall. The chapter
+  // page's First words button sets it; every other way in leaves it null.
+  const [practiceLearnTab, setPracticeLearnTab] = useState<LearnMode | null>(null);
   // Set just before opening Pick up the thread from a passing Recall, so its
   // setup starts on that chapter and verse. The screen clears it once read.
   const [threadDrillPreset, setThreadDrillPreset] = useState<ThreadDrillPreset | null>(null);
@@ -67,9 +71,10 @@ export function usePracticeSession({ navigateTo }: UsePracticeSessionDeps) {
   const startPractice = (
     mode: 'listen' | 'learn',
     passageVerses: VerseState[],
-    opts?: { listenSource?: ListenSource }
+    opts?: { listenSource?: ListenSource; learnTab?: LearnMode }
   ) => {
     setListenSource(opts?.listenSource ?? 'selection');
+    setPracticeLearnTab(opts?.learnTab ?? null);
     setModalVerses(passageVerses);
     setActiveModal(mode);
   };
@@ -90,6 +95,7 @@ export function usePracticeSession({ navigateTo }: UsePracticeSessionDeps) {
     reviewQueueRef.current = nonEmpty.slice(1);
     setReviewSessionTotal(nonEmpty.length);
     setReviewSessionPosition(1);
+    setPracticeLearnTab(null);
     setModalVerses(mapQueueItemsToVerseStates(nonEmpty[0]));
     setActiveModal('learn');
   };
@@ -166,6 +172,7 @@ export function usePracticeSession({ navigateTo }: UsePracticeSessionDeps) {
     modalVerses,
     setModalVerses,
     listenSource,
+    practiceLearnTab,
     threadDrillPreset,
     setThreadDrillPreset,
     guidedPassageKey,

@@ -3,7 +3,8 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronUp, ClipboardCheck, Headphones, Pause, Play, X } from 'lucide-react-native';
 
-import { VerseState, QueueItem, Recording, ChapterPhoto, ListenPlaylist } from '../types';
+import { VerseState, QueueItem, Recording, ChapterPhoto, ChapterSections, ListenPlaylist, ReviewLog } from '../types';
+import type { OutlineExtra } from '../lib/outline';
 import { isRtl, scriptOfVerse } from '../lib/textScript';
 import { WaveBars } from './ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from './design';
@@ -12,7 +13,7 @@ import { Badge, Dialog } from './blocks';
 import { useThemeColors } from './theme';
 import { useAboveTabBar } from './TabBar';
 import { useListenPlayback, type ListenSource } from './practice/useListenPlayback';
-import { useRecall } from './practice/useRecall';
+import { useRecall, type LearnMode } from './practice/useRecall';
 import ListenPanel from './practice/ListenPanel';
 import RecallPanel from './practice/RecallPanel';
 
@@ -33,7 +34,7 @@ export interface PracticeModalsProps {
     versesToUpdate: VerseState[],
     newStatus: 'memorized' | 'learning',
     customDrillType?: 'speak' | 'type' | 'reveal',
-    opts?: { perfect?: boolean }
+    opts?: { perfect?: boolean; quiet?: boolean; via?: ReviewLog['via'] }
   ) => void;
   // Opens Pick up the thread through this verse, after a passing Recall has
   // been logged. Absent: the offer isn't shown.
@@ -96,6 +97,13 @@ export interface PracticeModalsProps {
   photoCache?: ReadonlyMap<string, string>;
   onCacheChapterPhoto?: (photo: ChapterPhoto) => void;
   onAddChapterPhoto?: (book: string, chapter: number) => void;
+  // The Learn tab to open on instead of Recall (the chapter page's First
+  // words button).
+  initialLearnTab?: LearnMode;
+  // First words (Outline): the chapter's sections, for the dividers, and where
+  // the per-verse taps are saved (the same chapter doc).
+  sectionsForChapter?: (book: string, chapter: number) => ChapterSections | null;
+  onSaveOutlineExtra?: (book: string, chapter: number, extra: OutlineExtra) => void;
 }
 
 // Stable default, so the playlist effect in useListenPlayback doesn't rerun
@@ -148,6 +156,9 @@ function PracticeModalsInner({
   photoCache,
   onCacheChapterPhoto,
   onAddChapterPhoto,
+  initialLearnTab,
+  sectionsForChapter,
+  onSaveOutlineExtra,
 }: PracticeModalsProps) {
   const palette = useThemeColors();
   const space = useScaledSpace();
@@ -213,6 +224,8 @@ function PracticeModalsInner({
     sessionTotal,
     memoryQueue,
     passageScript,
+    initialLearnTab,
+    reviewsPaused,
   });
 
   // ==========================================
@@ -394,6 +407,8 @@ function PracticeModalsInner({
             fontScale={fontScale}
             handleGroupComplete={handleGroupComplete}
             passageScript={passageScript}
+            sectionsForChapter={sectionsForChapter}
+            onSaveOutlineExtra={onSaveOutlineExtra}
           />
         )}
       </View>

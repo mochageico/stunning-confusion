@@ -9,7 +9,9 @@ After each stage, update the **Progress** line below and note anything that chan
 
 **Progress:** stage 1 built 2026-10-22 (sections on the chapter page). The
 chapterSections Firestore rule is **not deployed yet**: build first, then rules.
-Stage 2 is next.
+Stage 2, First words (Outline), built 2026-10-22. **Still open from stage 2:** the
+"Last to first" option on Recall's normal recite and type (`useRecall`'s word
+pointer, Opus-only); First words' own last-to-first is done. Stage 3 is next.
 
 ---
 
@@ -165,6 +167,36 @@ it's a small change in a delicate place).
 - **Demo:** `?s=outline` (Matthew 7, sections on).
 - **Done when:** tsc, checks, screenshots both directions; recite in reverse credits the
   right verses (add a check for the reverse mapping).
+- **As built (First words only; Recall's Last to first is NOT built):**
+  - Pure logic `src/lib/outline.ts` + `outline.check.ts` (`npm run check:outline`):
+    words shown, tap wrap (`bumpExtra`: slider + taps, back to the slider's number
+    past 4), rows, grouping by section, grading, and `OutlineRun` (`recordRunResult`
+    keys every result by verse and ignores a result for any other verse, which is the
+    reverse-order guard; the check runs a whole reversed run).
+  - Screen `src/components/drills/OutlineDrill.tsx`: list in the chosen direction with
+    section brackets/headers (reuses `BracketGutter`/`SectionHeaderRow`), tap a row =
+    one more word (saved), mic on a row = say that verse, **Run it** = every row in
+    listed order, one `GradedRecitation` per verse. Settings (folding rows): Words
+    shown, Order (First to last / Last to first), Answer by (only where speech works),
+    switches for Section labels and Memory phrase (only with sections), Reset taps.
+  - It only grades; the host credits through `onVerseGraded`. Recall's panel credits a
+    verse that passes 90%, is `reviewing` and is due (and reviews aren't paused),
+    quietly, `via: 'outline'`, `perfect: false`. A learning verse is practice only
+    (a partly shown verse can't give the perfect graded run learning needs).
+  - `outlineExtra` lives on the ChapterSections doc (`useChapterSections.saveOutlineExtra`;
+    `saveChapterSections` keeps it). A doc with only taps uses the placeholder start
+    `[1]`, never another verse (it would read as a section start); the chapter page
+    treats such a doc as "no sections".
+  - Reach: new Recall tab "First words" (`LearnMode` 'outline', label from
+    `formatNames`), and a First words button on the chapter page (the picked verses,
+    or the whole chapter) via `startPractice(..., { learnTab: 'outline' })`
+    (`practiceLearnTab` in AppState). Six tabs don't fit at 1.5x, so
+    `SegmentedControl` got a `wrap` prop (second row) that Recall's picker uses at
+    1.3x and up.
+  - `ReviewLog.via` gained `'outline'`. `MIX_NAMES.firstToLast` added.
+  - Demo: `?s=outline` opens Matthew 7 (sections on) straight into First words.
+  - Not tried: on a real phone (speech grading, the hold on a row); crediting a real
+    due verse end to end (the demo queue has no Matthew 7).
 
 ## Stage 3 — Put in order, Which section, Teach-It
 

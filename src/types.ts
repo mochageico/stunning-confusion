@@ -153,7 +153,7 @@ export interface ReviewLog {
   stage: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; // the stage it happened in
   refresher?: true;            // happened during a refresher stint after a miss
   drillType?: TouchLog['drillType'];
-  via?: 'thread' | 'guided';   // pass: earned in Pick up the thread or Guided learning rather than Recall or a manual log
+  via?: 'thread' | 'guided' | 'outline'; // pass: earned in Pick up the thread, Guided learning or First words rather than Recall or a manual log
   cycles?: number;             // skipped: how many review dates passed
   forgiven?: true;             // skipped: resolved with no penalty
 }
@@ -668,6 +668,12 @@ export interface ChapterSections {
    * never makes one up; with none written it shows the opening letter.
    */
   phraseWords: Record<number, string>;
+  /**
+   * First words (Outline): extra words the user tapped open on a verse, by
+   * verse number, 1-4. Absent when none. Saved per chapter so the outline
+   * looks the same next time. See src/lib/outline.ts.
+   */
+  outlineExtra?: Record<number, number>;
   /** ISO time of the last save. */
   updatedAt: string;
 }

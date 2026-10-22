@@ -70,6 +70,7 @@
     "check:thread": "node scripts/run-thread-check.cjs",
     "check:guided": "node scripts/run-guided-check.cjs",
     "check:sections": "node scripts/run-sections-check.cjs",
+    "check:outline": "node scripts/run-outline-check.cjs",
     "check:translations": "node scripts/run-translations-check.cjs",
     "check:textscript": "node scripts/run-textscript-check.cjs",
     "check:retention": "node scripts/run-retention-check.cjs",
