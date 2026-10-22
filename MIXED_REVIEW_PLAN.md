@@ -1,0 +1,262 @@
+# Mixed review, sections and takeaways — build plan
+
+Written 2026-10-22 from a long brainstorm with the user. Nothing here is built yet.
+Each stage is one session. Run them in order: every stage builds on the ones before it.
+
+**For the session building a stage:** read this whole file first, then your stage.
+Stage by name when committing (never `git add -A`; other sessions edit this folder).
+After each stage, update the **Progress** line below and note anything that changed.
+
+**Progress:** nothing started.
+
+---
+
+## Locked decisions
+
+| Decision | Choice |
+| --- | --- |
+| Sections | Belong to the **chapter**, not to a mode. The user makes them by dragging a bracket edge. No automatic split from BSB headings. |
+| Section look | Colored bracket on the **left** of the verses, label at the top of it. Bracket colors are their own small set and never reuse the stage colors (stage dots stay on the right). |
+| Memory phrase | One word per section, starting with the first letter of that section's opening verse. The user's Matthew 7 phrase is "john doe ate some edamame but not every apple" (sections start at 1, 6, 7, 12, 13, 15, 21, 24, 28). The app never invents a phrase; with none written it shows the letters. |
+| Outline mode | Vertical list, one row per verse. Default 3 words shown, adjustable 0–4 for all verses, plus a per-verse tap that adds one word (wraps at 4). Section labels and phrase words on the dividers, each switchable. **Can run last to first.** |
+| Backwards | **Not its own mode.** A "Last to first" option on the normal recite and type: verses in reverse order, each verse still said forward. Word-by-word backwards is ruled out. |
+| Counting rule | A format counts as a review if you bring words out of memory. **Counts:** Recite (either direction), Keep going (Pick up the thread), First words (Outline), Find the wrong word (Spot the swap). **Practice, never credits:** Scramble, Put in order, Which section, Teach-It. |
+| Mixed review honesty | A verse counts as reviewed only when a counting format covers it that day. A Practice format in the mix is always followed by a counting one before moving on. |
+| Teach-It | Named "Teach-It". Say the section in your own words, one fixed **10-second** timer, self-checked. Practice only. |
+| "Practice" label | The non-counting formats are labeled "Practice" (not "warm-up"). |
+| Tricky verses | **Dropped** as bloat. The mixed-review recap's "where you slipped" list covers it. |
+| Takeaways | One per **section**. Asked once the whole section reaches **weekly** reviews. Optional, can be written later. The user can add a secondary **note** under it. |
+| Takeaway sharing | Shareable with a circle (share switch remembers the last choice). A circle sees each person's takeaways as their own items; **not** grouped by passage across people (everyone's sections differ). **Replies live on the takeaway**, visible only after tapping it open. |
+| Milestones | Books of the Bible as landmarks, counted in verses held ("You hold more verses than Ruth. Next: Philippians, 19 to go"). Shown as markers on the takeaways path. |
+| Circle totals | One weekly line ("This week the Tuesday group reviewed 2,140 verses and wrote 6 takeaways"), a bar of everyone's share with **no ranking**, and a shared landmark ladder ("Together you hold more than Hebrews"). |
+| Rejected | Lamp/momentum meter, streaks, speed or time as a score, clean-run counter, past-mistakes replay, keyword skeleton, phrase check, finish-the-recording, typing races, extra milestone kinds (first whole chapter etc.). Don't re-pitch these. |
+
+### Names are not final
+
+The user expects to rename some formats. Working names used in this plan:
+Mixed review, Recite, Last to first, Keep going (today "Pick up the thread"),
+First words (Outline), Find the wrong word (today "Spot the swap"), Put in order,
+Which section, Teach-It, Scramble.
+
+Stage 1 adds **one table** of format ids → labels (`src/lib/formatNames.ts`). Every
+screen reads labels from it, so a rename later is a one-line change. Check new copy
+against the banned-jargon list in the memory note "three-concept naming" (no "queue",
+"phase", "graduate", "rhythm" …).
+
+### Open questions (defaults used until the user says otherwise)
+
+1. **Chapter opener:** default is one Practice round (Put in order or Which section) at
+   the start of every chapter that has 3+ sections. Alternative: only sometimes.
+2. **Chapter order in Mixed review:** default follows Today (daily, then weekly, then
+   monthly). Alternative: shuffle chapters.
+3. **A miss in a counting round:** default counts as a miss exactly like Recall today
+   (below 90% = miss). Note that Pick up the thread on its own never penalizes a miss
+   (user's call 2026-10-10). Ask before shipping stage 5.
+
+---
+
+## What already exists that this builds on
+
+- **Due reviews on Today:** `src/screens/HomeScreen.tsx` — the Review card (~line 423)
+  with "Review all due" (`handleReviewAllDue` → `startReviewSession`) and per-chapter
+  rows (Listen / Review / manual log). Guided learning's button sits in the Learning card
+  (~line 416, `state.openGuided()`).
+- **Crediting a review:** `handleReviewCompleted(item, success, drillType, opts)` in
+  `src/state/useReviewEngine.ts:654`. It already returns `'early'` and changes nothing
+  for a verse that isn't due. `opts.quiet` suppresses toasts; `opts.via` is stored on
+  the review log. `ReviewLog.via` in `src/types.ts:156` is `'thread' | 'guided'` today.
+- **Guided learning, the model to copy:** pure logic + reducer in `src/lib/guided.ts`
+  (with `src/lib/guided.check.ts` → `npm run check:guided`), screen in
+  `src/screens/GuidedLearningScreen.tsx`, route `'guided'` in `src/state/useAppState.ts`
+  (~lines 110/136), opened from `src/state/usePracticeSession.ts:63`.
+- **Reusable drills:** `src/components/drills/` (BuildUp, Jigsaw, Scramble, SpotSwap)
+  and `src/components/GradedRecitation.tsx` (graded speak/type over a verse span; takes
+  `shownWords`, `onSwitchMode`, `onResult(perVerse, mode)`).
+- **Pick up the thread:** `src/lib/drills.ts` (`buildThreadPassages` ~906,
+  `pickThreadCue` ~1033) and `src/screens/ThreadDrillScreen.tsx` (credit rules ~line 39).
+- **Recall (the practice screen):** `src/components/PracticeModals.tsx` shell +
+  `src/components/practice/useRecall.ts` (tabs = `LearnMode`, word pointer across
+  `verses`) and `RecallPanel.tsx`.
+- **Per-user, per-chapter data precedent:** chapter photos —
+  `src/state/useChapterPhotos.ts`, stored at `users/{uid}/chapterPhotos/{id}`,
+  rule at `firestore.rules:164`.
+- **Practice settings:** `PracticeSettings` in `src/screens/SettingsScreen.tsx:61`,
+  saved through `src/lib/practicePrefs.ts`.
+- **Chapter page:** `src/screens/ChapterLandingScreen.tsx` (drag-select already lives here).
+- **Demo mode for checking UI without signing in:** `src/dev/DemoHarness.tsx`, opened
+  with `?s=<screen>` on web; `npm run shots` takes screenshots. Add a demo for every
+  new screen.
+- **Checks:** `npm run check:*` scripts in `scripts/` run the `*.check.ts` files. Every
+  new pure module gets one.
+
+---
+
+## Stage 1 — Sections on the chapter page
+
+**Model: Opus.** New data model plus a drag gesture; everything later depends on it.
+
+- **Data:** `ChapterSections` type in `src/types.ts`:
+  `{ key, book, chapter, starts: number[], labels: Record<number,string>, phraseWords: Record<number,string>, updatedAt }`.
+  Key is `book|chapter` (not per translation: sections are about structure). Note in
+  the code that Hebrew/Greek uses English numbering, so this holds.
+- **Storage:** `users/{uid}/chapterSections/{key}`, owner-only rule next to the
+  chapterPhotos rule. New hook `src/state/useChapterSections.ts` modeled on
+  `useChapterPhotos` (load on sign-in, reset on sign-out, destructured into AppState —
+  keep `npm run check:appstate` passing by adding the new fields deliberately).
+- **Pure helpers** in `src/lib/sections.ts` + `sections.check.ts` + `npm run check:sections`:
+  section list from starts, which section a verse is in, move a start (clamped between
+  neighbors), split at a verse, merge, labels follow their section when a start moves,
+  phrase letters (first letter of each section's opening verse, Hebrew/Greek aware via
+  `textScript`), "stretches" fallback for chapters with no sections (reuse
+  `buildThreadPassages` with 4 verses).
+- **Chapter page:** brackets on the left of the verse list, label at the top of each.
+  An **Edit sections** mode: drag the handle on a bracket edge (snaps to verses), tap a
+  verse to start a section there, double-tap a handle to join, tap a label to rename,
+  memory-phrase word field per section. Must not fight the existing hold-and-drag
+  multi-select: edit mode is separate.
+- **Colors:** a 4–6 color bracket set as theme tokens (see memory note "theme token
+  rules"); never the stage colors.
+- `src/lib/formatNames.ts` (the label table above).
+- **Demo:** `?s=sections` opens Matthew 7 with the user's nine sections and phrase.
+- **Done when:** tsc clean, `check:sections` + `check:appstate` + `check:layout` pass,
+  screenshots of the chapter page with brackets and in edit mode, including 1.5× text
+  on SE width. Sections survive sign-out/sign-in.
+- **Deploy note:** the new rule must reach Firestore before this ships. The memory note
+  "social rules deploy" has the order (new app build first, then rules).
+
+## Stage 2 — First words (Outline) and Last to first
+
+**Model: Sonnet for Outline. Opus for the Last to first change inside Recall**
+(`useRecall`'s word pointer, strikes and per-verse outcomes all assume forward order;
+it's a small change in a delicate place).
+
+- **Outline screen/panel** (`src/components/drills/OutlineDrill.tsx`): rows top to
+  bottom, number + first N words + a faint line for the rest. Controls: words slider
+  0–4 (default 3), per-verse tap adds a word (wraps), switches for section labels and
+  memory phrase, **direction switch (first to last / last to first)**, reset taps.
+  Per-verse taps save per chapter (on the ChapterSections doc as `outlineExtra:
+  Record<verse, number>`).
+- **Counting:** tapping a row (or "Run it") recites that verse with GradedRecitation,
+  `shownWords` = the words the row shows. Graded results are what a host credits.
+- Reachable as a new tab in Recall (`LearnMode`) and from the chapter page.
+- **Last to first in Recall:** an option on Recite (speak and type): verses run last to
+  first, each verse forward. Results still map to the right verse.
+- **Last to first for GradedRecitation hosts:** no change to GradedRecitation itself;
+  hosts run one verse at a time in reverse.
+- **Demo:** `?s=outline` (Matthew 7, sections on).
+- **Done when:** tsc, checks, screenshots both directions; recite in reverse credits the
+  right verses (add a check for the reverse mapping).
+
+## Stage 3 — Put in order, Which section, Teach-It
+
+**Model: Sonnet.** All three are self-contained Practice formats.
+
+- **Put in order** (`SectionOrderDrill.tsx`): shuffled section labels into numbered
+  slots. Reuse JigsawDrill's tile/slot interaction. Needs 3+ sections.
+- **Which section** (`WhichSectionDrill.tsx`): show one verse, pick its section from 3
+  choices (the right one + two neighbors). Needs 3+ sections.
+- **Teach-It** (`TeachItDrill.tsx`): "Say it in your own words", one 10-second ring
+  timer, mic transcript if speech is available, then Got it / Not really. Offer
+  "Save as takeaway draft" (stored for stage 6; until then keep it in the drill only).
+- All three are Practice: they never call `handleReviewCompleted`.
+- New Recall tabs where they fit; each needs its prerequisites (sections) or hides.
+- **Done when:** tsc, screenshots, demo entries.
+
+## Stage 4 — Mixed review: logic
+
+**Model: Opus.** The session planner and the honesty rule; same weight as Guided phases 1–3.
+
+- `src/lib/mix.ts` + `mix.check.ts` + `npm run check:mix`, pure, like `guided.ts`:
+  - Input: due reviewing items, chapter sections, enabled formats, an `Rng`.
+  - Build units: per chapter (Today's order), its sections (or stretches).
+  - Per chapter: optional opener (open question 1). Per section: draw a format from the
+    enabled set; never the same format twice in a row; skip formats whose
+    prerequisites fail (Keep going needs an earlier started verse, Find the wrong word
+    needs a decoy pool, Put in order / Which section need 3+ sections); fall back to Recite.
+  - If the drawn format is Practice, queue a counting format right after it for the same
+    section.
+  - Reducer: start, round result, skip, stop. Tracks which verses got counting coverage.
+  - Credit decision per verse from a counting round: pass/miss/self per the open
+    question 3 default.
+- Add `'mix'` to `ReviewLog.via` and the opts type.
+- Formats setting (which formats are in the mix) saved in practicePrefs; Settings gets a
+  "Mixed review" checklist with Counts/Practice tags.
+- **Done when:** `check:mix` covers: honesty (no verse credited by a Practice format
+  alone), no repeats in a row, fallbacks, stretches when a chapter has no sections,
+  stop mid-session keeps earlier credit.
+
+## Stage 5 — Mixed review: screen and Today
+
+**Model: Opus** for the screen wiring and crediting, Sonnet is fine for the recap
+layout if split off.
+
+- `src/screens/MixedReviewScreen.tsx`, route `'mixedReview'`, opened like Guided.
+- **Today:** Review card's primary button becomes **Mixed review**; the existing
+  "Review all due" stays as a secondary button labeled **Recite all due**. Chapter rows
+  unchanged.
+- **Start sheet:** verse count, chapters, rough time (reuse `getEstimatedReviewTime`),
+  chapter checkboxes, "Add sections" link for chapters without any, Formats link, Start,
+  "Stop anytime. What you finish counts."
+- **Session:** progress bar, "Matthew 7 · section 3 of 9", section bracket color and
+  label, format name with Counts/Practice tag, the drill. Credit each section as soon as
+  its counting round ends (`handleReviewCompleted(..., { quiet: true, via: 'mix' })`),
+  so closing the app loses nothing.
+- **Recap:** verses, sections, time; clean vs slipped; "Where you slipped" list with a
+  Practice button per section (opens Recall on those verses); formats used today.
+- **Demo:** `?s=mixedReview` with three due chapters.
+- **Done when:** tsc, all checks, screenshots of each step at 1.5× on SE, a real-phone
+  check of speech in the session.
+
+## Stage 6 — Takeaways path
+
+**Model: Sonnet** for the path and the ask. **Opus** for sharing, replies and rules.
+
+- **Data:** `users/{uid}/takeaways/{id}`: `{ book, chapter, sectionStart, sectionEnd,
+  label, text, note?, createdAt, sharedTo?: circleId[] }`.
+- **The ask:** when every verse in a section is in weekly reviews or later and the
+  section has no takeaway, show it once (end of a review session, and a quiet card on
+  Today). "Later" leaves an empty dashed stop on the path. Teach-It drafts prefill it.
+- **Path screen:** newest at top, stops alternate sides of one line, each in its
+  section's bracket color, chapter dividers, the next unlocking section as a dashed stop.
+  Mine / With my circle switch. Tap a stop to open it: takeaway, note, replies.
+- **Sharing:** share switch per takeaway (remembers last choice). Shared copy at
+  `circles/{circleId}/takeaways/{id}` (members-only read, author-only write), replies at
+  `.../takeaways/{id}/replies/{replyId}` (members can create their own, immutable,
+  same shape as circle messages). Respect block lists like circle chat does.
+- **Circle view:** each member's takeaways as their own items (not grouped by passage),
+  reply count shown, replies only after opening.
+- **Done when:** tsc, checks, screenshots, rules tested against a non-member.
+- **Deploy note:** new rules again: build first, then rules.
+
+## Stage 7 — Milestones and circle totals
+
+**Model: Sonnet** for milestones. **Opus** for circle totals (needs a shared stats doc
+and rules).
+
+- **Milestones:** `src/lib/milestones.ts` + check: a 66-book verse-count table, verses
+  held = items past learning. Ladder by verse count, "next landmark, N to go". Markers
+  on the takeaways path at the date each landmark was passed (from review logs).
+- **Circle totals:** each member writes a small weekly stats doc (verses reviewed this
+  week, takeaways written, verses held) readable by circle co-members. Circle page shows
+  the weekly line, the share bar (no names in rank order — alphabetical or fixed member
+  order), and the shared landmark ladder.
+- **Done when:** tsc, checks, screenshots; a member who leaves the circle drops out of
+  the totals.
+
+---
+
+## Model summary
+
+| Stage | Model |
+| --- | --- |
+| 1 Sections | Opus |
+| 2 Outline | Sonnet (Last to first inside Recall: Opus) |
+| 3 Put in order, Which section, Teach-It | Sonnet |
+| 4 Mixed review logic | Opus |
+| 5 Mixed review screen | Opus (recap layout: Sonnet) |
+| 6 Takeaways | Sonnet (sharing, replies, rules: Opus) |
+| 7 Milestones / circle totals | Sonnet / Opus |
+
+Rule of thumb used: Opus where a mistake corrupts saved data, credits the wrong
+verses, or opens a security hole (data models, the review engine, Firestore rules,
+`useRecall`). Sonnet for self-contained screens with a clear spec.
