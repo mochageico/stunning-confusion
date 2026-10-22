@@ -549,8 +549,9 @@ Or enter code ${activeCircle.inviteCode} under Community > Find a circle.`,
         }
       >
         <View className="items-center" style={{ gap: space(12) }}>
-          {/* White behind the code whatever the theme: scanners need contrast. */}
+          {/* White behind the code whatever the theme: scanners need contrast. theme-ok */}
           <View className="rounded-card border border-line" style={{ padding: space(14), backgroundColor: '#FFFFFF' }}>
+            {/* Near-black on white, fixed for the same reason. theme-ok */}
             <QRCode value={shareUrl} size={space(180)} color="#111111" backgroundColor="#FFFFFF" />
           </View>
           <View className="bg-surface-2 border border-line rounded-card items-center self-stretch" style={{ padding: space(12), gap: space(2) }}>
