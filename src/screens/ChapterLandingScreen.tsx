@@ -784,7 +784,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                               {verseWord}
                             </AppText>
                           ) : null}
-                          <AppText variant="body" script={chapterScript} className="font-serif leading-relaxed text-ink">
+                          <AppText variant="label" script={chapterScript} className="font-serif leading-relaxed text-ink">
                             {v.text}
                           </AppText>
                           {due ? (
