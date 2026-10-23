@@ -14,7 +14,8 @@
 //
 // Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
 // activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, verseRoad, versePage,
-// referenceDrill, threadDrill, guided, sections, outline,
+// referenceDrill, threadDrill, guided, sections, outline, sectionOrder,
+// whichSection, teachIt,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
@@ -32,6 +33,8 @@
 // user's nine sections and memory phrase; edit=1 (with sections) opens Edit
 // sections. outline: the same chapter, opened straight into First words in the
 // practice screen (the Order setting there flips it to last to first).
+// sectionOrder / whichSection / teachIt: the same chapter, opened on the Put in
+// order, Which section or Teach-It tab of the practice screen.
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
@@ -39,6 +42,7 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import type { AppState } from '../state/useAppState';
 import type { CircleMember, DMThread } from '../types';
+import { formatLabel } from '../lib/formatNames';
 
 /** Flip to true to see demo data on a phone. Dev builds only. */
 const DEMO_ON_DEVICE = false;
@@ -225,11 +229,11 @@ const matt7Sections = () => ({
 });
 
 /** Web only: taps a button by its exact text once it shows up (gives up after ~10s). */
-function tapWhenShown(text: string) {
+function tapWhenShown(text: string, role: 'button' | 'radio' = 'button') {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;
   let tries = 0;
   const timer = setInterval(() => {
-    const el = Array.from(document.querySelectorAll('[role="button"]')).find(
+    const el = Array.from(document.querySelectorAll(`[role="${role}"]`)).find(
       (node) => (node as HTMLElement).innerText?.trim().toLowerCase() === text.toLowerCase()
     ) as HTMLElement | undefined;
     if (el || ++tries > 40) clearInterval(timer);
@@ -423,6 +427,12 @@ export function useDemoState(real: AppState): AppState {
       void real.saveChapterSections('Matthew', 7, matt7Sections());
       real.navigateTo('chapterLanding', 'Matthew', 7);
       tapWhenShown('First words');
+    } else if (s === 'sectionOrder' || s === 'whichSection' || s === 'teachIt') {
+      // The same way in as First words, then the tab for this drill.
+      void real.saveChapterSections('Matthew', 7, matt7Sections());
+      real.navigateTo('chapterLanding', 'Matthew', 7);
+      tapWhenShown('First words');
+      tapWhenShown(formatLabel(s === 'sectionOrder' ? 'putInOrder' : s), 'radio');
     }
     else if (s === 'planDesigner') real.openActivePlanDesigner();
     else if (s === 'guided') real.openGuided('BSB|Psalms|23|1');

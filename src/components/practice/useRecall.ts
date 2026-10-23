@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Layers, ListOrdered, ListTree, Mic, Puzzle, SearchCheck } from 'lucide-react-native';
-import { VerseState, QueueItem, TextScript } from '../../types';
+import { Layers, ListChecks, ListOrdered, ListTree, MessageCircle, Mic, Puzzle, SearchCheck, Signpost } from 'lucide-react-native';
+import { ChapterSections, VerseState, QueueItem, TextScript } from '../../types';
 import { isReviewDue } from '../../state/useAppState';
 import { classifyFirstLetterAttempt, getSpeechRecognizer, normalizeToken, reconcileSpeechWindow, tokenizeWords, SpeechRecognizer, WordOutcome } from '../../lib/recitation';
 import { splitWords, typedLetters } from '../../lib/textScript';
@@ -9,6 +9,7 @@ import { verseAnnotationKey } from '../MemoryGrid';
 import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePrefs, StrikeLimit } from '../../lib/practicePrefs';
 import { formatDate } from '../../lib/format';
 import { formatLabel } from '../../lib/formatNames';
+import { drillSections, hasEnoughSections } from '../../lib/sectionDrills';
 import { buildReciteOrder, positionsToWords, verseStartPosition } from '../../lib/reciteOrder';
 
 // ============================================================================
@@ -21,7 +22,7 @@ import { buildReciteOrder, positionsToWords, verseStartPosition } from '../../li
 // .claude/file-split-plan.md).
 // ============================================================================
 
-export type LearnMode = 'recite' | 'buildUp' | 'jigsaw' | 'scramble' | 'spotSwap' | 'outline';
+export type LearnMode = 'recite' | 'buildUp' | 'jigsaw' | 'scramble' | 'spotSwap' | 'outline' | 'putInOrder' | 'whichSection' | 'teachIt';
 
 export interface UseRecallParams {
   verses: VerseState[];
@@ -33,6 +34,11 @@ export interface UseRecallParams {
   initialLearnTab?: LearnMode;
   /** Settings -> Pause Reviews is on: nothing is due. */
   reviewsPaused?: boolean;
+  /**
+   * The saved sections of the passage's chapter, if it has any. Put in order
+   * and Which section only get a tab when the passage reaches 3+ of them.
+   */
+  chapterSectionsDoc?: ChapterSections | null;
 }
 
 export function useRecall({
@@ -43,6 +49,7 @@ export function useRecall({
   passageScript,
   initialLearnTab,
   reviewsPaused = false,
+  chapterSectionsDoc = null,
 }: UseRecallParams) {
   // ==========================================
   // LEARN MODE — Recall (typed + spoken, either channel advances the same
@@ -468,6 +475,18 @@ export function useRecall({
     setLearnTab(tab);
   };
 
+  // The chapter's sections as far as this passage reaches (empty with none).
+  // Put in order and Which section need 3+ of them; Teach-It works on any
+  // passage and teaches stretches when there are no sections.
+  const sectionList = useMemo(() => drillSections(verses, chapterSectionsDoc), [verses, chapterSectionsDoc]);
+  const sectionDrillsReady = hasEnoughSections(sectionList);
+
+  // The same for the section drills: a passage without 3+ sections (or
+  // sections edited away) leaves no tab for them.
+  useEffect(() => {
+    if (!sectionDrillsReady && (learnTab === 'putInOrder' || learnTab === 'whichSection')) setLearnTab('recite');
+  }, [sectionDrillsReady, learnTab]);
+
   // Jigsaw is only meaningful with enough tiles to genuinely scramble.
   const learnModes = useMemo(
     () =>
@@ -478,8 +497,15 @@ export function useRecall({
         { id: 'scramble' as const, label: 'Scramble', Icon: Puzzle },
         { id: 'spotSwap' as const, label: 'Spot', Icon: SearchCheck },
         { id: 'outline' as const, label: formatLabel('firstWords'), Icon: ListTree },
+        ...(sectionDrillsReady
+          ? [
+              { id: 'putInOrder' as const, label: formatLabel('putInOrder'), Icon: ListChecks },
+              { id: 'whichSection' as const, label: formatLabel('whichSection'), Icon: Signpost },
+            ]
+          : []),
+        { id: 'teachIt' as const, label: formatLabel('teachIt'), Icon: MessageCircle },
       ] as { id: LearnMode; label: string; Icon: typeof Mic }[],
-    [verses.length]
+    [verses.length, sectionDrillsReady]
   );
 
   // Pick up the thread is offered after a passing Recall when the last verse
@@ -715,6 +741,7 @@ export function useRecall({
     gridWordStates,
     switchLearnTab,
     learnModes,
+    sectionList,
     threadTarget,
     notDueLine,
     allNotDue,

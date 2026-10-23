@@ -226,6 +226,7 @@ function PracticeModalsInner({
     passageScript,
     initialLearnTab,
     reviewsPaused,
+    chapterSectionsDoc: verses[0] ? sectionsForChapter?.(verses[0].book, verses[0].chapter) ?? null : null,
   });
 
   // ==========================================

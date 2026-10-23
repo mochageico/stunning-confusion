@@ -13,6 +13,9 @@ import JigsawDrill from '../drills/JigsawDrill';
 import ScrambleDrill from '../drills/ScrambleDrill';
 import SpotSwapDrill from '../drills/SpotSwapDrill';
 import OutlineDrill from '../drills/OutlineDrill';
+import SectionOrderDrill from '../drills/SectionOrderDrill';
+import WhichSectionDrill from '../drills/WhichSectionDrill';
+import TeachItDrill from '../drills/TeachItDrill';
 import type { OutlineVerseResult } from '../../lib/outline';
 import { DrillSetting, DrillSettings, HIDE_LEVELS } from './shared';
 import type { PracticeModalsProps } from '../PracticeModals';
@@ -98,6 +101,7 @@ export default function RecallPanel({
     gridWordStates,
     switchLearnTab,
     learnModes,
+    sectionList,
     threadTarget,
     notDueLine,
     allNotDue,
@@ -146,7 +150,7 @@ export default function RecallPanel({
           value={learnTab}
           onChange={switchLearnTab}
           accessibilityLabel="Practice mode"
-          wrap={fontScale >= 1.3}
+          wrap={fontScale >= 1.3 || learnModes.length > 6}
           options={learnModes.map(({ id, label }) => ({ id, label }))}
         />
       </View>
@@ -659,6 +663,22 @@ export default function RecallPanel({
           onSaveExtra={onSaveOutlineExtra}
           onVerseGraded={creditOutlineVerse}
         />
+      </View>
+      {/* Put in order, Which section and Teach-It are Practice (formatNames):
+          nothing here credits a review. The first two exist only with 3+
+          sections; Teach-It teaches stretches when there are none. */}
+      {sectionList.length >= 3 && (
+        <>
+          <View className="flex-1" style={{ display: learnTab === 'putInOrder' ? 'flex' : 'none' }}>
+            <SectionOrderDrill sections={sectionList} script={passageScript} />
+          </View>
+          <View className="flex-1" style={{ display: learnTab === 'whichSection' ? 'flex' : 'none' }}>
+            <WhichSectionDrill sections={sectionList} script={passageScript} />
+          </View>
+        </>
+      )}
+      <View className="flex-1" style={{ display: learnTab === 'teachIt' ? 'flex' : 'none' }}>
+        <TeachItDrill verses={verses} sections={sectionList} script={passageScript} active={learnTab === 'teachIt'} />
       </View>
     </View>
   );

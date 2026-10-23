@@ -10,7 +10,8 @@ After each stage, update the **Progress** line below and note anything that chan
 **Progress:** stage 1 built 2026-10-22 (sections on the chapter page). The
 chapterSections Firestore rule is **not deployed yet**: build first, then rules.
 Stage 2 built 2026-10-22: First words (Outline), and Last to first on Recall's
-normal recite and type. Stage 3 is next.
+normal recite and type. Stage 3 built 2026-10-22: Put in order, Which section,
+Teach-It (all Practice). Stage 4 is next.
 
 ---
 
@@ -222,6 +223,40 @@ it's a small change in a delicate place).
 - All three are Practice: they never call `handleReviewCompleted`.
 - New Recall tabs where they fit; each needs its prerequisites (sections) or hides.
 - **Done when:** tsc, screenshots, demo entries.
+- **As built (stage 3):**
+  - Pure logic `src/lib/sectionDrills.ts` + `sectionDrills.check.ts`
+    (`npm run check:sectiondrills`): `drillSections(verses, doc)` (the chapter's
+    sections as far as the selection reaches; one chapter only; `index` stays the
+    chapter-wide position so bracket colors match), `buildOrderRound`/`scoreOrder`,
+    `buildQuestions`/`choicesFor` (right section + one neighbor each side, or the
+    next two at an edge), `teachTargets` (sections, else stretches), the 10 s timer
+    maths, `makeTakeawayDraft`/`addDraft` (one draft per section).
+  - Drills in `src/components/drills/`: `SectionOrderDrill` (JigsawDrill's tap-to-place
+    slots; a tile is the section's label, or its first four words when it has none,
+    never its verse range, which would give the order away; "Check order" then shows
+    each placed section's verses), `WhichSectionDrill` (8 verses, one per section in
+    turn, verse number hidden until answered, choice = label + range + bracket color
+    swatch, score at the end, Play again), `TeachItDrill` (section/stretch chips,
+    ring timer from react-native-svg, live transcript where `getSpeechRecognizer()`
+    exists, else a typed line; the verses are shown after the time is up; Got it /
+    Not really; "Save as takeaway draft" keeps `TakeawayDraft`s in the drill only,
+    listed at its foot).
+  - None of the three calls `handleReviewCompleted` or any credit callback; they
+    take no such prop. Each says "is Practice: it never counts as a review".
+  - Recall tabs: `LearnMode` gained `putInOrder`, `whichSection`, `teachIt`. useRecall
+    takes `chapterSectionsDoc` and returns `sectionList`; Put in order and Which
+    section appear only with 3+ sections in the passage (and fall back to Recall if
+    the passage changes under them); Teach-It always shows. Labels from `formatNames`.
+  - The picker now wraps whenever there are more than 6 tabs (nine, with sections).
+    At 1.5x on an SE it is four rows; at 1.3x+ each drill moves its buttons into the
+    scrolling area so the controls are still reachable.
+  - Demos: `?s=sectionOrder`, `?s=whichSection`, `?s=teachIt` (Matthew 7, sections
+    on, entered like First words then the tab). Added to `npm run shots -- --all`.
+  - Open for the user: the old verse-order tab is labeled "Order" and the new one
+    "Put in order" (from formatNames). Easy to confuse; rename one.
+  - Not tried: speech on a real phone (the browser pane blocks the mic, so the typed
+    fallback was what ran); Hebrew/Greek passages; sections on a multi-chapter
+    selection (they have none, so only Teach-It shows).
 
 ## Stage 4 — Mixed review: logic
 
