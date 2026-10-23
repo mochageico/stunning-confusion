@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Bookmark, ChevronDown, Flag, ChevronUp, MessageCircle, Send, Trash2, Users } from 'lucide-react-native';
+import { Bookmark, ChevronDown, ChevronRight, ChevronUp, MessageCircle, Send, Trash2, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { replyKey } from '../state/useCircleTakeaways';
@@ -9,8 +9,7 @@ import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScale
 import { Badge, EmptyState, ScreenHeader, SegmentedControl } from '../components/blocks';
 import { bracketColor, useThemeColors } from '../components/theme';
 import { SectionTitle, ShareSwitch, spotName, TakeawayForm, useNewShareChoice } from '../components/TakeawayAsk';
-import { formatDate, formatTimeAgo } from '../lib/format';
-import { heldDates, ladderPosition, landmarkDates, nextLine } from '../lib/milestones';
+import { formatTimeAgo } from '../lib/format';
 import { sectionIndexOf } from '../lib/sections';
 import { buildPath, PathEntry, sectionStatuses } from '../lib/takeaways';
 import { authorShort, circleList, nextSharedTo, REPLY_MAX, replyCountText, sharedChoiceFor, visibleReplies } from '../lib/takeawaySharing';
@@ -108,11 +107,30 @@ function Path({ entries, onOpen }: { entries: PathEntry[]; onOpen: (id: string) 
   // At large text two half-width columns leave a card a few words a line, so
   // every stop moves to one side of the line (the line then runs down the left).
   const stacked = scale >= 1.3;
+  // Tap a chapter to fold its stops away (or open them again). Everything starts open.
+  const [folded, setFolded] = useState<Set<string>>(() => new Set());
+  const toggle = (key: string) =>
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const shown: PathEntry[] = [];
+  const hiddenCount: Record<string, number> = {};
+  let current = '';
+  for (const e of entries) {
+    if (e.kind === 'chapter') {
+      current = `${e.book}|${e.chapter}`;
+      shown.push(e);
+    } else if (folded.has(current)) hiddenCount[current] = (hiddenCount[current] ?? 0) + 1;
+    else shown.push(e);
+  }
   return (
     <View>
-      {entries.map((e, i) => {
+      {shown.map((e, i) => {
         const first = i === 0;
-        const last = i === entries.length - 1;
+        const last = i === shown.length - 1;
         // The line runs through every row; it starts below the first dot and ends at the last.
         const line = (
           // layout-ok: the path's line.
@@ -132,37 +150,28 @@ function Path({ entries, onOpen }: { entries: PathEntry[]; onOpen: (id: string) 
           return (
             <View key={e.key} className={stacked ? 'flex-row items-center' : 'items-center justify-center'}>
               {stacked ? <View className="self-stretch" style={{ width: rail }}>{line}</View> : line}
-              <View className="bg-canvas border border-line rounded-full" style={{ marginVertical: space(8), paddingHorizontal: space(12), paddingVertical: space(4) }}>
+              <Pressable
+                onPress={() => toggle(`${e.book}|${e.chapter}`)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: !folded.has(`${e.book}|${e.chapter}`) }}
+                accessibilityLabel={`${e.book} ${e.chapter}, ${folded.has(`${e.book}|${e.chapter}`) ? 'show its sections' : 'hide its sections'}`}
+                className="flex-row items-center bg-canvas border border-line rounded-full active:opacity-70"
+                style={{ marginVertical: space(8), paddingHorizontal: space(12), paddingVertical: space(4), gap: space(4), minHeight: 36 }}
+              >
                 <AppText variant="caption" className="font-sans font-bold text-ink-2">
                   {e.book} {e.chapter}
                 </AppText>
-              </View>
-            </View>
-          );
-        }
-        if (e.kind === 'landmark') {
-          // A book of the Bible you now hold more verses than, on the line at the day you passed it.
-          return (
-            <View key={e.key} className={stacked ? 'flex-row items-center' : 'items-center justify-center'}>
-              {stacked ? <View className="self-stretch" style={{ width: rail }}>{line}</View> : line}
-              <View
-                className={`flex-row items-center bg-canvas border border-line-strong flex-shrink ${stacked ? 'rounded-card' : 'rounded-full'}`}
-                style={{ marginVertical: space(8), paddingHorizontal: space(12), paddingVertical: space(4), gap: space(6) }}
-              >
-                <Flag size={Math.round(13 * Math.min(scale, 1.3))} color={palette.ink3} />
-                {/* At large text the day goes on its own line so it never splits mid-date. */}
-                <View className="flex-shrink">
-                  <AppText variant="caption" className="font-sans font-semibold text-ink-2">
-                    More than {e.book}
-                    {e.at && !stacked ? ` · ${formatDate(e.at)}` : ''}
-                  </AppText>
-                  {e.at && stacked ? (
+                {folded.has(`${e.book}|${e.chapter}`) ? (
+                  <>
                     <AppText variant="caption" className="font-sans text-ink-3">
-                      {formatDate(e.at)}
+                      · {hiddenCount[`${e.book}|${e.chapter}`] ?? 0}
                     </AppText>
-                  ) : null}
-                </View>
-              </View>
+                    <ChevronRight size={Math.round(14 * Math.min(scale, 1.3))} color={palette.ink3} />
+                  </>
+                ) : (
+                  <ChevronDown size={Math.round(14 * Math.min(scale, 1.3))} color={palette.ink3} />
+                )}
+              </Pressable>
             </View>
           );
         }
@@ -504,13 +513,11 @@ export default function TakeawaysScreen({ state }: { state: AppState }) {
   // Only circles the user is in now: leaving or being removed hides a circle's takeaways.
   const circle = myCircles.find((c) => c.id === circleId) ?? myCircles[0] ?? null;
 
-  const dates = useMemo(() => heldDates(memoryQueue), [memoryQueue]);
-  const next = nextLine(ladderPosition(dates.length));
   const entries = useMemo(
-    () => buildPath(takeaways, sectionStatuses(memoryQueue, sectionsForChapter), sectionsForChapter, landmarkDates(dates)),
+    () => buildPath(takeaways, sectionStatuses(memoryQueue, sectionsForChapter), sectionsForChapter),
     // sectionsForChapter is remade each render; chapterSections is what it reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [takeaways, memoryQueue, dates, state.chapterSections]
+    [takeaways, memoryQueue, state.chapterSections]
   );
   const opened = openId ? takeaways[openId] : null;
   if (view === 'mine' && opened) {
@@ -577,14 +584,7 @@ export default function TakeawaysScreen({ state }: { state: AppState }) {
             message="When every verse of a section is in weekly reviews, you'll be asked for its main point. It lands here, one stop at a time."
           />
         ) : (
-          <>
-            {next && dates.length > 0 ? (
-              <AppText variant="label" className="font-sans text-ink-2">
-                {next}
-              </AppText>
-            ) : null}
-            <Path entries={entries} onOpen={setOpenId} />
-          </>
+          <Path entries={entries} onOpen={setOpenId} />
         )}
       </ScrollView>
     </FadeInView>

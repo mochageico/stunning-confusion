@@ -19,7 +19,7 @@ tried on a real phone. Stage 6, private half, built 2026-10-22 (takeaways, the
 ask, the path; the takeaways Firestore rule is **not deployed**). Stage 6, sharing
 half, built 2026-10-22: share switch, With my circle, replies, circle rules (**not
 deployed**: build first, then rules). Stage 7, milestones half, built 2026-10-23
-(books of the Bible as landmarks, on the takeaways path and My Verses). Circle
+(books of the Bible as landmarks, one line on My Verses; chapters fold on the takeaways path). Circle
 totals and the shared ladder are next.
 
 ---
@@ -595,20 +595,18 @@ and rules).
     `heldDates(queue)` sorts them (undated first, earlier translation copy wins);
     `landmarkDates(dates)` dates each landmark as the (length + 1)th verse's day.
     Nothing is stored.
-  - **Path:** `buildPath` takes an optional 4th arg of `LandmarkPassed[]` and adds
-    `{ kind: 'landmark' }` entries between stops, newest first (same day: longer
-    book first; undated at the bottom). They don't count toward left/right.
-    Rendered as a small flag pill, "More than Ruth · Oct 22" (date on its own line
-    at 1.3x and up). A plain "Next: 1 Thessalonians, 4 to go" line sits above the
-    path once anything is held. My Verses has one quiet line under the title
-    ("You hold more verses than Ruth. Next: ..., N to go."), no tap, no popup.
-  - Demo: `?s=takeaways` now holds 86 verses (Psalm 119 filler, one leaving
-    Learning a day); Matthew 7:13-14 left Learning 1.8 s after load and the "Later"
-    stop is saved at 2.6 s, so the Ruth marker lands between the two stops.
-  - **Worth a look from the user:** every book shorter than you is a marker, so a
-    person holding ~85 verses sees about 17 on the path. If that's too busy,
-    options are showing only the last few, or only markers since the previous
-    stop. Not tried: a real phone; a real account's history.
+  - **One spot, revised after the user saw it:** the user found a trail of
+    "More than <book>" markers on the takeaways path tacky, so they were removed
+    (and the "Next:" line with them). The landmark shows in **one place only**:
+    one quiet line under My Verses' title, "You hold more verses than the book of
+    Ruth. Next: Philippians, 19 to go." Nothing until something is held; no tap,
+    no popup. `leftLearningAt`/`heldDates`/`landmarkDates` stay in
+    `milestones.ts` (checked, unused by any screen) in case dated landmarks are
+    wanted again.
+  - **Takeaways path:** each chapter pill folds and opens its stops (chevron; a
+    folded pill shows how many stops are hidden). Everything starts open; the
+    fold is per visit, not saved. Demo: `?s=takeaways&fold=1`.
+  - Not tried: a real phone.
 
 ---
 

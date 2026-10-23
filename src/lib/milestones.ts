@@ -82,9 +82,9 @@ export function ladderPosition(held: number): LadderPosition {
 /** Every landmark passed at this count, shortest first. */
 export const passedLandmarks = (held: number): Landmark[] => LANDMARKS.filter((l) => Math.floor(held) > l.verses);
 
-/** "You hold more verses than Ruth." (null before the first landmark.) */
+/** "You hold more verses than the book of Ruth." (null before the first landmark.) */
 export const heldLine = (pos: LadderPosition, who: 'You' | 'Together you' = 'You'): string | null =>
-  pos.passed ? `${who} hold more verses than ${pos.passed.book}.` : null;
+  pos.passed ? `${who} hold more verses than the book of ${pos.passed.book}.` : null;
 
 /** "Next: Philippians, 19 to go" (null once past the longest book). */
 export const nextLine = (pos: LadderPosition): string | null => (pos.next ? `Next: ${pos.next.book}, ${pos.toGo} to go` : null);

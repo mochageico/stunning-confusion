@@ -1,6 +1,5 @@
 import type { ChapterSections, QueueItem, Takeaway } from '../types';
 import { ALL_BIBLE_BOOKS } from '../data';
-import type { LandmarkPassed } from './milestones';
 import { normalizeDraft, sectionIndexOf, sectionRangeText, sectionsFromStarts } from './sections';
 import { STAGE_ORDER, VerseStage, verseStage } from './stageProgress';
 
@@ -150,9 +149,7 @@ export const nextAsk = (statuses: SectionStatus[], takeaways: Record<string, Tak
 export type PathEntry =
   | { kind: 'chapter'; key: string; book: string; chapter: number }
   | { kind: 'stop'; key: string; side: 'left' | 'right'; takeaway: Takeaway; index: number; label?: string; range: string; empty: boolean }
-  | { kind: 'next'; key: string; side: 'left' | 'right'; status: SectionStatus; range: string }
-  // A book of the Bible you now hold more verses than (lib/milestones.ts), at the day you passed it.
-  | { kind: 'landmark'; key: string; book: string; at: string | null };
+  | { kind: 'next'; key: string; side: 'left' | 'right'; status: SectionStatus; range: string };
 
 /**
  * The section that unlocks next: not yet at weekly, no takeaway yet, every
@@ -176,7 +173,7 @@ export function nextUp(statuses: SectionStatus[], takeaways: Record<string, Take
  * chapter divider wherever the chapter changes. Stops alternate sides of the
  * line; the divider doesn't count toward the alternation.
  */
-export function buildPath(takeaways: Record<string, Takeaway>, statuses: SectionStatus[], sectionsFor: SectionsFor, landmarks: LandmarkPassed[] = []): PathEntry[] {
+export function buildPath(takeaways: Record<string, Takeaway>, statuses: SectionStatus[], sectionsFor: SectionsFor): PathEntry[] {
   const stops = Object.values(takeaways)
     .filter(isStop)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : a.id < b.id ? 1 : -1));
@@ -196,20 +193,7 @@ export function buildPath(takeaways: Record<string, Takeaway>, statuses: Section
     divide(next.book, next.chapter);
     out.push({ kind: 'next', key: `next:${takeawayId(next.book, next.chapter, next.start)}`, side: sideNow(), status: next, range: sectionRangeText(next) });
   }
-  // Landmarks sit between stops by the day they were passed, newest first;
-  // one with no date to go on belongs to the oldest part of the path.
-  const marks = [...landmarks].sort((a, b) =>
-    a.at === b.at ? b.landmark.verses - a.landmark.verses : a.at === null ? 1 : b.at === null ? -1 : a.at < b.at ? 1 : -1
-  );
-  let m = 0;
-  const flushMarks = (before: string | null) => {
-    while (m < marks.length && (before === null || (marks[m].at !== null && marks[m].at! >= before))) {
-      out.push({ kind: 'landmark', key: `mark:${marks[m].landmark.book}`, book: marks[m].landmark.book, at: marks[m].at });
-      m++;
-    }
-  };
   for (const t of stops) {
-    flushMarks(t.createdAt);
     divide(t.book, t.chapter);
     const doc = sectionsFor(t.book, t.chapter);
     const index = doc ? Math.max(0, sectionIndexOf(doc.starts, t.sectionStart)) : 0;
@@ -224,7 +208,6 @@ export function buildPath(takeaways: Record<string, Takeaway>, statuses: Section
       empty: !isWritten(t),
     });
   }
-  flushMarks(null);
   return out;
 }
 
