@@ -109,6 +109,7 @@ export type ScreenName =
   | 'referenceDrill'
   | 'threadDrill'
   | 'guided'
+  | 'mixedReview'
   | 'memberProfile'
   | 'groupPlanDetail'
   | 'fullHistory'
@@ -135,6 +136,7 @@ const HOME_TAB_SCREENS: ScreenName[] = [
   'referenceDrill',
   'threadDrill',
   'guided',
+  'mixedReview',
 ];
 
 // The Verses tab replaced the My Memory Work menu (2026-10-10): My Verses is
@@ -344,6 +346,7 @@ export function useAppState() {
     reviewSessionTotal,
     openThreadDrill,
     openGuided,
+    openMixedReview,
     startPractice,
     startReviewSession,
     advanceReviewSession,
@@ -2550,6 +2553,7 @@ export function useAppState() {
     openThreadDrill,
     guidedPassageKey, setGuidedPassageKey,
     openGuided,
+    openMixedReview,
     setGuidedSetAside,
     pullVerseIntoLearning,
     creditGuided,

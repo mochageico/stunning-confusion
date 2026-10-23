@@ -13,7 +13,9 @@ Stage 2 built 2026-10-22: First words (Outline), and Last to first on Recall's
 normal recite and type. Stage 3 built 2026-10-22: Put in order, Which section,
 Teach-It (all Practice). Stage 4 built 2026-10-22: Mixed review logic
 (`src/lib/mix.ts`, `npm run check:mix`) and its Settings checklist; no screen yet.
-Stage 5 is next.
+Stage 5 built 2026-10-22: the Mixed review screen, Today's Mixed review / Recite
+all due buttons, crediting as each round ends. Speech in the session is not yet
+tried on a real phone. Stage 6 is next.
 
 ---
 
@@ -350,6 +352,70 @@ layout if split off.
 - **Demo:** `?s=mixedReview` with three due chapters.
 - **Done when:** tsc, all checks, screenshots of each step at 1.5× on SE, a real-phone
   check of speech in the session.
+- **As built (stage 5):**
+  - The user confirmed the three open-question defaults before this stage: an
+    opener for every chapter with 3+ sections, chapters in Today's order, a slip in
+    a counting round is a miss like Recall (Keep going included).
+  - Route `'mixedReview'` (Today tab), opened by `state.openMixedReview()`
+    (`usePracticeSession`, like `openGuided`). `check:appstate` snapshot updated on
+    purpose for it.
+  - Today: the Review card's main button is **Mixed review**; the old one is
+    **Recite all due (n verses)**, secondary, same `handleReviewAllDue`. Chapter
+    rows unchanged.
+  - `src/screens/MixedReviewScreen.tsx`. It decides nothing about the plan;
+    `buildMixPlan` runs once on Start with `Math.random`. Due = reviewing, due,
+    reviews not paused, in `todayOrder`.
+  - **Start sheet:** verses and chapters chosen, "About N min" from
+    `getEstimatedReviewTime` on the chosen due items only, a checkbox per chapter
+    (sections count or "no sections yet"), "Add sections to …" links (chapter page)
+    for chapters without, a formats line with "Choose formats" (Settings), Start,
+    "Stop anytime. What you finish counts."
+  - **Session:** top row progress bar + Skip + X (stop). Then "Matthew 7 · section
+    3 of 9" ("part" for stretches, "the whole chapter" for an opener), a bar in the
+    section's bracket color (neutral `line` for stretches and openers), the section
+    label (or "Verses 6–11"), the format name and its Counts/Practice badge.
+  - **What each format reports** (stage 4 left these open):
+    - Recite and First words: one `GradedRecitation` over the unit, **first to last
+      only** (Last to first is not used in the mix yet). First words keeps the
+      first 3 words of each verse showing (the same as the First words drill, the
+      shown words still have to be typed or said). "Show text and check myself" is
+      a self-check: Got it, or Missed some and pick the verses (never perfect).
+    - Keep going: `ThreadRound` over [context verse, ...unit], the cue always inside
+      the context verse (`pickThreadCue(..., { fromVerse: 0, beforeVerse: 1 })`), so
+      every unit verse is said whole; the context verse shows "Only the way in" and
+      is never credited. No cue found → that round runs as Recite.
+    - Find the wrong word: `SpotSwapDrill` got `onScored` (per-verse caught /
+      decoys / wrongly flagged), `resultNote` and `showSwapCount` (picker hidden, no
+      "New swaps" after the check). Per verse accuracy = caught / (decoys + wrongly
+      flagged), against the 90% bar, **never perfect** (spotting, not saying). Only
+      the first check counts. Worth a look from the user: missing 1 of 2 planted
+      words is a miss.
+    - Practice rounds: the drill plus a secondary "Done practicing". Put in order
+      and Which section get `drillSections` of the chapter's due verses. Teach-It
+      gets the unit's verses with no sections, so a section longer than 4 verses
+      shows as stretch chips (e.g. 7–10, 10–11), not one whole section.
+  - **Crediting:** `send(event)` runs `mixReducer` and sends `next.newCredits` to
+    `handleReviewCompleted(item, pass, mode === 'self' ? 'reveal' : mode, { quiet:
+    true, via: 'mix', perfect })` right away, one at a time on a promise chain, each
+    reading the live item from `memoryQueueRef` (as `handleUpdateVerseStatus` does).
+    Checked in the demo: passes logged `via: 'mix'`; a miss went through the
+    engine's miss policy (grace) and stays due.
+  - A round's verses are memoized per round: saving a credit refreshes AppState,
+    and new arrays made drills (Spot the swap, Scramble) deal again mid-round.
+  - **Recap:** "Reviews done" / "Stopped for today", verses · sections · minutes
+    (screen-measured, not added to Dashboard's study time), Clean / Slipped tiles,
+    "N verses not reached are still due today", "Where you slipped" rows with a
+    Practice button (`startPractice('learn', ...)` on that section's verses, i.e.
+    Recall), formats used today with their badges.
+  - Demo: `?s=mixedReview` (Matthew 7:1–14 BSB due daily with the user's sections,
+    Romans 8:1–2, Philippians 4:6–7; Psalm 119:11 moved off today), `&start=1`
+    taps Start. Added to `npm run shots -- --all`.
+  - Not tried: speech on a real phone (the browser pane has no mic; typing and
+    self-check were what ran); Hebrew/Greek chapters in the mix; closing the app
+    mid-round on a phone (credits are written per round, so it should lose only
+    the round on screen).
+  - Follow-ups for the user: Teach-It on a whole section (above); Last to first as
+    a Recite variety in the mix; whether Find the wrong word's bar is right.
 
 ## Stage 6 — Takeaways path
 

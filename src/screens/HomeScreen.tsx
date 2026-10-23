@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Volume2, BookMarked, ChevronRight, ClipboardCheck, Compass, Plus, Route, Target } from 'lucide-react-native';
+import { Volume2, BookMarked, ChevronRight, ClipboardCheck, Compass, Layers, Plus, Route, Target } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, VerseState } from '../types';
@@ -11,6 +11,7 @@ import { Dialog, GroupedList, ListRow, ScreenHeader } from '../components/blocks
 import { formatDate } from '../lib/format';
 import { translationLabel } from '../data';
 import { useThemeColors } from '../components/theme';
+import { MIX_NAMES } from '../lib/formatNames';
 
 const LOOKAHEAD_OPTIONS = [
   { id: 10, label: '10' },
@@ -432,11 +433,16 @@ export default function HomeScreen({ state }: { state: AppState }) {
             >
               {dueReviewItems.length > 0 ? (
                 <>
-                  <AppButton
-                    variant="primary"
-                    label={`Review all due (${dueReviewItems.length} ${dueReviewItems.length === 1 ? 'verse' : 'verses'})`}
-                    onPress={handleReviewAllDue}
-                  />
+                  {/* Mixed review is the main way in; reciting every group
+                      in turn (the old "Review all due") stays beside it. */}
+                  <View style={{ gap: space(8) }}>
+                    <AppButton variant="primary" Icon={Layers} label={MIX_NAMES.mixedReview} onPress={() => state.openMixedReview()} />
+                    <AppButton
+                      variant="secondary"
+                      label={`Recite all due (${dueReviewItems.length} ${dueReviewItems.length === 1 ? 'verse' : 'verses'})`}
+                      onPress={handleReviewAllDue}
+                    />
+                  </View>
 
                   {/* Daily, then weekly, then monthly: the same order
                       handleReviewAllDue chains them in. */}

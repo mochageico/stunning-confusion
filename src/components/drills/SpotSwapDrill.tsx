@@ -10,19 +10,38 @@ import { useThemeColors } from '../theme';
 
 // ============================================================================
 // SPOT-THE-SWAP -- a few words per verse are replaced with real words from
-// elsewhere in the passage; tap the imposters. Ungraded.
+// elsewhere in the passage; tap the imposters. Ungraded here; a host that
+// passes onScored (Mixed review's Find the wrong word) grades it itself.
 // ============================================================================
+
+/** One verse's result from a checked attempt, for a host that grades it. */
+export interface SwapVerseScore {
+  /** The verse number (SwapVerse ids end in -<verse>). */
+  verse: number;
+  caught: number;
+  totalDecoys: number;
+  falseAlarms: number;
+}
 
 export default React.memo(function SpotSwapDrill({
   verses,
   onlyVerse,
   onComplete,
+  onScored,
+  resultNote = 'practice only, nothing logged.',
+  showSwapCount = true,
 }: {
   verses: DrillVerse[];
   /** Show swaps in this one verse (a verse number); the rest of `verses` only supplies decoy words. */
   onlyVerse?: number;
   /** Fires when an attempt is checked. */
   onComplete?: () => void;
+  /** Fires when an attempt is checked, with each verse's score. */
+  onScored?: (perVerse: SwapVerseScore[]) => void;
+  /** Said after the score once checked. */
+  resultNote?: string;
+  /** The "Swaps per verse" picker. A host that grades the drill keeps it fixed. */
+  showSwapCount?: boolean;
 }) {
   const palette = useThemeColors();
   const script = useMemo(() => (verses.length > 0 ? scriptOfVerse(verses[0]) : 'latin'), [verses]);
@@ -54,6 +73,12 @@ export default React.memo(function SpotSwapDrill({
   const submit = () => {
     setSwapSubmitted(true);
     onComplete?.();
+    onScored?.(
+      swapVerses.map((sv) => {
+        const one = scoreSwapAttempt([sv], swapSelected);
+        return { verse: Number(sv.id.slice(sv.id.lastIndexOf('-') + 1)), caught: one.caught, totalDecoys: one.totalDecoys, falseAlarms: one.falseAlarms };
+      })
+    );
   };
 
   const score = scoreSwapAttempt(swapVerses, swapSelected);
@@ -136,10 +161,10 @@ export default React.memo(function SpotSwapDrill({
           <View className="bg-surface-2 border border-line rounded-card p-2.5">
             <AppText variant="caption" className="font-sans font-bold text-ink text-center">
               Caught {score.caught} of {score.totalDecoys}
-              {score.falseAlarms > 0 ? ` · ${score.falseAlarms} wrongly flagged` : ''} — practice only, nothing logged.
+              {score.falseAlarms > 0 ? ` · ${score.falseAlarms} wrongly flagged` : ''} — {resultNote}
             </AppText>
           </View>
-        ) : (
+        ) : !showSwapCount ? null : (
           // Label ABOVE the chips -- ChipRow's default chips are flex-1, so
           // next to a label in a justify-between row they size against the
           // leftovers and squash to slivers (same fix as the Build-up settings).
@@ -159,10 +184,13 @@ export default React.memo(function SpotSwapDrill({
             />
           </View>
         )}
-        <View className="flex-row gap-2">
-          <AppButton variant="quiet" Icon={Shuffle} label="New swaps" onPress={() => resetSwap()} className="flex-1" />
-          {!swapSubmitted && <AppButton variant="primary" Icon={Check} label="Check" onPress={submit} disabled={noDecoys} className="flex-1" />}
-        </View>
+        {/* A host that grades the drill counts the first check only, so no reshuffle after it. */}
+        {(showSwapCount || !swapSubmitted) && (
+          <View className="flex-row gap-2">
+            <AppButton variant="quiet" Icon={Shuffle} label="New swaps" onPress={() => resetSwap()} className="flex-1" />
+            {!swapSubmitted && <AppButton variant="primary" Icon={Check} label="Check" onPress={submit} disabled={noDecoys} className="flex-1" />}
+          </View>
+        )}
       </View>
     </View>
   );

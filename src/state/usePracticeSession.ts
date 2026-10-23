@@ -67,6 +67,12 @@ export function usePracticeSession({ navigateTo }: UsePracticeSessionDeps) {
     navigateTo('guided');
   };
 
+  // Mixed review (MIXED_REVIEW_PLAN.md, stage 5), opened like Guided learning.
+  const openMixedReview = () => {
+    abortReviewSession();
+    navigateTo('mixedReview');
+  };
+
   // Launch practice session
   const startPractice = (
     mode: 'listen' | 'learn',
@@ -184,6 +190,7 @@ export function usePracticeSession({ navigateTo }: UsePracticeSessionDeps) {
     reviewSessionTotal,
     openThreadDrill,
     openGuided,
+    openMixedReview,
     startPractice,
     startReviewSession,
     advanceReviewSession,

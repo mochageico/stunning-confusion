@@ -66,7 +66,7 @@ createGroupName: string
 createGroupPlan: (circleId: string, input: { name: string; description: string; }) => Promise<void>
 createGroupPrivacy: "private" | "public"
 creditGuided: (items: QueueItem[], kind: "touch" | "review", drill: "speak" | "type") => Promise<QueueItem[]>
-currentScreen: "home" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "planDesigner" | "activePlan" | "addVerses" | "mySchedule" | "verseSources" | "savedPlans" | "memoryCalendar" | "verseRoad" | "versePage" | "referenceDrill" | "threadDrill" | "guided" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
+currentScreen: "home" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "planDesigner" | "activePlan" | "addVerses" | "mySchedule" | "verseSources" | "savedPlans" | "memoryCalendar" | "verseRoad" | "versePage" | "referenceDrill" | "threadDrill" | "guided" | "mixedReview" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
 currentTab: "home" | "verses" | "community" | "record" | "profile"
 customPlanName: string
 dailyPhaseWeeks: number
@@ -218,6 +218,7 @@ openCircleChat: (circleId: string) => void
 openCirclePreview: (circle: Circle) => void
 openDMThread: (otherUid: string, otherName: string, otherAvatarUrl: string) => Promise<void>
 openGuided: (passageKey?: string | undefined) => void
+openMixedReview: () => void
 openQuiz: (threadId: string, message: ChatMessage) => void
 openThreadDrill: (preset: ThreadDrillPreset | null) => void
 openVersePage: (ref: VersePageRef) => void

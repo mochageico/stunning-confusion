@@ -34,6 +34,7 @@ import VersePageScreen from './src/screens/VersePageScreen';
 import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import ThreadDrillScreen from './src/screens/ThreadDrillScreen';
 import GuidedLearningScreen from './src/screens/GuidedLearningScreen';
+import MixedReviewScreen from './src/screens/MixedReviewScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -156,6 +157,8 @@ function Screens({ state }: { state: AppState }) {
         return <ThreadDrillScreen state={state} />;
       case 'guided':
         return <GuidedLearningScreen state={state} />;
+      case 'mixedReview':
+        return <MixedReviewScreen state={state} />;
       default:
         return <HomeScreen state={state} />;
     }

@@ -15,7 +15,7 @@
 // Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
 // activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, verseRoad, versePage,
 // referenceDrill, threadDrill, guided, sections, outline, sectionOrder,
-// whichSection, teachIt,
+// whichSection, teachIt, mixedReview,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
@@ -34,7 +34,9 @@
 // sections. outline: the same chapter, opened straight into First words in the
 // practice screen (the Order setting there flips it to last to first).
 // sectionOrder / whichSection / teachIt: the same chapter, opened on the Put in
-// order, Which section or Teach-It tab of the practice screen.
+// order, Which section or Teach-It tab of the practice screen. mixedReview:
+// three chapters due (Matthew 7:1-14 with the user's sections, Romans 8,
+// Philippians 4), opened on Mixed review's start sheet.
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
@@ -222,6 +224,40 @@ const MATT7_LABELS = [
   'Two builders',
 ];
 const MATT7_PHRASE = 'john doe ate some edamame but not every apple'.split(' ');
+// ?s=mixedReview: Matthew 7:1-14 (BSB) due today, before the rest of the
+// queue so it comes first, with the sections above. Psalm 119:11 is moved off
+// today so exactly three chapters are due.
+const MATT7_TEXT = [
+  'Do not judge, or you will be judged.',
+  'For with the same judgment you pronounce, you will be judged; and with the measure you use, it will be measured to you.',
+  'Why do you look at the speck in your brother’s eye, but fail to notice the beam in your own eye?',
+  'How can you say to your brother, ‘Let me take the speck out of your eye,’ while there is still a beam in your own eye?',
+  'You hypocrite! First take the beam out of your own eye, and then you will see clearly to remove the speck from your brother’s eye.',
+  'Do not give dogs what is holy; do not throw your pearls before swine. If you do, they may trample them under their feet, and then turn and tear you to pieces.',
+  'Ask, and it will be given to you; seek, and you will find; knock, and the door will be opened to you.',
+  'For everyone who asks receives; he who seeks finds; and to him who knocks, the door will be opened.',
+  'Which of you, if his son asks for bread, will give him a stone?',
+  'Or if he asks for a fish, will give him a snake?',
+  'So if you who are evil know how to give good gifts to your children, how much more will your Father in heaven give good things to those who ask Him!',
+  'In everything, then, do to others as you would have them do to you. For this is the essence of the Law and the Prophets.',
+  'Enter through the narrow gate. For wide is the gate and broad is the way that leads to destruction, and many enter through it.',
+  'But small is the gate and narrow is the way that leads to life, and only a few find it.',
+];
+function buildMixQueue() {
+  const base = buildQueue().map((q) => (q.book === 'Psalms' && q.chapter === 119 ? { ...q, nextReviewDueDate: iso(5, 6) } : q));
+  const matt = MATT7_TEXT.map((text, i) => ({
+    ...base[2],
+    verseId: `BSB_MAT_7_${i + 1}`,
+    book: 'Matthew',
+    chapter: 7,
+    verseNumber: i + 1,
+    text,
+    retentionPhase: 'daily',
+    nextReviewDueDate: iso(0, 6),
+  }));
+  return [...matt, ...base].map((q, i) => ({ ...q, orderIndex: i }));
+}
+
 const matt7Sections = () => ({
   starts: MATT7_STARTS,
   labels: Object.fromEntries(MATT7_LABELS.map((label, i) => [MATT7_STARTS[i], label])),
@@ -385,7 +421,7 @@ export function useDemoState(real: AppState): AppState {
   useEffect(() => {
     if (!DEMO_ENABLED || booted.current || real.loadingAuth) return;
     booted.current = true;
-    if (params.get('empty') !== '1') real.setMemoryQueue((s === 'guided' ? buildGuidedQueue() : buildQueue()) as any);
+    if (params.get('empty') !== '1') real.setMemoryQueue((s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : buildQueue()) as any);
     real.setUserRecordings(recordings as any);
     // The Record tab starts with no passage until one is chosen; the demo
     // picks Romans 8 unless `nopassage=1` asks for the empty state.
@@ -433,6 +469,12 @@ export function useDemoState(real: AppState): AppState {
       real.navigateTo('chapterLanding', 'Matthew', 7);
       tapWhenShown('First words');
       tapWhenShown(formatLabel(s === 'sectionOrder' ? 'putInOrder' : s), 'radio');
+    }
+    else if (s === 'mixedReview') {
+      void real.saveChapterSections('Matthew', 7, matt7Sections());
+      real.openMixedReview();
+      // start=1 goes straight into the session.
+      if (params.get('start') === '1') tapWhenShown('Start');
     }
     else if (s === 'planDesigner') real.openActivePlanDesigner();
     else if (s === 'guided') real.openGuided('BSB|Psalms|23|1');
