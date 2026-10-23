@@ -18,6 +18,7 @@ import {
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import type { ActivityEvent, Circle, CircleMember, Friend, GroupChallenge, GroupPlan } from '../types';
 import { normalizeGroupPlan } from '../lib/appData';
+import { removeSharesBy } from './useCircleTakeaways';
 
 // ============================================================================
 // SCRIPTURE CIRCLES
@@ -434,7 +435,7 @@ export function useCircles({
       // READ first, while we're still a member (most of these are
       // members-only), then deleted.
       const circleRef = doc(db, 'circles', circleId);
-      const [circleSnap, membersSnap, plansSnap, messagesSnap, reactionsSnap, challengesSnap, bannedSnap, responsesSnap] =
+      const [circleSnap, membersSnap, plansSnap, messagesSnap, reactionsSnap, challengesSnap, bannedSnap, responsesSnap, takeawaysSnap] =
         await Promise.all([
           getDoc(circleRef),
           getDocs(collection(db, 'circles', circleId, 'members')),
@@ -444,20 +445,25 @@ export function useCircles({
           getDocs(collection(db, 'circles', circleId, 'challenges')),
           getDocs(collection(db, 'circles', circleId, 'banned')),
           getDocs(collection(db, 'circles', circleId, 'responses')),
+          getDocs(collection(db, 'circles', circleId, 'takeaways')),
         ]);
       const participantSnaps = await Promise.all(
         challengesSnap.docs.map((c) => getDocs(collection(c.ref, 'participants')))
       );
+      const replySnaps = await Promise.all(takeawaysSnap.docs.map((t) => getDocs(collection(t.ref, 'replies'))));
       const inviteCode = (circleSnap.data() as Circle | undefined)?.inviteCode;
       const inviteSnap = inviteCode ? await getDoc(doc(db, 'circleInvites', inviteCode)) : null;
 
       // Order matters: participants before their challenge (their delete
-      // rule reads the challenge), and the member docs + circle doc go in
+      // rule reads the challenge), replies before their shared takeaway
+      // (likewise), and the member docs + circle doc go in
       // the very last batch, because every delete rule here checks the
       // circle's ownerId.
       const refs = [
         ...participantSnaps.flatMap((s) => s.docs.map((d) => d.ref)),
         ...challengesSnap.docs.map((d) => d.ref),
+        ...replySnaps.flatMap((s) => s.docs.map((d) => d.ref)),
+        ...takeawaysSnap.docs.map((d) => d.ref),
         ...reactionsSnap.docs.map((d) => d.ref),
         ...responsesSnap.docs.map((d) => d.ref),
         ...messagesSnap.docs.map((d) => d.ref),
@@ -489,8 +495,12 @@ export function useCircles({
 
   // The ban doc rides in the same batch: without it the removed member
   // could simply rejoin (firestore.rules' join rule checks banned/{uid}).
+  // Their shared takeaways (and the replies on them) go first, while the
+  // leader can still list them; best effort, since the circle's list hides
+  // anyone who isn't a member anyway.
   const removeCircleMember = async (circleId: string, memberUid: string) => {
     try {
+      await removeSharesBy(circleId, memberUid).catch((err) => console.error('Failed to remove their shared takeaways:', err));
       const batch = writeBatch(db);
       batch.delete(doc(db, 'circles', circleId, 'members', memberUid));
       batch.set(doc(db, 'circles', circleId, 'banned', memberUid), {

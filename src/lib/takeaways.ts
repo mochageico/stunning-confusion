@@ -214,14 +214,21 @@ export function buildPath(takeaways: Record<string, Takeaway>, statuses: Section
 /** How many takeaways are written, for a count on My Verses. */
 export const writtenCount = (takeaways: Record<string, Takeaway>): number => Object.values(takeaways).filter(isWritten).length;
 
-/** A new or changed doc for one section; `createdAt` is kept from `existing`. */
+/**
+ * A new or changed doc for one section; `createdAt` is kept from `existing`.
+ * `sharedTo` (the circles it is shared with) is kept from `existing` unless
+ * given, and dropped when the doc has no words to share (lib/takeawaySharing.ts).
+ */
 export function makeTakeaway(
   base: { book: string; chapter: number; sectionStart: number; sectionEnd: number; label?: string },
-  fields: { text: string; note?: string; status: 'saved' | 'later' | 'draft' },
+  fields: { text: string; note?: string; status: 'saved' | 'later' | 'draft'; sharedTo?: string[] },
   existing: Takeaway | null | undefined,
   nowIso: string
 ): Takeaway {
   const note = fields.note?.replace(/\s+$/g, '').trim();
+  const text = fields.text.replace(/\s+/g, ' ').trim();
+  const written = fields.status === 'saved' && text !== '';
+  const sharedTo = written ? [...new Set(fields.sharedTo ?? existing?.sharedTo ?? [])].sort() : [];
   return {
     id: takeawayId(base.book, base.chapter, base.sectionStart),
     book: base.book,
@@ -229,9 +236,10 @@ export function makeTakeaway(
     sectionStart: base.sectionStart,
     sectionEnd: base.sectionEnd,
     ...(base.label?.trim() ? { label: base.label.trim() } : {}),
-    text: fields.text.replace(/\s+/g, ' ').trim(),
+    text,
     ...(note ? { note } : {}),
     status: fields.status,
+    ...(sharedTo.length ? { sharedTo } : {}),
     // A draft turning into a stop is a new stop on the path, so it is dated now.
     createdAt: existing && isStop(existing) ? existing.createdAt : nowIso,
     updatedAt: nowIso,

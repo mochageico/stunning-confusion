@@ -1,16 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Bookmark, ChevronDown, ChevronUp, Trash2 } from 'lucide-react-native';
+import { Bookmark, ChevronDown, ChevronUp, MessageCircle, Send, Trash2, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
+import { replyKey } from '../state/useCircleTakeaways';
 import { FadeInView } from '../components/ui';
-import { AppButton, AppText, useFontScale, useScaledSpace } from '../components/design';
-import { Badge, EmptyState, ScreenHeader } from '../components/blocks';
+import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
+import { Badge, EmptyState, ScreenHeader, SegmentedControl } from '../components/blocks';
 import { bracketColor, useThemeColors } from '../components/theme';
-import { SectionTitle, spotName, TakeawayForm } from '../components/TakeawayAsk';
+import { SectionTitle, ShareSwitch, spotName, TakeawayForm, useNewShareChoice } from '../components/TakeawayAsk';
+import { formatTimeAgo } from '../lib/format';
 import { sectionIndexOf } from '../lib/sections';
 import { buildPath, PathEntry, sectionStatuses } from '../lib/takeaways';
-import type { Takeaway } from '../types';
+import { authorShort, circleList, nextSharedTo, REPLY_MAX, replyCountText, sharedChoiceFor, visibleReplies } from '../lib/takeawaySharing';
+import type { SharedTakeaway, Takeaway } from '../types';
 
 // ============================================================================
 // THE TAKEAWAYS PATH
@@ -18,14 +21,17 @@ import type { Takeaway } from '../types';
 // A journal of what you've memorized: one stop per section, newest on top,
 // alternating sides of one line, each in its section's bracket color. A
 // dashed stop is a takeaway not written yet ("Later") or the section that
-// unlocks next. Tap a stop to open it and change it.
+// unlocks next. Tap a stop to open it and change it, or share it.
 //
-// Mine only for now. The "With my circle" view, the share switch and replies
-// are the next stage (MIXED_REVIEW_PLAN.md, stage 6, second half): the opened
-// takeaway has a `shareSlot` marked below for the switch.
+// "With my circle" (the switch at the top) lists what the people in one of
+// your circles shared: each person's takeaways as their own items, never
+// grouped by passage (everyone's sections differ), with a reply count. The
+// replies and the author's note show once one is opened.
 // ============================================================================
 
 const STOP_LINE = 3;
+
+type View_ = 'mine' | 'circle';
 
 function Stop({ entry, onOpen }: { entry: Extract<PathEntry, { kind: 'stop' }>; onOpen: () => void }) {
   const palette = useThemeColors();
@@ -58,9 +64,9 @@ function Stop({ entry, onOpen }: { entry: Extract<PathEntry, { kind: 'stop' }>; 
           {t.text}
         </AppText>
       )}
-      {!entry.empty && t.note ? (
+      {!entry.empty && (t.note || t.sharedTo?.length) ? (
         <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={1}>
-          + a note
+          {[t.note ? '+ a note' : '', t.sharedTo?.length ? 'Shared' : ''].filter(Boolean).join(' · ')}
         </AppText>
       ) : null}
     </Pressable>
@@ -179,7 +185,15 @@ function Opened({ state, takeaway, onClose }: { state: AppState; takeaway: Takea
     sectionStart: takeaway.sectionStart,
     sectionEnd: takeaway.sectionEnd,
     label,
+    index,
   };
+
+  // The switch starts on the circles it's shared with; a stop never written
+  // starts on the last choice, like the ask.
+  const [newChoice, setNewChoice, offered] = useNewShareChoice(state);
+  const [choice, setChoice] = useState<string[]>(() => sharedChoiceFor(takeaway, offered));
+  const share = empty ? newChoice : choice;
+  const setShare = empty ? setNewChoice : setChoice;
 
   const verses = useMemo(() => {
     const seen = new Map<number, string>();
@@ -207,11 +221,11 @@ function Opened({ state, takeaway, onClose }: { state: AppState; takeaway: Takea
         initialNote={takeaway.note ?? ''}
         saveLabel="Save"
         onSave={(text, note) => {
-          void state.saveTakeaway(spot, { text, note, status: 'saved' });
+          void state.saveTakeaway(spot, { text, note, status: 'saved', sharedTo: nextSharedTo(takeaway.sharedTo, share, offered) });
+          state.setLastShareChoice(share);
           onClose();
         }}
-        // The share switch goes here when sharing with a circle is built (next stage).
-        shareSlot={null}
+        shareSlot={<ShareSwitch circles={state.myCircles} value={share} onChange={setShare} />}
       />
 
       {verses.length > 0 && (
@@ -248,10 +262,220 @@ function Opened({ state, takeaway, onClose }: { state: AppState; takeaway: Takea
   );
 }
 
+// ----------------------------------------------------------------------------
+// With my circle
+// ----------------------------------------------------------------------------
+
+/** One person's shared takeaway in the circle's list. */
+function CircleItem({ item, replies, myUid, onOpen }: { item: SharedTakeaway; replies: number; myUid?: string; onOpen: () => void }) {
+  const palette = useThemeColors();
+  const scale = useFontScale();
+  const space = useScaledSpace();
+  const who = authorShort(item, myUid);
+  const name = spotName(item);
+  return (
+    <Pressable
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`${who}, ${item.label || name}: ${item.text}. ${replyCountText(replies)}`}
+      className="flex-row bg-surface border border-line rounded-card active:opacity-70 overflow-hidden"
+    >
+      {/* layout-ok: the author's section's bracket color, a bar with no text. */}
+      <View style={{ width: Math.max(4, Math.round(space(4))), backgroundColor: bracketColor(palette, item.bracketIndex) }} />
+      <View className="flex-1" style={{ padding: space(12), gap: space(6) }}>
+        <View className="flex-row items-baseline flex-wrap" style={{ columnGap: space(8) }}>
+          <AppText variant="label" className="font-sans font-bold text-ink">
+            {who}
+          </AppText>
+          <AppText variant="caption" className="font-sans text-ink-3">
+            {formatTimeAgo(item.createdAt)}
+          </AppText>
+        </View>
+        <View style={{ gap: space(1) }}>
+          <AppText variant="caption" className="font-sans font-semibold text-ink-2">
+            {item.label || name}
+          </AppText>
+          {item.label ? (
+            <AppText variant="caption" className="font-sans text-ink-3">
+              {name}
+            </AppText>
+          ) : null}
+        </View>
+        <AppText variant="label" className="font-serif text-ink" numberOfLines={STOP_LINE + 1}>
+          {item.text}
+        </AppText>
+        <View className="flex-row items-center flex-wrap" style={{ gap: space(6) }}>
+          <MessageCircle size={Math.round(14 * scale)} color={palette.ink3} />
+          <AppText variant="caption" className="font-sans text-ink-3">
+            {replyCountText(replies)}
+            {item.note ? ' · a note' : ''}
+          </AppText>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function CircleView({ state, circleId, onOpen }: { state: AppState; circleId: string; onOpen: (docId: string) => void }) {
+  const space = useScaledSpace();
+  const { loadCircleTakeaways } = state;
+  useEffect(() => {
+    void loadCircleTakeaways(circleId);
+    // Reload when the circle changes; loadCircleTakeaways is remade each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [circleId]);
+  const entry = state.circleTakeaways[circleId];
+  const list = useMemo(
+    () => circleList(entry?.items ?? [], { blockedUids: state.blockedUids, memberUids: entry?.memberUids ?? null }),
+    [entry, state.blockedUids]
+  );
+
+  if (!entry || (entry.loading && entry.items.length === 0)) {
+    return (
+      <AppText variant="caption" className="font-sans text-ink-3 text-center" style={{ paddingVertical: space(24) }}>
+        Loading…
+      </AppText>
+    );
+  }
+  if (list.length === 0) {
+    return (
+      <EmptyState
+        Icon={Users}
+        title="Nothing shared yet"
+        message="When someone in this circle shares a takeaway, it shows here. Share one of yours from its stop on the path."
+      />
+    );
+  }
+  return (
+    <View style={{ gap: space(10) }}>
+      {list.map((t) => (
+        <CircleItem
+          key={t.id}
+          item={t}
+          myUid={state.user?.uid}
+          replies={visibleReplies(state.takeawayReplies[replyKey(circleId, t.id)] ?? [], state.blockedUids).length}
+          onOpen={() => onOpen(t.id)}
+        />
+      ))}
+    </View>
+  );
+}
+
+/** A shared takeaway, opened: the takeaway, the author's note, then the replies and a reply box. */
+function OpenedShared({ state, item, circleName, onClose }: { state: AppState; item: SharedTakeaway; circleName: string; onClose: () => void }) {
+  const palette = useThemeColors();
+  const scale = useFontScale();
+  const space = useScaledSpace();
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const myUid = state.user?.uid;
+  const mine = item.authorUid === myUid;
+  const who = authorShort(item, myUid);
+  const key = replyKey(item.circleId, item.id);
+  const { watchTakeawayReplies } = state;
+  useEffect(() => watchTakeawayReplies(item.circleId, item.id),
+    // Watch the one that's open; watchTakeawayReplies is remade each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [item.circleId, item.id]);
+  const replies = visibleReplies(state.takeawayReplies[key] ?? [], state.blockedUids);
+
+  const send = async () => {
+    if (!draft.trim() || sending) return;
+    setSending(true);
+    const ok = await state.postTakeawayReply(item.circleId, item.id, draft);
+    setSending(false);
+    if (ok) setDraft('');
+  };
+
+  return (
+    <ScrollView
+      className="flex-1 bg-canvas"
+      contentContainerClassName="p-5 pb-12"
+      contentContainerStyle={{ gap: space(16) }}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
+      <ScreenHeader title={mine ? 'Your takeaway' : `${who}'s takeaway`} onBack={onClose} backLabel={circleName} subtitle={formatTimeAgo(item.createdAt)} />
+      <SectionTitle index={item.bracketIndex} label={item.label} name={spotName(item)} />
+
+      <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+        <AppText variant="body" className="font-serif text-ink">
+          {item.text}
+        </AppText>
+        {item.note ? (
+          <View className="border-t border-hairline" style={{ paddingTop: space(10), gap: space(4) }}>
+            <AppText variant="caption" className="font-sans font-semibold text-ink-3">
+              {mine ? 'Your note' : `${who}'s note`}
+            </AppText>
+            <AppText variant="label" className="font-sans text-ink-2">
+              {item.note}
+            </AppText>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={{ gap: space(10) }}>
+        <View className="flex-row items-center" style={{ gap: space(6) }}>
+          <MessageCircle size={Math.round(16 * scale)} color={palette.ink2} />
+          <AppText variant="label" className="font-sans font-semibold text-ink-2">
+            {replyCountText(replies.length)}
+          </AppText>
+        </View>
+        {replies.map((r) => (
+          <View key={r.id} className="flex-row items-start bg-surface-2 rounded-card" style={{ padding: space(10), gap: space(8) }}>
+            <View className="flex-1" style={{ gap: space(2) }}>
+              <View className="flex-row items-baseline flex-wrap" style={{ columnGap: space(8) }}>
+                <AppText variant="caption" className="font-sans font-bold text-ink">
+                  {r.fromUid === myUid ? 'You' : r.fromName}
+                </AppText>
+                <AppText variant="caption" className="font-sans text-ink-3">
+                  {formatTimeAgo(r.createdAt)}
+                </AppText>
+              </View>
+              <AppText variant="label" className="font-sans text-ink">
+                {r.text}
+              </AppText>
+            </View>
+            {r.fromUid === myUid ? (
+              <AppIconButton
+                Icon={Trash2}
+                diameter={28}
+                iconColor={palette.ink3}
+                accessibilityLabel="Delete your reply"
+                onPress={() => void state.deleteTakeawayReply(item.circleId, item.id, r.id)}
+              />
+            ) : null}
+          </View>
+        ))}
+        <View className="flex-row items-end" style={{ gap: space(8) }}>
+          <AppTextInput
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={mine ? 'Reply' : `Reply to ${who}`}
+            accessibilityLabel="Reply"
+            variant="body"
+            multiline
+            maxLength={REPLY_MAX}
+            className="flex-1 bg-surface border border-line rounded-btn text-ink font-sans"
+            style={{ paddingHorizontal: space(12), paddingVertical: space(8), minHeight: space(40), maxHeight: 120 }}
+          />
+          <AppIconButton Icon={Send} variant="filled" diameter={40} onPress={() => void send()} disabled={!draft.trim() || sending} accessibilityLabel="Send reply" />
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
 export default function TakeawaysScreen({ state }: { state: AppState }) {
-  const { memoryQueue, sectionsForChapter, takeaways, handleBack } = state;
+  const { memoryQueue, sectionsForChapter, takeaways, handleBack, myCircles } = state;
   const space = useScaledSpace();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [view, setView] = useState<View_>('mine');
+  const [circleId, setCircleId] = useState<string | null>(null);
+  const [openShared, setOpenShared] = useState<string | null>(null);
+
+  // Only circles the user is in now: leaving or being removed hides a circle's takeaways.
+  const circle = myCircles.find((c) => c.id === circleId) ?? myCircles[0] ?? null;
 
   const entries = useMemo(
     () => buildPath(takeaways, sectionStatuses(memoryQueue, sectionsForChapter), sectionsForChapter),
@@ -260,24 +484,64 @@ export default function TakeawaysScreen({ state }: { state: AppState }) {
     [takeaways, memoryQueue, state.chapterSections]
   );
   const opened = openId ? takeaways[openId] : null;
-  if (opened) {
+  if (view === 'mine' && opened) {
     return (
       <FadeInView style={{ flex: 1 }}>
         <Opened state={state} takeaway={opened} onClose={() => setOpenId(null)} />
       </FadeInView>
     );
   }
+  const sharedItem = view === 'circle' && circle && openShared ? state.circleTakeaways[circle.id]?.items.find((t) => t.id === openShared) : null;
+  if (sharedItem && circle) {
+    return (
+      <FadeInView style={{ flex: 1 }}>
+        <OpenedShared state={state} item={sharedItem} circleName={circle.name} onClose={() => setOpenShared(null)} />
+      </FadeInView>
+    );
+  }
 
   const written = Object.values(takeaways).filter((t) => t.status !== 'draft' && t.status !== 'later' && t.text.trim()).length;
+  const subtitle =
+    view === 'circle'
+      ? 'What your circle took away. Open one to see replies.'
+      : written === 0
+        ? 'The main point of each section, in your own words.'
+        : `${written} written. Newest on top.`;
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(16) }}>
-        <ScreenHeader
-          title="Takeaways"
-          onBack={handleBack}
-          subtitle={written === 0 ? 'The main point of each section, in your own words.' : `${written} written. Newest on top.`}
+        <ScreenHeader title="Takeaways" onBack={handleBack} subtitle={subtitle} />
+        <SegmentedControl<View_>
+          options={[
+            { id: 'mine', label: 'Mine' },
+            { id: 'circle', label: 'With my circle' },
+          ]}
+          value={view}
+          onChange={setView}
+          accessibilityLabel="Whose takeaways"
         />
-        {entries.length === 0 ? (
+        {view === 'circle' ? (
+          !circle ? (
+            <EmptyState
+              Icon={Users}
+              title="You're not in a circle yet"
+              message="Join or start a circle in Community. Then you can share takeaways there and see what others took away."
+            />
+          ) : (
+            <>
+              {myCircles.length > 1 && (
+                <SegmentedControl<string>
+                  options={myCircles.map((c) => ({ id: c.id, label: c.name }))}
+                  value={circle.id}
+                  onChange={(id) => setCircleId(id)}
+                  accessibilityLabel="Which circle"
+                  wrap
+                />
+              )}
+              <CircleView state={state} circleId={circle.id} onOpen={setOpenShared} />
+            </>
+          )
+        ) : entries.length === 0 ? (
           <EmptyState
             Icon={Bookmark}
             title="Nothing here yet"

@@ -39,6 +39,8 @@ interface UseAccountDeps {
   wipeLocalPhotos: () => Promise<void>;
   /** Stops push notifications to this phone for the signed-in account. */
   unregisterPushToken: () => Promise<void>;
+  /** Takes this person's takeaways out of every circle they were shared with (useTakeaways). */
+  removeAllSharedTakeaways: () => Promise<void>;
   triggerToast: (message: string) => void;
 }
 
@@ -49,6 +51,7 @@ export function useAccount({
   wipeAudioCache,
   wipeLocalPhotos,
   unregisterPushToken,
+  removeAllSharedTakeaways,
   triggerToast,
 }: UseAccountDeps) {
   // Per-recording visibility choice for the Save dialog. Pre-filled from
@@ -228,6 +231,10 @@ export function useAccount({
 
       const uid = auth.currentUser.uid;
       const myEmail = (auth.currentUser.email || '').toLowerCase();
+      // Shared takeaways first, while still a member of those circles (their
+      // replies can only be listed by a member). Best effort: it never stops
+      // the account itself from being deleted.
+      await removeAllSharedTakeaways().catch((err) => console.error('Failed to remove shared takeaways:', err));
       const [queueSnap, versesSnap, recordingsSnap, sectionsSnap, takeawaysSnap, emailLookupSnap] = await Promise.all([
         getDocs(collection(db, 'users', uid, 'memoryQueue')),
         getDocs(collection(db, 'users', uid, 'verses')),

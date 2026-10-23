@@ -39,14 +39,16 @@
 // Philippians 4), opened on Mixed review's start sheet. takeaways: the path,
 // with Matthew 7's sections 1 (written) and 6 (put off) on it and 13-14 next to
 // unlock; takeawayAsk: Today, with the quiet card for section 7 (write=1 opens
-// the form); open=1 (takeaways) opens the written stop; fresh=1 (either) starts with no takeaways written.
+// the form); open=1 (takeaways) opens the written stop (shared with Grace Church Men);
+// circle=1 shows With my circle, circle=open opens David's takeaway and its replies;
+// fresh=1 (either) starts with no takeaways written.
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import type { AppState } from '../state/useAppState';
-import type { CircleMember, DMThread } from '../types';
+import type { CircleMember, DMThread, SharedTakeaway, TakeawayReply } from '../types';
 import { formatLabel } from '../lib/formatNames';
 
 /** Flip to true to see demo data on a phone. Dev builds only. */
@@ -352,6 +354,38 @@ const members: CircleMember[] = [
   { uid: 'u3', displayName: 'David Kim', avatarUrl: '', role: 'member', joinedAt: iso(-45) },
   { uid: 'u7', displayName: 'Tom Alvarez', avatarUrl: '', role: 'member', joinedAt: iso(-20) },
 ];
+// ?s=takeaways&circle=1: what Grace Church Men (c1) shared. Each person's
+// takeaways are their own items, so David's and Micah's Matthew 7:1-5 both show.
+const MY_SHARED_TEXT = 'Do not judge others, because I will be judged the same way.';
+const MY_SHARED_NOTE = 'Take the beam out of my own eye first.';
+const sharedItem = (id: string, authorUid: string, authorName: string, days: number, over: Partial<SharedTakeaway>): SharedTakeaway => ({
+  id: `${authorUid}_${id}`, circleId: 'c1', takeawayId: id, authorUid, authorName, book: 'Matthew', chapter: 7,
+  sectionStart: 1, sectionEnd: 5, bracketIndex: 0, text: '', createdAt: iso(days), updatedAt: iso(days), ...over,
+});
+const circleTakeaways = (withMine: boolean): SharedTakeaway[] => [
+  sharedItem('Matthew|7|1', 'u3', 'David Kim', -1, {
+    label: 'The beam and the speck',
+    text: 'Fix my own heart before I try to fix my brother. Judging starts with the mirror.',
+    note: 'Read this with my small group Tuesday and we sat on verse 5 for an hour.',
+  }),
+  sharedItem('Romans|8|28', 'u2', 'Sarah Miller', -3, {
+    book: 'Romans', chapter: 8, sectionStart: 28, sectionEnd: 30, bracketIndex: 2, label: 'All things for good',
+    text: 'God is working every single thing toward his good for us, even the parts I hate.',
+  }),
+  ...(withMine ? [sharedItem('Matthew|7|1', 'demo', 'Micah', -4, { label: MATT7_LABELS[0], text: MY_SHARED_TEXT, note: MY_SHARED_NOTE })] : []),
+  sharedItem('Psalms|23|1', 'u7', 'Tom Alvarez', -6, {
+    book: 'Psalms', chapter: 23, sectionStart: 1, sectionEnd: 3, bracketIndex: 1,
+    text: 'I have everything I need because he leads me, not because I have it all figured out.',
+  }),
+];
+const circleTakeawayReplies: Record<string, TakeawayReply[]> = {
+  'u3_Matthew|7|1': [
+    { id: 'tr1', fromUid: 'u2', fromName: 'Sarah Miller', text: 'this was fire', createdAt: iso(0, 7) },
+    { id: 'tr2', fromUid: 'demo', fromName: 'Micah', text: 'Same section as mine. "Starts with the mirror" is going on my fridge.', createdAt: iso(0, 8) },
+    { id: 'tr3', fromUid: 'u7', fromName: 'Tom Alvarez', text: 'Needed this today.', createdAt: iso(0, 9) },
+  ],
+  'u2_Romans|8|28': [{ id: 'tr4', fromUid: 'u3', fromName: 'David Kim', text: 'Amen.', createdAt: iso(-2) }],
+};
 const groupPlan = {
   planId: 'gp1',
   circleId: 'c1',
@@ -499,15 +533,23 @@ export function useDemoState(real: AppState): AppState {
       // Section 1 written (with a note), section 6 put off; 7 and 12 are left to ask.
       if (params.get('fresh') !== '1') {
         void real.saveTakeaway(
-          { book: 'Matthew', chapter: 7, sectionStart: 1, sectionEnd: 5, label: MATT7_LABELS[0] },
-          { text: 'Do not judge others, because I will be judged the same way.', note: 'Take the beam out of my own eye first.', status: 'saved' }
+          { book: 'Matthew', chapter: 7, sectionStart: 1, sectionEnd: 5, label: MATT7_LABELS[0], index: 0 },
+          // Shared with Grace Church Men (c1), as its copy below.
+          { text: MY_SHARED_TEXT, note: MY_SHARED_NOTE, status: 'saved', sharedTo: ['c1'] }
         );
         void real.saveTakeaway({ book: 'Matthew', chapter: 7, sectionStart: 6, sectionEnd: 6, label: MATT7_LABELS[1] }, { text: '', status: 'later' });
       }
+      real.seedCircleTakeaways('c1', circleTakeaways(params.get('fresh') !== '1'), members.map((m) => m.uid), circleTakeawayReplies);
       if (s === 'takeaways') {
         real.navigateTo('takeaways');
-        // open=1 opens the written stop.
+        // open=1 opens the written stop; circle=1 switches to With my circle,
+        // and circle=open also opens David's takeaway with its replies.
         if (params.get('open') === '1') tapWhenShown('Judging others', 'button', true);
+        const circle = params.get('circle');
+        if (circle) {
+          tapWhenShown('With my circle', 'radio');
+          if (circle === 'open') setTimeout(() => tapWhenShown('David', 'button', true), 600);
+        }
       }
       else if (params.get('write') === '1') tapWhenShown('Write it');
     }

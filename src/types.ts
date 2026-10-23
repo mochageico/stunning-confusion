@@ -690,7 +690,8 @@ export interface ChapterSections {
  * shown on the path as a takeaway.
  *
  * Stored at users/{uid}/takeaways/{id}; owner-only (firestore.rules). Sharing
- * with a circle is not built yet (MIXED_REVIEW_PLAN.md, stage 6, second half).
+ * with a circle writes a copy (SharedTakeaway, below) to each circle in
+ * `sharedTo`; this doc is never opened up to anyone.
  */
 export interface Takeaway {
   id: string;
@@ -705,7 +706,55 @@ export interface Takeaway {
   /** Optional secondary note under the takeaway. */
   note?: string;
   status?: 'saved' | 'later' | 'draft';
+  /** Circles this takeaway is shared with (each holds a SharedTakeaway copy). Absent = not shared. */
+  sharedTo?: string[];
   /** ISO times. */
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A takeaway shared with a circle: a copy at
+ * circles/{circleId}/takeaways/{authorUid}_{takeawayId}, members-only read,
+ * written only by its author (firestore.rules). The author's own doc
+ * (Takeaway, above) is the source; saving it rewrites this, unsharing or
+ * deleting it removes this and its replies. See src/lib/takeawaySharing.ts.
+ */
+export interface SharedTakeaway {
+  /** Doc id, `${authorUid}_${takeawayId}`. */
+  id: string;
+  /** From the path; not stored in the doc. */
+  circleId: string;
+  /** The author's own doc id (book|chapter|sectionStart). */
+  takeawayId: string;
+  authorUid: string;
+  authorName: string;
+  book: string;
+  chapter: number;
+  sectionStart: number;
+  sectionEnd: number;
+  label?: string;
+  /** The author's section's position, for its bracket color (the viewer's own sections may differ). */
+  bracketIndex: number;
+  text: string;
+  /** The memorizer's note: shows on the opened takeaway, above the replies. */
+  note?: string;
+  /** ISO times, the author's. */
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A reply on a shared takeaway, at circles/{circleId}/takeaways/{id}/replies/{replyId}.
+ * Casual ("this was fire"), seen only once the takeaway is opened. Can't be
+ * edited; its writer can delete it, and so can the takeaway's author (when
+ * the takeaway itself goes) and the circle's leader.
+ */
+export interface TakeawayReply {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  text: string;
+  /** ISO. */
+  createdAt: string;
 }

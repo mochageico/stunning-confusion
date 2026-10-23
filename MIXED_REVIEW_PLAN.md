@@ -16,8 +16,9 @@ Teach-It (all Practice). Stage 4 built 2026-10-22: Mixed review logic
 Stage 5 built 2026-10-22: the Mixed review screen, Today's Mixed review / Recite
 all due buttons, crediting as each round ends. Speech in the session is not yet
 tried on a real phone. Stage 6, private half, built 2026-10-22 (takeaways, the
-ask, the path; the takeaways Firestore rule is **not deployed**). Sharing, replies
-and circle rules are the next session.
+ask, the path; the takeaways Firestore rule is **not deployed**). Stage 6, sharing
+half, built 2026-10-22: share switch, With my circle, replies, circle rules (**not
+deployed**: build first, then rules). Stage 7 is next.
 
 ---
 
@@ -466,12 +467,98 @@ layout if split off.
     button on the chapter page. At 1.3x text and up the stops all sit on one side of the line
     (two half-width columns left a card a few words per line).
   - Demos: `?s=takeaways` (`&open=1`), `?s=takeawayAsk` (`&write=1`), `&fresh=1`.
-  - Left for sharing: the share switch (a `shareSlot` in `TakeawayForm`, used by the
+  - Left for sharing (done, see the next note): the share switch (a `shareSlot` in `TakeawayForm`, used by the
     opened takeaway and open for the ask; `sharedTo` is not on the type yet), the Mine /
     With my circle switch on the path, `circles/{id}/takeaways` and replies with rules and
     block-list handling, reply counts on stops, deploying the takeaways rule (build first,
     then rules). Not tried: a real phone; Hebrew/Greek chapters; the recap ask live (same
     component as Today's, but no demo reaches weekly through a session).
+
+- **As built (stage 6, sharing half):**
+  - Data: `Takeaway.sharedTo?: circleId[]` (kept on edit, dropped for a Later stop,
+    a draft or emptied text). `SharedTakeaway` at
+    `circles/{circleId}/takeaways/{authorUid}_{takeawayId}`: takeawayId, authorUid,
+    authorName, book, chapter, sectionStart/End, label?, bracketIndex, text, note?,
+    createdAt, updatedAt (the author's). The author's uid leads the id because two
+    people can both have Matthew 7:1. `TakeawayReply` at `.../replies/{replyId}`:
+    fromUid, fromName, text (500 max), createdAt (ISO, like circle messages).
+  - Pure logic `src/lib/takeawaySharing.ts` + `npm run check:takeawaysharing`:
+    `nextSharedTo` (a circle the switch didn't offer is left as it was, so a save
+    before the circle list loads can't unshare everything), `shareChanges` (put on
+    every save so an edit reaches the copies; remove what was unshared; everything
+    when not shareable), `sharedCopy` (only rule-allowed keys, capped),
+    `circleList` (newest first, never grouped; blocked people and non-members out),
+    `visibleReplies`, `replyCountText`, `cleanReply`, `authorShort`.
+  - `useTakeaways`: `saveTakeaway(spot, {..., sharedTo})` writes the private doc
+    first, then the copies (`spot.index` = bracket color). Delete removes every copy.
+    `unshareFromCircle` (leaving), `removeAllSharedTakeaways` (account deletion,
+    best effort, before the private docs go). `lastShareChoice` is on the device
+    (AsyncStorage `takeaways:lastShare:v1`), set on every Save with the switch.
+  - `useCircleTakeaways` (new): `loadCircleTakeaways` (list, members, every
+    takeaway's replies for the counts), `watchTakeawayReplies` (live, the open one),
+    `postTakeawayReply`, `deleteTakeawayReply`, `seedCircleTakeaways` (demo only).
+    `removeSharedCopy` deletes replies then the copy; `removeSharesBy` is the
+    leader's cleanup for one member.
+  - Circle cleanup: `leaveCircle` (AppState wrapper) unshares first, while still a
+    member; `removeCircleMember` deletes the removed person's copies and replies
+    before the kick; `disbandCircle` reads and deletes takeaways and replies
+    (replies before their takeaway). The list also hides anyone not in the member
+    list, so a failed cleanup shows nothing.
+  - UI: `ShareSwitch` in `TakeawayAsk.tsx`, in the ask and in the opened takeaway:
+    "Share with <circle>" for one circle, "Share with my circles" with a checkbox per
+    circle for several; nothing for someone in no circle. A Later stop being written
+    starts on the last choice, a written one on its own circles. Path stops say
+    "Shared". The path has a Mine / With my circle switch; with 2+ circles a circle
+    picker. Circle items: name (or "You"), time, label + passage, text, reply count,
+    "a note", bracket color bar from the author's section. Opened: "David's
+    takeaway", the text, "David's note" above the replies, replies oldest first
+    (yours with a delete), a reply box.
+  - **Rules** (`firestore.rules`, after circle reactions; **not deployed**):
+    takeaway copy: read = member; create = member + `isValidSharedTakeaway` (author
+    is you, id = your uid + `_` + takeawayId, only allowed keys, types, caps);
+    update = same + the existing doc is yours; delete = author (even after leaving)
+    or the circle's leader. Replies: read = member; create = member, your own
+    fromUid, only allowed keys, text 1–500, its takeaway exists; update never;
+    delete = writer, the circle's leader, or the takeaway's author.
+  - **Two choices beyond the brief, easy to undo:** (1) the leader may delete
+    shared takeaways and replies (as with circle messages), because disbanding and
+    removing a member otherwise leave docs nobody can ever clean up; (2) the
+    takeaway's author may delete replies on it, because unsharing or deleting would
+    otherwise orphan everyone else's replies. The author has no "delete someone's
+    reply" button; it only happens when the takeaway goes.
+  - **Rules reasoned through:**
+    - *Non-member* (signed in, no member doc): every read and list is refused
+      (`isCircleMember` false). Create refused. Update/delete of a copy refused
+      unless it is theirs (a former member cleaning up their own) or they lead the
+      circle. Replies: read and create refused; delete only their own old replies.
+      Squatting `victim_Matthew|7|1` is refused: the id must start with your uid.
+      Someone removed from the circle is a non-member, so it all disappears for them.
+    - *Member, not the author*: reads the list and every reply; can't create a copy
+      in someone else's name (authorUid and the id prefix are checked), can't update
+      or delete someone else's (existing authorUid checked); can reply as themselves
+      only, can't edit a reply, can delete only their own.
+    - *Author*: creates/updates their copy while a member, with only the listed
+      fields; can't change authorUid to someone else (both sides checked); deletes
+      it any time; deletes any reply on it (cleanup); replies like anyone else.
+    - *Leader*: as a member, plus delete on any copy and any reply.
+    - Not run against the emulator (none set up in this repo); reasoned by hand.
+  - **Blocking:** as circle chat: rules don't check it (a check would tell the
+    blocked person they're blocked); the blocker's screen hides the blocked person's
+    takeaways and replies, and the reply counts leave them out.
+  - **Push:** not built. A reply notification needs a new Cloud Function
+    (`onDocumentCreated('circles/{c}/takeaways/{t}/replies/{r}')` in
+    `functions/src/social.ts`, next to `notifyCircleMessage`, sending to the
+    takeaway's `authorUid`). Small, but it is functions work, so it's left.
+  - Demos: `?s=takeaways&open=1` (the written stop, shared with Grace Church Men,
+    the share switch with two circles), `&circle=1` (With my circle), `&circle=open`
+    (David's takeaway, note, three replies). Added to `npm run shots -- --all`.
+  - Limits: a circle's list reads the newest 100 and one reply query per takeaway
+    (fine for a small group; a `replyCount` would need a function or a looser
+    rule). A copy whose write failed is fixed by the next save of that takeaway.
+    Not tried: a real phone, real Firestore (demo writes nothing), the keyboard over
+    the reply box on iOS (`automaticallyAdjustKeyboardInsets` is set).
+  - Deploy order: new app build first, then rules (memory note "social rules
+    deploy"); the takeaways rule from the private half rides along.
 
 ## Stage 7 — Milestones and circle totals
 

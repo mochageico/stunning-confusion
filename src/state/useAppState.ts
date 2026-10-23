@@ -57,6 +57,7 @@ import { useLocalPrefs } from './useLocalPrefs';
 import { useChapterPhotos } from './useChapterPhotos';
 import { useChapterSections } from './useChapterSections';
 import { useTakeaways } from './useTakeaways';
+import { useCircleTakeaways } from './useCircleTakeaways';
 import { isStop, nextAsk, sectionStatuses, takeawayId } from '../lib/takeaways';
 import type { TakeawayDraft } from '../lib/sectionDrills';
 import { useAudioDownloads } from './useAudioDownloads';
@@ -326,7 +327,26 @@ export function useAppState() {
   const { chapterSections, loadChapterSections, sectionsForChapter, saveChapterSections, saveOutlineExtra } = useChapterSections({ user });
 
   // The user's takeaways, one per section (see useTakeaways), and the ask that is due now.
-  const { takeaways, loadTakeaways, saveTakeaway, deleteTakeaway } = useTakeaways({ user });
+  const {
+    takeaways,
+    loadTakeaways,
+    saveTakeaway,
+    deleteTakeaway,
+    lastShareChoice,
+    setLastShareChoice,
+    unshareFromCircle,
+    removeAllSharedTakeaways,
+  } = useTakeaways({ user });
+  // Takeaways shared with the user's circles, and their replies (see useCircleTakeaways).
+  const {
+    circleTakeaways,
+    takeawayReplies,
+    loadCircleTakeaways,
+    watchTakeawayReplies,
+    postTakeawayReply,
+    deleteTakeawayReply,
+    seedCircleTakeaways,
+  } = useCircleTakeaways({ user, triggerToast: (message) => triggerToast(message) });
   // Teach-It's "Save as takeaway draft": a draft fills in the ask when the section is ready.
   // A section that already has a takeaway or a "Later" stop keeps it (false).
   const saveTakeawayDraft = (d: TakeawayDraft): boolean => {
@@ -1455,6 +1475,7 @@ export function useAppState() {
     wipeAudioCache,
     wipeLocalPhotos,
     unregisterPushToken: () => push.unregisterPushToken(),
+    removeAllSharedTakeaways,
     triggerToast,
   });
 
@@ -2727,7 +2748,12 @@ export function useAppState() {
     createCircle,
     joinCircle,
     joinCircleByCode,
-    leaveCircle,
+    // Takes the user's shared takeaways out of the circle first, while still
+    // a member (see useTakeaways.unshareFromCircle).
+    leaveCircle: async (circleId: string) => {
+      await unshareFromCircle(circleId);
+      await leaveCircle(circleId);
+    },
     disbandCircle,
     removeCircleMember,
     updateCircleSettings,
@@ -2824,6 +2850,15 @@ export function useAppState() {
     deleteTakeaway,
     saveTakeawayDraft,
     nextTakeawayAsk,
+    lastShareChoice,
+    setLastShareChoice,
+    circleTakeaways,
+    takeawayReplies,
+    loadCircleTakeaways,
+    watchTakeawayReplies,
+    postTakeawayReply,
+    deleteTakeawayReply,
+    seedCircleTakeaways,
     buildVerseTimestamps,
   };
 }

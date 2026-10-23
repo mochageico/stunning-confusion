@@ -46,6 +46,7 @@ chapterPhotos: ChapterPhoto[]
 chapterSections: { [x: string]: ChapterSections; }
 chapterViewMode: "list" | "grid" | "memoryGrid"
 circleFriends: CircleMember[]
+circleTakeaways: { [x: string]: CircleTakeawayList; }
 clearAudioDownloads: () => Promise<void>
 clearGroupChallengeMembershipsForCircle: (circleId: string) => void
 clearGroupPlanMembershipsForCircle: (circleId: string) => void
@@ -83,6 +84,7 @@ deleteGroupPlan: (circleId: string, planId: string) => Promise<void>
 deleteListenPlaylist: (id: string) => void
 deleteRecording: (recording: Recording) => Promise<void>
 deleteTakeaway: (id: string) => Promise<void>
+deleteTakeawayReply: (circleId: string, docId: string, replyId: string) => Promise<void>
 disbandCircle: (circleId: string) => Promise<void>
 dismissAccountabilityNudge: (nudgeId: string) => Promise<void>
 dismissNotificationAsk: () => void
@@ -152,6 +154,7 @@ joinedGroupChallenges: GroupChallengeMembership[]
 joinedGroupPlanDetails: GroupPlan[]
 joinedGroupPlanMemberships: GroupPlanMembership[]
 lastRecordingDuration: number
+lastShareChoice: string[]
 learningCount: number
 learningDays: string[]
 leaveCircle: (circleId: string) => Promise<void>
@@ -162,6 +165,7 @@ listenSource: "all" | "selection" | "memorization" | "reviewing" | "priming" | `
 loadActiveCircleData: (circleId: string) => Promise<void>
 loadActivityFeed: () => Promise<void>
 loadCircleFriends: (circles: Circle[]) => Promise<void>
+loadCircleTakeaways: (circleId: string) => Promise<void>
 loadFriendQuizVerses: (friendUid: string) => Promise<{ book: string; chapter: number; verseNumber: number; status: string; translationId?: string | undefined; }[] | null>
 loadFriendRequests: () => Promise<void>
 loadFriends: () => Promise<void>
@@ -238,6 +242,7 @@ playChatRecording: (sharedRecordingId: string) => Promise<void>
 playingRecProgress: number
 playingRecordingId: string | null
 postChatMessage: (scope: "circle" | "dm", containerId: string, text: string, attachment?: ChatAttachment | undefined) => Promise<boolean>
+postTakeawayReply: (circleId: string, docId: string, text: string) => Promise<boolean>
 practiceLearnTab: LearnMode | null
 previewCircle: Circle | null
 primingLookahead: number
@@ -287,7 +292,7 @@ saveRecordedAudio: () => Promise<void>
 saveRecordingDialog: boolean
 saveRecordingOffline: (recording: Recording) => Promise<boolean>
 saveSharedRecordingToLibrary: (rec: Recording) => Promise<void>
-saveTakeaway: (spot: TakeawaySpot, fields: { text: string; note?: string | undefined; status: "saved" | "later" | "draft"; }) => Promise<void>
+saveTakeaway: (spot: TakeawaySpot, fields: { text: string; note?: string | undefined; status: "saved" | "later" | "draft"; sharedTo?: string[] | undefined; }) => Promise<void>
 saveTakeawayDraft: (d: TakeawayDraft) => boolean
 saveVerseDoodle: (key: string, strokes: string[]) => void
 saveVerseSyncOffsets: (verseTimestamps: VerseTimestamp[]) => Promise<void>
@@ -295,6 +300,7 @@ savedPlans: MemoryPlan[]
 searchUsers: (rawQuery: string) => Promise<void>
 searchingUsers: boolean
 sectionsForChapter: (book: string, chapter: number) => ChapterSections | null
+seedCircleTakeaways: (circleId: string, items: SharedTakeaway[], memberUids: string[], replies: Record<string, TakeawayReply[]>) => void
 seekImportAudioBy: (deltaSeconds: number) => void
 seekRecordingBy: (deltaSeconds: number) => Promise<void>
 seekRecordingToTime: (recording: Recording, seconds: number) => Promise<void>
@@ -346,6 +352,7 @@ setInviteCodeInput: (value: SetStateAction<string>) => void
 setIsEditingCircleSettings: (value: SetStateAction<boolean>) => void
 setIsEditingSync: (value: SetStateAction<boolean>) => void
 setIsRecording: (value: SetStateAction<boolean>) => void
+setLastShareChoice: (ids: string[]) => void
 setLearningDays: (value: SetStateAction<string[]>) => void
 setListenModePlaying: (value: SetStateAction<boolean>) => void
 setMasteryTouches: (value: SetStateAction<number>) => void
@@ -417,6 +424,7 @@ startRecordingForRequest: (scope: "circle" | "dm", containerId: string, message:
 startReviewSession: (groups: QueueItem[][]) => void
 studioAbOverride: boolean | null
 studioPlaybackEnabled: boolean
+takeawayReplies: { [x: string]: TakeawayReply[]; }
 takeaways: { [x: string]: Takeaway; }
 threadDrillPreset: ThreadDrillPreset | null
 toastMessage: string | null
@@ -458,4 +466,5 @@ verses: VerseState[]
 viewMemberProfileById: (uid: string) => Promise<void>
 viewingGroupDetail: boolean
 viewingGroupPlan: GroupPlan | null
+watchTakeawayReplies: (circleId: string, docId: string) => () => void
 weeklyPhaseMonths: number

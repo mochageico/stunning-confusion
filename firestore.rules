@@ -176,8 +176,8 @@ service cloud.firestore {
 
     // The user's own takeaways (the main point of a section, plus a note), one
     // per section, id = book|chapter|sectionStart. Owner-only. Sharing with a
-    // circle will be a copy written elsewhere (circles/{id}/takeaways), never
-    // this collection opened up.
+    // circle writes a copy elsewhere (circles/{id}/takeaways, below), never
+    // opens this collection up.
     match /users/{userId}/takeaways/{takeawayId} {
       allow read, write: if isOwner(userId);
     }
@@ -548,6 +548,78 @@ service cloud.firestore {
         && isCircleMember(circleId, request.auth.uid);
       allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isCircleOwner(circleId));
       allow update: if false;
+    }
+
+    // Takeaways shared with a circle (MIXED_REVIEW_PLAN.md, stage 6). Each is
+    // a copy of the author's own users/{uid}/takeaways/{takeawayId}, written
+    // by the author's app when they share, edit or unshare it -- like
+    // sharedRecordings, the private doc itself is never opened up. The doc id
+    // is `${authorUid}_${takeawayId}` (checked), so nobody can plant a doc
+    // under the id someone else's share will need.
+    //
+    // Members-only read. Only the author writes it, and only while still in
+    // the circle. The author may delete theirs at any time (even after
+    // leaving, to clean up); so may the circle's leader, because removing a
+    // member takes their takeaways with them and disbandCircle has to clear
+    // the collection (no cascading deletes). Blocking works as in circle chat
+    // above: it hides the person on the blocker's own screen only.
+    function isValidSharedTakeaway(takeawayDocId) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['takeawayId', 'authorUid', 'authorName', 'book', 'chapter', 'sectionStart', 'sectionEnd',
+                               'label', 'bracketIndex', 'text', 'note', 'createdAt', 'updatedAt'])
+        && d.authorUid == request.auth.uid
+        && d.takeawayId is string
+        && d.takeawayId.size() <= 120
+        && takeawayDocId == request.auth.uid + '_' + d.takeawayId
+        && d.authorName is string && d.authorName.size() <= 100
+        && d.book is string && d.book.size() <= 40
+        && d.chapter is int && d.sectionStart is int && d.sectionEnd is int
+        && d.bracketIndex is int
+        && d.text is string && d.text.size() > 0 && d.text.size() <= 2000
+        && d.get('note', '') is string && d.get('note', '').size() <= 2000
+        && d.get('label', '') is string && d.get('label', '').size() <= 120
+        && d.createdAt is string && d.updatedAt is string;
+    }
+
+    match /circles/{circleId}/takeaways/{takeawayDocId} {
+      allow read: if isSignedIn() && isCircleMember(circleId, request.auth.uid);
+      allow create: if isSignedIn()
+        && isCircleMember(circleId, request.auth.uid)
+        && isValidSharedTakeaway(takeawayDocId);
+      // The EXISTING doc must be the writer's too, not just the incoming one.
+      allow update: if isSignedIn()
+        && resource.data.authorUid == request.auth.uid
+        && isCircleMember(circleId, request.auth.uid)
+        && isValidSharedTakeaway(takeawayDocId);
+      allow delete: if isSignedIn() && (resource.data.authorUid == request.auth.uid || isCircleOwner(circleId));
+
+      // Replies on a shared takeaway: casual, seen once it's opened. Same
+      // posture as circle messages: members only, each person writes only
+      // their own, and nobody can edit one. Deleting: the reply's writer;
+      // the takeaway's author, so unsharing or deleting the takeaway can take
+      // its replies with it (otherwise they'd be orphaned forever); and the
+      // circle's leader, for removing a member and disbanding. A reply needs
+      // its takeaway to exist, so none can be left under a deleted one.
+      match /replies/{replyId} {
+        allow read: if isSignedIn() && isCircleMember(circleId, request.auth.uid);
+        allow create: if isSignedIn()
+          && request.resource.data.keys().hasOnly(['fromUid', 'fromName', 'text', 'createdAt'])
+          && request.resource.data.fromUid == request.auth.uid
+          && request.resource.data.fromName is string
+          && request.resource.data.fromName.size() <= 100
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.createdAt is string
+          && isCircleMember(circleId, request.auth.uid)
+          && exists(/databases/$(database)/documents/circles/$(circleId)/takeaways/$(takeawayDocId));
+        allow update: if false;
+        allow delete: if isSignedIn() && (
+          resource.data.fromUid == request.auth.uid
+          || isCircleOwner(circleId)
+          || get(/databases/$(database)/documents/circles/$(circleId)/takeaways/$(takeawayDocId)).data.authorUid == request.auth.uid
+        );
+      }
     }
 
     // Real memorization-milestone activity feed (Community). Read is open to
