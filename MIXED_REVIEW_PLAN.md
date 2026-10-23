@@ -18,7 +18,9 @@ all due buttons, crediting as each round ends. Speech in the session is not yet
 tried on a real phone. Stage 6, private half, built 2026-10-22 (takeaways, the
 ask, the path; the takeaways Firestore rule is **not deployed**). Stage 6, sharing
 half, built 2026-10-22: share switch, With my circle, replies, circle rules (**not
-deployed**: build first, then rules). Stage 7 is next.
+deployed**: build first, then rules). Stage 7, milestones half, built 2026-10-23
+(books of the Bible as landmarks, on the takeaways path and My Verses). Circle
+totals and the shared ladder are next.
 
 ---
 
@@ -574,6 +576,39 @@ and rules).
   order), and the shared landmark ladder.
 - **Done when:** tsc, checks, screenshots; a member who leaves the circle drops out of
   the totals.
+- **As built (stage 7, milestones half):**
+  - `src/lib/milestones.ts` + `npm run check:milestones`. `BOOK_VERSES` is the
+    66-book table (standard KJV/ESV/BSB versification); the check adds it up
+    (OT 23,145, NT 7,957, 31,102), matches names/order to `ALL_BIBLE_BOOKS`, and
+    spot-checks Psalms 2,461, Ruth 85, Philippians 104, 2 John 13.
+  - **Verses held** = `versesHeld(queue)`: past Learning by `verseStage` (daily,
+    weekly, monthly, complete; a refresher still counts), a verse in two
+    translations once. **Ladder** = books sorted by length (ties in Bible order).
+    A landmark is **passed by holding more than its length**, so "to go" is
+    length + 1 - held (Ruth is 85, so 86 verses passes it; Philippians is 19 more).
+  - **For the circle half:** `ladderPosition(n)` is pure on a number; `heldLine(pos,
+    'Together you')` gives "Together you hold more verses than ...". Use it on a
+    circle's summed count. `passedLandmarks(n)` lists them.
+  - **Dates:** `leftLearningAt(item)` = the last Learning-stage pass log before the
+    first later-stage log (a hand "placed" log is dated when placed); older data
+    falls back to the first review, then lastReviewDate, then dateStarted.
+    `heldDates(queue)` sorts them (undated first, earlier translation copy wins);
+    `landmarkDates(dates)` dates each landmark as the (length + 1)th verse's day.
+    Nothing is stored.
+  - **Path:** `buildPath` takes an optional 4th arg of `LandmarkPassed[]` and adds
+    `{ kind: 'landmark' }` entries between stops, newest first (same day: longer
+    book first; undated at the bottom). They don't count toward left/right.
+    Rendered as a small flag pill, "More than Ruth · Oct 22" (date on its own line
+    at 1.3x and up). A plain "Next: 1 Thessalonians, 4 to go" line sits above the
+    path once anything is held. My Verses has one quiet line under the title
+    ("You hold more verses than Ruth. Next: ..., N to go."), no tap, no popup.
+  - Demo: `?s=takeaways` now holds 86 verses (Psalm 119 filler, one leaving
+    Learning a day); Matthew 7:13-14 left Learning 1.8 s after load and the "Later"
+    stop is saved at 2.6 s, so the Ruth marker lands between the two stops.
+  - **Worth a look from the user:** every book shorter than you is a marker, so a
+    person holding ~85 verses sees about 17 on the path. If that's too busy,
+    options are showing only the last few, or only markers since the previous
+    stop. Not tried: a real phone; a real account's history.
 
 ---
 

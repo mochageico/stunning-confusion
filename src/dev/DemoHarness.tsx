@@ -266,10 +266,30 @@ function buildMixQueue() {
 // ?s=takeaways / ?s=takeawayAsk: Matthew 7:1-14 (BSB), nothing due today. Verses
 // 1-12 are in weekly reviews (sections 1, 6, 7 and 12 are ready), 13-14 are
 // still daily (the next section to unlock).
+// Landmarks (lib/milestones.ts): Psalm 119 verses fill the count up to 86 verses (87 slots, one is a duplicate slot)
+// held, one leaving Learning a day. Matthew 7:13-14 left Learning 1.8 s from
+// now, so the landmark they pass (Ruth) sits on the path after the first
+// takeaway and before the "Later" stop, which is saved 2.6 s in.
 function buildTakeawayQueue() {
   const base = buildQueue();
+  const logsAt = (at: string) => [{ at, result: 'pass', stage: 'learning' }, ...(at < iso(-1, 8) ? [{ at: iso(-1, 8), result: 'pass', stage: 'weekly' }] : [])];
+  const heldBase = base.filter((q) => q.status === 'retained' || (q.status === 'reviewing' && q.retentionPhase !== 'none')).length;
+  const psalmCount = Math.max(0, 87 - 14 - heldBase);
+  const soon = new Date(Date.now() + 1800).toISOString();
+  const psalm = Array.from({ length: psalmCount }, (_, i) => ({
+    ...base[2],
+    verseId: `BSB_PSA_119_${i + 1}`,
+    book: 'Psalms',
+    chapter: 119,
+    verseNumber: i + 1,
+    text: 'I have hidden Your word in my heart.',
+    retentionPhase: 'weekly',
+    nextReviewDueDate: iso(5, 6),
+    reviewLogs: logsAt(iso(-(psalmCount + 12) + i, 8)),
+  }));
   const matt = MATT7_TEXT.map((text, i) => ({
     ...base[2],
+    reviewLogs: logsAt(i < 12 ? iso(-12 + i, 9) : soon),
     verseId: `BSB_MAT_7_${i + 1}`,
     book: 'Matthew',
     chapter: 7,
@@ -278,7 +298,7 @@ function buildTakeawayQueue() {
     retentionPhase: i < 12 ? 'weekly' : 'daily',
     nextReviewDueDate: iso(5, 6),
   }));
-  return [...matt, ...base].map((q, i) => ({ ...q, orderIndex: i }));
+  return [...matt, ...psalm, ...base].map((q, i) => ({ ...q, orderIndex: i }));
 }
 
 const matt7Sections = () => ({
@@ -537,7 +557,8 @@ export function useDemoState(real: AppState): AppState {
           // Shared with Grace Church Men (c1), as its copy below.
           { text: MY_SHARED_TEXT, note: MY_SHARED_NOTE, status: 'saved', sharedTo: ['c1'] }
         );
-        void real.saveTakeaway({ book: 'Matthew', chapter: 7, sectionStart: 6, sectionEnd: 6, label: MATT7_LABELS[1] }, { text: '', status: 'later' });
+        // After the landmark's date (buildTakeawayQueue), so the marker sits between the two stops.
+        setTimeout(() => void real.saveTakeaway({ book: 'Matthew', chapter: 7, sectionStart: 6, sectionEnd: 6, label: MATT7_LABELS[1] }, { text: '', status: 'later' }), 2600);
       }
       real.seedCircleTakeaways('c1', circleTakeaways(params.get('fresh') !== '1'), members.map((m) => m.uid), circleTakeawayReplies);
       if (s === 'takeaways') {

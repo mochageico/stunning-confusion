@@ -12,6 +12,7 @@ import { PRIORITY_LABELS } from '../components/QueueSources';
 import { CompleteChips, StageDot, StageStrip, VerseStageRow, stageCaption } from '../components/VerseStages';
 import VersesByBook from '../components/VersesByBook';
 import { writtenCount } from '../lib/takeaways';
+import { ladderPosition, landmarkText, versesHeld } from '../lib/milestones';
 import { reorderQueueGroups } from '../lib/queueReorder';
 import { STAGE_LABEL, STAGE_ORDER, StageGroup, VerseStage, groupByStage, referenceFor, stageCounts } from '../lib/stageProgress';
 import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, learnedCount, projectStartDates } from '../lib/forecast';
@@ -131,6 +132,11 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   );
   const counts = useMemo(() => stageCounts(memoryQueue), [memoryQueue]);
   const takeawayCount = useMemo(() => writtenCount(takeaways), [takeaways]);
+  // "You hold more verses than Ruth. Next: Philippians, 19 to go." Nothing until the first landmark is in sight.
+  const landmark = useMemo(() => {
+    const held = versesHeld(memoryQueue);
+    return held > 0 ? landmarkText(ladderPosition(held)) : '';
+  }, [memoryQueue]);
   const total = memoryQueue.length;
 
   // ---- Looking ahead ----
@@ -447,6 +453,11 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           <EmptyState title="No verses yet" message="Tap Add verses, or add them from a chapter's page." />
         ) : (
           <>
+            {landmark ? (
+              <AppText variant="label" className="font-sans text-ink-2">
+                {landmark}
+              </AppText>
+            ) : null}
             <SegmentedControl
               accessibilityLabel="Show verses"
               options={[

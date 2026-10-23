@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Bookmark, ChevronDown, ChevronUp, MessageCircle, Send, Trash2, Users } from 'lucide-react-native';
+import { Bookmark, ChevronDown, Flag, ChevronUp, MessageCircle, Send, Trash2, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { replyKey } from '../state/useCircleTakeaways';
@@ -9,7 +9,8 @@ import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScale
 import { Badge, EmptyState, ScreenHeader, SegmentedControl } from '../components/blocks';
 import { bracketColor, useThemeColors } from '../components/theme';
 import { SectionTitle, ShareSwitch, spotName, TakeawayForm, useNewShareChoice } from '../components/TakeawayAsk';
-import { formatTimeAgo } from '../lib/format';
+import { formatDate, formatTimeAgo } from '../lib/format';
+import { heldDates, ladderPosition, landmarkDates, nextLine } from '../lib/milestones';
 import { sectionIndexOf } from '../lib/sections';
 import { buildPath, PathEntry, sectionStatuses } from '../lib/takeaways';
 import { authorShort, circleList, nextSharedTo, REPLY_MAX, replyCountText, sharedChoiceFor, visibleReplies } from '../lib/takeawaySharing';
@@ -135,6 +136,32 @@ function Path({ entries, onOpen }: { entries: PathEntry[]; onOpen: (id: string) 
                 <AppText variant="caption" className="font-sans font-bold text-ink-2">
                   {e.book} {e.chapter}
                 </AppText>
+              </View>
+            </View>
+          );
+        }
+        if (e.kind === 'landmark') {
+          // A book of the Bible you now hold more verses than, on the line at the day you passed it.
+          return (
+            <View key={e.key} className={stacked ? 'flex-row items-center' : 'items-center justify-center'}>
+              {stacked ? <View className="self-stretch" style={{ width: rail }}>{line}</View> : line}
+              <View
+                className={`flex-row items-center bg-canvas border border-line-strong flex-shrink ${stacked ? 'rounded-card' : 'rounded-full'}`}
+                style={{ marginVertical: space(8), paddingHorizontal: space(12), paddingVertical: space(4), gap: space(6) }}
+              >
+                <Flag size={Math.round(13 * Math.min(scale, 1.3))} color={palette.ink3} />
+                {/* At large text the day goes on its own line so it never splits mid-date. */}
+                <View className="flex-shrink">
+                  <AppText variant="caption" className="font-sans font-semibold text-ink-2">
+                    More than {e.book}
+                    {e.at && !stacked ? ` · ${formatDate(e.at)}` : ''}
+                  </AppText>
+                  {e.at && stacked ? (
+                    <AppText variant="caption" className="font-sans text-ink-3">
+                      {formatDate(e.at)}
+                    </AppText>
+                  ) : null}
+                </View>
               </View>
             </View>
           );
@@ -477,11 +504,13 @@ export default function TakeawaysScreen({ state }: { state: AppState }) {
   // Only circles the user is in now: leaving or being removed hides a circle's takeaways.
   const circle = myCircles.find((c) => c.id === circleId) ?? myCircles[0] ?? null;
 
+  const dates = useMemo(() => heldDates(memoryQueue), [memoryQueue]);
+  const next = nextLine(ladderPosition(dates.length));
   const entries = useMemo(
-    () => buildPath(takeaways, sectionStatuses(memoryQueue, sectionsForChapter), sectionsForChapter),
+    () => buildPath(takeaways, sectionStatuses(memoryQueue, sectionsForChapter), sectionsForChapter, landmarkDates(dates)),
     // sectionsForChapter is remade each render; chapterSections is what it reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [takeaways, memoryQueue, state.chapterSections]
+    [takeaways, memoryQueue, dates, state.chapterSections]
   );
   const opened = openId ? takeaways[openId] : null;
   if (view === 'mine' && opened) {
@@ -548,7 +577,14 @@ export default function TakeawaysScreen({ state }: { state: AppState }) {
             message="When every verse of a section is in weekly reviews, you'll be asked for its main point. It lands here, one stop at a time."
           />
         ) : (
-          <Path entries={entries} onOpen={setOpenId} />
+          <>
+            {next && dates.length > 0 ? (
+              <AppText variant="label" className="font-sans text-ink-2">
+                {next}
+              </AppText>
+            ) : null}
+            <Path entries={entries} onOpen={setOpenId} />
+          </>
         )}
       </ScrollView>
     </FadeInView>

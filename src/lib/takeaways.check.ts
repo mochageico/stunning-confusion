@@ -86,13 +86,23 @@ const t1 = tk(1, { createdAt: '2026-10-01T00:00:00Z' });
 const t2 = tk(7, { createdAt: '2026-10-05T00:00:00Z' });
 const t3: Takeaway = { ...tk(3), book: 'Romans', chapter: 8, id: takeawayId('Romans', 8, 3), createdAt: '2026-10-03T00:00:00Z', text: 'R' };
 const path = buildPath({ [t1.id]: t1, [t2.id]: t2, [t3.id]: t3, x: tk(12, { status: 'draft' }) }, st, sectionsFor);
-const kinds = path.map((p) => (p.kind === 'stop' ? `s${p.takeaway.sectionStart}` : p.kind === 'next' ? 'next' : `c${p.chapter}`));
+const kinds = path.map((p) => (p.kind === 'stop' ? `s${p.takeaway.sectionStart}` : p.kind === 'next' ? 'next' : p.kind === 'landmark' ? `m${p.book}` : `c${p.chapter}`));
 check('newest first, next on top, dividers on chapter change', kinds.join() === 'c7,next,s7,c8,s3,c7,s1', kinds);
-const sides = path.flatMap((p) => (p.kind === 'chapter' ? [] : [p.side]));
+const sides = path.flatMap((p) => (p.kind === 'chapter' || p.kind === 'landmark' ? [] : [p.side]));
 check('stops alternate sides', sides.join() === 'left,right,left,right', sides);
 const sp = path.find((p) => p.kind === 'stop' && p.takeaway.sectionStart === 7);
 check('a stop keeps its section color index and label', sp?.kind === 'stop' && sp.index === 2 && sp.label === 'Ask', sp);
 check('a draft is not on the path', !kinds.includes('s12'));
+
+// Landmarks sit between stops by the day they were passed (newest first); undated ones go last.
+const lm = (book: string, verses: number, at: string | null) => ({ landmark: { book, verses }, at });
+const withMarks = buildPath({ [t1.id]: t1, [t2.id]: t2, [t3.id]: t3 }, st, sectionsFor, [
+  lm('Ruth', 85, '2026-10-04T00:00:00Z'), lm('Jude', 25, '2026-10-02T00:00:00Z'), lm('Titus', 46, '2026-10-02T00:00:00Z'), lm('2 John', 13, null), lm('Obadiah', 21, '2026-10-20T00:00:00Z'),
+]);
+const markKinds = withMarks.map((p) => (p.kind === 'stop' ? `s${p.takeaway.sectionStart}` : p.kind === 'next' ? 'next' : p.kind === 'landmark' ? `m${p.book}` : `c${p.chapter}`));
+check('landmarks fall between stops by date, same-day longest first, undated last', markKinds.join() === 'c7,next,mObadiah,s7,mRuth,c8,s3,mTitus,mJude,c7,s1,m2 John', markKinds);
+check('landmarks do not change the stops alternation', withMarks.flatMap((p) => (p.kind === 'stop' || p.kind === 'next' ? [p.side] : [])).join() === 'left,right,left,right');
+check('no landmarks given: the path is as before', buildPath({ [t1.id]: t1 }, st, sectionsFor).every((p) => p.kind !== 'landmark'));
 const later = buildPath({ [tk(6).id]: tk(6, { status: 'later', text: '' }) }, st, sectionsFor).find((p) => p.kind === 'stop');
 check('a "later" stop is empty', later?.kind === 'stop' && later.empty);
 
