@@ -13,7 +13,8 @@ import BuildUpDrill from '../components/drills/BuildUpDrill';
 import ScrambleDrill from '../components/drills/ScrambleDrill';
 import SpotSwapDrill from '../components/drills/SpotSwapDrill';
 import JigsawDrill from '../components/drills/JigsawDrill';
-import { threadSpan, threadStartVerseCounts, ThreadCue } from '../lib/drills';
+import VersePlayButton from '../components/VersePlayButton';
+import { threadSlips, ThreadSlip, threadSpan, threadStartVerseCounts, ThreadCue } from '../lib/drills';
 import { WordOutcome } from '../lib/recitation';
 import { joinWords, maskExceptFirstLetter, normalizeToken, scriptOfVerse, splitWords } from '../lib/textScript';
 import { loadPracticePrefs, savePracticePrefs } from '../lib/practicePrefs';
@@ -27,6 +28,7 @@ import {
   GuidedOutcome,
   guidedCredit,
   GUIDED_PARTLY_HIDDEN,
+  joinChanges,
   Ladder,
   newVersesFinishedToday,
   nextNewVerse,
@@ -74,6 +76,8 @@ interface StageResult {
   mode: RecitationMode;
   /** One per verse in the stretch, by index into the verses given to the stage. */
   perVerse: { index: number; passed: boolean; perfect: boolean }[];
+  /** Where it went wrong, joins included (threadSlips); indices as in perVerse. */
+  slips: ThreadSlip[];
 }
 
 // ----------------------------------------------------------------------------
@@ -156,6 +160,7 @@ function GradedStage({
     onDone({
       mode,
       perVerse: span.map((sv, k) => ({ index: sv.index, ...verseResult(perVerseOutcomes[k]) })),
+      slips: threadSlips(span, perVerseOutcomes.map((o) => (o || []).map((x) => x === 'missed'))),
     });
   };
 
@@ -201,6 +206,7 @@ function GradedStage({
         const results: StageResult = {
           mode: stage,
           perVerse: span.map((sv, k) => ({ index: sv.index, ...verseResult(perVerse[k]) })),
+          slips: [],
         };
         const lines = creditLines?.(results) ?? [];
         const anyMissed = results.perVerse.some((r) => !r.perfect);
@@ -534,6 +540,12 @@ function Sitting({
     })();
   };
 
+  /** Saves which joins in a graded stretch slipped or held, so the next jump-ins aim at the shaky ones. */
+  const markJoins = (verseIds: string[], startVerse: number, endVerse: number, slips: ThreadSlip[]) => {
+    const { shaky, steady } = joinChanges(verseIds.slice(startVerse, endVerse + 1), slips, startVerse);
+    state.setGuidedShakyJoins(shaky, steady);
+  };
+
   // ---- small helpers over the step ---------------------------------------
   const verseOf = (id: string): GuidedDrillVerse | null => {
     const it = itemOf(id);
@@ -695,12 +707,48 @@ function Sitting({
   // COLD CHECK
   // ==========================================================================
   if (step.kind === 'cold') {
-    const verse = verseOf(step.verseId);
-    if (!verse) {
+    const verses = versesOf(step.verseIds);
+    const refreshId = step.refreshIds[0];
+    const verse = step.stage === 'recite' ? verses[0] : refreshId ? verseOf(refreshId) : null;
+    if (verses.length !== step.verseIds.length || !verse) {
       dispatchMissing();
       return null;
     }
     const eyebrow = `Check · ${s.coldQueue.length} left`;
+    if (step.stage === 'recite') {
+      const many = verses.length > 1;
+      return frame(
+        eyebrow,
+        rangeOf(verses),
+        <GradedStage
+          key={`cold:${step.verseIds.join()}`}
+          verses={verses}
+          startVerse={0}
+          startWord={0}
+          endVerse={verses.length - 1}
+          easierLabel="Not ready? Refresh it first"
+          onEasier={() => dispatch({ type: 'easier' })}
+          eyebrow="Check from memory"
+          caption={many ? 'Say these verses with nothing in front of you.' : 'Say the verse with nothing in front of you.'}
+          creditLines={({ mode, perVerse }) =>
+            perVerse.map((r) => ({
+              index: r.index,
+              text: creditLabel(step.verseIds[r.index], { activity: 'cold', passed: r.passed, perfect: r.perfect, mode }),
+            }))
+          }
+          onDone={({ mode, perVerse, slips }) => {
+            bank(
+              perVerse.map((r) => ({ id: step.verseIds[r.index], outcome: { activity: 'cold' as const, passed: r.passed, perfect: r.perfect, mode } })),
+              mode
+            );
+            markJoins(step.verseIds, 0, step.verseIds.length - 1, slips);
+            const missed = perVerse.filter((r) => !r.perfect).map((r) => r.index);
+            dispatch({ type: 'result', perfect: missed.length === 0, slips: missed });
+          }}
+        />,
+        skipBar(many ? 'Skip these checks' : 'Skip this check')
+      );
+    }
     if (step.stage === 'refreshDrill' && step.drill) {
       return frame(
         eyebrow,
@@ -720,32 +768,22 @@ function Sitting({
         skipBar('Skip this check')
       );
     }
-    const refresh = step.stage === 'refreshRecite';
+    // Refresh recitation: the one verse, again. It never counts.
     return frame(
       eyebrow,
-      refresh ? `Once more: ${refOf(verse)}` : refOf(verse),
+      `Once more: ${refOf(verse)}`,
       <GradedStage
-        key={`cold:${step.verseId}:${step.stage}`}
+        key={`cold:${refreshId}:refresh`}
         verses={[verse]}
         startVerse={0}
         startWord={0}
         endVerse={0}
-        easierLabel={refresh ? undefined : 'Not ready? Refresh it first'}
-        onEasier={refresh ? undefined : () => dispatch({ type: 'easier' })}
-        eyebrow={refresh ? 'Once more' : 'Check from memory'}
-        caption={refresh ? 'Say it again. This one doesn’t count.' : 'Say the verse with nothing in front of you.'}
+        eyebrow="Once more"
+        caption="Say it again. This one doesn’t count."
         creditLines={({ perVerse }) => [
-          {
-            index: 0,
-            text: creditLabel(step.verseId, { activity: refresh ? 'refresh' : 'cold', passed: perVerse[0].passed, perfect: perVerse[0].perfect, mode: 'speak' }),
-          },
+          { index: 0, text: creditLabel(refreshId, { activity: 'refresh', passed: perVerse[0].passed, perfect: perVerse[0].perfect, mode: 'speak' }) },
         ]}
-        onDone={({ mode, perVerse }) => {
-          const r = perVerse[0];
-          const activity: GuidedActivity = refresh ? 'refresh' : 'cold';
-          bank([{ id: step.verseId, outcome: { activity, passed: r.passed, perfect: r.perfect, mode } }], mode);
-          dispatch({ type: 'result', perfect: r.perfect });
-        }}
+        onDone={({ perVerse }) => dispatch({ type: 'result', perfect: perVerse[0].perfect })}
       />,
       skipBar('Skip this check')
     );
@@ -761,7 +799,7 @@ function Sitting({
       return null;
     }
     const kind = step.kind;
-    const cue: ThreadCue = step.cue;
+    const cue: ThreadCue = step.kind === 'thread' ? step.cues[step.index] : step.cue;
 
     if (kind === 'stitch' && step.stage === 'jigsaw') {
       return frame(
@@ -787,7 +825,14 @@ function Sitting({
       );
     }
 
-    const eyebrow = kind === 'stitch' ? 'Stitch' : kind === 'seam' ? 'The join' : 'Pick up the thread';
+    const eyebrow =
+      step.kind === 'stitch'
+        ? 'Stitch'
+        : step.kind === 'seam'
+          ? 'The join'
+          : step.cues.length > 1
+            ? `Jump in · ${step.index + 1} of ${step.cues.length}`
+            : 'Jump in';
     const activity: GuidedActivity = kind;
     const caption =
       kind === 'stitch'
@@ -805,7 +850,7 @@ function Sitting({
       eyebrow,
       rangeOf(verses.slice(cue.startVerse, cue.endVerse + 1)),
       <GradedStage
-        key={`${kind}:${s.log.length}:${step.kind === 'stitch' ? step.fails : 0}`}
+        key={`${kind}:${s.log.length}:${step.kind === 'stitch' ? step.fails : step.kind === 'thread' ? step.index : 0}`}
         verses={verses}
         startVerse={cue.startVerse}
         startWord={cue.startWord}
@@ -816,16 +861,52 @@ function Sitting({
         creditLines={({ mode, perVerse }) =>
           perVerse.map((r) => ({ index: r.index, text: creditLabel(step.verseIds[r.index], outcomeFor(r.index, r.passed, r.perfect, mode)) }))
         }
-        onDone={({ mode, perVerse }) => {
+        onDone={({ mode, perVerse, slips }) => {
           bank(
             perVerse.map((r) => ({ id: step.verseIds[r.index], outcome: outcomeFor(r.index, r.passed, r.perfect, mode) })),
             mode
           );
+          markJoins(step.verseIds, cue.startVerse, cue.endVerse, slips);
           const slip = perVerse.find((r) => !r.perfect);
           dispatch({ type: 'result', perfect: !slip, firstSlip: slip ? slip.index : undefined });
         }}
       />,
-      skipBar(kind === 'thread' ? 'Skip the thread' : 'Skip the stitch')
+      skipBar(kind === 'thread' ? 'Skip this one' : 'Skip the stitch')
+    );
+  }
+
+  // ==========================================================================
+  // LAST LOOK
+  // ==========================================================================
+  if (step.kind === 'lastLook') {
+    const verseIds = step.groups[step.index];
+    const verses = versesOf(verseIds);
+    if (verses.length !== verseIds.length || verses.length === 0) {
+      dispatchMissing();
+      return null;
+    }
+    return frame(
+      step.groups.length > 1 ? `One last look · ${step.index + 1} of ${step.groups.length}` : 'One last look',
+      rangeOf(verses),
+      <GradedStage
+        key={`lastLook:${step.index}`}
+        verses={verses}
+        startVerse={0}
+        startWord={0}
+        endVerse={verses.length - 1}
+        eyebrow="Learned this sitting"
+        caption={`Say ${verses.length > 1 ? 'them' : 'it'} once more before you stop. This one doesn’t count.`}
+        creditLines={({ mode, perVerse }) =>
+          perVerse.map((r) => ({ index: r.index, text: creditLabel(verseIds[r.index], { activity: 'lastLook', passed: r.passed, perfect: r.perfect, mode }) }))
+        }
+        onDone={({ perVerse, slips }) => {
+          markJoins(verseIds, 0, verseIds.length - 1, slips);
+          dispatch({ type: 'result', perfect: perVerse.every((r) => r.perfect) });
+        }}
+      />,
+      <View style={{ marginBottom: space(12) }}>
+        <ButtonPair left={<AppButton size="sm" variant="quiet" label="Skip this" onPress={() => dispatch({ type: 'skip' })} />} right={<View />} />
+      </View>
     );
   }
 
@@ -860,6 +941,17 @@ function Sitting({
             Read it through, slowly, a couple of times.
           </AppText>
           <VerseCard verse={verse} />
+          <VersePlayButton
+            key={step.verseId}
+            book={verse.book}
+            chapter={verse.chapter}
+            verse={verse.verse}
+            userRecordings={state.userRecordings}
+            selectedChapterAudios={state.selectedChapterAudios}
+            studioPlaybackEnabled={state.studioPlaybackEnabled}
+            audioCacheMap={state.audioCache.map}
+            onStart={() => state.setPlayingRecordingId(null)}
+          />
         </RoundFrame>
       );
     }

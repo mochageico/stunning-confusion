@@ -587,6 +587,7 @@ export function useReviewEngine({
       delete base.refresherReturnProgress;
       delete base.refresherTargetUnits;
       delete base.guidedSetAside;
+      delete base.guidedShakyJoin;
 
       if (targetPhase === 'learning') {
         base.status = 'learning';
@@ -1167,6 +1168,22 @@ export function useReviewEngine({
     );
   };
 
+  // Marks the joins Guided learning saw slip (`shaky`) and clears the ones it
+  // saw held (`steady`), in one queue update. Same delete-to-clear rule as
+  // setGuidedSetAside.
+  const setGuidedShakyJoins = (shaky: string[], steady: string[]) => {
+    if (shaky.length === 0 && steady.length === 0) return;
+    updateMemoryQueue((prev) =>
+      prev.map((item) => {
+        if (shaky.includes(item.verseId)) return item.guidedShakyJoin ? item : { ...item, guidedShakyJoin: true as const };
+        if (!steady.includes(item.verseId) || !item.guidedShakyJoin) return item;
+        const next = { ...item };
+        delete next.guidedShakyJoin;
+        return next;
+      })
+    );
+  };
+
   // Guided learning's "Add verse N to Learning": moves exactly one queued
   // verse into Learning, with the same field resets as triggerDailyPull. It
   // ignores the daily pace and the learning-day check (the user asked for
@@ -1244,6 +1261,7 @@ export function useReviewEngine({
     triggerMockDueReviews,
     handleUpdateVerseStatus,
     setGuidedSetAside,
+    setGuidedShakyJoins,
     pullVerseIntoLearning,
     creditGuided,
   };

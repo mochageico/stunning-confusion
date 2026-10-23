@@ -253,6 +253,11 @@ export interface QueueItem {
   // sitting starts with it. Only ever true: the key is deleted to clear it,
   // never written as false or undefined.
   guidedSetAside?: true;
+
+  // Guided learning saw a slip at the join INTO this verse from the one
+  // before it, so the next jump-ins aim there. A clean join clears it. Same
+  // only-ever-true rule as guidedSetAside.
+  guidedShakyJoin?: true;
 }
 
 export interface VerseTimestamp {

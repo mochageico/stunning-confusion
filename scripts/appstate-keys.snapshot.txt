@@ -348,6 +348,7 @@ setGraceCount: (value: SetStateAction<number>) => void
 setGroupPlanPriority: (planId: string, priority: "group" | "individual" | "additive") => Promise<void>
 setGuidedPassageKey: (value: SetStateAction<string | null>) => void
 setGuidedSetAside: (verseId: string, on: boolean) => void
+setGuidedShakyJoins: (shaky: string[], steady: string[]) => void
 setInviteCodeInput: (value: SetStateAction<string>) => void
 setIsEditingCircleSettings: (value: SetStateAction<boolean>) => void
 setIsEditingSync: (value: SetStateAction<boolean>) => void

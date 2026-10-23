@@ -1308,6 +1308,7 @@ export function useAppState() {
             ...(data.refresherReturnProgress !== undefined ? { refresherReturnProgress: data.refresherReturnProgress } : {}),
             ...(data.refresherTargetUnits !== undefined ? { refresherTargetUnits: data.refresherTargetUnits } : {}),
             ...(data.guidedSetAside === true ? { guidedSetAside: true as const } : {}),
+            ...(data.guidedShakyJoin === true ? { guidedShakyJoin: true as const } : {}),
           });
         });
         loadedQueue.sort((a, b) => a.orderIndex - b.orderIndex);
@@ -1670,6 +1671,7 @@ export function useAppState() {
     triggerMockDueReviews,
     handleUpdateVerseStatus,
     setGuidedSetAside,
+    setGuidedShakyJoins,
     pullVerseIntoLearning,
     creditGuided,
   } = useReviewEngine({
@@ -2601,6 +2603,7 @@ export function useAppState() {
     openGuided,
     openMixedReview,
     setGuidedSetAside,
+    setGuidedShakyJoins,
     pullVerseIntoLearning,
     creditGuided,
     isRecording, setIsRecording,
