@@ -221,8 +221,10 @@ export default function ChapterPhotoViewer({
                 ) : (
                   // Untagged is a real, common answer -- the photo still shows,
                   // it just sits out Listen's auto-flip. Say so instead of
-                  // leaving a dead control.
-                  <View className="justify-center h-full">
+                  // leaving a dead control. flex-1, not h-full: a percentage
+                  // height inside this auto-height row balloons the whole
+                  // panel on iOS and squeezes the photo out of view.
+                  <View className="flex-1 justify-center">
                     <AppText variant="micro" className="font-sans text-white/40">
                       Optional — untagged pages still show here.
                     </AppText>
