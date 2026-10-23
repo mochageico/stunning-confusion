@@ -58,6 +58,7 @@ import { useChapterPhotos } from './useChapterPhotos';
 import { useChapterSections } from './useChapterSections';
 import { useTakeaways } from './useTakeaways';
 import { useCircleTakeaways } from './useCircleTakeaways';
+import { useCircleTotals } from './useCircleTotals';
 import { isStop, nextAsk, sectionStatuses, takeawayId } from '../lib/takeaways';
 import type { TakeawayDraft } from '../lib/sectionDrills';
 import { useAudioDownloads } from './useAudioDownloads';
@@ -200,6 +201,8 @@ export function useAppState() {
   // ==========================================
   const [verses, setVerses] = useState<VerseState[]>([]);
   const [memoryQueue, setMemoryQueue] = useState<QueueItem[]>([]);
+  // Whose queue has finished loading from Firestore (circle stats wait for it).
+  const [queueLoadedUid, setQueueLoadedUid] = useState<string | null>(null);
   const [primingLookahead, setPrimingLookahead] = useState<number>(30);
   // Review Settings (retention plan) and Rhythm (your pace) -- see usePlanSettings.
   const plan = usePlanSettings({
@@ -581,6 +584,16 @@ export function useAppState() {
     setActiveCircleChallenges: (value) => setActiveCircleChallenges(value),
     setLoadingActiveCircleChallenges: (loading) => setLoadingActiveCircleChallenges(loading),
     triggerToast: (message) => triggerToast(message),
+  });
+
+  // This week's reviews and verses held, written into each of the user's
+  // circles and added up on the circle page (see useCircleTotals).
+  const { circleStats, loadCircleStats, removeMyCircleStats, seedCircleStats } = useCircleTotals({
+    user,
+    memoryQueue,
+    queueReady: !!user?.uid && queueLoadedUid === user.uid,
+    circleIds: myCircles.map((c) => c.id),
+    dayStartHour,
   });
 
   // Accountability nudges between friends (see useAccountabilityNudges).
@@ -1229,6 +1242,7 @@ export function useAppState() {
         handleFirestoreError(e, OperationType.GET, `users/${currentUser.uid}/memoryQueue`);
       }
       console.log('User data fetched. Verses:', vSnap?.size, 'Queue:', qSnap?.size);
+      if (qSnap) setQueueLoadedUid(currentUser.uid);
 
       // A brand-new account starts with a genuinely empty verse list — no
       // pre-seeded demo progress.
@@ -1475,7 +1489,11 @@ export function useAppState() {
     wipeAudioCache,
     wipeLocalPhotos,
     unregisterPushToken: () => push.unregisterPushToken(),
-    removeAllSharedTakeaways,
+    // The circle stats docs ride along with the shared takeaways (both need membership to clean up).
+    removeAllSharedTakeaways: async () => {
+      await Promise.all(myCircles.map((c) => removeMyCircleStats(c.id)));
+      await removeAllSharedTakeaways();
+    },
     triggerToast,
   });
 
@@ -2748,10 +2766,11 @@ export function useAppState() {
     createCircle,
     joinCircle,
     joinCircleByCode,
-    // Takes the user's shared takeaways out of the circle first, while still
-    // a member (see useTakeaways.unshareFromCircle).
+    // Takes the user's shared takeaways and weekly stats out of the circle
+    // first, while still a member (see useTakeaways.unshareFromCircle).
     leaveCircle: async (circleId: string) => {
       await unshareFromCircle(circleId);
+      await removeMyCircleStats(circleId);
       await leaveCircle(circleId);
     },
     disbandCircle,
@@ -2859,6 +2878,9 @@ export function useAppState() {
     postTakeawayReply,
     deleteTakeawayReply,
     seedCircleTakeaways,
+    circleStats,
+    loadCircleStats,
+    seedCircleStats,
     buildVerseTimestamps,
   };
 }

@@ -41,7 +41,10 @@
 // unlock; takeawayAsk: Today, with the quiet card for section 7 (write=1 opens
 // the form); open=1 (takeaways) opens the written stop (shared with Grace Church Men);
 // circle=1 shows With my circle, circle=open opens David's takeaway and its replies;
-// fresh=1 (either) starts with no takeaways written.
+// fresh=1 (either) starts with no takeaways written. groupDetail: the circle
+// page with this week's totals (Tom's stats are last week's, so he counts as
+// zero; a former member's doc and takeaway are left out); quiet=1 makes it a
+// week nobody has reviewed yet.
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
@@ -50,6 +53,7 @@ import { Platform } from 'react-native';
 import type { AppState } from '../state/useAppState';
 import type { CircleMember, DMThread, SharedTakeaway, TakeawayReply } from '../types';
 import { formatLabel } from '../lib/formatNames';
+import { weekBounds } from '../lib/circleTotals';
 
 /** Flip to true to see demo data on a phone. Dev builds only. */
 const DEMO_ON_DEVICE = false;
@@ -503,6 +507,31 @@ export function useDemoState(real: AppState): AppState {
       record: 'record',
       profile: 'profile',
     };
+    if (s === 'groupDetail') {
+      // What circles/c1/memberStats and this week's shared takeaways would hold.
+      const week = weekBounds(new Date(), 0);
+      const lastWeek = weekBounds(new Date(week.start.getTime() - DAY), 0).key;
+      const thisWeek = params.get('quiet') === '1' ? lastWeek : week.key;
+      const justNow = new Date(Date.now() - 60000).toISOString();
+      real.seedCircleStats(
+        'c1',
+        [
+          { uid: 'demo', weekStart: thisWeek, reviewed: 640, held: 120, updatedAt: justNow },
+          { uid: 'u2', weekStart: thisWeek, reviewed: 820, held: 95, updatedAt: justNow },
+          { uid: 'u3', weekStart: thisWeek, reviewed: 480, held: 70, updatedAt: justNow },
+          { uid: 'u7', weekStart: lastWeek, reviewed: 200, held: 40, updatedAt: justNow },
+          { uid: 'u9', weekStart: thisWeek, reviewed: 500, held: 900, updatedAt: justNow }, // left the circle
+        ],
+        params.get('quiet') === '1'
+          ? []
+          : [
+              { authorUid: 'demo', createdAt: justNow },
+              { authorUid: 'u2', createdAt: justNow },
+              { authorUid: 'u3', createdAt: justNow },
+              { authorUid: 'u9', createdAt: justNow },
+            ]
+      );
+    }
     if (tabFor[s]) {
       real.selectTab(tabFor[s]);
       if (s === 'find' || s === 'create' || s === 'preview') real.setCommunitySubView(s);

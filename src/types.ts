@@ -419,6 +419,25 @@ export interface CircleMember {
   inviteCode?: string;          // the code presented when joining a private circle -- firestore.rules checks it
 }
 
+/**
+ * One member's week, for the circle page's totals, at
+ * circles/{circleId}/memberStats/{uid}. Each member writes their own into
+ * every circle they're in (at app open and after reviews); members read the
+ * circle's. See src/lib/circleTotals.ts.
+ */
+export interface CircleMemberStats {
+  /** The doc id; also stored, so the rule can check it. */
+  uid: string;
+  /** The Monday this week's numbers belong to (local day key, the writer's logical day). */
+  weekStart: string;
+  /** Reviews logged since that Monday (passes, misses, grace; not Learning practice). */
+  reviewed: number;
+  /** Verses past Learning (milestones.versesHeld). */
+  held: number;
+  /** ISO, when it was written. */
+  updatedAt: string;
+}
+
 // Real, mutual, persistent friend connection — independent of circle
 // membership (survives leaving a shared circle), unlike the old
 // "circleFriends" (real co-members across your circles, recomputed live).
