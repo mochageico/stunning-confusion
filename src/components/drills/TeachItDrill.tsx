@@ -82,6 +82,7 @@ export default React.memo(function TeachItDrill({
   sections,
   script = 'latin',
   active = true,
+  onSaveDraft,
 }: {
   verses: { book: string; chapter: number; verse: number; text: string; translationId?: string }[];
   /** The chapter's sections as the drills see them; empty when it has none (stretches are taught instead). */
@@ -89,6 +90,12 @@ export default React.memo(function TeachItDrill({
   script?: TextScript;
   /** False while another Recall tab is showing: the timer and mic stop and the round goes back to ready. */
   active?: boolean;
+  /**
+   * Keeps a draft for a real section: true when kept (it fills in the ask once
+   * the section reaches weekly reviews), false when the section already has
+   * its takeaway. Without it, or for a stretch, drafts stay in this drill only.
+   */
+  onSaveDraft?: (draft: TakeawayDraft) => boolean;
 }) {
   const palette = useThemeColors();
   const space = useScaledSpace();
@@ -111,6 +118,9 @@ export default React.memo(function TeachItDrill({
   const [marks, setMarks] = useState<Record<string, 'got' | 'not'>>({});
   const [drafts, setDrafts] = useState<TakeawayDraft[]>([]);
   const [savedNow, setSavedNow] = useState(false);
+  // The last saved draft went to the takeaways, not just this drill; the section already has a takeaway.
+  const [savedForAsk, setSavedForAsk] = useState(false);
+  const [already, setAlready] = useState(false);
   const [speechFailed, setSpeechFailed] = useState(false);
 
   const speakable = useMemo(() => getSpeechRecognizer() !== null, []);
@@ -140,6 +150,7 @@ export default React.memo(function TeachItDrill({
     setVerdict(null);
     setShowVerses(false);
     setSavedNow(false);
+    setAlready(false);
   }, [stopEngine]);
 
   const finishTiming = useCallback(() => {
@@ -226,6 +237,13 @@ export default React.memo(function TeachItDrill({
     if (!target) return;
     const draft = makeTakeawayDraft(target, text, Date.now());
     if (!draft) return;
+    if (onSaveDraft && target.sectionIndex !== null) {
+      if (!onSaveDraft(draft)) {
+        setAlready(true);
+        return;
+      }
+      setSavedForAsk(true);
+    }
     setDrafts((prev) => addDraft(prev, draft));
     setSavedNow(true);
   };
@@ -363,6 +381,7 @@ export default React.memo(function TeachItDrill({
               onChangeText={(v) => {
                 setText(v);
                 setSavedNow(false);
+                setAlready(false);
               }}
               multiline
               variant="label"
@@ -378,6 +397,11 @@ export default React.memo(function TeachItDrill({
               onPress={saveDraft}
               disabled={!canSave || savedNow}
             />
+            {already && (
+              <AppText variant="caption" className="font-sans text-ink-3">
+                This section already has its takeaway. Open it on the path to change it.
+              </AppText>
+            )}
           </View>
         )}
 
@@ -414,7 +438,7 @@ export default React.memo(function TeachItDrill({
             <View className="flex-row items-center" style={{ gap: space(6) }}>
               <Bookmark size={Math.round(space(13))} color={palette.ink3} />
               <AppText variant="caption" className="font-sans font-semibold text-ink-3 flex-1">
-                Takeaway drafts ({draftCount}), kept here until you leave this practice
+                {savedForAsk ? `Takeaway drafts (${draftCount}), saved to fill in your takeaway when the section reaches weekly reviews` : `Takeaway drafts (${draftCount}), kept here until you leave this practice`}
               </AppText>
             </View>
             {drafts.map((d) => (

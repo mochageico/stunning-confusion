@@ -15,7 +15,9 @@ Teach-It (all Practice). Stage 4 built 2026-10-22: Mixed review logic
 (`src/lib/mix.ts`, `npm run check:mix`) and its Settings checklist; no screen yet.
 Stage 5 built 2026-10-22: the Mixed review screen, Today's Mixed review / Recite
 all due buttons, crediting as each round ends. Speech in the session is not yet
-tried on a real phone. Stage 6 is next.
+tried on a real phone. Stage 6, private half, built 2026-10-22 (takeaways, the
+ask, the path; the takeaways Firestore rule is **not deployed**). Sharing, replies
+and circle rules are the next session.
 
 ---
 
@@ -437,6 +439,39 @@ layout if split off.
   reply count shown, replies only after opening.
 - **Done when:** tsc, checks, screenshots, rules tested against a non-member.
 - **Deploy note:** new rules again: build first, then rules.
+
+- **As built (stage 6, private half):**
+  - Data: `Takeaway` in types.ts at `users/{uid}/takeaways/{book|chapter|sectionStart}`
+    (one per section by construction). Fields as planned plus `status`: absent/'saved'
+    = written, 'later' = the empty dashed stop (text may hold what was typed), 'draft' =
+    Teach-It's draft (not a stop; fills in the ask). `createdAt`/`updatedAt` are ISO.
+    Owner-only rule beside chapterSections, **not deployed**. Account deletion removes them.
+  - `src/lib/takeaways.ts` + `npm run check:takeaways`: `sectionStatuses` (a section is
+    ready when every verse number start..end is in the queue at weekly or later, a verse in
+    two translations at its furthest, a refresher at its return stage; the last section ends
+    at the highest verse the user is learning; chapters with no real sections have none),
+    `pendingAsks`/`nextAsk`, `nextUp` (the dashed "unlocks at weekly reviews" section:
+    furthest along, all verses in the queue), `buildPath` (newest first, chapter dividers,
+    sides alternate), `makeTakeaway`.
+  - `useTakeaways` (load, `saveTakeaway(spot, {text, note, status})`, `deleteTakeaway`);
+    AppState gained `takeaways`, `saveTakeaway`, `deleteTakeaway`, `saveTakeawayDraft`,
+    `nextTakeawayAsk`; route `'takeaways'` (Verses tab). Snapshot updated on purpose.
+  - The ask: `src/components/TakeawayAsk.tsx` (`TakeawayForm`, `TakeawayAsk`). Quiet card
+    on Today above Review ("Write it" / "Later"); open form at the end of the Mixed review
+    recap. Later and Save both write the doc, so each section is asked once. Teach-It saves
+    a draft only for a real section (stretches, as in Mixed review, stay in the drill) and
+    says so if the section already has its takeaway.
+  - `src/screens/TakeawaysScreen.tsx`: the path and the opened takeaway (edit text and
+    note, show the verses, remove). Reached from My Verses ("Takeaways" row) and a Takeaways
+    button on the chapter page. At 1.3x text and up the stops all sit on one side of the line
+    (two half-width columns left a card a few words per line).
+  - Demos: `?s=takeaways` (`&open=1`), `?s=takeawayAsk` (`&write=1`), `&fresh=1`.
+  - Left for sharing: the share switch (a `shareSlot` in `TakeawayForm`, used by the
+    opened takeaway and open for the ask; `sharedTo` is not on the type yet), the Mine /
+    With my circle switch on the path, `circles/{id}/takeaways` and replies with rules and
+    block-list handling, reply counts on stops, deploying the takeaways rule (build first,
+    then rules). Not tried: a real phone; Hebrew/Greek chapters; the recap ask live (same
+    component as Today's, but no demo reaches weekly through a session).
 
 ## Stage 7 — Milestones and circle totals
 

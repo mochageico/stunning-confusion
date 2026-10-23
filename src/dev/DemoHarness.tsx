@@ -15,7 +15,7 @@
 // Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
 // activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, verseRoad, versePage,
 // referenceDrill, threadDrill, guided, sections, outline, sectionOrder,
-// whichSection, teachIt, mixedReview,
+// whichSection, teachIt, mixedReview, takeaways, takeawayAsk,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
@@ -36,7 +36,10 @@
 // sectionOrder / whichSection / teachIt: the same chapter, opened on the Put in
 // order, Which section or Teach-It tab of the practice screen. mixedReview:
 // three chapters due (Matthew 7:1-14 with the user's sections, Romans 8,
-// Philippians 4), opened on Mixed review's start sheet.
+// Philippians 4), opened on Mixed review's start sheet. takeaways: the path,
+// with Matthew 7's sections 1 (written) and 6 (put off) on it and 13-14 next to
+// unlock; takeawayAsk: Today, with the quiet card for section 7 (write=1 opens
+// the form); open=1 (takeaways) opens the written stop; fresh=1 (either) starts with no takeaways written.
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
@@ -258,6 +261,24 @@ function buildMixQueue() {
   return [...matt, ...base].map((q, i) => ({ ...q, orderIndex: i }));
 }
 
+// ?s=takeaways / ?s=takeawayAsk: Matthew 7:1-14 (BSB), nothing due today. Verses
+// 1-12 are in weekly reviews (sections 1, 6, 7 and 12 are ready), 13-14 are
+// still daily (the next section to unlock).
+function buildTakeawayQueue() {
+  const base = buildQueue();
+  const matt = MATT7_TEXT.map((text, i) => ({
+    ...base[2],
+    verseId: `BSB_MAT_7_${i + 1}`,
+    book: 'Matthew',
+    chapter: 7,
+    verseNumber: i + 1,
+    text,
+    retentionPhase: i < 12 ? 'weekly' : 'daily',
+    nextReviewDueDate: iso(5, 6),
+  }));
+  return [...matt, ...base].map((q, i) => ({ ...q, orderIndex: i }));
+}
+
 const matt7Sections = () => ({
   starts: MATT7_STARTS,
   labels: Object.fromEntries(MATT7_LABELS.map((label, i) => [MATT7_STARTS[i], label])),
@@ -265,12 +286,15 @@ const matt7Sections = () => ({
 });
 
 /** Web only: taps a button by its exact text once it shows up (gives up after ~10s). */
-function tapWhenShown(text: string, role: 'button' | 'radio' = 'button') {
+function tapWhenShown(text: string, role: 'button' | 'radio' = 'button', prefix = false) {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;
   let tries = 0;
   const timer = setInterval(() => {
     const el = Array.from(document.querySelectorAll(`[role="${role}"]`)).find(
-      (node) => (node as HTMLElement).innerText?.trim().toLowerCase() === text.toLowerCase()
+      (node) => {
+        const t = (node as HTMLElement).innerText?.trim().toLowerCase() ?? '';
+        return prefix ? t.startsWith(text.toLowerCase()) : t === text.toLowerCase();
+      }
     ) as HTMLElement | undefined;
     if (el || ++tries > 40) clearInterval(timer);
     el?.click();
@@ -421,7 +445,7 @@ export function useDemoState(real: AppState): AppState {
   useEffect(() => {
     if (!DEMO_ENABLED || booted.current || real.loadingAuth) return;
     booted.current = true;
-    if (params.get('empty') !== '1') real.setMemoryQueue((s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : buildQueue()) as any);
+    if (params.get('empty') !== '1') real.setMemoryQueue((s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : buildQueue()) as any);
     real.setUserRecordings(recordings as any);
     // The Record tab starts with no passage until one is chosen; the demo
     // picks Romans 8 unless `nopassage=1` asks for the empty state.
@@ -469,6 +493,23 @@ export function useDemoState(real: AppState): AppState {
       real.navigateTo('chapterLanding', 'Matthew', 7);
       tapWhenShown('First words');
       tapWhenShown(formatLabel(s === 'sectionOrder' ? 'putInOrder' : s), 'radio');
+    }
+    else if (s === 'takeaways' || s === 'takeawayAsk') {
+      void real.saveChapterSections('Matthew', 7, matt7Sections());
+      // Section 1 written (with a note), section 6 put off; 7 and 12 are left to ask.
+      if (params.get('fresh') !== '1') {
+        void real.saveTakeaway(
+          { book: 'Matthew', chapter: 7, sectionStart: 1, sectionEnd: 5, label: MATT7_LABELS[0] },
+          { text: 'Do not judge others, because I will be judged the same way.', note: 'Take the beam out of my own eye first.', status: 'saved' }
+        );
+        void real.saveTakeaway({ book: 'Matthew', chapter: 7, sectionStart: 6, sectionEnd: 6, label: MATT7_LABELS[1] }, { text: '', status: 'later' });
+      }
+      if (s === 'takeaways') {
+        real.navigateTo('takeaways');
+        // open=1 opens the written stop.
+        if (params.get('open') === '1') tapWhenShown('Judging others', 'button', true);
+      }
+      else if (params.get('write') === '1') tapWhenShown('Write it');
     }
     else if (s === 'mixedReview') {
       void real.saveChapterSections('Matthew', 7, matt7Sections());

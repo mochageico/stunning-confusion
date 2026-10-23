@@ -7,6 +7,7 @@ import { QueueItem, VerseState } from '../types';
 import { FadeInView, HelpTooltip } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
 import { AppButton, AppIconButton, AppText, Card, CollapsibleCard, useFontScale, useScaledSpace } from '../components/design';
+import { TakeawayAsk } from '../components/TakeawayAsk';
 import { Dialog, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { formatDate } from '../lib/format';
 import { translationLabel } from '../data';
@@ -421,6 +422,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 <AppButton variant="secondary" label="Start next verses" onPress={handlePullNewVerses} />
               )}
             </CollapsibleCard>
+
+            {/* A section that just reached weekly reviews: asked once, quietly. */}
+            <TakeawayAsk state={state} quiet />
 
             <CollapsibleCard
               storageKey="home.reviews"

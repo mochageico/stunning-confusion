@@ -66,7 +66,7 @@ createGroupName: string
 createGroupPlan: (circleId: string, input: { name: string; description: string; }) => Promise<void>
 createGroupPrivacy: "private" | "public"
 creditGuided: (items: QueueItem[], kind: "touch" | "review", drill: "speak" | "type") => Promise<QueueItem[]>
-currentScreen: "home" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "planDesigner" | "activePlan" | "addVerses" | "mySchedule" | "verseSources" | "savedPlans" | "memoryCalendar" | "verseRoad" | "versePage" | "referenceDrill" | "threadDrill" | "guided" | "mixedReview" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
+currentScreen: "home" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "planDesigner" | "activePlan" | "addVerses" | "mySchedule" | "verseSources" | "savedPlans" | "memoryCalendar" | "verseRoad" | "versePage" | "referenceDrill" | "threadDrill" | "guided" | "mixedReview" | "takeaways" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
 currentTab: "home" | "verses" | "community" | "record" | "profile"
 customPlanName: string
 dailyPhaseWeeks: number
@@ -82,6 +82,7 @@ deleteGroupChallenge: (challenge: GroupChallenge) => Promise<void>
 deleteGroupPlan: (circleId: string, planId: string) => Promise<void>
 deleteListenPlaylist: (id: string) => void
 deleteRecording: (recording: Recording) => Promise<void>
+deleteTakeaway: (id: string) => Promise<void>
 disbandCircle: (circleId: string) => Promise<void>
 dismissAccountabilityNudge: (nudgeId: string) => Promise<void>
 dismissNotificationAsk: () => void
@@ -205,6 +206,7 @@ navigateTo: (screen: ScreenName, book?: string | null, chapter?: number | null, 
 newPlanDesc: string
 newPlanName: string
 newVersesPace: number
+nextTakeawayAsk: PendingAsk | null
 notificationAskReason: string | null
 notificationPermission: "granted" | "denied" | "undetermined" | "unsupported"
 notificationPrefs: NotificationPrefs
@@ -285,6 +287,8 @@ saveRecordedAudio: () => Promise<void>
 saveRecordingDialog: boolean
 saveRecordingOffline: (recording: Recording) => Promise<boolean>
 saveSharedRecordingToLibrary: (rec: Recording) => Promise<void>
+saveTakeaway: (spot: TakeawaySpot, fields: { text: string; note?: string | undefined; status: "saved" | "later" | "draft"; }) => Promise<void>
+saveTakeawayDraft: (d: TakeawayDraft) => boolean
 saveVerseDoodle: (key: string, strokes: string[]) => void
 saveVerseSyncOffsets: (verseTimestamps: VerseTimestamp[]) => Promise<void>
 savedPlans: MemoryPlan[]
@@ -413,6 +417,7 @@ startRecordingForRequest: (scope: "circle" | "dm", containerId: string, message:
 startReviewSession: (groups: QueueItem[][]) => void
 studioAbOverride: boolean | null
 studioPlaybackEnabled: boolean
+takeaways: { [x: string]: Takeaway; }
 threadDrillPreset: ThreadDrillPreset | null
 toastMessage: string | null
 toggleImportPlayback: () => void

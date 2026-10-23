@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureDetector } from 'react-native-gesture-handler';
-import { Check, Download, GripVertical, ListTree, Pause, Play, Printer, Search } from 'lucide-react-native';
+import { Bookmark, Check, Download, GripVertical, ListTree, Pause, Play, Printer, Search } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { cacheableTarget } from '../lib/audioCache';
@@ -639,7 +639,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         {/* First words: say each verse from its first few words. The verses
             picked, or the whole chapter when none are. */}
         {activeChapterVerses.length > 0 && !editing && (
-          <View className="flex-row">
+          <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
             <AppButton
               size="sm"
               variant="secondary"
@@ -650,6 +650,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 startPractice('learn', selectedVerseNumbers.length > 0 ? selectedVerses() : activeChapterVerses, { learnTab: 'outline' })
               }
             />
+            <AppButton size="sm" variant="secondary" Icon={Bookmark} label="Takeaways" onPress={() => navigateTo('takeaways')} />
           </View>
         )}
 

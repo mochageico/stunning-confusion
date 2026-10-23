@@ -677,3 +677,35 @@ export interface ChapterSections {
   /** ISO time of the last save. */
   updatedAt: string;
 }
+
+/**
+ * One takeaway: the main point of one section, in the user's own words. A
+ * section has at most one; the doc id is `${book}|${chapter}|${sectionStart}`
+ * (see takeawayId in src/lib/takeaways.ts), so there is no way to make two.
+ *
+ * `status` is how the doc got there. Absent or 'saved' is a finished takeaway.
+ * 'later' is the empty dashed stop left when the user dismissed the ask (text
+ * may hold what they had typed). 'draft' is what Teach-It's "Save as takeaway
+ * draft" wrote: it fills in the ask when the section is ready, and is not
+ * shown on the path as a takeaway.
+ *
+ * Stored at users/{uid}/takeaways/{id}; owner-only (firestore.rules). Sharing
+ * with a circle is not built yet (MIXED_REVIEW_PLAN.md, stage 6, second half).
+ */
+export interface Takeaway {
+  id: string;
+  book: string;
+  chapter: number;
+  sectionStart: number;
+  sectionEnd: number;
+  /** The section's label when the doc was written; the path falls back to the verses. */
+  label?: string;
+  /** "What's the main point?" -- empty on a 'later' stop with nothing typed. */
+  text: string;
+  /** Optional secondary note under the takeaway. */
+  note?: string;
+  status?: 'saved' | 'later' | 'draft';
+  /** ISO times. */
+  createdAt: string;
+  updatedAt: string;
+}

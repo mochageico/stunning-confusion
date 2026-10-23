@@ -44,6 +44,7 @@ interface RecallPanelProps {
   passageScript: TextScript;
   sectionsForChapter: PracticeModalsProps['sectionsForChapter'];
   onSaveOutlineExtra: PracticeModalsProps['onSaveOutlineExtra'];
+  onSaveTakeawayDraft: PracticeModalsProps['onSaveTakeawayDraft'];
 }
 
 export default function RecallPanel({
@@ -62,6 +63,7 @@ export default function RecallPanel({
   passageScript,
   sectionsForChapter,
   onSaveOutlineExtra,
+  onSaveTakeawayDraft,
 }: RecallPanelProps) {
   const {
     learnTab,
@@ -678,7 +680,7 @@ export default function RecallPanel({
         </>
       )}
       <View className="flex-1" style={{ display: learnTab === 'teachIt' ? 'flex' : 'none' }}>
-        <TeachItDrill verses={verses} sections={sectionList} script={passageScript} active={learnTab === 'teachIt'} />
+        <TeachItDrill verses={verses} sections={sectionList} script={passageScript} active={learnTab === 'teachIt'} onSaveDraft={onSaveTakeawayDraft} />
       </View>
     </View>
   );

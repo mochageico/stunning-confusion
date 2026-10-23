@@ -35,6 +35,7 @@ import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import ThreadDrillScreen from './src/screens/ThreadDrillScreen';
 import GuidedLearningScreen from './src/screens/GuidedLearningScreen';
 import MixedReviewScreen from './src/screens/MixedReviewScreen';
+import TakeawaysScreen from './src/screens/TakeawaysScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -172,6 +173,8 @@ function Screens({ state }: { state: AppState }) {
         return <VerseSourcesScreen state={state} />;
       case 'memoryCalendar':
         return <MemoryCalendarScreen state={state} />;
+      case 'takeaways':
+        return <TakeawaysScreen state={state} />;
       case 'verseRoad':
         return <VerseRoadScreen state={state} />;
       case 'versePage':
@@ -573,6 +576,7 @@ function AppShell() {
           initialLearnTab={state.practiceLearnTab ?? undefined}
           sectionsForChapter={state.sectionsForChapter}
           onSaveOutlineExtra={state.saveOutlineExtra}
+          onSaveTakeawayDraft={state.saveTakeawayDraft}
           // Camera rather than a source chooser: the placeholder only appears
           // for a chapter you are listening to right now, and the useful move
           // in that moment is photographing the Bible in front of you. The

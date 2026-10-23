@@ -56,6 +56,9 @@ import { useSocial } from './useSocial';
 import { useLocalPrefs } from './useLocalPrefs';
 import { useChapterPhotos } from './useChapterPhotos';
 import { useChapterSections } from './useChapterSections';
+import { useTakeaways } from './useTakeaways';
+import { isStop, nextAsk, sectionStatuses, takeawayId } from '../lib/takeaways';
+import type { TakeawayDraft } from '../lib/sectionDrills';
 import { useAudioDownloads } from './useAudioDownloads';
 import { useAccountabilityNudges } from './useAccountabilityNudges';
 import { useRecorder } from './useRecorder';
@@ -110,6 +113,7 @@ export type ScreenName =
   | 'threadDrill'
   | 'guided'
   | 'mixedReview'
+  | 'takeaways'
   | 'memberProfile'
   | 'groupPlanDetail'
   | 'fullHistory'
@@ -150,6 +154,7 @@ const VERSES_TAB_SCREENS: ScreenName[] = [
   'memoryCalendar',
   'verseRoad',
   'versePage',
+  'takeaways',
   'savedPlans',
   'planDesigner',
 ];
@@ -319,6 +324,23 @@ export function useAppState() {
 
   // The user's own sections per chapter (see useChapterSections).
   const { chapterSections, loadChapterSections, sectionsForChapter, saveChapterSections, saveOutlineExtra } = useChapterSections({ user });
+
+  // The user's takeaways, one per section (see useTakeaways), and the ask that is due now.
+  const { takeaways, loadTakeaways, saveTakeaway, deleteTakeaway } = useTakeaways({ user });
+  // Teach-It's "Save as takeaway draft": a draft fills in the ask when the section is ready.
+  // A section that already has a takeaway or a "Later" stop keeps it (false).
+  const saveTakeawayDraft = (d: TakeawayDraft): boolean => {
+    const existing = takeaways[takeawayId(d.book, d.chapter, d.sectionStart)];
+    if (existing && isStop(existing)) return false;
+    void saveTakeaway({ book: d.book, chapter: d.chapter, sectionStart: d.sectionStart, sectionEnd: d.sectionEnd, label: d.label }, { text: d.text, status: 'draft' });
+    return true;
+  };
+  const nextTakeawayAsk = useMemo(
+    () => nextAsk(sectionStatuses(memoryQueue, sectionsForChapter), takeaways),
+    // sectionsForChapter is remade each render; chapterSections is what it reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [memoryQueue, chapterSections, takeaways]
+  );
 
   // Whether RecordingDetailScreen's verse-sync timeline is in edit mode.
   // The draft marker positions themselves live as local component state in
@@ -1316,6 +1338,9 @@ export function useAppState() {
 
       // 6. Chapter sections (private to this user)
       await loadChapterSections(currentUser.uid);
+
+      // 7. Takeaways (private to this user)
+      await loadTakeaways(currentUser.uid);
 
       triggerToast('Cloud profile and scripture data synchronized!');
     } catch (err) {
@@ -2794,6 +2819,11 @@ export function useAppState() {
     sectionsForChapter,
     saveChapterSections,
     saveOutlineExtra,
+    takeaways,
+    saveTakeaway,
+    deleteTakeaway,
+    saveTakeawayDraft,
+    nextTakeawayAsk,
     buildVerseTimestamps,
   };
 }

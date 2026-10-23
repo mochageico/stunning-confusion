@@ -16,6 +16,7 @@ import { useListenPlayback, type ListenSource } from './practice/useListenPlayba
 import { useRecall, type LearnMode } from './practice/useRecall';
 import ListenPanel from './practice/ListenPanel';
 import RecallPanel from './practice/RecallPanel';
+import type { TakeawayDraft } from '../lib/sectionDrills';
 
 export interface PracticeModalsProps {
   type: 'listen' | 'learn';
@@ -104,6 +105,8 @@ export interface PracticeModalsProps {
   // the per-verse taps are saved (the same chapter doc).
   sectionsForChapter?: (book: string, chapter: number) => ChapterSections | null;
   onSaveOutlineExtra?: (book: string, chapter: number, extra: OutlineExtra) => void;
+  /** Teach-It's "Save as takeaway draft": true when kept, false when that section already has its takeaway. */
+  onSaveTakeawayDraft?: (draft: TakeawayDraft) => boolean;
 }
 
 // Stable default, so the playlist effect in useListenPlayback doesn't rerun
@@ -159,6 +162,7 @@ function PracticeModalsInner({
   initialLearnTab,
   sectionsForChapter,
   onSaveOutlineExtra,
+  onSaveTakeawayDraft,
 }: PracticeModalsProps) {
   const palette = useThemeColors();
   const space = useScaledSpace();
@@ -410,6 +414,7 @@ function PracticeModalsInner({
             passageScript={passageScript}
             sectionsForChapter={sectionsForChapter}
             onSaveOutlineExtra={onSaveOutlineExtra}
+            onSaveTakeawayDraft={onSaveTakeawayDraft}
           />
         )}
       </View>

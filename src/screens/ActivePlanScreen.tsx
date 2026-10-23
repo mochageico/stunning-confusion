@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { ArrowUp, CalendarDays, ChevronRight, GripVertical, History, Plus, Trash2 } from 'lucide-react-native';
+import { ArrowUp, Bookmark, CalendarDays, ChevronRight, GripVertical, History, Plus, Trash2 } from 'lucide-react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import { AppState } from '../state/useAppState';
@@ -11,6 +11,7 @@ import { EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, Segmente
 import { PRIORITY_LABELS } from '../components/QueueSources';
 import { CompleteChips, StageDot, StageStrip, VerseStageRow, stageCaption } from '../components/VerseStages';
 import VersesByBook from '../components/VersesByBook';
+import { writtenCount } from '../lib/takeaways';
 import { reorderQueueGroups } from '../lib/queueReorder';
 import { STAGE_LABEL, STAGE_ORDER, StageGroup, VerseStage, groupByStage, referenceFor, stageCounts } from '../lib/stageProgress';
 import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, learnedCount, projectStartDates } from '../lib/forecast';
@@ -87,6 +88,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     removeQueueItems,
     isReviewDue,
     reviewsPaused,
+    takeaways,
     dailyPhaseWeeks,
     weeklyPhaseMonths,
     monthlyPhaseYears,
@@ -128,6 +130,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     [memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches]
   );
   const counts = useMemo(() => stageCounts(memoryQueue), [memoryQueue]);
+  const takeawayCount = useMemo(() => writtenCount(takeaways), [takeaways]);
   const total = memoryQueue.length;
 
   // ---- Looking ahead ----
@@ -588,6 +591,12 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             title="Memory Calendar"
             value={reviewsPaused ? 'Paused' : dueTodayCount === 1 ? '1 due today' : `${dueTodayCount} due today`}
             onPress={() => go('memoryCalendar')}
+          />
+          <ListRow
+            Icon={Bookmark}
+            title="Takeaways"
+            value={takeawayCount === 0 ? 'None yet' : `${takeawayCount} written`}
+            onPress={() => go('takeaways')}
           />
           <ListRow
             Icon={History}

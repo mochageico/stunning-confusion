@@ -6,6 +6,7 @@ import { AppState, isReviewDue } from '../state/useAppState';
 import { ChapterSections, QueueItem } from '../types';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
+import { TakeawayAsk } from '../components/TakeawayAsk';
 import { Badge, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { bracketColor, useThemeColors } from '../components/theme';
 import GradedRecitation, { ButtonPair, canSpeakVerses, RecitationMode, RoundFrame, SpanText } from '../components/GradedRecitation';
@@ -692,6 +693,9 @@ function Session({
               </AppText>
             </View>
           </View>
+
+          {/* A section may have just reached weekly reviews with this session's credits. */}
+          <TakeawayAsk state={state} />
 
           {sum.notCovered.length > 0 && (
             <AppText variant="label" className="font-sans text-ink-2">
