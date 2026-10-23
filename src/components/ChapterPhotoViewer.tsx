@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, ImagePlus, Trash2, X } from 'lucide-react-native';
 
 import { AppIconButton, AppText } from './design';
 import ZoomablePhoto from './ZoomablePhoto';
@@ -37,6 +37,7 @@ export default function ChapterPhotoViewer({
   onDelete,
   onSetRange,
   onReorder,
+  onAdd,
 }: {
   photos: ChapterPhoto[];
   initialIndex: number;
@@ -48,6 +49,8 @@ export default function ChapterPhotoViewer({
   onDelete: (photo: ChapterPhoto) => Promise<void> | void;
   onSetRange: (photo: ChapterPhoto, start: number | null, end: number | null) => Promise<void> | void;
   onReorder: (orderedIds: string[]) => Promise<void> | void;
+  /** Adds another page. Absent once the chapter holds as many as it can. */
+  onAdd?: () => void;
 }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -115,6 +118,17 @@ export default function ChapterPhotoViewer({
               Page {safeIndex + 1} of {photos.length}
             </AppText>
           </View>
+          {onAdd && (
+            <AppIconButton
+              Icon={ImagePlus}
+              diameter={36}
+              iconSize={18}
+              iconColor={ON_DARK.icon}
+              onPress={onAdd}
+              accessibilityLabel="Add a page"
+              className="rounded-full border border-white/25 mr-2"
+            />
+          )}
           <AppIconButton
             Icon={X}
             diameter={36}

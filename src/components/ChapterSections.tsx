@@ -353,10 +353,10 @@ export function SectionsEditIntro({ onStartOver, canStartOver }: { onStartOver: 
       <View style={{ gap: space(4) }}>
         {lines.map((line) => (
           <View key={line} className="flex-row" style={{ gap: space(8) }}>
-            <AppText variant="label" className="font-sans text-ink-3">
+            <AppText variant="caption" className="font-sans text-ink-3">
               •
             </AppText>
-            <AppText variant="label" className="font-sans text-ink-2 flex-1">
+            <AppText variant="caption" className="font-sans text-ink-2 flex-1">
               {line}
             </AppText>
           </View>

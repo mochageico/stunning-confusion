@@ -544,7 +544,7 @@ export function useDemoState(real: AppState): AppState {
       // editing in the demo works and writes nothing.
       void real.saveChapterSections('Matthew', 7, matt7Sections());
       real.navigateTo('chapterLanding', 'Matthew', 7);
-      if (params.get('edit') === '1') tapWhenShown('Edit sections');
+      if (params.get('edit') === '1') tapWhenShown('Sections');
     } else if (s === 'outline') {
       // The chapter page's own First words button, once the chapter has loaded.
       void real.saveChapterSections('Matthew', 7, matt7Sections());

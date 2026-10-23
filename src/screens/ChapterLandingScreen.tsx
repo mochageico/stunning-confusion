@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureDetector } from 'react-native-gesture-handler';
-import { Bookmark, Check, Download, GripVertical, ListTree, Pause, Play, Printer, Search } from 'lucide-react-native';
+import { Bookmark, Brackets, Check, ChevronDown, Download, Grid2x2, GripVertical, LayoutGrid, List, ListTree, Pause, Play, Printer, Search } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { cacheableTarget } from '../lib/audioCache';
@@ -360,15 +360,6 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const gridColumns = Math.max(1, Math.floor((gridWidth + tileGap) / (minTile + tileGap)));
   const tileWidth = gridWidth > 0 ? Math.floor((gridWidth - tileGap * (gridColumns - 1)) / gridColumns) : minTile;
 
-  const changeButton = (
-    <AppButton
-      size="sm"
-      variant="quiet"
-      label={showAudioSelector ? 'Done' : 'Change'}
-      onPress={() => setShowAudioSelector(!showAudioSelector)}
-    />
-  );
-
   // The recordings feed, already filtered to this chapter.
   const openRecordingsFeed = () => {
     setFeedBookFilter(selectedBook || '');
@@ -409,14 +400,36 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           }
           onBack={handleBack}
           actions={
-            <Dropdown
-              value={selectedTranslationId}
-              onChange={setSelectedTranslationId}
-              options={PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }))}
-              title="Translation"
-              searchable={false}
-              compact
-            />
+            <>
+              {/* The pill names the translation; Hebrew/Greek is too long
+                  for it, so it shortens there and stays spelled out in the menu. */}
+              <Dropdown
+                value={selectedTranslationId}
+                onChange={setSelectedTranslationId}
+                options={PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }))}
+                triggerLabel={selectedTranslationId === 'HEBGRK' ? 'Hb/Gk' : translationLabel(selectedTranslationId)}
+                title="Translation"
+                searchable={false}
+                compact
+              />
+              {/* How the verses are laid out. Edit sections always shows the
+                  list, so the switch steps aside while it's open. */}
+              {!editing && (
+                <Dropdown
+                  value={chapterViewMode}
+                  onChange={setChapterViewMode}
+                  options={[
+                    { id: 'list', label: 'List' },
+                    { id: 'grid', label: 'Grid' },
+                    { id: 'memoryGrid', label: 'Memory grid' },
+                  ]}
+                  TriggerIcon={chapterViewMode === 'grid' ? LayoutGrid : chapterViewMode === 'memoryGrid' ? Grid2x2 : List}
+                  title="Verse layout"
+                  searchable={false}
+                  compact
+                />
+              )}
+            </>
           }
         />
 
@@ -437,25 +450,17 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           </View>
         </View>
 
-        {/* This chapter's recording: play it here, or change which one plays. */}
-        <View className="bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(12) }}>
-          {/* Empty state is one line then the action. The second sentence used
-              to say "or find one in the community library" directly above a
-              button that does exactly that. */}
-          {!currentAudio ? (
-            <View className="items-center" style={{ gap: space(8), paddingVertical: space(4) }}>
-              <AppText variant="label" className="font-sans text-ink-2 text-center">
-                No recordings for this chapter yet
-              </AppText>
-              <AppButton size="sm" variant="secondary" Icon={Search} label="Find recordings" onPress={openRecordingsFeed} />
-            </View>
-          ) : (
-            <>
-              <View className="flex-row items-center" style={{ gap: space(12) }}>
+        {/* This chapter's recording and photos of the user's Bible pages, in
+            one slim card: play and the recording's name on the left (tap the
+            name to change which recording plays), pages on the right. */}
+        <View className="bg-surface border border-line rounded-card" style={{ padding: space(10), gap: space(10) }}>
+          <View className="flex-row items-center" style={{ gap: space(10) }}>
+            {currentAudio ? (
+              <>
                 <AppIconButton
                   variant="filled"
                   Icon={isPlayingThis ? Pause : Play}
-                  diameter={40}
+                  diameter={34}
                   accessibilityLabel={isPlayingThis ? 'Pause' : `Play ${currentAudio.title}`}
                   onPress={() => {
                     if (isPlayingThis) {
@@ -466,178 +471,146 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     }
                   }}
                 />
-                <View className="flex-1" style={{ minWidth: 0 }}>
-                  <AppText variant="label" className="font-sans font-semibold text-ink" numberOfLines={scale >= 1.3 ? 2 : 1}>
-                    {currentAudio.title}
-                  </AppText>
+                <Pressable
+                  onPress={() => setShowAudioSelector(!showAudioSelector)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${currentAudio.title}, by ${currentAudio.user}. Change recording`}
+                  accessibilityState={{ expanded: showAudioSelector }}
+                  className="flex-1 active:opacity-60"
+                  style={{ minWidth: 0 }}
+                >
+                  <View className="flex-row items-center" style={{ gap: space(4) }}>
+                    <AppText variant="label" className="font-sans font-semibold text-ink shrink" numberOfLines={1}>
+                      {currentAudio.title}
+                    </AppText>
+                    <ChevronDown size={Math.round(13 * scale)} color={palette.ink3} strokeWidth={2.4} />
+                  </View>
                   <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={1}>
                     {currentAudio.user} · {translationLabel(currentAudio.translation)}
                   </AppText>
-                  {/* Past 1.3x the button would squeeze the title to a few
-                      letters, so it moves under the title instead. */}
-                  {scale >= 1.3 ? <View className="flex-row" style={{ paddingTop: space(6) }}>{changeButton}</View> : null}
-                </View>
-                {scale >= 1.3 ? null : changeButton}
+                </Pressable>
+              </>
+            ) : (
+              <Pressable
+                onPress={openRecordingsFeed}
+                accessibilityRole="button"
+                className="flex-1 flex-row items-center active:opacity-60"
+                style={{ gap: space(6), paddingVertical: space(4) }}
+              >
+                <Search size={Math.round(16 * scale)} color={palette.accent} />
+                <AppText variant="caption" className="font-sans font-semibold text-accent">
+                  Find a recording
+                </AppText>
+              </Pressable>
+            )}
+            <View className="self-stretch bg-line" style={{ width: 1 }} />
+            <ChapterPhotoStrip state={state} book={selectedBook || ''} chapter={selectedChapter ?? 0} />
+          </View>
+
+          {/* Real playback progress bar */}
+          {currentAudio && isPlayingThis && (
+            <View style={{ gap: space(4) }}>
+              <View className="w-full bg-fill h-1 rounded-full overflow-hidden">
+                <View className="bg-accent h-full" style={{ width: `${playingRecProgress}%` }} />
               </View>
+              <View className="flex-row justify-between">
+                <AppText variant="caption" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
+                  {formatTime(Math.round((playingRecProgress / 100) * currentAudio.duration))}
+                </AppText>
+                <AppText variant="caption" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
+                  {formatTime(currentAudio.duration)}
+                </AppText>
+              </View>
+            </View>
+          )}
 
-              {/* Real playback progress bar */}
-              {isPlayingThis && (
-                <View style={{ gap: space(4) }}>
-                  <View className="w-full bg-fill h-1 rounded-full overflow-hidden">
-                    <View className="bg-accent h-full" style={{ width: `${playingRecProgress}%` }} />
-                  </View>
-                  <View className="flex-row justify-between">
-                    <AppText variant="caption" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
-                      {formatTime(Math.round((playingRecProgress / 100) * currentAudio.duration))}
-                    </AppText>
-                    <AppText variant="caption" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
-                      {formatTime(currentAudio.duration)}
-                    </AppText>
-                  </View>
-                </View>
-              )}
-
-              {/* Priority-ordered, drag-to-reorder list. The top row is this
-                  chapter's default (see resolveChapterAudio); tapping a row
-                  just switches what plays now. scrollEnabled is off since this
-                  always nests inside the page's own ScrollView -- lists here
-                  are short (a handful of recordings per chapter at most). */}
-              {showAudioSelector && (
-                <View className="border-t border-hairline" style={{ paddingTop: space(12), gap: space(10) }}>
-                  <AppText variant="caption" className="font-sans text-ink-3">
-                    Press and hold the handle to reorder. The top one plays by default.
-                  </AppText>
-                  <DraggableFlatList
-                    data={optionsList}
-                    scrollEnabled={false}
-                    keyExtractor={(opt) => opt.id}
-                    contentContainerStyle={{ gap: space(6) }}
-                    onDragEnd={({ data }) => reorderChapterRecordings(data.map((r) => r.id))}
-                    renderItem={({ item: opt, drag, isActive }: RenderItemParams<Recording>) => {
-                      const isSelected = currentAudio.id === opt.id;
-                      return (
-                        <Pressable
-                          onPress={() => {
-                            setSelectedChapterAudios((prev) => ({
-                              ...prev,
-                              [activeChapterKey]: opt as Recording,
-                            }));
-                            setShowAudioSelector(false);
-                            setPlayingRecordingId(null);
-                            triggerToast(`Now playing ${opt.user}'s recording`);
-                          }}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: isSelected }}
-                          className={`w-full rounded-btn border flex-row items-center ${
-                            isSelected || isActive ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
-                          }`}
-                          style={{ padding: space(10), gap: space(8) }}
-                        >
-                          <Pressable onLongPress={drag} hitSlop={10} accessibilityLabel="Hold to reorder">
-                            <GripVertical size={Math.round(16 * scale)} color={palette.ink3} />
-                          </Pressable>
-                          <View className="flex-1" style={{ minWidth: 0 }}>
-                            <AppText variant="label" className="font-sans font-semibold text-ink" numberOfLines={1}>
-                              {opt.title}
-                            </AppText>
-                            <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={1}>
-                              {opt.user} · {translationLabel(opt.translation)}
-                            </AppText>
-                          </View>
-                          {isSelected && <Check size={Math.round(16 * scale)} color={palette.accent} strokeWidth={2.4} />}
-                        </Pressable>
-                      );
-                    }}
-                  />
-
-                  <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
-                    {downloadableNarrations.length > 0 && (
-                      <AppButton
-                        size="sm"
-                        variant="secondary"
-                        Icon={notYetDownloaded.length === 0 ? Check : Download}
-                        label={
-                          chapterDownloadBusy
-                            ? 'Downloading…'
-                            : notYetDownloaded.length === 0
-                              ? 'Saved offline'
-                              : `Save ${notYetDownloaded.length} offline`
-                        }
-                        disabled={chapterDownloadBusy || notYetDownloaded.length === 0}
-                        onPress={() => saveChapterOffline(downloadableNarrations)}
-                      />
-                    )}
-                    <AppButton
-                      size="sm"
-                      variant="quiet"
-                      Icon={Search}
-                      label="Find more recordings"
+          {/* Priority-ordered, drag-to-reorder list. The top row is this
+              chapter's default (see resolveChapterAudio); tapping a row
+              just switches what plays now. scrollEnabled is off since this
+              always nests inside the page's own ScrollView -- lists here
+              are short (a handful of recordings per chapter at most). */}
+          {currentAudio && showAudioSelector && (
+            <View className="border-t border-hairline" style={{ paddingTop: space(12), gap: space(10) }}>
+              <AppText variant="caption" className="font-sans text-ink-3">
+                Press and hold the handle to reorder. The top one plays by default.
+              </AppText>
+              <DraggableFlatList
+                data={optionsList}
+                scrollEnabled={false}
+                keyExtractor={(opt) => opt.id}
+                contentContainerStyle={{ gap: space(6) }}
+                onDragEnd={({ data }) => reorderChapterRecordings(data.map((r) => r.id))}
+                renderItem={({ item: opt, drag, isActive }: RenderItemParams<Recording>) => {
+                  const isSelected = currentAudio.id === opt.id;
+                  return (
+                    <Pressable
                       onPress={() => {
+                        setSelectedChapterAudios((prev) => ({
+                          ...prev,
+                          [activeChapterKey]: opt as Recording,
+                        }));
                         setShowAudioSelector(false);
-                        openRecordingsFeed();
+                        setPlayingRecordingId(null);
+                        triggerToast(`Now playing ${opt.user}'s recording`);
                       }}
-                    />
-                  </View>
-                </View>
-              )}
-            </>
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected }}
+                      className={`w-full rounded-btn border flex-row items-center ${
+                        isSelected || isActive ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
+                      }`}
+                      style={{ padding: space(10), gap: space(8) }}
+                    >
+                      <Pressable onLongPress={drag} hitSlop={10} accessibilityLabel="Hold to reorder">
+                        <GripVertical size={Math.round(16 * scale)} color={palette.ink3} />
+                      </Pressable>
+                      <View className="flex-1" style={{ minWidth: 0 }}>
+                        <AppText variant="label" className="font-sans font-semibold text-ink" numberOfLines={1}>
+                          {opt.title}
+                        </AppText>
+                        <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={1}>
+                          {opt.user} · {translationLabel(opt.translation)}
+                        </AppText>
+                      </View>
+                      {isSelected && <Check size={Math.round(16 * scale)} color={palette.accent} strokeWidth={2.4} />}
+                    </Pressable>
+                  );
+                }}
+              />
+
+              <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
+                {downloadableNarrations.length > 0 && (
+                  <AppButton
+                    size="sm"
+                    variant="secondary"
+                    Icon={notYetDownloaded.length === 0 ? Check : Download}
+                    label={
+                      chapterDownloadBusy
+                        ? 'Downloading…'
+                        : notYetDownloaded.length === 0
+                          ? 'Saved offline'
+                          : `Save ${notYetDownloaded.length} offline`
+                    }
+                    disabled={chapterDownloadBusy || notYetDownloaded.length === 0}
+                    onPress={() => saveChapterOffline(downloadableNarrations)}
+                  />
+                )}
+                <AppButton
+                  size="sm"
+                  variant="quiet"
+                  Icon={Search}
+                  label="Find more recordings"
+                  onPress={() => {
+                    setShowAudioSelector(false);
+                    openRecordingsFeed();
+                  }}
+                />
+              </View>
+            </View>
           )}
         </View>
 
-        {/* Photos of the user's own Bible pages for this chapter. Renders a
-            single muted line when there are none -- see ChapterPhotoStrip. */}
-        <ChapterPhotoStrip state={state} book={selectedBook || ''} chapter={selectedChapter ?? 0} />
-
-        {/* How the verses are laid out, then the verses. Select all lives
-            here, beside the thing it selects. Edit sections always shows the
-            list, so the layout switch steps aside while it's open. */}
-        {!editing && (
-          <SegmentedControl
-            value={chapterViewMode}
-            onChange={setChapterViewMode}
-            accessibilityLabel="Verse layout"
-            options={[
-              { id: 'list', label: 'List' },
-              { id: 'grid', label: 'Grid' },
-              { id: 'memoryGrid', label: 'Memory grid' },
-            ]}
-          />
-        )}
-
-        {/* The chapter's memory phrase, and the way into Edit sections. Past
-            1.3x the button moves under the phrase rather than squeeze it. */}
-        {activeChapterVerses.length > 0 && !editing && (
-          <View
-            className={scale >= 1.3 ? 'items-start' : 'flex-row items-center'}
-            style={{ gap: scale >= 1.3 ? space(8) : space(12) }}
-          >
-            <View className={scale >= 1.3 ? 'self-stretch' : 'flex-1'} style={{ minWidth: 0 }}>
-              {phrase ? (
-                <>
-                  <AppText variant="caption" className="font-sans text-ink-3">
-                    Memory phrase
-                  </AppText>
-                  <AppText variant="label" className="font-sans font-medium text-ink">
-                    {phrase}
-                  </AppText>
-                </>
-              ) : (
-                <AppText variant="caption" className="font-sans text-ink-3">
-                  Split this chapter into sections to learn and review it a part at a time.
-                </AppText>
-              )}
-            </View>
-            <AppButton
-              size="sm"
-              variant="secondary"
-              label={savedDraft ? 'Edit sections' : 'Add sections'}
-              onPress={startEditingSections}
-            />
-          </View>
-        )}
-
-        {/* First words: say each verse from its first few words. The verses
-            picked, or the whole chapter when none are. */}
+        {/* The chapter's tools in one row: First words (the verses picked, or
+            the whole chapter when none are), Sections, Takeaways. */}
         {activeChapterVerses.length > 0 && !editing && (
           <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
             <AppButton
@@ -650,8 +623,23 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 startPractice('learn', selectedVerseNumbers.length > 0 ? selectedVerses() : activeChapterVerses, { learnTab: 'outline' })
               }
             />
+            <AppButton
+              size="sm"
+              variant="secondary"
+              Icon={Brackets}
+              label="Sections"
+              accessibilityLabel={savedDraft ? 'Edit sections' : 'Add sections'}
+              onPress={startEditingSections}
+            />
             <AppButton size="sm" variant="secondary" Icon={Bookmark} label="Takeaways" onPress={() => navigateTo('takeaways')} />
           </View>
+        )}
+
+        {/* The memory phrase, only once the user has written one. */}
+        {phrase && !editing && (
+          <AppText variant="label" className="font-sans text-ink-2" accessibilityLabel={`Memory phrase: ${phrase}`}>
+            {phrase}
+          </AppText>
         )}
 
         {editing && (

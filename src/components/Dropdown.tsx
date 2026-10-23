@@ -43,6 +43,8 @@ export function Dropdown<T extends string | number>({
   searchable,
   staticLabel,
   compact,
+  triggerLabel,
+  TriggerIcon,
 }: {
   value: T;
   options: DropdownOption<T>[];
@@ -65,6 +67,12 @@ export function Dropdown<T extends string | number>({
    * deliberately NOT shrunk -- the menu has room, and a pick list is where
    * legibility matters most. Off by default. */
   compact?: boolean;
+  /** What the trigger says instead of the selected option's label -- a short
+   * form ("Hb/Gk") where the menu row spells it out ("Hebrew/Greek"). */
+  triggerLabel?: string;
+  /** Draws the trigger as this icon alone, no text or arrow (the chapter
+   * page's layout menu). `title` names it for screen readers. */
+  TriggerIcon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 }) {
   const palette = useThemeColors();
   const [open, setOpen] = useState(false);
@@ -141,21 +149,32 @@ export function Dropdown<T extends string | number>({
         }`}
         style={{
           minHeight: compact ? undefined : MIN_TOUCH,
-          paddingHorizontal: space(compact ? 11 : 12),
+          paddingHorizontal: space(compact ? (TriggerIcon ? 7 : 10) : 12),
           paddingVertical: space(compact ? 5 : 8),
-          gap: space(4),
+          gap: space(compact ? 3 : 4),
         }}
+        hitSlop={compact ? 6 : undefined}
       >
-        <AppText
-          variant={compact ? 'caption' : 'label'}
-          className={`font-sans ${compact ? 'font-semibold' : ''} flex-1 ${selected || staticLabel ? 'text-ink' : 'text-ink-3'}`}
-          numberOfLines={1}
-        >
-          {staticLabel ? placeholder : selected ? selected.label : placeholder}
-        </AppText>
-        <View className="shrink-0">
-          <ChevronDown size={Math.round(16 * scale)} color={palette.ink3} strokeWidth={2.4} />
-        </View>
+        {TriggerIcon ? (
+          <TriggerIcon size={Math.round(16 * scale)} color={palette.ink2} strokeWidth={2.2} />
+        ) : (
+          <>
+            {/* Only the full-width field stretches its text. In the compact
+                pill the text sizes to itself: stretching inside a pill that
+                sizes to its content squeezed the label to nothing, leaving
+                just the arrow. */}
+            <AppText
+              variant={compact ? 'caption' : 'label'}
+              className={`font-sans ${compact ? 'font-semibold' : 'flex-1'} ${selected || staticLabel ? 'text-ink' : 'text-ink-3'}`}
+              numberOfLines={1}
+            >
+              {staticLabel ? placeholder : triggerLabel ?? (selected ? selected.label : placeholder)}
+            </AppText>
+            <View className="shrink-0 items-center justify-center">
+              <ChevronDown size={Math.round((compact ? 13 : 16) * scale)} color={palette.ink3} strokeWidth={2.4} />
+            </View>
+          </>
+        )}
       </Pressable>
 
       <Modal visible={open} animationType="none" transparent onRequestClose={close}>
