@@ -18,10 +18,12 @@ import {
   STRIKE_LIMITS,
   StrikeLimit,
 } from '../lib/practicePrefs';
-import { AppButton, AppText, AppTextInput, ChoiceCard, ToggleRow, useScaledSpace } from '../components/design';
-import { Dialog, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
+import { AppButton, AppText, AppTextInput, ChoiceCard, ToggleRow, useFontScale, useScaledSpace } from '../components/design';
+import { Badge, Dialog, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { ACCENTS, useAccent, useThemeColors } from '../components/theme';
 import { BlockedPeopleSettings, GuidelinesRow, NotificationSettings } from '../components/SocialSettings';
+import { FORMATS, formatLabel, formatTag, FormatId, MIX_NAMES } from '../lib/formatNames';
+import { MIX_FORMAT_ORDER, MIX_FORMATS_PREF, readMixFormats } from '../lib/mix';
 
 const formatMB = (bytes: number) => {
   const mb = bytes / (1024 * 1024);
@@ -96,6 +98,67 @@ function PracticeSettings() {
           }}
         />
       </View>
+    </View>
+  );
+}
+
+/**
+ * Mixed review > which formats it may draw. A checklist rather than switches:
+ * it reads as "which of these", and each row carries its Counts or Practice
+ * tag so it's clear which ones review a verse. Recite still runs when nothing
+ * else fits a section, even if it's unchecked here (lib/mix.ts).
+ */
+function MixFormatSettings() {
+  const palette = useThemeColors();
+  const scale = useFontScale();
+  const space = useScaledSpace();
+  const [enabled, setEnabled] = useState<FormatId[]>(MIX_FORMAT_ORDER);
+  useEffect(() => {
+    loadPracticePrefs().then((saved) => setEnabled(readMixFormats(saved[MIX_FORMATS_PREF])));
+  }, []);
+  const toggle = (id: FormatId) => {
+    const next = enabled.includes(id) ? enabled.filter((f) => f !== id) : MIX_FORMAT_ORDER.filter((f) => f === id || enabled.includes(f));
+    setEnabled(next);
+    savePracticePrefs({ [MIX_FORMATS_PREF]: next });
+  };
+  const box = Math.round(22 * scale);
+  return (
+    <View style={{ gap: space(6) }}>
+      <SectionHeader title={MIX_NAMES.mixedReview} />
+      <View className="bg-surface border border-line rounded-card overflow-hidden">
+        {MIX_FORMAT_ORDER.map((id, i) => {
+          const on = enabled.includes(id);
+          return (
+            <Pressable
+              key={id}
+              onPress={() => toggle(id)}
+              accessibilityRole="checkbox"
+              accessibilityLabel={`${formatLabel(id)}, ${formatTag(id)}`}
+              accessibilityState={{ checked: on }}
+              aria-checked={on}
+              className={`flex-row items-center active:bg-surface-2 ${i === 0 ? '' : 'border-t border-hairline'}`}
+              style={{ minHeight: Math.round(52 * scale), paddingVertical: space(10), paddingHorizontal: space(14), gap: space(12) }}
+            >
+              {/* The box keeps its border either way; only the fill changes, so checking never shifts the row. */}
+              <View
+                className={`rounded-md border-2 items-center justify-center shrink-0 ${on ? 'bg-accent border-accent' : 'border-line'}`}
+                style={{ width: box, height: box }}
+              >
+                {on ? <Check size={Math.round(14 * scale)} color={palette.onAccent} strokeWidth={3} /> : null}
+              </View>
+              <AppText variant="body" className="font-sans text-ink flex-1">
+                {formatLabel(id)}
+              </AppText>
+              <View className="shrink-0">
+                <Badge label={formatTag(id)} tone={FORMATS[id].counts ? 'accent' : 'neutral'} />
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+      <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
+        {`${MIX_NAMES.mixedReview} picks from these, section by section. Only ${MIX_NAMES.countsTag} formats review a verse, so every ${MIX_NAMES.practiceTag} round is followed by one. ${formatLabel('recite')} fills in when nothing else fits.`}
+      </AppText>
     </View>
   );
 }
@@ -317,6 +380,8 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         <AccentColorPicker />
 
         <PracticeSettings />
+
+        <MixFormatSettings />
 
         <ChoiceSection
           title="New recordings are shared with"

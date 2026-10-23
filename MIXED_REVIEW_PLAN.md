@@ -11,7 +11,9 @@ After each stage, update the **Progress** line below and note anything that chan
 chapterSections Firestore rule is **not deployed yet**: build first, then rules.
 Stage 2 built 2026-10-22: First words (Outline), and Last to first on Recall's
 normal recite and type. Stage 3 built 2026-10-22: Put in order, Which section,
-Teach-It (all Practice). Stage 4 is next.
+Teach-It (all Practice). Stage 4 built 2026-10-22: Mixed review logic
+(`src/lib/mix.ts`, `npm run check:mix`) and its Settings checklist; no screen yet.
+Stage 5 is next.
 
 ---
 
@@ -280,6 +282,52 @@ it's a small change in a delicate place).
 - **Done when:** `check:mix` covers: honesty (no verse credited by a Practice format
   alone), no repeats in a row, fallbacks, stretches when a chapter has no sections,
   stop mid-session keeps earlier credit.
+- **As built (stage 4):**
+  - `src/lib/mix.ts`: `buildMixPlan(input, rng)` decides the whole session up front
+    (chapters, units, rounds), so the screen can say "section 3 of 9". Input: `due`
+    (the caller filters: reviewing, due, reviews not paused), `pool` (the whole queue,
+    for Keep going's context), `sectionsFor` (`sectionsForChapter`), `enabled`.
+  - **Order:** `todayOrder` = daily, weekly, monthly, each in queue order; a chapter
+    sits where its first due verse does. A chapter is translation|book|chapter.
+  - **Units:** the chapter's sections that hold a due verse (`dueSections`; unlike
+    `drillSections`, due verses all in one section still make one section unit, not
+    stretches). No sections: each unbroken run of due verses cut by
+    `chapterStretches` (4, sharing a verse); a lone verse is its own stretch, since
+    `buildThreadPassages` drops runs of one and a due verse must never fall out.
+  - **Opener:** a chapter with 3+ sections (holding due verses) opens with Put in
+    order or Which section when one is switched on; the next round is always counting.
+    **Put in order only ever opens** (it is a whole-chapter round). Which section can
+    also be a section's draw.
+  - **Prerequisites (`formatFits`):** Keep going needs `unit.contextVerseId`, the
+    started (not queued) verse just before an unbroken unit, so every unit verse is
+    said whole; Find the wrong word needs a planted word in **every** verse
+    (`buildSwapVerses`); Scramble needs a verse that splits into tiles; Which section
+    needs a section unit in a 3+ section chapter. Recite, First words, Teach-It: none.
+  - **Draws:** `drawFormat` never repeats the previous round's format; when nothing
+    fits it falls back to Recite, **even if Recite is unchecked** (so Recite-only
+    repeats Recite). A Practice draw gets a `role: 'follow'` counting round on the
+    same unit.
+  - **Credit (`roundCredits`, open question 3 default):** graded >= 90% pass, under a
+    miss; self-check Got it pass / Not really miss, never perfect. Practice rounds
+    credit nothing whatever the screen reports; a round only credits its own
+    `verseIds` (Keep going's context verse never); a verse keeps its first credit
+    (overlapping stretches). Keep going in the mix **does** count a miss, unlike the
+    standalone thread screen; ask the user before stage 5 ships.
+  - **Reducer:** `startMix(plan)` → `mixReducer` with `start`, `result` (perVerse),
+    `skip`, `stop`. `state.newCredits` = exactly the credits the last event earned:
+    stage 5 sends each to `handleReviewCompleted(item, outcome === 'pass',
+    mode === 'self' ? 'reveal' : mode, { quiet: true, via: 'mix', perfect })` right
+    away. Skipping a Practice round still leaves its counting round. `stop` keeps all
+    credit. `mixSummary` gives passed / missed / not covered / slipped units /
+    formats used for the recap.
+  - `ReviewLog.via` gained `'mix'` (`ReviewCompletedOpts` reads it from there). The
+    engine only stores `via` on pass logs today, so a mixed-review miss won't show
+    `via: 'mix'` in history.
+  - **Settings:** "Mixed review" checklist under the practice settings, a checkbox
+    row per format with its Counts/Practice badge, saved as `mixFormats` in practice
+    prefs (`readMixFormats` cleans it; nothing saved = all on).
+  - Not decided by this stage: Recite's direction (Last to first) and First words'
+    word count per round; Find the wrong word's per-verse accuracy for crediting.
 
 ## Stage 5 — Mixed review: screen and Today
 
