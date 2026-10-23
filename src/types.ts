@@ -678,6 +678,9 @@ export interface ChapterPhoto {
  * Stored at users/{uid}/chapterSections/{key}; owner-only (firestore.rules).
  * Helpers that read and change it live in src/lib/sections.ts.
  */
+/** A chapter's memory aid: off, one word per section, or one word per verse. */
+export type MemoryAid = 'off' | 'sections' | 'verses';
+
 export interface ChapterSections {
   /** `${book}|${chapter}` -- see chapterSectionsKey in src/lib/sections.ts. */
   key: string;
@@ -692,6 +695,19 @@ export interface ChapterSections {
    * never makes one up; with none written it shows the opening letter.
    */
   phraseWords: Record<number, string>;
+  /**
+   * Which memory aid the chapter uses: none, one word per section (the
+   * phraseWords above), or one word per verse (verseWords below). Absent on
+   * docs saved before the choice existed -- see memoryAidOf in
+   * src/lib/sections.ts for how those read.
+   */
+  memoryAid?: MemoryAid;
+  /**
+   * The user's memory-phrase word for single verses, by verse number (Isaiah
+   * 53:7-12 as "he bore all your offenses triumphantly"). Keyed by verse, not
+   * by section, so moving section edges never touches them. Absent when none.
+   */
+  verseWords?: Record<number, string>;
   /**
    * First words (Outline): extra words the user tapped open on a verse, by
    * verse number, 1-4. Absent when none. Saved per chapter so the outline

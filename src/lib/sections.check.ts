@@ -7,6 +7,8 @@ import {
   chapterStretches,
   emptyDraft,
   isBlankDraft,
+  isEmptyDraft,
+  memoryAidOf,
   mergeAt,
   moveStart,
   normalizeDraft,
@@ -18,8 +20,10 @@ import {
   sectionsFromStarts,
   SectionDraft,
   setSectionText,
+  setVerseWord,
   splitAt,
   startBounds,
+  versePhrase,
 } from './sections';
 
 let failures = 0;
@@ -161,6 +165,27 @@ check('10 verses -> runs of up to 4 sharing their joins', eq(st.map((r) => r.map
 check('every verse is covered', vs(29).every((v) => chapterStretches(vs(29)).some((r) => r.some((x) => x.verse === v.verse))));
 check('a one-verse chapter is one stretch', chapterStretches(vs(1)).length === 1);
 check('three verses are one stretch', chapterStretches(vs(3)).length === 1);
+
+console.log('Memory aid');
+check('an old doc with section words reads as per section', memoryAidOf(matt7) === 'sections');
+check('an old doc without words reads as off', memoryAidOf(emptyDraft(1)) === 'off');
+check('a chosen aid wins', memoryAidOf({ ...matt7, memoryAid: 'off' }) === 'off');
+// Isaiah 53:7-12, the user's per-verse phrase.
+const ISA = ['he', 'bore', 'all', 'your', 'offenses', 'triumphantly'];
+let isa: SectionDraft = { ...emptyDraft(1), memoryAid: 'verses' };
+ISA.forEach((w, i) => (isa = setVerseWord(isa, 7 + i, w)));
+const isaVerses = Array.from({ length: 12 }, (_, i) => i + 1);
+check('verse words make the phrase', versePhrase(isa.verseWords, isaVerses) === 'he bore all your offenses triumphantly', versePhrase(isa.verseWords, isaVerses));
+check('a gap between runs shows as …', versePhrase({ 1: 'a', 2: 'b', 5: 'c' }, [1, 2, 3, 4, 5]) === 'a b … c');
+check('no verse words, no phrase', versePhrase({}, isaVerses) === null);
+check('clearing a verse word removes it', setVerseWord(isa, 7, ' ').verseWords?.[7] === undefined);
+check('verse words alone are not sections', isBlankDraft(isa) && !isEmptyDraft(isa));
+check('only an "off" choice is empty', isEmptyDraft({ ...emptyDraft(1), memoryAid: 'off' }));
+check('verse words outside the chapter are dropped', normalizeDraft({ ...isa, verseWords: { 7: 'he', 40: 'x' } }, 1, 12).verseWords?.[40] === undefined);
+check('verse words stay put when a section edge moves', moveStart(splitAt(isa, 6, 12), 1, 9, 12).verseWords?.[7] === 'he');
+check('verse words survive a join', mergeAt(splitAt(isa, 6, 12), 1).verseWords?.[12] === 'triumphantly');
+check('changing the aid is a change', !sameDraft(isa, { ...isa, memoryAid: 'sections' }));
+check('changing a verse word is a change', !sameDraft(isa, setVerseWord(isa, 8, 'carried')));
 
 console.log(failures === 0 ? '\nAll sections checks passed.' : `\n${failures} sections check(s) FAILED.`);
 if (failures > 0) process.exit(1);

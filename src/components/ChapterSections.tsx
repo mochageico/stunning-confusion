@@ -3,9 +3,10 @@ import { View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GripHorizontal } from 'lucide-react-native';
 
-import type { TextScript } from '../types';
+import type { MemoryAid, TextScript } from '../types';
 import { Section, sectionRangeText } from '../lib/sections';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
+import { SegmentedControl } from './blocks';
 import { bracketColor, useThemeColors } from './theme';
 
 // ============================================================================
@@ -210,6 +211,7 @@ export function SectionHeaderRow({
   onLabel,
   onPhraseWord,
   handle,
+  showWord = true,
 }: {
   section: Section;
   /** The opening verse's first letter, '' if unknown. */
@@ -227,6 +229,8 @@ export function SectionHeaderRow({
   onLabel?: (text: string) => void;
   onPhraseWord?: (text: string) => void;
   handle?: Omit<React.ComponentProps<typeof SectionHandle>, 'index' | 'label'>;
+  /** False when the chapter's memory aid isn't per section: no word, no letter, no word field. */
+  showWord?: boolean;
 }) {
   const space = useScaledSpace();
   const scale = useFontScale();
@@ -271,6 +275,7 @@ export function SectionHeaderRow({
               className="bg-surface border border-line rounded-btn text-ink font-sans font-semibold"
               style={{ flexGrow: 3, flexBasis: space(150), minWidth: 0, paddingHorizontal: space(10), paddingVertical: space(8) }}
             />
+            {showWord ? (
             <AppTextInput
               value={wordText ?? ''}
               onChangeText={onPhraseWord}
@@ -283,6 +288,7 @@ export function SectionHeaderRow({
               className="bg-surface border border-line rounded-btn text-ink font-sans"
               style={{ flexGrow: 1, flexBasis: space(90), minWidth: 0, paddingHorizontal: space(10), paddingVertical: space(8) }}
             />
+            ) : null}
           </View>
           <AppText variant="caption" className="font-sans text-ink-3">
             {range}
@@ -303,7 +309,7 @@ export function SectionHeaderRow({
               </AppText>
             ) : null}
           </View>
-          {section.phraseWord ? (
+          {!showWord ? null : section.phraseWord ? (
             <AppText variant="label" className="font-sans font-medium text-ink-2" accessibilityLabel={`Phrase word: ${section.phraseWord}`}>
               {section.phraseWord}
             </AppText>
@@ -337,13 +343,27 @@ export function phraseSummary(sections: Section[], letters: string[], script: Te
  * The card at the top of the verse list in Edit sections mode: how editing
  * works, and Start over.
  */
-export function SectionsEditIntro({ onStartOver, canStartOver }: { onStartOver: () => void; canStartOver: boolean }) {
+export function SectionsEditIntro({
+  onStartOver,
+  canStartOver,
+  memoryAid,
+  onMemoryAid,
+}: {
+  onStartOver: () => void;
+  canStartOver: boolean;
+  memoryAid: MemoryAid;
+  onMemoryAid: (aid: MemoryAid) => void;
+}) {
   const space = useScaledSpace();
   const lines = [
     'Tap a verse to start a new section there.',
     'Drag a round handle up or down to move where a section starts.',
     'Double-tap a handle to join that section to the one above.',
-    'Give each section a name and, if you like, a memory-phrase word that starts with its first letter.',
+    memoryAid === 'sections'
+      ? 'Give each section a name and a memory-phrase word that starts with its first letter.'
+      : memoryAid === 'verses'
+        ? 'Give each section a name. Type a word beside any verse, starting with its first letter.'
+        : 'Give each section a name.',
   ];
   return (
     <View className="bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(8) }}>
@@ -361,6 +381,23 @@ export function SectionsEditIntro({ onStartOver, canStartOver }: { onStartOver: 
             </AppText>
           </View>
         ))}
+      </View>
+      {/* The chapter's memory aid. Off hides every phrase word and letter;
+          words already typed are kept for if it's turned back on. */}
+      <View style={{ gap: space(6) }}>
+        <AppText variant="caption" className="font-sans font-semibold text-ink-2">
+          Memory phrase
+        </AppText>
+        <SegmentedControl
+          value={memoryAid}
+          onChange={onMemoryAid}
+          accessibilityLabel="Memory phrase"
+          options={[
+            { id: 'off', label: 'Off' },
+            { id: 'sections', label: 'Per section' },
+            { id: 'verses', label: 'Per verse' },
+          ]}
+        />
       </View>
       {canStartOver ? (
         <View className="flex-row">

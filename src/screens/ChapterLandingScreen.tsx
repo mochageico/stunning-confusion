@@ -15,11 +15,12 @@ import { formatLabel } from '../lib/formatNames';
 import { Recording } from '../types';
 import { BIBLE_TRANSLATIONS, PICKER_TRANSLATIONS, copyrightFor, textScriptFor, translationLabel } from '../data';
 import { isRtl, joinWords, splitWords } from '../lib/textScript';
-import { AppButton, AppIconButton, AppText, RangeCaption, useFontScale, useScaledSpace } from '../components/design';
+import { AppButton, AppIconButton, AppText, AppTextInput, RangeCaption, useFontScale, useScaledSpace } from '../components/design';
 import { Dialog, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { useDragSelect } from '../components/useDragSelect';
 import {
   BracketGutter,
+  displayLetter,
   DropLine,
   phraseSummary,
   SectionHeaderRow,
@@ -29,6 +30,8 @@ import {
 import {
   emptyDraft,
   isBlankDraft,
+  isEmptyDraft,
+  memoryAidOf,
   mergeAt,
   moveStart,
   normalizeDraft,
@@ -38,7 +41,9 @@ import {
   sectionIndexOf,
   sectionsFromStarts,
   setSectionText,
+  setVerseWord,
   splitAt,
+  versePhrase,
 } from '../lib/sections';
 
 import { useThemeColors } from '../components/theme';
@@ -230,26 +235,42 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const firstVerse = activeChapterVerses[0]?.verse ?? 1;
   const lastVerse = activeChapterVerses[activeChapterVerses.length - 1]?.verse ?? firstVerse;
   const savedSections = selectedBook && selectedChapter ? sectionsForChapter(selectedBook, selectedChapter) : null;
-  // A doc that holds only First words taps (nothing written for sections)
-  // counts as no sections here.
+  // A doc that holds only First words taps (nothing written for sections or
+  // the memory phrase) counts as nothing saved here.
   const normalizedSaved = savedSections && activeChapterVerses.length > 0 ? normalizeDraft(savedSections, firstVerse, lastVerse) : null;
-  const savedDraft = normalizedSaved && !isBlankDraft(normalizedSaved) ? normalizedSaved : null;
+  const savedDraft = normalizedSaved && !isEmptyDraft(normalizedSaved) ? normalizedSaved : null;
   // Non-null while editing: the sections as edited so far, saved on Done.
   const [editDraft, setEditDraft] = useState<SectionDraft | null>(null);
   const editing = editDraft !== null;
   const shownDraft = editDraft ?? savedDraft;
-  const sections = shownDraft ? sectionsFromStarts(shownDraft, lastVerse) : [];
+  // Brackets and header rows only for real sections (or while editing them):
+  // a chapter with just per-verse phrase words has none.
+  const hasSections = !!shownDraft && (editing || !isBlankDraft(shownDraft));
+  const sections = shownDraft && hasSections ? sectionsFromStarts(shownDraft, lastVerse) : [];
   const letters = phraseLetters(sections, activeChapterVerses, chapterScript);
-  const phrase = sections.length > 0 ? phraseSummary(sections, letters, chapterScript) : null;
   const gutterForMode = useGutterWidth(editing);
-  const gutterWidth = shownDraft ? gutterForMode : 0;
+  const gutterWidth = hasSections ? gutterForMode : 0;
+
+  // The memory phrase: off, a word per section, or a word per verse (in the
+  // last case the verse's own first letter is the field's hint).
+  const memoryAid = memoryAidOf(shownDraft);
+  const verseLetters =
+    memoryAid === 'verses'
+      ? phraseLetters(activeChapterVerses.map((v) => ({ start: v.verse, end: v.verse })), activeChapterVerses, chapterScript)
+      : [];
+  const phrase =
+    memoryAid === 'sections' && sections.length > 0
+      ? phraseSummary(sections, letters, chapterScript)
+      : memoryAid === 'verses'
+        ? versePhrase(shownDraft?.verseWords, activeChapterVerses.map((v) => v.verse))
+        : null;
 
   // A handle mid-drag: which start, and the verse it would land on. The list
   // doesn't reflow until the finger lifts (the handle would move out from
   // under it); the bars recolor and a line marks the landing verse instead.
   const [drag, setDrag] = useState<{ index: number; to: number } | null>(null);
   const dragRef = useRef<{ index: number; to: number } | null>(null);
-  const barDraft = shownDraft && drag ? moveStart(shownDraft, drag.index, drag.to, lastVerse) : shownDraft;
+  const barDraft = !hasSections ? null : shownDraft && drag ? moveStart(shownDraft, drag.index, drag.to, lastVerse) : shownDraft;
   // Verse rows by index, and their on-screen spans measured when a drag
   // starts. Measured fresh rather than kept from onLayout: inserting a header
   // row moves the rows below it without resizing them, and web reports only
@@ -326,7 +347,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
       const next = normalizeDraft(editDraft, firstVerse, lastVerse);
       if (!sameDraft(next, savedDraft ?? emptyDraft(firstVerse))) {
         void saveChapterSections(selectedBook, selectedChapter, next);
-        triggerToast(isBlankDraft(next) ? 'Sections removed' : 'Sections saved');
+        triggerToast(isEmptyDraft(next) ? 'Sections removed' : 'Saved');
       }
     }
     setEditDraft(null);
@@ -645,7 +666,12 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         {editing && (
           <SectionsEditIntro
             canStartOver={!!editDraft && !isBlankDraft(editDraft)}
-            onStartOver={() => setEditDraft(emptyDraft(firstVerse))}
+            // Start over clears the sections, not the phrase choice or verse words.
+            onStartOver={() =>
+              setEditDraft((prev) => ({ ...emptyDraft(firstVerse), memoryAid: prev?.memoryAid, verseWords: prev?.verseWords }))
+            }
+            memoryAid={memoryAid}
+            onMemoryAid={(aid) => setEditDraft((prev) => prev && { ...prev, memoryAid: aid })}
           />
         )}
 
@@ -686,7 +712,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 const next = activeChapterVerses[index + 1];
                 // Header rows follow the sections as they are; the bars follow
                 // a handle mid-drag (barDraft), so the change shows before it lands.
-                const sIdx = shownDraft ? sectionIndexOf(shownDraft.starts, v.verse) : -1;
+                const sIdx = shownDraft && hasSections ? sectionIndexOf(shownDraft.starts, v.verse) : -1;
+                const verseWord = memoryAid === 'verses' ? shownDraft?.verseWords?.[v.verse]?.trim() : undefined;
+                const verseLetter = displayLetter(verseLetters[index] ?? '', chapterScript);
                 const section = sIdx >= 0 ? sections[sIdx] : null;
                 const opensSection =
                   !!section && (index === 0 || sectionIndexOf(shownDraft!.starts, activeChapterVerses[index - 1].verse) !== sIdx);
@@ -710,19 +738,24 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                         onLabel={(t) => setEditDraft((prev) => prev && setSectionText(prev, 'labels', section.start, t))}
                         onPhraseWord={(t) => setEditDraft((prev) => prev && setSectionText(prev, 'phraseWords', section.start, t))}
                         handle={editing ? handleFor(sIdx) : undefined}
+                        showWord={memoryAid === 'sections'}
                       />
                     ) : null}
+                    {/* The row measures itself for drag-select; the verse is
+                        the tappable part, and a per-verse word field sits
+                        beside it rather than inside it, so tapping the field
+                        never splits a section. */}
+                    <View className={rtl ? 'flex-row-reverse' : 'flex-row'} onLayout={dragSelect.itemLayout(index)}>
                     <Pressable
                       ref={(el) => {
                         rowRefs.current[index] = el;
                       }}
-                      onLayout={dragSelect.itemLayout(index)}
                       onPress={() => (editing ? tapVerseWhileEditing(v.verse) : dragSelect.handleTap(v.verse))}
                       accessibilityRole="button"
                       accessibilityState={editing ? undefined : { selected: isSelected }}
                       accessibilityLabel={`Verse ${v.verse}, ${STATUS_WORD[v.status] ?? 'not started'}`}
                       accessibilityHint={editing ? 'Starts a new section at this verse.' : undefined}
-                      className={`${rtl ? 'flex-row-reverse' : 'flex-row'} ${isSelected ? 'bg-accent-soft' : ''}`}
+                      className={`flex-1 ${rtl ? 'flex-row-reverse' : 'flex-row'} ${isSelected ? 'bg-accent-soft' : ''}`}
                     >
                       <BracketGutter index={bIdx} width={gutterWidth} bottom={closesBar} rtl={rtl} />
                       <View
@@ -746,6 +779,11 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                           <View className={`w-2 h-2 rounded-full ${STATUS_DOT[v.status] ?? 'bg-fill'}`} />
                         </View>
                         <View className="flex-1" style={{ gap: space(4) }}>
+                          {verseWord && !editing ? (
+                            <AppText variant="caption" className="font-sans font-semibold text-accent" accessibilityLabel={`Phrase word: ${verseWord}`}>
+                              {verseWord}
+                            </AppText>
+                          ) : null}
                           <AppText variant="body" script={chapterScript} className="font-serif leading-relaxed text-ink">
                             {v.text}
                           </AppText>
@@ -758,6 +796,27 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                       </View>
                       {dropHere ? <DropLine /> : null}
                     </Pressable>
+                    {/* Per verse: the verse's phrase word, hinted with its first letter. */}
+                    {editing && memoryAid === 'verses' ? (
+                      <View
+                        className={index > 0 && !opensSection ? 'border-t border-hairline' : ''}
+                        style={{ paddingVertical: space(12), ...(rtl ? { paddingLeft: space(14) } : { paddingRight: space(14) }) }}
+                      >
+                        <AppTextInput
+                          value={editDraft?.verseWords?.[v.verse] ?? ''}
+                          onChangeText={(t) => setEditDraft((prev) => prev && setVerseWord(prev, v.verse, t))}
+                          placeholder={verseLetter ? `${verseLetter}…` : 'Word'}
+                          accessibilityLabel={`Memory phrase word for verse ${v.verse}${verseLetter ? `, starts with ${verseLetter}` : ''}`}
+                          variant="caption"
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          maxLength={30}
+                          className="bg-surface border border-line rounded-btn text-ink font-sans"
+                          style={{ width: space(84), paddingHorizontal: space(8), paddingVertical: space(6) }}
+                        />
+                      </View>
+                    ) : null}
+                    </View>
                   </Fragment>
                 );
               })}

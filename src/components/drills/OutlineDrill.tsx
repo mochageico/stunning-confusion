@@ -24,7 +24,7 @@ import {
   shownIndices,
   startRun,
 } from '../../lib/outline';
-import { normalizeDraft, phraseLetters, sectionsFromStarts } from '../../lib/sections';
+import { memoryAidOf, normalizeDraft, phraseLetters, sectionsFromStarts } from '../../lib/sections';
 import { FORMATS, MIX_NAMES } from '../../lib/formatNames';
 import type { WordOutcome } from '../../lib/recitation';
 import { isRtl } from '../../lib/textScript';
@@ -115,6 +115,12 @@ export default React.memo(function OutlineDrill({
   const hasSections = !!draft && draft.starts.length > 1;
   const sectionList = useMemo(() => (hasSections && draft ? sectionsFromStarts(draft, lastVerse) : []), [hasSections, draft, lastVerse]);
   const groups = useMemo(() => groupBySection(rows, hasSections && draft ? draft.starts : null), [rows, hasSections, draft]);
+  // The chapter's memory phrase: a word per section on the dividers, or a
+  // word per verse above each verse. Off shows neither, and so no switch.
+  const memoryAid = memoryAidOf(draft);
+  const verseWords = memoryAid === 'verses' ? draft?.verseWords ?? {} : {};
+  const hasPhrase =
+    memoryAid === 'sections' ? hasSections : memoryAid === 'verses' ? verses.some((v) => verseWords[v.verse]?.trim()) : false;
 
   // ---- Saving taps ----------------------------------------------------------
   const saveExtra = (next: OutlineExtra) => {
@@ -225,6 +231,11 @@ export default React.memo(function OutlineDrill({
             className="flex-1 active:opacity-60"
             style={{ gap: space(6), minWidth: 0 }}
           >
+            {showPhrase && verseWords[row.verse.verse]?.trim() ? (
+              <AppText variant="caption" className="font-sans font-semibold text-accent">
+                {verseWords[row.verse.verse].trim()}
+              </AppText>
+            ) : null}
             {row.shown !== '' && (
               <AppText variant="body" script={row.script} className="font-serif text-ink">
                 {row.shown}
@@ -299,12 +310,8 @@ export default React.memo(function OutlineDrill({
               />
             </DrillSetting>
           )}
-          {hasSections && (
-            <>
-              <SwitchRow label="Section labels" value={showLabels} onChange={setShowLabels} />
-              <SwitchRow label="Memory phrase" value={showPhrase} onChange={setShowPhrase} />
-            </>
-          )}
+          {hasSections && <SwitchRow label="Section labels" value={showLabels} onChange={setShowLabels} />}
+          {hasPhrase && <SwitchRow label="Memory phrase" value={showPhrase} onChange={setShowPhrase} />}
         </DrillSettings>
 
         {finishedRun && resultCount > 0 && (
@@ -333,6 +340,7 @@ export default React.memo(function OutlineDrill({
                       phraseWord: showPhrase ? section.phraseWord : undefined,
                     }}
                     letter={showPhrase ? letter : ''}
+                    showWord={memoryAid === 'sections'}
                     script={rows[0]?.script ?? 'latin'}
                     rtl={isRtl(rows[0]?.script ?? 'latin')}
                     editing={false}

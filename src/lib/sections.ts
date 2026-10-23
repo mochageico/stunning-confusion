@@ -1,4 +1,4 @@
-import type { ChapterSections, TextScript } from '../types';
+import type { ChapterSections, MemoryAid, TextScript } from '../types';
 import { buildThreadPassages, DrillVerse } from './drills';
 import { normalizeToken, splitWords } from './textScript';
 
@@ -26,7 +26,7 @@ import { normalizeToken, splitWords } from './textScript';
 export const chapterSectionsKey = (book: string, chapter: number): string => `${book}|${chapter}`;
 
 /** The editable part of a ChapterSections doc. */
-export type SectionDraft = Pick<ChapterSections, 'starts' | 'labels' | 'phraseWords'>;
+export type SectionDraft = Pick<ChapterSections, 'starts' | 'labels' | 'phraseWords' | 'memoryAid' | 'verseWords'>;
 
 export interface Section {
   index: number;
@@ -61,10 +61,61 @@ function keepFor(starts: number[], byStart: Record<number, string>): Record<numb
   return out;
 }
 
-/** normalizeStarts for a whole draft, dropping labels and words left without a section. */
+/** normalizeStarts for a whole draft, dropping labels and words left without a section or verse. */
 export function normalizeDraft(draft: SectionDraft, firstVerse: number, lastVerse: number): SectionDraft {
   const starts = normalizeStarts(draft.starts, firstVerse, lastVerse);
-  return { starts, labels: keepFor(starts, draft.labels), phraseWords: keepFor(starts, draft.phraseWords) };
+  const verseWords: Record<number, string> = {};
+  for (const [k, v] of Object.entries(draft.verseWords ?? {})) {
+    const verse = Number(k);
+    if (v?.trim() && verse >= firstVerse && verse <= lastVerse) verseWords[verse] = v;
+  }
+  return {
+    starts,
+    labels: keepFor(starts, draft.labels),
+    phraseWords: keepFor(starts, draft.phraseWords),
+    ...(draft.memoryAid ? { memoryAid: draft.memoryAid } : {}),
+    ...(Object.keys(verseWords).length > 0 ? { verseWords } : {}),
+  };
+}
+
+/**
+ * The chapter's memory aid. A doc saved before there was a choice reads as
+ * "per section" when it has any section words (that's how they were made)
+ * and "off" otherwise.
+ */
+export function memoryAidOf(draft: Pick<SectionDraft, 'memoryAid' | 'phraseWords'> | null | undefined): MemoryAid {
+  if (!draft) return 'off';
+  if (draft.memoryAid) return draft.memoryAid;
+  return Object.values(draft.phraseWords ?? {}).some((w) => w?.trim()) ? 'sections' : 'off';
+}
+
+/** Sets (or, with blank text, clears) the memory-phrase word of one verse. */
+export function setVerseWord(draft: SectionDraft, verse: number, text: string): SectionDraft {
+  const next = { ...(draft.verseWords ?? {}) };
+  if (text.trim()) next[verse] = text;
+  else delete next[verse];
+  return { ...draft, verseWords: next };
+}
+
+/**
+ * The per-verse phrase in one line: the words in verse order, a gap between
+ * verses that have none marked with "…". Only the verses with words count,
+ * so a phrase over Isaiah 53:7-12 reads as just that. Null with no words.
+ */
+export function versePhrase(verseWords: Record<number, string> | undefined, verseNumbers: number[]): string | null {
+  const parts: string[] = [];
+  let gap = false;
+  for (const v of [...verseNumbers].sort((a, b) => a - b)) {
+    const word = verseWords?.[v]?.trim();
+    if (word) {
+      if (gap && parts.length > 0) parts.push('…');
+      parts.push(word);
+      gap = false;
+    } else {
+      gap = true;
+    }
+  }
+  return parts.length > 0 ? parts.join(' ') : null;
 }
 
 /** The sections, in order, each with its verse range, label and phrase word. */
@@ -124,7 +175,7 @@ export function moveStart(draft: SectionDraft, index: number, toVerse: number, l
   if (to === from) return draft;
   const starts = draft.starts.slice();
   starts[index] = to;
-  return { starts, labels: rekey(draft.labels, from, to), phraseWords: rekey(draft.phraseWords, from, to) };
+  return { ...draft, starts, labels: rekey(draft.labels, from, to), phraseWords: rekey(draft.phraseWords, from, to) };
 }
 
 /**
@@ -135,7 +186,7 @@ export function moveStart(draft: SectionDraft, index: number, toVerse: number, l
 export function splitAt(draft: SectionDraft, verse: number, lastVerse: number): SectionDraft {
   if (verse <= draft.starts[0] || verse > lastVerse || draft.starts.includes(verse)) return draft;
   const starts = [...draft.starts, verse].sort((a, b) => a - b);
-  return { starts, labels: draft.labels, phraseWords: draft.phraseWords };
+  return { ...draft, starts };
 }
 
 /**
@@ -154,6 +205,7 @@ export function mergeAt(draft: SectionDraft, index: number): SectionDraft {
     return out;
   };
   return {
+    ...draft,
     starts: draft.starts.filter((_, i) => i !== index),
     labels: fold(draft.labels),
     phraseWords: fold(draft.phraseWords),
@@ -173,12 +225,25 @@ export function setSectionText(
   return { ...draft, [field]: next };
 }
 
-/** Whether a draft says nothing worth saving: one section, no label, no word. */
+/**
+ * Whether a draft has no sections to speak of: one section, no label, no
+ * section word. The memory aid choice and verse words don't count -- a chapter
+ * with only those still has no sections (see isEmptyDraft for saving).
+ */
 export function isBlankDraft(draft: SectionDraft): boolean {
   return (
     draft.starts.length <= 1 &&
     !Object.values(draft.labels).some((t) => t?.trim()) &&
     !Object.values(draft.phraseWords).some((t) => t?.trim())
+  );
+}
+
+/** Whether a draft holds nothing at all worth keeping: no sections, no verse words, no aid chosen. */
+export function isEmptyDraft(draft: SectionDraft): boolean {
+  return (
+    isBlankDraft(draft) &&
+    !Object.values(draft.verseWords ?? {}).some((t) => t?.trim()) &&
+    (draft.memoryAid === undefined || draft.memoryAid === 'off')
   );
 }
 
@@ -193,7 +258,9 @@ export function sameDraft(a: SectionDraft, b: SectionDraft): boolean {
     a.starts.length === b.starts.length &&
     a.starts.every((s, i) => s === b.starts[i]) &&
     sameMap(a.labels, b.labels) &&
-    sameMap(a.phraseWords, b.phraseWords)
+    sameMap(a.phraseWords, b.phraseWords) &&
+    sameMap(a.verseWords ?? {}, b.verseWords ?? {}) &&
+    memoryAidOf(a) === memoryAidOf(b)
   );
 }
 

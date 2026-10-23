@@ -3,7 +3,7 @@ import { collection, deleteDoc, doc, getDocs, setDoc } from 'firebase/firestore'
 
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import type { ChapterSections } from '../types';
-import { chapterSectionsKey, emptyDraft, isBlankDraft, SectionDraft } from '../lib/sections';
+import { chapterSectionsKey, emptyDraft, isEmptyDraft, SectionDraft } from '../lib/sections';
 import { cleanExtra, OutlineExtra } from '../lib/outline';
 
 // ============================================================================
@@ -56,7 +56,7 @@ export function useChapterSections({ user }: ChapterSectionsDeps) {
    */
   const persist = async (book: string, chapter: number, draft: SectionDraft, extra: OutlineExtra) => {
     const key = chapterSectionsKey(book, chapter);
-    const blank = isBlankDraft(draft) && Object.keys(extra).length === 0;
+    const blank = isEmptyDraft(draft) && Object.keys(extra).length === 0;
     const record: ChapterSections = {
       key,
       book,
@@ -64,6 +64,8 @@ export function useChapterSections({ user }: ChapterSectionsDeps) {
       starts: draft.starts,
       labels: draft.labels,
       phraseWords: draft.phraseWords,
+      ...(draft.memoryAid ? { memoryAid: draft.memoryAid } : {}),
+      ...(draft.verseWords && Object.keys(draft.verseWords).length > 0 ? { verseWords: draft.verseWords } : {}),
       // Left out when empty: Firestore rejects undefined, and a whole-doc set
       // below drops the field for good.
       ...(Object.keys(extra).length > 0 ? { outlineExtra: extra } : {}),
@@ -105,7 +107,13 @@ export function useChapterSections({ user }: ChapterSectionsDeps) {
   const saveOutlineExtra = async (book: string, chapter: number, extra: OutlineExtra) => {
     const existing = sectionsForChapter(book, chapter);
     const draft: SectionDraft = existing
-      ? { starts: existing.starts, labels: existing.labels, phraseWords: existing.phraseWords }
+      ? {
+          starts: existing.starts,
+          labels: existing.labels,
+          phraseWords: existing.phraseWords,
+          memoryAid: existing.memoryAid,
+          verseWords: existing.verseWords,
+        }
       : emptyDraft(1);
     await persist(book, chapter, draft, cleanExtra(extra));
   };
