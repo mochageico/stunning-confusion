@@ -94,6 +94,7 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
     const palette = useThemeColors();
   const {
     dismissOnboarding,
+    setShowTour,
     addVerseRangeToQueue,
     updateRhythm,
     learningDays,
@@ -299,6 +300,16 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
 
         <View style={{ gap: space(4) }}>
           <AppButton size="lg" variant="primary" label={hasVerses ? "I'm ready, start" : 'Go to Today'} onPress={dismissOnboarding} />
+          {/* Offered, never started for you: the tour is optional (see
+              components/GuidedTour.tsx). */}
+          <AppButton
+            variant="secondary"
+            label="Take a 1-minute tour first"
+            onPress={() => {
+              dismissOnboarding();
+              setShowTour(true);
+            }}
+          />
           <AppButton variant="quiet" label="Skip for now" onPress={dismissOnboarding} className="border-0" />
         </View>
       </ScrollView>

@@ -9,6 +9,7 @@ import { isRtl, scriptOfVerse } from '../lib/textScript';
 import { WaveBars } from './ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from './design';
 import { Badge, Dialog } from './blocks';
+import { OneTimeTip } from './OneTimeTip';
 
 import { useThemeColors } from './theme';
 import { useAboveTabBar } from './TabBar';
@@ -363,6 +364,23 @@ function PracticeModalsInner({
           <AppButton variant="quiet" label="Needs practice" onPress={() => submitManualLog('practice')} />
         </View>
       </Dialog>
+
+      {/* First-time tips: one for learning, one for the first verse back
+          for a check. Each shows once (see OneTimeTip). */}
+      {type === 'learn' &&
+        (verses.length > 0 && verses.every((v) => v.status === 'memorized') ? (
+          <OneTimeTip
+            id="reviewCheck"
+            style={{ marginBottom: 12 }}
+            text="This verse is back for a quick check, so it doesn't fade. Say it from memory. If you stumble, that's fine — it just comes back more often for a while."
+          />
+        ) : (
+          <OneTimeTip
+            id="practice"
+            style={{ marginBottom: 12 }}
+            text="Say the verse from memory. Get it right a few times, an hour or more apart, and it counts as learned. After that it comes back now and then so it sticks."
+          />
+        ))}
 
       {/* Main Panel */}
       <View className="flex-1 justify-between py-1">

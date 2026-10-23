@@ -465,9 +465,11 @@ export function useAppState() {
     setSaveRecordingDialog(true);
   };
 
-  // The optional "Show me around" tour, reachable from Settings at any time.
-  // Deliberately separate from setup: setup configures, the tour explains.
-  const [showTour, setShowTour] = useState(false);
+  // The optional tour, reachable from Settings at any time and never started
+  // automatically. Deliberately separate from setup: setup configures, the
+  // tour explains. true runs the tour cards over the real app; 'questions' opens Common
+  // questions, which the tour's last card and Settings both link to.
+  const [showTour, setShowTour] = useState<boolean | 'questions'>(false);
 
   // Real shared-recordings feed, seeded with illustrative sample entries
   // (other people's recordings, e.g. "Sarah Miller") until the real feed loads.

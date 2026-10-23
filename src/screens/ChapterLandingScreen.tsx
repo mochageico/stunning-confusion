@@ -47,6 +47,7 @@ import {
 } from '../lib/sections';
 
 import { useThemeColors } from '../components/theme';
+import { OneTimeTip } from '../components/OneTimeTip';
 const OVERRIDE_PHASE_OPTIONS: { id: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; label: string }[] = [
   { id: 'learning', label: 'Learning' },
   { id: 'daily', label: 'Daily' },
@@ -452,6 +453,11 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               )}
             </>
           }
+        />
+
+        <OneTimeTip
+          id="chapterPage"
+          text="Tap verses to select them, then Add to learn them. Already know some by heart? Select them and tap Status instead."
         />
 
         {/* Chapter progress: one sliver per verse, in the same status colors

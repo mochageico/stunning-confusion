@@ -67,12 +67,15 @@ export function FloatingTabBar<T extends string>({
   current,
   onSelect,
   dots,
+  ring,
 }: {
   tabs: TabItem<T>[];
   current: T;
   onSelect: (id: T) => void;
   /** Tabs with something new (unread messages, a friend request): a small accent dot. */
   dots?: Partial<Record<T, boolean>>;
+  /** Circle the current tab, so the tour can point at the tab it's describing. */
+  ring?: boolean;
 }) {
   const palette = useThemeColors();
   return (
@@ -99,7 +102,10 @@ export function FloatingTabBar<T extends string>({
             // shares out what's left, so with five tabs "Community" gets the
             // room it needs at large text on an SE (equal fifths cut it off).
             className={`grow items-center justify-center rounded-full ${active ? 'bg-accent-soft' : 'active:bg-fill'}`}
-            style={{ gap: 2, paddingHorizontal: 4 }}
+            // A border, not a shadow: the ring comes and goes with the tour,
+            // and a toggled shadow class freezes iOS (ios-fabric-shadow-deadlock).
+            // Every tab gets the width while it's on so none of them shifts.
+            style={[{ gap: 2, paddingHorizontal: 4 }, ring ? { borderWidth: 2, borderColor: active ? palette.accent : 'transparent' } : null]}
           >
             <View>
               <Icon size={20} color={active ? palette.accent : palette.ink3} strokeWidth={active ? 2.4 : 2} />

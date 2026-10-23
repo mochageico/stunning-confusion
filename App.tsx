@@ -39,7 +39,8 @@ import TakeawaysScreen from './src/screens/TakeawaysScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
-import TourScreen from './src/screens/TourScreen';
+import CommonQuestionsScreen from './src/screens/CommonQuestionsScreen';
+import { TourCard } from './src/components/GuidedTour';
 import AuthGateScreen from './src/screens/AuthGateScreen';
 import DevLayoutLab from './src/screens/DevLayoutLab';
 
@@ -526,11 +527,15 @@ function AppShell() {
           bar now. */}
       {showBars && (
         <BottomBars>
+          {/* The tour card sits here rather than over the screen, so the
+              screen it's describing stays fully in view above it. */}
+          {state.showTour === true && <TourCard state={state} />}
           <NowPlayingBar state={state} />
           <FloatingTabBar
             tabs={TABS}
             current={state.currentTab}
             onSelect={state.selectTab}
+            ring={state.showTour === true}
             dots={{ community: state.unreadDMCount + state.unreadCircleCount + state.incomingFriendRequests.length > 0 }}
           />
         </BottomBars>
@@ -602,14 +607,14 @@ function AppShell() {
         </View>
       )}
 
-      {/* "Show me around" -- opened on demand from Settings or from Today's
-          empty state, never automatically. Rendered after setup so that if
-          both are somehow open, setup (the one with unanswered questions)
-          isn't buried underneath it. */}
-      {state.showTour && (
+      {/* Common questions -- opened from the tour's last card or Settings,
+          never automatically. (The tour itself is the card in BottomBars.)
+          Rendered after setup so that if both are somehow open, setup (the
+          one with unanswered questions) isn't buried underneath it. */}
+      {state.showTour === 'questions' && (
         <View className="absolute inset-0 bg-canvas z-50">
           <SafeAreaView style={{ flex: 1 }}>
-            <TourScreen state={state} />
+            <CommonQuestionsScreen state={state} />
           </SafeAreaView>
         </View>
       )}

@@ -19,6 +19,7 @@ import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, lear
 import { translationLabel } from '../data';
 
 import { useThemeColors } from '../components/theme';
+import { OneTimeTip } from '../components/OneTimeTip';
 function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
   if (items.length === 0) return [];
   const groups: GroupedQueueItem[] = [];
@@ -447,6 +448,11 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           title="My Verses"
           subtitle={summary}
           actions={<AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => go('addVerses')} />}
+        />
+
+        <OneTimeTip
+          id="versesTab"
+          text="Everything about your verses lives here: the list itself, My Schedule for which days you learn new ones, and Review Settings for how often learned verses come back."
         />
 
         {total === 0 ? (
