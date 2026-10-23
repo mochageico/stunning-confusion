@@ -40,7 +40,7 @@ totals and the shared ladder are next.
 | Tricky verses | **Dropped** as bloat. The mixed-review recap's "where you slipped" list covers it. |
 | Takeaways | One per **section**. Asked once the whole section reaches **weekly** reviews. Optional, can be written later. The user can add a secondary **note** under it. |
 | Takeaway sharing | Shareable with a circle (share switch remembers the last choice). A circle sees each person's takeaways as their own items; **not** grouped by passage across people (everyone's sections differ). **Replies live on the takeaway**, visible only after tapping it open. |
-| Milestones | Books of the Bible as landmarks, counted in verses held ("You hold more verses than Ruth. Next: Philippians, 19 to go"). Shown as markers on the takeaways path. |
+| Milestones | Books of the Bible as landmarks, counted in verses held ("You hold more verses than Ruth. Next: Philippians, 19 to go"). **One place only** (user, 2026-10-23): a quiet line under My Verses' title. No markers or "Next:" line on the takeaways path (stacked markers looked tacky). |
 | Circle totals | One weekly line ("This week the Tuesday group reviewed 2,140 verses and wrote 6 takeaways"), a bar of everyone's share with **no ranking**, and a shared landmark ladder ("Together you hold more than Hebrews"). |
 | Rejected | Lamp/momentum meter, streaks, speed or time as a score, clean-run counter, past-mistakes replay, keyword skeleton, phrase check, finish-the-recording, typing races, extra milestone kinds (first whole chapter etc.). Don't re-pitch these. |
 
