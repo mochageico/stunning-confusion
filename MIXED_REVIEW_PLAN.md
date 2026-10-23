@@ -19,8 +19,12 @@ tried on a real phone. Stage 6, private half, built 2026-10-22 (takeaways, the
 ask, the path; the takeaways Firestore rule is **not deployed**). Stage 6, sharing
 half, built 2026-10-22: share switch, With my circle, replies, circle rules (**not
 deployed**: build first, then rules). Stage 7, milestones half, built 2026-10-23
-(books of the Bible as landmarks, one line on My Verses; chapters fold on the takeaways path). Circle
-totals and the shared ladder are next.
+(books of the Bible as landmarks, one line on My Verses; chapters fold on the takeaways path).
+Stage 7, circle totals half, built 2026-10-23 (weekly line, share bar, one shared
+landmark line on the circle page; the memberStats rule is **not deployed**).
+**The plan is fully built.** Left: deploying the rules (new app build first, then
+rules, per the memory note "social rules deploy") and the real-phone checks each
+stage lists under "Not tried".
 
 ---
 
@@ -41,7 +45,7 @@ totals and the shared ladder are next.
 | Takeaways | One per **section**. Asked once the whole section reaches **weekly** reviews. Optional, can be written later. The user can add a secondary **note** under it. |
 | Takeaway sharing | Shareable with a circle (share switch remembers the last choice). A circle sees each person's takeaways as their own items; **not** grouped by passage across people (everyone's sections differ). **Replies live on the takeaway**, visible only after tapping it open. |
 | Milestones | Books of the Bible as landmarks, counted in verses held ("You hold more verses than Ruth. Next: Philippians, 19 to go"). **One place only** (user, 2026-10-23): a quiet line under My Verses' title. No markers or "Next:" line on the takeaways path (stacked markers looked tacky). |
-| Circle totals | One weekly line ("This week the Tuesday group reviewed 2,140 verses and wrote 6 takeaways"), a bar of everyone's share with **no ranking**, and a shared landmark ladder ("Together you hold more than Hebrews"). |
+| Circle totals | One weekly line ("This week the Tuesday group reviewed 2,140 verses and wrote 6 takeaways"), a bar of everyone's share with **no ranking**, and one shared landmark **line** ("Together you hold more verses than the book of Hebrews. Next: Daniel, 54 to go"), not a stacked ladder (user, 2026-10-23). |
 | Rejected | Lamp/momentum meter, streaks, speed or time as a score, clean-run counter, past-mistakes replay, keyword skeleton, phrase check, finish-the-recording, typing races, extra milestone kinds (first whole chapter etc.). Don't re-pitch these. |
 
 ### Names are not final
@@ -573,7 +577,7 @@ and rules).
 - **Circle totals:** each member writes a small weekly stats doc (verses reviewed this
   week, takeaways written, verses held) readable by circle co-members. Circle page shows
   the weekly line, the share bar (no names in rank order — alphabetical or fixed member
-  order), and the shared landmark ladder.
+  order), and one shared landmark line (not a ladder; see Milestones above).
 - **Done when:** tsc, checks, screenshots; a member who leaves the circle drops out of
   the totals.
 - **As built (stage 7, milestones half):**
@@ -607,6 +611,79 @@ and rules).
     folded pill shows how many stops are hidden). Everything starts open; the
     fold is per visit, not saved. Demo: `?s=takeaways&fold=1`.
   - Not tried: a real phone.
+
+- **As built (stage 7, circle totals half):**
+  - **Where the stats live: `circles/{circleId}/memberStats/{uid}`**, one doc per
+    member per circle: `uid, weekStart, reviewed, held, updatedAt`
+    (`CircleMemberStats` in types.ts). Not `profiles/{uid}/shared/weeklyStats`:
+    a rule can't loop over every circle the reader is in, so a profile-side doc
+    could only be gated by the self-reported `circleIds`, which no rule may
+    trust. Inside the circle, "is the reader a co-member?" is one `exists()` on
+    their real member doc, the same check shared takeaways use. Cost: one write
+    per circle (people are in a few).
+  - **Takeaways are not in the doc.** The weekly line's count comes from
+    `circles/{id}/takeaways` (`createdAt` since this week's Monday, authors who
+    are still members), so only takeaways shared to *this* circle count.
+  - Pure logic `src/lib/circleTotals.ts` + `npm run check:circletotals`:
+    `weekBounds(now, dayStartHour)` (Monday first, by the logical day: with a 2am
+    day start, Monday 1am is last week; key = that Monday's local day key),
+    `isReviewLog` (a pass, miss or grace past Learning; Learning practice,
+    skipped and placed don't count), `reviewsInWeek`, `myWeekStats` (held =
+    `milestones.versesHeld`), `cleanStats` (odd or missing fields read as zero,
+    capped as the rule caps), `combineCircle`, `memberOrder`, `weeklyLine`,
+    `togetherLine`, `withCommas`.
+  - **Combining:** only the current member list counts, so someone who left
+    drops out even if their doc survived; a member with no doc counts as zero;
+    a doc from an earlier week counts **zero reviews** but still counts its
+    **verses held** (holding doesn't reset on Monday). Held is summed across
+    people (the circle holds them together), not de-duplicated.
+  - **Writing** (`src/state/useCircleTotals.ts`): once the user's queue has
+    loaded (`queueLoadedUid`, so the empty first render never writes 0 held),
+    8 s after the queue last changed (a review session writes once, not per
+    verse), and again each time the app comes back to the front (a new week
+    may have begun). Unchanged numbers aren't rewritten. Each member writes by
+    their own logical day and time zone; the viewer compares `weekStart` with
+    their own week, so around Monday midnight two people in different zones
+    may briefly disagree. Fine for a small group.
+  - **Leaving:** the AppState `leaveCircle` wrapper deletes your stats doc
+    (with the takeaways unshare) before leaving; `removeCircleMember` deletes the
+    member's doc in the kick batch; `disbandCircle` reads and deletes
+    `memberStats`; account deletion removes yours from every circle (best
+    effort, beside the shared takeaways).
+  - **Circle page** (`CommunityGroupDetailScreen`, card in
+    `src/components/CircleTotalsCard.tsx`, under the members row): "This week
+    Grace Church Men reviewed 1,940 verses and wrote 3 takeaways." ("No reviews
+    yet this week." when nothing); the share bar shows only people with reviews
+    this week, in join-date order (never sorted), bracket colors by member
+    position (never the stage colors), first names under it ("You" for you),
+    **no numbers per person**; then the quiet landmark line from
+    `ladderPosition` / `heldLine(pos, 'Together you')` / `nextLine(pos)` (before
+    the first landmark: "Together you hold 8 verses. Next: 2 John, 6 to go.").
+    Loaded when the circle opens (`loadCircleStats`). The existing challenge
+    leaderboard is untouched.
+  - **Rule** (`firestore.rules`, after the shared takeaways; **not deployed**):
+    read = member; create/update = the doc's own uid, while a member, only the
+    five keys, `uid` = doc id, `weekStart` YYYY-MM-DD, `reviewed` int 0–100,000,
+    `held` int 0–40,000, `updatedAt` string ≤ 40; delete = the member themself
+    (any time) or the circle's leader.
+  - **Rules reasoned through:**
+    - *Non-member* (signed in, no member doc): get and list refused; can't
+      create a doc in the circle even for their own uid (member check); can't
+      write anyone else's (uid = doc id = their auth uid). Someone who left can
+      still delete their own old doc, nothing else. Signed out: all refused.
+    - *Member*: reads every member's doc; writes only their own, only valid
+      shapes (no extra keys, no negative or huge counts, no fake uid); can't
+      delete anyone else's.
+    - *Leader*: as a member, plus delete on any doc (kick, disband).
+    - Not run against the emulator (none in this repo); reasoned by hand. Until
+      the rule is deployed the circle page's load is refused and the card
+      simply doesn't show; writes fail quietly to the console.
+  - Demo: `?s=groupDetail` (Micah, Sarah, David this week; Tom's doc is last
+    week's so he counts zero; a former member's doc and takeaway are left out),
+    `&quiet=1` (nobody has reviewed yet this week). `check:appstate` snapshot
+    updated on purpose (`circleStats`, `loadCircleStats`, `seedCircleStats`).
+  - Not tried: real Firestore (the demo writes nothing), a real phone, a week
+    rolling over with the app open.
 
 ---
 

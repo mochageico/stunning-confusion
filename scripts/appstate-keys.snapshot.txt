@@ -46,6 +46,7 @@ chapterPhotos: ChapterPhoto[]
 chapterSections: { [x: string]: ChapterSections; }
 chapterViewMode: "list" | "grid" | "memoryGrid"
 circleFriends: CircleMember[]
+circleStats: { [x: string]: CircleStatsState; }
 circleTakeaways: { [x: string]: CircleTakeawayList; }
 clearAudioDownloads: () => Promise<void>
 clearGroupChallengeMembershipsForCircle: (circleId: string) => void
@@ -165,6 +166,7 @@ listenSource: "all" | "selection" | "memorization" | "reviewing" | "priming" | `
 loadActiveCircleData: (circleId: string) => Promise<void>
 loadActivityFeed: () => Promise<void>
 loadCircleFriends: (circles: Circle[]) => Promise<void>
+loadCircleStats: (circleId: string) => Promise<void>
 loadCircleTakeaways: (circleId: string) => Promise<void>
 loadFriendQuizVerses: (friendUid: string) => Promise<{ book: string; chapter: number; verseNumber: number; status: string; translationId?: string | undefined; }[] | null>
 loadFriendRequests: () => Promise<void>
@@ -300,6 +302,7 @@ savedPlans: MemoryPlan[]
 searchUsers: (rawQuery: string) => Promise<void>
 searchingUsers: boolean
 sectionsForChapter: (book: string, chapter: number) => ChapterSections | null
+seedCircleStats: (circleId: string, stats: CircleMemberStats[], sharedThisWeek: { authorUid: string; createdAt: string; }[]) => void
 seedCircleTakeaways: (circleId: string, items: SharedTakeaway[], memberUids: string[], replies: Record<string, TakeawayReply[]>) => void
 seekImportAudioBy: (deltaSeconds: number) => void
 seekRecordingBy: (deltaSeconds: number) => Promise<void>

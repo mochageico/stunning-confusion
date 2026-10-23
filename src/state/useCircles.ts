@@ -435,7 +435,7 @@ export function useCircles({
       // READ first, while we're still a member (most of these are
       // members-only), then deleted.
       const circleRef = doc(db, 'circles', circleId);
-      const [circleSnap, membersSnap, plansSnap, messagesSnap, reactionsSnap, challengesSnap, bannedSnap, responsesSnap, takeawaysSnap] =
+      const [circleSnap, membersSnap, plansSnap, messagesSnap, reactionsSnap, challengesSnap, bannedSnap, responsesSnap, takeawaysSnap, statsSnap] =
         await Promise.all([
           getDoc(circleRef),
           getDocs(collection(db, 'circles', circleId, 'members')),
@@ -446,6 +446,7 @@ export function useCircles({
           getDocs(collection(db, 'circles', circleId, 'banned')),
           getDocs(collection(db, 'circles', circleId, 'responses')),
           getDocs(collection(db, 'circles', circleId, 'takeaways')),
+          getDocs(collection(db, 'circles', circleId, 'memberStats')),
         ]);
       const participantSnaps = await Promise.all(
         challengesSnap.docs.map((c) => getDocs(collection(c.ref, 'participants')))
@@ -464,6 +465,7 @@ export function useCircles({
         ...challengesSnap.docs.map((d) => d.ref),
         ...replySnaps.flatMap((s) => s.docs.map((d) => d.ref)),
         ...takeawaysSnap.docs.map((d) => d.ref),
+        ...statsSnap.docs.map((d) => d.ref),
         ...reactionsSnap.docs.map((d) => d.ref),
         ...responsesSnap.docs.map((d) => d.ref),
         ...messagesSnap.docs.map((d) => d.ref),
@@ -497,12 +499,14 @@ export function useCircles({
   // could simply rejoin (firestore.rules' join rule checks banned/{uid}).
   // Their shared takeaways (and the replies on them) go first, while the
   // leader can still list them; best effort, since the circle's list hides
-  // anyone who isn't a member anyway.
+  // anyone who isn't a member anyway. Their weekly stats doc goes in the kick
+  // batch (the totals skip non-members too).
   const removeCircleMember = async (circleId: string, memberUid: string) => {
     try {
       await removeSharesBy(circleId, memberUid).catch((err) => console.error('Failed to remove their shared takeaways:', err));
       const batch = writeBatch(db);
       batch.delete(doc(db, 'circles', circleId, 'members', memberUid));
+      batch.delete(doc(db, 'circles', circleId, 'memberStats', memberUid));
       batch.set(doc(db, 'circles', circleId, 'banned', memberUid), {
         uid: memberUid,
         bannedAt: new Date().toISOString(),

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Share, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import * as Clipboard from 'expo-clipboard';
@@ -12,6 +12,8 @@ import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScale
 import { Avatar, Badge, CollapsibleSection, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SegmentedControl } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { buildInviteUrl } from '../lib/invites';
+import { combineCircle, weekBounds } from '../lib/circleTotals';
+import { CircleTotalsCard } from '../components/CircleTotalsCard';
 
 const PRIVACY_OPTIONS = [
   { id: 'public' as const, label: 'Public' },
@@ -64,6 +66,9 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     clearGroupChallengeMembershipsForCircle,
     memoryQueue,
     countRangeProgress,
+    circleStats,
+    loadCircleStats,
+    dayStartHour,
   } = state;
 
   const [showCreateChallengeForm, setShowCreateChallengeForm] = useState(false);
@@ -81,6 +86,22 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
   const [draftPublic, setDraftPublic] = useState(true);
 
   const isLeaderOrAdmin = !!activeCircle && !!user && activeCircle.ownerId === user.uid;
+
+  // This week together: everyone's stats docs, added up over the current
+  // member list only (someone who left drops out; no doc yet = zero).
+  const circleId = activeCircle?.id;
+  useEffect(() => {
+    if (circleId) loadCircleStats(circleId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [circleId]);
+  const loadedStats = circleId ? circleStats[circleId] : undefined;
+  const totals = useMemo(
+    () =>
+      loadedStats && !loadedStats.loading
+        ? combineCircle(activeCircleMembers, loadedStats.stats, loadedStats.sharedThisWeek, weekBounds(new Date(), dayStartHour))
+        : null,
+    [loadedStats, activeCircleMembers, dayStartHour]
+  );
 
   // The settings dialog edits a copy and applies it on Save, so a half-typed
   // name is never written to the circle.
@@ -213,6 +234,8 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           </AppText>
           <ChevronRight size={18} color={palette.ink3} strokeWidth={2.4} />
         </Pressable>
+
+        {totals && <CircleTotalsCard circleName={activeCircle.name} totals={totals} myUid={user?.uid} />}
 
         <AppButton
           size="lg"
