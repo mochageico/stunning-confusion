@@ -71,6 +71,7 @@ import BlocksGallery from './src/dev/BlocksGallery';
 import { useToastMessage } from './src/lib/toastStore';
 import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent, useColorSchemeInUse } from './src/components/theme';
 import { loadAppPrefs, setAppPref, useAppPrefs } from './src/lib/appPrefs';
+import { startSpeechSlipSync } from './src/lib/speechSlips';
 
 import { useThemeColors } from './src/components/theme';
 // The original web app has no router — it's a hand-rolled state machine on
@@ -706,6 +707,10 @@ export default function App() {
       setInitialAccent(demo ? demo.id : saved);
     });
   }, []);
+
+  // The speech slips this account has taught the grader (tap-to-fix), loaded
+  // per sign-in -- see lib/speechSlips.
+  React.useEffect(() => startSpeechSlipSync(), []);
 
   // app.config.js sets orientation: 'default' rather than 'portrait' so the
   // photo viewer can unlock landscape at runtime -- iOS refuses to rotate

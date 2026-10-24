@@ -8,6 +8,7 @@ import {
   Check,
   CircleHelp,
   Compass,
+  Ear,
   Download,
   FileText,
   Layers,
@@ -50,6 +51,7 @@ import { FALLBACK_FORMAT, MIX_COUNTS_PREF, MIX_FORMAT_ORDER, MIX_FORMATS_PREF, M
 import { PassMark, PracticeTextSize, SchemeChoice, setAppPref, useAppPrefs } from '../lib/appPrefs';
 import { printVerses, shareVersesAsText } from '../lib/exportVerses';
 import { resetTips } from '../lib/tips';
+import { forgetAllSpeechSlips, forgetSpeechSlip, SLIP_LEARN_AFTER, useSpeechSlips } from '../lib/speechSlips';
 
 // ============================================================================
 // SETTINGS
@@ -347,6 +349,7 @@ function RecallPage() {
           }}
         />
       </ToggleCard>
+      <LearnedSlips />
       <View style={{ gap: space(6) }}>
         <SectionHeader title="Sounds and vibration" />
         <ToggleCard>
@@ -367,6 +370,63 @@ function RecallPage() {
         </ToggleCard>
       </View>
     </View>
+  );
+}
+
+/**
+ * The speech slips tap-to-fix has taught the grader (lib/speechSlips): every
+ * one it now accepts, each forgettable, plus how many are still on their
+ * first fix.
+ */
+function LearnedSlips() {
+  const slips = useSpeechSlips();
+  const [confirmAll, setConfirmAll] = useState(false);
+  const accepted = slips.filter((s) => s.count >= SLIP_LEARN_AFTER);
+  const pending = slips.length - accepted.length;
+  return (
+    <>
+      <GroupedList
+        header="Speech slips accepted for you"
+        footer={`When you tap a red word to say you did say it, the app remembers what the speech engine heard instead. Fix the same one ${SLIP_LEARN_AFTER === 2 ? 'twice' : `${SLIP_LEARN_AFTER} times`} and it counts as right on its own after that. Only the words are saved, never your voice.${
+          pending > 0 ? ` ${pending} more ${pending === 1 ? 'has' : 'have'} been fixed once so far.` : ''
+        }`}
+      >
+        {accepted.length === 0 ? (
+          <ListRow Icon={Ear} title="None yet" accessory="none" />
+        ) : (
+          accepted.map((slip) => (
+            <ListRow
+              key={slip.key}
+              Icon={Ear}
+              title={`"${slip.heard}" for "${slip.expected}"`}
+              subtitle={`Fixed ${slip.count} times`}
+              value="Forget"
+              onPress={() => forgetSpeechSlip(slip.key)}
+            />
+          ))
+        )}
+        {slips.length > 0 && <ListRow Icon={RotateCcw} title="Forget all" destructive onPress={() => setConfirmAll(true)} />}
+      </GroupedList>
+      <Dialog
+        visible={confirmAll}
+        onClose={() => setConfirmAll(false)}
+        title="Forget every speech slip?"
+        message="Recall goes back to grading every misheard word as missed until you fix it again."
+        actions={
+          <>
+            <AppButton variant="quiet" label="Cancel" onPress={() => setConfirmAll(false)} />
+            <AppButton
+              variant="primary"
+              label="Forget all"
+              onPress={() => {
+                forgetAllSpeechSlips();
+                setConfirmAll(false);
+              }}
+            />
+          </>
+        }
+      />
+    </>
   );
 }
 

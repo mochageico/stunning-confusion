@@ -21,6 +21,9 @@ import {
   alignRecitationWindow,
   gradeTranscript,
   isCommonlyDroppedWord,
+  isLearnableSlip,
+  setLearnedSlips,
+  slipKey,
   reconcileSpeechWindow,
   tokenizeWords,
   wordsRoughlyEqual,
@@ -617,6 +620,28 @@ scenario('20. Skipping a whole verse blames that verse, not the next one', () =>
   const v10Content = v10Words.filter((w) => !isCommonlyDroppedWord(w)).length;
   check('every word of verse 11 grades non-missed', v11Outcomes.every((o) => o !== 'missed'), v11Outcomes.join(','));
   check('every content word of the skipped verse 10 grades missed', v10Missed === v10Content, `${v10Missed} of ${v10Content}`);
+});
+
+// ============================================================================
+// Learned speech slips (tap-to-fix, lib/speechSlips)
+// ============================================================================
+scenario('21. A learned slip is accepted; nothing else changes', () => {
+  const text = 'those who live according to the spirit set their minds on the things of the spirit';
+  const heard = 'those who live according to the spirit that their minds on the things of the spirit';
+  const before = gradeTranscript(text, heard);
+  check('before learning, "that" for "set" grades missed', before[7] === 'missed', before.join(','));
+
+  setLearnedSlips(new Set([slipKey('set', 'that')]));
+  const after = gradeTranscript(text, heard);
+  check('after learning, "that" for "set" grades close', after[7] === 'close', after.join(','));
+  const otherWord = gradeTranscript('the law of sin and death', 'the law of that and death');
+  check('the learned pair only covers its own verse word ("that" for "sin" still missed)', otherWord[3] === 'missed', otherWord.join(','));
+  setLearnedSlips(new Set());
+
+  check('a real substitution is learnable', isLearnableSlip('set', 'that'));
+  check('a meaning flip is never learnable ("visible" for "invisible")', !isLearnableSlip('invisible', 'visible'));
+  check('a spoken verse number is never learnable', !isLearnableSlip('tree', 'three'));
+  check('a pair already accepted on its own is not stored', !isLearnableSlip('condemned', 'condemns'));
 });
 
 // ============================================================================

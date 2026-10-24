@@ -36,6 +36,18 @@ export const setForgiveNearbyKeys = (on: boolean) => {
   forgiveNearbyKeys = on;
 };
 
+// Speech slips this user's engine keeps making, learned from tap-to-fix (see
+// lib/speechSlips, which loads them per account). Same module-state reasoning
+// as the two settings above.
+let learnedSlips: ReadonlySet<string> = new Set();
+
+/** One learned slip: the verse word and what the engine wrote for it, both normalized. */
+export const slipKey = (expectedWord: string, heardWord: string): string => `${expectedWord}>${heardWord}`;
+
+export const setLearnedSlips = (keys: ReadonlySet<string>) => {
+  learnedSlips = keys;
+};
+
 export type WordOutcome = 'perfect' | 'close' | 'missed';
 
 export interface RecitationSummary {
@@ -392,8 +404,22 @@ const pairCost = (expectedWord: string, spokenWord: string): number => {
   // INSERT_SPOKEN_COST instead, unless it's an exact match (handled above).
   if (isLikelyVerseNumber(spokenWord) && !isLikelyVerseNumber(expectedWord)) return SUBSTITUTION_COST;
   if (wordsRoughlyEqual(expectedWord, normalizedSpoken)) return CLOSE_MATCH_COST;
+  if (learnedSlips.has(slipKey(expectedWord, normalizedSpoken))) return CLOSE_MATCH_COST;
   return SUBSTITUTION_COST;
 };
+
+/**
+ * Whether a tap-to-fix pair may be learned at all. Never a meaning flip
+ * ("visible" for "invisible": tapping still fixes that one time, but it's
+ * never accepted automatically), never a spoken verse number, and never a
+ * pair the grader already accepts on its own.
+ */
+export const isLearnableSlip = (expectedWord: string, heardWord: string): boolean =>
+  expectedWord.length > 0 &&
+  heardWord.length > 0 &&
+  !isNegatedPair(expectedWord, heardWord) &&
+  !isLikelyVerseNumber(heardWord) &&
+  pairCost(expectedWord, heardWord) === SUBSTITUTION_COST;
 
 const skipExpectedCost = (expectedWord: string): number =>
   isCommonlyDroppedWord(expectedWord) ? SKIP_EXPECTED_DROPPABLE_COST : SKIP_EXPECTED_COST;

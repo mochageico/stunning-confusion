@@ -18,6 +18,7 @@ When you create an account or sign in to the Application (e.g., via Google Sign-
 To deliver the core scripture memorization functionality, we collect and store:
 - **Verse Progress & Practice Data:** Scripture verses you save, your practice history, recitation scores, and review schedules.
 - **App Settings & Preferences:** User interface preferences and app configuration settings.
+- **Learned Speech Corrections:** When you mark a word the speech recognizer misheard as correct, the verse word and the word the recognizer produced (for example, "set" and "that") are saved to your account, so the app can accept that mishearing for you in future. Only these words are saved, never audio. You can view and delete them in Settings > Recall and typing.
 
 ### C. Device Permissions and Sensor Data
 The Application requests specific permissions on your mobile device to enable interactive features:

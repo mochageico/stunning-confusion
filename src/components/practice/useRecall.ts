@@ -3,7 +3,8 @@ import { Layers, ListChecks, ListOrdered, ListTree, MessageCircle, Mic, Puzzle, 
 import { ChapterSections, VerseState, QueueItem, TextScript } from '../../types';
 import { isReviewDue } from '../../state/useAppState';
 import { feedbackDone, feedbackMiss } from '../../lib/feedback';
-import { classifyFirstLetterAttempt, getSpeechRecognizer, normalizeToken, reconcileSpeechWindow, tokenizeWords, SpeechRecognizer, WordOutcome } from '../../lib/recitation';
+import { classifyFirstLetterAttempt, getSpeechRecognizer, gradeTranscriptDetailed, normalizeToken, reconcileSpeechWindow, tokenizeWords, SpeechRecognizer, WordOutcome } from '../../lib/recitation';
+import { recordSpeechSlip } from '../../lib/speechSlips';
 import { splitWords, typedLetters } from '../../lib/textScript';
 import { MIN_JIGSAW_VERSES, MIN_THREAD_VERSES, threadRunEndingAt } from '../../lib/drills';
 import { verseAnnotationKey } from '../MemoryGrid';
@@ -290,7 +291,18 @@ export function useRecall({
   // grade it themselves. Also patches finalOutcomes when the session has
   // already finished (the summary/log buttons read from that snapshot, not
   // reciteOutcomes, once isFinishedRecite is true).
+  //
+  // A word speech graded (not a typed miss or a revealed hint, which are the
+  // user's own) also teaches the grader: what the engine wrote in its place
+  // is counted, and a slip fixed often enough is accepted from then on (see
+  // lib/speechSlips). Recomputed from the full transcript here rather than
+  // tracked through every live reconciliation pass.
   const overrideWordAsCorrect = (idx: number) => {
+    if (reciteSource[idx] === 'speech' && passageScript === 'latin' && speakTranscript) {
+      const pos = reciteOrder.posOf[idx];
+      const { heard } = gradeTranscriptDetailed(speakExpectedTokens.join(' '), speakTranscript);
+      recordSpeechSlip(speakExpectedTokens[pos] ?? '', heard[pos]);
+    }
     setReciteOutcomes((prev) => ({ ...prev, [idx]: 'perfect' }));
     setReciteSource((prev) => ({ ...prev, [idx]: 'protected' }));
     setFinalOutcomes((prev) => (prev ? prev.map((o, i) => (i === idx ? 'perfect' : o)) : prev));

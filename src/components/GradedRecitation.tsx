@@ -6,6 +6,7 @@ import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttemp
 import { blankExceptFirstLetter, blankLetters, joinWords, normalizeToken, scriptOfVerse, typedLetters, wordGap } from '../lib/textScript';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
 import { WaveBars } from './ui';
+import { recordSpeechSlip } from '../lib/speechSlips';
 
 // ============================================================================
 // ONE GRADED RECITATION
@@ -323,7 +324,12 @@ export default function GradedRecitation({
   }, [span, graded, outcomes]);
 
   // Speech mishears words people said right; tapping one marks it right, as in Recall.
-  const markRight = (flatIdx: number) => setOutcomes((prev) => prev.map((o, i) => (i === flatIdx ? 'perfect' : o)));
+  // Only reachable in speak mode, on a word speech graded missed -- so what
+  // the engine heard there is worth learning from (lib/speechSlips).
+  const markRight = (flatIdx: number) => {
+    setOutcomes((prev) => prev.map((o, i) => (i === flatIdx ? 'perfect' : o)));
+    recordSpeechSlip(graded[flatIdx]?.word ?? '', heard[flatIdx]);
+  };
 
   // Switching drops this attempt: stop listening first so the engine's own
   // end callback can't report a cancel after the switch.
