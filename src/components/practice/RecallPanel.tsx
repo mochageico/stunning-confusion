@@ -1,6 +1,6 @@
 import { ScrollView, View } from 'react-native';
 import { Check, Eye, Mic, MicOff, RefreshCw, Shuffle, Sparkles } from 'lucide-react-native';
-import { normalizeToken, summarizeOutcomes, REVIEW_PASS_ACCURACY } from '../../lib/recitation';
+import { normalizeToken, summarizeOutcomes, reviewPassAccuracy } from '../../lib/recitation';
 import { maskExceptFirstLetter, maskLetters, splitWords, wordGap } from '../../lib/textScript';
 import { MIN_JIGSAW_VERSES } from '../../lib/drills';
 import { MIX_NAMES } from '../../lib/formatNames';
@@ -529,13 +529,13 @@ export default function RecallPanel({
              logging actions exist: perfect (no missed words) with
              First Letter mode OFF -> counts as a mastery touch AND a
              review; perfect WITH First Letter assist, or >=
-             REVIEW_PASS_ACCURACY otherwise -> counts as a review only;
+             the pass mark otherwise -> counts as a review only;
              below that -> the run logs as a failed attempt. */
           (() => {
             const summary = summarizeOutcomes(finalOutcomes || []);
             const drill: 'speak' | 'type' = usedSpeechRef.current ? 'speak' : 'type';
             const pct = Math.round(summary.accuracy * 100);
-            const passPct = Math.round(REVIEW_PASS_ACCURACY * 100);
+            const passPct = Math.round(reviewPassAccuracy() * 100);
             const assisted = hintMode === 'firstLetter' || recallDisplayMode === 'memoryGrid';
             const isMasteryEligible = summary.isPerfect && !assisted;
             return (

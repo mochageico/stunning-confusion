@@ -20,6 +20,22 @@ export { firstLetterOnly, normalizeToken } from './textScript';
 // enough" near-miss keys are fine, but no wrong words and no revealed hints.
 export const REVIEW_PASS_ACCURACY = 0.9;
 
+// The user's own pass mark and near-key forgiveness (Settings > Recall and
+// typing, lib/appPrefs). Module state rather than arguments: every grader in
+// the app goes through these few functions, and threading a setting through
+// each call site would touch a dozen screens for one number.
+let passAccuracy = REVIEW_PASS_ACCURACY;
+let forgiveNearbyKeys = true;
+
+/** The accuracy a review needs to pass: 0.9 unless changed in Settings. */
+export const reviewPassAccuracy = (): number => passAccuracy;
+export const setReviewPassAccuracy = (v: number) => {
+  passAccuracy = v;
+};
+export const setForgiveNearbyKeys = (on: boolean) => {
+  forgiveNearbyKeys = on;
+};
+
 export type WordOutcome = 'perfect' | 'close' | 'missed';
 
 export interface RecitationSummary {
@@ -48,7 +64,7 @@ export const summarizeOutcomes = (outcomes: WordOutcome[]): RecitationSummary =>
     missedWords,
     accuracy,
     isPerfect: totalWords > 0 && missedWords === 0,
-    passesReview: totalWords > 0 && accuracy >= REVIEW_PASS_ACCURACY,
+    passesReview: totalWords > 0 && accuracy >= passAccuracy,
   };
 };
 
@@ -139,7 +155,7 @@ export const classifyFirstLetterAttempt = (typedChar: string, word: string, scri
   // Hebrew or Greek near-miss is just wrong. Strict, by the user's choice.
   const typed = script === 'latin' ? typedChar.toLowerCase() : normalizeToken(typedChar, script);
   if (typed === target) return 'exact';
-  if (isAdjacentKey(typed, target)) return 'close';
+  if (forgiveNearbyKeys && isAdjacentKey(typed, target)) return 'close';
   return 'wrong';
 };
 

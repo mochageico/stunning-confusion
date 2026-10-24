@@ -63,12 +63,13 @@ import CircleChatScreen from './src/screens/CircleChatScreen';
 import QuizScreen from './src/screens/QuizScreen';
 import { CommunityGuidelinesSheet } from './src/components/CommunityGuidelinesSheet';
 import { NotificationAskSheet } from './src/components/NotificationAskSheet';
-import { APP_FONTS, AppButton, AppIconButton, AppText, ChoiceCard, FontScaleOverrideProvider, useScaledSpace } from './src/components/design';
+import { APP_FONTS, AppButton, AppIconButton, AppText, ChoiceCard, FontScaleOverrideProvider, useScaledSpace, VerseFontContext } from './src/components/design';
 import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from './src/components/blocks';
 import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
 import BlocksGallery from './src/dev/BlocksGallery';
 import { useToastMessage } from './src/lib/toastStore';
-import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent } from './src/components/theme';
+import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent, useColorSchemeInUse } from './src/components/theme';
+import { loadAppPrefs, setAppPref, useAppPrefs } from './src/lib/appPrefs';
 
 import { useThemeColors } from './src/components/theme';
 // The original web app has no router — it's a hand-rolled state machine on
@@ -502,7 +503,7 @@ function AppShell() {
   if (!state.user) {
     return (
       <View style={{ flex: 1 }} className="bg-canvas">
-        <StatusBar style="dark" />
+        <ThemedStatusBar />
         <SafeAreaView style={{ flex: 1 }}>
           <AuthGateScreen state={state} />
         </SafeAreaView>
@@ -513,7 +514,7 @@ function AppShell() {
 
   return (
     <View style={{ flex: 1 }} className="bg-canvas">
-      <StatusBar style="dark" />
+      <ThemedStatusBar />
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
         <View style={{ flex: 1 }}>
           <Screens state={state} />
@@ -653,15 +654,31 @@ function ToastLayer({ state }: { state: AppState }) {
   );
 }
 
+// Dark text on the light theme, light text on the dark one.
+function ThemedStatusBar() {
+  return <StatusBar style={useColorSchemeInUse() === 'dark' ? 'light' : 'dark'} />;
+}
+
+// Settings > Verse text, handed to every AppText.
+function VerseFontProvider({ children }: { children: React.ReactNode }) {
+  return <VerseFontContext.Provider value={useAppPrefs().verseFont}>{children}</VerseFontContext.Provider>;
+}
+
 export default function App() {
   const [fontsLoaded] = useFonts(APP_FONTS);
   // Read before first paint, alongside the fonts, so the app opens in the
   // chosen accent instead of flashing navy first.
   const [initialAccent, setInitialAccent] = React.useState<AccentId | null>(null);
+  // The rest of Settings' look-and-feel choices (light or dark above all)
+  // load in the same wait.
   React.useEffect(() => {
-    loadStoredAccent().then((saved) => {
-      // Demo preview only: ?accent=<id> shows the app in another accent.
+    Promise.all([loadStoredAccent(), loadAppPrefs()]).then(([saved]) => {
+      // Demo preview only: ?accent=<id> shows the app in another accent, and
+      // ?dark=1 in dark.
       const demo = ACCENTS.find((a) => a.id === DEMO_ACCENT);
+      if (DEMO_SCREEN && Platform.OS === 'web' && new URLSearchParams(window.location.search).get('dark') === '1') {
+        setAppPref('colorScheme', 'dark');
+      }
       setInitialAccent(demo ? demo.id : saved);
     });
   }, []);
@@ -701,6 +718,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider initialAccent={initialAccent}>
+          <VerseFontProvider>
           {DEV_LAYOUT_LAB ? (
             <SafeAreaView style={{ flex: 1 }}>
               <DevLayoutLab />
@@ -714,6 +732,7 @@ export default function App() {
           ) : (
             <AppShell />
           )}
+          </VerseFontProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

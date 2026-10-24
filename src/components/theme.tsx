@@ -1,7 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, useColorScheme, View } from 'react-native';
 import { vars } from 'nativewind';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { useAppPrefs } from '../lib/appPrefs';
 
 // ============================================================================
 // THEME
@@ -19,9 +21,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //
 // The accent is the user's choice (Settings > Appearance > Accent color), so
 // no screen may hardcode an accent hex. Neutrals, status and stage colors are
-// fixed per scheme. Dark values are defined here but the app still renders
-// light: turning dark mode on later means choosing the scheme, not recoloring
-// the app.
+// fixed per scheme. The scheme is Settings > Appearance (lib/appPrefs):
+// light, dark, or the phone's own setting.
 // ============================================================================
 
 export type ColorScheme = 'light' | 'dark';
@@ -266,11 +267,11 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export function ThemeProvider({ initialAccent, children }: { initialAccent: AccentId; children: React.ReactNode }) {
   const [accentId, setAccentState] = useState<AccentId>(initialAccent);
-  // Light only for now. Dark values exist above; switching this is what
-  // turning dark mode on will mean.
-  const scheme: ColorScheme = 'light';
+  const { colorScheme: choice } = useAppPrefs();
+  const phone = useColorScheme();
+  const scheme: ColorScheme = choice === 'system' ? (phone === 'dark' ? 'dark' : 'light') : choice;
 
-  const colors = useMemo(() => buildThemeColors(accentId, scheme), [accentId]);
+  const colors = useMemo(() => buildThemeColors(accentId, scheme), [accentId, scheme]);
   const cssValues = useMemo(() => cssVarValues(colors), [colors]);
   const rootVars = useMemo(() => vars(cssValues), [cssValues]);
 
@@ -290,7 +291,7 @@ export function ThemeProvider({ initialAccent, children }: { initialAccent: Acce
     });
   }, []);
 
-  const value = useMemo(() => ({ colors, accentId, setAccentId, scheme }), [colors, accentId, setAccentId]);
+  const value = useMemo(() => ({ colors, accentId, setAccentId, scheme }), [colors, accentId, setAccentId, scheme]);
 
   return (
     <ThemeContext.Provider value={value}>
@@ -302,6 +303,11 @@ export function ThemeProvider({ initialAccent, children }: { initialAccent: Acce
 /** The palette as hex strings, for props that can't take a className. */
 export function useThemeColors(): ThemeColors {
   return useContext(ThemeContext).colors;
+}
+
+/** Light or dark, as drawn right now (after "Match phone" is worked out). */
+export function useColorSchemeInUse(): ColorScheme {
+  return useContext(ThemeContext).scheme;
 }
 
 /** The accent choice, for the Settings picker. */

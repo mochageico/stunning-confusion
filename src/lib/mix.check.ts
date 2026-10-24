@@ -8,6 +8,7 @@ import { FORMATS, FormatId } from './formatNames';
 import {
   buildMixPlan,
   buildUnits,
+  countsAsReview,
   currentRound,
   DEFAULT_MIX_FORMATS,
   MixEvent,
@@ -478,6 +479,7 @@ console.log('Counts or Practice, per format');
   check('Nothing saved: each format keeps its usual tag', DEFAULT_MIX_FORMATS.every((f) => usual[f] === FORMATS[f].counts));
   check('Recite can never be switched to Practice', readMixCounts({ recite: false }).recite === true);
   check('Junk values are ignored', readMixCounts({ scramble: 'yes' }).scramble === FORMATS.scramble.counts);
+  check('Put in order, Which section and Teach-It can never count', (['putInOrder', 'whichSection', 'teachIt'] as const).every((f) => !readMixCounts({ [f]: true })[f] && !countsAsReview(f, { [f]: true })));
 
   // Scramble switched to Counts: it reviews on its own, no follow round.
   const scrCounts = buildMixPlan({ ...fullInput(['scramble']), counts: { scramble: true } }, seeded(7));

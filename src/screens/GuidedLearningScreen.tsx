@@ -15,7 +15,7 @@ import SpotSwapDrill from '../components/drills/SpotSwapDrill';
 import JigsawDrill from '../components/drills/JigsawDrill';
 import VersePlayButton from '../components/VersePlayButton';
 import { threadSlips, ThreadSlip, threadSpan, threadStartVerseCounts, ThreadCue } from '../lib/drills';
-import { WordOutcome } from '../lib/recitation';
+import { reviewPassAccuracy, WordOutcome } from '../lib/recitation';
 import { joinWords, maskExceptFirstLetter, normalizeToken, scriptOfVerse, splitWords } from '../lib/textScript';
 import { loadPracticePrefs, savePracticePrefs } from '../lib/practicePrefs';
 import {
@@ -65,11 +65,11 @@ const refOf = (v: { book: string; chapter: number; verse: number }) => `${v.book
 const rangeOf = (vs: { book: string; chapter: number; verse: number }[]) =>
   vs.length === 0 ? '' : vs.length === 1 ? refOf(vs[0]) : `${vs[0].book} ${vs[0].chapter}:${vs[0].verse}–${vs[vs.length - 1].verse}`;
 
-/** The same pass bar a review uses: 90% of words, and "perfect" means none missed. */
+/** The same pass bar a review uses (90% of words unless changed in Settings), and "perfect" means none missed. */
 const verseResult = (o: WordOutcome[]) => {
   const right = o.filter((x) => x !== 'missed').length;
   const pct = o.length === 0 ? 1 : right / o.length;
-  return { passed: pct >= 0.9, perfect: o.length > 0 && right === o.length };
+  return { passed: pct >= reviewPassAccuracy(), perfect: o.length > 0 && right === o.length };
 };
 
 interface StageResult {

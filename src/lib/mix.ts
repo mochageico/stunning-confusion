@@ -1,7 +1,7 @@
 import type { ChapterSections, QueueItem } from '../types';
 import { buildScrambleRounds, buildSwapVerses, DrillVerse } from './drills';
 import { FORMATS, FormatId } from './formatNames';
-import { REVIEW_PASS_ACCURACY } from './recitation';
+import { reviewPassAccuracy } from './recitation';
 import { MIN_SECTION_DRILL_SECTIONS } from './sectionDrills';
 import { chapterStretches, normalizeDraft, Section, sectionsFromStarts } from './sections';
 
@@ -82,13 +82,15 @@ export const readMixCounts = (raw: unknown): MixCounts => {
   const saved = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const out = {} as MixCounts;
   MIX_FORMAT_ORDER.forEach((id) => {
-    out[id] = id === FALLBACK_FORMAT || (typeof saved[id] === 'boolean' ? (saved[id] as boolean) : FORMATS[id].counts);
+    out[id] =
+      id === FALLBACK_FORMAT ||
+      (FORMATS[id].canCount !== false && (typeof saved[id] === 'boolean' ? (saved[id] as boolean) : FORMATS[id].counts));
   });
   return out;
 };
 
 export const countsAsReview = (id: FormatId, counts?: Partial<MixCounts>): boolean =>
-  id === FALLBACK_FORMAT || (counts?.[id] ?? FORMATS[id].counts);
+  id === FALLBACK_FORMAT || (FORMATS[id].canCount !== false && (counts?.[id] ?? FORMATS[id].counts));
 
 // ============================================================================
 // 1. UNITS -- chapters, then sections (or stretches)
@@ -417,7 +419,7 @@ export interface MixCredit {
  * passes on Got it and misses on Not really.
  */
 export const verseOutcome = (r: MixVerseResult): 'pass' | 'miss' => {
-  if (typeof r.accuracy === 'number') return r.accuracy >= REVIEW_PASS_ACCURACY ? 'pass' : 'miss';
+  if (typeof r.accuracy === 'number') return r.accuracy >= reviewPassAccuracy() ? 'pass' : 'miss';
   return r.gotIt ? 'pass' : 'miss';
 };
 

@@ -8,8 +8,10 @@
 //
 // `counts` is the usual counting rule: a format counts as a review when it
 // brings words out of memory. The others are labeled "Practice" and never
-// credit a review on their own. Mixed review lets the user switch any format
+// credit a review on their own. Mixed review lets the user switch a format
 // either way in Settings (lib/mix.ts MIX_COUNTS_PREF); this is the default.
+// `canCount: false` formats are warm-ups that can never count, by the user's
+// rule (2026-10-24): Scramble can, because you read every word to solve it.
 //
 // New copy: check it against the banned-jargon list in the memory note
 // "three-concept naming" (no "queue", "phase", "graduate", "rhythm"...).
@@ -25,7 +27,7 @@ export type FormatId =
   | 'teachIt'
   | 'scramble';
 
-export const FORMATS: Record<FormatId, { label: string; counts: boolean }> = {
+export const FORMATS: Record<FormatId, { label: string; counts: boolean; canCount?: false }> = {
   recite: { label: 'Recite', counts: true },
   // Today's "Pick up the thread".
   keepGoing: { label: 'Keep going', counts: true },
@@ -33,9 +35,9 @@ export const FORMATS: Record<FormatId, { label: string; counts: boolean }> = {
   firstWords: { label: 'First words', counts: true },
   // Today's "Spot the swap".
   findWrongWord: { label: 'Find the wrong word', counts: true },
-  putInOrder: { label: 'Put in order', counts: false },
-  whichSection: { label: 'Which section', counts: false },
-  teachIt: { label: 'Teach-It', counts: false },
+  putInOrder: { label: 'Put in order', counts: false, canCount: false },
+  whichSection: { label: 'Which section', counts: false, canCount: false },
+  teachIt: { label: 'Teach-It', counts: false, canCount: false },
   scramble: { label: 'Scramble', counts: false },
 };
 

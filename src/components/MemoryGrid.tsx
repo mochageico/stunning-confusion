@@ -171,7 +171,7 @@ export default function MemoryGrid({
                           : grade === 'incorrect'
                             ? palette.danger
                             : isActive
-                              ? 'rgba(255,255,255,0.4)'
+                              ? `${palette.onAccent}66` // on-accent at 40%: white on light, near-black on dark
                               : palette.lineStrong;
                     // layout-ok: a word dot, no text
                     return <View key={wi} style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: dotColor }} />;

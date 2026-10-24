@@ -239,6 +239,12 @@ function parseFontTokens(className: string | undefined): Partial<FontSpec> {
  */
 const InheritedFont = createContext<FontSpec | null>(null);
 
+/**
+ * Settings > Verse text: 'plain' sets every font-serif (verse text) in Inter
+ * instead of Literata. App.tsx provides it from lib/appPrefs.
+ */
+export const VerseFontContext = createContext<'serif' | 'plain'>('serif');
+
 function resolveFont(className: string | undefined, parent: FontSpec | null, script?: TextScript): FontSpec {
   const own = parseFontTokens(className);
   return {
@@ -249,7 +255,8 @@ function resolveFont(className: string | undefined, parent: FontSpec | null, scr
   };
 }
 
-function fontStyleFor({ family, weight, italic, script }: FontSpec): TextStyle {
+function fontStyleFor({ family: asked, weight, italic, script }: FontSpec, verseFont: 'serif' | 'plain' = 'serif'): TextStyle {
+  const family = asked === 'serif' && verseFont === 'plain' ? 'sans' : asked;
   // Hebrew: one face for every family role (a sans Hebrew would be a fourth
   // font for the same few screens), weight-matched, never italic -- Hebrew
   // has no italic, and a slanted Hebrew face would only be a fake.
@@ -316,6 +323,7 @@ export function AppText({
   const fontScale = useFontScale();
   const scale = maxScale ? Math.min(fontScale, maxScale) : fontScale;
   const parentFont = useContext(InheritedFont);
+  const verseFont = useContext(VerseFontContext);
   const font = resolveFont(className, parentFont, script);
   const { family, weight, italic } = font;
   const inherited = useMemo<FontSpec>(
@@ -337,7 +345,7 @@ export function AppText({
     <Text
       allowFontScaling={false}
       className={className}
-      style={[fontStyleFor(font), size, rtlParagraph ? RTL_TEXT_STYLE : null, style]}
+      style={[fontStyleFor(font, verseFont), size, rtlParagraph ? RTL_TEXT_STYLE : null, style]}
       // Web: an explicit dir, because react-native-web otherwise sets
       // dir="auto" and a fully masked Recall line (bullets and ׃, no letters)
       // has nothing for the browser to infer RTL from.

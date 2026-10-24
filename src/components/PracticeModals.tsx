@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronUp, ClipboardCheck, Headphones, Pause, Play, X } from 'lucide-react-native';
@@ -7,7 +7,8 @@ import { VerseState, QueueItem, Recording, ChapterPhoto, ChapterSections, Listen
 import type { OutlineExtra } from '../lib/outline';
 import { isRtl, scriptOfVerse } from '../lib/textScript';
 import { WaveBars } from './ui';
-import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from './design';
+import { AppButton, AppIconButton, AppText, FontScaleOverrideProvider, useFontScale, useScaledSpace } from './design';
+import { PRACTICE_TEXT_SCALE, useAppPrefs } from '../lib/appPrefs';
 import { Badge, Dialog } from './blocks';
 import { OneTimeTip } from './OneTimeTip';
 
@@ -120,8 +121,16 @@ const EMPTY_PLAYLISTS: ListenPlaylist[] = [];
 // mounted, React would see fewer hooks than the previous render and crash
 // ("Rendered fewer hooks than expected").
 export default function PracticeModals(props: PracticeModalsProps) {
+  // Settings > Verse text > Practice text size: the practice screen's text,
+  // on top of the phone's own size.
+  const fontScale = useFontScale();
+  const { practiceTextSize } = useAppPrefs();
   if (!props.verses || props.verses.length === 0) return null;
-  return <PracticeModalsInner {...props} />;
+  return (
+    <FontScaleOverrideProvider scale={fontScale * PRACTICE_TEXT_SCALE[practiceTextSize]}>
+      <PracticeModalsInner {...props} />
+    </FontScaleOverrideProvider>
+  );
 }
 
 function PracticeModalsInner({
@@ -207,6 +216,14 @@ function PracticeModalsInner({
   // later piece of work -- this only keeps it going while the app itself is
   // foregrounded.
   const [listenMinimized, setListenMinimized] = useState(false);
+
+  // Settings > Recall and typing > Hide the reference: drilling the
+  // reference too, so the header keeps it back until tapped. Each new group
+  // in a review session starts hidden again.
+  const { hideReference } = useAppPrefs();
+  const [referenceShown, setReferenceShown] = useState(false);
+  useEffect(() => setReferenceShown(false), [verses]);
+  const referenceHidden = hideReference && type === 'learn' && !referenceShown;
   const insets = useSafeAreaInsets();
   const aboveTabBar = useAboveTabBar();
 
@@ -325,9 +342,25 @@ function PracticeModalsInner({
         <View className="flex-1">
           {/* Non-breaking hyphen: at large text a range wraps as "Romans /
               8:28-29", never "Romans 8:28- / 29". */}
-          <AppText variant="title" className="font-sans font-bold text-ink leading-tight" numberOfLines={2}>
-            {referenceText.replace(/-/g, '‑')}
-          </AppText>
+          {referenceHidden ? (
+            <Pressable
+              onPress={() => setReferenceShown(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Reference hidden. Show it."
+              className="self-start active:opacity-60"
+            >
+              <AppText variant="title" className="font-sans font-bold text-ink-3 leading-tight">
+                Reference hidden
+              </AppText>
+              <AppText variant="caption" className="font-sans font-semibold text-accent">
+                Show
+              </AppText>
+            </Pressable>
+          ) : (
+            <AppText variant="title" className="font-sans font-bold text-ink leading-tight" numberOfLines={2}>
+              {referenceText.replace(/-/g, '‑')}
+            </AppText>
+          )}
         </View>
         <View className="flex-row items-center gap-2 shrink-0">
           {!!sessionTotal && sessionTotal > 1 && <Badge label={`${sessionPosition} of ${sessionTotal}`} />}

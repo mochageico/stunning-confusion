@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Layers, ListChecks, ListOrdered, ListTree, MessageCircle, Mic, Puzzle, SearchCheck, Signpost } from 'lucide-react-native';
 import { ChapterSections, VerseState, QueueItem, TextScript } from '../../types';
 import { isReviewDue } from '../../state/useAppState';
+import { feedbackDone, feedbackMiss } from '../../lib/feedback';
 import { classifyFirstLetterAttempt, getSpeechRecognizer, normalizeToken, reconcileSpeechWindow, tokenizeWords, SpeechRecognizer, WordOutcome } from '../../lib/recitation';
 import { splitWords, typedLetters } from '../../lib/textScript';
 import { MIN_JIGSAW_VERSES, MIN_THREAD_VERSES, threadRunEndingAt } from '../../lib/drills';
@@ -208,6 +209,8 @@ export function useRecall({
     const idx = reciteOrder.order[pos];
     setReciteOutcomes((prev) => ({ ...prev, [idx]: outcome }));
     setReciteSource((prev) => ({ ...prev, [idx]: 'protected' }));
+    const verseDone = pos + 1 >= reciteOrder.order.length || wordVerse(pos + 1) !== wordVerse(pos);
+    if (verseDone) feedbackDone();
     if (pos + 1 < reciteOrder.order.length && wordVerse(pos + 1) !== wordVerse(pos)) {
       setVerseStrikes(0);
     }
@@ -250,6 +253,7 @@ export function useRecall({
       const nextStrikes = verseStrikes + 1;
       setVerseStrikes(nextStrikes);
       setFlashError(true);
+      feedbackMiss();
       setTypedInput(''); // Clear on error so user doesn't have to backspace
       // One wrong attempt permanently marks this word missed for the session
       // (getting it right on the next try lets you continue, but the

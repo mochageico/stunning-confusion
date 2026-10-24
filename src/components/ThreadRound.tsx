@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Eye, Keyboard, Mic, RefreshCw } from 'lucide-react-native';
 
 import { ThreadCue, threadSlips, ThreadSlip, threadSpan } from '../lib/drills';
-import { WordOutcome } from '../lib/recitation';
+import { reviewPassAccuracy, WordOutcome } from '../lib/recitation';
 import { scriptOfVerse } from '../lib/textScript';
 import { AppButton, AppText, useScaledSpace } from './design';
 import GradedRecitation, { ButtonPair, canSpeakVerses, RoundFrame, SpanText } from './GradedRecitation';
@@ -42,7 +42,7 @@ type Stage = 'cue' | 'speak' | 'type' | 'reveal' | 'pickSlip';
 const verseResult = (o: WordOutcome[]) => {
   const right = o.filter((x) => x !== 'missed').length;
   const pct = o.length === 0 ? 1 : right / o.length;
-  return { passed: pct >= 0.9, perfect: o.length > 0 && right === o.length };
+  return { passed: pct >= reviewPassAccuracy(), perfect: o.length > 0 && right === o.length };
 };
 
 export default function ThreadRound({

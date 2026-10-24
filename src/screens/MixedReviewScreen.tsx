@@ -21,6 +21,7 @@ import { drillSections, DrillSection } from '../lib/sectionDrills';
 import { summarizeOutcomes, WordOutcome } from '../lib/recitation';
 import { normalizeToken, scriptOfVerse } from '../lib/textScript';
 import { loadPracticePrefs } from '../lib/practicePrefs';
+import { openSettingsAt } from './SettingsScreen';
 import { mapQueueItemsToVerseStates } from '../lib/appData';
 import { FORMATS, FormatId, formatLabel, formatTag, MIX_NAMES } from '../lib/formatNames';
 import {
@@ -593,7 +594,13 @@ function StartSheet({
           <AppText variant="label" className="font-sans text-ink-2">
             {`Formats: ${plural(countingOn, 'that counts', 'that count')}, ${plural(practiceOn, 'for practice', 'for practice')}.`}
           </AppText>
-          <TextLink label="Choose formats" onPress={() => navigateTo('settings')} />
+          <TextLink
+            label="Choose formats"
+            onPress={() => {
+              openSettingsAt('formats');
+              navigateTo('settings');
+            }}
+          />
         </View>
 
         <View style={{ gap: space(8) }}>
