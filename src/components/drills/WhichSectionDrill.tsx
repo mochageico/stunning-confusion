@@ -21,9 +21,12 @@ import { bracketColor, useThemeColors } from '../theme';
 export default React.memo(function WhichSectionDrill({
   sections,
   script = 'latin',
+  counts = false,
 }: {
   sections: DrillSection[];
   script?: TextScript;
+  /** Mixed review with this format set to Counts in Settings: the notes say so instead of "never counts". */
+  counts?: boolean;
 }) {
   const palette = useThemeColors();
   const space = useScaledSpace();
@@ -82,7 +85,7 @@ export default React.memo(function WhichSectionDrill({
             {rightCount} of {questions.length} right
           </AppText>
           <AppText variant="caption" className="font-sans text-ink-3 text-center">
-            {formatTag('whichSection')} only, nothing logged.
+            {counts ? 'Mark how it went below.' : `${formatTag('whichSection')} only, nothing logged.`}
           </AppText>
         </View>
         <AppButton variant="primary" Icon={RotateCcw} label="Play again" onPress={restart} />
@@ -94,7 +97,9 @@ export default React.memo(function WhichSectionDrill({
     <View className="shrink-0" style={{ gap: space(8) }}>
       {!answered && (
         <AppText variant="micro" className="font-sans text-ink-3 text-center">
-          {formatLabel('whichSection')} is {formatTag('whichSection')}: it never counts as a review.
+          {counts
+            ? `${formatLabel('whichSection')} counts as a review here: mark how it went when you're done.`
+            : `${formatLabel('whichSection')} is ${formatTag('whichSection')}: it never counts as a review.`}
         </AppText>
       )}
       <AppButton

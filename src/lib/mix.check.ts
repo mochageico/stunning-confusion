@@ -17,6 +17,7 @@ import {
   MixState,
   mixSummary,
   MixVerseResult,
+  readMixCounts,
   readMixFormats,
   roundCredits,
   startMix,
@@ -468,6 +469,26 @@ console.log('Settings');
   check('Unknown ids are dropped', readMixFormats(['recite', 'bogus']).join() === 'recite');
   check('Saved order is put back in Settings order', readMixFormats(['teachIt', 'recite']).join() === 'recite,teachIt');
   check('An empty list stays empty (Recite still runs as the fallback)', readMixFormats([]).length === 0);
+}
+
+// ------------------------------------------------- counts / practice ----
+console.log('Counts or Practice, per format');
+{
+  const usual = readMixCounts(undefined);
+  check('Nothing saved: each format keeps its usual tag', DEFAULT_MIX_FORMATS.every((f) => usual[f] === FORMATS[f].counts));
+  check('Recite can never be switched to Practice', readMixCounts({ recite: false }).recite === true);
+  check('Junk values are ignored', readMixCounts({ scramble: 'yes' }).scramble === FORMATS.scramble.counts);
+
+  // Scramble switched to Counts: it reviews on its own, no follow round.
+  const scrCounts = buildMixPlan({ ...fullInput(['scramble']), counts: { scramble: true } }, seeded(7));
+  const scr = scrCounts.rounds.filter((r) => r.format === 'scramble');
+  check('Scramble set to Counts: its rounds count', scr.length > 0 && scr.every((r) => r.counts), scr.length);
+  check('Scramble set to Counts: no follow rounds', !scrCounts.rounds.some((r) => r.role === 'follow'));
+
+  // Find the wrong word switched to Practice: it never credits, and a counting round follows.
+  const fwPlan = buildMixPlan({ ...fullInput(['findWrongWord', 'recite']), counts: { findWrongWord: false } }, seeded(8));
+  const fwOk = fwPlan.rounds.every((r, i) => r.format !== 'findWrongWord' || (!r.counts && fwPlan.rounds[i + 1]?.counts));
+  check('Find the wrong word set to Practice: never counts, always followed', fwOk, fwPlan.rounds.map((r) => `${r.format}:${r.counts}`));
 }
 
 console.log(failures === 0 ? '\nAll mix checks passed.' : `\n${failures} mix check(s) FAILED.`);

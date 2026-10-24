@@ -6,9 +6,10 @@
 // expects to rename some, so every screen that shows a format's name reads it
 // from here: a rename is a one-line change.
 //
-// `counts` is the locked counting rule: a format counts as a review when it
+// `counts` is the usual counting rule: a format counts as a review when it
 // brings words out of memory. The others are labeled "Practice" and never
-// credit a review on their own.
+// credit a review on their own. Mixed review lets the user switch any format
+// either way in Settings (lib/mix.ts MIX_COUNTS_PREF); this is the default.
 //
 // New copy: check it against the banned-jargon list in the memory note
 // "three-concept naming" (no "queue", "phase", "graduate", "rhythm"...).
@@ -55,4 +56,5 @@ export const MIX_NAMES = {
 export const formatLabel = (id: FormatId): string => FORMATS[id].label;
 
 /** "Counts" or "Practice", for the tag beside a format's name. */
-export const formatTag = (id: FormatId): string => (FORMATS[id].counts ? MIX_NAMES.countsTag : MIX_NAMES.practiceTag);
+export const formatTag = (id: FormatId, counts: boolean = FORMATS[id].counts): string =>
+  counts ? MIX_NAMES.countsTag : MIX_NAMES.practiceTag;

@@ -22,8 +22,8 @@ import { AppButton, AppText, AppTextInput, ChoiceCard, ToggleRow, useFontScale, 
 import { Badge, Dialog, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { ACCENTS, useAccent, useThemeColors } from '../components/theme';
 import { BlockedPeopleSettings, GuidelinesRow, NotificationSettings } from '../components/SocialSettings';
-import { FORMATS, formatLabel, formatTag, FormatId, MIX_NAMES } from '../lib/formatNames';
-import { MIX_FORMAT_ORDER, MIX_FORMATS_PREF, readMixFormats } from '../lib/mix';
+import { formatLabel, formatTag, FormatId, MIX_NAMES } from '../lib/formatNames';
+import { FALLBACK_FORMAT, MIX_COUNTS_PREF, MIX_FORMAT_ORDER, MIX_FORMATS_PREF, MixCounts, readMixCounts, readMixFormats } from '../lib/mix';
 
 const formatMB = (bytes: number) => {
   const mb = bytes / (1024 * 1024);
@@ -104,18 +104,28 @@ function PracticeSettings() {
 
 /**
  * Mixed review > which formats it may draw. A checklist rather than switches:
- * it reads as "which of these", and each row carries its Counts or Practice
- * tag so it's clear which ones review a verse. Recite still runs when nothing
- * else fits a section, even if it's unchecked here (lib/mix.ts).
+ * it reads as "which of these". Each row ends in a Counts / Practice choice
+ * for whether that format reviews a verse. Recite always counts, and still
+ * runs when nothing else fits a section, even if it's unchecked here
+ * (lib/mix.ts).
  */
 function MixFormatSettings() {
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
   const [enabled, setEnabled] = useState<FormatId[]>(MIX_FORMAT_ORDER);
+  const [counts, setCounts] = useState<MixCounts>(() => readMixCounts(undefined));
   useEffect(() => {
-    loadPracticePrefs().then((saved) => setEnabled(readMixFormats(saved[MIX_FORMATS_PREF])));
+    loadPracticePrefs().then((saved) => {
+      setEnabled(readMixFormats(saved[MIX_FORMATS_PREF]));
+      setCounts(readMixCounts(saved[MIX_COUNTS_PREF]));
+    });
   }, []);
+  const setCounting = (id: FormatId, on: boolean) => {
+    const next = { ...counts, [id]: on };
+    setCounts(next);
+    savePracticePrefs({ [MIX_COUNTS_PREF]: next });
+  };
   const toggle = (id: FormatId) => {
     const next = enabled.includes(id) ? enabled.filter((f) => f !== id) : MIX_FORMAT_ORDER.filter((f) => f === id || enabled.includes(f));
     setEnabled(next);
@@ -133,7 +143,7 @@ function MixFormatSettings() {
               key={id}
               onPress={() => toggle(id)}
               accessibilityRole="checkbox"
-              accessibilityLabel={`${formatLabel(id)}, ${formatTag(id)}`}
+              accessibilityLabel={`${formatLabel(id)}, ${formatTag(id, counts[id])}`}
               accessibilityState={{ checked: on }}
               aria-checked={on}
               className={`flex-row items-center active:bg-surface-2 ${i === 0 ? '' : 'border-t border-hairline'}`}
@@ -150,14 +160,26 @@ function MixFormatSettings() {
                 {formatLabel(id)}
               </AppText>
               <View className="shrink-0">
-                <Badge label={formatTag(id)} tone={FORMATS[id].counts ? 'accent' : 'neutral'} />
+                {id === FALLBACK_FORMAT ? (
+                  <Badge label={formatTag(id, true)} tone="accent" />
+                ) : (
+                  <SegmentedControl
+                    value={counts[id] ? 'counts' : 'practice'}
+                    onChange={(v) => setCounting(id, v === 'counts')}
+                    accessibilityLabel={`Whether ${formatLabel(id)} counts as a review`}
+                    options={[
+                      { id: 'counts', label: MIX_NAMES.countsTag },
+                      { id: 'practice', label: MIX_NAMES.practiceTag },
+                    ]}
+                  />
+                )}
               </View>
             </Pressable>
           );
         })}
       </View>
       <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-        {`${MIX_NAMES.mixedReview} picks from these, section by section. Only ${MIX_NAMES.countsTag} formats review a verse, so every ${MIX_NAMES.practiceTag} round is followed by one. ${formatLabel('recite')} fills in when nothing else fits.`}
+        {`${MIX_NAMES.mixedReview} picks from these, section by section. Only ${MIX_NAMES.countsTag} formats review a verse, so every ${MIX_NAMES.practiceTag} round is followed by one. A drill that doesn't grade you asks "Got it?" when it counts. ${formatLabel('recite')} always counts and fills in when nothing else fits.`}
       </AppText>
     </View>
   );

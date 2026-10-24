@@ -15,8 +15,11 @@ import { useThemeColors } from '../theme';
 export default React.memo(function ScrambleDrill({
   verses,
   onComplete,
+  counts = false,
 }: {
   verses: DrillVerse[];
+  /** Mixed review with this format set to Counts in Settings: the notes say so instead of "never counts". */
+  counts?: boolean;
   /** Fires when the last round comes out right. */
   onComplete?: () => void;
 }) {
@@ -199,8 +202,12 @@ export default React.memo(function ScrambleDrill({
             <AppText variant="caption" className={`font-sans font-bold text-center ${solved ? 'text-success' : 'text-warning'}`}>
               {solved
                 ? isLastRound
-                  ? 'That’s the whole passage! Practice only — nothing logged.'
-                  : 'That’s the verse! Practice only — nothing logged.'
+                  ? counts
+                    ? 'That’s the whole passage! Mark how it went below.'
+                    : 'That’s the whole passage! Practice only — nothing logged.'
+                  : counts
+                    ? 'That’s the verse!'
+                    : 'That’s the verse! Practice only — nothing logged.'
                 : 'Not quite — tap a red tile to send it back.'}
             </AppText>
           </View>

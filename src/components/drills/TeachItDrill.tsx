@@ -83,6 +83,7 @@ export default React.memo(function TeachItDrill({
   script = 'latin',
   active = true,
   onSaveDraft,
+  counts = false,
 }: {
   verses: { book: string; chapter: number; verse: number; text: string; translationId?: string }[];
   /** The chapter's sections as the drills see them; empty when it has none (stretches are taught instead). */
@@ -96,6 +97,8 @@ export default React.memo(function TeachItDrill({
    * its takeaway. Without it, or for a stretch, drafts stay in this drill only.
    */
   onSaveDraft?: (draft: TakeawayDraft) => boolean;
+  /** Mixed review with this format set to Counts in Settings: the notes say so instead of "never counts". */
+  counts?: boolean;
 }) {
   const palette = useThemeColors();
   const space = useScaledSpace();
@@ -267,7 +270,9 @@ export default React.memo(function TeachItDrill({
       {phase === 'ready' && (
         <>
           <AppText variant="micro" className="font-sans text-ink-3 text-center">
-            {formatLabel('teachIt')} is {formatTag('teachIt')}: it never counts as a review.
+            {counts
+              ? `${formatLabel('teachIt')} counts as a review here: mark how it went when you're done.`
+              : `${formatLabel('teachIt')} is ${formatTag('teachIt')}: it never counts as a review.`}
           </AppText>
           <AppButton variant="primary" Icon={Play} label={`Start ${TEACH_SECONDS} seconds`} onPress={start} />
         </>

@@ -389,6 +389,7 @@ export function SegmentedControl<T extends string | number>({
   onChange,
   accessibilityLabel,
   wrap = false,
+  rows,
 }: {
   options: SegmentOption<T>[];
   value: T;
@@ -396,51 +397,66 @@ export function SegmentedControl<T extends string | number>({
   accessibilityLabel?: string;
   /** Let segments that don't fit move to a second row (for six labels at large text). */
   wrap?: boolean;
+  /** Split the options evenly over this many rows of thinner segments (for
+   *  long option lists, so no label is squeezed into breaking mid-word). */
+  rows?: number;
 }) {
   const scale = useFontScale();
   const space = useScaledSpace();
+  const thin = !!rows && rows > 1;
+  const perRow = thin ? Math.ceil(options.length / rows!) : options.length;
+  const chunks: SegmentOption<T>[][] = [];
+  for (let i = 0; i < options.length; i += perRow) chunks.push(options.slice(i, i + perRow));
+  // Rows never shrink a segment below its label; one that still overflows
+  // at large text wraps onto its own line instead.
+  const rowWraps = wrap || thin;
+  const segment = (opt: SegmentOption<T>) => {
+    const active = opt.id === value;
+    return (
+      <Pressable
+        key={String(opt.id)}
+        onPress={() => onChange(opt.id)}
+        accessibilityRole="radio"
+        accessibilityState={{ checked: active }}
+        aria-checked={active}
+        className={`items-center justify-center rounded-seg-inner border ${
+          active ? 'bg-raised border-line' : 'border-transparent active:bg-raised/50'
+        }`}
+        // Sized by label, then the spare width shared out evenly: "Last 30
+        // Days" gets more room than "All", instead of every segment
+        // getting the same slice and the long one wrapping (the iPhone's
+        // apportionsSegmentWidthsByContent).
+        style={{
+          flexGrow: 1,
+          flexShrink: rowWraps ? 0 : 1,
+          flexBasis: 'auto',
+          minHeight: Math.round((thin ? 26 : 32) * scale),
+          paddingVertical: space(thin ? 3 : 5),
+          paddingHorizontal: space(6),
+        }}
+      >
+        {/* No line limit: at large text a label wraps rather than being cut. */}
+        <AppText
+          variant="caption"
+          className={`font-sans text-center ${active ? 'font-semibold text-ink' : 'font-medium text-ink-2'}`}
+        >
+          {opt.label}
+        </AppText>
+      </Pressable>
+    );
+  };
   return (
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={accessibilityLabel}
-      className={`flex-row bg-fill rounded-seg ${wrap ? 'flex-wrap' : ''}`}
+      className="bg-fill rounded-seg"
       style={{ padding: 2, gap: 2 }}
     >
-      {options.map((opt) => {
-        const active = opt.id === value;
-        return (
-          <Pressable
-            key={String(opt.id)}
-            onPress={() => onChange(opt.id)}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: active }}
-            aria-checked={active}
-            className={`items-center justify-center rounded-seg-inner border ${
-              active ? 'bg-raised border-line' : 'border-transparent active:bg-raised/50'
-            }`}
-            // Sized by label, then the spare width shared out evenly: "Last 30
-            // Days" gets more room than "All", instead of every segment
-            // getting the same slice and the long one wrapping (the iPhone's
-            // apportionsSegmentWidthsByContent).
-            style={{
-              flexGrow: 1,
-              flexShrink: wrap ? 0 : 1,
-              flexBasis: 'auto',
-              minHeight: Math.round(32 * scale),
-              paddingVertical: space(5),
-              paddingHorizontal: space(6),
-            }}
-          >
-            {/* No line limit: at large text a label wraps rather than being cut. */}
-            <AppText
-              variant="caption"
-              className={`font-sans text-center ${active ? 'font-semibold text-ink' : 'font-medium text-ink-2'}`}
-            >
-              {opt.label}
-            </AppText>
-          </Pressable>
-        );
-      })}
+      {chunks.map((chunk, i) => (
+        <View key={i} className={`flex-row ${rowWraps ? 'flex-wrap' : ''}`} style={{ gap: 2 }}>
+          {chunk.map(segment)}
+        </View>
+      ))}
     </View>
   );
 }

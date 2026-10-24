@@ -142,17 +142,16 @@ export default function RecallPanel({
 
       {/* Mode picker. Recall is the only graded mode; the rest are
           supplementary drills (see the LearnMode comment above). */}
-      {/* The standard segmented control, labels only: at five modes
-          the icons were what pushed the old picker onto two rows.
-          Segments size to their labels, so "Scramble" gets more room
-          than "Spot", and a label wraps rather than being cut off at
-          large text sizes. */}
+      {/* The standard segmented control, labels only, over two rows of
+          thinner segments: on one row the nine modes squeezed "Recall"
+          into breaking mid-word. Segments size to their labels, and a
+          label wraps rather than being cut off at large text sizes. */}
       <View className="mb-3 shrink-0">
         <SegmentedControl
           value={learnTab}
           onChange={switchLearnTab}
           accessibilityLabel="Practice mode"
-          wrap={fontScale >= 1.3 || learnModes.length > 6}
+          rows={2}
           options={learnModes.map(({ id, label }) => ({ id, label }))}
         />
       </View>

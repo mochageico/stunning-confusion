@@ -17,7 +17,8 @@ import { chapterStretches, normalizeDraft, Section, sectionsFromStarts } from '.
 // entry in `state.newCredits` as soon as a round ends.
 //
 // The honesty rule (locked): a verse counts as reviewed only when a counting
-// format (formatNames FORMATS[id].counts) covers it. A Practice round is
+// format covers it (formatNames FORMATS[id].counts, unless the user switched
+// it in Settings: MIX_COUNTS_PREF). A Practice round is
 // always followed by a counting round on the same section, and a Practice
 // round's results never credit anything, whatever the screen reports.
 //
@@ -65,7 +66,29 @@ export const FALLBACK_FORMAT: FormatId = 'recite';
 /** Formats that only make sense for a whole chapter, so only ever open one. */
 const OPENER_FORMATS: FormatId[] = ['putInOrder', 'whichSection'];
 
-export const countsAsReview = (id: FormatId): boolean => FORMATS[id].counts;
+/** Which formats count, by format: the user can switch any of them in Settings. */
+export type MixCounts = Record<FormatId, boolean>;
+
+/** The practicePrefs key for the user's Counts / Practice choice per format. */
+export const MIX_COUNTS_PREF = 'mixCounts';
+
+/**
+ * What practicePrefs holds, cleaned up: each format's saved choice, or its
+ * usual tag (formatNames FORMATS) when there's none. Recite always counts:
+ * it's what every Practice round falls back on, so the mix can't end up
+ * with nothing that reviews a verse.
+ */
+export const readMixCounts = (raw: unknown): MixCounts => {
+  const saved = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const out = {} as MixCounts;
+  MIX_FORMAT_ORDER.forEach((id) => {
+    out[id] = id === FALLBACK_FORMAT || (typeof saved[id] === 'boolean' ? (saved[id] as boolean) : FORMATS[id].counts);
+  });
+  return out;
+};
+
+export const countsAsReview = (id: FormatId, counts?: Partial<MixCounts>): boolean =>
+  id === FALLBACK_FORMAT || (counts?.[id] ?? FORMATS[id].counts);
 
 // ============================================================================
 // 1. UNITS -- chapters, then sections (or stretches)
@@ -131,6 +154,8 @@ export interface MixInput {
   sectionsFor: (book: string, chapter: number) => ChapterSections | null | undefined;
   /** The formats switched on in Settings. */
   enabled: FormatId[];
+  /** Which formats count (readMixCounts). Left out: each format's usual tag. */
+  counts?: Partial<MixCounts>;
 }
 
 const toVerse = (item: QueueItem): DrillVerse & { id: string } => ({
@@ -317,10 +342,11 @@ export const buildMixPlan = (input: MixInput, rng: Rng): MixPlan => {
   input.due.forEach((i) => byId.set(i.verseId, i));
   const versesOf = (ids: string[]) => ids.map((id) => byId.get(id)).filter((i): i is QueueItem => !!i).map(toVerse);
 
+  const counts = (f: FormatId) => countsAsReview(f, input.counts);
   const rounds: MixRound[] = [];
   let previous: FormatId | undefined;
   const add = (r: Omit<MixRound, 'index' | 'counts'>) => {
-    rounds.push({ ...r, index: rounds.length, counts: countsAsReview(r.format) });
+    rounds.push({ ...r, index: rounds.length, counts: counts(r.format) });
     previous = r.format;
   };
 
@@ -335,19 +361,19 @@ export const buildMixPlan = (input: MixInput, rng: Rng): MixPlan => {
         chapterKey: chapter.key,
         verseIds: chapter.unitIndexes.flatMap((u) => units[u].verseIds),
       });
-      // The opener is Practice: what follows it has to count.
-      countingOnly = true;
+      // A Practice opener: what follows it has to count.
+      countingOnly = !rounds[rounds.length - 1].counts;
     }
 
     chapter.unitIndexes.forEach((u) => {
       const unit = units[u];
       const verses = versesOf(unit.verseIds);
       const fits = enabled.filter((f) => formatFits(f, unit, chapter, verses));
-      const counting = fits.filter(countsAsReview);
+      const counting = fits.filter(counts);
       const main = drawFormat(countingOnly ? counting : fits, previous, rng);
       countingOnly = false;
       add({ format: main, role: 'main', unitIndex: u, chapterKey: chapter.key, verseIds: unit.verseIds });
-      if (!countsAsReview(main)) {
+      if (!counts(main)) {
         add({ format: drawFormat(counting, previous, rng), role: 'follow', unitIndex: u, chapterKey: chapter.key, verseIds: unit.verseIds });
       }
     });

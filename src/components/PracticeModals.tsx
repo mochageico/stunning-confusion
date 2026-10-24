@@ -315,7 +315,9 @@ function PracticeModalsInner({
   }
 
   return (
-    <View className="absolute inset-0 bg-surface z-50 pt-11 pb-4 px-4" id="practice_overlay">
+    // Clear of the notch / Dynamic Island: a fixed top padding sat under it
+    // on taller-notched phones.
+    <View className="absolute inset-0 bg-surface z-50 pb-4 px-4" style={{ paddingTop: insets.top + 12 }} id="practice_overlay">
       {/* Header Bar */}
       <View className="flex-row items-center justify-between border-b border-hairline pb-2 mb-3" style={{ gap: 8 }}>
         {/* flex-1 so a long reference wraps instead of pushing the

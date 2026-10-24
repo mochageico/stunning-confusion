@@ -24,9 +24,12 @@ export default React.memo(function SectionOrderDrill({
   sections,
   script = 'latin',
   onComplete,
+  counts = false,
 }: {
   sections: DrillSection[];
   script?: TextScript;
+  /** Mixed review with this format set to Counts in Settings: the notes say so instead of "never counts". */
+  counts?: boolean;
   /** Fires each time the order comes out right. */
   onComplete?: () => void;
 }) {
@@ -76,7 +79,7 @@ export default React.memo(function SectionOrderDrill({
         <View className="bg-success-soft border border-success/30 rounded-card flex-row items-center justify-center" style={{ padding: space(10), gap: space(8) }}>
           <Trophy size={Math.round(space(14))} color={palette.success} />
           <AppText variant="caption" className="font-sans font-bold text-success flex-1 text-center">
-            Right order! {formatTag('putInOrder')} only, nothing logged.
+            {counts ? 'Right order! Mark how it went below.' : `Right order! ${formatTag('putInOrder')} only, nothing logged.`}
           </AppText>
         </View>
       ) : checked ? (
@@ -89,7 +92,9 @@ export default React.memo(function SectionOrderDrill({
         <View className="flex-row items-center justify-center" style={{ gap: space(6) }}>
           <Info size={Math.round(space(12))} color={palette.ink3} />
           <AppText variant="micro" className="font-sans text-ink-3">
-            {formatLabel('putInOrder')} is {formatTag('putInOrder')}: it never counts as a review.
+            {counts
+              ? `${formatLabel('putInOrder')} counts as a review here: mark how it went when you're done.`
+              : `${formatLabel('putInOrder')} is ${formatTag('putInOrder')}: it never counts as a review.`}
           </AppText>
         </View>
       )}

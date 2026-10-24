@@ -37,7 +37,10 @@ import {
   mixSummary,
   MixUnit,
   MixVerseResult,
+  MIX_COUNTS_PREF,
   MIX_FORMATS_PREF,
+  MixCounts,
+  readMixCounts,
   readMixFormats,
   startMix,
   todayOrder,
@@ -146,11 +149,14 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
 function ReciteRound({
   verses,
   firstWords,
+  counts,
   onDone,
 }: {
   verses: DueVerse[];
   /** Keep the first FIRST_WORDS_SHOWN words of each verse showing. */
   firstWords: boolean;
+  /** False when the user switched this format to Practice: same round, no credit. */
+  counts: boolean;
   onDone: (perVerse: Record<string, MixVerseResult>) => void;
 }) {
   const space = useScaledSpace();
@@ -241,7 +247,7 @@ function ReciteRound({
                     v{verses[sv.index].verse}
                   </AppText>
                   <AppText variant="caption" className={`font-sans flex-1 text-right ${sum.passesReview ? 'text-ink-2' : 'text-ink-3'}`}>
-                    {sum.passesReview ? 'Reviewed' : 'Slipped: counts as a miss'}
+                    {!counts ? (sum.passesReview ? 'Clean' : 'Slipped') : sum.passesReview ? 'Reviewed' : 'Slipped: counts as a miss'}
                   </AppText>
                 </View>
               );
@@ -292,7 +298,7 @@ function ReciteRound({
           })}
         </View>
         <AppText variant="caption" className="font-sans text-ink-3 text-center">
-          The rest count as reviewed.
+          {counts ? 'The rest count as reviewed.' : 'Practice only: nothing is recorded.'}
         </AppText>
       </RoundFrame>
     );
@@ -343,11 +349,13 @@ function ReciteRound({
 function KeepGoingRound({
   context,
   verses,
+  counts,
   onDone,
   onFallback,
 }: {
   context: DueVerse;
   verses: DueVerse[];
+  counts: boolean;
   onDone: (perVerse: Record<string, MixVerseResult>) => void;
   /** No cue could be found in the context verse: say it as Recite instead. */
   onFallback: () => void;
@@ -385,7 +393,7 @@ function KeepGoingRound({
       verses={all}
       cue={cue}
       hideVerseNumber={false}
-      creditPreview={(index, passed) => (index === 0 ? 'Only the way in' : passed ? 'Reviewed' : 'Slipped: counts as a miss')}
+      creditPreview={(index, passed) => (index === 0 ? 'Only the way in' : !counts ? (passed ? 'Clean' : 'Slipped') : passed ? 'Reviewed' : 'Slipped: counts as a miss')}
       onFinish={finish}
       onDifferentCue={() => {
         const next = pick();
@@ -402,7 +410,15 @@ function KeepGoingRound({
 // Find the wrong word: the first check is what counts
 // ----------------------------------------------------------------------------
 
-function FindWrongWordRound({ verses, onDone }: { verses: DueVerse[]; onDone: (perVerse: Record<string, MixVerseResult>) => void }) {
+function FindWrongWordRound({
+  verses,
+  counts,
+  onDone,
+}: {
+  verses: DueVerse[];
+  counts: boolean;
+  onDone: (perVerse: Record<string, MixVerseResult>) => void;
+}) {
   const space = useScaledSpace();
   const [scored, setScored] = useState<SwapVerseScore[] | null>(null);
   const result = () => {
@@ -421,7 +437,7 @@ function FindWrongWordRound({ verses, onDone }: { verses: DueVerse[]; onDone: (p
         <SpotSwapDrill
           verses={verses}
           showSwapCount={false}
-          resultNote="these count for the review."
+          resultNote={counts ? 'these count for the review.' : 'this one is practice.'}
           onScored={setScored}
         />
       </View>
@@ -439,25 +455,40 @@ function PracticeRound({
   verses,
   sections,
   script,
+  counts,
   onNext,
 }: {
   format: FormatId;
   verses: DueVerse[];
   sections: DrillSection[];
   script: ReturnType<typeof scriptOfVerse>;
-  onNext: () => void;
+  /** Switched to Counts in Settings: these drills don't grade, so the user checks themself. */
+  counts: boolean;
+  onNext: (perVerse?: Record<string, MixVerseResult>) => void;
 }) {
   const space = useScaledSpace();
+  const selfCheck = (gotIt: boolean) => {
+    const out: Record<string, MixVerseResult> = {};
+    verses.forEach((v) => (out[v.id] = { mode: 'self', gotIt }));
+    onNext(out);
+  };
   return (
     <View className="flex-1" style={{ gap: space(10) }}>
       <View className="flex-1">
-        {format === 'scramble' && <ScrambleDrill verses={verses} />}
-        {format === 'putInOrder' && <SectionOrderDrill sections={sections} script={script} />}
-        {format === 'whichSection' && <WhichSectionDrill sections={sections} script={script} />}
-        {format === 'teachIt' && <TeachItDrill verses={verses} sections={[]} script={script} />}
+        {format === 'scramble' && <ScrambleDrill verses={verses} counts={counts} />}
+        {format === 'putInOrder' && <SectionOrderDrill sections={sections} script={script} counts={counts} />}
+        {format === 'whichSection' && <WhichSectionDrill sections={sections} script={script} counts={counts} />}
+        {format === 'teachIt' && <TeachItDrill verses={verses} sections={[]} script={script} counts={counts} />}
       </View>
-      {/* Secondary: most drills have a primary button of their own. */}
-      <AppButton variant="secondary" label="Done practicing" onPress={onNext} />
+      {counts ? (
+        <ButtonPair
+          left={<AppButton variant="secondary" label="Not really" onPress={() => selfCheck(false)} />}
+          right={<AppButton variant="secondary" label="Got it" onPress={() => selfCheck(true)} />}
+        />
+      ) : (
+        // Secondary: most drills have a primary button of their own.
+        <AppButton variant="secondary" label="Done practicing" onPress={() => onNext()} />
+      )}
     </View>
   );
 }
@@ -470,11 +501,13 @@ function StartSheet({
   state,
   due,
   enabled,
+  counts,
   onStart,
 }: {
   state: AppState;
   due: QueueItem[];
   enabled: FormatId[];
+  counts: MixCounts;
   onStart: (chosen: QueueItem[]) => void;
 }) {
   const space = useScaledSpace();
@@ -486,8 +519,8 @@ function StartSheet({
   const chosenChapters = chapters.filter((c) => !off.has(c.key));
   const minutes = chosen.length === 0 ? 0 : Math.max(1, getEstimatedReviewTime(chosen, cognitiveLoadSensitivity));
   const countOf = (key: string) => due.filter((i) => keyOf(i) === key).length;
-  const practiceOn = enabled.filter((f) => !FORMATS[f].counts).length;
-  const countingOn = enabled.filter((f) => FORMATS[f].counts).length;
+  const practiceOn = enabled.filter((f) => !counts[f]).length;
+  const countingOn = enabled.filter((f) => counts[f]).length;
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -582,10 +615,12 @@ function Session({
   state,
   initial,
   startedAt,
+  counts,
 }: {
   state: AppState;
   initial: MixState;
   startedAt: number;
+  counts: MixCounts;
 }) {
   const space = useScaledSpace();
   const palette = useThemeColors();
@@ -648,7 +683,8 @@ function Session({
     return item ? toVerse(item) : null;
   }, [plan, roundIndex]); // eslint-disable-line react-hooks/exhaustive-deps
   const sectionsHere = useMemo(() => {
-    if (!round || round.counts) return [];
+    // By the drill, not by whether it counts: only the section drills need sections.
+    if (!round || FORMATS[round.format].counts) return [];
     const c = chapterOf(round.chapterKey);
     return drillSections(versesOf(plan.units.filter((u) => u.chapterKey === c.key).flatMap((u) => u.verseIds)), docOf(c));
   }, [plan, roundIndex]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -742,7 +778,7 @@ function Session({
                     <AppText variant="label" className="font-sans text-ink">
                       {formatLabel(f)}
                     </AppText>
-                    <Badge label={formatTag(f)} tone={FORMATS[f].counts ? 'accent' : 'neutral'} />
+                    <Badge label={formatTag(f, counts[f])} tone={counts[f] ? 'accent' : 'neutral'} />
                   </View>
                 ))}
               </View>
@@ -777,22 +813,35 @@ function Session({
   const result = (perVerse?: Record<string, MixVerseResult>) => send({ type: 'result', perVerse });
 
   let body: React.ReactNode;
+  // Which drill shows goes by the format; whether it credits goes by
+  // round.counts (the user's Counts / Practice choice in Settings).
   if (!FORMATS[format].counts) {
-    body = <PracticeRound key={round.index} format={format} verses={verses} sections={sectionsHere} script={script} onNext={() => result()} />;
+    body = (
+      <PracticeRound
+        key={round.index}
+        format={format}
+        verses={verses}
+        sections={sectionsHere}
+        script={script}
+        counts={round.counts}
+        onNext={result}
+      />
+    );
   } else if (format === 'keepGoing' && contextVerse) {
     body = (
       <KeepGoingRound
         key={round.index}
         context={contextVerse}
         verses={verses}
+        counts={round.counts}
         onDone={result}
         onFallback={() => setAsRecite((prev) => new Set(prev).add(round.index))}
       />
     );
   } else if (format === 'findWrongWord') {
-    body = <FindWrongWordRound key={round.index} verses={verses} onDone={result} />;
+    body = <FindWrongWordRound key={round.index} verses={verses} counts={round.counts} onDone={result} />;
   } else {
-    body = <ReciteRound key={`${round.index}:${format}`} verses={verses} firstWords={format === 'firstWords'} onDone={result} />;
+    body = <ReciteRound key={`${round.index}:${format}`} verses={verses} firstWords={format === 'firstWords'} counts={round.counts} onDone={result} />;
   }
 
   return (
@@ -820,7 +869,7 @@ function Session({
                 <AppText variant="label" className="font-sans font-semibold text-ink-2">
                   {formatLabel(format)}
                 </AppText>
-                <Badge label={formatTag(format)} tone={FORMATS[format].counts ? 'accent' : 'neutral'} />
+                <Badge label={formatTag(format, round.counts)} tone={round.counts ? 'accent' : 'neutral'} />
               </View>
             </View>
           </View>
@@ -840,8 +889,12 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
   const { memoryQueue, reviewsPaused, navigateTo, sectionsForChapter } = state;
 
   const [enabled, setEnabled] = useState<FormatId[] | null>(null);
+  const [counts, setCounts] = useState<MixCounts>(() => readMixCounts(undefined));
   useEffect(() => {
-    loadPracticePrefs().then((saved: any) => setEnabled(readMixFormats(saved[MIX_FORMATS_PREF])));
+    loadPracticePrefs().then((saved: any) => {
+      setCounts(readMixCounts(saved[MIX_COUNTS_PREF]));
+      setEnabled(readMixFormats(saved[MIX_FORMATS_PREF]));
+    });
   }, []);
 
   // Today's due reviews, in Today's order. The planner takes the filtered list.
@@ -853,7 +906,7 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
   const [session, setSession] = useState<{ state: MixState; startedAt: number } | null>(null);
 
   if (session) {
-    return <Session state={state} initial={session.state} startedAt={session.startedAt} />;
+    return <Session state={state} initial={session.state} startedAt={session.startedAt} counts={counts} />;
   }
   if (!enabled) return <View className="flex-1 bg-canvas" />;
 
@@ -877,8 +930,9 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
       state={state}
       due={due}
       enabled={enabled}
+      counts={counts}
       onStart={(chosen) => {
-        const plan = buildMixPlan({ due: chosen, pool: memoryQueue, sectionsFor: sectionsForChapter, enabled }, Math.random);
+        const plan = buildMixPlan({ due: chosen, pool: memoryQueue, sectionsFor: sectionsForChapter, enabled, counts }, Math.random);
         setSession({ state: mixReducer(startMix(plan), { type: 'start' }), startedAt: Date.now() });
       }}
     />
