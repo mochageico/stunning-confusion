@@ -558,6 +558,9 @@ scenario('18. Hyphenated and em-dash-joined words', () => {
   const turned = gradeTranscript('we have turned—every one—to his own way', 'we have turned everyone to his own way');
   check('word breaks that differ on both sides ("turned—every one—to" vs "turned everyone to") grade non-missed', turned.every((o) => o !== 'missed'), turned.join(','));
 
+  const firstborn = gradeTranscript('the firstborn of all creation', 'the 1st born of all creation');
+  check('an ordinal digit ("1st born") matches the spelled-out word ("firstborn")', firstborn.every((o) => o !== 'missed'), firstborn.join(','));
+
   const merged = gradeTranscript('every one who believes', 'everyone who believes');
   check('two written words heard as one ("every one" vs "everyone") grade non-missed', merged.every((o) => o !== 'missed'), merged.join(','));
 
@@ -567,6 +570,29 @@ scenario('18. Hyphenated and em-dash-joined words', () => {
   const liveTokens = tokenizeWords(expected);
   const live = alignRecitationWindow(liveTokens, tokenizeWords(spoken));
   check('live alignment also reaches the end through the hyphenated word', live.pointer === liveTokens.length, `pointer=${live.pointer}/${liveTokens.length}`);
+});
+
+// ============================================================================
+// Meaning-changing near misses (bake-off 2026-10)
+// ============================================================================
+scenario('19. Plurals and negating prefixes are never "close enough"', () => {
+  const plural = gradeTranscript('whether thrones or dominions or rulers', 'whether thrones or dominion or rulers');
+  check('"dominion" for "dominions" grades missed', plural[3] === 'missed', plural.join(','));
+
+  const singular = gradeTranscript('he bore the sin of many', 'he bore the sins of many');
+  check('"sins" for "sin" grades missed', singular[3] === 'missed', singular.join(','));
+
+  const ies = gradeTranscript('all the families of the earth', 'all the family of the earth');
+  check('"family" for "families" grades missed', ies[2] === 'missed', ies.join(','));
+
+  const negated = gradeTranscript('the image of the invisible God', 'the image of the visible God');
+  check('"visible" for "invisible" grades missed', negated[4] === 'missed', negated.join(','));
+
+  const unNegated = gradeTranscript('he was unable to speak', 'he was able to speak');
+  check('"able" for "unable" grades missed', unNegated[2] === 'missed', unNegated.join(','));
+
+  const stillClose = gradeTranscript('he condemned sin in the flesh', 'he condemns sin in the flesh');
+  check('an ordinary engine slip ("condemns" for "condemned") is still forgiven', stillClose[1] === 'close', stillClose.join(','));
 });
 
 // ============================================================================

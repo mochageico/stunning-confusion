@@ -238,9 +238,30 @@ const CURATED_WORD_EQUIVALENTS: Record<string, string> = {
  * 5-letter words still have enough length that a 2-edit match is very
  * unlikely to land on a genuinely different word.)
  */
+// Near misses that change meaning, never forgiven however close the spelling.
+// Found by the 2026-10 speech bake-off: every engine heard "visible",
+// "dominion" and "prominent" exactly as spoken, and the edit-distance tiers
+// below still passed them for "invisible", "dominions" and "preeminent"
+// (that last one is a tolerance question, handled in the tiers below).
+//  - A plural said as a singular (or the reverse) -- by the user's call,
+//    context makes the right form obvious to any English speaker, so getting
+//    it wrong is a real recall error. Also catches a dropped verb -s
+//    ("dwell"/"dwells").
+//  - A negating prefix added or dropped ("visible"/"invisible").
+const NEGATING_PREFIXES = ['in', 'im', 'il', 'ir', 'un', 'dis', 'non'];
+
+const isPluralPair = (shorter: string, longer: string): boolean =>
+  longer === `${shorter}s` || longer === `${shorter}es` || (shorter.endsWith('y') && longer === `${shorter.slice(0, -1)}ies`);
+
+export const isMeaningChangingNearMiss = (a: string, b: string): boolean => {
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  return isPluralPair(shorter, longer) || NEGATING_PREFIXES.some((p) => longer === p + shorter);
+};
+
 export const wordsRoughlyEqual = (a: string, b: string): boolean => {
   if (a === b) return true;
   if (CURATED_WORD_EQUIVALENTS[a] === b) return true;
+  if (isMeaningChangingNearMiss(a, b)) return false;
   const minLen = Math.min(a.length, b.length);
   if (minLen >= 8 && levenshtein(a, b) <= 3) return true;
   if (minLen >= 5 && levenshtein(a, b) <= 2) return true;
@@ -271,6 +292,18 @@ const NUMBER_WORDS = new Set(NUMBER_WORD_PAIRS.map(([word]) => word));
 const DIGIT_TO_NUMBER_WORD: Record<string, string> = Object.fromEntries(
   NUMBER_WORD_PAIRS.map(([word, digit]) => [digit, word])
 );
+
+// Same idea for ordinals: Apple's engine wrote "the 1st born" for "the
+// firstborn" in the bake-off (the word-break matcher then joins "first" +
+// "born").
+const ORDINAL_TO_WORD: Record<string, string> = {
+  '1st': 'first', '2nd': 'second', '3rd': 'third', '4th': 'fourth', '5th': 'fifth',
+  '6th': 'sixth', '7th': 'seventh', '8th': 'eighth', '9th': 'ninth', '10th': 'tenth',
+  '11th': 'eleventh', '12th': 'twelfth',
+};
+
+/** A spoken token in the form the verse text would spell it, for comparison only. */
+const spelledOut = (spokenWord: string): string => DIGIT_TO_NUMBER_WORD[spokenWord] ?? ORDINAL_TO_WORD[spokenWord] ?? spokenWord;
 
 /**
  * True for a spoken token that's plausibly a recited verse number ("3",
@@ -333,7 +366,7 @@ const pairCost = (expectedWord: string, spokenWord: string): number => {
   // Normalized for comparison only -- isLikelyVerseNumber below still checks
   // the raw token, since a bare digit is exactly what marks a spoken verse
   // number for suppression regardless of its word form.
-  const normalizedSpoken = DIGIT_TO_NUMBER_WORD[spokenWord] ?? spokenWord;
+  const normalizedSpoken = spelledOut(spokenWord);
   if (expectedWord === normalizedSpoken) return MATCH_COST;
   // A spoken verse number ("three", "23") read aloud between verses isn't
   // part of the passage. Suppress the usual fuzzy-match discount so it can't
@@ -363,7 +396,7 @@ const lettersMatch = (expected: string[], i: number, eSpan: number, spoken: stri
   (eSpan > 1 || sSpan > 1) &&
   i - eSpan >= 0 &&
   j - sSpan >= 0 &&
-  expected.slice(i - eSpan, i).join('') === spoken.slice(j - sSpan, j).join('');
+  expected.slice(i - eSpan, i).join('') === spoken.slice(j - sSpan, j).map(spelledOut).join('');
 
 // dp[i][j] = min cost aligning expected[0..i) with spoken[0..j). Standard
 // three-move recurrence (match/substitute diagonally, skip an expected word,
