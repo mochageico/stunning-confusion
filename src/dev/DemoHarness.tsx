@@ -24,7 +24,8 @@
 // (src/dev/BlocksGallery.tsx) in place of the app.
 // Extra params: ios=1 reproduces iPhone font rendering in the browser (no
 // synthesized bold, so a weight that isn't a real loaded face shows as the
-// Regular it is on the phone); empty=1 skips the seeded queue;
+// Regular it is on the phone); empty=1 skips the seeded queue; big=1 seeds
+// 700 verses instead, for timing the screens that draw every verse;
 // accent=<id> opens in that accent (navy, evergreen, burgundy, plum, walnut,
 // ink) without changing the one saved in Settings; scale=1.5 renders at that
 // text size, as if set in iOS Settings; notdue=1 (with modalLearn) practices
@@ -183,6 +184,62 @@ function buildQueue() {
       reviewsToday: 0,
     };
   });
+}
+
+// big=1: a 700-verse list, the size of a long-time user's, for timing the
+// screens that draw every verse (My Verses, Today, a chapter page). Whole runs
+// of real chapters, mostly far along the road, with placeholder text.
+const BIG_CHAPTERS: [string, string, number, number][] = [
+  ['Psalms', 'PSA', 119, 176], ['Romans', 'ROM', 8, 39], ['Romans', 'ROM', 12, 21], ['John', 'JHN', 1, 51],
+  ['John', 'JHN', 15, 27], ['Matthew', 'MAT', 5, 48], ['Matthew', 'MAT', 6, 34], ['Matthew', 'MAT', 7, 29],
+  ['Ephesians', 'EPH', 1, 23], ['Ephesians', 'EPH', 2, 22], ['Philippians', 'PHP', 2, 30], ['Philippians', 'PHP', 4, 23],
+  ['Colossians', 'COL', 3, 25], ['Hebrews', 'HEB', 11, 40], ['James', 'JAS', 1, 27], ['Isaiah', 'ISA', 53, 12],
+  ['Isaiah', 'ISA', 40, 31], ['1 Corinthians', '1CO', 13, 13], ['Psalms', 'PSA', 1, 6], ['Psalms', 'PSA', 23, 6],
+  ['Psalms', 'PSA', 91, 16],
+];
+function buildBigQueue() {
+  const out: ReturnType<typeof buildQueue> = [];
+  let i = 0;
+  for (const [book, id, chapter, count] of BIG_CHAPTERS) {
+    for (let verse = 1; verse <= count && out.length < 700; verse++, i++) {
+      // By position: the first ~60% Complete or Monthly, then Weekly, Daily,
+      // a few Learning, and the last ones Waiting.
+      const f = i / 700;
+      const status = f < 0.25 ? 'retained' : f < 0.86 ? 'reviewing' : f < 0.93 ? 'learning' : 'queued';
+      const phase = f < 0.6 ? 'monthly' : f < 0.75 ? 'weekly' : f < 0.86 ? 'daily' : 'none';
+      const spec: Spec = {
+        ref: `${book} ${chapter}:${verse}`,
+        status,
+        phase,
+        due: status === 'queued' ? undefined : (i % 37) - 3,
+        touches: status === 'queued' ? undefined : [1, 2, 3],
+        streak: status === 'queued' ? 0 : 3 + (i % 9),
+      };
+      out.push({
+        verseId: `BSB_${id}_${chapter}_${verse}`,
+        translationId: 'BSB',
+        book,
+        chapter,
+        verseNumber: verse,
+        text: `Placeholder words for ${book} ${chapter}:${verse}, long enough to wrap onto a second line like a real verse would.`,
+        orderIndex: i,
+        status,
+        origin: 'individual',
+        originPlanId: undefined,
+        retentionPhase: phase,
+        dateStarted: status === 'queued' ? null : iso(-200),
+        lastReviewDate: status === 'queued' ? null : iso(-3),
+        nextReviewDueDate: spec.due === undefined ? null : iso(spec.due, 6),
+        currentStreakCount: spec.streak ?? 0,
+        totalSuccessfulReviews: 3 + (spec.streak ?? 0),
+        gracePeriodUsedToday: false,
+        touchLogs: (spec.touches ?? []).map((d) => ({ timestamp: iso(-d, 8), drillType: 'type' })),
+        reviewLogs: demoLogs(spec),
+        reviewsToday: 0,
+      });
+    }
+  }
+  return out;
 }
 
 // ?s=guided: Psalm 23 as a passage mid-learning. Verses 1 and 2 have one run
@@ -483,7 +540,8 @@ export function useDemoState(real: AppState): AppState {
   useEffect(() => {
     if (!DEMO_ENABLED || booted.current || real.loadingAuth) return;
     booted.current = true;
-    if (params.get('empty') !== '1') real.setMemoryQueue((s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : buildQueue()) as any);
+    if (params.get('big') === '1') real.setMemoryQueue(buildBigQueue() as any);
+    else if (params.get('empty') !== '1') real.setMemoryQueue((s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : buildQueue()) as any);
     real.setUserRecordings(recordings as any);
     // The Record tab starts with no passage until one is chosen; the demo
     // picks Romans 8 unless `nopassage=1` asks for the empty state.

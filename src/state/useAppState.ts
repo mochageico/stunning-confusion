@@ -77,6 +77,7 @@ import { usePracticeSession } from './usePracticeSession';
 import { usePlanSettings } from './usePlanSettings';
 import { countRangeProgress } from '../lib/verseRange';
 import { buildVerseTimestamps } from '../lib/verseTimestamps';
+import { showToast } from '../lib/toastStore';
 import { PushTarget, ReminderDay, usePushNotifications } from './usePushNotifications';
 import * as Linking from 'expo-linking';
 import { parseInviteCode } from '../lib/invites';
@@ -493,8 +494,6 @@ export function useAppState() {
   const [showAudioSelector, setShowAudioSelector] = useState(false);
 
   // General App Toast
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Group plans: the open circle's and the ones I've joined (see useGroupPlans).
   const {
@@ -750,6 +749,11 @@ export function useAppState() {
   // Memory Queue auto-sync bookkeeping (debounce timer + last-synced verseIds, for deletion diffing)
   const queueSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSyncedQueueIdsRef = useRef<Set<string>>(new Set());
+  // Each verse as it was last written to (or read from) Firestore, as JSON.
+  // The auto-sync writes only the verses that differ from it: it used to
+  // rewrite every verse on every change, so one review on a 700-verse list
+  // uploaded all 700. Reset alongside prevSyncedQueueIdsRef.
+  const syncedQueueJsonRef = useRef<Map<string, string>>(new Map());
   // Guards the auto-sync until this user's real queue has been loaded from
   // Firestore. Without it, the sign-in/account-switch transition (which
   // clears memoryQueue synchronously) could commit an empty/stale queue —
@@ -902,15 +906,9 @@ export function useAppState() {
   // ==========================================
   // TOAST HELPER
   // ==========================================
-  // Tracks the active hide-timer so showing a new toast cancels the old
-  // one's timer — otherwise an earlier toast's 3s timeout would hide a
-  // newer message early (very visible during multi-verse practice, where
-  // several toasts fire back-to-back).
-  const triggerToast = (msg: string) => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastMessage(msg);
-    toastTimerRef.current = setTimeout(() => setToastMessage(null), 3000);
-  };
+  // The message lives in its own small store (lib/toastStore), so showing
+  // one redraws only the toast, not the whole open screen.
+  const triggerToast = (msg: string) => showToast(msg);
 
   // Real Community audio feed: every 'public' sharedRecordings doc, plus
   // every 'circle' one whose snapshot sharedWithUids includes the signed-in
@@ -1026,16 +1024,28 @@ export function useAppState() {
   const loadUserData = async (currentUser: any) => {
     console.log('loadUserData started for UID:', currentUser.uid);
     try {
-      // 1. Profile
-      console.log('Step 1: Fetching profile...');
+      // The four reads opening the app waits on go out together: each one
+      // waiting for the last made a slow network four round trips slower.
+      // They're still handled in the same order below. A failed read comes
+      // back undefined, as before, so it never stops the others.
       const profileRef = doc(db, 'profiles', currentUser.uid);
-      let profileSnap;
-      try {
-        profileSnap = await getDoc(profileRef);
-        console.log('Profile fetched successfully. Exists:', profileSnap.exists());
-      } catch (e) {
-        handleFirestoreError(e, OperationType.GET, `profiles/${currentUser.uid}`);
-      }
+      const planRef = doc(db, 'memoryPlans', currentUser.uid);
+      const versesCol = collection(db, 'users', currentUser.uid, 'verses');
+      const queueCol = collection(db, 'users', currentUser.uid, 'memoryQueue');
+      const settle = <T,>(p: Promise<T>, path: string) =>
+        p.catch((e) => {
+          handleFirestoreError(e, OperationType.GET, path);
+          return undefined;
+        });
+      const [profileSnap, planSnap, vSnap, qSnap] = await Promise.all([
+        settle(getDoc(profileRef), `profiles/${currentUser.uid}`),
+        settle(getDoc(planRef), `memoryPlans/${currentUser.uid}`),
+        settle(getDocs(versesCol), `users/${currentUser.uid}/verses`),
+        settle(getDocs(queueCol), `users/${currentUser.uid}/memoryQueue`),
+      ]);
+      console.log('User data fetched. Verses:', vSnap?.size, 'Queue:', qSnap?.size);
+
+      // 1. Profile
 
       if (profileSnap && profileSnap.exists()) {
         setDefaultRecordingVisibility(profileSnap.data().defaultRecordingVisibility || null);
@@ -1113,18 +1123,9 @@ export function useAppState() {
       // before React has flushed the rhythm setters, so it reads this rather
       // than the live state.
       let resolvedRhythm: Rhythm = DEFAULT_RHYTHM;
+      let groupPlansLoad: Promise<void> = Promise.resolve();
 
       // 2. Memory Plan
-      console.log('Step 2: Fetching memory plan...');
-      const planRef = doc(db, 'memoryPlans', currentUser.uid);
-      let planSnap;
-      try {
-        planSnap = await getDoc(planRef);
-        console.log('Memory plan fetched successfully. Exists:', planSnap.exists());
-      } catch (e) {
-        handleFirestoreError(e, OperationType.GET, `memoryPlans/${currentUser.uid}`);
-      }
-
       if (planSnap && planSnap.exists()) {
         const planData = planSnap.data();
         let plansList: MemoryPlan[] = planData.savedPlans || [];
@@ -1200,8 +1201,10 @@ export function useAppState() {
         // where the old singular activeGroupPlan was written to Firestore on
         // join but never actually read back on load -- it silently reset to
         // null every reload even though the user was still really a member.
+        // Not waited on here: the verses below don't need the plans, and
+        // the loading screen shouldn't wait on another round trip for them.
         const memberships: GroupPlanMembership[] = planData[JOINED_GROUP_PLANS_FIELD] || [];
-        await loadJoinedGroupPlans(memberships);
+        groupPlansLoad = loadJoinedGroupPlans(memberships);
 
         applyJoinedGroupChallenges((planData.joinedGroupChallenges as GroupChallengeMembership[]) || []);
 
@@ -1228,22 +1231,6 @@ export function useAppState() {
       }
 
       // 3. User Verses & Deterministic Memory Queue
-      console.log('Step 3: Fetching user verses and memory queue...');
-      const versesCol = collection(db, 'users', currentUser.uid, 'verses');
-      const queueCol = collection(db, 'users', currentUser.uid, 'memoryQueue');
-
-      let vSnap, qSnap;
-      try {
-        vSnap = await getDocs(versesCol);
-      } catch (e) {
-        handleFirestoreError(e, OperationType.GET, `users/${currentUser.uid}/verses`);
-      }
-      try {
-        qSnap = await getDocs(queueCol);
-      } catch (e) {
-        handleFirestoreError(e, OperationType.GET, `users/${currentUser.uid}/memoryQueue`);
-      }
-      console.log('User data fetched. Verses:', vSnap?.size, 'Queue:', qSnap?.size);
       if (qSnap) setQueueLoadedUid(currentUser.uid);
 
       // A brand-new account starts with a genuinely empty verse list — no
@@ -1278,6 +1265,7 @@ export function useAppState() {
       if (qSnap && qSnap.empty) {
         updateMemoryQueue(() => []);
         prevSyncedQueueIdsRef.current = new Set();
+        syncedQueueJsonRef.current = new Map();
       } else if (qSnap) {
         const loadedQueue: QueueItem[] = [];
         qSnap.forEach((docSnap) => {
@@ -1332,6 +1320,7 @@ export function useAppState() {
         // Baseline for the auto-sync's deletion diffing: what's in Firestore
         // right now is by definition already synced.
         prevSyncedQueueIdsRef.current = new Set(loadedQueue.map((i) => i.verseId));
+        syncedQueueJsonRef.current = new Map(loadedQueue.map((i) => [i.verseId, JSON.stringify(i)]));
 
         // Missed-review popup scan: uses resolvedActivePlan directly (not
         // React state, which may not have flushed from syncDesignerFromPlan
@@ -1359,25 +1348,26 @@ export function useAppState() {
         }
       }
 
-      // 4. Saved voice recordings (private to this user)
-      console.log('Step 4: Fetching saved recordings...');
-      try {
-        const recordingsSnap = await getDocs(
-          query(collection(db, 'users', currentUser.uid, 'recordings'), orderBy('createdAt', 'desc'))
-        );
-        setUserRecordings(recordingsSnap.docs.map((docSnap) => docSnap.data() as Recording));
-      } catch (e) {
-        handleFirestoreError(e, OperationType.GET, `users/${currentUser.uid}/recordings`);
-      }
-
-      // 5. Bible page photos (private to this user)
-      await loadChapterPhotos(currentUser.uid);
-
-      // 6. Chapter sections (private to this user)
-      await loadChapterSections(currentUser.uid);
-
-      // 7. Takeaways (private to this user)
-      await loadTakeaways(currentUser.uid);
+      // 4-7. Saved recordings, Bible page photos, chapter sections and
+      // takeaways (all private to this user), fetched together. Each catches
+      // its own errors.
+      const loadRecordings = async () => {
+        try {
+          const recordingsSnap = await getDocs(
+            query(collection(db, 'users', currentUser.uid, 'recordings'), orderBy('createdAt', 'desc'))
+          );
+          setUserRecordings(recordingsSnap.docs.map((docSnap) => docSnap.data() as Recording));
+        } catch (e) {
+          handleFirestoreError(e, OperationType.GET, `users/${currentUser.uid}/recordings`);
+        }
+      };
+      await Promise.all([
+        groupPlansLoad,
+        loadRecordings(),
+        loadChapterPhotos(currentUser.uid),
+        loadChapterSections(currentUser.uid),
+        loadTakeaways(currentUser.uid),
+      ]);
 
       triggerToast('Cloud profile and scripture data synchronized!');
     } catch (err) {
@@ -1431,6 +1421,7 @@ export function useAppState() {
       // account.
       queueHydratedRef.current = false;
       prevSyncedQueueIdsRef.current = new Set();
+      syncedQueueJsonRef.current = new Map();
       setVerses([]);
       updateMemoryQueue(() => []);
       // Same reasoning applies to saved recordings — clear synchronously so a
@@ -1624,15 +1615,29 @@ export function useAppState() {
         );
       }
 
+      // Only the verses that changed since they were last written or read.
+      // A verse whose write fails keeps its old JSON here, so the next sync
+      // tries it again.
+      const changed = memoryQueue
+        .map((item) => ({ item, json: JSON.stringify(item) }))
+        .filter(({ item, json }) => syncedQueueJsonRef.current.get(item.verseId) !== json);
+
       try {
-        const batch = writeBatch(db);
-        memoryQueue.forEach((item) => {
-          batch.set(doc(db, 'users', uid, 'memoryQueue', item.verseId), item);
-        });
-        removedIds.forEach((id) => {
-          batch.delete(doc(db, 'users', uid, 'memoryQueue', id));
-        });
-        await batch.commit();
+        // Batches of 400 writes, well inside Firestore's per-request limits
+        // even when every verse changed at once (a bulk status change).
+        const ops = [
+          ...changed.map(({ item }) => (b: ReturnType<typeof writeBatch>) =>
+            b.set(doc(db, 'users', uid, 'memoryQueue', item.verseId), item)
+          ),
+          ...removedIds.map((id) => (b: ReturnType<typeof writeBatch>) => b.delete(doc(db, 'users', uid, 'memoryQueue', id))),
+        ];
+        for (let start = 0; start < ops.length; start += 400) {
+          const batch = writeBatch(db);
+          ops.slice(start, start + 400).forEach((op) => op(batch));
+          await batch.commit();
+        }
+        changed.forEach(({ item, json }) => syncedQueueJsonRef.current.set(item.verseId, json));
+        removedIds.forEach((id) => syncedQueueJsonRef.current.delete(id));
         removedIds.forEach((id) => pendingQueueDeletionsRef.current.delete(id));
         // Keep unexplained ids in the baseline: they still exist in Firestore,
         // so dropping them here would let a later shrink delete them silently.
@@ -2672,7 +2677,6 @@ export function useAppState() {
     feedTranslationFilter, setFeedTranslationFilter,
     selectedChapterAudios, setSelectedChapterAudios,
     showAudioSelector, setShowAudioSelector,
-    toastMessage, setToastMessage,
     masteryTouches, setMasteryTouches,
     reviewsRequired, setReviewsRequired,
     sabbathEnabled, setSabbathEnabled,

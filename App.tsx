@@ -67,6 +67,7 @@ import { APP_FONTS, AppButton, AppIconButton, AppText, ChoiceCard, FontScaleOver
 import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from './src/components/blocks';
 import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
 import BlocksGallery from './src/dev/BlocksGallery';
+import { useToastMessage } from './src/lib/toastStore';
 import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent } from './src/components/theme';
 
 import { useThemeColors } from './src/components/theme';
@@ -638,13 +639,14 @@ function AppShell() {
 // previously painted over toasts fired while they were open.
 function ToastLayer({ state }: { state: AppState }) {
   const palette = useThemeColors();
-  if (!state.toastMessage) return null;
+  const toastMessage = useToastMessage();
+  if (!toastMessage) return null;
   return (
     <View pointerEvents="none" style={{ position: 'absolute', top: 56, left: 0, right: 0, alignItems: 'center', zIndex: 100 }}>
       <FadeInView>
         <View className="flex-row items-center gap-2 bg-ink border border-ink py-2.5 px-4 rounded-full">
           <Check size={12} color={palette.success} />
-          <AppText variant="label" className="text-on-accent font-bold font-sans">{state.toastMessage}</AppText>
+          <AppText variant="label" className="text-on-accent font-bold font-sans">{toastMessage}</AppText>
         </View>
       </FadeInView>
     </View>

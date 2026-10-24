@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import { ArrowUp, Bookmark, CalendarDays, ChevronRight, GripVertical, History, Plus, Trash2 } from 'lucide-react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
@@ -109,6 +109,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     lastView = v;
     setViewState(v);
   };
+
+  // Which waiting list is being reordered (its section key), if any.
+  const [reordering, setReordering] = useState<string | null>(null);
 
   const plan = { dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches };
   // One clock per visit, so the memoized rows below don't all redraw
@@ -239,9 +242,10 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     })),
   ].filter((s) => s.key === 'mine' || s.groups.length > 0);
 
-  // The strip jumps to a stage's section. Each section reports where it sits
-  // inside the scroll content as it lays out.
-  const scrollRef = useRef<ScrollView>(null);
+  // The strip jumps to a stage's section: its place in the list's items
+  // (stageIndex, below).
+  const scrollRef = useRef<FlatList<ListItem>>(null);
+  const stageIndexRef = useRef<Partial<Record<VerseStage, number>>>({});
   const scrollY = useRef(0);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -269,7 +273,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     const y = restoreY.current;
     if (y === null || !listsReady) return;
     if (contentHeight !== undefined && contentHeight < y) return;
-    scrollRef.current?.scrollTo({ y, animated: false });
+    scrollRef.current?.scrollToOffset({ offset: y, animated: false });
     restoreY.current = null;
   };
   useEffect(() => {
@@ -279,11 +283,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listsReady]);
-  const sectionY = useRef<Partial<Record<VerseStage, number>>>({});
-  const listY = useRef(0);
   const scrollToStage = (stage: VerseStage) => {
-    const y = sectionY.current[stage];
-    if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, listY.current + y - space(12)), animated: true });
+    const index = stageIndexRef.current[stage];
+    if (index !== undefined) scrollRef.current?.scrollToIndex({ index, animated: true, viewOffset: space(12) });
   };
   const jumpTo = (stage: VerseStage) => {
     if (view === 'stage') return scrollToStage(stage);
@@ -345,24 +347,13 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     </View>
   );
 
-  const stageSection = (stage: VerseStage, title: string, body: React.ReactNode) => (
-    <View key={stage} style={{ gap: space(10) }} onLayout={(e) => (sectionY.current[stage] = e.nativeEvent.layout.y)}>
-      {counts[stage] === 0 && stage !== 'waiting' ? (
-        emptyStage(stage)
-      ) : (
-        <>
-          {sectionHeader(stage, title)}
-          {body}
-        </>
-      )}
-    </View>
-  );
 
-  const waitingRow = (group: GroupedQueueItem, drag?: () => void, isActive = false) => (
+  const waitingRow = (group: GroupedQueueItem, drag?: () => void, isActive = false, onHold?: () => void) => (
     <VerseGroupRow
       key={group.id}
       group={group}
       drag={drag}
+      onHold={onHold}
       isActive={isActive}
       onStart={() => promoteToLearning(group.items.map((item) => item.verseId))}
       onRemove={() => {
@@ -384,16 +375,33 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
       ) : (
         waitingSections.map((section) => (
           <View key={section.key} style={{ gap: space(6) }}>
-            {waitingSections.length > 1 && <SectionHeader title={section.title} />}
+            {(waitingSections.length > 1 || section.groups.length > 1) && (
+              <View className="flex-row items-center" style={{ gap: space(8) }}>
+                <View className="flex-1">{waitingSections.length > 1 && <SectionHeader title={section.title} />}</View>
+                {section.groups.length > 1 && (
+                  <AppButton
+                    size="sm"
+                    variant="quiet"
+                    label={reordering === section.key ? 'Done' : 'Reorder'}
+                    accessibilityLabel={reordering === section.key ? 'Done reordering' : `Reorder ${section.title}`}
+                    onPress={() => setReordering(reordering === section.key ? null : section.key)}
+                  />
+                )}
+              </View>
+            )}
             {section.groups.length === 0 ? (
               <AppText variant="label" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
                 None waiting.
               </AppText>
-            ) : section.groups.length === 1 ? (
-              // One row has nothing to reorder against, so it skips the
-              // drag list: setting one up was the slowest part of opening
-              // this tab.
-              waitingRow(section.groups[0])
+            ) : reordering !== section.key ? (
+              // Plain rows until you ask to reorder: setting up the drag
+              // list was the slowest part of opening this tab, and it grows
+              // with every waiting verse. Holding a row starts reordering too.
+              <View style={{ gap: space(8) }}>
+                {section.groups.map((g) =>
+                  waitingRow(g, undefined, false, section.groups.length > 1 ? () => setReordering(section.key) : undefined)
+                )}
+              </View>
             ) : (
               // Real drag-to-reorder. scrollEnabled={false} because this
               // always nests inside the screen's own ScrollView -- same
@@ -425,22 +433,117 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     </View>
   );
 
-  const rows = (stage: 'learning' | 'daily' | 'weekly' | 'monthly') => (
-    <View style={{ gap: space(8) }}>
-      {byStage[stage].map((g) => (
-        <VerseStageRow key={g.key} group={g} now={now} onOpen={openGroup} />
-      ))}
-    </View>
-  );
+  // The stage lists as one flat run of items, so the list only builds the
+  // rows near the screen. Building every row up front (hundreds, for a long
+  // list) is what made opening this tab slow. Waiting (with its drag list)
+  // and Complete (its chips) stay one item each.
+  const items: ListItem[] = useMemo(() => {
+    if (!listsReady || total === 0) return [];
+    if (view === 'book') return [{ kind: 'book', key: 'book' }];
+    const out: ListItem[] = [{ kind: 'waiting', key: 'waiting', stage: 'waiting' }];
+    for (const stage of ['learning', 'daily', 'weekly', 'monthly'] as const) {
+      if (byStage[stage].length === 0) {
+        out.push({ kind: 'empty', key: `empty-${stage}`, stage });
+        continue;
+      }
+      out.push({ kind: 'header', key: `header-${stage}`, stage });
+      byStage[stage].forEach((group, i) => out.push({ kind: 'row', key: group.key, stage, group, first: i === 0 }));
+    }
+    out.push({ kind: 'complete', key: 'complete', stage: 'complete' });
+    return out;
+  }, [listsReady, total, view, byStage]);
+  // Where each stage starts in that run, for the strip's jump.
+  const stageIndex = useMemo(() => {
+    const m: Partial<Record<VerseStage, number>> = {};
+    items.forEach((it, i) => {
+      if (it.kind !== 'row' && it.stage && m[it.stage] === undefined) m[it.stage] = i;
+    });
+    return m;
+  }, [items]);
+  stageIndexRef.current = stageIndex;
+
+  const STAGE_TITLE: Record<VerseStage, string> = {
+    waiting: 'Waiting to start',
+    learning: 'Learning now',
+    daily: 'Daily',
+    weekly: 'Weekly',
+    monthly: 'Monthly',
+    complete: 'Complete',
+  };
+  // The gaps the old single column had: 24 between stages, 10 under a
+  // stage's heading, 8 between rows.
+  const renderItem = ({ item }: { item: ListItem }) => {
+    const top = item.kind === 'row' ? space(item.first ? 10 : 8) : item.kind === 'book' ? 0 : space(item.kind === 'waiting' ? 0 : 24);
+    let body: React.ReactNode;
+    switch (item.kind) {
+      case 'waiting':
+        body = (
+          <View style={{ gap: space(10) }}>
+            {sectionHeader('waiting', STAGE_TITLE.waiting)}
+            {waitingBody}
+          </View>
+        );
+        break;
+      case 'empty':
+        body = emptyStage(item.stage!);
+        break;
+      case 'header':
+        body = sectionHeader(item.stage!, STAGE_TITLE[item.stage!]);
+        break;
+      case 'row':
+        body = <VerseStageRow group={item.group!} now={now} onOpen={openGroup} />;
+        break;
+      case 'complete':
+        body =
+          counts.complete === 0 ? (
+            emptyStage('complete')
+          ) : (
+            <View style={{ gap: space(10) }}>
+              {sectionHeader('complete', STAGE_TITLE.complete)}
+              <CompleteChips groups={byStage.complete} onPress={openGroup} />
+            </View>
+          );
+        break;
+      case 'book':
+        body = (
+          <VersesByBook
+            queue={memoryQueue}
+            plan={plan}
+            starts={starts}
+            onOpenChapter={(book, chapter) => go('chapterLanding', book, chapter, { keepBack: true })}
+          />
+        );
+        break;
+    }
+    return <View style={{ paddingTop: top }}>{body}</View>;
+  };
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView
+      <FlatList
         ref={scrollRef}
+        data={items}
+        keyExtractor={(item) => item.key}
+        renderItem={renderItem}
+        // A list skips redrawing its rows unless this changes. The rows read
+        // this screen's own state (counts, the reorder switch), so they
+        // redraw along with it; the verse rows inside are memoized anyway.
+        extraData={renderItem}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={11}
+        onScrollToIndexFailed={({ index, averageItemLength }) => {
+          // Not laid out yet: get close, then land once it has drawn.
+          scrollRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: false });
+          setTimeout(() => scrollRef.current?.scrollToIndex({ index, animated: true, viewOffset: space(12) }), 120);
+        }}
         onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)}
         scrollEventThrottle={32}
         onContentSizeChange={(_, h) => tryRestore(h)}
-        className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+        className="flex-1 bg-canvas"
+        contentContainerClassName="p-5 pb-12"
+        ListHeaderComponent={
+      <View style={{ gap: space(20), paddingBottom: total === 0 ? 0 : space(20) }}>
         {/* The Verses tab's first screen, so no back link. Every verse you
             have is here, in every stage -- it used to stop at Learning and
             send you to the Memory Calendar for the rest. */}
@@ -563,26 +666,12 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
               </View>
             )}
 
-            {!listsReady ? null : view === 'stage' ? (
-              <View style={{ gap: space(24) }} onLayout={(e) => (listY.current = e.nativeEvent.layout.y)}>
-                {stageSection('waiting', 'Waiting to start', waitingBody)}
-                {stageSection('learning', 'Learning now', rows('learning'))}
-                {stageSection('daily', 'Daily', rows('daily'))}
-                {stageSection('weekly', 'Weekly', rows('weekly'))}
-                {stageSection('monthly', 'Monthly', rows('monthly'))}
-                {stageSection('complete', 'Complete', <CompleteChips groups={byStage.complete} onPress={openGroup} />)}
-              </View>
-            ) : (
-              <VersesByBook
-                queue={memoryQueue}
-                plan={plan}
-                starts={starts}
-                onOpenChapter={(book, chapter) => go('chapterLanding', book, chapter, { keepBack: true })}
-              />
-            )}
           </>
         )}
-
+      </View>
+        }
+        ListFooterComponent={
+      <View style={{ gap: space(20), paddingTop: space(20) }}>
         {/* How the list above gets worked through. Each opens its own screen.
             "Where verses come from" only appears once a group plan competes
             with your own verses. */}
@@ -622,10 +711,22 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             onPress={() => go('fullHistory')}
           />
         </GroupedList>
-      </ScrollView>
+      </View>
+        }
+      />
     </FadeInView>
   );
 }
+
+/** One item of My Verses' list: a stage's heading, one verse row, or a whole block. */
+type ListItem = {
+  kind: 'waiting' | 'empty' | 'header' | 'row' | 'complete' | 'book';
+  key: string;
+  stage?: VerseStage;
+  group?: StageGroup;
+  /** The first row under its heading (a wider gap above it). */
+  first?: boolean;
+};
 
 /**
  * One run of consecutive waiting verses. The reference gets the full width of
@@ -634,13 +735,16 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 function VerseGroupRow({
   group,
   drag,
+  onHold,
   isActive,
   onStart,
   onRemove,
 }: {
   group: GroupedQueueItem;
-  /** Absent when the row is alone in its list: there's nothing to move it past. */
+  /** Present only while its list is being reordered. */
   drag?: () => void;
+  /** Holding the row outside reordering: starts reordering its list. */
+  onHold?: () => void;
   isActive: boolean;
   onStart: () => void;
   onRemove: () => void;
@@ -653,7 +757,7 @@ function VerseGroupRow({
 
   return (
     <Pressable
-      onLongPress={drag}
+      onLongPress={drag ?? onHold}
       delayLongPress={250}
       accessibilityRole="button"
       accessibilityLabel={drag ? `${reference}. Press and hold to move.` : reference}

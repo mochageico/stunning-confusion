@@ -74,6 +74,19 @@ interface MemoryGridProps {
   onBoxLayout?: (index: number, e: LayoutChangeEvent) => void;
 }
 
+/** A verse's first letters, joined into runs of words that share a color. */
+function letterRuns(words: string[], script: ReturnType<typeof scriptOfVerse>, colorOf: (wordIndex: number) => string | undefined) {
+  const runs: { color: string | undefined; text: string }[] = [];
+  words.forEach((w, wi) => {
+    const color = colorOf(wi);
+    const piece = `${firstLetterOnly(w, script)}${wordGap(w)}`;
+    const last = runs[runs.length - 1];
+    if (last && last.color === color) last.text += piece;
+    else runs.push({ color, text: piece });
+  });
+  return runs;
+}
+
 export default function MemoryGrid({
   verses,
   columns = 4,
@@ -166,24 +179,27 @@ export default function MemoryGrid({
                 </View>
               ) : (
                 <AppText variant="caption" script={script} className={`font-sans leading-tight flex-row flex-wrap ${isActive ? 'text-on-accent' : 'text-ink'}`}>
-                  {words.map((w, wi) => {
+                  {/* One run of text per color, not one per word: a chapter
+                      was a thousand text pieces, which made opening this view
+                      slow. Ungraded words take the box's own color. */}
+                  {letterRuns(words, script, (wi) => {
                     const grade = grades?.[wi];
-                    const gradeColor =
-                      grade === 'correct'
-                        ? palette.success
-                        : grade === 'close'
-                          ? palette.warning
-                          : grade === 'incorrect'
-                            ? palette.danger
-                            : isActive
-                              ? palette.onAccent
-                              : undefined;
-                    return (
-                      <AppText variant="inherit" key={wi} style={gradeColor ? { color: gradeColor } : undefined}>
-                        {firstLetterOnly(w, script)}{wordGap(w)}
+                    return grade === 'correct'
+                      ? palette.success
+                      : grade === 'close'
+                        ? palette.warning
+                        : grade === 'incorrect'
+                          ? palette.danger
+                          : undefined;
+                  }).map((run, ri) =>
+                    run.color ? (
+                      <AppText variant="inherit" key={ri} style={{ color: run.color }}>
+                        {run.text}
                       </AppText>
-                    );
-                  })}
+                    ) : (
+                      run.text
+                    )
+                  )}
                 </AppText>
               )}
             </Pressable>
