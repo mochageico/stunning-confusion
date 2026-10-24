@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 
 import { threadSpan, ThreadSpanVerse } from '../lib/drills';
 import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, SpeechRecognizer, tokenizeWords, WordOutcome } from '../lib/recitation';
-import { joinWords, maskExceptFirstLetter, maskLetters, normalizeToken, scriptOfVerse, typedLetters, wordGap } from '../lib/textScript';
+import { blankExceptFirstLetter, blankLetters, joinWords, normalizeToken, scriptOfVerse, typedLetters, wordGap } from '../lib/textScript';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
 import { WaveBars } from './ui';
 
@@ -357,7 +357,7 @@ export default function GradedRecitation({
             show={(i, w) =>
               shownWords.has(i)
                 ? { text: w, className: 'font-serif text-ink' }
-                : { text: maskLetters(w, script), className: 'font-sans font-bold rounded px-1 bg-surface-2 text-ink-3' }
+                : { text: blankLetters(w, script), className: 'font-serif text-ink-3' }
             }
           />
         )}
@@ -412,8 +412,8 @@ export default function GradedRecitation({
             }
             if (shownWords?.has(i)) return { text: w, className: `font-serif ${i === pointer ? 'bg-accent-soft text-accent' : 'text-ink-2'}` };
             return {
-              text: hintFirstLetters ? maskExceptFirstLetter(w, script) : maskLetters(w, script),
-              className: `font-sans font-bold rounded px-1 ${i === pointer ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-ink-3'}`,
+              text: hintFirstLetters ? blankExceptFirstLetter(w, script) : blankLetters(w, script),
+              className: i === pointer ? 'font-serif font-bold text-accent' : 'font-serif text-ink-3',
             };
           }}
         />

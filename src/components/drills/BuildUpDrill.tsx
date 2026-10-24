@@ -3,7 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { Check, ChevronRight, Eye, EyeOff, Layers, Mic, RefreshCw, Sliders, Undo2 } from 'lucide-react-native';
 
 import { buildUpStages, BUILD_UP_REPS, BiteSize, BuildDirection, DrillVerse } from '../../lib/drills';
-import { joinWords, maskExceptFirstLetter, maskLetters, scriptOfVerse, splitWords, wordGap } from '../../lib/textScript';
+import { blankExceptFirstLetter, blankLetters, joinWords, scriptOfVerse, splitWords, wordGap } from '../../lib/textScript';
 import { loadPracticePrefs, savePracticePrefs } from '../../lib/practicePrefs';
 import { AppButton, AppText } from '../design';
 import { ChipRow } from '../ui';
@@ -137,7 +137,7 @@ export default React.memo(function BuildUpDrill({
   // shape and punctuation. Peeking overrides all of it.
   const maskBuildSegment = (text: string) => {
     if (buildRep === 'read' || buildPeek) return text;
-    const maskWord = buildRep === 'hint' ? maskExceptFirstLetter : maskLetters;
+    const maskWord = buildRep === 'hint' ? blankExceptFirstLetter : blankLetters;
     return joinWords(splitWords(text, script).map((w) => maskWord(w, script)));
   };
 

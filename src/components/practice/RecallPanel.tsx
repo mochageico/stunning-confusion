@@ -1,7 +1,7 @@
 import { ScrollView, View } from 'react-native';
 import { Check, Eye, Mic, MicOff, RefreshCw, Shuffle, Sparkles } from 'lucide-react-native';
 import { normalizeToken, summarizeOutcomes, reviewPassAccuracy } from '../../lib/recitation';
-import { maskExceptFirstLetter, maskLetters, splitWords, wordGap } from '../../lib/textScript';
+import { blankExceptFirstLetter, blankLetters, splitWords, wordGap } from '../../lib/textScript';
 import { MIN_JIGSAW_VERSES } from '../../lib/drills';
 import { MIX_NAMES } from '../../lib/formatNames';
 import { BounceView, DiscreteSlider, FadeInView, SpinView, WaveBars } from '../ui';
@@ -250,7 +250,7 @@ export default function RecallPanel({
                               return (
                                 <AppText variant="inherit"
                                   key={idx}
-                                  className={`font-serif font-semibold ${gradeClass}`}
+                                  className={`font-serif ${gradeClass}`}
                                   onPress={outcome === 'missed' ? () => overrideWordAsCorrect(g) : undefined}
                                 >
                                   {w}{wordGap(w)}
@@ -293,11 +293,9 @@ export default function RecallPanel({
                               return (
                                 <AppText variant="inherit"
                                   key={idx}
-                                  className={`font-sans rounded px-1 font-bold ${
-                                    isCurrent ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-ink-3'
-                                  }`}
+                                  className={isCurrent ? 'font-serif font-bold text-accent' : 'font-serif text-ink-3'}
                                 >
-                                  {maskExceptFirstLetter(w, passageScript)}{wordGap(w)}
+                                  {blankExceptFirstLetter(w, passageScript)}{wordGap(w)}
                                 </AppText>
                               );
                             }
@@ -305,11 +303,9 @@ export default function RecallPanel({
                             return (
                               <AppText variant="inherit"
                                 key={idx}
-                                className={`font-sans rounded px-1 font-bold ${
-                                  isCurrent ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-ink-3'
-                                }`}
+                                className={isCurrent ? 'font-serif font-bold text-accent' : 'font-serif text-ink-3'}
                               >
-                                {maskLetters(w, passageScript)}{wordGap(w)}
+                                {blankLetters(w, passageScript)}{wordGap(w)}
                               </AppText>
                             );
                           })}

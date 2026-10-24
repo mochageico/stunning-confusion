@@ -267,6 +267,19 @@ export const maskExceptFirstLetter = (word: string, script: TextScript = 'latin'
 };
 
 /**
+ * The look for a hidden word in every drill: a writing line the length of the word,
+ * one underscore per letter (they join into one line), punctuation kept.
+ * Underscores rather than a styled underline because Android can't color an
+ * underline apart from its text.
+ */
+export const blankLetters = (word: string, script: TextScript = 'latin'): string =>
+  maskLetters(word, script).replace(/•/g, '_');
+
+/** blankLetters with the first letter left showing -- First Letter hint mode. */
+export const blankExceptFirstLetter = (word: string, script: TextScript = 'latin'): string =>
+  maskExceptFirstLetter(word, script).replace(/•/g, '_');
+
+/**
  * Puts a replacement word into the original's punctuation (and, for English,
  * its capitalization -- all caps too, so a decoy for "LORD" is in caps), so a spot-the-swap decoy never gives itself away by
  * being the only word missing its comma or maqaf. `replacement` is a bare
