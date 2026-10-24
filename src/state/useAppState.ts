@@ -77,6 +77,7 @@ import { usePracticeSession } from './usePracticeSession';
 import { usePlanSettings } from './usePlanSettings';
 import { countRangeProgress } from '../lib/verseRange';
 import { buildVerseTimestamps } from '../lib/verseTimestamps';
+import { cacheLoadingVerses } from '../lib/loadingVerses';
 import { showToast } from '../lib/toastStore';
 import { PushTarget, ReminderDay, usePushNotifications } from './usePushNotifications';
 import * as Linking from 'expo-linking';
@@ -588,12 +589,16 @@ export function useAppState() {
     triggerToast: (message) => triggerToast(message),
   });
 
+  // Whether this user's queue has come back from Firestore yet. The loading
+  // screen waits on it too, so Home never opens empty and then fills in.
+  const queueReady = !!user?.uid && queueLoadedUid === user.uid;
+
   // This week's reviews and verses held, written into each of the user's
   // circles and added up on the circle page (see useCircleTotals).
   const { circleStats, loadCircleStats, removeMyCircleStats, seedCircleStats } = useCircleTotals({
     user,
     memoryQueue,
-    queueReady: !!user?.uid && queueLoadedUid === user.uid,
+    queueReady,
     circleIds: myCircles.map((c) => c.id),
     dayStartHour,
   });
@@ -1318,6 +1323,7 @@ export function useAppState() {
         });
         loadedQueue.sort((a, b) => a.orderIndex - b.orderIndex);
         updateMemoryQueue(() => loadedQueue);
+        cacheLoadingVerses(loadedQueue);
         // Baseline for the auto-sync's deletion diffing: what's in Firestore
         // right now is by definition already synced.
         prevSyncedQueueIdsRef.current = new Set(loadedQueue.map((i) => i.verseId));
@@ -2615,6 +2621,7 @@ export function useAppState() {
     selectedAddChapter, setSelectedAddChapter,
     user, setUser,
     loadingAuth,
+    queueReady,
     currentTab, setCurrentTab,
     currentScreen, setCurrentScreen,
     selectedBook, setSelectedBook,

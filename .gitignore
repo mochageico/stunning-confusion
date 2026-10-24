@@ -55,3 +55,6 @@ bakeoff/
 
 # Studio audio sample page (generated, about 9 MB)
 studio-samples.html
+
+# Firebase CLI deploy cache
+.firebase/

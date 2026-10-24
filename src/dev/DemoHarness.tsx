@@ -664,6 +664,7 @@ export function useDemoState(real: AppState): AppState {
 
   if (!DEMO_ENABLED) return real;
   if (s === 'auth') return { ...real, user: null, loadingAuth: false };
+  if (s === 'loading') return { ...real, loadingAuth: true };
 
   const circleMsgs = msgs([
     ['u2', 'Morning all! Anyone else stuck on verse 38?'],
@@ -681,6 +682,8 @@ export function useDemoState(real: AppState): AppState {
   const overrides: Partial<AppState> & Record<string, unknown> = {
     user: DEMO_USER,
     loadingAuth: false,
+    // Sample data is all in place already; nothing to wait for.
+    queueReady: true,
     myCircles: circles,
     loadingMyCircles: false,
     publicCircles,

@@ -42,6 +42,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import CommonQuestionsScreen from './src/screens/CommonQuestionsScreen';
 import { TourCard } from './src/components/GuidedTour';
 import AuthGateScreen from './src/screens/AuthGateScreen';
+import LoadingScreen from './src/components/LoadingScreen';
 import DevLayoutLab from './src/screens/DevLayoutLab';
 
 // Set to true to mount the layout lab instead of the app -- side-by-side
@@ -473,6 +474,10 @@ function NowPlayingBar({ state }: { state: AppState }) {
   );
 }
 
+// How long the loading screen waits for the user's verses before opening
+// the app anyway.
+const VERSE_WAIT_CAP_MS = 8000;
+
 function AppShell() {
   const palette = useThemeColors();
   // Demo mode (sample data, no sign-in) for checking UI work -- a no-op unless
@@ -492,13 +497,32 @@ function AppShell() {
   // room, and a stray tap on a tab can't walk away from a live take.
   const showBars = !chatScreenActive && keyboardHeight === 0 && !state.isRecording;
 
-  // While Firebase resolves whether a session already exists, render nothing
-  // rather than flashing the sign-in gate first. Once resolved, no user means
-  // no demo/guest content -- show the auth gate instead of the tabbed app;
-  // a brand-new account's showOnboarding overlay (below) then takes over
-  // automatically once loadUserData creates their profile.
-  if (state.loadingAuth) {
-    return <View style={{ flex: 1 }} className="bg-canvas" />;
+  // Signed in but the verses haven't arrived yet: keep the loading screen up
+  // so Home doesn't open empty and then fill in. Capped, so a failed or very
+  // slow load still lets the app open (with whatever it has) instead of
+  // spinning forever.
+  const awaitingVerses = !!state.user && !state.queueReady;
+  const [verseWaitCapped, setVerseWaitCapped] = React.useState(false);
+  React.useEffect(() => {
+    setVerseWaitCapped(false);
+    if (!awaitingVerses) return;
+    const timer = setTimeout(() => setVerseWaitCapped(true), VERSE_WAIT_CAP_MS);
+    return () => clearTimeout(timer);
+  }, [awaitingVerses, state.user?.uid]);
+
+  // While Firebase resolves whether a session already exists, show the
+  // loading screen rather than flashing the sign-in gate first. Once
+  // resolved, no user means no demo/guest content -- show the auth gate
+  // instead of the tabbed app; a brand-new account's showOnboarding overlay
+  // (below) then takes over automatically once loadUserData creates their
+  // profile.
+  if (state.loadingAuth || (awaitingVerses && !verseWaitCapped)) {
+    return (
+      <>
+        <ThemedStatusBar />
+        <LoadingScreen />
+      </>
+    );
   }
   if (!state.user) {
     return (
