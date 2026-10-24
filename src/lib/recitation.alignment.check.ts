@@ -553,6 +553,14 @@ scenario('18. Hyphenated and em-dash-joined words', () => {
   const inLaw = gradeTranscript('his son-in-law went', 'his son in law went');
   check('a three-part join ("son-in-law") grades non-missed', inLaw.every((o) => o !== 'missed'), inLaw.join(','));
 
+  // Bake-off repro (Isaiah 53:6): the ESV's dashes split "every one" across
+  // two tokens ("turnedevery", "oneto"); every Whisper model wrote "everyone".
+  const turned = gradeTranscript('we have turned—every one—to his own way', 'we have turned everyone to his own way');
+  check('word breaks that differ on both sides ("turned—every one—to" vs "turned everyone to") grade non-missed', turned.every((o) => o !== 'missed'), turned.join(','));
+
+  const merged = gradeTranscript('every one who believes', 'everyone who believes');
+  check('two written words heard as one ("every one" vs "everyone") grade non-missed', merged.every((o) => o !== 'missed'), merged.join(','));
+
   const halfSaid = gradeTranscript('gentleness, self-control; against', 'gentleness self against');
   check('saying only half of a hyphenated word still grades it missed', halfSaid[1] === 'missed', halfSaid.join(','));
 

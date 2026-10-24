@@ -348,18 +348,22 @@ const pairCost = (expectedWord: string, spokenWord: string): number => {
 const skipExpectedCost = (expectedWord: string): number =>
   isCommonlyDroppedWord(expectedWord) ? SKIP_EXPECTED_DROPPABLE_COST : SKIP_EXPECTED_COST;
 
-// A written word that joins two or three spoken ones -- "self-control",
-// "son-in-law", or the ESV's unspaced em-dash ("flesh—could") -- normalizes to
-// ONE expected token ("selfcontrol"), but every speech engine hears it as
-// separate words ("self control"). Without this move those words could never
-// match and always graded missed. Exact-match only, so it can't become a new
-// source of false passes; deliberately the same cost as a real match.
-const MAX_JOINED_SPOKEN = 3;
+// Word breaks that don't line up between the text and the transcript. A
+// hyphenated word ("self-control", "son-in-law") or the ESV's unspaced
+// em-dash ("flesh—could") normalizes to ONE expected token ("selfcontrol"),
+// but speech engines hear separate words ("self control"); and the reverse
+// happens too -- the ESV's "turned—every one—to" tokenizes as "turnedevery"
+// "oneto" while engines write "turned everyone to". So a run of up to three
+// expected words matches a run of up to three spoken words whenever their
+// letters join up exactly. Exact-match only, so it can't become a new source
+// of false passes; deliberately the same cost as a real match.
+const MAX_JOINED_WORDS = 3;
 
-const joinedSpokenCost = (expectedWord: string, spoken: string[], j: number, span: number): number | null => {
-  if (span < 2 || j - span < 0) return null;
-  return spoken.slice(j - span, j).join('') === expectedWord ? MATCH_COST : null;
-};
+const lettersMatch = (expected: string[], i: number, eSpan: number, spoken: string[], j: number, sSpan: number): boolean =>
+  (eSpan > 1 || sSpan > 1) &&
+  i - eSpan >= 0 &&
+  j - sSpan >= 0 &&
+  expected.slice(i - eSpan, i).join('') === spoken.slice(j - sSpan, j).join('');
 
 // dp[i][j] = min cost aligning expected[0..i) with spoken[0..j). Standard
 // three-move recurrence (match/substitute diagonally, skip an expected word,
@@ -377,9 +381,10 @@ const buildAlignmentTable = (expected: string[], spoken: string[]): number[][] =
         dp[i - 1][j] + skipExpectedCost(expected[i - 1]),
         dp[i][j - 1] + INSERT_SPOKEN_COST
       );
-      for (let span = 2; span <= MAX_JOINED_SPOKEN; span++) {
-        const joined = joinedSpokenCost(expected[i - 1], spoken, j, span);
-        if (joined !== null) best = Math.min(best, dp[i - 1][j - span] + joined);
+      for (let eSpan = 1; eSpan <= MAX_JOINED_WORDS; eSpan++) {
+        for (let sSpan = 1; sSpan <= MAX_JOINED_WORDS; sSpan++) {
+          if (lettersMatch(expected, i, eSpan, spoken, j, sSpan)) best = Math.min(best, dp[i - eSpan][j - sSpan] + MATCH_COST);
+        }
       }
       dp[i][j] = best;
     }
@@ -407,17 +412,24 @@ const backtraceOutcomes = (
   let i = startI;
   let j = startJ;
   while (i > 0 && j > 0) {
-    const joinedSpan = (() => {
-      for (let span = 2; span <= MAX_JOINED_SPOKEN; span++) {
-        const joined = joinedSpokenCost(expected[i - 1], spoken, j, span);
-        if (joined !== null && dp[i][j] === dp[i - 1][j - span] + joined) return span;
+    const joined = (() => {
+      for (let eSpan = 1; eSpan <= MAX_JOINED_WORDS; eSpan++) {
+        for (let sSpan = 1; sSpan <= MAX_JOINED_WORDS; sSpan++) {
+          if (lettersMatch(expected, i, eSpan, spoken, j, sSpan) && dp[i][j] === dp[i - eSpan][j - sSpan] + MATCH_COST) {
+            return { eSpan, sSpan };
+          }
+        }
       }
-      return 0;
+      return null;
     })();
-    if (joinedSpan > 0) {
-      outcomes[i - 1] = 'perfect';
-      i -= 1;
-      j -= joinedSpan;
+    if (joined) {
+      const heardWords = spoken.slice(j - joined.sSpan, j).join(' ');
+      for (let k = 1; k <= joined.eSpan; k++) {
+        outcomes[i - k] = 'perfect';
+        if (heard) heard[i - k] = heardWords;
+      }
+      i -= joined.eSpan;
+      j -= joined.sSpan;
       continue;
     }
     const cost = pairCost(expected[i - 1], spoken[j - 1]);
