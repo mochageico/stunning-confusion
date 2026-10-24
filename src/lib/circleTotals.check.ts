@@ -124,8 +124,8 @@ check('singulars', weeklyLine('Grace', { reviewed: 1, takeaways: 1 }) === 'This 
 check('no takeaways: just the reviews', weeklyLine('Grace', { reviewed: 40, takeaways: 0 }) === 'This week Grace reviewed 40 verses.');
 check('only takeaways', weeklyLine('Grace', { reviewed: 0, takeaways: 2 }) === 'This week Grace wrote 2 takeaways.');
 check('nothing yet', weeklyLine('Grace', { reviewed: 0, takeaways: 0 }) === 'No reviews yet this week.');
-check('together line past Hebrews', togetherLine(304) === 'Together you hold more verses than the book of Hebrews. Next: Daniel, 54 to go.', togetherLine(304));
-check('together line before the first landmark', togetherLine(8) === 'Together you hold 8 verses. Next: 2 John, 6 to go.', togetherLine(8));
+check('together line past Hebrews', togetherLine(304) === 'Together you hold more verses than the book of Hebrews.', togetherLine(304));
+check('together line before the first landmark', togetherLine(8) === 'Together you hold 8 verses.', togetherLine(8));
 check('together line with nothing held is empty', togetherLine(0) === '');
 check('together line past Psalms has no Next', togetherLine(5000) === 'Together you hold more verses than the book of Psalms.', togetherLine(5000));
 

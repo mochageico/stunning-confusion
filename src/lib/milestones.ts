@@ -89,10 +89,9 @@ export const heldLine = (pos: LadderPosition, who: 'You' | 'Together you' = 'You
 /** "Next: Philippians, 19 to go" (null once past the longest book). */
 export const nextLine = (pos: LadderPosition): string | null => (pos.next ? `Next: ${pos.next.book}, ${pos.toGo} to go` : null);
 
-/** Both lines as one quiet sentence pair, for My Verses. */
+/** The held line alone, for My Verses (empty before the first landmark). */
 export function landmarkText(pos: LadderPosition): string {
-  const next = nextLine(pos);
-  return [heldLine(pos), next ? `${next}.` : null].filter(Boolean).join(' ');
+  return heldLine(pos) ?? '';
 }
 
 // ----------------------------------------------------------------------------

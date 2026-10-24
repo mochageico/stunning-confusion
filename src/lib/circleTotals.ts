@@ -14,7 +14,7 @@
 
 import type { CircleMember, CircleMemberStats, QueueItem, ReviewLog } from '../types';
 import { getLogicalDate, localDayKey } from './logicalDate';
-import { heldLine, ladderPosition, nextLine, versesHeld } from './milestones';
+import { heldLine, ladderPosition, versesHeld } from './milestones';
 
 // ----------------------------------------------------------------------------
 // The week
@@ -185,14 +185,13 @@ export function weeklyLine(circleName: string, t: Pick<CircleTotals, 'reviewed' 
 }
 
 /**
- * "Together you hold more verses than the book of Hebrews. Next: 1 Corinthians,
- * 125 to go." Before the first landmark, "Together you hold 8 verses. Next: ...".
+ * "Together you hold more verses than the book of Hebrews." Before the first
+ * landmark, "Together you hold 8 verses."
  * Empty when nobody holds anything yet.
  */
 export function togetherLine(held: number): string {
   if (held <= 0) return '';
   const pos = ladderPosition(held);
   const first = heldLine(pos, 'Together you') ?? `Together you hold ${plural(pos.held, 'verse', 'verses')}.`;
-  const next = nextLine(pos);
-  return next ? `${first} ${next}.` : first;
+  return first;
 }

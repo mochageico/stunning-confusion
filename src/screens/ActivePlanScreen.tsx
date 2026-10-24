@@ -136,7 +136,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   );
   const counts = useMemo(() => stageCounts(memoryQueue), [memoryQueue]);
   const takeawayCount = useMemo(() => writtenCount(takeaways), [takeaways]);
-  // "You hold more verses than Ruth. Next: Philippians, 19 to go." Nothing until the first landmark is in sight.
+  // "You hold more verses than the book of Ruth." Nothing before the first landmark.
   const landmark = useMemo(() => {
     const held = versesHeld(memoryQueue);
     return held > 0 ? landmarkText(ladderPosition(held)) : '';
