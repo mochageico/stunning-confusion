@@ -16,7 +16,7 @@ import JigsawDrill from '../components/drills/JigsawDrill';
 import VersePlayButton from '../components/VersePlayButton';
 import { threadSlips, ThreadSlip, threadSpan, threadStartVerseCounts, ThreadCue } from '../lib/drills';
 import { reviewPassAccuracy, WordOutcome } from '../lib/recitation';
-import { joinWords, maskExceptFirstLetter, normalizeToken, scriptOfVerse, splitWords } from '../lib/textScript';
+import { blankExceptFirstLetter, joinWords, normalizeToken, scriptOfVerse, splitWords } from '../lib/textScript';
 import { loadPracticePrefs, savePracticePrefs } from '../lib/practicePrefs';
 import {
   buildPassages,
@@ -309,14 +309,25 @@ function DrillStage({
 function VerseCard({ verse, firstLettersOnly }: { verse: GuidedDrillVerse; firstLettersOnly?: boolean }) {
   const space = useScaledSpace();
   const script = scriptOfVerse(verse);
-  const text = firstLettersOnly ? joinWords(splitWords(verse.text, script).map((w) => maskExceptFirstLetter(w, script))) : verse.text;
+  const text = firstLettersOnly ? joinWords(splitWords(verse.text, script).map((w) => blankExceptFirstLetter(w, script))) : verse.text;
   return (
     <View className="bg-surface border border-line rounded-card" style={{ padding: space(16), gap: space(6) }}>
       <AppText variant="caption" className="font-sans font-bold text-ink-3">
         {refOf(verse)}
       </AppText>
       <AppText variant="body" script={script} className="font-serif leading-relaxed text-ink">
-        {text}
+        {/* The letters stay dark; the lines after them are quieter, as in Recall. */}
+        {firstLettersOnly
+          ? text.split(/(_+)/).map((part, i) =>
+              part.startsWith('_') ? (
+                <AppText variant="inherit" key={i} className="text-ink-3">
+                  {part}
+                </AppText>
+              ) : (
+                part
+              )
+            )
+          : text}
       </AppText>
     </View>
   );
