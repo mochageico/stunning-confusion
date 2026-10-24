@@ -93,10 +93,12 @@ export async function loadAppPrefs(): Promise<AppPrefs> {
   return prefs;
 }
 
-export function setAppPref<K extends keyof AppPrefs>(key: K, value: AppPrefs[K]) {
+/** `save: false` changes it for this session only (the demo's ?dark=1). */
+export function setAppPref<K extends keyof AppPrefs>(key: K, value: AppPrefs[K], { save = true }: { save?: boolean } = {}) {
   prefs = { ...prefs, [key]: value };
   apply(prefs);
   listeners.forEach((l) => l());
+  if (!save) return;
   AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)).catch(() => {
     // Not worth interrupting anyone over; the choice just won't outlast a restart.
   });

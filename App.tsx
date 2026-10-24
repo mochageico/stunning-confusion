@@ -677,7 +677,7 @@ export default function App() {
       // ?dark=1 in dark.
       const demo = ACCENTS.find((a) => a.id === DEMO_ACCENT);
       if (DEMO_SCREEN && Platform.OS === 'web' && new URLSearchParams(window.location.search).get('dark') === '1') {
-        setAppPref('colorScheme', 'dark');
+        setAppPref('colorScheme', 'dark', { save: false });
       }
       setInitialAccent(demo ? demo.id : saved);
     });
