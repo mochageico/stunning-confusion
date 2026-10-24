@@ -238,30 +238,35 @@ const CURATED_WORD_EQUIVALENTS: Record<string, string> = {
  * 5-letter words still have enough length that a 2-edit match is very
  * unlikely to land on a genuinely different word.)
  */
-// Near misses that change meaning, never forgiven however close the spelling.
-// Found by the 2026-10 speech bake-off: every engine heard "visible",
-// "dominion" and "prominent" exactly as spoken, and the edit-distance tiers
-// below still passed them for "invisible", "dominions" and "preeminent"
-// (that last one is a tolerance question, handled in the tiers below).
-//  - A plural said as a singular (or the reverse) -- by the user's call,
-//    context makes the right form obvious to any English speaker, so getting
-//    it wrong is a real recall error. Also catches a dropped verb -s
-//    ("dwell"/"dwells").
-//  - A negating prefix added or dropped ("visible"/"invisible").
+// Two rules found by the 2026-10 speech bake-off, where every engine heard
+// "visible" and "dominion" exactly as spoken:
+//  - A negating prefix added or dropped ("visible"/"invisible") changes the
+//    meaning, so it is never "close enough" however near the spelling.
+//  - A plural said as a singular, or the reverse ("dominion"/"dominions",
+//    "family"/"families", a dropped verb -s), always is. By the user's call,
+//    nobody reciting actually confuses these -- context makes the right form
+//    obvious -- so it's an engine slip, never a recall error. 3+ letters, so
+//    "a"/"as" can't count.
 const NEGATING_PREFIXES = ['in', 'im', 'il', 'ir', 'un', 'dis', 'non'];
 
-const isPluralPair = (shorter: string, longer: string): boolean =>
-  longer === `${shorter}s` || longer === `${shorter}es` || (shorter.endsWith('y') && longer === `${shorter.slice(0, -1)}ies`);
+const shorterLonger = (a: string, b: string): [string, string] => (a.length <= b.length ? [a, b] : [b, a]);
 
-export const isMeaningChangingNearMiss = (a: string, b: string): boolean => {
-  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
-  return isPluralPair(shorter, longer) || NEGATING_PREFIXES.some((p) => longer === p + shorter);
+export const isNegatedPair = (a: string, b: string): boolean => {
+  const [shorter, longer] = shorterLonger(a, b);
+  return NEGATING_PREFIXES.some((p) => longer === p + shorter);
+};
+
+export const isPluralPair = (a: string, b: string): boolean => {
+  const [shorter, longer] = shorterLonger(a, b);
+  if (shorter.length < 3) return false;
+  return longer === `${shorter}s` || longer === `${shorter}es` || (shorter.endsWith('y') && longer === `${shorter.slice(0, -1)}ies`);
 };
 
 export const wordsRoughlyEqual = (a: string, b: string): boolean => {
   if (a === b) return true;
   if (CURATED_WORD_EQUIVALENTS[a] === b) return true;
-  if (isMeaningChangingNearMiss(a, b)) return false;
+  if (isNegatedPair(a, b)) return false;
+  if (isPluralPair(a, b)) return true;
   const minLen = Math.min(a.length, b.length);
   if (minLen >= 8 && levenshtein(a, b) <= 3) return true;
   if (minLen >= 5 && levenshtein(a, b) <= 2) return true;

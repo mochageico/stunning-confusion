@@ -575,15 +575,18 @@ scenario('18. Hyphenated and em-dash-joined words', () => {
 // ============================================================================
 // Meaning-changing near misses (bake-off 2026-10)
 // ============================================================================
-scenario('19. Plurals and negating prefixes are never "close enough"', () => {
+scenario('19. Plurals always close enough; negating prefixes never', () => {
   const plural = gradeTranscript('whether thrones or dominions or rulers', 'whether thrones or dominion or rulers');
-  check('"dominion" for "dominions" grades missed', plural[3] === 'missed', plural.join(','));
+  check('"dominion" for "dominions" grades close', plural[3] === 'close', plural.join(','));
 
   const singular = gradeTranscript('he bore the sin of many', 'he bore the sins of many');
-  check('"sins" for "sin" grades missed', singular[3] === 'missed', singular.join(','));
+  check('"sins" for "sin" grades close', singular[3] === 'close', singular.join(','));
 
   const ies = gradeTranscript('all the families of the earth', 'all the family of the earth');
-  check('"family" for "families" grades missed', ies[2] === 'missed', ies.join(','));
+  check('"family" for "families" grades close (3 edits, past the length tiers)', ies[2] === 'close', ies.join(','));
+
+  const tiny = gradeTranscript('as a lamb', 'as as lamb');
+  check('a 1-letter word can\'t pluralize into a match ("as" for "a")', tiny[1] !== 'close', tiny.join(','));
 
   const negated = gradeTranscript('the image of the invisible God', 'the image of the visible God');
   check('"visible" for "invisible" grades missed', negated[4] === 'missed', negated.join(','));
