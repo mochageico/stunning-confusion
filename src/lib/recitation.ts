@@ -360,10 +360,22 @@ export const isCommonlyDroppedWord = (token: string): boolean => COMMONLY_DROPPE
 //  - A stray spoken word matching nothing (false start, "um", a
 //    self-correction) is cheaper to write off as noise (INSERT_SPOKEN_COST)
 //    than to force into a wrong slot.
+//  - Once a run of skipped words has started, each further skipped word
+//    costs less (SKIP_EXPECTED_CONTINUE_COST) -- a standard "affine gap".
+//    Without it, skipping a whole verse was costlier than smearing the next
+//    verse's words across the skipped one as substitutions: skip Isaiah
+//    53:10 and verse 10 got partly "matched" by verse 11's words (both have
+//    "his soul ... he shall see") while verse 11 was graded missed (2026-10
+//    speech bake-off). A single skipped word still costs the full
+//    SKIP_EXPECTED_COST, so the repetition bias above is unchanged.
 export const MATCH_COST = 0;
 export const CLOSE_MATCH_COST = 0.15;
 export const SUBSTITUTION_COST = 1;
 export const SKIP_EXPECTED_COST = 1.2;
+// Anywhere in 0.6-0.9 fixes the Isaiah 53 case with every check passing; 0.5
+// and below lets a long skip-ahead win again in Romans 8's repetitive verse 6
+// (scenario 17), so 0.7 sits mid-range.
+export const SKIP_EXPECTED_CONTINUE_COST = 0.7;
 export const SKIP_EXPECTED_DROPPABLE_COST = 0.05;
 export const INSERT_SPOKEN_COST = 0.4;
 
@@ -386,6 +398,9 @@ const pairCost = (expectedWord: string, spokenWord: string): number => {
 const skipExpectedCost = (expectedWord: string): number =>
   isCommonlyDroppedWord(expectedWord) ? SKIP_EXPECTED_DROPPABLE_COST : SKIP_EXPECTED_COST;
 
+const continueSkipCost = (expectedWord: string): number =>
+  isCommonlyDroppedWord(expectedWord) ? SKIP_EXPECTED_DROPPABLE_COST : SKIP_EXPECTED_CONTINUE_COST;
+
 // Word breaks that don't line up between the text and the transcript. A
 // hyphenated word ("self-control", "son-in-law") or the ESV's unspaced
 // em-dash ("flesh—could") normalizes to ONE expected token ("selfcontrol"),
@@ -397,26 +412,46 @@ const skipExpectedCost = (expectedWord: string): number =>
 // of false passes; deliberately the same cost as a real match.
 const MAX_JOINED_WORDS = 3;
 
-const lettersMatch = (expected: string[], i: number, eSpan: number, spoken: string[], j: number, sSpan: number): boolean =>
-  (eSpan > 1 || sSpan > 1) &&
-  i - eSpan >= 0 &&
-  j - sSpan >= 0 &&
-  expected.slice(i - eSpan, i).join('') === spoken.slice(j - sSpan, j).map(spelledOut).join('');
+const lettersMatch = (expected: string[], i: number, eSpan: number, spoken: string[], j: number, sSpan: number): boolean => {
+  if ((eSpan === 1 && sSpan === 1) || i - eSpan < 0 || j - sSpan < 0) return false;
+  const e = expected.slice(i - eSpan, i);
+  const s = spoken.slice(j - sSpan, j).map(spelledOut);
+  // Same breaks on both sides is just ordinary word-by-word matching --
+  // leave it to the diagonal move so `heard` stays one word per word.
+  if (eSpan === sSpan && e.every((w, k) => w === s[k])) return false;
+  return e.join('') === s.join('');
+};
 
-// dp[i][j] = min cost aligning expected[0..i) with spoken[0..j). Standard
-// three-move recurrence (match/substitute diagonally, skip an expected word,
-// insert a spoken word) with the tuned costs above instead of plain 0/1.
-const buildAlignmentTable = (expected: string[], spoken: string[]): number[][] => {
+interface AlignmentTables {
+  /** dp[i][j] = min cost aligning expected[0..i) with spoken[0..j). */
+  dp: number[][];
+  /** gap[i][j] = the same, restricted to paths whose last move skipped expected[i-1]. */
+  gap: number[][];
+}
+
+// Standard three-move recurrence (match/substitute diagonally, skip an
+// expected word, insert a spoken word) with the tuned costs above instead of
+// plain 0/1, plus the affine-gap split: a skip either opens a new run (from
+// dp) or continues one (from gap).
+const buildAlignmentTable = (expected: string[], spoken: string[]): AlignmentTables => {
   const m = expected.length;
   const n = spoken.length;
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 1; i <= m; i++) dp[i][0] = dp[i - 1][0] + skipExpectedCost(expected[i - 1]);
+  const gap: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(Infinity));
+  for (let i = 1; i <= m; i++) {
+    gap[i][0] = i === 1 ? skipExpectedCost(expected[0]) : gap[i - 1][0] + continueSkipCost(expected[i - 1]);
+    dp[i][0] = gap[i][0];
+  }
   for (let j = 1; j <= n; j++) dp[0][j] = dp[0][j - 1] + INSERT_SPOKEN_COST;
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
+      gap[i][j] = Math.min(
+        dp[i - 1][j] + skipExpectedCost(expected[i - 1]),
+        gap[i - 1][j] + continueSkipCost(expected[i - 1])
+      );
       let best = Math.min(
         dp[i - 1][j - 1] + pairCost(expected[i - 1], spoken[j - 1]),
-        dp[i - 1][j] + skipExpectedCost(expected[i - 1]),
+        gap[i][j],
         dp[i][j - 1] + INSERT_SPOKEN_COST
       );
       for (let eSpan = 1; eSpan <= MAX_JOINED_WORDS; eSpan++) {
@@ -427,7 +462,7 @@ const buildAlignmentTable = (expected: string[], spoken: string[]): number[][] =
       dp[i][j] = best;
     }
   }
-  return dp;
+  return { dp, gap };
 };
 
 // Walks the DP table backward from (startI, startJ) to (0, 0), classifying
@@ -440,16 +475,29 @@ const buildAlignmentTable = (expected: string[], spoken: string[]): number[][] =
 const backtraceOutcomes = (
   expected: string[],
   spoken: string[],
-  dp: number[][],
+  { dp, gap }: AlignmentTables,
   startI: number,
   startJ: number,
   /** Optional: filled with the spoken word each expected word was paired with (null when none). */
   heard?: (string | null)[]
 ): (WordOutcome | null)[] => {
   const outcomes: (WordOutcome | null)[] = new Array(expected.length).fill(null);
+  // A skipped COMMONLY_DROPPED_WORDS word is forgiven outright -- the cheap
+  // cost only decides which alignment PATH wins; without this the word would
+  // still grade 'missed' despite never having a real chance to be heard (see
+  // COMMONLY_DROPPED_WORDS above).
+  const skippedOutcome = (word: string): WordOutcome => (isCommonlyDroppedWord(word) ? 'perfect' : 'missed');
   let i = startI;
   let j = startJ;
+  // True while walking back through a run of skipped expected words.
+  let inGap = false;
   while (i > 0 && j > 0) {
+    if (inGap) {
+      outcomes[i - 1] = skippedOutcome(expected[i - 1]);
+      inGap = i > 1 && gap[i][j] === gap[i - 1][j] + continueSkipCost(expected[i - 1]);
+      i -= 1;
+      continue;
+    }
     const joined = (() => {
       for (let eSpan = 1; eSpan <= MAX_JOINED_WORDS; eSpan++) {
         for (let sSpan = 1; sSpan <= MAX_JOINED_WORDS; sSpan++) {
@@ -476,19 +524,14 @@ const backtraceOutcomes = (
       if (heard) heard[i - 1] = spoken[j - 1];
       i -= 1;
       j -= 1;
-    } else if (dp[i][j] === dp[i - 1][j] + skipExpectedCost(expected[i - 1])) {
-      // A skipped COMMONLY_DROPPED_WORDS word is forgiven outright -- the
-      // cheap cost only decides which alignment PATH wins; without this the
-      // word would still grade 'missed' despite never having a real chance
-      // to be heard (see COMMONLY_DROPPED_WORDS above).
-      outcomes[i - 1] = isCommonlyDroppedWord(expected[i - 1]) ? 'perfect' : 'missed';
-      i -= 1;
+    } else if (dp[i][j] === gap[i][j]) {
+      inGap = true;
     } else {
       j -= 1;
     }
   }
   while (i > 0) {
-    outcomes[i - 1] = isCommonlyDroppedWord(expected[i - 1]) ? 'perfect' : 'missed';
+    outcomes[i - 1] = skippedOutcome(expected[i - 1]);
     i -= 1;
   }
   return outcomes;
@@ -506,8 +549,8 @@ const backtraceOutcomes = (
 export const gradeTranscript = (expectedText: string, transcript: string): WordOutcome[] => {
   const expected = tokenizeWords(expectedText);
   const spoken = tokenizeWords(transcript);
-  const dp = buildAlignmentTable(expected, spoken);
-  const outcomes = backtraceOutcomes(expected, spoken, dp, expected.length, spoken.length);
+  const tables = buildAlignmentTable(expected, spoken);
+  const outcomes = backtraceOutcomes(expected, spoken, tables, expected.length, spoken.length);
   return outcomes.map((o) => o ?? 'missed');
 };
 
@@ -519,9 +562,9 @@ export const gradeTranscript = (expectedText: string, transcript: string): WordO
 export const gradeTranscriptDetailed = (expectedText: string, transcript: string): { outcomes: WordOutcome[]; heard: (string | null)[] } => {
   const expected = tokenizeWords(expectedText);
   const spoken = tokenizeWords(transcript);
-  const dp = buildAlignmentTable(expected, spoken);
+  const tables = buildAlignmentTable(expected, spoken);
   const heard: (string | null)[] = new Array(expected.length).fill(null);
-  const outcomes = backtraceOutcomes(expected, spoken, dp, expected.length, spoken.length, heard);
+  const outcomes = backtraceOutcomes(expected, spoken, tables, expected.length, spoken.length, heard);
   return { outcomes: outcomes.map((o) => o ?? 'missed'), heard };
 };
 
@@ -551,7 +594,8 @@ export interface LiveAlignResult {
  * caller decides how much of that revision it's willing to accept.
  */
 export const alignRecitationWindow = (expectedWindow: string[], spokenWindow: string[]): LiveAlignResult => {
-  const dp = buildAlignmentTable(expectedWindow, spokenWindow);
+  const tables = buildAlignmentTable(expectedWindow, spokenWindow);
+  const { dp } = tables;
   const n = spokenWindow.length;
 
   // argmin over dp[i][n] -- the cheapest way to explain everything heard so
@@ -569,7 +613,7 @@ export const alignRecitationWindow = (expectedWindow: string[], spokenWindow: st
     }
   }
 
-  const outcomes = backtraceOutcomes(expectedWindow, spokenWindow, dp, bestI, n);
+  const outcomes = backtraceOutcomes(expectedWindow, spokenWindow, tables, bestI, n);
   return { outcomes, pointer: bestI };
 };
 

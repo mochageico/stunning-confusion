@@ -599,6 +599,27 @@ scenario('19. Plurals always close enough; negating prefixes never', () => {
 });
 
 // ============================================================================
+// A skipped verse is graded as a skip, not smeared onto the next verse
+// ============================================================================
+scenario('20. Skipping a whole verse blames that verse, not the next one', () => {
+  // Isaiah 53:9-11 (ESV wording), with verse 10 skipped. Verses 10 and 11 share
+  // "his soul ... he shall see", which used to pull verse 11's spoken words
+  // back onto verse 10 and grade verse 11 missed (2026-10 speech bake-off).
+  const v9 = 'and they made his grave with the wicked and with a rich man in his death although he had done no violence and there was no deceit in his mouth';
+  const v10 = 'yet it was the will of the lord to crush him he has put him to grief when his soul makes an offering for guilt he shall see his offspring he shall prolong his days the will of the lord shall prosper in his hand';
+  const v11 = 'out of the anguish of his soul he shall see and be satisfied by his knowledge shall the righteous one my servant make many to be accounted righteous';
+  const outcomes = gradeTranscript(`${v9} ${v10} ${v11}`, `${v9} ${v11}`);
+  const n9 = tokenizeWords(v9).length;
+  const n10 = tokenizeWords(v10).length;
+  const v11Outcomes = outcomes.slice(n9 + n10);
+  const v10Words = tokenizeWords(v10);
+  const v10Missed = outcomes.slice(n9, n9 + n10).filter((o, k) => o === 'missed' && !isCommonlyDroppedWord(v10Words[k])).length;
+  const v10Content = v10Words.filter((w) => !isCommonlyDroppedWord(w)).length;
+  check('every word of verse 11 grades non-missed', v11Outcomes.every((o) => o !== 'missed'), v11Outcomes.join(','));
+  check('every content word of the skipped verse 10 grades missed', v10Missed === v10Content, `${v10Missed} of ${v10Content}`);
+});
+
+// ============================================================================
 console.log(`\n${total - failures}/${total} checks passed.`);
 if (failures > 0) {
   console.error(`${failures} FAILED.`);
