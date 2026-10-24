@@ -152,7 +152,7 @@ const hexToRgb = (hex: string) => {
  * tints are computed here instead of with an opacity modifier: an opacity tint
  * would change with whatever sits behind it, and these have to stay readable.
  */
-function mix(color: string, base: string, amount: number) {
+export function mix(color: string, base: string, amount: number) {
   const a = hexToRgb(color);
   const b = hexToRgb(base);
   return (

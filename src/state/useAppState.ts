@@ -90,6 +90,7 @@ import {
   stripUndefined,
 } from '../lib/appData';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
+import { isReviewLog } from '../lib/circleTotals';
 import { computeMissedCycles } from '../lib/missPolicy';
 import { isReviewDue } from '../lib/retention';
 
@@ -1739,30 +1740,52 @@ export function useAppState() {
     });
   });
 
+  // Spaced reviews per day, for the heatmap and the streak. They come from
+  // reviewLogs (isReviewLog skips Learning entries, which touchLogs already
+  // counts), kept apart from activityByDay so the heatmap can show each.
+  const reviewsByDay = new Map<string, number>();
+  memoryQueue.forEach((item) => {
+    (item.reviewLogs || []).forEach((log) => {
+      if (!isReviewLog(log)) return;
+      const at = new Date(log.at);
+      if (Number.isNaN(at.getTime())) return;
+      const day = localDayKey(getLogicalDate(dayStartHour, at));
+      reviewsByDay.set(day, (reviewsByDay.get(day) || 0) + 1);
+    });
+  });
+
   // Shared by the 15-day grid (ProfileScreen) and the Dashboard's bigger
   // 90-day heatmap -- same window construction, just a different length.
+  // `count` is everything the heatmap shades: Learning practice plus reviews.
   const buildActivityWindow = (days: number) =>
     Array.from({ length: days }, (_, i) => {
       const d = getLogicalDate(dayStartHour);
       d.setDate(d.getDate() - (days - 1 - i));
       const key = localDayKey(d);
+      const practice = activityByDay.get(key) || 0;
+      const reviews = reviewsByDay.get(key) || 0;
       return {
         day: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-        count: activityByDay.get(key) || 0,
+        weekday: d.getDay(),
+        month: d.getMonth(),
+        practice,
+        reviews,
+        count: practice + reviews,
       };
     });
 
   const activityLast15Days = buildActivityWindow(15);
   const activityLast90Days = buildActivityWindow(90);
 
-  // Consecutive days of practice counting back from today; 0 for a new/idle account.
+  // Consecutive days of practice or spaced review counting back from today;
+  // 0 for a new/idle account.
   const memoryStreak = (() => {
     let streak = 0;
     const d = getLogicalDate(dayStartHour);
     // eslint-disable-next-line no-constant-condition
     while (true) {
       const key = localDayKey(d);
-      if ((activityByDay.get(key) || 0) > 0) {
+      if ((activityByDay.get(key) || 0) + (reviewsByDay.get(key) || 0) > 0) {
         streak++;
         d.setDate(d.getDate() - 1);
       } else {

@@ -5,6 +5,7 @@ import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppText, useFontScale, useScaledSpace } from '../components/design';
 import { GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
+import { ActivityHeatmap } from '../components/ActivityHeatmap';
 
 // Opens from Profile (and Today's streak); the back link names which.
 const BACK_LABELS: Partial<Record<string, string>> = {
@@ -16,7 +17,7 @@ const BACK_LABELS: Partial<Record<string, string>> = {
 // purely derived from existing counts (memoryStreak/memorizedCount), no
 // new persistence needed.
 const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100, 365];
-const MEMORIZED_MILESTONES = [5, 10, 25, 50, 100, 250, 500];
+const MEMORIZED_MILESTONES = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000];
 
 // A retained set can run to hundreds of verses; rendering every chip into a
 // horizontal ScrollView would cost more than anyone scrolls through. Show a
@@ -272,20 +273,10 @@ export default function DashboardScreen({ state }: { state: AppState }) {
         <View style={{ gap: space(6) }}>
           <SectionHeader title="Past 90 days" actionLabel="Full history" onAction={() => navigateTo('fullHistory')} />
           <View className="bg-surface border border-line rounded-card" style={{ padding: space(12) }}>
-            <View className="flex-row flex-wrap justify-center" style={{ gap: 3 }}>
-              {activityLast90Days.map((item, index) => {
-                const color =
-                  item.count === 0
-                    ? 'bg-surface-2 border-line'
-                    : item.count > 6
-                      ? 'bg-success border-success'
-                      : 'bg-success/50 border-success/60';
-                return <View key={index} style={{ width: '6.2%', aspectRatio: 1 }} className={`border rounded-sm ${color}`} />;
-              })}
-            </View>
+            <ActivityHeatmap days={activityLast90Days} />
           </View>
           <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-            A square fills in on days you practiced a verse you're learning; darker means more practice that day. Spaced reviews aren't counted here.
+            Each square is a day. It fills in when you review a verse or practice one you're learning; darker means more that day. Tap a square to see its count.
           </AppText>
         </View>
 
