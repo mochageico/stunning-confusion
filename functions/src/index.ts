@@ -207,12 +207,17 @@ function preFilters(boomCutDb: number): string {
 // it is an ABSOLUTE level (which is why this runs after loudnorm). Lower it
 // for more de-essing — at -26dB vowels start to lose ~1dB of top end, at -30
 // it is audibly duller. `ratio` matters much less than threshold here.
-const DEESS_CROSSOVER_HZ = 4500;
+//
+// 2026-10-25: the original -22dB/8:1 at 4.5kHz made the user sound lisped.
+// Picked by ear from a five-step A/B on a real Isaiah 61 take: crossover up to
+// 6kHz (leaves the body of the "s" alone), threshold -15dB, ratio 2.5 — only
+// the sharpest esses get trimmed.
+const DEESS_CROSSOVER_HZ = 6000;
 const SPLIT_BAND_DEESSER =
   `asplit[deess_lo][deess_hi];` +
   `[deess_lo]lowpass=f=${DEESS_CROSSOVER_HZ},lowpass=f=${DEESS_CROSSOVER_HZ}[deess_l];` +
   `[deess_hi]highpass=f=${DEESS_CROSSOVER_HZ},highpass=f=${DEESS_CROSSOVER_HZ},` +
-  `acompressor=threshold=-22dB:ratio=8:attack=1:release=50:knee=2[deess_h];` +
+  `acompressor=threshold=-15dB:ratio=2.5:attack=1:release=50:knee=2[deess_h];` +
   `[deess_l][deess_h]amix=inputs=2:normalize=0`;
 
 // Still probed at startup rather than assumed — the 7.0.2 lesson stands. The
