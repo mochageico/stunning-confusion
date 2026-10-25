@@ -118,19 +118,28 @@ export function useCircles({
       const profileSnap = await getDoc(doc(db, 'profiles', uid));
       const circleIds: string[] = profileSnap.exists() ? profileSnap.data().circleIds || [] : [];
 
+      // Each circle loads on its own: one failed read used to throw out the
+      // whole list, leaving My Circles empty for the rest of the session.
+      // A failed circle is skipped ('error'), never pruned -- only a circle
+      // confirmed gone (null) is.
       const results = await Promise.all(
-        circleIds.map(async (id) => {
-          // Member doc first: once kicked from a PRIVATE circle, its doc is
-          // no longer readable at all (permission-denied, not "missing").
-          const memberSnap = await getDoc(doc(db, 'circles', id, 'members', uid));
-          // Self-heal: a circle may have been disbanded, or this user kicked
-          // from it, since circleIds was last written — neither of those can
-          // update this user's OTHER-side data (disbanding can't touch every
-          // member's profile; kicking can't either), so prune stale ids here.
-          if (!memberSnap.exists()) return null;
-          const circleSnap = await getDoc(doc(db, 'circles', id));
-          if (!circleSnap.exists()) return null;
-          return { id: circleSnap.id, ...circleSnap.data() } as Circle;
+        circleIds.map(async (id): Promise<Circle | null | 'error'> => {
+          try {
+            // Member doc first: once kicked from a PRIVATE circle, its doc is
+            // no longer readable at all (permission-denied, not "missing").
+            const memberSnap = await getDoc(doc(db, 'circles', id, 'members', uid));
+            // Self-heal: a circle may have been disbanded, or this user kicked
+            // from it, since circleIds was last written — neither of those can
+            // update this user's OTHER-side data (disbanding can't touch every
+            // member's profile; kicking can't either), so prune stale ids here.
+            if (!memberSnap.exists()) return null;
+            const circleSnap = await getDoc(doc(db, 'circles', id));
+            if (!circleSnap.exists()) return null;
+            return { id: circleSnap.id, ...circleSnap.data() } as Circle;
+          } catch (err) {
+            console.error(`Failed to load circle ${id}:`, err);
+            return 'error';
+          }
         })
       );
 
@@ -141,7 +150,7 @@ export function useCircles({
         );
       }
 
-      const validCircles = results.filter((c): c is Circle => c !== null);
+      const validCircles = results.filter((c): c is Circle => c !== null && c !== 'error');
       setMyCircles(validCircles);
       loadCircleFriends(validCircles);
     } catch (err) {
@@ -333,6 +342,13 @@ export function useCircles({
         getDoc(doc(db, 'circles', circleId, 'banned', uid)),
       ]);
       if (existing.exists()) {
+        // The member doc is the real membership, but My Circles is built
+        // from the profile's circleIds -- if that lost this id, the circle
+        // was invisible with no way back short of recreating it. Put it back.
+        if (!myCircles.some((c) => c.id === circleId)) {
+          await setDoc(doc(db, 'profiles', uid), { circleIds: arrayUnion(circleId) }, { merge: true });
+          await loadMyCircles();
+        }
         openCircle(circleId);
         triggerToast("You're already in this circle.");
         return;
