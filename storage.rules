@@ -23,6 +23,15 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Built-in readings: audioLibrary/{readerId}/{fileName} -- the Hebrew
+    // Old Testament read by Abraham Shmuelof (CC BY-NC-ND 4.0). Public read so
+    // media players can stream by a tokenless URL; uploaded only by
+    // scripts/hebrew-audio/upload.js with a service account.
+    match /audioLibrary/{readerId}/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Bible page photos: chapterPhotos/{userId}/{fileName}
     // Both the full image and its _thumb variant live here. Owner-only, with
     // no read path for anyone else -- see firestore.rules for why sharing is

@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Pressable, View } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { Pause, Play } from 'lucide-react-native';
 
 import { Recording } from '../types';
-import { AppButton } from './design';
-import { resolveChapterAudio } from '../lib/appData';
-import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
+import { AppButton, AppText, useScaledSpace } from './design';
+import { LIBRARY_READER, isLibraryRecording, libraryTimingsKey, resolveVerseAudio } from '../lib/libraryAudio';
+import { resolvePlaybackUrl } from '../lib/studioAudio';
+import { useLibraryTimings } from '../state/useLibraryAudio';
 
 // ============================================================================
 // VERSE PLAY BUTTON
@@ -13,13 +15,16 @@ import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
 // Plays one verse from the user's own recording of its chapter: seeks to the
 // verse's tagged start and pauses at its end. Renders nothing when there is no
 // recording, or the recording has no timing for this verse -- there is no
-// text-to-speech fallback in the app.
+// text-to-speech fallback in the app. Hebrew Old Testament verses fall back
+// to the built-in reading (see lib/libraryAudio.ts).
 // ============================================================================
 
 export interface VersePlayButtonProps {
   book: string;
   chapter: number;
   verse: number;
+  /** Which translation the verse is shown in -- picks a recording in the same language. */
+  translationId: string;
   userRecordings: Recording[];
   selectedChapterAudios: Record<string, Recording | null>;
   studioPlaybackEnabled: boolean;
@@ -29,11 +34,39 @@ export interface VersePlayButtonProps {
 }
 
 export default function VersePlayButton(props: VersePlayButtonProps) {
-  const recording = resolveChapterAudio(props.userRecordings, props.selectedChapterAudios, props.book, props.chapter);
-  const timing = hasPlayableAudio(recording) ? recording?.verseTimestamps?.find((t) => t.verse === props.verse) : undefined;
-  const url = resolvePlaybackUrl(recording, props.studioPlaybackEnabled, props.audioCacheMap);
-  if (!timing || !url) return null;
-  return <Player url={url} startSec={timing.startSec} endSec={timing.endSec} onStart={props.onStart} />;
+  const { book, chapter, translationId } = props;
+  const chapterRefs = useMemo(() => [{ book, chapter, translationId }], [book, chapter, translationId]);
+  const library = useLibraryTimings(chapterRefs);
+  const key = libraryTimingsKey(translationId, book, chapter);
+  const audio = resolveVerseAudio(
+    props.userRecordings,
+    props.selectedChapterAudios,
+    book,
+    chapter,
+    props.verse,
+    translationId,
+    key ? library.get(key) : null
+  );
+  const url = resolvePlaybackUrl(audio?.recording, props.studioPlaybackEnabled, props.audioCacheMap);
+  const space = useScaledSpace();
+  if (!audio || !url) return null;
+  return (
+    <View style={{ gap: space(4) }}>
+      <Player url={url} startSec={audio.startSec} endSec={audio.endSec} onStart={props.onStart} />
+      {isLibraryRecording(audio.recording) && <LibraryCredit />}
+    </View>
+  );
+}
+
+/** The licence's attribution, wherever the built-in reading plays. */
+export function LibraryCredit() {
+  return (
+    <Pressable onPress={() => Linking.openURL(LIBRARY_READER.licenseUrl)} accessibilityRole="link">
+      <AppText variant="caption" className="font-sans text-ink-3">
+        {LIBRARY_READER.credit}
+      </AppText>
+    </Pressable>
+  );
 }
 
 function Player({ url, startSec, endSec, onStart }: { url: string; startSec: number; endSec: number; onStart?: () => void }) {

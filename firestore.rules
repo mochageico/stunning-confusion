@@ -820,6 +820,21 @@ service cloud.firestore {
       }
     }
 
+    // Built-in readings: audioLibrary/{readerId} (credit/licence) and
+    // audioLibrary/{readerId}/chapters/{BOOKID_chapter} (verse timings, see
+    // src/lib/libraryAudio.ts). Openly licensed and the same for everyone, so
+    // readable like scripture text; written only by
+    // scripts/hebrew-audio/upload.js with a service account.
+    match /audioLibrary/{readerId} {
+      allow read: if true;
+      allow write: if false;
+
+      match /chapters/{chapterId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+
     // api.bible's shared chapter cache and its monthly call counter.
     //
     // Denied to clients on BOTH operations, deliberately and explicitly. The

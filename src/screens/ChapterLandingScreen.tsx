@@ -5,6 +5,7 @@ import { GestureDetector } from 'react-native-gesture-handler';
 import { Bookmark, Brackets, Check, ChevronDown, Download, Grid2x2, GripVertical, LayoutGrid, List, ListTree, Pause, Play, Printer, Search } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
+import { recordingFitsTranslation } from '../lib/appData';
 import { cacheableTarget } from '../lib/audioCache';
 import { ChipRow, DiscreteSlider, FadeInView } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
@@ -179,7 +180,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   // and playing it uses the exact same playingRecordingId/playingRecProgress
   // mechanism as Profile/RecordingDetail/the floating now-playing bar.
   const availableNarrations = userRecordings.filter(
-    (r) => r.book.toLowerCase() === (selectedBook || '').toLowerCase() && r.chapter === selectedChapter
+    (r) =>
+      r.book.toLowerCase() === (selectedBook || '').toLowerCase() &&
+      r.chapter === selectedChapter &&
+      recordingFitsTranslation(r, selectedTranslationId)
   );
   // Priority-ordered top to bottom -- the top item is this chapter's default
   // playback source (see resolveChapterAudio); dragging in the panel below
@@ -187,7 +191,13 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const optionsList = [...availableNarrations].sort(
     (a, b) => (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER)
   );
-  const currentAudio = resolveChapterAudio(userRecordings, selectedChapterAudios, selectedBook || '', selectedChapter || 0);
+  const currentAudio = resolveChapterAudio(
+    userRecordings,
+    selectedChapterAudios,
+    selectedBook || '',
+    selectedChapter || 0,
+    selectedTranslationId
+  );
   const isPlayingThis = !!currentAudio && playingRecordingId === currentAudio.id;
 
   // Offline downloads for this chapter's recordings. "Downloadable" excludes

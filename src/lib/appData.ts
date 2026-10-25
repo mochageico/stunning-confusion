@@ -42,16 +42,28 @@ export const normalizeGroupPlan = (planId: string, data: any): GroupPlan => ({
 // chapter. Shared (rather than duplicated) so PracticeModals' real-audio
 // Listen mode and ChapterLandingScreen's audio card can never quietly
 // disagree about which recording is "the" audio for a chapter.
+//
+// Only recordings in the same language as the verse count: an English
+// reading of Psalm 23 must not play for Psalm 23 in Hebrew, or the reverse.
+// English translations still share recordings with each other -- a BSB
+// reading is close enough to follow along with in the WEB.
+export function recordingFitsTranslation(recording: Pick<Recording, 'translation'>, translationId: string): boolean {
+  return (recording.translation === 'HEBGRK') === (translationId === 'HEBGRK');
+}
+
 export function resolveChapterAudio(
   userRecordings: Recording[],
   selectedChapterAudios: Record<string, Recording | null>,
   book: string,
-  chapter: number
+  chapter: number,
+  translationId: string
 ): Recording | null {
   const key = `${book}_${chapter}`;
   const assigned = selectedChapterAudios[key];
-  if (assigned) return assigned;
-  const matches = userRecordings.filter((r) => r.book.toLowerCase() === book.toLowerCase() && r.chapter === chapter);
+  if (assigned && recordingFitsTranslation(assigned, translationId)) return assigned;
+  const matches = userRecordings.filter(
+    (r) => r.book.toLowerCase() === book.toLowerCase() && r.chapter === chapter && recordingFitsTranslation(r, translationId)
+  );
   if (matches.length === 0) return null;
   // Lowest priority number wins (top of the drag-reorderable list on
   // ChapterLandingScreen); legacy recordings without a priority sort last.

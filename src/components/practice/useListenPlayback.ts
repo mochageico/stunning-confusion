@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer, type AudioPlayer, type AudioStatus } from 'expo-audio';
-import { hasPlayableAudio, resolvePlaybackUrl } from '../../lib/studioAudio';
+import { resolvePlaybackUrl } from '../../lib/studioAudio';
 import { VerseState, QueueItem, Recording, ChapterPhoto, ListenPlaylist } from '../../types';
-import { resolveChapterAudio, isReviewDue } from '../../state/useAppState';
+import { isReviewDue } from '../../state/useAppState';
+import { libraryTimingsKey, resolveVerseAudio } from '../../lib/libraryAudio';
+import { useLibraryTimings } from '../../state/useLibraryAudio';
 import { chapterPhotoKey, sortChapterPhotos } from '../../lib/chapterPhotos';
 import { groupPassages } from './shared';
 
@@ -225,16 +227,27 @@ export function useListenPlayback({
   // no verseTimestamps entry for it, simply has no segment -- it's still
   // shown in the reading pane (so the list doesn't mysteriously skip verses)
   // but playback skips over it, since there's nothing to play.
+  // Hebrew Old Testament verses fall back to the built-in reading, whose
+  // timings load per chapter (see lib/libraryAudio.ts).
+  const libraryTimings = useLibraryTimings(activePlayVerses);
   const playableSegments = useMemo(() => {
     return activePlayVerses.map((verseObj) => {
-      const recording = resolveChapterAudio(userRecordings, selectedChapterAudios, verseObj.book, verseObj.chapter);
-      // hasPlayableAudio rather than a raw audioUrl check — verse timestamps
-      // are equally valid against the studio render, since processing is
-      // duration-preserving (enforced by the guard in processStudioAudio).
-      const vt = hasPlayableAudio(recording) ? recording!.verseTimestamps?.find((t) => t.verse === verseObj.verse) : undefined;
-      return vt ? { verseObj, recording: recording!, startSec: vt.startSec, endSec: vt.endSec } : { verseObj, recording: null, startSec: null, endSec: null };
+      const key = libraryTimingsKey(verseObj.translationId, verseObj.book, verseObj.chapter);
+      // resolveVerseAudio checks hasPlayableAudio rather than a raw audioUrl —
+      // verse timestamps are equally valid against the studio render, since
+      // processing is duration-preserving (enforced by the guard in processStudioAudio).
+      const audio = resolveVerseAudio(
+        userRecordings,
+        selectedChapterAudios,
+        verseObj.book,
+        verseObj.chapter,
+        verseObj.verse,
+        verseObj.translationId ?? '',
+        key ? libraryTimings.get(key) : null
+      );
+      return audio ? { verseObj, ...audio } : { verseObj, recording: null, startSec: null, endSec: null };
     });
-  }, [activePlayVerses, userRecordings, selectedChapterAudios]);
+  }, [activePlayVerses, userRecordings, selectedChapterAudios, libraryTimings]);
 
   // Indices (into activePlayVerses/playableSegments) that actually have
   // audio -- the only ones playback ever lands on.

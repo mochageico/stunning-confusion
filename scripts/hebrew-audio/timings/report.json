@@ -1,0 +1,1219 @@
+{
+ "missingFiles": [],
+ "flags": [
+  {
+   "verse": "GEN 5:15",
+   "problem": "only 5/9 words heard"
+  },
+  {
+   "verse": "GEN 6:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "GEN 6:8",
+   "problem": "1.96 s per word (9.8 s for 5 words)"
+  },
+  {
+   "verse": "GEN 10:30",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "GEN 15:19",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "GEN 25:2",
+   "problem": "only 8/14 words heard"
+  },
+  {
+   "verse": "GEN 30:11",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "GEN 36:18",
+   "problem": "only 10/18 words heard"
+  },
+  {
+   "verse": "GEN 36:32",
+   "problem": "only 4/8 words heard"
+  },
+  {
+   "verse": "EXO 1:21",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "EXO 3:1",
+   "problem": "clip check failed (11% of words); left without audio"
+  },
+  {
+   "verse": "EXO 9:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "EXO 25:1",
+   "problem": "no words heard; time estimated"
+  },
+  {
+   "verse": "EXO 25:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "EXO 40:1",
+   "problem": "no words heard; time estimated"
+  },
+  {
+   "verse": "EXO 40:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "EXO 40:2",
+   "problem": "only 3/10 words heard"
+  },
+  {
+   "verse": "LEV 3:11",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "LEV 6:8",
+   "problem": "no words heard; time estimated"
+  },
+  {
+   "verse": "LEV 6:8",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "LEV 6:9",
+   "problem": "clip check failed (4% of words); left without audio"
+  },
+  {
+   "verse": "LEV 6:21",
+   "problem": "clip check failed (23% of words); left without audio"
+  },
+  {
+   "verse": "LEV 12:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "LEV 14:32",
+   "problem": "not found in the recording; left without audio"
+  },
+  {
+   "verse": "LEV 15:1",
+   "problem": "only 3/7 words heard"
+  },
+  {
+   "verse": "LEV 20:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "LEV 22:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "LEV 23:5",
+   "problem": "only 5/9 words heard"
+  },
+  {
+   "verse": "LEV 24:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "LEV 26:2",
+   "problem": "1.96 s per word (13.7 s for 7 words)"
+  },
+  {
+   "verse": "NUM 1:27",
+   "problem": "clip check failed (38% of words); left without audio"
+  },
+  {
+   "verse": "NUM 1:31",
+   "problem": "clip check failed (38% of words); left without audio"
+  },
+  {
+   "verse": "NUM 1:33",
+   "problem": "clip check failed (29% of words); left without audio"
+  },
+  {
+   "verse": "NUM 1:41",
+   "problem": "clip check failed (38% of words); left without audio"
+  },
+  {
+   "verse": "NUM 2:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "NUM 2:6",
+   "problem": "only 2/7 words heard"
+  },
+  {
+   "verse": "NUM 2:6",
+   "problem": "clip check failed (29% of words); left without audio"
+  },
+  {
+   "verse": "NUM 2:7",
+   "problem": "only 1/8 words heard"
+  },
+  {
+   "verse": "NUM 2:8",
+   "problem": "only 1/7 words heard"
+  },
+  {
+   "verse": "NUM 2:8",
+   "problem": "clip check failed (29% of words); left without audio"
+  },
+  {
+   "verse": "NUM 2:9",
+   "problem": "only 7/15 words heard"
+  },
+  {
+   "verse": "NUM 2:19",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NUM 4:20",
+   "problem": "1.97 s per word (13.8 s for 7 words)"
+  },
+  {
+   "verse": "NUM 4:21",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "NUM 7:79",
+   "problem": "2.00 s per word (40.0 s for 20 words)"
+  },
+  {
+   "verse": "NUM 7:81",
+   "problem": "1.77 s per word (19.5 s for 11 words)"
+  },
+  {
+   "verse": "NUM 11:30",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "NUM 14:6",
+   "problem": "only 2/12 words heard"
+  },
+  {
+   "verse": "NUM 14:26",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "NUM 15:19",
+   "problem": "clip check failed (29% of words); left without audio"
+  },
+  {
+   "verse": "NUM 16:37",
+   "problem": "no words heard; time estimated"
+  },
+  {
+   "verse": "NUM 16:38",
+   "problem": "no words heard; time estimated"
+  },
+  {
+   "verse": "NUM 22:2",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "NUM 25:9",
+   "problem": "2.74 s per word (16.4 s for 6 words)"
+  },
+  {
+   "verse": "NUM 26:1",
+   "problem": "spans two files; plays only hbofNum_26.mp3",
+   "minor": true
+  },
+  {
+   "verse": "NUM 26:1",
+   "problem": "no words heard; time estimated"
+  },
+  {
+   "verse": "NUM 26:39",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NUM 31:44",
+   "problem": "only 2/4 words heard"
+  },
+  {
+   "verse": "NUM 33:13",
+   "problem": "only 2/4 words heard"
+  },
+  {
+   "verse": "NUM 33:16",
+   "problem": "only 3/6 words heard"
+  },
+  {
+   "verse": "NUM 33:18",
+   "problem": "only 2/4 words heard"
+  },
+  {
+   "verse": "NUM 33:19",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "NUM 33:23",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "NUM 33:24",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "NUM 33:26",
+   "problem": "only 2/4 words heard"
+  },
+  {
+   "verse": "NUM 33:27",
+   "problem": "only 2/4 words heard"
+  },
+  {
+   "verse": "NUM 33:28",
+   "problem": "only 1/4 words heard"
+  },
+  {
+   "verse": "NUM 33:36",
+   "problem": "only 4/8 words heard"
+  },
+  {
+   "verse": "NUM 33:36",
+   "problem": "clip check failed (25% of words); left without audio"
+  },
+  {
+   "verse": "NUM 33:37",
+   "problem": "no words heard; time estimated"
+  },
+  {
+   "verse": "NUM 33:48",
+   "problem": "only 5/9 words heard"
+  },
+  {
+   "verse": "DEU 2:35",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "DEU 21:9",
+   "problem": "1.77 s per word (17.7 s for 10 words)"
+  },
+  {
+   "verse": "DEU 23:22",
+   "problem": "only 4/7 words heard"
+  },
+  {
+   "verse": "DEU 33:12",
+   "problem": "clip check failed (14% of words); left without audio"
+  },
+  {
+   "verse": "JOS 1:10",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "JOS 15:56",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "JOS 21:36",
+   "problem": "not found in the recording; left without audio"
+  },
+  {
+   "verse": "JOS 21:37",
+   "problem": "only 4/10 words heard"
+  },
+  {
+   "verse": "JOS 24:29",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "JDG 10:5",
+   "problem": "1.63 s per word (6.5 s for 4 words)"
+  },
+  {
+   "verse": "1SA 20:42",
+   "problem": "spans two files; plays only hbof1Sa_20.mp3",
+   "minor": true
+  },
+  {
+   "verse": "1SA 26:18",
+   "problem": "clip check failed (8% of words); left without audio"
+  },
+  {
+   "verse": "1KI 15:11",
+   "problem": "clip check failed (29% of words); left without audio"
+  },
+  {
+   "verse": "1CH 1:52",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "1CH 2:51",
+   "problem": "not found in the recording; left without audio"
+  },
+  {
+   "verse": "1CH 6:5",
+   "problem": "only 3/8 words heard"
+  },
+  {
+   "verse": "1CH 6:46",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "1CH 6:51",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "1CH 8:20",
+   "problem": "1.66 s per word (5.0 s for 3 words)"
+  },
+  {
+   "verse": "1CH 8:26",
+   "problem": "1.67 s per word (5.0 s for 3 words)"
+  },
+  {
+   "verse": "1CH 9:30",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "1CH 11:32",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "1CH 12:13",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "1CH 14:5",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "1CH 14:7",
+   "problem": "2.03 s per word (6.1 s for 3 words)"
+  },
+  {
+   "verse": "1CH 14:7",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "1CH 15:22",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "1CH 16:34",
+   "problem": "only 4/7 words heard"
+  },
+  {
+   "verse": "1CH 17:20",
+   "problem": "2.32 s per word (23.2 s for 10 words)"
+  },
+  {
+   "verse": "1CH 23:7",
+   "problem": "1.61 s per word (4.8 s for 3 words)"
+  },
+  {
+   "verse": "EZR 2:3",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:5",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:7",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:8",
+   "problem": "not found in the recording; left without audio"
+  },
+  {
+   "verse": "EZR 2:9",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "EZR 2:9",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:10",
+   "problem": "only 2/6 words heard"
+  },
+  {
+   "verse": "EZR 2:10",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:11",
+   "problem": "only 2/6 words heard"
+  },
+  {
+   "verse": "EZR 2:12",
+   "problem": "only 2/6 words heard"
+  },
+  {
+   "verse": "EZR 2:12",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:13",
+   "problem": "only 2/6 words heard"
+  },
+  {
+   "verse": "EZR 2:14",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "EZR 2:15",
+   "problem": "only 2/6 words heard"
+  },
+  {
+   "verse": "EZR 2:15",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:16",
+   "problem": "clip check failed (20% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:17",
+   "problem": "only 1/6 words heard"
+  },
+  {
+   "verse": "EZR 2:18",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "EZR 2:19",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "EZR 2:20",
+   "problem": "only 2/4 words heard"
+  },
+  {
+   "verse": "EZR 2:21",
+   "problem": "only 2/6 words heard"
+  },
+  {
+   "verse": "EZR 2:21",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:22",
+   "problem": "only 2/4 words heard"
+  },
+  {
+   "verse": "EZR 2:23",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "EZR 2:24",
+   "problem": "only 2/4 words heard"
+  },
+  {
+   "verse": "EZR 2:25",
+   "problem": "only 5/9 words heard"
+  },
+  {
+   "verse": "EZR 2:26",
+   "problem": "only 2/7 words heard"
+  },
+  {
+   "verse": "EZR 2:27",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "EZR 2:28",
+   "problem": "only 3/7 words heard"
+  },
+  {
+   "verse": "EZR 2:29",
+   "problem": "only 2/4 words heard"
+  },
+  {
+   "verse": "EZR 2:30",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "EZR 2:31",
+   "problem": "only 3/7 words heard"
+  },
+  {
+   "verse": "EZR 2:31",
+   "problem": "clip check failed (29% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:32",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "EZR 2:32",
+   "problem": "clip check failed (20% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:33",
+   "problem": "only 4/8 words heard"
+  },
+  {
+   "verse": "EZR 2:33",
+   "problem": "clip check failed (25% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:36",
+   "problem": "only 5/9 words heard"
+  },
+  {
+   "verse": "EZR 2:37",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "EZR 2:38",
+   "problem": "only 2/6 words heard"
+  },
+  {
+   "verse": "EZR 2:41",
+   "problem": "only 3/6 words heard"
+  },
+  {
+   "verse": "EZR 2:44",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:46",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "EZR 2:66",
+   "problem": "only 2/9 words heard"
+  },
+  {
+   "verse": "EZR 2:67",
+   "problem": "only 2/11 words heard"
+  },
+  {
+   "verse": "EZR 7:2",
+   "problem": "only 3/6 words heard"
+  },
+  {
+   "verse": "EZR 7:3",
+   "problem": "only 3/6 words heard"
+  },
+  {
+   "verse": "NEH 7:9",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:10",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:12",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:13",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:14",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:15",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:17",
+   "problem": "clip check failed (29% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:20",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:29",
+   "problem": "only 5/9 words heard"
+  },
+  {
+   "verse": "NEH 7:30",
+   "problem": "only 3/7 words heard"
+  },
+  {
+   "verse": "NEH 7:31",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "NEH 7:32",
+   "problem": "only 4/7 words heard"
+  },
+  {
+   "verse": "NEH 7:34",
+   "problem": "only 3/7 words heard"
+  },
+  {
+   "verse": "NEH 7:34",
+   "problem": "clip check failed (29% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:35",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "NEH 7:36",
+   "problem": "only 2/6 words heard"
+  },
+  {
+   "verse": "NEH 7:36",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:37",
+   "problem": "only 4/8 words heard"
+  },
+  {
+   "verse": "NEH 7:39",
+   "problem": "only 5/9 words heard"
+  },
+  {
+   "verse": "NEH 7:41",
+   "problem": "only 2/6 words heard"
+  },
+  {
+   "verse": "NEH 7:41",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:42",
+   "problem": "only 2/5 words heard"
+  },
+  {
+   "verse": "NEH 7:44",
+   "problem": "only 3/6 words heard"
+  },
+  {
+   "verse": "NEH 7:47",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:49",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:53",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:55",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "NEH 7:69",
+   "problem": "clip check failed (18% of words); left without audio"
+  },
+  {
+   "verse": "NEH 10:2",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NEH 10:7",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NEH 10:23",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NEH 10:27",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "NEH 12:14",
+   "problem": "1.70 s per word (6.8 s for 4 words)"
+  },
+  {
+   "verse": "JOB 6:1",
+   "problem": "1.70 s per word (5.1 s for 3 words)"
+  },
+  {
+   "verse": "JOB 7:14",
+   "problem": "1.62 s per word (6.5 s for 4 words)"
+  },
+  {
+   "verse": "JOB 11:17",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "JOB 16:19",
+   "problem": "clip check failed (14% of words); left without audio"
+  },
+  {
+   "verse": "JOB 18:13",
+   "problem": "only 4/7 words heard"
+  },
+  {
+   "verse": "JOB 19:18",
+   "problem": "only 4/7 words heard"
+  },
+  {
+   "verse": "JOB 19:18",
+   "problem": "clip check failed (14% of words); left without audio"
+  },
+  {
+   "verse": "JOB 25:6",
+   "problem": "only 2/7 words heard"
+  },
+  {
+   "verse": "JOB 27:15",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "JOB 28:27",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "JOB 30:2",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "JOB 30:27",
+   "problem": "only 4/7 words heard"
+  },
+  {
+   "verse": "JOB 31:37",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "JOB 32:17",
+   "problem": "clip check failed (38% of words); left without audio"
+  },
+  {
+   "verse": "JOB 35:3",
+   "problem": "only 3/8 words heard"
+  },
+  {
+   "verse": "JOB 36:31",
+   "problem": "clip check failed (14% of words); left without audio"
+  },
+  {
+   "verse": "JOB 38:3",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "JOB 39:26",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 10:10",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "PSA 13:6",
+   "problem": "clip check failed (36% of words); left without audio"
+  },
+  {
+   "verse": "PSA 16:3",
+   "problem": "only 4/8 words heard"
+  },
+  {
+   "verse": "PSA 22:12",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 29:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 37:29",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 38 heading",
+   "problem": "1.62 s per word (4.9 s for 3 words)"
+  },
+  {
+   "verse": "PSA 39:4",
+   "problem": "clip check failed (9% of words); left without audio"
+  },
+  {
+   "verse": "PSA 39:9",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 41:4",
+   "problem": "clip check failed (11% of words); left without audio"
+  },
+  {
+   "verse": "PSA 50:10",
+   "problem": "clip check failed (25% of words); left without audio"
+  },
+  {
+   "verse": "PSA 51 heading",
+   "problem": "only 7/12 words heard"
+  },
+  {
+   "verse": "PSA 66:11",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 78:58",
+   "problem": "1.67 s per word (6.7 s for 4 words)"
+  },
+  {
+   "verse": "PSA 78:66",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 83:1",
+   "problem": "only 4/9 words heard"
+  },
+  {
+   "verse": "PSA 92 heading",
+   "problem": "1.70 s per word (6.8 s for 4 words)"
+  },
+  {
+   "verse": "PSA 96:2",
+   "problem": "clip check failed (38% of words); left without audio"
+  },
+  {
+   "verse": "PSA 106:1",
+   "problem": "only 4/9 words heard"
+  },
+  {
+   "verse": "PSA 112:7",
+   "problem": "clip check failed (38% of words); left without audio"
+  },
+  {
+   "verse": "PSA 115:13",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 116:10",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "PSA 118:10",
+   "problem": "only 3/7 words heard"
+  },
+  {
+   "verse": "PSA 118:10",
+   "problem": "clip check failed (29% of words); left without audio"
+  },
+  {
+   "verse": "PSA 118:17",
+   "problem": "only 2/7 words heard"
+  },
+  {
+   "verse": "PSA 118:20",
+   "problem": "only 2/6 words heard"
+  },
+  {
+   "verse": "PSA 118:20",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "PSA 118:25",
+   "problem": "only 3/8 words heard"
+  },
+  {
+   "verse": "PSA 118:29",
+   "problem": "only 4/7 words heard"
+  },
+  {
+   "verse": "PSA 119:17",
+   "problem": "1.63 s per word (9.8 s for 6 words)"
+  },
+  {
+   "verse": "PSA 119:41",
+   "problem": "1.87 s per word (9.4 s for 5 words)"
+  },
+  {
+   "verse": "PSA 119:97",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 119:113",
+   "problem": "1.65 s per word (6.6 s for 4 words)"
+  },
+  {
+   "verse": "PSA 119:161",
+   "problem": "1.81 s per word (10.9 s for 6 words)"
+  },
+  {
+   "verse": "PSA 139:9",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 143:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "PSA 145:6",
+   "problem": "clip check failed (20% of words); left without audio"
+  },
+  {
+   "verse": "PSA 150:6",
+   "problem": "only 3/6 words heard"
+  },
+  {
+   "verse": "PRO 6:2",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "PRO 21:1",
+   "problem": "only 6/11 words heard"
+  },
+  {
+   "verse": "PRO 31:2",
+   "problem": "only 1/8 words heard"
+  },
+  {
+   "verse": "PRO 31:16",
+   "problem": "clip check failed (14% of words); left without audio"
+  },
+  {
+   "verse": "ECC 12:8",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "SNG 1:1",
+   "problem": "2.24 s per word (8.9 s for 4 words)"
+  },
+  {
+   "verse": "SNG 1:7",
+   "problem": "clip check failed (13% of words); left without audio"
+  },
+  {
+   "verse": "SNG 1:9",
+   "problem": "1.66 s per word (8.3 s for 5 words)"
+  },
+  {
+   "verse": "SNG 1:17",
+   "problem": "2.11 s per word (10.6 s for 5 words)"
+  },
+  {
+   "verse": "SNG 7:6",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "SNG 8:3",
+   "problem": "clip check failed (20% of words); left without audio"
+  },
+  {
+   "verse": "ISA 5:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "ISA 6:3",
+   "problem": "2.60 s per word (36.5 s for 14 words)"
+  },
+  {
+   "verse": "ISA 12:3",
+   "problem": "1.68 s per word (8.4 s for 5 words)"
+  },
+  {
+   "verse": "ISA 19:1",
+   "problem": "no words heard; time estimated"
+  },
+  {
+   "verse": "ISA 19:2",
+   "problem": "no words heard; time estimated"
+  },
+  {
+   "verse": "ISA 19:3",
+   "problem": "only 2/15 words heard"
+  },
+  {
+   "verse": "ISA 19:3",
+   "problem": "0.12 s per word (1.8 s for 15 words)"
+  },
+  {
+   "verse": "ISA 19:3",
+   "problem": "clip check failed (7% of words); left without audio"
+  },
+  {
+   "verse": "ISA 21:11",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "ISA 25:1",
+   "problem": "not found in the recording; left without audio"
+  },
+  {
+   "verse": "ISA 25:2",
+   "problem": "only 7/13 words heard"
+  },
+  {
+   "verse": "ISA 25:2",
+   "problem": "1.69 s per word (22.0 s for 13 words)"
+  },
+  {
+   "verse": "ISA 25:2",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "ISA 46:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "ISA 49:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "ISA 61:4",
+   "problem": "clip check failed (8% of words); left without audio"
+  },
+  {
+   "verse": "JER 4:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "JER 5:1",
+   "problem": "clip check failed (5% of words); left without audio"
+  },
+  {
+   "verse": "JER 17:15",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "JER 23:29",
+   "problem": "clip check failed (22% of words); left without audio"
+  },
+  {
+   "verse": "JER 25:5",
+   "problem": "only 2/20 words heard"
+  },
+  {
+   "verse": "JER 25:6",
+   "problem": "not found in the recording; left without audio"
+  },
+  {
+   "verse": "JER 25:7",
+   "problem": "only 6/11 words heard"
+  },
+  {
+   "verse": "JER 33:23",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "LAM 1:8",
+   "problem": "only 10/18 words heard"
+  },
+  {
+   "verse": "LAM 1:14",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "LAM 1:16",
+   "problem": "clip check failed (5% of words); left without audio"
+  },
+  {
+   "verse": "LAM 3:5",
+   "problem": "clip check failed (20% of words); left without audio"
+  },
+  {
+   "verse": "LAM 3:15",
+   "problem": "1.62 s per word (6.5 s for 4 words)"
+  },
+  {
+   "verse": "LAM 3:18",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "LAM 3:21",
+   "problem": "only 4/7 words heard"
+  },
+  {
+   "verse": "LAM 3:25",
+   "problem": "1.66 s per word (8.3 s for 5 words)"
+  },
+  {
+   "verse": "LAM 3:27",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "LAM 3:29",
+   "problem": "clip check failed (17% of words); left without audio"
+  },
+  {
+   "verse": "LAM 3:58",
+   "problem": "clip check failed (33% of words); left without audio"
+  },
+  {
+   "verse": "LAM 5:10",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "LAM 5:16",
+   "problem": "only 3/8 words heard"
+  },
+  {
+   "verse": "EZK 12:21",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "EZK 28:1",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "EZK 32:11",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "EZK 36:16",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "EZK 38:23",
+   "problem": "only 5/10 words heard"
+  },
+  {
+   "verse": "EZK 47:2",
+   "problem": "2.27 s per word (43.1 s for 19 words)"
+  },
+  {
+   "verse": "EZK 47:3",
+   "problem": "not found in the recording; left without audio"
+  },
+  {
+   "verse": "EZK 47:4",
+   "problem": "not found in the recording; left without audio"
+  },
+  {
+   "verse": "EZK 47:5",
+   "problem": "only 5/16 words heard"
+  },
+  {
+   "verse": "EZK 47:5",
+   "problem": "clip check failed (25% of words); left without audio"
+  },
+  {
+   "verse": "DAN 3:25",
+   "problem": "clip check failed (10% of words); left without audio"
+  },
+  {
+   "verse": "DAN 4:28",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "DAN 5:27",
+   "problem": "1.64 s per word (8.2 s for 5 words)"
+  },
+  {
+   "verse": "DAN 12:12",
+   "problem": "only 4/9 words heard"
+  },
+  {
+   "verse": "HOS 2:3",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "JOL 2:27",
+   "problem": "clip check failed (0% of words); left without audio"
+  },
+  {
+   "verse": "AMO 5:13",
+   "problem": "only 5/9 words heard"
+  },
+  {
+   "verse": "ZEC 4:5",
+   "problem": "only 4/14 words heard"
+  }
+ ]
+}

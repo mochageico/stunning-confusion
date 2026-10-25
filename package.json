@@ -60,6 +60,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "check:recitation": "node scripts/run-recitation-check.cjs",
+    "check:libraryaudio": "node scripts/run-libraryaudio-check.cjs",
     "check:reciteorder": "node scripts/run-reciteorder-check.cjs",
     "check:layout": "node scripts/check-layout.cjs",
     "check:calendar": "node scripts/run-calendar-check.cjs",

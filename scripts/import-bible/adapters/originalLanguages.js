@@ -190,7 +190,7 @@ function buildHebrewBook(osis) {
   }
 
   const chapters = {};
-  const get = (ch) => (chapters[ch] = chapters[ch] || { verses: {}, headings: {}, sources: {} });
+  const get = (ch) => (chapters[ch] = chapters[ch] || { verses: {}, headings: {}, sources: {}, headingSources: {} });
   // Group by target verse, in document order.
   const byTarget = new Map();
   for (const p of pieces) {
@@ -210,7 +210,10 @@ function buildHebrewBook(osis) {
       headingParts.push(...verseParts.slice(0, -1));
       verseParts = verseParts.slice(-1);
     }
-    if (headingParts.length) c.headings[v] = headingParts.map((p) => p.text).join(' ');
+    if (headingParts.length) {
+      c.headings[v] = headingParts.map((p) => p.text).join(' ');
+      c.headingSources[v] = headingParts.map((p) => p.wlc);
+    }
     if (verseParts.length) {
       c.verses[v] = verseParts.map((p) => p.text).join(' ');
       c.sources[v] = verseParts.map((p) => p.wlc);

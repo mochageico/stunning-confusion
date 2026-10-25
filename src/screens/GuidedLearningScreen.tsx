@@ -957,6 +957,7 @@ function Sitting({
             book={verse.book}
             chapter={verse.chapter}
             verse={verse.verse}
+            translationId={verse.translationId ?? ''}
             userRecordings={state.userRecordings}
             selectedChapterAudios={state.selectedChapterAudios}
             studioPlaybackEnabled={state.studioPlaybackEnabled}
