@@ -29,8 +29,9 @@ import {
 import { AppState } from '../state/useAppState';
 import { auth } from '../firebase';
 import { FadeInView } from '../components/ui';
-import { PICKER_TRANSLATIONS, RECORDING_VISIBILITY_OPTIONS, translationLabel } from '../data';
+import { RECORDING_VISIBILITY_OPTIONS, translationLabel } from '../data';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
+import { usePickerTranslations } from '../state/usePickerTranslations';
 import { AUDIO_CACHE_SUPPORTED, CACHE_CAP_CHOICES } from '../lib/audioCache';
 import { formatDate } from '../lib/format';
 import {
@@ -153,7 +154,6 @@ const SCHEMES: { id: SchemeChoice; label: string }[] = [
   { id: 'system', label: 'Match phone' },
 ];
 
-const TRANSLATION_OPTIONS = PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }));
 
 // A sample for the font choice to show itself on (BSB, public domain).
 const SAMPLE_VERSE = 'Your word is a lamp to my feet and a light to my path.';
@@ -438,11 +438,12 @@ function TextPage({ state }: { state: AppState }) {
   const space = useScaledSpace();
   const prefs = useAppPrefs();
   const { selectedTranslationId, setSelectedTranslationId } = state;
+  const translationOptions = usePickerTranslations().map((t) => ({ id: t.id, label: translationLabel(t.id) }));
   return (
     <View style={{ gap: space(20) }}>
       <View style={{ gap: space(6) }}>
         <SectionHeader title="Translation" />
-        <Dropdown value={selectedTranslationId} options={TRANSLATION_OPTIONS} title="Translation" onChange={setSelectedTranslationId} />
+        <Dropdown value={selectedTranslationId} options={translationOptions} title="Translation" onChange={setSelectedTranslationId} />
         <Caption>Chapters open in this one, and new verses are added in it. You can still pick another each time.</Caption>
       </View>
       <View style={{ gap: space(6) }}>

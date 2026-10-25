@@ -4,9 +4,10 @@ import { BookOpen, Mic, Play, Shuffle, Target, Trophy } from 'lucide-react-nativ
 
 import type { AppState } from '../../state/useAppState';
 import type { ChatScope } from '../../state/useSocial';
-import { DEFAULT_TRANSLATION_ID, PICKER_TRANSLATIONS, getBookByName, translationLabel } from '../../data';
+import { DEFAULT_TRANSLATION_ID, getBookByName, translationLabel } from '../../data';
 import { Dropdown } from '../Dropdown';
 import { fetchChapterText } from '../../state/useScripture';
+import { usePickerTranslations } from '../../state/usePickerTranslations';
 import {
   attachmentFallbackText,
   passageLabel,
@@ -21,7 +22,6 @@ import { Dialog, EmptyState, GroupedList, ListRow } from '../blocks';
 import { PassageRangeForm } from '../ChallengeCard';
 
 // Its own Modal, so its number fields need their own "Done" bar (see ui.tsx).
-const TRANSLATION_OPTIONS = PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }));
 const ATTACH_ACCESSORY_ID = 'chatAttachNumericDoneBar';
 
 type Step = 'menu' | 'verse' | 'recording' | 'request' | 'quiz';
@@ -58,6 +58,8 @@ export function AttachMenu({
   onChallenge?: () => void;
 }) {
   const space = useScaledSpace();
+  const pickerTranslations = usePickerTranslations();
+  const translationOptions = pickerTranslations.map((t) => ({ id: t.id, label: translationLabel(t.id) }));
   const [step, setStep] = useState<Step>('menu');
   const isDM = scope === 'dm';
   const other = isDM ? state.activeDMThread : null;
@@ -66,7 +68,7 @@ export function AttachMenu({
 
   // The translation a recording request asks for. Starts on the one I'm
   // reading in, so asking for "my" translation is one tap.
-  const defaultTranslation = PICKER_TRANSLATIONS.some((t) => t.id === state.selectedTranslationId)
+  const defaultTranslation = pickerTranslations.some((t) => t.id === state.selectedTranslationId)
     ? state.selectedTranslationId
     : DEFAULT_TRANSLATION_ID;
   const [requestTranslation, setRequestTranslation] = useState(defaultTranslation);
@@ -169,7 +171,7 @@ export function AttachMenu({
             <AppText variant="caption" className="font-sans font-medium text-ink-2">
               Translation
             </AppText>
-            <Dropdown value={requestTranslation} options={TRANSLATION_OPTIONS} title="Translation" onChange={setRequestTranslation} />
+            <Dropdown value={requestTranslation} options={translationOptions} title="Translation" onChange={setRequestTranslation} />
           </View>
           <PassageRangeForm
             submitLabel="Ask"

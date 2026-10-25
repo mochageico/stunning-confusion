@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { DEFAULT_TRANSLATION_ID, PICKER_TRANSLATIONS } from '../data';
+import { DEFAULT_TRANSLATION_ID, getTranslation } from '../data';
 import type { ListenPlaylist } from '../types';
 
 // ============================================================================
@@ -31,9 +31,10 @@ export function useLocalPrefs() {
     (async () => {
       try {
         const stored = await AsyncStorage.getItem(PREFERRED_TRANSLATION_KEY);
-        // Only a translation the picker still offers; one since removed
-        // falls back to the default.
-        if (stored && PICKER_TRANSLATIONS.some((t) => t.id === stored)) setSelectedTranslationIdState(stored);
+        // Any translation still in the registry; one since removed falls
+        // back to the default. Whether this account may pick it isn't known
+        // until sign-in resolves -- useAppState drops it then if not.
+        if (stored && getTranslation(stored)) setSelectedTranslationIdState(stored);
       } catch {}
     })();
   }, []);

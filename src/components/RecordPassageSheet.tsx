@@ -6,11 +6,11 @@ import { Dropdown } from './Dropdown';
 import { NumericInput, NumericKeyboardAccessory } from './ui';
 import { AppButton, AppText, useScaledSpace } from './design';
 import { Dialog } from './blocks';
-import { PICKER_TRANSLATIONS, getBookByName, translationLabel } from '../data';
+import { getBookByName, translationLabel } from '../data';
 import { useChapterText } from '../state/useScripture';
+import { usePickerTranslations } from '../state/usePickerTranslations';
 
 const ACCESSORY_ID = 'recordPassageSheet';
-const TRANSLATION_OPTIONS = PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }));
 
 export type RecordPassage = {
   book: string;
@@ -42,6 +42,7 @@ export function RecordPassageSheet({
   onApply: (passage: RecordPassage) => void;
 }) {
   const space = useScaledSpace();
+  const translationOptions = usePickerTranslations().map((t) => ({ id: t.id, label: translationLabel(t.id) }));
   const [book, setBook] = useState(initial.book);
   const [chapter, setChapter] = useState(initial.chapter);
   const [translation, setTranslation] = useState(initial.translation);
@@ -150,7 +151,7 @@ export function RecordPassageSheet({
           </View>
           <View style={half}>
             {label('Translation')}
-            <Dropdown value={translation} options={TRANSLATION_OPTIONS} title="Translation" onChange={setTranslation} />
+            <Dropdown value={translation} options={translationOptions} title="Translation" onChange={setTranslation} />
           </View>
         </View>
 

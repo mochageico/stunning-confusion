@@ -35,8 +35,9 @@ import {
   BUILT_IN_PLAN_ID,
   DEFAULT_PLANS,
   DEFAULT_RHYTHM,
+  DEFAULT_TRANSLATION_ID,
   getBookByName,
-  PICKER_TRANSLATIONS,
+  pickerTranslationsFor,
   SUGGESTED_FEED_RECORDINGS,
 } from '../data';
 import { useChapterText } from './useScripture';
@@ -1393,6 +1394,18 @@ export function useAppState() {
     }
   };
 
+  // The saved translation choices are restored before sign-in is known, so
+  // they accept any registry translation. Once the account is known, one it
+  // isn't offered (an unreleased translation, outside the testers) falls back
+  // to the default. Saved verses in it are untouched.
+  useEffect(() => {
+    if (loadingAuth) return;
+    const allowed = pickerTranslationsFor(user?.uid);
+    if (!allowed.some((t) => t.id === selectedTranslationId)) setSelectedTranslationId(DEFAULT_TRANSLATION_ID);
+    if (!allowed.some((t) => t.id === recordingTranslation)) setRecordingTranslation(DEFAULT_TRANSLATION_ID);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingAuth, user?.uid, selectedTranslationId, recordingTranslation]);
+
   // Firebase Auth State Listener & Data Loader
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -2274,7 +2287,7 @@ export function useAppState() {
       setRecordingChapter(chapter);
       setRecordingRangeStart(startVerse);
       setRecordingRangeEnd(endVerse);
-      if (translationId && PICKER_TRANSLATIONS.some((t) => t.id === translationId)) setRecordingTranslation(translationId);
+      if (translationId && pickerTranslationsFor(user?.uid).some((t) => t.id === translationId)) setRecordingTranslation(translationId);
     },
     saveSharedRecordingToLibrary: (rec) => saveSharedRecordingToLibrary(rec),
     triggerToast: (message) => triggerToast(message),

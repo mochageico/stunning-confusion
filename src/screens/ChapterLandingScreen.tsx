@@ -13,11 +13,12 @@ import ChapterPhotoStrip from '../components/ChapterPhotoStrip';
 import ChapterLibraryPlayer from '../components/ChapterLibraryPlayer';
 import { LIBRARY_READER, libraryTimingsKey } from '../lib/libraryAudio';
 import { useLibraryTimings } from '../state/useLibraryAudio';
+import { usePickerTranslations } from '../state/usePickerTranslations';
 import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
 import { printMemoryGrid } from '../lib/printMemoryGrid';
 import { formatLabel } from '../lib/formatNames';
 import { Recording } from '../types';
-import { BIBLE_TRANSLATIONS, PICKER_TRANSLATIONS, copyrightFor, textScriptFor, translationLabel } from '../data';
+import { BIBLE_TRANSLATIONS, copyrightFor, textScriptFor, translationLabel } from '../data';
 import { isRtl, joinWords, splitWords } from '../lib/textScript';
 import { AppButton, AppIconButton, AppText, AppTextInput, RangeCaption, useFontScale, useScaledSpace } from '../components/design';
 import { Dialog, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
@@ -83,6 +84,7 @@ function dueLabel(dueDate: string | undefined): string | null {
 }
 
 export default function ChapterLandingScreen({ state }: { state: AppState }) {
+  const pickerTranslations = usePickerTranslations();
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
@@ -454,7 +456,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               <Dropdown
                 value={selectedTranslationId}
                 onChange={setSelectedTranslationId}
-                options={PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }))}
+                options={pickerTranslations.map((t) => ({ id: t.id, label: translationLabel(t.id) }))}
                 triggerLabel={selectedTranslationId === 'HEBGRK' ? 'Hb/Gk' : translationLabel(selectedTranslationId)}
                 title="Translation"
                 searchable={false}

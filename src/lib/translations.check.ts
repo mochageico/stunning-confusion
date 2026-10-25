@@ -17,6 +17,7 @@ import {
   getTranslation,
   textScriptFor,
   translationLabel,
+  UNRELEASED_TRANSLATION_TESTERS,
 } from '../data';
 
 let failures = 0;
@@ -145,6 +146,12 @@ check(
   PICKER_TRANSLATIONS.length === BIBLE_TRANSLATIONS.length,
   { picker: PICKER_TRANSLATIONS.length, all: BIBLE_TRANSLATIONS.length }
 );
+
+// Outside a dev build, an unreleased translation is offered to the testers
+// list and nobody else. This check runs as plain Node (a dev build), so it
+// tests the hidden flag and the testers list directly.
+check('ESV is unreleased (hidden outside testers)', getTranslation('ESV')?.inDevelopment === true);
+check('testers list is not empty while a translation is unreleased', UNRELEASED_TRANSLATION_TESTERS.length > 0);
 
 // ESV is the worked example of a licensed translation: it must be listed (old
 // queue items reference it) but must announce real work before being enabled.

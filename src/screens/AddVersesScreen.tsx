@@ -9,10 +9,10 @@ import { ScreenHeader, SectionHeader } from '../components/blocks';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
 import { useThemeColors } from '../components/theme';
-import { PICKER_TRANSLATIONS, getBookByName, textScriptFor, translationLabel } from '../data';
+import { getBookByName, textScriptFor, translationLabel } from '../data';
 import { useChapterText } from '../state/useScripture';
+import { usePickerTranslations } from '../state/usePickerTranslations';
 
-const TRANSLATION_OPTIONS = PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }));
 
 /** "Romans 8:28" or "Romans 8:28-30". */
 const refFor = (book: string, chapter: number, start: number, end: number) =>
@@ -37,6 +37,7 @@ const refForVerses = (book: string, chapter: number, verses: number[]) =>
 // choice, not two that drift apart.
 // ============================================================================
 export default function AddVersesScreen({ state }: { state: AppState }) {
+  const translationOptions = usePickerTranslations().map((t) => ({ id: t.id, label: translationLabel(t.id) }));
   const {
     handleBack,
     triggerToast,
@@ -192,7 +193,7 @@ export default function AddVersesScreen({ state }: { state: AppState }) {
             </View>
             <View style={half}>
               {label('Translation')}
-              <Dropdown value={translation} options={TRANSLATION_OPTIONS} title="Translation" onChange={setSelectedTranslationId} />
+              <Dropdown value={translation} options={translationOptions} title="Translation" onChange={setSelectedTranslationId} />
             </View>
           </View>
 

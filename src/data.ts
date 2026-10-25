@@ -312,6 +312,8 @@ export const BIBLE_TRANSLATIONS: BibleTranslation[] = [
   {
     id: 'ESV',
     name: 'English Standard Version',
+    // Hidden from everyone but UNRELEASED_TRANSLATION_TESTERS until licensed.
+    inDevelopment: true,
     copyright: ESV_COPYRIGHT_NOTICE,
     isPublicDomain: false,
     source: 'firestore',
@@ -332,14 +334,33 @@ export const getTranslation = (id: string): BibleTranslation | undefined =>
 const IS_DEV_BUILD = typeof __DEV__ === 'undefined' || __DEV__;
 
 /**
- * The translations a person can pick. Same order as BIBLE_TRANSLATIONS, minus
- * any still `inDevelopment` when this isn't a development build. Lookups by
- * id (getTranslation) still see every translation, so a saved verse or a
- * recording in a hidden translation keeps its name.
+ * Accounts that see `inDevelopment` translations in every build, TestFlight
+ * and App Store included -- so the owner can keep using the ESV on their own
+ * phone while nobody else is offered it. Firebase Auth uids (the same one is
+ * in functions/.env as ADMIN_UIDS).
+ *
+ * This only hides the translation from pickers. The text itself is still
+ * readable from Firestore; locking it to these accounts is a pre-launch step
+ * in LAUNCH_CHECKLIST.md.
  */
-export const PICKER_TRANSLATIONS: BibleTranslation[] = BIBLE_TRANSLATIONS.filter(
-  (t) => !t.inDevelopment || IS_DEV_BUILD
-);
+export const UNRELEASED_TRANSLATION_TESTERS: string[] = ['lg9QLmMSlHQhpErSj5UOnmAt20C2'];
+
+/**
+ * The translations this account can pick. Same order as BIBLE_TRANSLATIONS,
+ * minus any still `inDevelopment` -- unless this is a development build or
+ * the account is in UNRELEASED_TRANSLATION_TESTERS. Lookups by id
+ * (getTranslation) still see every translation, so a saved verse or a
+ * recording in a hidden translation keeps its name.
+ *
+ * Components use usePickerTranslations(), which follows sign-in.
+ */
+export const pickerTranslationsFor = (uid: string | null | undefined): BibleTranslation[] => {
+  const tester = !!uid && UNRELEASED_TRANSLATION_TESTERS.includes(uid);
+  return BIBLE_TRANSLATIONS.filter((t) => !t.inDevelopment || IS_DEV_BUILD || tester);
+};
+
+/** What everyone else can pick: the list a launch build shows a stranger. */
+export const PICKER_TRANSLATIONS: BibleTranslation[] = pickerTranslationsFor(null);
 
 /**
  * What to show a person for a translation id: its shortLabel when it has one

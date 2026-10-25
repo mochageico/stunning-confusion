@@ -5,10 +5,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, GripVertical, Search, Square, SquareCheck, SquareMinus, Trash2, X } from 'lucide-react-native';
 
-import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, PICKER_TRANSLATIONS, getBookByName, translationLabel } from '../../data';
+import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, getBookByName, translationLabel } from '../../data';
 import type { ListenPlaylist, QueueItem, VerseState } from '../../types';
 import { scriptOfVerse } from '../../lib/textScript';
 import { useChapterText } from '../../state/useScripture';
+import { usePickerTranslations } from '../../state/usePickerTranslations';
 import { useDragSelect } from '../useDragSelect';
 import { BookPicker } from '../BookPicker';
 import { Dropdown } from '../Dropdown';
@@ -600,6 +601,7 @@ function BiblePicker({
   startAt?: VerseState;
 }) {
   const space = useScaledSpace();
+  const pickerTranslations = usePickerTranslations();
   const [translationId, setTranslationId] = useState(startAt?.translationId ?? startTranslationId ?? DEFAULT_TRANSLATION_ID);
   const [book, setBook] = useState(startAt?.book ?? 'Psalms');
   const [chapter, setChapter] = useState(startAt?.chapter ?? 1);
@@ -656,7 +658,7 @@ function BiblePicker({
         <Dropdown
           value={translationId}
           onChange={setTranslationId}
-          options={PICKER_TRANSLATIONS.map((t) => ({ id: t.id, label: translationLabel(t.id) }))}
+          options={pickerTranslations.map((t) => ({ id: t.id, label: translationLabel(t.id) }))}
           title="Translation"
           searchable={false}
         />

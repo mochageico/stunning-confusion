@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 
-import { DEFAULT_TRANSLATION_ID, getBookByName, PICKER_TRANSLATIONS } from '../data';
+import { DEFAULT_TRANSLATION_ID, getBookByName, getTranslation } from '../data';
 
 // ============================================================================
 // RECORD TAB: PASSAGE AND MIC
@@ -60,8 +60,9 @@ export function useRecorder({ triggerToast, getFirstVerse, onStopped }: Recorder
         if (saved && typeof saved.book === 'string' && getBookByName(saved.book)) {
           setRecordingBook(saved.book);
           setRecordingChapter(Number(saved.chapter) || 1);
-          // A translation that has since left the picker falls back to the default.
-          if (PICKER_TRANSLATIONS.some((t) => t.id === saved.translation)) setRecordingTranslation(saved.translation);
+          // A translation since removed falls back to the default. One this
+          // account can't pick is dropped by useAppState once sign-in resolves.
+          if (getTranslation(saved.translation)) setRecordingTranslation(saved.translation);
           setRecordingRangeStart(typeof saved.start === 'number' ? saved.start : null);
           setRecordingRangeEnd(typeof saved.end === 'number' ? saved.end : null);
         }
