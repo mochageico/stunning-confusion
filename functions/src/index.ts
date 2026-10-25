@@ -9,6 +9,7 @@ import ffprobeStatic from 'ffprobe-static';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
+import { onDocumentDeleted } from 'firebase-functions/v2/firestore';
 import { onObjectFinalized } from 'firebase-functions/v2/storage';
 import { logger } from 'firebase-functions';
 
@@ -881,6 +882,46 @@ export const processStudioAudio = onObjectFinalized(
       });
     } finally {
       rmSync(workDir, { recursive: true, force: true });
+    }
+  }
+);
+
+// ── Recording delete cleanup ────────────────────────────────────────────────
+// The app deletes a recording's files itself, but only for the paths it knows
+// about at that moment: a studio render that landed after the app loaded, a
+// Storage delete that failed on a bad connection, or the shared copy in
+// sharedRecordings (what circles, chats and the Community feed read) would
+// otherwise stay on the server forever with nothing pointing at them. This
+// runs on every private-doc delete and removes whatever is left.
+//
+// Saved copies (users/{saver}/recordings/saved_*) point at the ORIGINAL
+// owner's file, so only files under this doc's own uid and id are touched --
+// deleting your saved copy never deletes someone else's recording.
+export const cleanUpDeletedRecording = onDocumentDeleted(
+  { document: 'users/{uid}/recordings/{recordingId}', database: FIRESTORE_DATABASE_ID, region: 'us-east1' },
+  async (event) => {
+    const { uid, recordingId } = event.params;
+    const bucket = getStorage(app).bucket();
+    const [files] = await bucket.getFiles({ prefix: `recordings/${uid}/${recordingId}` });
+    // The prefix also matches longer ids (rec_1 vs rec_12), so check the name exactly.
+    const mine = files.filter((f) => {
+      const base = f.name.split('/')[2]?.replace(/\.[^.]+$/, '');
+      return base === recordingId || base === `${recordingId}${STUDIO_SUFFIX}`;
+    });
+    await Promise.all(mine.map((f) => f.delete({ ignoreNotFound: true })));
+
+    const sharedRef = db.doc(`sharedRecordings/${recordingId}`);
+    const shared = await sharedRef.get();
+    const deletedShared = shared.exists && (shared.data()?.ownerId ?? shared.data()?.userId) === uid;
+    if (deletedShared) await sharedRef.delete();
+
+    if (mine.length || deletedShared) {
+      logger.info('Cleaned up deleted recording', {
+        uid,
+        recordingId,
+        files: mine.map((f) => f.name),
+        deletedShared,
+      });
     }
   }
 );

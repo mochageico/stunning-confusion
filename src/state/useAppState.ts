@@ -2345,15 +2345,26 @@ export function useAppState() {
   const deleteRecording = async (recording: Recording) => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
+    // A "Save to My Library" copy points at the original owner's files and
+    // shared copy — deleting it only drops the saver's own doc.
+    const ownsAudio = !recording.savedFromRecordingId && (recording.audioPath ?? '').startsWith(`recordings/${uid}/`);
     try {
-      await deleteDoc(doc(db, 'users', uid, 'recordings', recording.id));
-      if (recording.audioPath) {
-        await deleteObject(storageRef(storage, recording.audioPath));
+      if (ownsAudio) {
+        // The shared copy is what circles, chats and the Community feed read;
+        // leaving it meant a deleted recording stayed public forever.
+        // Best-effort: private recordings have none (the delete is denied).
+        await deleteDoc(doc(db, 'sharedRecordings', recording.id)).catch(() => {});
       }
-      // The studio render is a second blob under the same prefix — deleting
-      // only audioPath silently leaks it on every delete. Best-effort: it may
-      // legitimately not exist yet (still processing) or ever ('failed').
-      if (recording.studioAudioPath) {
+      await deleteDoc(doc(db, 'users', uid, 'recordings', recording.id));
+      // Files are best-effort too: the cleanUpDeletedRecording function
+      // removes anything left under this id once the doc is gone, including a
+      // studio render that landed after this recording was loaded.
+      if (ownsAudio && recording.audioPath) {
+        await deleteObject(storageRef(storage, recording.audioPath)).catch((err) =>
+          console.error('Failed to delete audio file:', err)
+        );
+      }
+      if (ownsAudio && recording.studioAudioPath) {
         await deleteObject(storageRef(storage, recording.studioAudioPath)).catch((err) =>
           console.error('Failed to delete studio audio file:', err)
         );
