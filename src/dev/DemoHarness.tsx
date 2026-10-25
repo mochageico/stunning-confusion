@@ -45,7 +45,8 @@
 // fresh=1 (either) starts with no takeaways written. groupDetail: the circle
 // page with this week's totals (Tom's stats are last week's, so he counts as
 // zero; a former member's doc and takeaway are left out); quiet=1 makes it a
-// week nobody has reviewed yet.
+// week nobody has reviewed yet. hebrew=1 (with chapterLanding) opens Isaiah 64 in
+// Hebrew/Greek, with the built-in Hebrew reading on the chapter card.
 //
 // Screenshots: `npm run shots -- --all` (scripts/capture-screens.cjs).
 // ============================================================================
@@ -596,7 +597,12 @@ export function useDemoState(real: AppState): AppState {
       return;
     }
     if (s === 'chapters') real.navigateTo('chapters', 'Romans');
-    else if (s === 'chapterLanding') real.navigateTo('chapterLanding', 'Romans', 8);
+    else if (s === 'chapterLanding' && params.get('hebrew') === '1') {
+      // Isaiah 64 in Hebrew/Greek: the built-in reading, whose verse 1 is the
+      // last verse of Hebrew Isaiah 63, so it switches files a few seconds in.
+      real.setSelectedTranslationId('HEBGRK');
+      real.navigateTo('chapterLanding', 'Isaiah', 64);
+    } else if (s === 'chapterLanding') real.navigateTo('chapterLanding', 'Romans', 8);
     else if (s === 'sections') {
       // Saved through the real hook: with no Firebase user it stays local, so
       // editing in the demo works and writes nothing.
