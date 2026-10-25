@@ -12,6 +12,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -1085,15 +1086,24 @@ export function useAppState() {
           updatedAt: new Date(),
           streakDays: 0,
         };
+        // Re-checked inside a transaction (which always reads the server)
+        // before writing: right after an install the first read has come
+        // back "missing" for a profile that exists, and the old plain
+        // setDoc then wiped it -- circleIds, settings, study time and all.
         console.log('Creating new profile...');
         try {
-          await setDoc(profileRef, newProfile);
-          console.log('Profile created successfully.');
+          const created = await runTransaction(db, async (tx) => {
+            const fresh = await tx.get(profileRef);
+            if (fresh.exists()) return false;
+            tx.set(profileRef, newProfile);
+            return true;
+          });
+          console.log(created ? 'Profile created successfully.' : 'Profile already existed; left untouched.');
+          // Brand-new account, never seen the Getting Started checklist.
+          if (created) setShowOnboarding(true);
         } catch (e) {
           handleFirestoreError(e, OperationType.WRITE, `profiles/${currentUser.uid}`);
         }
-        // Brand-new account, never seen the Getting Started checklist.
-        setShowOnboarding(true);
       }
 
       // Exact-email friend search (see searchUsers). Profiles written before
