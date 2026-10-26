@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { AppState } from '../state/useAppState';
@@ -65,11 +65,23 @@ const STEPS: { tab: Tab; place: string; text: string }[] = [
   },
 ];
 
+// The card unmounts whenever the tab bar hides (e.g. while picking verses on
+// the "Adding verses" card), so the step lives out here or it would restart
+// at 1 every time the bar came back.
+let savedStep = 0;
+
 /** The tour card. App.tsx shows it above the tab bar while `showTour === true`. */
 export function TourCard({ state }: { state: AppState }) {
   const { selectTab, setShowTour } = state;
   const space = useScaledSpace();
-  const [step, setStep] = useState(0);
+  const [step, setStepState] = useState(savedStep);
+  const setStep = (n: number) => {
+    savedStep = n;
+    setStepState(n);
+  };
+  // Coming back mid-tour, you're already where you went; don't yank you
+  // back to the tab's first screen.
+  const restored = useRef(savedStep > 0);
   const { tab, place, text } = STEPS[step];
   const last = step === STEPS.length - 1;
 
@@ -81,6 +93,10 @@ export function TourCard({ state }: { state: AppState }) {
   }, []);
 
   useEffect(() => {
+    if (restored.current) {
+      restored.current = false;
+      return;
+    }
     selectTab(tab);
     // The Verses tab's own tip says what this card just said.
     if (tab === 'verses') dismissTip('versesTab');
@@ -88,7 +104,10 @@ export function TourCard({ state }: { state: AppState }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  const close = () => setShowTour(false);
+  const close = () => {
+    savedStep = 0;
+    setShowTour(false);
+  };
 
   return (
     <FadeInView key={step}>
@@ -108,7 +127,10 @@ export function TourCard({ state }: { state: AppState }) {
           <View className="flex-1" />
           {last ? (
             <>
-              <AppButton size="sm" variant="secondary" label="Common questions" onPress={() => setShowTour('questions')} />
+              <AppButton size="sm" variant="secondary" label="Common questions" onPress={() => {
+                  savedStep = 0;
+                  setShowTour('questions');
+                }} />
               <AppButton
                 size="sm"
                 variant="primary"
