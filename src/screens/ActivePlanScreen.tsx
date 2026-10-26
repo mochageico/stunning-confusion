@@ -91,6 +91,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     removeQueueItems,
     isReviewDue,
     reviewsPaused,
+    handleUpdateVerseStatus,
+    validateTouch,
     takeaways,
     dailyPhaseWeeks,
     weeklyPhaseMonths,
@@ -564,6 +566,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             relabelVerseLink={relabelVerseLink}
             deleteVerseLink={deleteVerseLink}
             onJoined={() => triggerToast('Joined.')}
+            walk={{ handleUpdateVerseStatus, validateTouch, isReviewDue, reviewsPaused }}
           />
         </View>
       </FadeInView>

@@ -48,6 +48,13 @@ export const MIX_FORMAT_ORDER: FormatId[] = [
   'teachIt',
 ];
 
+/**
+ * Formats with a Counts / Practice switch in Settings that are not part of
+ * Mixed review: Walk the constellation follows the map's lines, so it has no
+ * place in a chapter's sections. Never drawn, and Off doesn't apply.
+ */
+export const STANDALONE_FORMATS: FormatId[] = ['walk'];
+
 /** All of them, until the user turns some off in Settings. */
 export const DEFAULT_MIX_FORMATS: FormatId[] = [...MIX_FORMAT_ORDER];
 
@@ -81,7 +88,7 @@ export const MIX_COUNTS_PREF = 'mixCounts';
 export const readMixCounts = (raw: unknown): MixCounts => {
   const saved = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const out = {} as MixCounts;
-  MIX_FORMAT_ORDER.forEach((id) => {
+  [...MIX_FORMAT_ORDER, ...STANDALONE_FORMATS].forEach((id) => {
     out[id] =
       id === FALLBACK_FORMAT ||
       (FORMATS[id].canCount !== false && (typeof saved[id] === 'boolean' ? (saved[id] as boolean) : FORMATS[id].counts));
@@ -320,6 +327,7 @@ export const formatFits = (format: FormatId, unit: MixUnit, chapter: MixChapter,
     case 'whichSection':
       return unit.kind === 'section' && chapter.sectionCount >= MIN_SECTION_DRILL_SECTIONS;
     case 'putInOrder':
+    case 'walk':
       return false;
   }
 };

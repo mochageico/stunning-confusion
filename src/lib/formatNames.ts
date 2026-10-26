@@ -25,7 +25,8 @@ export type FormatId =
   | 'putInOrder'
   | 'whichSection'
   | 'teachIt'
-  | 'scramble';
+  | 'scramble'
+  | 'walk';
 
 export const FORMATS: Record<FormatId, { label: string; counts: boolean; canCount?: false }> = {
   recite: { label: 'Recite', counts: true },
@@ -39,6 +40,9 @@ export const FORMATS: Record<FormatId, { label: string; counts: boolean; canCoun
   whichSection: { label: 'Which section', counts: false, canCount: false },
   teachIt: { label: 'Teach-It', counts: false, canCount: false },
   scramble: { label: 'Scramble', counts: false },
+  // On the Map. Standalone: it follows the map's lines, not a chapter's
+  // sections, so it isn't in Mixed review (lib/mix.ts STANDALONE_FORMATS).
+  walk: { label: 'Walk the constellation', counts: true },
 };
 
 /** Names that aren't formats but sit beside them. */

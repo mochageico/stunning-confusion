@@ -48,7 +48,7 @@ import { Dropdown } from '../components/Dropdown';
 import { ACCENTS, useAccent, useThemeColors } from '../components/theme';
 import { BlockedPeopleSettings, GuidelinesRow, NotificationSettings } from '../components/SocialSettings';
 import { FORMATS, formatLabel, FormatId, MIX_NAMES } from '../lib/formatNames';
-import { FALLBACK_FORMAT, MIX_COUNTS_PREF, MIX_FORMAT_ORDER, MIX_FORMATS_PREF, MixCounts, readMixCounts, readMixFormats } from '../lib/mix';
+import { FALLBACK_FORMAT, MIX_COUNTS_PREF, MIX_FORMAT_ORDER, MIX_FORMATS_PREF, MixCounts, readMixCounts, readMixFormats, STANDALONE_FORMATS } from '../lib/mix';
 import { PassMark, PracticeTextSize, SchemeChoice, setAppPref, useAppPrefs } from '../lib/appPrefs';
 import { printVerses, shareVersesAsText } from '../lib/exportVerses';
 import { resetTips } from '../lib/tips';
@@ -219,8 +219,16 @@ function useMixChoices() {
       setCounts(readMixCounts(saved[MIX_COUNTS_PREF]));
     });
   }, []);
-  const choiceOf = (id: FormatId): FormatChoice => (!enabled.includes(id) ? 'off' : counts[id] ? 'counts' : 'practice');
+  const choiceOf = (id: FormatId): FormatChoice =>
+    STANDALONE_FORMATS.includes(id) ? (counts[id] ? 'counts' : 'practice') : !enabled.includes(id) ? 'off' : counts[id] ? 'counts' : 'practice';
   const setChoice = (id: FormatId, choice: FormatChoice) => {
+    // Not in Mixed review, so there is no Off: only Counts or Practice.
+    if (STANDALONE_FORMATS.includes(id)) {
+      const nextCounts = { ...counts, [id]: choice === 'counts' };
+      setCounts(nextCounts);
+      savePracticePrefs({ [MIX_COUNTS_PREF]: nextCounts });
+      return;
+    }
     const nextEnabled = choice === 'off' ? enabled.filter((f) => f !== id) : MIX_FORMAT_ORDER.filter((f) => f === id || enabled.includes(f));
     const nextCounts = choice === 'off' ? counts : { ...counts, [id]: choice === 'counts' };
     setEnabled(nextEnabled);
@@ -246,7 +254,8 @@ function FormatsPage({ mix }: { mix: ReturnType<typeof useMixChoices> }) {
         {`${MIX_NAMES.countsTag} moves a verse along its schedule. ${MIX_NAMES.practiceTag} is for warming up and never counts. Off leaves it out of ${MIX_NAMES.mixedReview}.`}
       </Caption>
       <View className="bg-surface border border-line rounded-card overflow-hidden">
-        {MIX_FORMAT_ORDER.map((id, i) => {
+        {[...MIX_FORMAT_ORDER, ...STANDALONE_FORMATS].map((id, i) => {
+          const standalone = STANDALONE_FORMATS.includes(id);
           const canCount = FORMATS[id].canCount !== false;
           return (
             <View
@@ -259,16 +268,17 @@ function FormatsPage({ mix }: { mix: ReturnType<typeof useMixChoices> }) {
                   {formatLabel(id)}
                 </AppText>
                 {id === FALLBACK_FORMAT && <Badge label="Always counts" tone="accent" />}
+                {standalone && <Badge label={`Not in ${MIX_NAMES.mixedReview}`} tone="neutral" />}
               </View>
               {id !== FALLBACK_FORMAT && (
                 <SegmentedControl<FormatChoice>
                   value={mix.choiceOf(id)}
                   onChange={(c) => mix.setChoice(id, c)}
-                  accessibilityLabel={`${formatLabel(id)} in ${MIX_NAMES.mixedReview}`}
+                  accessibilityLabel={standalone ? formatLabel(id) : `${formatLabel(id)} in ${MIX_NAMES.mixedReview}`}
                   options={[
                     ...(canCount ? [{ id: 'counts' as const, label: MIX_NAMES.countsTag }] : []),
                     { id: 'practice' as const, label: MIX_NAMES.practiceTag },
-                    { id: 'off' as const, label: 'Off' },
+                    ...(standalone ? [] : [{ id: 'off' as const, label: 'Off' }]),
                   ]}
                 />
               )}

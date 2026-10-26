@@ -19,11 +19,14 @@ export function GuideSheet({
   queue,
   onClose,
   onAddRest,
+  onWalk,
 }: {
   constellation: Constellation | null;
   queue: QueueItem[];
   onClose: () => void;
   onAddRest: (refs: StarRef[]) => void;
+  /** Set when two of its stars are in My Verses. */
+  onWalk?: () => void;
 }) {
   const space = useScaledSpace();
   const missing = constellation ? constellation.stars.filter((s) => !starLit(s.ref, queue)).map((s) => s.ref) : [];
@@ -36,6 +39,7 @@ export function GuideSheet({
       actions={
         <>
           <AppButton variant="quiet" label="Close" onPress={onClose} />
+          {onWalk ? <AppButton variant="secondary" label="Walk this constellation" onPress={onWalk} /> : null}
           {missing.length > 0 ? (
             <AppButton
               variant="primary"

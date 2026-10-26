@@ -4,11 +4,11 @@ import { Minus, Plus } from 'lucide-react-native';
 
 import type { MapLayout, QueueItem, StarRef, VerseLink, VerseState } from '../../types';
 import type { VersePageRef } from '../../state/useAppState';
-import { AppIconButton, AppText, useScaledSpace } from '../design';
+import { AppButton, AppIconButton, AppText, useScaledSpace } from '../design';
 import { useThemeColors } from '../theme';
 import { OneTimeTip } from '../OneTimeTip';
 import { setAppPref, useAppPrefs } from '../../lib/appPrefs';
-import { starKey } from '../../lib/constellations';
+import { starKey, starLit } from '../../lib/constellations';
 import { CONSTELLATIONS } from '../../content/constellations';
 import { layout, LayoutResult, Pt, StarMove, viewBounds } from '../../lib/mapLayout';
 import { MapCamera, MapCanvas } from './MapCanvas';
@@ -18,6 +18,7 @@ import { JumpChips } from './JumpChips';
 import ConnectSheet from './ConnectSheet';
 import { ConstellationListSheet, GuideSheet } from './ConstellationSheets';
 import { versesForStars } from './addStars';
+import WalkConstellation, { WalkDeps } from './WalkConstellation';
 import { echoViews, foundEchoes, hitTest, lineLabels as lineLabelsFor, starLooks } from './mapModel';
 
 // ============================================================================
@@ -98,6 +99,7 @@ export default function ConstellationMap({
   relabelVerseLink,
   deleteVerseLink,
   onJoined,
+  walk,
 }: {
   queue: QueueItem[];
   verseLinks: Record<string, VerseLink>;
@@ -112,6 +114,8 @@ export default function ConstellationMap({
   relabelVerseLink: (id: string, label: string) => Promise<void>;
   deleteVerseLink: (id: string) => Promise<void>;
   onJoined?: () => void;
+  /** What Walk the constellation needs to credit a review. */
+  walk: WalkDeps;
 }) {
   const space = useScaledSpace();
   const palette = useThemeColors();
@@ -123,6 +127,8 @@ export default function ConstellationMap({
   const [listOpen, setListOpen] = useState(false);
   const [guideFor, setGuideFor] = useState<string | null>(null);
   const [connectFrom, setConnectFrom] = useState<StarRef | null>(null);
+  // The group being walked (Walk the constellation), drawn over the whole map view.
+  const [walkGroup, setWalkGroup] = useState<string | null>(null);
 
   const addStars = async (refs: StarRef[]) => {
     const verses = await versesForStars(refs, translationId);
@@ -245,6 +251,11 @@ export default function ConstellationMap({
     return out;
   }, [result, starsByKey]);
   const chipConstellation = CONSTELLATIONS.find((c) => c.id === chip);
+  // A group can be walked once two of its stars are in My Verses.
+  const walkable = (groupId: string) => {
+    const g = result.groups.find((x) => x.id === groupId);
+    return !!g && g.keys.filter((k) => starsByKey.get(k) && starLit(starsByKey.get(k)!.ref, queue)).length >= 2;
+  };
   useEffect(() => {
     if (chip !== WHOLE && !result.groups.some((g) => g.id === chip)) setChip(WHOLE);
   }, [chip, result]);
@@ -339,10 +350,13 @@ export default function ConstellationMap({
       <OneTimeTip id="constellationMap" text="Tap any star to see its passage. Some stars hide something more." />
       <View style={{ gap: space(6) }}>
         <JumpChips chips={chips} value={chip} onPick={pickChip} />
-        {chipConstellation ? (
-          <AppText variant="caption" className="font-sans text-ink-2" style={{ paddingHorizontal: space(4) }}>
-            {chipConstellation.description}
-          </AppText>
+        {chipConstellation || chip !== WHOLE ? (
+          <View className="flex-row items-center" style={{ gap: space(8), paddingHorizontal: space(4) }}>
+            <AppText variant="caption" className="font-sans text-ink-2 flex-1">
+              {chipConstellation?.description ?? ''}
+            </AppText>
+            {walkable(chip) ? <AppButton variant="secondary" size="sm" label="Walk this constellation" onPress={() => setWalkGroup(chip)} /> : null}
+          </View>
         ) : null}
       </View>
 
@@ -422,6 +436,7 @@ export default function ConstellationMap({
         queue={queue}
         onClose={() => setGuideFor(null)}
         onAddRest={(refs) => void addStars(refs)}
+        onWalk={guideFor && walkable(guideFor) ? () => { setWalkGroup(guideFor); setGuideFor(null); } : undefined}
       />
       <ConstellationListSheet
         visible={listOpen}
@@ -432,6 +447,9 @@ export default function ConstellationMap({
         }
         onClose={() => setListOpen(false)}
       />
+      {walkGroup ? (
+        <WalkConstellation result={result} groupId={walkGroup} queue={queue} deps={walk} onClose={() => setWalkGroup(null)} />
+      ) : null}
     </View>
   );
 }

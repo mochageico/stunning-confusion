@@ -3,6 +3,7 @@
 
 import type { Echo, QueueItem, StarRef, VerseLink } from '../types';
 import { CONSTELLATIONS } from '../content/constellations';
+import { starVerses, walkCredit, walkOrder } from './mapWalk';
 import { canLabel, echoesFor, echoVisible, isLearned, starKey, starLit, starStage, suggestedNext, userConstellations } from './constellations';
 
 let failures = 0;
@@ -79,6 +80,29 @@ check('echo found from either end', echoesFor(ref('Hebrews', 10, 15, 17), echoes
 check('no echo for an unrelated star', echoesFor(ps, echoes).length === 0);
 check('echo hidden until both ends are held', !echoVisible(echoes[0], [item('Hebrews', 10, 16)]));
 check('echo permanent once both ends are held', echoVisible(echoes[0], [item('Hebrews', 10, 16), item('Jeremiah', 31, 33, learning)]));
+
+// Walking the constellation.
+const g = { keys: ['a', 'b', 'c', 'd', 'e'], lines: [{ from: 'a', to: 'b' }, { from: 'c', to: 'b' }, { from: 'c', to: 'd' }, { from: 'b', to: 'e' }] };
+check('walk goes depth first, either direction, in key order', walkOrder(g, 'a', () => true).join() === 'b,c,d,e', walkOrder(g, 'a', () => true));
+check('an unheld star is crossed, not asked for', walkOrder(g, 'a', (k) => k !== 'b').join() === 'c,d,e', walkOrder(g, 'a', (k) => k !== 'b'));
+check('the start is never in its own walk', !walkOrder(g, 'c', () => true).includes('c'));
+check('a lone star walks nowhere', walkOrder({ keys: ['x'], lines: [] }, 'x', () => true).length === 0);
+const wq = [item('Psalms', 23, 2), item('Psalms', 23, 1, learning), item('Psalms', 23, 3, queued), item('Psalms', 23, 1, {}, 'KJV'), item('John', 3, 16)];
+const wv = starVerses(ps, wq);
+check('star verses: held only, verse order, one per number', wv.map((v) => v.verse).join() === '1,2', wv.map((v) => v.verse));
+check('a schedule beats Learning for a verse in two translations', wv[0].translationId === 'KJV', wv[0].translationId);
+const base = { counts: true, passed: true, perfect: false, mode: 'speak' as const, paused: false, due: true, touchOk: true, alreadyCounted: false };
+const rev = item('Psalms', 23, 1);
+check('a due review counts', walkCredit(rev, base).kind === 'review');
+check('a not-due review is practice', walkCredit(rev, { ...base, due: false }).kind === null);
+check('paused reviews are practice', walkCredit(rev, { ...base, paused: true }).kind === null);
+check('a miss earns nothing', walkCredit(rev, { ...base, passed: false }).kind === null);
+check('set to Practice, nothing counts', walkCredit(rev, { ...base, counts: false }).kind === null);
+check('counted once per walk', walkCredit(rev, { ...base, alreadyCounted: true }).kind === null);
+check('self-check still counts a due review', walkCredit(rev, { ...base, mode: 'self' }).kind === 'review');
+const lrn = item('Psalms', 23, 1, learning);
+check('learning needs graded and perfect', walkCredit(lrn, { ...base, perfect: true }).kind === 'touch' && walkCredit(lrn, { ...base, perfect: true, mode: 'self' }).kind === null && walkCredit(lrn, base).kind === null);
+check('a Complete verse is practice', walkCredit(item('Psalms', 23, 1, { status: 'retained' as const }), base).kind === null);
 
 if (failures > 0) {
   console.log(`\n${failures} check(s) failed.`);

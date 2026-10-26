@@ -153,7 +153,7 @@ export interface ReviewLog {
   stage: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; // the stage it happened in
   refresher?: true;            // happened during a refresher stint after a miss
   drillType?: TouchLog['drillType'];
-  via?: 'thread' | 'guided' | 'outline' | 'mix'; // pass: earned in Pick up the thread, Guided learning, First words or Mixed review rather than Recall or a manual log
+  via?: 'thread' | 'guided' | 'outline' | 'mix' | 'map'; // pass: earned in Pick up the thread, Guided learning, First words, Mixed review or Walk the constellation rather than Recall or a manual log
   cycles?: number;             // skipped: how many review dates passed
   forgiven?: true;             // skipped: resolved with no penalty
 }
