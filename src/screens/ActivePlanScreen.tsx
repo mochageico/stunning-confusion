@@ -101,6 +101,10 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     pausedAt,
     pausedUntil,
     verseLinks,
+    addVersesToQueue,
+    addVerseLink,
+    relabelVerseLink,
+    deleteVerseLink,
     mapLayout,
     saveMapLayout,
     selectedTranslationId,
@@ -554,10 +558,12 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             mapLayout={mapLayout}
             saveMapLayout={saveMapLayout}
             translationId={selectedTranslationId}
-            actions={{
-              onOpenVerse: (page) => openVersePage(page),
-              onAddVerses: (ref) => go('chapterLanding', ref.book, ref.chapter, { keepBack: true }),
-            }}
+            onOpenVerse={(page) => openVersePage(page)}
+            addVersesToQueue={addVersesToQueue}
+            addVerseLink={addVerseLink}
+            relabelVerseLink={relabelVerseLink}
+            deleteVerseLink={deleteVerseLink}
+            onJoined={() => triggerToast('Joined.')}
           />
         </View>
       </FadeInView>

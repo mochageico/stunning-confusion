@@ -2,16 +2,22 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ScrollView, View } from 'react-native';
 import { Minus, Plus } from 'lucide-react-native';
 
-import type { MapLayout, QueueItem, VerseLink } from '../../types';
+import type { MapLayout, QueueItem, StarRef, VerseLink, VerseState } from '../../types';
+import type { VersePageRef } from '../../state/useAppState';
 import { AppIconButton, AppText, useScaledSpace } from '../design';
 import { useThemeColors } from '../theme';
 import { OneTimeTip } from '../OneTimeTip';
+import { setAppPref, useAppPrefs } from '../../lib/appPrefs';
+import { starKey } from '../../lib/constellations';
 import { CONSTELLATIONS } from '../../content/constellations';
 import { layout, LayoutResult, Pt, StarMove, viewBounds } from '../../lib/mapLayout';
 import { MapCamera, MapCanvas } from './MapCanvas';
 import { EchoGhosts, MapDrawing } from './MapDrawing';
 import { CardActions, EchoCard, LineCard, StarCard } from './MapCards';
 import { JumpChips } from './JumpChips';
+import ConnectSheet from './ConnectSheet';
+import { ConstellationListSheet, GuideSheet } from './ConstellationSheets';
+import { versesForStars } from './addStars';
 import { echoViews, foundEchoes, hitTest, lineLabels as lineLabelsFor, starLooks } from './mapModel';
 
 // ============================================================================
@@ -31,6 +37,7 @@ import { echoViews, foundEchoes, hitTest, lineLabels as lineLabelsFor, starLooks
 const MOVE_MS = 700;
 const GHOST_FADE_MS = 260;
 const WHOLE = 'whole';
+const SHOW_HIDE = 'showhide';
 
 type Selection =
   | { kind: 'star'; key: string }
@@ -85,7 +92,12 @@ export default function ConstellationMap({
   mapLayout,
   saveMapLayout,
   translationId,
-  actions,
+  onOpenVerse,
+  addVersesToQueue,
+  addVerseLink,
+  relabelVerseLink,
+  deleteVerseLink,
+  onJoined,
 }: {
   queue: QueueItem[];
   verseLinks: Record<string, VerseLink>;
@@ -93,21 +105,44 @@ export default function ConstellationMap({
   saveMapLayout: (layout: MapLayout) => void;
   /** For fetching an echo's text the user doesn't hold. */
   translationId: string;
-  actions: CardActions;
+  onOpenVerse: (page: VersePageRef) => void;
+  /** The existing add path (waiting, started by My Schedule's pace). */
+  addVersesToQueue: (verses: VerseState[], translationId: string) => void;
+  addVerseLink: (a: StarRef, b: StarRef, extra?: { label?: string; curated?: string }) => Promise<VerseLink>;
+  relabelVerseLink: (id: string, label: string) => Promise<void>;
+  deleteVerseLink: (id: string) => Promise<void>;
+  onJoined?: () => void;
 }) {
   const space = useScaledSpace();
   const palette = useThemeColors();
   const paper = palette.surface;
 
+  // ---- Which curated constellations are shown (a choice kept on this device) ----
+  const { hiddenConstellations } = useAppPrefs();
+  const shownConstellations = useMemo(() => CONSTELLATIONS.filter((c) => !hiddenConstellations.includes(c.id)), [hiddenConstellations]);
+  const [listOpen, setListOpen] = useState(false);
+  const [guideFor, setGuideFor] = useState<string | null>(null);
+  const [connectFrom, setConnectFrom] = useState<StarRef | null>(null);
+
+  const addStars = async (refs: StarRef[]) => {
+    const verses = await versesForStars(refs, translationId);
+    addVersesToQueue(verses, translationId);
+  };
+  const actions: CardActions = {
+    onOpenVerse,
+    onAddVerses: (ref) => void addStars([ref]),
+    onConnect: (ref) => setConnectFrom(ref),
+  };
+
   // ---- Layout: once per change, never per frame ----
   const links = useMemo(() => Object.values(verseLinks), [verseLinks]);
   const { result, animate } = useMemo(
     () => ({
-      result: layout({ constellations: CONSTELLATIONS, links }, mapLayout),
+      result: layout({ constellations: shownConstellations, links }, mapLayout),
       // The very first layout just appears; after that, changes glide.
       animate: !!mapLayout,
     }),
-    [links, mapLayout]
+    [links, mapLayout, shownConstellations]
   );
   useEffect(() => {
     if (result.changed) saveMapLayout(result.layout);
@@ -128,6 +163,8 @@ export default function ConstellationMap({
   // A star that left the map (its link was deleted) can't stay selected.
   useEffect(() => {
     if (selectedStar && !starsByKey.has(selectedStar)) setSelection(null);
+    else if (selection?.kind === 'line' && !(starsByKey.has(selection.from) && starsByKey.has(selection.to))) setSelection(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStar, starsByKey]);
   const echoes = useMemo(() => (selectedStar ? echoViews(result, selectedStar, found) : []), [result, selectedStar, found]);
   const ghostT = useTween(selectedStar, GHOST_FADE_MS);
@@ -155,8 +192,23 @@ export default function ConstellationMap({
     camera.current?.frame(viewBounds(result, first?.id), insets(), true);
   }, [sized, result]);
 
+  // Showing or hiding a constellation changes what's on the map: look at all of it again.
+  const shownBefore = useRef(shownConstellations);
+  useEffect(() => {
+    if (shownBefore.current === shownConstellations) return;
+    shownBefore.current = shownConstellations;
+    setChip(WHOLE);
+    camera.current?.frame(viewBounds(result), insets());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownConstellations]);
+
   const pickChip = (id: string) => {
+    if (id === SHOW_HIDE) {
+      setListOpen(true);
+      return;
+    }
     setChip(id);
+    setSelection(null);
     camera.current?.frame(viewBounds(result, id === WHOLE ? undefined : id), insets());
   };
 
@@ -189,6 +241,7 @@ export default function ConstellationMap({
         out.push({ id: g.id, label: g.keys.length > 1 ? `${name} and ${g.keys.length - 1} more` : name });
       }
     }
+    out.push({ id: SHOW_HIDE, label: 'Show or hide' });
     return out;
   }, [result, starsByKey]);
   const chipConstellation = CONSTELLATIONS.find((c) => c.id === chip);
@@ -225,6 +278,7 @@ export default function ConstellationMap({
           onLayout={onCardLayout}
           actions={actions}
           compact={mapHeight > 0 && mapHeight < 520}
+          suggested={!!looks[selection.key]?.suggested}
         />
       );
   } else if (selection?.kind === 'echo') {
@@ -244,19 +298,40 @@ export default function ConstellationMap({
   } else if (selection?.kind === 'line') {
     const a = starsByKey.get(selection.from);
     const b = starsByKey.get(selection.to);
-    if (a && b)
+    if (a && b) {
+      const curatedId = selection.lineKind === 'curated' ? selection.id : null;
+      const pair = [starKey(a.ref), starKey(b.ref)].sort().join();
+      // The user's label on a curated line is a link with `curated` set; their own lines are links by id.
+      const link = curatedId
+        ? links.find((l) => l.curated === curatedId && [starKey(l.a), starKey(l.b)].sort().join() === pair)
+        : verseLinks[selection.id];
       card = (
         <LineCard
           a={a.ref}
           b={b.ref}
+          key={`${selection.from}~${selection.to}`}
           label={lineLabels[`${selection.from}~${selection.to}`]}
           constellationTitle={selection.lineKind === 'curated' ? titleOf(selection.id) : undefined}
           queue={queue}
           onClose={() => setSelection(null)}
           onLayout={(h) => (cardHeight.current = h)}
           actions={actions}
+          onSaveLabel={(text) => {
+            if (link) void relabelVerseLink(link.id, text);
+            else if (curatedId && text.trim()) void addVerseLink(a.ref, b.ref, { label: text, curated: curatedId });
+          }}
+          onDelete={
+            curatedId || !link
+              ? undefined
+              : () => {
+                  setSelection(null);
+                  void deleteVerseLink(link.id);
+                }
+          }
+          onGuide={curatedId ? () => setGuideFor(curatedId) : undefined}
         />
       );
+    }
   }
 
   return (
@@ -330,6 +405,33 @@ export default function ConstellationMap({
           </View>
         )}
       </View>
+
+      <ConnectSheet
+        from={connectFrom}
+        queue={queue}
+        links={links}
+        onClose={() => setConnectFrom(null)}
+        onSave={(a, b) => {
+          setConnectFrom(null);
+          void addVerseLink(a, b);
+          onJoined?.();
+        }}
+      />
+      <GuideSheet
+        constellation={CONSTELLATIONS.find((c) => c.id === guideFor) ?? null}
+        queue={queue}
+        onClose={() => setGuideFor(null)}
+        onAddRest={(refs) => void addStars(refs)}
+      />
+      <ConstellationListSheet
+        visible={listOpen}
+        constellations={CONSTELLATIONS}
+        hidden={hiddenConstellations}
+        onToggle={(id, show) =>
+          setAppPref('hiddenConstellations', show ? hiddenConstellations.filter((x) => x !== id) : [...hiddenConstellations, id])
+        }
+        onClose={() => setListOpen(false)}
+      />
     </View>
   );
 }

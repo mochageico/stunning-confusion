@@ -37,6 +37,8 @@ export interface AppPrefs {
   /** The practice screen's text, on top of the phone's own text size. */
   practiceTextSize: PracticeTextSize;
   colorScheme: SchemeChoice;
+  /** Curated constellations hidden from the Map (ids). On this device, like the rest. */
+  hiddenConstellations: string[];
 }
 
 export const DEFAULT_APP_PREFS: AppPrefs = {
@@ -48,6 +50,7 @@ export const DEFAULT_APP_PREFS: AppPrefs = {
   verseFont: 'serif',
   practiceTextSize: 'normal',
   colorScheme: 'light',
+  hiddenConstellations: [],
 };
 
 export const PRACTICE_TEXT_SCALE: Record<PracticeTextSize, number> = { normal: 1, larger: 1.15, largest: 1.3 };
@@ -77,6 +80,7 @@ const clean = (raw: unknown): AppPrefs => {
     verseFont: pick('verseFont', ['serif', 'plain']),
     practiceTextSize: pick('practiceTextSize', ['normal', 'larger', 'largest']),
     colorScheme: pick('colorScheme', ['light', 'dark', 'system']),
+    hiddenConstellations: Array.isArray(r.hiddenConstellations) ? r.hiddenConstellations.filter((x): x is string => typeof x === 'string') : [],
   };
 };
 

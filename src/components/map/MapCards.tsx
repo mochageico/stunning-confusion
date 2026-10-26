@@ -1,17 +1,18 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Pencil, X } from 'lucide-react-native';
 
 import type { QueueItem, StarRef } from '../../types';
 import type { VersePageRef } from '../../state/useAppState';
-import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../design';
+import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../design';
+import { Dialog } from '../blocks';
 import { useThemeColors } from '../theme';
 import { StageDot } from '../VerseStages';
 import { useChapterText } from '../../state/useScripture';
 import { getBookByName } from '../../data';
 import { starLabel } from '../../lib/mapLayout';
 import { STAGE_LABEL, STAGE_ORDER, verseStage } from '../../lib/stageProgress';
-import { starStage } from '../../lib/constellations';
+import { canLabel, starStage } from '../../lib/constellations';
 import type { EchoView } from './mapModel';
 
 // ============================================================================
@@ -49,9 +50,9 @@ function heldText(ref: StarRef, queue: QueueItem[]): string {
 
 export interface CardActions {
   onOpenVerse: (page: VersePageRef) => void;
-  /** Stage 4 sends "Add to My Verses" to the chapter page, where adding already lives. */
+  /** Adds the star's verses through the usual add path; My Schedule's pace decides when they start. */
   onAddVerses: (ref: StarRef) => void;
-  /** Connect to another verse. Stage 5; the button is left out until it's passed. */
+  /** Connect to another verse. */
   onConnect?: (ref: StarRef) => void;
 }
 
@@ -97,9 +98,12 @@ export function StarCard({
   onLayout,
   actions,
   compact,
+  suggested,
 }: {
   refr: StarRef;
   constellationTitle?: string;
+  /** A curated star worth adding next. */
+  suggested?: boolean;
   queue: QueueItem[];
   echoes: EchoView[];
   onCompare: (index: number) => void;
@@ -119,7 +123,7 @@ export function StarCard({
       <AppText variant="title" className="font-sans font-bold text-ink" accessibilityRole="header" style={{ paddingRight: space(36) }}>
         {starLabel(refr)}
       </AppText>
-      <StageLine refr={refr} queue={queue} note={constellationTitle ? `In ${constellationTitle}` : undefined} />
+      <StageLine refr={refr} queue={queue} note={suggested ? 'Suggested next' : constellationTitle ? `In ${constellationTitle}` : undefined} />
       {text ? (
         <AppText variant="caption" className="font-serif text-ink-2" numberOfLines={2}>
           {text}
@@ -184,9 +188,9 @@ function PassageBlock({ refr, queue, actions, withText }: { refr: StarRef; queue
 }
 
 /**
- * A line between two stars. Stage 5 fills this in (the user's label, naming
- * it once both are learned, deleting, the curated guide); for now it shows
- * the two passages and any label already written.
+ * A line between two stars: both passages, the user's own label (only once
+ * both ends are learned), and either Delete link (their own lines) or
+ * Read the guide (a curated constellation's).
  */
 export function LineCard({
   a,
@@ -197,6 +201,9 @@ export function LineCard({
   onClose,
   onLayout,
   actions,
+  onSaveLabel,
+  onDelete,
+  onGuide,
 }: {
   a: StarRef;
   b: StarRef;
@@ -206,8 +213,20 @@ export function LineCard({
   onClose: () => void;
   onLayout?: (h: number) => void;
   actions: CardActions;
+  onSaveLabel: (text: string) => void;
+  /** Their own lines only. */
+  onDelete?: () => void;
+  /** Curated lines only. */
+  onGuide?: () => void;
 }) {
   const space = useScaledSpace();
+  const scale = useFontScale();
+  const palette = useThemeColors();
+  const [draft, setDraft] = useState(label ?? '');
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => setDraft(label ?? ''), [label]);
+  const nameable = canLabel({ a, b }, queue);
+  const changed = draft.trim() !== (label ?? '');
   return (
     <CardShell onClose={onClose} onLayout={onLayout}>
       <View style={{ gap: space(2), paddingRight: space(36), minHeight: space(28), justifyContent: 'center' }}>
@@ -223,6 +242,57 @@ export function LineCard({
       <PassageBlock refr={a} queue={queue} actions={actions} />
       <View className="border-t border-hairline" />
       <PassageBlock refr={b} queue={queue} actions={actions} />
+      <View className="border-t border-hairline" />
+      {nameable ? (
+        <View style={{ gap: space(8) }}>
+          <View className="flex-row items-center bg-surface-2 border border-line rounded-btn" style={{ paddingHorizontal: space(12), gap: space(8) }}>
+            <Pencil size={Math.round(16 * scale)} color={palette.ink3} />
+            <AppTextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Name this line in your own words"
+              accessibilityLabel="Name this line"
+              maxLength={40}
+              variant="body"
+              className="flex-1 text-ink font-sans"
+              style={{ minWidth: 0, paddingVertical: space(10) }}
+            />
+          </View>
+          {changed ? (
+            <View className="flex-row" style={{ gap: space(8) }}>
+              <AppButton size="md" variant="primary" label="Save name" onPress={() => onSaveLabel(draft)} />
+              <AppButton size="md" variant="quiet" label="Cancel" onPress={() => setDraft(label ?? '')} />
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <AppText variant="label" className="font-sans text-ink-2">
+          You can name this once both are learned.
+        </AppText>
+      )}
+      <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
+        {onGuide ? <AppButton size="md" variant="secondary" label="Read the guide" onPress={onGuide} /> : null}
+        {onDelete ? <AppButton size="md" variant="destructive" label="Delete link" onPress={() => setConfirming(true)} /> : null}
+      </View>
+      <Dialog
+        visible={confirming}
+        onClose={() => setConfirming(false)}
+        title="Delete this link?"
+        message="The line and its name go away. Both verses stay on My Verses."
+        actions={
+          <>
+            <AppButton variant="quiet" label="Keep it" onPress={() => setConfirming(false)} />
+            <AppButton
+              variant="destructive"
+              label="Delete"
+              onPress={() => {
+                setConfirming(false);
+                onDelete?.();
+              }}
+            />
+          </>
+        }
+      />
     </CardShell>
   );
 }

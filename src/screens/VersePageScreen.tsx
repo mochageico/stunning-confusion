@@ -11,6 +11,7 @@ import { useThemeColors } from '../components/theme';
 import { STAGE_FILL, StageBar, dayWord } from '../components/VerseStages';
 import { textScriptFor, translationLabel } from '../data';
 import { isRtl } from '../lib/textScript';
+import ConnectSheet from '../components/map/ConnectSheet';
 import { QueueItem, ReviewLog, VerseState } from '../types';
 import {
   STAGE_LABEL,
@@ -59,11 +60,14 @@ export default function VersePageScreen({ state }: { state: AppState }) {
     weeklyPhaseMonths,
     monthlyPhaseYears,
     masteryTouches,
+    verseLinks,
+    addVerseLink,
   } = state;
   const space = useScaledSpace();
   const scale = useFontScale();
   const palette = useThemeColors();
   const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
   const plan = { dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches };
   const now = new Date();
@@ -365,6 +369,7 @@ export default function VersePageScreen({ state }: { state: AppState }) {
         )}
 
         <GroupedList>
+          <ListRow title="Connect to another verse" value="Join on the Map" onPress={() => setConnecting(true)} />
           <ListRow
             title={`${ref.book} ${ref.chapter}`}
             value="Open chapter"
@@ -374,6 +379,18 @@ export default function VersePageScreen({ state }: { state: AppState }) {
 
         <AppButton variant="destructive" label="Remove from My Verses" onPress={() => setConfirmingRemove(true)} />
       </ScrollView>
+
+      <ConnectSheet
+        from={connecting ? { book: ref.book, chapter: ref.chapter, start: Math.min(...ref.verses), end: Math.max(...ref.verses) } : null}
+        queue={memoryQueue}
+        links={Object.values(verseLinks)}
+        onClose={() => setConnecting(false)}
+        onSave={(a, b) => {
+          setConnecting(false);
+          void addVerseLink(a, b);
+          triggerToast('Joined. See it on the Map in My Verses.');
+        }}
+      />
 
       <Dialog
         visible={confirmingRemove}
