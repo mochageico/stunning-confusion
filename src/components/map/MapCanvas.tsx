@@ -3,6 +3,7 @@ import { Platform, View } from 'react-native';
 import Svg, { G } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  cancelAnimation,
   clamp,
   Easing,
   runOnJS,
@@ -84,6 +85,10 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
 
   // Gesture starting points.
   const z0 = useSharedValue(1);
+  const s0 = useSharedValue(1);
+  const n0 = useSharedValue(0);
+  // Fingers on the map right now. A camera slide (reveal) waits while it's above 0, so it can't fight a drag.
+  const touches = useSharedValue(0);
   const tx0 = useSharedValue(0);
   const ty0 = useSharedValue(0);
   const fx0 = useSharedValue(0);
@@ -105,16 +110,42 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
     return lo > hi ? (lo + hi) / 2 : clamp(t, lo, hi);
   };
 
+  /** A touch stops any camera slide still running, like catching a scrolling page. */
+  const catchCamera = () => {
+    'worklet';
+    cancelAnimation(zoom);
+    cancelAnimation(tx);
+    cancelAnimation(ty);
+  };
+
+  /** Starts (or restarts) the pinch from where the map is now, with these fingers. */
+  const anchorPinch = (scale: number, focalX: number, focalY: number, pointers: number) => {
+    'worklet';
+    z0.value = zoom.value;
+    s0.value = scale;
+    tx0.value = tx.value;
+    ty0.value = ty.value;
+    fx0.value = focalX;
+    fy0.value = focalY;
+    n0.value = pointers;
+  };
+
   const pinch = Gesture.Pinch()
+    .onBegin(() => {
+      touches.value += 1;
+      catchCamera();
+    })
     .onStart((e) => {
-      z0.value = zoom.value;
-      tx0.value = tx.value;
-      ty0.value = ty.value;
-      fx0.value = e.focalX;
-      fy0.value = e.focalY;
+      anchorPinch(e.scale, e.focalX, e.focalY, e.numberOfPointers);
     })
     .onUpdate((e) => {
-      const z = clamp(z0.value * e.scale, minZoom(), MAX_ZOOM);
+      // One finger lifting (or a third landing) moves the pinch's center to a different finger. Start again from here rather than let the map jump with it.
+      if (e.numberOfPointers !== n0.value) {
+        anchorPinch(e.scale, e.focalX, e.focalY, e.numberOfPointers);
+        return;
+      }
+      if (e.numberOfPointers < 2) return;
+      const z = clamp(z0.value * (e.scale / s0.value), minZoom(), MAX_ZOOM);
       // The map point that was under the fingers stays under them, and moving
       // both fingers together drags the map too.
       const mx = (fx0.value - tx0.value) / z0.value;
@@ -122,11 +153,18 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
       zoom.value = z;
       tx.value = clampT(e.focalX - mx * z, z, bx.value, bw.value, boxW.value);
       ty.value = clampT(e.focalY - my * z, z, by.value, bh.value, boxH.value);
+    })
+    .onFinalize(() => {
+      touches.value = Math.max(0, touches.value - 1);
     });
 
   const pan = Gesture.Pan()
     .maxPointers(1)
     .minDistance(6)
+    .onBegin(() => {
+      touches.value += 1;
+      catchCamera();
+    })
     .onStart(() => {
       tx0.value = tx.value;
       ty0.value = ty.value;
@@ -134,6 +172,9 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
     .onUpdate((e) => {
       tx.value = clampT(tx0.value + e.translationX, zoom.value, bx.value, bw.value, boxW.value);
       ty.value = clampT(ty0.value + e.translationY, zoom.value, by.value, bh.value, boxH.value);
+    })
+    .onFinalize(() => {
+      touches.value = Math.max(0, touches.value - 1);
     });
 
   const tap = Gesture.Tap()
@@ -185,13 +226,31 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
       onLabelsChange?.(z >= LABEL_ZOOM);
     },
     reveal(points, bottomInset) {
-      if (!points.length) return;
+      // A finger on the map is steering it; don't slide the camera under it.
+      if (!points.length || touches.value > 0) return;
       const z = zoom.value;
       // Room for a label under each point, and off the zoom buttons' edge.
       const top = 36;
       const bottom = Math.max(boxH.value - bottomInset - 44, top);
       const left = 60;
       const right = boxW.value - 60;
+      // A star with a lot of echoes rings itself with ghosts: zoom out until the ring fits (a label's width either side).
+      const mxs = points.map((p) => p[0]);
+      const mys = points.map((p) => p[1]);
+      const spanX = Math.max(...mxs) - Math.min(...mxs) + 96;
+      const spanY = Math.max(...mys) - Math.min(...mys) + 48;
+      // Fitting the ring can use more of the width than a plain pan: only the zoom buttons' side needs keeping clear.
+      const fitLeft = 28;
+      const fitRight = boxW.value - 56;
+      const fit = Math.min((fitRight - fitLeft) / spanX, (bottom - top) / spanY);
+      if (fit < z && points.length > 1) {
+        const nz = Math.max(fit, minZoom());
+        zoom.value = withTiming(nz, timing);
+        tx.value = withTiming((fitLeft + fitRight) / 2 - ((Math.min(...mxs) + Math.max(...mxs)) / 2) * nz, timing);
+        ty.value = withTiming((top + bottom) / 2 - ((Math.min(...mys) + Math.max(...mys)) / 2) * nz, timing);
+        onLabelsChange?.(nz >= LABEL_ZOOM);
+        return;
+      }
       const shift = (lo: number, hi: number, min: number, max: number, first: number) => {
         let d = 0;
         if (hi > max) d = max - hi;

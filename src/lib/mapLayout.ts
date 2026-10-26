@@ -983,6 +983,70 @@ export function echoGhost(result: LayoutResult, key: string, ghostRef?: StarRef)
   return [round(best[0]), round(best[1])];
 }
 
+/**
+ * Spots for ALL of a star's echoes at once: fanned out around it, facing away
+ * from its group's middle, spread wide enough that their labels don't touch
+ * (a star with ten echoes gets a ring). Each one then slides a little, if it
+ * has to, to clear stars, lines and the ghosts placed before it.
+ */
+export function echoGhosts(result: LayoutResult, key: string, ghostRefs: StarRef[]): Pt[] {
+  const n = ghostRefs.length;
+  const p = result.positions[key];
+  if (!p || n === 0) return [];
+  const star = result.stars.find((s) => s.key === key);
+  const group = result.groups.find((g) => g.id === star?.group);
+  let base = group ? Math.atan2(p[1] - group.center[1], p[0] - group.center[0]) : seededAngle(key);
+  if (group && dist(p[0], p[1], group.center[0], group.center[1]) < 1) base = seededAngle(key);
+  const widths = ghostRefs.map((r) => labelWidth(starLabel(r)));
+  const maxW = Math.max(...widths);
+  // About 32 degrees between neighbors, never more than a full turn in all.
+  const step = n === 1 ? 0 : Math.min((2 * Math.PI) / n, 0.56);
+  // Every other ghost sits on a nearer ring, so neighbors' labels needn't fit side by side and the whole ring can stay snug.
+  const radius = n === 1 ? GHOST_DISTANCE : Math.max(GHOST_DISTANCE, Math.ceil((maxW + 12) / (2 * step)));
+  const others: { x: number; y: number; w: number }[] = result.stars.map((s) => ({ x: result.positions[s.key][0], y: result.positions[s.key][1], w: s.labelWidth }));
+  const segs = result.lines.map((l) => [result.positions[l.from], result.positions[l.to]] as [Pt, Pt]);
+  const out: Pt[] = [];
+  const nudges = n === 1 ? [0] : [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2, 1.6, -1.6];
+  const reach = [1, 1.2, 1.45, 1.8, 2.2];
+  for (let i = 0; i < n; i++) {
+    const want = base + (i - (n - 1) / 2) * step;
+    const ring = n > 1 && i % 2 === 1 ? radius * 0.74 : radius;
+    let best: Pt = [p[0] + Math.cos(want) * ring, p[1] + Math.sin(want) * ring];
+    let bestScore = -Infinity;
+    let done = false;
+    for (const r of reach) {
+      for (const t of nudges) {
+        const ang = want + t * step;
+        const g = { x: p[0] + Math.cos(ang) * ring * r, y: p[1] + Math.sin(ang) * ring * r, w: widths[i] };
+        let clearance = Infinity;
+        let hits = 0;
+        for (const o of others) {
+          clearance = Math.min(clearance, dist(g.x, g.y, o.x, o.y));
+          const [ox, oy] = boxOverlap(g, o);
+          if (ox > 0 && oy > 0) hits++;
+        }
+        for (const [a, b] of segs) if (crosses([p[0], p[1]], [g.x, g.y], a, b)) hits++;
+        if (!hits && clearance >= MIN_SPACING * 0.75) {
+          best = [g.x, g.y];
+          done = true;
+          break;
+        }
+        const score = Math.min(clearance, MIN_SPACING) - hits * 100 - Math.abs(t) * 2 - r * 4;
+        if (score > bestScore) {
+          bestScore = score;
+          best = [g.x, g.y];
+        }
+      }
+      if (done) break;
+    }
+    const spot: Pt = [round(best[0]), round(best[1])];
+    out.push(spot);
+    // The next ghosts keep clear of this one too.
+    others.push({ x: spot[0], y: spot[1], w: widths[i] });
+  }
+  return out;
+}
+
 /** The rectangle a jump-to chip should zoom to: one group, or the whole map. */
 export const viewBounds = (result: LayoutResult, groupId?: string): Rect =>
   (groupId && result.groups.find((g) => g.id === groupId)?.bounds) || result.bounds;

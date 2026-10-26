@@ -128,6 +128,8 @@ export function StarCard({
   compact?: boolean;
 }) {
   const space = useScaledSpace();
+  const scale = useFontScale();
+  const tight = { paddingHorizontal: space(8), minHeight: Math.round(40 * scale) };
   const page = heldPage(refr, queue);
   const text = page && !compact ? heldText(refr, queue) : '';
   return (
@@ -169,16 +171,17 @@ export function StarCard({
           </ScrollView>
         </View>
       ) : null}
-      <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
+      {/* A little tighter than a usual button so Open verse, Connect and Remove star share one row at normal text size (they still wrap if the text is large). */}
+      <View className="flex-row flex-wrap" style={{ gap: space(6) }}>
         {page ? (
-          <AppButton size="md" variant="primary" label="Open verse" onPress={() => actions.onOpenVerse(page)} />
+          <AppButton size="md" variant="primary" label="Open verse" style={tight} onPress={() => actions.onOpenVerse(page)} />
         ) : onMyVerses(refr, queue) ? null : (
-          <AppButton size="md" variant="primary" label="Add to My Verses" onPress={() => actions.onAddVerses(refr)} />
+          <AppButton size="md" variant="primary" label="Add to My Verses" style={tight} onPress={() => actions.onAddVerses(refr)} />
         )}
         {page && actions.onConnect ? (
-          <AppButton size="md" variant="secondary" label="Connect" onPress={() => actions.onConnect!(refr)} />
+          <AppButton size="md" variant="secondary" label="Connect" style={tight} onPress={() => actions.onConnect!(refr)} />
         ) : null}
-        {onRemove ? <AppButton size="md" variant="quiet" label="Remove star" onPress={onRemove} /> : null}
+        {onRemove ? <AppButton size="md" variant="quiet" label="Remove" accessibilityLabel="Remove star from the map" style={tight} onPress={onRemove} /> : null}
       </View>
     </CardShell>
   );

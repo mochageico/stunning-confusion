@@ -4,7 +4,7 @@
 import type { MapLayout, StarRef, VerseLink } from '../types';
 import { CONSTELLATIONS } from '../content/constellations';
 import { starKey } from './constellations';
-import { echoGhost, layout, LayoutInput, LayoutResult, MIN_SPACING, starBox, viewBounds } from './mapLayout';
+import { echoGhost, echoGhosts, labelWidth, layout, LayoutInput, LayoutResult, MIN_SPACING, starBox, starLabel, viewBounds } from './mapLayout';
 
 let failures = 0;
 function check(label: string, condition: boolean, detail?: unknown) {
@@ -210,6 +210,34 @@ for (const s of r1.stars) {
 }
 check('echo ghosts are clear of other stars', ghostsOk);
 check('no ghost for a star not on the map', echoGhost(r1, 'Nope|1|1-1') === null);
+
+// A star with ten echoes (Mark 10:19 has ten): every one gets a spot, fanned out and clear.
+{
+  const refs = [12, 13, 14, 15, 16].map((v) => ref('Exodus', 20, v)).concat([16, 17, 18, 19, 20].map((v) => ref('Deuteronomy', 5, v)));
+  const hit = (a: ReturnType<typeof starBox>, b: ReturnType<typeof starBox>) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const overlaps = (r: LayoutResult, key: string, spots: [number, number][], againstStars: boolean) => {
+    const boxes = spots.map((p, k) => starBox(p, labelWidth(starLabel(refs[k]))));
+    let n = 0;
+    for (let a = 0; a < boxes.length; a++) {
+      for (let b = a + 1; b < boxes.length; b++) if (hit(boxes[a], boxes[b])) n++;
+      if (againstStars) for (const t of r.stars) if (hit(boxes[a], starBox(r.positions[t.key], t.labelWidth))) n++;
+    }
+    return n;
+  };
+  // Out in the open (a star on its own, beside a pair): nothing overlaps anything.
+  const open = layout({ constellations: [], links: [link('o1', john3, rom5), link('o2', ref('Mark', 10, 19), ref('Mark', 10, 19), { solo: true })] });
+  const openKey = starKey(ref('Mark', 10, 19));
+  const openSpots = echoGhosts(open, openKey, refs);
+  check('ten echoes: one spot each', openSpots.length === 10);
+  check('ten echoes in the open: no label box overlaps a star or another ghost', overlaps(open, openKey, openSpots, true) === 0, openSpots);
+  const around = openSpots.map((p) => Math.hypot(p[0] - open.positions[openKey][0], p[1] - open.positions[openKey][1]));
+  check(`ten echoes in the open: a snug ring (nearest ${Math.round(Math.min(...around))}, farthest ${Math.round(Math.max(...around))})`, Math.max(...around) < 170, around);
+  check('ten echoes: same spots every time', JSON.stringify(openSpots) === JSON.stringify(echoGhosts(open, openKey, refs)));
+  // Inside a crowded constellation there may not be room: ghosts still don't land on each other.
+  const crowded = echoGhosts(r1, r1.stars[0].key, refs);
+  check('ten echoes in a crowded constellation: ghosts keep off each other', crowded.length === 10 && overlaps(r1, r1.stars[0].key, crowded, false) === 0, crowded);
+  check('no echoes, no spots; star not on the map, no spots', echoGhosts(r1, r1.stars[0].key, []).length === 0 && echoGhosts(r1, 'Nope|1|1-1', refs).length === 0);
+}
 
 // --- The big map -----------------------------------------------------------
 

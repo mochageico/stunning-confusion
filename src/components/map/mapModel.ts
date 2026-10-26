@@ -1,6 +1,6 @@
 import type { Echo, QueueItem, StarRef, VerseLink } from '../../types';
 import { echoesFor, refsOverlap, starKey, starLit, starStage, suggestedNext } from '../../lib/constellations';
-import { echoGhost, LayoutResult, MapStar, Pt, starLabel, STAR_RADIUS, LABEL_GAP, LABEL_HEIGHT } from '../../lib/mapLayout';
+import { echoGhosts, LayoutResult, MapStar, Pt, starLabel, STAR_RADIUS, LABEL_GAP, LABEL_HEIGHT } from '../../lib/mapLayout';
 import type { VerseStage } from '../../lib/stageProgress';
 import { CONSTELLATIONS } from '../../content/constellations';
 import ECHOES_JSON from '../../content/echoes.json';
@@ -97,16 +97,15 @@ export const echoSentence = (e: Echo): string =>
   `${starLabel(e.nt)} ${e.kind === 'quote' ? 'quotes' : 'echoes'} ${starLabel(e.ot)}.`;
 
 /**
- * The echoes of the tapped star. Quotes before allusions. Only the first one
- * without a star on the map gets a ghost (the layout has one clear spot per
- * star); the card lists them all.
+ * The echoes of the tapped star. Quotes before allusions. Every one whose
+ * other end isn't on the map gets a ghost star and a dotted line, fanned out
+ * around the star; the card lists them all.
  */
 export function echoViews(result: LayoutResult, key: string, found: FoundEcho[]): EchoView[] {
   const star = result.stars.find((s) => s.key === key);
   if (!star) return [];
   const list = [...echoesFor(star.ref, ECHOES)].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'quote' ? -1 : 1));
   const seen = new Set<string>();
-  let ghosted = false;
   const out: EchoView[] = [];
   for (const e of list) {
     const ntHere = refsOverlap(e.nt, star.ref);
@@ -120,15 +119,13 @@ export function echoViews(result: LayoutResult, key: string, found: FoundEcho[])
     if (other && other.key !== key) {
       view.thereKey = other.key;
       view.found = found.some((f) => (f.from === key && f.to === other.key) || (f.to === key && f.from === other.key));
-    } else if (!ghosted) {
-      const p = echoGhost(result, key, there);
-      if (p) {
-        view.ghost = p;
-        ghosted = true;
-      }
     }
     out.push(view);
   }
+  // Every end that isn't a star on the map gets a ghost, all placed together so they fan out.
+  const bare = out.filter((v) => !v.thereKey);
+  const spots = echoGhosts(result, key, bare.map((v) => v.there));
+  bare.forEach((v, i) => (v.ghost = spots[i]));
   return out;
 }
 

@@ -206,6 +206,8 @@ const MAP_SPECS: Spec[] = [
   { ref: 'Matthew 4:4', status: 'reviewing', phase: 'daily', due: 0, touches: [1, 2], streak: 5 },
   { ref: 'Romans 1:17', status: 'reviewing', phase: 'weekly', due: 2, touches: [5, 12], streak: 4 },
   { ref: 'Habakkuk 2:4', status: 'learning', phase: 'none', touches: [0] },
+  // Mark 10:19 has ten echoes (the commandments, in Exodus 20 and Deuteronomy 5): tap it to see the ring.
+  { ref: 'Mark 10:19', status: 'reviewing', phase: 'daily', due: 2, touches: [1, 2, 3], streak: 3 },
 ];
 
 /** The demo's own lines between verses (on screen only: no signed-in user, so nothing is written). */
@@ -221,6 +223,8 @@ function seedMapLinks(real: AppState) {
     [r('Romans', 8, 28, 29), r('Philippians', 4, 6, 7)],
   ];
   for (const [a, b, label] of pairs) void real.addVerseLink(a, b, label ? { label } : {});
+  // A star on its own.
+  void real.addVerseLink(r('Mark', 10, 19), r('Mark', 10, 19), { solo: true });
 }
 
 // big=1: a 700-verse list, the size of a long-time user's, for timing the

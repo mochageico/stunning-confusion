@@ -333,11 +333,13 @@ export default function ConstellationMap({
   };
   // A card the same height as the last one doesn't lay out again, so moving
   // from star to star reveals here too.
+  // Keyed on where the ghosts are, not on the array: a layout save hands back a new array of the same spots, and must not slide the camera.
+  const ghostSpots = ghosts.map((g) => g.p.join(',')).join('|');
   useEffect(() => {
     if (selectedStar && positions[selectedStar] && cardHeight.current)
       camera.current?.reveal([positions[selectedStar], ...ghosts.map((g) => g.p)], cardHeight.current + 12);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStar, ghosts]);
+  }, [selectedStar, ghostSpots]);
   let card: React.ReactNode = null;
   if (selection?.kind === 'star') {
     const s = starsByKey.get(selection.key);
