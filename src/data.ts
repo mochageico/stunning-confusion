@@ -343,7 +343,10 @@ const IS_DEV_BUILD = typeof __DEV__ === 'undefined' || __DEV__;
  * readable from Firestore; locking it to these accounts is a pre-launch step
  * in LAUNCH_CHECKLIST.md.
  */
-export const UNRELEASED_TRANSLATION_TESTERS: string[] = ['lg9QLmMSlHQhpErSj5UOnmAt20C2'];
+export const UNRELEASED_TRANSLATION_TESTERS: string[] = [
+  'lg9QLmMSlHQhpErSj5UOnmAt20C2', // owner
+  'D4hglY53zuWR3PVZxngwHhwzhng2',
+];
 
 /**
  * The translations this account can pick. Same order as BIBLE_TRANSLATIONS,

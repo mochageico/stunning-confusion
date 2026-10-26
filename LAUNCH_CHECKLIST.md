@@ -9,8 +9,8 @@ What a stranger can pick in a TestFlight/App Store build today:
 BSB, WEB, KJV, Hebrew/Greek, CSB, NASB, NLT.
 
 - **ESV is hidden** from everyone except the accounts in
-  `UNRELEASED_TRANSLATION_TESTERS` in `src/data.ts` (currently just the
-  owner's account). Done 2026-10-25. Nothing to do at launch, unless a
+  `UNRELEASED_TRANSLATION_TESTERS` in `src/data.ts` (currently the
+  owner's account plus one more tester). Done 2026-10-25. Nothing to do at launch, unless a
   Crossway licence has come through (then remove `inDevelopment: true` from
   the ESV entry and do everything `capabilityWarningsFor('ESV')` lists).
 - **NIV stays out** until Biblica confirms in writing that the memorization
@@ -30,12 +30,12 @@ change that block so ESV can only be read by the tester accounts:
 ```
 match /translations/{translationId} {
   allow read: if translationId != 'ESV'
-    || (request.auth != null && request.auth.uid in ['lg9QLmMSlHQhpErSj5UOnmAt20C2']);
+    || (request.auth != null && request.auth.uid in ['lg9QLmMSlHQhpErSj5UOnmAt20C2', 'D4hglY53zuWR3PVZxngwHhwzhng2']);
   allow write: if false;
 
   match /books/{bookId}/chapters/{chapterId} {
     allow read: if translationId != 'ESV'
-      || (request.auth != null && request.auth.uid in ['lg9QLmMSlHQhpErSj5UOnmAt20C2']);
+      || (request.auth != null && request.auth.uid in ['lg9QLmMSlHQhpErSj5UOnmAt20C2', 'D4hglY53zuWR3PVZxngwHhwzhng2']);
     allow write: if false;
   }
 }
