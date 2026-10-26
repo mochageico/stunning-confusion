@@ -69,6 +69,7 @@ import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from '.
 import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
 import BlocksGallery from './src/dev/BlocksGallery';
 import { useToastMessage } from './src/lib/toastStore';
+import { useMapFullscreen } from './src/lib/mapFullscreen';
 import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent, useColorSchemeInUse } from './src/components/theme';
 import { loadAppPrefs, setAppPref, useAppPrefs } from './src/lib/appPrefs';
 import { startSpeechSlipSync } from './src/lib/speechSlips';
@@ -496,7 +497,9 @@ function AppShell() {
   const keyboardHeight = useKeyboardHeight();
   // And while recording: the Record tab goes full screen so the text has the
   // room, and a stray tap on a tab can't walk away from a live take.
-  const showBars = !chatScreenActive && keyboardHeight === 0 && !state.isRecording;
+  // The constellation map can take the whole screen too.
+  const mapFullscreen = useMapFullscreen();
+  const showBars = !chatScreenActive && keyboardHeight === 0 && !state.isRecording && !mapFullscreen;
 
   // Signed in but the verses haven't arrived yet: keep the loading screen up
   // so Home doesn't open empty and then fill in. Capped, so a failed or very

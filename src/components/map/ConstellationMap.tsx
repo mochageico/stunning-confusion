@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { Minus, Plus } from 'lucide-react-native';
+import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { Maximize2, Minimize2, Minus, Plus } from 'lucide-react-native';
 
 import type { MapLayout, QueueItem, StarRef, VerseLink, VerseState } from '../../types';
 import type { VersePageRef } from '../../state/useAppState';
@@ -8,6 +8,7 @@ import { AppButton, AppIconButton, AppText, useScaledSpace } from '../design';
 import { useThemeColors } from '../theme';
 import { OneTimeTip } from '../OneTimeTip';
 import { setAppPref, useAppPrefs } from '../../lib/appPrefs';
+import { setMapFullscreen, useMapFullscreen } from '../../lib/mapFullscreen';
 import { starKey, starLit } from '../../lib/constellations';
 import { CONSTELLATIONS } from '../../content/constellations';
 import { layout, LayoutResult, Pt, StarMove, viewBounds } from '../../lib/mapLayout';
@@ -178,6 +179,10 @@ export default function ConstellationMap({
 
   // ---- Camera ----
   const camera = useRef<MapCamera>(null);
+  const fullscreen = useMapFullscreen();
+  // Leaving the Map (or My Verses) must give the tab bar back.
+  useEffect(() => () => setMapFullscreen(false), []);
+  const windowHeight = useWindowDimensions().height;
   const [showLabels, setShowLabels] = useState(true);
   const [chip, setChip] = useState(WHOLE);
   const [sized, setSized] = useState(false);
@@ -207,6 +212,16 @@ export default function ConstellationMap({
     camera.current?.frame(viewBounds(result), insets());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shownConstellations]);
+
+  // The map's room changes with full screen: look at the same constellation again once it has resized.
+  const fullscreenBefore = useRef(fullscreen);
+  useEffect(() => {
+    if (fullscreenBefore.current === fullscreen) return;
+    fullscreenBefore.current = fullscreen;
+    const t = setTimeout(() => camera.current?.frame(viewBounds(result, chip === WHOLE ? undefined : chip), insets()), 150);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreen]);
 
   const pickChip = (id: string) => {
     if (id === SHOW_HIDE) {
@@ -262,8 +277,10 @@ export default function ConstellationMap({
 
   // ---- The card ----
   const titleOf = (constellationId?: string) => CONSTELLATIONS.find((c) => c.id === constellationId)?.title;
+  // A card never takes more than the bottom half of the screen (or the map, if that's smaller); past that it scrolls.
+  const cardMax = Math.max(120, Math.min(mapHeight ? mapHeight - space(20) : windowHeight, Math.round(windowHeight * 0.5)));
   const onCardLayout = (full: number) => {
-    const h = mapHeight ? Math.min(full, mapHeight - 20) : full;
+    const h = Math.min(full, cardMax);
     cardHeight.current = h;
     if (selectedStar && positions[selectedStar]) camera.current?.reveal([positions[selectedStar], ...ghosts.map((g) => g.p)], h + 12);
   };
@@ -325,7 +342,7 @@ export default function ConstellationMap({
           constellationTitle={selection.lineKind === 'curated' ? titleOf(selection.id) : undefined}
           queue={queue}
           onClose={() => setSelection(null)}
-          onLayout={(h) => (cardHeight.current = h)}
+          onLayout={(h) => (cardHeight.current = Math.min(h, cardMax))}
           actions={actions}
           onSaveLabel={(text) => {
             if (link) void relabelVerseLink(link.id, text);
@@ -397,13 +414,23 @@ export default function ConstellationMap({
         </MapCanvas>
 
         {/* Zoom without pinching. */}
-        <View style={{ position: 'absolute', top: space(10), right: space(10), gap: space(8) }}>
+        <View style={{ position: 'absolute', top: space(10), right: space(10) }}>
+          <AppIconButton
+            Icon={fullscreen ? Minimize2 : Maximize2}
+            variant="outline"
+            diameter={40}
+            className="bg-surface"
+            accessibilityLabel={fullscreen ? 'Leave full screen' : 'Full screen'}
+            onPress={() => setMapFullscreen(!fullscreen)}
+          />
+        </View>
+        <View style={{ position: 'absolute', top: space(10) + 40 + space(18), right: space(10), gap: space(8) }}>
           <AppIconButton Icon={Plus} variant="outline" diameter={40} className="bg-surface" accessibilityLabel="Zoom in" onPress={() => camera.current?.zoomBy(1.5)} />
           <AppIconButton Icon={Minus} variant="outline" diameter={40} className="bg-surface" accessibilityLabel="Zoom out" onPress={() => camera.current?.zoomBy(1 / 1.5)} />
         </View>
 
         {(card || empty) && (
-          <View style={{ position: 'absolute', left: space(10), right: space(10), bottom: space(10), maxHeight: mapHeight ? mapHeight - space(20) : undefined }}>
+          <View style={{ position: 'absolute', left: space(10), right: space(10), bottom: space(10), maxHeight: cardMax }}>
             {card ? (
               // Never taller than the map: a long echo scrolls inside its card.
               <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>

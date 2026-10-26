@@ -12,6 +12,8 @@ import { PRIORITY_LABELS } from '../components/QueueSources';
 import { CompleteChips, StageDot, StageStrip, VerseStageRow, stageCaption } from '../components/VerseStages';
 import VersesByBook from '../components/VersesByBook';
 import ConstellationMap from '../components/map/ConstellationMap';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useMapFullscreen } from '../lib/mapFullscreen';
 import { writtenCount } from '../lib/takeaways';
 import { ladderPosition, landmarkText, versesHeld } from '../lib/milestones';
 import { reorderQueueGroups } from '../lib/queueReorder';
@@ -115,6 +117,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
   const palette = useThemeColors();
   const scale = useFontScale();
+  const insets = useSafeAreaInsets();
+  const mapFullscreen = useMapFullscreen();
   const [view, setViewState] = useState<VersesView>(lastView);
   const setView = (v: VersesView) => {
     lastView = v;
@@ -547,13 +551,23 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   if (view === 'map' && total > 0) {
     return (
       <FadeInView style={{ flex: 1 }}>
-        <View className="flex-1 bg-canvas" style={{ paddingHorizontal: space(20), paddingTop: space(20), paddingBottom: space(8), gap: space(14) }}>
-          <ScreenHeader
-            title="My Verses"
-            subtitle={summary}
-            actions={<AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => go('addVerses')} />}
-          />
-          {viewSwitch}
+        <View
+          className="flex-1 bg-canvas"
+          style={
+            mapFullscreen
+              ? { paddingHorizontal: space(8), paddingTop: space(8), paddingBottom: Math.max(insets.bottom, space(8)), gap: space(8) }
+              : { paddingHorizontal: space(20), paddingTop: space(20), paddingBottom: space(8), gap: space(14) }
+          }
+        >
+          {/* Fullscreen hides these but keeps the map where it is in the tree, so it isn't rebuilt. */}
+          {!mapFullscreen && (
+            <ScreenHeader
+              title="My Verses"
+              subtitle={summary}
+              actions={<AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => go('addVerses')} />}
+            />
+          )}
+          {!mapFullscreen && viewSwitch}
           <ConstellationMap
             queue={memoryQueue}
             verseLinks={verseLinks}

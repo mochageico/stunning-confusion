@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { ChevronLeft, ChevronRight, Pencil, X } from 'lucide-react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { ChevronLeft, Pencil, X } from 'lucide-react-native';
 
 import type { QueueItem, StarRef } from '../../types';
 import type { VersePageRef } from '../../state/useAppState';
@@ -19,6 +19,13 @@ import type { EchoView } from './mapModel';
 // The card along the bottom of the map: the tapped star, line or echo.
 // One at a time; the map stays usable above it.
 // ============================================================================
+
+/** How the other end of an echo relates to the tapped star, in a few words. */
+function echoRole(e: EchoView, here: StarRef): string {
+  const hereIsNt = e.echo.nt.book === here.book && e.echo.nt.chapter === here.chapter && e.echo.nt.start <= here.end && e.echo.nt.end >= here.start;
+  const verb = e.echo.kind === 'quote' ? 'quotes' : 'echoes';
+  return hereIsNt ? `This ${verb} it` : `It ${verb} this`;
+}
 
 /** The verses of this star the user holds, as a verse page ref (furthest translation wins ties). */
 export function heldPage(ref: StarRef, queue: QueueItem[]): VersePageRef | null {
@@ -114,8 +121,6 @@ export function StarCard({
   compact?: boolean;
 }) {
   const space = useScaledSpace();
-  const scale = useFontScale();
-  const palette = useThemeColors();
   const page = heldPage(refr, queue);
   const text = page && !compact ? heldText(refr, queue) : '';
   return (
@@ -129,24 +134,34 @@ export function StarCard({
           {text}
         </AppText>
       ) : null}
-      {echoes.map((e, i) => (
-        <Pressable
-          key={i}
-          onPress={() => onCompare(i)}
-          accessibilityRole="button"
-          accessibilityHint="Shows both passages"
-          className="flex-row items-center border-t border-hairline active:opacity-60"
-          style={{ paddingTop: space(8), gap: space(6), minHeight: 44 }}
-        >
-          <AppText variant="label" className="font-sans text-ink flex-1">
-            {e.sentence}
+      {echoes.length > 0 ? (
+        <View style={{ gap: space(6) }}>
+          <AppText variant="caption" className="font-sans text-ink-2">
+            {echoes.length === 1 ? 'Quotes and echoes' : `Quotes and echoes (${echoes.length})`}
           </AppText>
-          <AppText variant="label" className="font-sans font-semibold text-accent">
-            Compare
-          </AppText>
-          <ChevronRight size={Math.round(16 * scale)} color={palette.accent} />
-        </Pressable>
-      ))}
+          {/* Sideways, so a verse with a lot of ties (Isaiah 53) takes one short row, not the whole card. */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled contentContainerStyle={{ gap: space(8) }}>
+            {echoes.map((e, i) => (
+              <Pressable
+                key={i}
+                onPress={() => onCompare(i)}
+                accessibilityRole="button"
+                accessibilityLabel={e.sentence}
+                accessibilityHint="Shows both passages"
+                className="bg-surface-2 border border-line rounded-btn active:opacity-60"
+                style={{ paddingHorizontal: space(12), paddingVertical: space(8), minHeight: 44, minWidth: space(132), gap: space(2) }}
+              >
+                <AppText variant="label" className="font-sans font-bold text-ink" numberOfLines={1}>
+                  {starLabel(e.there)}
+                </AppText>
+                <AppText variant="caption" className="font-sans text-ink-2" numberOfLines={1}>
+                  {echoRole(e, refr)}
+                </AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
       <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
         {page ? (
           <AppButton size="md" variant="primary" label="Open verse" onPress={() => actions.onOpenVerse(page)} />
