@@ -40,6 +40,10 @@ import { logger } from 'firebase-functions';
 
 const apiBibleKey = defineSecret('API_BIBLE_KEY');
 
+// The app's data lives in this named database, not (default) -- see index.ts.
+// getFirestore() without it hit (default) and every call failed NOT_FOUND.
+const FIRESTORE_DATABASE_ID = 'ai-studio-da1c3045-26bb-470c-883c-0b120417bcda';
+
 /**
  * Calls allowed per calendar month.
  *
@@ -198,7 +202,7 @@ export const fetchApiBibleChapter = onCall(
       throw new HttpsError('invalid-argument', 'apiBibleId, bookId and a positive integer chapter are required.');
     }
 
-    const db = getFirestore();
+    const db = getFirestore(FIRESTORE_DATABASE_ID);
     const cacheRef = db.collection(CACHE_COLLECTION).doc(cacheDocId(apiBibleId, bookId, chapter));
 
     // ── 1. Shared cache ──────────────────────────────────────────────────────
@@ -301,7 +305,7 @@ export const fetchApiBibleChapter = onCall(
 export const purgeApiBibleCache = onSchedule(
   { region: 'us-east1', schedule: 'every 24 hours', timeoutSeconds: 540 },
   async () => {
-    const db = getFirestore();
+    const db = getFirestore(FIRESTORE_DATABASE_ID);
     const cutoff = Timestamp.fromMillis(Date.now() - CACHE_TTL_MS);
     let deleted = 0;
 
