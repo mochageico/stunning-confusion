@@ -235,12 +235,14 @@ export function useAccount({
       // replies can only be listed by a member). Best effort: it never stops
       // the account itself from being deleted.
       await removeAllSharedTakeaways().catch((err) => console.error('Failed to remove shared takeaways:', err));
-      const [queueSnap, versesSnap, recordingsSnap, sectionsSnap, takeawaysSnap, emailLookupSnap] = await Promise.all([
+      const [queueSnap, versesSnap, recordingsSnap, sectionsSnap, takeawaysSnap, verseLinksSnap, mapLayoutSnap, emailLookupSnap] = await Promise.all([
         getDocs(collection(db, 'users', uid, 'memoryQueue')),
         getDocs(collection(db, 'users', uid, 'verses')),
         getDocs(collection(db, 'users', uid, 'recordings')),
         getDocs(collection(db, 'users', uid, 'chapterSections')),
         getDocs(collection(db, 'users', uid, 'takeaways')),
+        getDocs(collection(db, 'users', uid, 'verseLinks')),
+        getDocs(collection(db, 'users', uid, 'mapLayout')),
         myEmail && !myEmail.includes('/') ? getDoc(doc(db, 'emailLookup', myEmail)) : Promise.resolve(null),
       ]);
 
@@ -250,6 +252,8 @@ export function useAccount({
       recordingsSnap.docs.forEach((d) => batch.delete(d.ref));
       sectionsSnap.docs.forEach((d) => batch.delete(d.ref));
       takeawaysSnap.docs.forEach((d) => batch.delete(d.ref));
+      verseLinksSnap.docs.forEach((d) => batch.delete(d.ref));
+      mapLayoutSnap.docs.forEach((d) => batch.delete(d.ref));
       batch.delete(doc(db, 'memoryPlans', uid));
       batch.delete(sharedQueueDocRef(uid));
       // Only if it's really ours -- the rule reads the existing doc's uid,

@@ -182,6 +182,16 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
+    // Constellation map (CONSTELLATION_PLAN.md): the user's own links between
+    // verses (and their labels on curated lines), and the saved star positions
+    // (one doc, 'main'). Owner-only; nothing here is shown to anyone else.
+    match /users/{userId}/verseLinks/{linkId} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/mapLayout/{layoutId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // Denormalized, read-only-to-others copy of a recording once its owner
     // sets sharedVisibility to 'circle' or 'public'. Firestore rules can't
     // cheaply check "is this reader a co-member of ANY of the owner's

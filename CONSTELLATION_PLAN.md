@@ -8,7 +8,7 @@ Each stage is one session. Run them in order unless a stage says otherwise.
 Stage by name when committing (never `git add -A`; other sessions edit this folder).
 After each stage, update the **Progress** line below and note anything that changed.
 
-**Progress:** not started.
+**Progress:** stage 1 done 2026-10-25 (types, lib/constellations.ts + check, useVerseLinks/useMapLayout, owner-only rules for verseLinks + mapLayout (written, NOT deployed), delete-account list, placeholder constellation). Hooks are not yet called from useAppState/loadUserData; that wiring comes with stage 4. Changes: `VerseLink` gained `curated?: string`; `echoesFor(ref, echoes)` takes the echo list as an argument; "held" = past Waiting; "learned" = every verse held and Daily or later. Next: stage 3.
 
 ---
 

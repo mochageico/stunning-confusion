@@ -798,3 +798,52 @@ export interface TakeawayReply {
   /** ISO. */
   createdAt: string;
 }
+
+// ============================================================================
+// CONSTELLATION MAP (CONSTELLATION_PLAN.md)
+// ============================================================================
+
+/** A star: a run of verses in one chapter. Key = book|chapter|start-end (starKey in lib/constellations.ts). */
+export interface StarRef {
+  book: string;
+  chapter: number;
+  start: number;
+  end: number;
+}
+
+/**
+ * A line the user made (or labeled) between two stars, at users/{uid}/verseLinks/{id}.
+ * `curated` is set when the line belongs to a curated constellation: the doc then
+ * only carries the user's label for it, so labels live in one place.
+ */
+export interface VerseLink {
+  id: string;
+  a: StarRef;
+  b: StarRef;
+  label?: string;
+  curated?: string;
+  createdAt: number;
+}
+
+/** Saved star positions, one doc at users/{uid}/mapLayout/main. */
+export interface MapLayout {
+  positions: Record<string, [number, number]>;
+  version: number;
+}
+
+/** A shipped constellation (src/content/constellations.ts). Line direction = "builds on". */
+export interface Constellation {
+  id: string;
+  title: string;
+  description: string;
+  guide: string;
+  stars: { id: string; ref: StarRef; x: number; y: number }[];
+  lines: { from: string; to: string }[];
+}
+
+/** An NT passage quoting or echoing an OT one (src/content/echoes.json). */
+export interface Echo {
+  nt: StarRef;
+  ot: StarRef;
+  kind: 'quote' | 'allusion';
+}

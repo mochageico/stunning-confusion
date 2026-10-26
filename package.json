@@ -75,6 +75,7 @@
     "check:mix": "node scripts/run-mix-check.cjs",
     "check:sections": "node scripts/run-sections-check.cjs",
     "check:takeaways": "node scripts/run-takeaways-check.cjs",
+    "check:constellations": "node scripts/run-constellations-check.cjs",
     "check:milestones": "node scripts/run-milestones-check.cjs",
     "check:circletotals": "node scripts/run-circletotals-check.cjs",
     "check:takeawaysharing": "node scripts/run-takeawaysharing-check.cjs",
