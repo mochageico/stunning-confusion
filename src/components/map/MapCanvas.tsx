@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import Svg, { G } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -7,7 +7,7 @@ import Animated, {
   clamp,
   Easing,
   runOnJS,
-  useAnimatedProps,
+  useAnimatedStyle,
   useAnimatedReaction,
   useSharedValue,
   withTiming,
@@ -18,17 +18,18 @@ import type { Rect } from '../../lib/mapLayout';
 // ============================================================================
 // The map's camera: pinch, pan and tap over an SVG drawing.
 //
-// The SVG is only as big as the box on screen. What moves is one group
-// inside it, whose transform (screen = t + zoom * map) is set on the UI
-// thread every frame, so the drawing stays sharp at any zoom and a big map
-// never becomes one huge bitmap. Native SVG groups take that transform as a
-// `matrix` prop; on the web it's the `transform` attribute.
+// The drawing is painted once at a "baked" camera, a little bigger than the
+// box so a short pan doesn't show its edge. While a finger moves or the camera
+// slides, only the finished picture is moved and scaled (a native view
+// transform, which costs the phone almost nothing); repainting every star and
+// dotted line each frame is what made the map stutter. When the camera comes
+// to rest, the drawing is painted again at the new camera, sharp. Native SVG
+// groups take the baked transform as a `matrix` prop; on the web it's `transform`.
 //
 // Taps are worked out here only as far as "this map point, at this zoom";
 // what was hit is mapModel.hitTest's job.
 // ============================================================================
 
-const AnimatedG = Animated.createAnimatedComponent(G);
 const IS_WEB = Platform.OS === 'web';
 
 export const MAX_ZOOM = 3;
@@ -39,6 +40,8 @@ const FRAME_MAX_ZOOM = 1.6;
 /** At least this much of the map stays on screen, so it can't be flung away and lost. */
 const KEEP_ON_SCREEN = 80;
 const FRAME_MS = 480;
+/** How much extra drawing is painted past each edge of the box, as a share of the box. */
+const OVERSCAN = 0.4;
 
 export interface MapCamera {
   /** Animates the view to show this map rectangle, clear of the given screen insets. */
@@ -66,6 +69,9 @@ interface Props {
 export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bounds, onTap, onSize, onLabelsChange, children }, ref) {
   // layout-ok: measured size, not a style
   const [box, setBox] = useState({ w: 0, h: 0 });
+  // The camera the drawing was last painted at.
+  // layout-ok: camera state, not a style
+  const [baked, setBaked] = useState({ z: 1, tx: 0, ty: 0 });
 
   const zoom = useSharedValue(1);
   const tx = useSharedValue(0);
@@ -93,6 +99,25 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
   const ty0 = useSharedValue(0);
   const fx0 = useSharedValue(0);
   const fy0 = useSharedValue(0);
+  // The baked camera, mirrored for the UI thread once the repaint is committed.
+  const bz = useSharedValue(1);
+  const btx = useSharedValue(0);
+  const bty = useSharedValue(0);
+  useLayoutEffect(() => {
+    bz.value = baked.z;
+    btx.value = baked.tx;
+    bty.value = baked.ty;
+  }, [baked]);
+
+  const bake = (z: number, x: number, y: number) => {
+    setBaked((b) => (b.z === z && b.tx === x && b.ty === y ? b : { z, tx: x, ty: y }));
+  };
+  /** Repaints at the camera as it is now, once nothing is moving it. */
+  const settle = () => {
+    'worklet';
+    if (touches.value > 0) return;
+    runOnJS(bake)(zoom.value, tx.value, ty.value);
+  };
 
   /** Small enough to see the whole map with room around it, never above 1. */
   const minZoom = () => {
@@ -156,6 +181,7 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
     })
     .onFinalize(() => {
       touches.value = Math.max(0, touches.value - 1);
+      settle();
     });
 
   const pan = Gesture.Pan()
@@ -175,6 +201,7 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
     })
     .onFinalize(() => {
       touches.value = Math.max(0, touches.value - 1);
+      settle();
     });
 
   const tap = Gesture.Tap()
@@ -186,12 +213,28 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
 
   const gesture = Gesture.Race(Gesture.Simultaneous(pinch, pan), tap);
 
-  const animatedProps = useAnimatedProps(() => {
-    const z = zoom.value;
-    return IS_WEB
-      ? ({ transform: `matrix(${z} 0 0 ${z} ${tx.value} ${ty.value})` } as object)
-      : ({ matrix: [z, 0, 0, z, tx.value, ty.value] } as object);
+  // Moves the painted picture from the baked camera to the live one.
+  // Screen point = tx + zoom * map; the picture holds it at btx + bz * map,
+  // shifted by the overscan margin, and RN scales about the view's center.
+  const ox = box.w * OVERSCAN;
+  const oy = box.h * OVERSCAN;
+  const pictureStyle = useAnimatedStyle(() => {
+    const s = zoom.value / bz.value;
+    const mx = boxW.value * OVERSCAN;
+    const my = boxH.value * OVERSCAN;
+    const cx = boxW.value / 2 + mx;
+    const cy = boxH.value / 2 + my;
+    return {
+      transform: [
+        { translateX: tx.value + mx - cx - s * (mx + btx.value - cx) },
+        { translateY: ty.value + my - cy - s * (my + bty.value - cy) },
+        { scale: s },
+      ],
+    };
   });
+  const bakedMatrix = IS_WEB
+    ? { transform: `matrix(${baked.z} 0 0 ${baked.z} ${baked.tx + ox} ${baked.ty + oy})` }
+    : { matrix: [baked.z, 0, 0, baked.z, baked.tx + ox, baked.ty + oy] };
 
   useAnimatedReaction(
     () => zoom.value >= LABEL_ZOOM,
@@ -201,6 +244,10 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
   );
 
   const timing = { duration: FRAME_MS, easing: Easing.out(Easing.cubic) };
+  const done = (finished?: boolean) => {
+    'worklet';
+    if (finished) settle();
+  };
 
   useImperativeHandle(ref, () => ({
     frame(rect, insets = {}, instant = false) {
@@ -218,8 +265,9 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
         zoom.value = z;
         tx.value = ntx;
         ty.value = nty;
+        bake(z, ntx, nty);
       } else {
-        zoom.value = withTiming(z, timing);
+        zoom.value = withTiming(z, timing, done);
         tx.value = withTiming(ntx, timing);
         ty.value = withTiming(nty, timing);
       }
@@ -245,7 +293,7 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
       const fit = Math.min((fitRight - fitLeft) / spanX, (bottom - top) / spanY);
       if (fit < z && points.length > 1) {
         const nz = Math.max(fit, minZoom());
-        zoom.value = withTiming(nz, timing);
+        zoom.value = withTiming(nz, timing, done);
         tx.value = withTiming((fitLeft + fitRight) / 2 - ((Math.min(...mxs) + Math.max(...mxs)) / 2) * nz, timing);
         ty.value = withTiming((top + bottom) / 2 - ((Math.min(...mys) + Math.max(...mys)) / 2) * nz, timing);
         onLabelsChange?.(nz >= LABEL_ZOOM);
@@ -264,8 +312,8 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
       const xs = points.map((p) => tx.value + p[0] * z);
       const dy = shift(Math.min(...ys), Math.max(...ys), top, bottom, ys[0]);
       const dx = shift(Math.min(...xs), Math.max(...xs), left, right, xs[0]);
-      if (dy) ty.value = withTiming(ty.value + dy, timing);
-      if (dx) tx.value = withTiming(tx.value + dx, timing);
+      if (dy) ty.value = withTiming(ty.value + dy, timing, dx ? undefined : done);
+      if (dx) tx.value = withTiming(tx.value + dx, timing, done);
     },
     zoomBy(factor) {
       const z = clamp(zoom.value * factor, minZoom(), MAX_ZOOM);
@@ -273,7 +321,7 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
       const cy = boxH.value / 2;
       const mx = (cx - tx.value) / zoom.value;
       const my = (cy - ty.value) / zoom.value;
-      zoom.value = withTiming(z, timing);
+      zoom.value = withTiming(z, timing, done);
       tx.value = withTiming(clampT(cx - mx * z, z, bx.value, bw.value, boxW.value), timing);
       ty.value = withTiming(clampT(cy - my * z, z, by.value, bh.value, boxH.value), timing);
       onLabelsChange?.(z >= LABEL_ZOOM);
@@ -294,9 +342,11 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
         }}
       >
         {box.w > 0 && (
-          <Svg width={box.w} height={box.h}>
-            <AnimatedG animatedProps={animatedProps}>{children}</AnimatedG>
-          </Svg>
+          <Animated.View style={[{ position: 'absolute', left: -ox, top: -oy, width: box.w + 2 * ox, height: box.h + 2 * oy }, pictureStyle]}>
+            <Svg width={box.w + 2 * ox} height={box.h + 2 * oy}>
+              <G {...(bakedMatrix as object)}>{children}</G>
+            </Svg>
+          </Animated.View>
         )}
       </View>
     </GestureDetector>
