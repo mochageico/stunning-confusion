@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // The point is that no hint stays on screen forever. "Show tips again"
 // (resetTips) is the only way back, so nothing is lost by dismissing one.
 
-export type TipId = 'practice' | 'reviewCheck' | 'chapterPage' | 'versesTab';
+export type TipId = 'practice' | 'reviewCheck' | 'chapterPage' | 'versesTab' | 'constellationMap';
 
 const TIPS_KEY = 'tips:seen:v1';
 

@@ -13,7 +13,7 @@
 // It is inert in production builds whatever the flags say (__DEV__ gate).
 //
 // Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
-// activePlan, addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, verseRoad, versePage,
+// activePlan, map (My Verses' Map view; see MAP_SPECS), addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, verseRoad, versePage,
 // referenceDrill, threadDrill, guided, sections, outline, sectionOrder,
 // whichSection, teachIt, mixedReview, takeaways, takeawayAsk,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
@@ -104,8 +104,14 @@ const TEXT: Record<string, string> = {
   'John 1:1': 'In the beginning was the Word, and the Word was with God, and the Word was God.',
   'John 1:2': 'He was with God in the beginning.',
   'John 1:3': 'Through Him all things were made, and without Him nothing was made that has been made.',
+  'Matthew 4:4': 'But Jesus answered, “It is written: ‘Man shall not live on bread alone, but on every word that comes from the mouth of God.’”',
+  'Matthew 11:28': 'Come to Me, all you who are weary and burdened, and I will give you rest.',
+  'Matthew 11:29': 'Take My yoke upon you and learn from Me; for I am gentle and humble in heart, and you will find rest for your souls.',
+  'Matthew 11:30': 'For My yoke is easy and My burden is light.',
+  'Romans 1:17': 'For the gospel reveals the righteousness of God that comes by faith from start to finish, just as it is written: “The righteous will live by faith.”',
+  'Habakkuk 2:4': 'Look at the proud one; his soul is not upright—but the righteous will live by faith.',
 };
-const BOOK_ID: Record<string, string> = { Romans: 'ROM', Philippians: 'PHP', Psalms: 'PSA', John: 'JHN' };
+const BOOK_ID: Record<string, string> = { Romans: 'ROM', Philippians: 'PHP', Psalms: 'PSA', John: 'JHN', Matthew: 'MAT', Habakkuk: 'HAB' };
 
 type Spec = {
   ref: string;
@@ -158,8 +164,8 @@ function demoLogs(s: (typeof SPECS)[number]) {
   return logs.filter((l) => new Date(l.at).getTime() < now);
 }
 
-function buildQueue() {
-  return SPECS.map((s, i) => {
+function buildQueue(specs: Spec[] = SPECS) {
+  return specs.map((s, i) => {
     const [book, cv] = [s.ref.slice(0, s.ref.lastIndexOf(' ')), s.ref.slice(s.ref.lastIndexOf(' ') + 1)];
     const [chapter, verse] = cv.split(':').map(Number);
     return {
@@ -185,6 +191,36 @@ function buildQueue() {
       reviewsToday: 0,
     };
   });
+}
+
+// ?s=map: the constellation map. The usual queue plus a few verses the map
+// needs: Matthew 11:28-30 (lighting a curated star, so 1 Peter 5:7 after it is
+// suggested), Matthew 4:4 (its echo of Deuteronomy 8:3 shows as a ghost when
+// tapped) and Romans 1:17 + Habakkuk 2:4 (an echo held at both ends, so its
+// dotted line stays). nolinks=1 shows the empty state instead.
+const MAP_SPECS: Spec[] = [
+  ...SPECS,
+  { ref: 'Matthew 11:28', status: 'reviewing', phase: 'daily', due: 1, touches: [1, 2, 3], streak: 6 },
+  { ref: 'Matthew 11:29', status: 'reviewing', phase: 'daily', due: 1, touches: [1, 2, 3], streak: 6 },
+  { ref: 'Matthew 11:30', status: 'reviewing', phase: 'daily', due: 1, touches: [1, 2, 3], streak: 6 },
+  { ref: 'Matthew 4:4', status: 'reviewing', phase: 'daily', due: 0, touches: [1, 2], streak: 5 },
+  { ref: 'Romans 1:17', status: 'reviewing', phase: 'weekly', due: 2, touches: [5, 12], streak: 4 },
+  { ref: 'Habakkuk 2:4', status: 'learning', phase: 'none', touches: [0] },
+];
+
+/** The demo's own lines between verses (on screen only: no signed-in user, so nothing is written). */
+function seedMapLinks(real: AppState) {
+  const r = (book: string, chapter: number, start: number, end = start) => ({ book, chapter, start, end });
+  const pairs: [ReturnType<typeof r>, ReturnType<typeof r>, string?][] = [
+    [r('John', 1, 1, 3), r('John', 3, 16), 'The Word, given'],
+    [r('John', 3, 16), r('Romans', 8, 1, 2)],
+    [r('Romans', 8, 1, 2), r('Romans', 1, 17)],
+    [r('Matthew', 4, 4), r('Psalms', 119, 11)],
+    [r('Psalms', 119, 11), r('Habakkuk', 2, 4)],
+    // Philippians 4:6-7 is a curated star: this pulls Romans 8:28-29 in beside Rest and trust.
+    [r('Romans', 8, 28, 29), r('Philippians', 4, 6, 7)],
+  ];
+  for (const [a, b, label] of pairs) void real.addVerseLink(a, b, label ? { label } : {});
 }
 
 // big=1: a 700-verse list, the size of a long-time user's, for timing the
@@ -542,7 +578,7 @@ export function useDemoState(real: AppState): AppState {
     if (!DEMO_ENABLED || booted.current || real.loadingAuth) return;
     booted.current = true;
     if (params.get('big') === '1') real.setMemoryQueue(buildBigQueue() as any);
-    else if (params.get('empty') !== '1') real.setMemoryQueue((s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : buildQueue()) as any);
+    else if (params.get('empty') !== '1') real.setMemoryQueue((s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : s === 'map' ? buildQueue(MAP_SPECS) : buildQueue()) as any);
     real.setUserRecordings(recordings as any);
     // The Record tab starts with no passage until one is chosen; the demo
     // picks Romans 8 unless `nopassage=1` asks for the empty state.
@@ -653,6 +689,11 @@ export function useDemoState(real: AppState): AppState {
       real.openMixedReview();
       // start=1 goes straight into the session.
       if (params.get('start') === '1') tapWhenShown('Start');
+    }
+    else if (s === 'map') {
+      if (params.get('nolinks') !== '1') seedMapLinks(real);
+      real.navigateTo('activePlan');
+      tapWhenShown('Map', 'radio');
     }
     else if (s === 'planDesigner') real.openActivePlanDesigner();
     else if (s === 'guided') real.openGuided('BSB|Psalms|23|1');

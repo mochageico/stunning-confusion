@@ -59,6 +59,8 @@ import { useLocalPrefs } from './useLocalPrefs';
 import { useChapterPhotos } from './useChapterPhotos';
 import { useChapterSections } from './useChapterSections';
 import { useTakeaways } from './useTakeaways';
+import { useVerseLinks } from './useVerseLinks';
+import { useMapLayout } from './useMapLayout';
 import { useCircleTakeaways } from './useCircleTakeaways';
 import { useCircleTotals } from './useCircleTotals';
 import { isStop, nextAsk, sectionStatuses, takeawayId } from '../lib/takeaways';
@@ -345,6 +347,10 @@ export function useAppState() {
     unshareFromCircle,
     removeAllSharedTakeaways,
   } = useTakeaways({ user });
+  // The constellation map: the user's own lines between verses, and where the
+  // stars settled (see useVerseLinks / useMapLayout, CONSTELLATION_PLAN.md).
+  const { verseLinks, loadVerseLinks, addVerseLink, relabelVerseLink, deleteVerseLink } = useVerseLinks({ user });
+  const { mapLayout, loadMapLayout, saveMapLayout } = useMapLayout({ user });
   // Takeaways shared with the user's circles, and their replies (see useCircleTakeaways).
   const {
     circleTakeaways,
@@ -1385,6 +1391,8 @@ export function useAppState() {
         loadChapterPhotos(currentUser.uid),
         loadChapterSections(currentUser.uid),
         loadTakeaways(currentUser.uid),
+        loadVerseLinks(currentUser.uid),
+        loadMapLayout(currentUser.uid),
       ]);
 
       triggerToast('Cloud profile and scripture data synchronized!');
@@ -2955,6 +2963,12 @@ export function useAppState() {
     loadCircleStats,
     seedCircleStats,
     buildVerseTimestamps,
+    verseLinks,
+    addVerseLink,
+    relabelVerseLink,
+    deleteVerseLink,
+    mapLayout,
+    saveMapLayout,
   };
 }
 

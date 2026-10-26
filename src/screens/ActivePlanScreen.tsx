@@ -11,6 +11,7 @@ import { EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, Segmente
 import { PRIORITY_LABELS } from '../components/QueueSources';
 import { CompleteChips, StageDot, StageStrip, VerseStageRow, stageCaption } from '../components/VerseStages';
 import VersesByBook from '../components/VersesByBook';
+import ConstellationMap from '../components/map/ConstellationMap';
 import { writtenCount } from '../lib/takeaways';
 import { ladderPosition, landmarkText, versesHeld } from '../lib/milestones';
 import { reorderQueueGroups } from '../lib/queueReorder';
@@ -64,7 +65,7 @@ function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
   return groups;
 }
 
-type VersesView = 'stage' | 'book';
+type VersesView = 'stage' | 'book' | 'map';
 const EMPTY_STARTS = new Map<string, Date>();
 // Remembered for the session, so coming back from a verse page lands on the
 // view you left. Not saved to the device: By stage is the right place to open.
@@ -99,6 +100,10 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     sabbathDay,
     pausedAt,
     pausedUntil,
+    verseLinks,
+    mapLayout,
+    saveMapLayout,
+    selectedTranslationId,
   } = state;
 
   const space = useScaledSpace();
@@ -438,7 +443,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   // list) is what made opening this tab slow. Waiting (with its drag list)
   // and Complete (its chips) stay one item each.
   const items: ListItem[] = useMemo(() => {
-    if (!listsReady || total === 0) return [];
+    if (!listsReady || total === 0 || view === 'map') return [];
     if (view === 'book') return [{ kind: 'book', key: 'book' }];
     const out: ListItem[] = [{ kind: 'waiting', key: 'waiting', stage: 'waiting' }];
     for (const stage of ['learning', 'daily', 'weekly', 'monthly'] as const) {
@@ -518,6 +523,47 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     return <View style={{ paddingTop: top }}>{body}</View>;
   };
 
+  const viewSwitch = (
+    <SegmentedControl
+      accessibilityLabel="Show verses"
+      options={[
+        { id: 'stage', label: 'By stage' },
+        { id: 'book', label: 'By book' },
+        { id: 'map', label: 'Map' },
+      ]}
+      value={view}
+      onChange={setView}
+    />
+  );
+
+  // The map pans and zooms, so it can't sit inside the scrolling list: it
+  // gets the screen below the switch to itself (components/map).
+  if (view === 'map' && total > 0) {
+    return (
+      <FadeInView style={{ flex: 1 }}>
+        <View className="flex-1 bg-canvas" style={{ paddingHorizontal: space(20), paddingTop: space(20), paddingBottom: space(8), gap: space(14) }}>
+          <ScreenHeader
+            title="My Verses"
+            subtitle={summary}
+            actions={<AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => go('addVerses')} />}
+          />
+          {viewSwitch}
+          <ConstellationMap
+            queue={memoryQueue}
+            verseLinks={verseLinks}
+            mapLayout={mapLayout}
+            saveMapLayout={saveMapLayout}
+            translationId={selectedTranslationId}
+            actions={{
+              onOpenVerse: (page) => openVersePage(page),
+              onAddVerses: (ref) => go('chapterLanding', ref.book, ref.chapter, { keepBack: true }),
+            }}
+          />
+        </View>
+      </FadeInView>
+    );
+  }
+
   return (
     <FadeInView style={{ flex: 1 }}>
       <FlatList
@@ -567,15 +613,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                 {landmark}
               </AppText>
             ) : null}
-            <SegmentedControl
-              accessibilityLabel="Show verses"
-              options={[
-                { id: 'stage', label: 'By stage' },
-                { id: 'book', label: 'By book' },
-              ]}
-              value={view}
-              onChange={setView}
-            />
+            {viewSwitch}
 
             {/* Every stage at a glance; tap one to jump to it. The switch
                 redraws the same strip for a date ahead, with the change from
