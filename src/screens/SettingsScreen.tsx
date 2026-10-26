@@ -888,7 +888,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     // made the old single entry unclear about whether tapping it would change
     // anything.
     help: (
-      <GroupedList>
+      <GroupedList footer="Quote and echo connections: UBS Parallel Passage Database, © 2023 United Bible Societies (CC BY-SA 4.0).">
         <ListRow Icon={Compass} title="Take the tour" onPress={() => setShowTour(true)} />
         <ListRow Icon={CircleHelp} title="Common questions" onPress={() => setShowTour('questions')} />
         <ListRow

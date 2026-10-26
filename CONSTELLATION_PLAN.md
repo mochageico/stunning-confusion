@@ -8,7 +8,7 @@ Each stage is one session. Run them in order unless a stage says otherwise.
 Stage by name when committing (never `git add -A`; other sessions edit this folder).
 After each stage, update the **Progress** line below and note anything that changed.
 
-**Progress:** stage 1 done 2026-10-25 (types, lib/constellations.ts + check, useVerseLinks/useMapLayout, owner-only rules for verseLinks + mapLayout (written, NOT deployed), delete-account list, placeholder constellation). Hooks are not yet called from useAppState/loadUserData; that wiring comes with stage 4. Changes: `VerseLink` gained `curated?: string`; `echoesFor(ref, echoes)` takes the echo list as an argument; "held" = past Waiting; "learned" = every verse held and Daily or later. Next: stage 3.
+**Progress:** stage 1 done 2026-10-25 (types, lib/constellations.ts + check, useVerseLinks/useMapLayout, owner-only rules for verseLinks + mapLayout (written, NOT deployed), delete-account list, placeholder constellation). Hooks are not yet called from useAppState/loadUserData; that wiring comes with stage 4. Changes: `VerseLink` gained `curated?: string`; `echoesFor(ref, echoes)` takes the echo list as an argument; "held" = past Waiting; "learned" = every verse held and Daily or later. Next: stage 3. Stage 2 done 2026-10-25: `scripts/build-echoes.cjs` → `src/content/echoes.json` (421 NT→OT pairs, 246 quote / 175 allusion; refs only, English verse numbering, UBS Hebrew numbers converted; `kind` is our heuristic from UBS word-overlap digits; UBS has no 1 Pet 2:24 / Isa 53:5 entry), `DATA_LICENSES.md`, credit in Settings → Help and tour.
 
 ---
 
@@ -50,8 +50,8 @@ fade in only when you tap the star that has one.
 
 ### Open questions (ask the user when the stage reaches them)
 
-1. Stage 6: does "Walk the constellation" count as a review? By the counting rule
-   (you bring words out of memory) it could. Settings-switchable like the other formats?
+1. ~~Stage 6: does "Walk the constellation" count?~~ **Yes, it counts** (user,
+   2026-10-25). Default Counts, switchable in Settings like the other formats.
 
 ---
 
