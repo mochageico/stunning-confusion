@@ -345,7 +345,7 @@ const IS_DEV_BUILD = typeof __DEV__ === 'undefined' || __DEV__;
  */
 export const UNRELEASED_TRANSLATION_TESTERS: string[] = [
   'lg9QLmMSlHQhpErSj5UOnmAt20C2', // owner
-  'D4hglY53zuWR3PVZxngwHhwzhng2',
+  'D4hglY53zuWR3PVZxngwHhwzhng2', // luke! my brother
 ];
 
 /**
