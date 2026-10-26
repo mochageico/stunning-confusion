@@ -58,10 +58,11 @@ export function useVerseLinks({ user }: VerseLinksDeps) {
   };
 
   /** Joins two stars. Optimistic: the map shows it at once. Returns the new link. */
-  const addVerseLink = async (a: StarRef, b: StarRef, extra: { label?: string; curated?: string } = {}): Promise<VerseLink> => {
+  const addVerseLink = async (a: StarRef, b: StarRef, extra: { label?: string; curated?: string; solo?: boolean } = {}): Promise<VerseLink> => {
     const record: VerseLink = { id: makeLinkId(), a, b, createdAt: Date.now() };
     if (extra.label?.trim()) record.label = extra.label.trim();
     if (extra.curated) record.curated = extra.curated;
+    if (extra.solo) record.solo = true;
     await writeLink(record);
     return record;
   };

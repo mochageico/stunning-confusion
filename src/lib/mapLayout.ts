@@ -569,10 +569,12 @@ export function layout(input: LayoutInput, saved?: MapLayout | null): LayoutResu
       const kb = starKey(l.b);
       return { l, ka, kb, pair: ka < kb ? `${ka}~${kb}` : `${kb}~${ka}` };
     })
-    .filter((x) => x.ka !== x.kb)
+    .filter((x) => x.ka !== x.kb || x.l.solo)
     .sort((x, y) => (x.pair < y.pair ? -1 : x.pair > y.pair ? 1 : x.l.id < y.l.id ? -1 : 1));
   for (const { l, ka, kb, pair } of own) {
     const a = nodes.get(ka) ?? makeNode(ka, l.a);
+    // A star on its own: it takes a place on the map but joins nothing.
+    if (l.solo) continue;
     const b = nodes.get(kb) ?? makeNode(kb, l.b);
     lines.push({ from: a.key, to: b.key, kind: 'user', id: l.id });
     if (seen.has(pair)) continue;

@@ -822,6 +822,8 @@ export interface VerseLink {
   b: StarRef;
   label?: string;
   curated?: string;
+  /** A star placed on the map on its own, joined to nothing: `b` is the same star as `a`. */
+  solo?: boolean;
   createdAt: number;
 }
 

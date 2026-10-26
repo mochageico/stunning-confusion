@@ -580,6 +580,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             relabelVerseLink={relabelVerseLink}
             deleteVerseLink={deleteVerseLink}
             onJoined={() => triggerToast('Joined.')}
+            onAdded={() => triggerToast('Star added.')}
             walk={{ handleUpdateVerseStatus, validateTouch, isReviewDue, reviewsPaused }}
           />
         </View>

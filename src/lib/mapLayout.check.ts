@@ -262,6 +262,29 @@ const odd: MapLayout = { version: 1, positions: { [starKey(john3)]: [0, 0], [sta
 const sp3 = spacing(layout(small, odd));
 check('overlapping saved spots are pushed apart', sp3.min >= MIN_SPACING - 0.5 && sp3.overlaps === 0, sp3);
 
+// A star on its own: on the map, joined to nothing.
+{
+  const lone = ref('Psalms', 46, 10);
+  const soloLink = link('s1', lone, lone, { solo: true });
+  const withLone = layout({ constellations: [], links: [link('l1', john3, rom5), soloLink] });
+  const loneKey = starKey(lone);
+  check('lone star: it is on the map', !!withLone.positions[loneKey] && withLone.stars.some((x) => x.key === loneKey));
+  check('lone star: no line touches it', !withLone.lines.some((l) => l.from === loneKey || l.to === loneKey));
+  const loneGroup = withLone.groups.find((g) => g.keys.includes(loneKey));
+  check('lone star: it is its own group', !!loneGroup && loneGroup.keys.length === 1 && loneGroup.kind === 'user', loneGroup);
+  const spl = spacing(withLone);
+  check('lone star: no overlaps with the others', spl.min >= MIN_SPACING - 0.5 && spl.overlaps === 0, spl);
+  const again = layout({ constellations: [], links: [link('l1', john3, rom5), soloLink] });
+  check('lone star: same place every time', JSON.stringify(again.positions) === JSON.stringify(withLone.positions));
+  const onlyLone = layout({ constellations: [], links: [soloLink] });
+  check('lone star: alone on an empty map is fine', onlyLone.stars.length === 1 && onlyLone.lines.length === 0);
+  // Joining it to something later moves it only a little, and the solo record draws no extra line.
+  const joined = layout({ constellations: [], links: [link('l1', john3, rom5), soloLink, link('l2', lone, john3)] }, withLone.layout);
+  check('lone star: joined later, it gets one line', joined.lines.filter((l) => l.from === loneKey || l.to === loneKey).length === 1);
+  const shift = maxShift(withLone, joined);
+  check(`lone star: the others barely move when it is joined (${Math.round(shift.max)} pt)`, shift.max < 160, shift);
+}
+
 if (failures) {
   console.log(`\n${failures} failure(s)`);
   process.exit(1);

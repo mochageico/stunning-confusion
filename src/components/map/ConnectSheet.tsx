@@ -21,7 +21,7 @@ const RECENT_COUNT = 6;
 const MAX_RESULTS = 30;
 
 /** "From verse 5 [−] [+]": one edge of a range. */
-function Stepper({ label, value, canDown, canUp, onDown, onUp }: { label: string; value: number; canDown: boolean; canUp: boolean; onDown: () => void; onUp: () => void }) {
+export function Stepper({ label, value, canDown, canUp, onDown, onUp }: { label: string; value: number; canDown: boolean; canUp: boolean; onDown: () => void; onUp: () => void }) {
   const space = useScaledSpace();
   return (
     <View className="flex-row items-center" style={{ gap: space(10) }}>
@@ -38,7 +38,7 @@ function Stepper({ label, value, canDown, canUp, onDown, onUp }: { label: string
 }
 
 /** One end of the link, with its two steppers. */
-function EndTrim({ title, run, range, onChange }: { title: string; run: Run; range: StarRef; onChange: (next: StarRef) => void }) {
+export function EndTrim({ title, run, range, onChange }: { title: string; run: Run; range: StarRef; onChange: (next: StarRef) => void }) {
   const space = useScaledSpace();
   return (
     <View className="bg-surface-2 rounded-card" style={{ padding: space(14), gap: space(10) }}>

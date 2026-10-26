@@ -80,7 +80,11 @@ function CardShell({ children, onClose, onLayout }: { children: React.ReactNode;
   );
 }
 
-/** "Daily" with its dot, or "Not in My Verses yet". */
+/** Any of this star's verses on My Verses, even one still waiting to start. */
+const onMyVerses = (ref: StarRef, queue: QueueItem[]): boolean =>
+  queue.some((q) => q.book === ref.book && q.chapter === ref.chapter && q.verseNumber >= ref.start && q.verseNumber <= ref.end);
+
+/** "Daily" with its dot, "Waiting to start", or "Not in My Verses yet". */
 function StageLine({ refr, queue, note }: { refr: StarRef; queue: QueueItem[]; note?: string }) {
   const space = useScaledSpace();
   const stage = starStage(refr, queue);
@@ -88,7 +92,7 @@ function StageLine({ refr, queue, note }: { refr: StarRef; queue: QueueItem[]; n
     <View className="flex-row items-center" style={{ gap: space(8) }}>
       {stage ? <StageDot stage={stage} /> : <StageDot stage="waiting" />}
       <AppText variant="label" className="font-sans text-ink-2 flex-1" numberOfLines={1}>
-        {stage ? STAGE_LABEL[stage] : 'Not in My Verses yet'}
+        {stage ? STAGE_LABEL[stage] : onMyVerses(refr, queue) ? 'Waiting to start' : 'Not in My Verses yet'}
         {note ? ` · ${note}` : ''}
       </AppText>
     </View>
@@ -106,11 +110,14 @@ export function StarCard({
   actions,
   compact,
   suggested,
+  onRemove,
 }: {
   refr: StarRef;
   constellationTitle?: string;
   /** A curated star worth adding next. */
   suggested?: boolean;
+  /** A star on its own: take it off the map (the verse stays on My Verses). */
+  onRemove?: () => void;
   queue: QueueItem[];
   echoes: EchoView[];
   onCompare: (index: number) => void;
@@ -165,12 +172,13 @@ export function StarCard({
       <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
         {page ? (
           <AppButton size="md" variant="primary" label="Open verse" onPress={() => actions.onOpenVerse(page)} />
-        ) : (
+        ) : onMyVerses(refr, queue) ? null : (
           <AppButton size="md" variant="primary" label="Add to My Verses" onPress={() => actions.onAddVerses(refr)} />
         )}
         {page && actions.onConnect ? (
           <AppButton size="md" variant="secondary" label="Connect" onPress={() => actions.onConnect!(refr)} />
         ) : null}
+        {onRemove ? <AppButton size="md" variant="quiet" label="Remove star" onPress={onRemove} /> : null}
       </View>
     </CardShell>
   );

@@ -17,6 +17,7 @@ import { EchoGhosts, MapDrawing } from './MapDrawing';
 import { CardActions, EchoCard, LineCard, StarCard } from './MapCards';
 import { JumpChips } from './JumpChips';
 import ConnectSheet from './ConnectSheet';
+import AddStarSheet from './AddStarSheet';
 import { ConstellationListSheet, GuideSheet } from './ConstellationSheets';
 import { versesForStars } from './addStars';
 import WalkConstellation, { WalkDeps } from './WalkConstellation';
@@ -40,6 +41,7 @@ const MOVE_MS = 700;
 const GHOST_FADE_MS = 260;
 const WHOLE = 'whole';
 const SHOW_HIDE = 'showhide';
+const ADD_STAR = 'addstar';
 
 type Selection =
   | { kind: 'star'; key: string }
@@ -100,6 +102,7 @@ export default function ConstellationMap({
   relabelVerseLink,
   deleteVerseLink,
   onJoined,
+  onAdded,
   walk,
 }: {
   queue: QueueItem[];
@@ -111,10 +114,12 @@ export default function ConstellationMap({
   onOpenVerse: (page: VersePageRef) => void;
   /** The existing add path (waiting, started by My Schedule's pace). */
   addVersesToQueue: (verses: VerseState[], translationId: string) => void;
-  addVerseLink: (a: StarRef, b: StarRef, extra?: { label?: string; curated?: string }) => Promise<VerseLink>;
+  addVerseLink: (a: StarRef, b: StarRef, extra?: { label?: string; curated?: string; solo?: boolean }) => Promise<VerseLink>;
   relabelVerseLink: (id: string, label: string) => Promise<void>;
   deleteVerseLink: (id: string) => Promise<void>;
   onJoined?: () => void;
+  /** A star was put on the map on its own. */
+  onAdded?: () => void;
   /** What Walk the constellation needs to credit a review. */
   walk: WalkDeps;
 }) {
@@ -128,6 +133,9 @@ export default function ConstellationMap({
   const [listOpen, setListOpen] = useState(false);
   const [guideFor, setGuideFor] = useState<string | null>(null);
   const [connectFrom, setConnectFrom] = useState<StarRef | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  // The star just added: once the layout has placed it, look at it.
+  const focusStar = useRef<string | null>(null);
   // The group being walked (Walk the constellation), drawn over the whole map view.
   const [walkGroup, setWalkGroup] = useState<string | null>(null);
 
@@ -228,10 +236,37 @@ export default function ConstellationMap({
       setListOpen(true);
       return;
     }
+    if (id === ADD_STAR) {
+      setAddOpen(true);
+      return;
+    }
     setChip(id);
     setSelection(null);
     camera.current?.frame(viewBounds(result, id === WHOLE ? undefined : id), insets());
   };
+
+  // ---- A star on its own ----
+  const addSoloStar = (ref: StarRef) => {
+    // Verses outside My Verses join it through the usual add path; ones already there are left alone.
+    const have = (v: number) => queue.some((q) => q.book === ref.book && q.chapter === ref.chapter && q.verseNumber === v);
+    let missing = false;
+    for (let v = ref.start; v <= ref.end; v++) if (!have(v)) missing = true;
+    if (missing) void addStars([ref]);
+    void addVerseLink(ref, ref, { solo: true });
+    focusStar.current = starKey(ref);
+    setAddOpen(false);
+    onAdded?.();
+  };
+  useEffect(() => {
+    const key = focusStar.current;
+    if (!key || !starsByKey.has(key)) return;
+    focusStar.current = null;
+    const group = result.groups.find((g) => g.keys.includes(key));
+    if (group) setChip(group.id);
+    setSelection({ kind: 'star', key });
+    camera.current?.frame(viewBounds(result, group?.id), insets());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
 
   const onTap = useCallback(
     (x: number, y: number, zoom: number) => {
@@ -262,6 +297,7 @@ export default function ConstellationMap({
         out.push({ id: g.id, label: g.keys.length > 1 ? `${name} and ${g.keys.length - 1} more` : name });
       }
     }
+    out.push({ id: ADD_STAR, label: 'Add a star' });
     out.push({ id: SHOW_HIDE, label: 'Show or hide' });
     return out;
   }, [result, starsByKey]);
@@ -274,6 +310,17 @@ export default function ConstellationMap({
   useEffect(() => {
     if (chip !== WHOLE && !result.groups.some((g) => g.id === chip)) setChip(WHOLE);
   }, [chip, result]);
+
+  // A star placed on its own, with nothing joined to it, can be taken off the map again.
+  const soloIdsFor = (key: string): string[] | null => {
+    const ids = links.filter((l) => l.solo && starKey(l.a) === key).map((l) => l.id);
+    const joined = result.lines.some((l) => l.kind === 'user' && (l.from === key || l.to === key));
+    return ids.length > 0 && !joined ? ids : null;
+  };
+  const removeSoloStar = (key: string) => {
+    setSelection(null);
+    for (const id of soloIdsFor(key) ?? []) void deleteVerseLink(id);
+  };
 
   // ---- The card ----
   const titleOf = (constellationId?: string) => CONSTELLATIONS.find((c) => c.id === constellationId)?.title;
@@ -307,6 +354,7 @@ export default function ConstellationMap({
           actions={actions}
           compact={mapHeight > 0 && mapHeight < 520}
           suggested={!!looks[selection.key]?.suggested}
+          onRemove={soloIdsFor(selection.key) ? () => removeSoloStar(selection.key) : undefined}
         />
       );
   } else if (selection?.kind === 'echo') {
@@ -439,14 +487,25 @@ export default function ConstellationMap({
             ) : (
               <View className="bg-surface border border-line-strong rounded-card" style={{ padding: space(14) }}>
                 <AppText variant="label" className="font-sans text-ink">
-                  Connect two of your verses and they'll shine here as stars, next to these.
+                  Add a star, or connect two of your verses, and they'll shine here next to these.
                 </AppText>
+                <View className="flex-row" style={{ marginTop: space(8) }}>
+                  <AppButton size="md" variant="secondary" label="Add a star" onPress={() => setAddOpen(true)} />
+                </View>
               </View>
             )}
           </View>
         )}
       </View>
 
+      <AddStarSheet
+        visible={addOpen}
+        queue={queue}
+        mapRefs={result.stars.map((s) => s.ref)}
+        translationId={translationId}
+        onClose={() => setAddOpen(false)}
+        onAdd={addSoloStar}
+      />
       <ConnectSheet
         from={connectFrom}
         queue={queue}
