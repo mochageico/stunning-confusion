@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 import Svg, { G } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -30,7 +30,6 @@ import type { Rect } from '../../lib/mapLayout';
 // what was hit is mapModel.hitTest's job.
 // ============================================================================
 
-const IS_WEB = Platform.OS === 'web';
 
 export const MAX_ZOOM = 3;
 /** Below this zoom, star names and line labels are left off (they'd be specks). */
@@ -232,9 +231,7 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
       ],
     };
   });
-  const bakedMatrix = IS_WEB
-    ? { transform: `matrix(${baked.z} 0 0 ${baked.z} ${baked.tx + ox} ${baked.ty + oy})` }
-    : { matrix: [baked.z, 0, 0, baked.z, baked.tx + ox, baked.ty + oy] };
+  const bakedTransform = `matrix(${baked.z} 0 0 ${baked.z} ${baked.tx + ox} ${baked.ty + oy})`;
 
   useAnimatedReaction(
     () => zoom.value >= LABEL_ZOOM,
@@ -344,7 +341,7 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
         {box.w > 0 && (
           <Animated.View style={[{ position: 'absolute', left: -ox, top: -oy, width: box.w + 2 * ox, height: box.h + 2 * oy }, pictureStyle]}>
             <Svg width={box.w + 2 * ox} height={box.h + 2 * oy}>
-              <G {...(bakedMatrix as object)}>{children}</G>
+              <G transform={bakedTransform}>{children}</G>
             </Svg>
           </Animated.View>
         )}
