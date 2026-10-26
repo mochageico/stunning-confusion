@@ -41,6 +41,7 @@ module.exports = {
         'stage-daily': 'rgb(var(--stage-daily) / <alpha-value>)',
         'stage-weekly': 'rgb(var(--stage-weekly) / <alpha-value>)',
         'stage-monthly': 'rgb(var(--stage-monthly) / <alpha-value>)',
+        'stage-complete': 'rgb(var(--stage-complete) / <alpha-value>)',
         // Section brackets: their own set, never the stage colors (theme.tsx).
         'bracket-1': 'rgb(var(--bracket-1) / <alpha-value>)',
         'bracket-2': 'rgb(var(--bracket-2) / <alpha-value>)',

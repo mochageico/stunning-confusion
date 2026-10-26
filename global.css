@@ -26,10 +26,11 @@
   --warning-soft: 241 233 220;
   --danger: 179 38 30;
   --danger-soft: 246 227 223;
-  --stage-learning: 110 75 184;
+  --stage-learning: 210 64 52;
   --stage-daily: 46 154 104;
   --stage-weekly: 58 107 214;
-  --stage-monthly: 192 131 26;
+  --stage-monthly: 110 75 184;
+  --stage-complete: 201 154 24;
   --bracket-1: 29 127 120;
   --bracket-2: 192 74 107;
   --bracket-3: 107 125 36;

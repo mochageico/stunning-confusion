@@ -30,8 +30,7 @@ export function stageRing(palette: ThemeColors, stage: VerseStage): string {
     case 'monthly':
       return palette.stageMonthly;
     default:
-      // Complete has no stage token (it's ink everywhere else too).
-      return palette.ink;
+      return palette.stageComplete;
   }
 }
 

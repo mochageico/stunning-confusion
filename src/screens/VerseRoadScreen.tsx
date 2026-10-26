@@ -24,7 +24,7 @@ const LINE: Record<VerseStage, string> = {
   daily: 'bg-stage-daily',
   weekly: 'bg-stage-weekly',
   monthly: 'bg-stage-monthly',
-  complete: 'bg-ink',
+  complete: 'bg-stage-complete',
 };
 
 const NEXT: Partial<Record<VerseStage, VerseStage>> = { learning: 'daily', daily: 'weekly', weekly: 'monthly', monthly: 'complete' };

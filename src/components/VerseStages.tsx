@@ -15,14 +15,14 @@ import { STAGE_LABEL, STAGE_ORDER, StageGroup, StagePlan, VerseStage, referenceF
 // rules: Daily and Monthly fail contrast as text), so every label is ink.
 // ============================================================================
 
-/** Fill for a stage's dot. Waiting is an empty ring: nothing has started. Complete has no stage token, so it's ink. */
+/** Fill for a stage's dot. Waiting is an empty ring: nothing has started. Complete is gold. */
 export const STAGE_FILL: Record<VerseStage, string> = {
   waiting: 'bg-surface border-2 border-ink-3',
   learning: 'bg-stage-learning',
   daily: 'bg-stage-daily',
   weekly: 'bg-stage-weekly',
   monthly: 'bg-stage-monthly',
-  complete: 'bg-ink',
+  complete: 'bg-stage-complete',
 };
 
 export function stageCaption(stage: VerseStage, plan: StagePlan): string {

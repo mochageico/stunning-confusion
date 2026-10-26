@@ -138,7 +138,7 @@ const STAGE_DOT: Record<string, string> = {
   daily: 'bg-stage-daily',
   weekly: 'bg-stage-weekly',
   monthly: 'bg-stage-monthly',
-  completed: 'bg-ink',
+  completed: 'bg-stage-complete',
 };
 
 export default function DashboardScreen({ state }: { state: AppState }) {

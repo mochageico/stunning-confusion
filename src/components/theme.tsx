@@ -83,8 +83,8 @@ const STATUS = {
 
 /** Review stages. The same four everywhere a stage is shown. */
 const STAGES = {
-  light: { stageLearning: '#6E4BB8', stageDaily: '#2E9A68', stageWeekly: '#3A6BD6', stageMonthly: '#C0831A' },
-  dark: { stageLearning: '#B79CF0', stageDaily: '#4CC38A', stageWeekly: '#7BA1F2', stageMonthly: '#E3B04B' },
+  light: { stageLearning: '#D24034', stageDaily: '#2E9A68', stageWeekly: '#3A6BD6', stageMonthly: '#6E4BB8', stageComplete: '#C99A18' },
+  dark: { stageLearning: '#F2887D', stageDaily: '#4CC38A', stageWeekly: '#7BA1F2', stageMonthly: '#B79CF0', stageComplete: '#E8BE45' },
 } as const;
 
 /**
@@ -129,6 +129,7 @@ export interface ThemeColors {
   stageDaily: string;
   stageWeekly: string;
   stageMonthly: string;
+  stageComplete: string;
   bracket1: string;
   bracket2: string;
   bracket3: string;
@@ -216,6 +217,7 @@ const CSS_VARS: Record<keyof ThemeColors, string> = {
   stageDaily: '--stage-daily',
   stageWeekly: '--stage-weekly',
   stageMonthly: '--stage-monthly',
+  stageComplete: '--stage-complete',
   bracket1: '--bracket-1',
   bracket2: '--bracket-2',
   bracket3: '--bracket-3',
