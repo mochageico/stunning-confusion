@@ -11,8 +11,11 @@ Stage files by name when committing (never `git add -A`). After each stage, upda
 
 **Progress:** stages 1–3 built (ladder, grading, passages and migration logic, all
 pure, plus a dev-only dry run that saves nothing). Main account dry run read with the user
-2026-10-27 (led to the retained-verse spreading); before stage 4, run it again to
-confirm the dates, and once on the test account.
+2026-10-27 (led to the retained-verse spreading) and approved.
+
+**No test account (user, 2026-10-27):** the only users are the owner and their
+brother, and a rare edge case going wrong in the move is acceptable. Wherever a stage
+below says "test account", use the main account, keeping the backup step in 4a.
 
 Mockups: the "My Verses ladder sketches" design canvas (claude.ai artifact
 77ZK89BZsaNcsiS8UgXqHL): My Verses by group and by chapter, verse page ladder,
