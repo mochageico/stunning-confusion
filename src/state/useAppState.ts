@@ -48,6 +48,7 @@ import {
   Recording,
   Rhythm,
   GroupPlanMembership,
+  ReviewGrade,
   ReviewLog,
   VerseState,
   VerseTimestamp,
@@ -96,7 +97,10 @@ import {
 } from '../lib/appData';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { isReviewLog } from '../lib/circleTotals';
-import { computeMissedCycles } from '../lib/missPolicy';
+import { LADDER_VERSION, ladderPrefsFrom, prepareLadderQueue } from '../lib/ladderEngine';
+import { TOP_STEP } from '../lib/ladder';
+import type { SpreadDay } from '../lib/passages';
+import { backupQueueBeforeLadder } from '../lib/ladderBackup';
 import { isReviewDue } from '../lib/retention';
 
 // Pure helpers that used to live in this file; re-exported so the screens
@@ -190,7 +194,17 @@ const tabForScreen = (screen: ScreenName): TabName | null =>
  * show their own results; `via` records which practice produced it in the
  * verse's review history.
  */
-export type ReviewCompletedOpts = { perfect?: boolean; quiet?: boolean; via?: ReviewLog['via'] };
+export type ReviewCompletedOpts = {
+  perfect?: boolean;
+  quiet?: boolean;
+  via?: ReviewLog['via'];
+  /** A verse past Learning's grade (REVIEW_LADDER_PLAN.md §4). Without it a pass is clean and a fail a stumble. */
+  grade?: ReviewGrade;
+  /** The grade came from a self-check (the every-other rule applies). */
+  selfCheck?: boolean;
+  /** false: this round can't move the passage up (a missed spot check). */
+  canMoveUp?: boolean;
+};
 
 /** Where Pick up the thread opens: the verse to recite through, from a Recall that just passed. */
 export type ThreadDrillPreset = { book: string; chapter: number; verse: number; translationId?: string };
@@ -211,6 +225,9 @@ export function useAppState() {
   // Whose queue has finished loading from Firestore (circle stats wait for it).
   const [queueLoadedUid, setQueueLoadedUid] = useState<string | null>(null);
   const [primingLookahead, setPrimingLookahead] = useState<number>(30);
+  // Welcome back: the days overdue passages were spread over when the app
+  // opened (empty when nothing was overdue). Today's card reads it (stage 7).
+  const [welcomeBackDays, setWelcomeBackDays] = useState<SpreadDay[]>([]);
   // Review Settings (retention plan) and Rhythm (your pace) -- see usePlanSettings.
   const plan = usePlanSettings({
     navigateTo: (...args) => navigateTo(...args),
@@ -258,6 +275,13 @@ export function useAppState() {
     pausedUntil,
     setPausedUntil,
     reviewsPaused,
+    thoroughness,
+    cleanPct,
+    lateMovesBack,
+    swapCanBeClean,
+    setLadderVersion,
+    updateLadderSettings,
+    applyLadderPrefs,
     customPlanName,
     setCustomPlanName,
     savedPlans,
@@ -1146,6 +1170,10 @@ export function useAppState() {
       // before React has flushed the rhythm setters, so it reads this rather
       // than the live state.
       let resolvedRhythm: Rhythm = DEFAULT_RHYTHM;
+      // The ladder settings and whether this account's queue is on the
+      // ladder yet, for the same reason.
+      let resolvedLadderPrefs = ladderPrefsFrom(undefined);
+      let resolvedLadderVersion: number | null = null;
       let groupPlansLoad: Promise<void> = Promise.resolve();
 
       // 2. Memory Plan
@@ -1186,6 +1214,9 @@ export function useAppState() {
         setPausedAt(loadedRhythm.pausedAt);
         setPausedUntil(loadedRhythm.pausedUntil);
         resolvedRhythm = loadedRhythm;
+        resolvedLadderPrefs = ladderPrefsFrom(planData);
+        applyLadderPrefs(resolvedLadderPrefs);
+        resolvedLadderVersion = typeof planData.ladderVersion === 'number' ? planData.ladderVersion : null;
 
         // ---- PLANS ----
         // An account with no savedPlans array at all (or one emptied by an
@@ -1245,8 +1276,12 @@ export function useAppState() {
             savedPlans: DEFAULT_PLANS,
             ...planTopLevelFields(DEFAULT_PLANS[0]),
             ...DEFAULT_RHYTHM,
+            ...resolvedLadderPrefs,
+            // A new account has nothing to move onto the ladder.
+            ladderVersion: LADDER_VERSION,
             updatedAt: new Date(),
           });
+          resolvedLadderVersion = LADDER_VERSION;
           console.log('Memory plan created successfully.');
         } catch (e) {
           handleFirestoreError(e, OperationType.WRITE, `memoryPlans/${currentUser.uid}`);
@@ -1336,40 +1371,86 @@ export function useAppState() {
             ...(data.refresherTargetUnits !== undefined ? { refresherTargetUnits: data.refresherTargetUnits } : {}),
             ...(data.guidedSetAside === true ? { guidedSetAside: true as const } : {}),
             ...(data.guidedShakyJoin === true ? { guidedShakyJoin: true as const } : {}),
+            // Review ladder fields (REVIEW_LADDER_PLAN.md decision 2), same
+            // omit-when-absent rule.
+            ...(typeof data.ladderStep === 'number' ? { ladderStep: data.ladderStep } : {}),
+            ...(typeof data.ladderReviews === 'number' ? { ladderReviews: data.ladderReviews } : {}),
+            ...(data.catchUp === true ? { catchUp: true as const } : {}),
+            ...(data.dayResult ? { dayResult: data.dayResult } : {}),
+            ...(data.lastSelfChecked === true ? { lastSelfChecked: true as const } : {}),
+            ...(data.firmUp ? { firmUp: data.firmUp } : {}),
+            ...(data.slipped === true ? { slipped: true as const } : {}),
           });
         });
         loadedQueue.sort((a, b) => a.orderIndex - b.orderIndex);
-        updateMemoryQueue(() => loadedQueue);
-        cacheLoadingVerses(loadedQueue);
-        // Baseline for the auto-sync's deletion diffing: what's in Firestore
-        // right now is by definition already synced.
+        // Baseline for the auto-sync: what's in Firestore right now is by
+        // definition already synced. Anything the ladder step below changes
+        // differs from it, so a write that fails here is retried by the
+        // auto-sync.
         prevSyncedQueueIdsRef.current = new Set(loadedQueue.map((i) => i.verseId));
         syncedQueueJsonRef.current = new Map(loadedQueue.map((i) => [i.verseId, JSON.stringify(i)]));
 
-        // Missed-review popup scan: uses resolvedActivePlan directly (not
-        // React state, which may not have flushed from syncDesignerFromPlan
-        // yet) so this can't race the plan settings it depends on. Only
-        // runs once, right here at load -- not on every later memoryQueue
-        // change from normal review activity.
-        if (resolvedActivePlan.missPolicyAskEveryTime) {
-          const overdue = loadedQueue
-            .map((qItem) => ({
-              item: qItem,
-              missedCycles: computeMissedCycles(
-                qItem,
-                resolvedRhythm.dayStartHour,
-                resolvedRhythm.sabbathEnabled,
-                resolvedRhythm.sabbathDay,
-                resolvedRhythm.pausedAt,
-                resolvedRhythm.pausedUntil
-              ),
-            }))
-            .filter((entry) => entry.missedCycles > 0);
-          if (overdue.length > 0) {
-            setMissedReviewQueue(overdue);
-            setShowMissedReviewPrompt(true);
+        // The review ladder (REVIEW_LADDER_PLAN.md stage 4a), with the
+        // settings just read rather than React state that hasn't flushed:
+        // the migration (only verses not on the ladder yet; a no-op once
+        // done), passages left partly covered on an earlier day, late
+        // reviews and the welcome-back spread. The migration is backed up
+        // first, its writes go out in batches, and ladderVersion is set
+        // LAST, so an interrupted run simply runs again next time.
+        const ladder = prepareLadderQueue(loadedQueue, {
+          clock: {
+            dayStartHour: resolvedRhythm.dayStartHour,
+            sabbathEnabled: resolvedRhythm.sabbathEnabled,
+            sabbathDay: resolvedRhythm.sabbathDay,
+            pausedAt: resolvedRhythm.pausedAt,
+            pausedUntil: resolvedRhythm.pausedUntil,
+          },
+          prefs: resolvedLadderPrefs,
+          capMinutes: resolvedRhythm.maxReviewCap,
+        });
+        const migrating = resolvedLadderVersion !== LADDER_VERSION;
+        if (migrating && ladder.migration.changed.length > 0) {
+          await backupQueueBeforeLadder(currentUser.uid, loadedQueue);
+        }
+        updateMemoryQueue(() => ladder.queue);
+        cacheLoadingVerses(ladder.queue);
+        setWelcomeBackDays(ladder.spread);
+
+        let ladderWritten = true;
+        if (ladder.changed.length > 0) {
+          try {
+            for (let start = 0; start < ladder.changed.length; start += 450) {
+              const batch = writeBatch(db);
+              const chunk = ladder.changed.slice(start, start + 450);
+              chunk.forEach((item) => batch.set(doc(db, 'users', currentUser.uid, 'memoryQueue', item.verseId), item));
+              await batch.commit();
+              chunk.forEach((item) => syncedQueueJsonRef.current.set(item.verseId, JSON.stringify(item)));
+            }
+          } catch (e) {
+            ladderWritten = false;
+            handleFirestoreError(e, OperationType.WRITE, `users/${currentUser.uid}/memoryQueue`);
+          }
+          console.log(
+            `[ladder] ${ladder.migration.changed.length} moved onto the ladder, ${ladder.settled.length} partly covered settled, ` +
+              `${ladder.late.length} late, ${ladder.spread.length} spread day(s); ${ladder.changed.length} verse(s) written`
+          );
+        }
+        if (migrating && ladderWritten) {
+          try {
+            await setDoc(planRef, { ladderVersion: LADDER_VERSION }, { merge: true });
+            resolvedLadderVersion = LADDER_VERSION;
+          } catch (e) {
+            handleFirestoreError(e, OperationType.WRITE, `memoryPlans/${currentUser.uid}`);
           }
         }
+      }
+      setLadderVersion(resolvedLadderVersion);
+      // An empty queue has nothing to move: mark it done so a later load
+      // doesn't think a migration is pending.
+      if (qSnap && qSnap.empty && resolvedLadderVersion !== LADDER_VERSION) {
+        setDoc(planRef, { ladderVersion: LADDER_VERSION }, { merge: true })
+          .then(() => setLadderVersion(LADDER_VERSION))
+          .catch((e) => handleFirestoreError(e, OperationType.WRITE, `memoryPlans/${currentUser.uid}`));
       }
 
       // 4-7. Saved recordings, Bible page photos, chapter sections and
@@ -1756,7 +1837,9 @@ export function useAppState() {
   // COMPUTED METRICS
   // ==========================================
   const totalVersesCount = memoryQueue.length || verses.length || 1;
-  const memorizedCount = memoryQueue.filter((v) => v.status === 'retained').length;
+  // Reached the top of the review ladder (Every 6 months). 'retained' only
+  // survives on verses not moved onto the ladder yet.
+  const memorizedCount = memoryQueue.filter((v) => v.ladderStep === TOP_STEP || v.status === 'retained').length;
   const learningCount = memoryQueue.filter((v) => v.status === 'learning').length;
   const untouchedCount = memoryQueue.filter((v) => v.status === 'queued').length;
   const memorizedPercent = Math.round((memorizedCount / totalVersesCount) * 100) || 0;
@@ -2763,6 +2846,8 @@ export function useAppState() {
     pausedUntil, setPausedUntil,
     reviewsPaused,
     pauseReviews, resumeReviews,
+    thoroughness, cleanPct, lateMovesBack, swapCanBeClean, updateLadderSettings,
+    welcomeBackDays,
     missedReviewQueue,
     showMissedReviewPrompt, setShowMissedReviewPrompt,
     resolveMissedReviewChoice,

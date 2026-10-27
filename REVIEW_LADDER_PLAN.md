@@ -11,7 +11,9 @@ Stage files by name when committing (never `git add -A`). After each stage, upda
 
 **Progress:** stages 1–3 built (ladder, grading, passages and migration logic, all
 pure, plus a dev-only dry run that saves nothing). Main account dry run read with the user
-2026-10-27 (led to the retained-verse spreading) and approved.
+2026-10-27 (led to the retained-verse spreading) and approved. Stage 4 built
+(settings, automatic migration on load, grading through passages); its live run on
+the account is still to do.
 
 **No test account (user, 2026-10-27):** the only users are the owner and their
 brother, and a rare edge case going wrong in the move is acceptable. Wherever a stage
@@ -442,6 +444,74 @@ it runs long (4a settings + migration run, 4b grading path).
   second load did nothing), a passage reviewed end to end moved up, a stumble held, a
   blank dropped a step, and a partly covered passage got its penalty-only outcome the
   next day. Then the user's main account.
+
+### As built (stage 4, 4a + 4b in one session)
+
+- **Migration starts automatically** on the first load in this build (the user chose
+  this over a dev-only button, 2026-10-27, knowing phones on the old build would grade
+  migrated verses the old way until stage 9).
+- `src/lib/ladderEngine.ts` (pure, `npm run check:ladderengine`, 37 checks):
+  - `LadderPrefs` / `DEFAULT_LADDER_PREFS` / `ladderPrefsFrom` (bad or missing values fall
+    back to the defaults), `LADDER_VERSION = 2`.
+  - `prepareLadderQueue`: what runs on every open, in order: `migrateQueue`,
+    `settleStaleDays`, lateness (when on; logged as `skipped` + `outcome: 'late'`), then
+    `spreadOverdue` with the review time cap. Lateness and the spread are skipped while
+    paused. The spread gives every overdue passage a new date, so the next open charges
+    nothing again.
+  - `gradeVerse`: a firm-up attempt first (when the passage has one today), then
+    `recordGrade`; adds history entries and returns the toast text (`outcomeMessage`,
+    `joinMessage`: "Romans 8:21–22 join verses 1–20.").
+- **Load path** (`useAppState` `loadUserData`): the queue loader now keeps the ladder
+  fields (it copies fields one by one and would have dropped them). Then
+  `prepareLadderQueue` with the settings just read; if the account isn't at
+  `ladderVersion: 2` and anything moves, the queue is backed up first
+  (`src/lib/ladderBackup.ts`: AsyncStorage `ladderBackup:{uid}`, plus a JSON download on
+  web); changed verses are written in batches of 450; `ladderVersion: 2` is written last,
+  only if every batch went through. A failed batch leaves the verses differing from the
+  auto-sync's baseline, so the auto-sync retries them. A new account or an empty queue
+  gets `ladderVersion: 2` straight away. `welcomeBackDays` (AppState) holds the spread for
+  stage 7's card.
+- **The migration runs on every open, not only once.** It only touches verses past Learning
+  with no `ladderStep`, so it's a no-op once done, and it catches verses an old build
+  wrote back without the ladder fields: those are mapped from their legacy streak again
+  instead of looking like new arrivals (which would have restarted their passage's
+  catch-up).
+- **Settings** (`usePlanSettings`): `thoroughness`, `cleanPct`, `lateMovesBack`,
+  `swapCanBeClean`, `ladderVersion`; `updateLadderSettings(patch)` commits live to the
+  root of `memoryPlans/{uid}` like `updateRhythm`. No screen sets them yet (stage 7).
+- **Engine** (`useReviewEngine`): `handleReviewCompleted` → `gradeQueueItem`.
+  - Learning is unchanged, except leaving it: the verse gets `status: 'reviewing'` with no
+    `ladderStep` and `reconcile` gives it its passage's schedule (the toast says what it
+    joined).
+  - Past Learning goes through `gradeVerse`. `ReviewCompletedOpts` gained `grade`,
+    `selfCheck`, `canMoveUp`. **Until stage 5, a caller that only says pass/fail gets clean
+    for a pass and a stumble for a fail** (the gentler reading, since the old fail line
+    was 90%).
+  - Every changed member goes out in one batch. Toasts only come when a passage's outcome
+    is applied or a verse joins; `handleUpdateVerseStatus` shows those in place of its
+    generic toast.
+  - Firm-up grades are kept per day in a ref, because screens grade verses one call at a
+    time and winning back needs every slipped verse clean.
+  - Reaching Every 6 months posts the activity event: one chapter event when the whole
+    chapter (that translation) is at the top, otherwise one per verse, like before.
+  - Retired: the miss policy, refreshers, `reviewsRequired`, `dailyPhaseExtensionDays` and
+    the load-time missed-review scan. The popup's state stays, always empty, until stage 8
+    deletes the popup.
+  - Placing verses by hand (`overrideVerseMemoryStatus`) clears their ladder fields and
+    maps them with `migrateQueue`, so they land in their passage like migrated verses.
+  - "Reset today's reviews" (dev) now sets verses due now instead of yesterday, which
+    would have read as late.
+- **History entries:** `step`, `grade`, `outcome` on `ReviewLog`. `result` is `pass` for
+  up / forgiven / wonBack and otherwise follows the verse's own grade (clean = pass), so a
+  clean verse in a held review doesn't show as a miss on its page. Joins aren't logged (the
+  only fitting legacy result, `placed`, reads as "by hand" on the verse page).
+- `memorizedCount` counts verses at Every 6 months (plus any `retained` not moved yet).
+- `check:appstate` snapshot updated on purpose (the new keys, plus drift that was already
+  there). `check:maplayout` and `check:milestones` fail the same way without this
+  stage's changes.
+- **Not done in this session:** the live run on the account (migrate once, a second load
+  does nothing, up / held / down, partly covered → penalty-only next day). The logic for
+  each is in `check:ladderengine`; the live run needs the user signed in.
 
 ## Stage 5 — Every credit path reports grades
 

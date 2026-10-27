@@ -89,6 +89,7 @@
     "check:grading": "node scripts/run-grading-check.cjs",
     "check:passages": "node scripts/run-passages-check.cjs",
     "check:migration": "node scripts/run-migration-check.cjs",
+    "check:ladderengine": "node scripts/run-ladderengine-check.cjs",
     "check:appstate": "node scripts/check-appstate-keys.cjs",
     "shots": "node scripts/capture-screens.cjs",
     "scan:fonts": "node scripts/scan-fonts.cjs",
