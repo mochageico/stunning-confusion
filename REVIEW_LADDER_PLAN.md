@@ -1,8 +1,15 @@
 # Review ladder, passages and grading — decisions
 
 Written 2026-10-27 from a design conversation with the user. **Nothing here is built
-yet.** This file records what was decided; a staged build plan (like
-`MIXED_REVIEW_PLAN.md`) still has to be written before any code changes.
+yet.** Part 1 (sections 1–6) is what was decided. Part 2 (**Build plan**, at the end)
+is the staged plan: one stage per session, in order.
+
+**For the session building a stage:** read this whole file first, then your stage.
+Stage files by name when committing (never `git add -A`). After each stage, update the
+**Progress** line and add an "As built" note under the stage, like
+`MIXED_REVIEW_PLAN.md` does.
+
+**Progress:** nothing built.
 
 Mockups: the "My Verses ladder sketches" design canvas (claude.ai artifact
 77ZK89BZsaNcsiS8UgXqHL): My Verses by group and by chapter, verse page ladder,
@@ -147,6 +154,271 @@ Every counting format reports per verse: **clean, stumble or blank**.
 
 ## Open
 
-- Staged build plan, with Opus for the engine, passages and migration (a mistake
-  there corrupts saved data) and Sonnet for screens.
 - Rename "Fix the transitions".
+
+---
+
+# Part 2 — Build plan
+
+## Where each stage runs
+
+The user runs anything that **touches Firestore or the review engine locally, with
+Opus**. Visual work with no Firestore can run in a cloud session (Sonnet is fine).
+Each stage says which:
+
+- **Local · Opus** — reads or writes Firestore, or decides what gets credited. A
+  mistake here corrupts saved progress. Test against a **test account** first, never
+  the main account.
+- **Cloud OK · Sonnet** — screens and pure display logic, checked with the demo
+  harness (`?s=…`), `npm run shots` and `npm run check:layout`. Writes nothing to
+  Firestore. It doesn't need local, but can run locally too.
+
+No Firestore **rules** change in this plan: `users/{uid}/memoryQueue/*` and
+`memoryPlans/{uid}` are already owner read/write, and new fields ride on those docs.
+
+## Architecture decisions (made up front so stages agree)
+
+1. **Passages are derived, not stored as their own docs.** `passages(queue)` groups
+   reviewing items by translation + book + chapter + consecutive verse numbers. The
+   passage's schedule (step, review count, due date, catch-up, firm-up) is written
+   **identically on every member item**. A pure `reconcile` makes members agree:
+   lowest step, then lowest review count, earliest due date. Joins and merges are just
+   reconcile running after a verse enters (it arrives at step 0 with a catch-up, so
+   the passage drops to Every day). No new collection, no new rules, the existing
+   debounced queue auto-sync keeps persisting it.
+2. **New fields on `QueueItem`** (all optional, additive):
+   - `ladderStep` (0–7, index into the ladder table), `ladderReviews` (reviews at the
+     current step), `catchUp?: true` (short catch-up targets apply).
+   - `dayResult?: { day: string; grade: 'clean' | 'stumble' | 'blank'; via?: … }`: this
+     verse's result for its passage's current review (see 4).
+   - `lastSelfChecked?: true`: the passage's last counted review was a self-check
+     (every-other rule).
+   - `firmUp?: { day: string; restore: { step: number; reviews: number } }`: winnable
+     review after a slip; `slipped?: true`: weak-spot dot. Both follow the existing
+     "only ever true / delete to clear" rule (Firestore rejects `undefined`).
+3. **Legacy fields keep being written, mapped**, so a friend's view of your verses
+   (`profiles/{uid}/shared/memoryQueue`) and any old app build still read something
+   sensible: `status: 'reviewing'`, `retentionPhase` = daily for Settling, weekly for
+   Steady, monthly for Kept. An old build that *grades* a verse will still write wrong
+   progress; ship the new build to every device before migrating (note for the user).
+4. **Coverage accumulates per day across every practice screen.** Each graded verse
+   gets `dayResult` for today. When every member of the passage has a result for the
+   current due review, the passage outcome is applied once (Part 1 §4 table) and the
+   `dayResult`s are cleared. A passage left partly covered when the day rolls over gets
+   a **penalty-only** outcome (stumbles/blanks apply, it can't move up), applied lazily
+   on next load. This makes Recall, Pick up the thread, Guided, First words, the map
+   walk, the manual log and Mixed review all follow the same rule without each one
+   knowing about passages.
+5. **Review settings are user-level** (like Rhythm), on `memoryPlans/{uid}`:
+   `ladderVersion: 2`, `thoroughness` (0.5 | 1 | 1.5 | 2), `cleanPct` (85–100, default
+   90), `lateMovesBack` (default true), `swapCanBeClean` (default true). The old
+   per-plan phase lengths, `reviewsRequired`, miss policy, grace and refresher
+   settings are retired (the Review Settings / plan designer screens change in stage 8).
+6. **ReviewLog** gains `step?: number`, `grade?`, `outcome?: 'up' | 'held' | 'forgiven'
+   | 'back' | 'down' | 'late' | 'joined' | 'wonBack'`. `result: 'pass' | 'miss'` stays
+   for older readers (pass = up/forgiven/wonBack). `stage` keeps the mapped legacy
+   value.
+
+## Stage 1 — Ladder and grading logic (pure)
+
+**Local · Opus** (no Firestore, but it's the engine's math; cloud is acceptable if
+needed).
+
+- `src/lib/ladder.ts` + `ladder.check.ts` + `npm run check:ladder`:
+  - The ladder table (step → interval days, base review count, group, color token
+    name), `thoroughness` multiplier (min 2 per step), catch-up targets (3/2/2, then
+    lands on Every week).
+  - `nextDue(step, anchorDay, clock)`: steps 0–2 by days (`nextDueDateISO`), 3+ on the
+    chapter weekday (`nthOccurrenceOfWeekday`, 1/2/4/8 weeks), 6 months as 26 weeks
+    on the anchor. Sabbath and pause respected like today.
+  - `passageOutcome(grades[])` (grades already decided by stage 1 grading): the Part 1 §4 table (under 12 vs
+    12+, blank beats stumbles), `applyOutcome(state, outcome)` (never below review 1 of
+    the step; down a step lands at review 1 of the step below; step 0 is the floor).
+  - `lateness(state, dueISO, clock)`: missed reviews = full intervals overdue, skipping
+    Sabbath/paused days (reuse `computeMissedCycles`' elapsed-day logic), applied by
+    moving back within the step.
+- `src/lib/grading.ts` + `grading.check.ts` + `npm run check:grading`:
+  - Recite/type/Keep going/First words accuracy → grade with `cleanPct`, < 50% or
+    revealed = blank, a hint = one stumble.
+  - Find the wrong word: misses = unfound swaps + wrong flags + "didn't know the
+    replacement"; misses per verse 0–0.49 clean, 0.5–1 stumble, > 1 blank;
+    `swapCanBeClean` off → best is a stumble.
+  - Self-check: three buttons → grade; every-other rule (`canSelfCheckMoveUp`); spot
+    check odds and the 3-word lead-in text from the verse before.
+- **Done when:** both checks cover every row of the §4 table, both passage sizes, the
+  step floors, lateness across a Sabbath and a pause, each thoroughness preset's
+  counts, and the swap thresholds at their edges (0.49, 0.5, 1.0, 1.01).
+
+## Stage 2 — Passages logic (pure)
+
+**Local · Opus.**
+
+- `src/lib/passages.ts` + check + `npm run check:passages`:
+  - `passages(queue)`: unbroken runs, translation-separate, learning verses excluded.
+  - `reconcile(queue)`: members agree (decision 1); a verse arriving from Learning
+    starts a catch-up; joining during a catch-up doesn't restart it; a filled gap
+    merges two passages; a reopened top-step passage climbs normally. Returns only
+    the items that changed (so writes stay small).
+  - `recordGrade(queue, verseId, grade, day)` → sets `dayResult`, applies the outcome
+    when the passage is fully covered, returns the changed items + a summary for
+    toasts/recap.
+  - `settleStaleDays(queue, today)`: penalty-only outcome for passages partly covered
+    on an earlier day.
+  - `firmUp`: set after a hold/back-one; `winBack(queue, passage, grades)` restores
+    when the slipped verses are recited clean the next day (not for step drops).
+  - `spreadOverdue(queue, maxReviewCap, clock)`: welcome-back spreading, Settling
+    first, then most overdue, each day kept under the review-time cap.
+  - Weak-spot `slipped` set/clear.
+- **Done when:** the check runs every scenario from the design conversation: join at
+  the end and the front, join during a catch-up, gap fill and merge, two translations,
+  a single-verse passage, a reopened top passage, partial coverage then day rollover,
+  win-back allowed vs. not, and a 19-day absence spread under the cap.
+
+## Stage 3 — Migration (pure + dry run)
+
+**Local · Opus · reads Firestore.**
+
+- `src/lib/ladderMigration.ts` + check + `npm run check:migration`:
+  - Per item: daily streak d → step 0 (d < 7), 1 (d < 11), 2 (d < 15), else step 3 at
+    0; weekly w → 3 (w < 8), 4 (w < 14), else 5; monthly m → 5 (m < 12), 6 (m < 18),
+    else 7; `retained` → 7. An active refresher uses its return phase/progress.
+    Keep `nextReviewDueDate` (no lateness, no avalanche).
+  - Then `reconcile`: passages whose members disagree take the lowest with a catch-up;
+    uniform passages keep their mapped step.
+  - Output: new items + a **report** (per passage: old stages → new step, due date).
+    Idempotent: items that already have `ladderStep` are left alone.
+- A **dev-only dry run** (Settings > developer, or a demo route) that loads the signed-in
+  account's queue, runs the migration in memory and shows the report. **Writes
+  nothing.** Run it on the test account, then the main account, and read the report
+  with the user before stage 4.
+- **Done when:** the check covers every mapping row and a mixed-stage chapter; the dry
+  run's report on the user's real account looks right to the user.
+
+## Stage 4 — Engine swap and settings
+
+**Local · Opus · writes Firestore.** The riskiest stage; split into two sessions if
+it runs long (4a settings + migration run, 4b grading path).
+
+- **4a:** `usePlanSettings` gains the new settings (decision 5), saved to
+  `memoryPlans/{uid}`. On load: if `ladderVersion !== 2`, back up the queue (local
+  JSON via AsyncStorage + a downloadable export on web), run the stage-3 migration,
+  write the changed items in batches (≤ 500 per batch), then set `ladderVersion: 2`
+  **last**, so an interrupted run simply re-runs (the migration is idempotent). Then
+  `settleStaleDays`, lateness (if on) and `spreadOverdue`.
+- **4b:** `useReviewEngine`: `handleReviewCompleted` becomes "grade one verse": Learning
+  touches unchanged (graduation still waits for due reviews to clear, then the verse
+  joins via `reconcile`); reviewing verses go through `recordGrade`. All changed
+  passage members are persisted together (one batch). Practicing ahead (not due)
+  stays practice, except a firm-up item. Retire `missPolicy` use, the missed-review
+  popup state, refreshers, `dailyPhaseExtensionDays` and `reviewsRequired` in the
+  engine (fields left on old docs are ignored, not deleted). Keep `syncChallengeProgress`
+  and the activity-feed "verse/chapter reached the top" event (now: reaching every
+  6 months).
+- `npm run check:appstate`: update the snapshot on purpose for the new keys.
+- **Done when:** tsc clean, all checks pass, the test account migrated once (and a
+  second load did nothing), a passage reviewed end to end moved up, a stumble held, a
+  blank dropped a step, and a partly covered passage got its penalty-only outcome the
+  next day. Then the user's main account.
+
+## Stage 5 — Every credit path reports grades
+
+**Local · Opus · writes Firestore** (through the engine). A mistake credits the wrong
+verses.
+
+- **Mixed review** (`mix.ts`, `MixedReviewScreen`): `roundCredits` returns per-verse
+  grades (stage-1 grading) instead of pass/miss; the "every verse covered" rule now
+  lives in the engine (decision 4), so a stopped session needs no special case.
+  `todayOrder` sorts by ladder step. The self-check becomes Got it / Stumbled /
+  Blanked; the every-other rule hides self-check where it can't count; the spot check
+  runs after "Got it".
+- **Find the wrong word** (`SpotSwapDrill`): after the check, a Yes/No "knew the
+  replacement" per found swap; `onScored` reports misses per verse.
+- **Recall, Pick up the thread, Guided learning, First words, Walk the constellation,
+  the manual log:** each passes a grade, not success/fail. The manual log becomes a
+  self-check (subject to the every-other rule).
+- **Done when:** tsc, `check:mix`, `check:guided`, `check:thread`, `check:swap`,
+  `check:outline` updated and passing; on the test account, one passage reviewed half
+  in Recall and half in Mixed review moved up once, not twice.
+
+## Stage 6 — Showing the ladder
+
+**Cloud OK · Sonnet.** Display only; demo data, no Firestore. Can start once stage 1
+has landed (it needs the ladder table and the new `QueueItem` fields), in parallel
+with stages 2–5.
+
+- `stageProgress.ts`: `VerseStage` becomes waiting / learning / settling / steady /
+  kept (+ the top step flagged within kept), driven by `ladderStep`; update
+  `check:stages`.
+- Theme tokens: Settling = `stageDaily` green, Steady = `stageWeekly` blue, Kept =
+  gold (`stageComplete`), plus top-tier tokens for the halo-and-glint (light and dark).
+  Labels stay ink (theme rule).
+- `VerseStages.tsx` strip and captions, My Verses by group and by chapter (passage
+  rows, the gap note, "Romans 8:21–22 join verses 1–20"), the verse page ladder
+  (`VerseRoadScreen`/`VersePageScreen`), the weak-spot dot, Today's review card copy.
+- Constellation map: ring colors per group and the halo-and-glint top star in
+  `MapDrawing.tsx` (spec in Part 1 §1).
+- Match the design canvas boards. Demo harness seeds the new fields
+  (`DemoHarness.tsx`) so every screen has a demo.
+- **Done when:** tsc, `check:layout`, `check:stages`, screenshots at 1.5× on SE width,
+  light and dark.
+
+## Stage 7 — Settings, recap, welcome back, firm-up
+
+**Cloud OK · Sonnet** for the screens, wired to the stage-4/5 engine functions (the
+demo stubs them). **Local** for one end-to-end pass on the test account afterwards.
+
+- Settings > Reviews: Thoroughness presets with the per-step table, "Accuracy needed
+  for clean" (85–100 by 5), "Late reviews move you back", "Find the wrong word can
+  count as a clean review".
+- Mixed review recap: per-passage outcome tags (Clean / Held / Forgiven / Back 1 /
+  Down a step) with the reason line; "Fix the transitions" (final name TBD) running
+  the Seam drill, with a clear **Skip**.
+- Today: the "Welcome back" card (spread days), the Firm-up item ("win back a
+  review"), late notes on rows.
+- **Done when:** tsc, `check:layout`, screenshots; then locally on the test account:
+  a stumble → firm-up the next day → review won back.
+
+## Stage 8 — Everything else that reads stages
+
+Mixed: pure projections **Cloud OK · Sonnet**; anything that writes Firestore
+**Local · Opus**.
+
+- Projections (cloud OK): `forecast.ts`, `reviewCalendar.ts` + Memory Calendar,
+  `retention.ts` load estimates (Review Shield, minutes), Dashboard, `milestones`
+  `versesHeld` (past Learning, unchanged meaning), `takeaways` `sectionStatuses`
+  ("weekly or later" → Steady or later), `constellations`, `reviewLog` stage mapping.
+  Update each one's check.
+- Writes (local): `circleTotals` (`isReviewLog` counts the new outcomes; it writes
+  `memberStats`), group plans (`useGroupPlans` creates queue items with the new
+  fields), challenge progress.
+- Retire: `MissPolicySection.tsx`, the missed-review popup, `missPolicy.ts` (after
+  nothing imports it), the per-plan phase-length controls in `PlanDesignerScreen` /
+  `ActivePlanScreen` / `SavedPlansScreen` (replaced by Settings > Reviews; decide with
+  the user what those screens keep).
+- **Done when:** tsc, every `npm run check:*` passes, no import of `missPolicy` or
+  `retentionPhase` logic left outside the legacy-field mapping.
+
+## Stage 9 — Real phone and release
+
+**Local · Opus**, with the user.
+
+- Ship the new build to every device the user uses before migrating the main
+  account (decision 3).
+- Real-phone checks: speech grading in Mixed review, the Find the wrong word toggles,
+  the spot check, a welcome-back after time away (fake the clock on the test account).
+- Main account: dry run report again, then migrate, then confirm My Verses matches the
+  report.
+
+## Model and place summary
+
+| Stage | Where | Model |
+| --- | --- | --- |
+| 1 Ladder + grading logic | Local (cloud acceptable) | Opus |
+| 2 Passages logic | Local | Opus |
+| 3 Migration + dry run | Local (reads Firestore) | Opus |
+| 4 Engine swap + settings | Local (writes Firestore) | Opus |
+| 5 Credit paths | Local (writes Firestore) | Opus |
+| 6 Showing the ladder | Cloud OK | Sonnet |
+| 7 Settings, recap, welcome back | Cloud for screens, local pass | Sonnet |
+| 8 Other stage readers | Cloud for projections, local for writes | Sonnet / Opus |
+| 9 Real phone + release | Local | Opus |
