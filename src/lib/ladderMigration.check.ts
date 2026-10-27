@@ -164,6 +164,45 @@ console.log('A uniform passage keeps its mapped step');
   check('retained becomes reviewing, monthly (decision 3)', queue[0].status === 'reviewing' && queue[0].retentionPhase === 'monthly');
 }
 
+console.log('Retained verses with no due date are spread over 26 weeks');
+{
+  // 26 one-chapter passages of 4 retained verses each, no dates. Chapter 3 has a Thursday anchor.
+  const q: QueueItem[] = [];
+  for (let ch = 1; ch <= 26; ch++) for (let v = 1; v <= 4; v++) q.push(item({ v, ch, status: 'retained', due: null }));
+  for (const x of q) if (x.chapter === 3) x.chapterReviewAnchorDay = 'Th';
+  const { queue, report } = run(q);
+  check('every verse got a date', queue.every((x) => !!x.nextReviewDueDate));
+  const days = (ch: number) => {
+    const d = new Date(queue.find((x) => x.chapter === ch)!.nextReviewDueDate!);
+    return Math.round((d.getTime() - NOW.getTime()) / 86400000);
+  };
+  check('first chapter within the first week', days(1) >= 1 && days(1) <= 7, days(1));
+  check('last chapter in week 26', days(26) > 25 * 7 - 7 && days(26) <= 26 * 7, days(26));
+  check('one chapter a week (equal sizes)', [2, 10, 20].every((ch) => days(ch) > (ch - 1) * 7 - 1 && days(ch) <= ch * 7), [2, 10, 20].map(days));
+  check('chapter weekday kept', new Date(queue.find((x) => x.chapter === 3)!.nextReviewDueDate!).getDay() === 4);
+  check('members of a passage share the date', new Set(queue.filter((x) => x.chapter === 5).map((x) => x.nextReviewDueDate)).size === 1);
+  check('report shows the date', report.passages.every((p) => !!p.due));
+  check('a second run changes nothing', migrateQueue(queue, { clock: CLOCK, now: NOW }).changed.length === 0);
+}
+{
+  // Weighted by verses: a 48-verse chapter, then two 2-verse ones.
+  const q = [
+    ...Array.from({ length: 48 }, (_, i) => item({ v: i + 1, ch: 5, status: 'retained', due: null })),
+    item({ v: 1, ch: 6, status: 'retained', due: null }),
+    item({ v: 2, ch: 6, status: 'retained', due: null }),
+    item({ v: 1, ch: 7, status: 'retained', due: null }),
+    item({ v: 2, ch: 7, status: 'retained', due: null }),
+  ];
+  const { queue } = run(q);
+  const week = (ch: number) => Math.ceil((new Date(queue.find((x) => x.chapter === ch)!.nextReviewDueDate!).getTime() - NOW.getTime()) / (7 * 86400000));
+  check('the long chapter pushes the next ones late in the 26 weeks', week(5) === 1 && week(6) >= 24 && week(7) >= 25, [week(5), week(6), week(7)]);
+}
+{
+  const dated = at(30).toISOString();
+  const { queue } = run([item({ v: 1, status: 'retained', due: dated })]);
+  check('a retained verse that has a date keeps it', queue[0].nextReviewDueDate === dated);
+}
+
 console.log('Passage boundaries');
 {
   const q = [

@@ -11,9 +11,11 @@ import {
   stepInfo,
   stepReviewCount,
   type Thoroughness,
+  TOP_STEP,
 } from './ladder';
+import { getLogicalDate, nthOccurrenceOfWeekday } from './logicalDate';
 import { passages, passageState, reconcile } from './passages';
-import type { ReviewClock } from './retention';
+import { findChapterReviewAnchor, nextDueDateISO, type ReviewClock } from './retention';
 
 const isPastLearning = (q: QueueItem) => q.status === 'reviewing' || q.status === 'retained';
 
@@ -117,7 +119,9 @@ export interface MigrationResult {
  *    catch-up only exists there); a passage whose members agree keeps its
  *    step;
  * 3. reconcile writes the agreed schedule on every member (earliest due
- *    date, legacy `status` / `retentionPhase` mapped).
+ *    date, legacy `status` / `retentionPhase` mapped);
+ * 4. top-step passages with no due date (retained verses) are spread over
+ *    the next 26 weeks (`spreadUndated`).
  * Idempotent: verses that already have `ladderStep` keep their position, so
  * a second run changes nothing. Learning and waiting verses are untouched.
  */
@@ -169,6 +173,8 @@ export const migrateQueue = (
   const { changed: reconciled } = reconcile(prepared, { clock: opts.clock, now: opts.now });
   const finalOf = new Map(prepared.map((q) => [q.verseId, q]));
   for (const q of reconciled) finalOf.set(q.verseId, q);
+  const spread = spreadUndated(queue.map((q) => finalOf.get(q.verseId)!), opts.clock, opts.now ?? new Date());
+  for (const q of spread) finalOf.set(q.verseId, q);
   const final = queue.map((q) => finalOf.get(q.verseId)!);
 
   const changed = final.filter((q) => JSON.stringify(q) !== JSON.stringify(original.get(q.verseId)));
@@ -199,6 +205,35 @@ export const migrateQueue = (
     }));
 
   return { changed, report: { passages: report, changedCount: changed.length, alreadyMigrated, notStarted } };
+};
+
+/** Weeks the undated top-step passages are spread over: one Every 6 months interval. */
+export const SPREAD_WEEKS = 26;
+
+/**
+ * Retained verses never had a due date (the old system was finished with
+ * them), and a verse with no date reads as due now. Top-step passages with
+ * no date are spread across the next 26 weeks instead, weighted by verse
+ * count so long chapters don't bunch up, each on its chapter's weekday
+ * (a chapter without one counts whole weeks from today). In queue order.
+ */
+const spreadUndated = (queue: readonly QueueItem[], clock: ReviewClock, now: Date): QueueItem[] => {
+  const undated = passages(queue).filter((p) => passageState(p).step === TOP_STEP && p.items.every((q) => !q.nextReviewDueDate));
+  const total = undated.reduce((n, p) => n + p.items.length, 0);
+  const tomorrow = new Date(getLogicalDate(clock.dayStartHour, now));
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const out: QueueItem[] = [];
+  let before = 0;
+  for (const p of undated) {
+    const week = 1 + Math.floor((before * SPREAD_WEEKS) / total);
+    before += p.items.length;
+    const anchor = findChapterReviewAnchor(p.book, p.chapter, queue as QueueItem[]);
+    const due = anchor
+      ? nthOccurrenceOfWeekday(tomorrow, anchor, week, clock.sabbathEnabled, clock.sabbathDay).toISOString()
+      : nextDueDateISO(week * 7, clock, now);
+    for (const q of p.items) out.push({ ...q, nextReviewDueDate: due });
+  }
+  return out;
 };
 
 /** "Every 2 days, review 3 of 4 (catch-up)" for the report. */

@@ -10,8 +10,9 @@ Stage files by name when committing (never `git add -A`). After each stage, upda
 `MIXED_REVIEW_PLAN.md` does.
 
 **Progress:** stages 1–3 built (ladder, grading, passages and migration logic, all
-pure, plus a dev-only dry run that saves nothing). Before stage 4: run the dry run on
-the test account and the main account and read the reports with the user.
+pure, plus a dev-only dry run that saves nothing). Main account dry run read with the user
+2026-10-27 (led to the retained-verse spreading); before stage 4, run it again to
+confirm the dates, and once on the test account.
 
 Mockups: the "My Verses ladder sketches" design canvas (claude.ai artifact
 77ZK89BZsaNcsiS8UgXqHL): My Verses by group and by chapter, verse page ladder,
@@ -400,12 +401,18 @@ needed).
     Every week vs Every 4 weeks just lands at Every week). The catch-up's count is held
     one short too (daily 5 joining → Every day, 2 of 3 done).
   - Due dates: each verse keeps its own, then the passage takes its earliest (reconcile).
+  - **Retained verses had no due date** (the old system was done with them), and no
+    date reads as due now: the user's first dry run (2026-10-27) would have made ~450
+    verses due on day one. Top-step passages with no date are now **spread across the
+    next 26 weeks** (decided with the user), weighted by verse count, each on its
+    chapter's weekday (whole weeks from today if the chapter has none). Retained
+    verses that do have a date keep it.
   - `retained` verses come out `status: 'reviewing'`, `retentionPhase: 'monthly'`
     (decision 3). Anything still counting `retained` (Memorized counts, the
     activity feed) moves to "reached Every 6 months" in stages 4b / 8.
   - Idempotent: verses with `ladderStep` keep their position; a second run returns no
     changes. A half-migrated passage (interrupted run) maps the rest and agrees.
-- `npm run check:migration` (61 checks).
+- `npm run check:migration` (71 checks).
 
 ## Stage 4 — Engine swap and settings
 
