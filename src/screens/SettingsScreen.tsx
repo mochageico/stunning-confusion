@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 import Constants from 'expo-constants';
 import {
@@ -52,6 +52,7 @@ import { FALLBACK_FORMAT, MIX_COUNTS_PREF, MIX_FORMAT_ORDER, MIX_FORMATS_PREF, M
 import { PassMark, PracticeTextSize, SchemeChoice, setAppPref, useAppPrefs } from '../lib/appPrefs';
 import { printVerses, shareVersesAsText } from '../lib/exportVerses';
 import { resetTips } from '../lib/tips';
+import { LadderDryRun } from '../dev/LadderDryRun';
 import { forgetAllSpeechSlips, forgetSpeechSlip, SLIP_LEARN_AFTER, useSpeechSlips } from '../lib/speechSlips';
 
 // ============================================================================
@@ -77,7 +78,8 @@ type Page =
   | 'notifications'
   | 'privacy'
   | 'appearance'
-  | 'help';
+  | 'help'
+  | 'ladderDryRun';
 
 const PAGE_TITLE: Record<Page, string> = {
   home: 'Settings',
@@ -91,6 +93,7 @@ const PAGE_TITLE: Record<Page, string> = {
   privacy: 'Privacy and safety',
   appearance: 'Appearance',
   help: 'Help and tour',
+  ladderDryRun: 'Ladder dry run',
 };
 
 // Set just before navigateTo('settings') to land on one page.
@@ -590,6 +593,9 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     updateAccountabilityDailyCap,
     pausedAt,
     pausedUntil,
+    sabbathEnabled,
+    sabbathDay,
+    dayStartHour,
     pauseReviews,
     resumeReviews,
     memoryQueue,
@@ -685,6 +691,12 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     pauseReviews(untilISO);
   };
 
+  // For the dev-only ladder dry run.
+  const reviewClock = useMemo(
+    () => ({ dayStartHour, sabbathEnabled, sabbathDay, pausedAt, pausedUntil }),
+    [dayStartHour, sabbathEnabled, sabbathDay, pausedAt, pausedUntil]
+  );
+
   if (!user) {
     return (
       <FadeInView style={{ flex: 1 }}>
@@ -773,10 +785,18 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         <ListRow Icon={Palette} title="Appearance" value={`${schemeName} · ${accentName}`} onPress={() => setPage('appearance')} />
         <ListRow Icon={CircleHelp} title="Help and tour" onPress={() => setPage('help')} />
       </GroupedList>
+
+      {/* Development builds only: REVIEW_LADDER_PLAN.md stage 3. */}
+      {__DEV__ ? (
+        <GroupedList header="Developer">
+          <ListRow title="Ladder dry run" subtitle="What the move to the review ladder would do. Saves nothing." onPress={() => setPage('ladderDryRun')} />
+        </GroupedList>
+      ) : null}
     </>
   );
 
   const pages: Record<Exclude<Page, 'home'>, React.ReactNode> = {
+    ladderDryRun: page === 'ladderDryRun' ? <LadderDryRun queue={memoryQueue} clock={reviewClock} /> : null,
     account: (
       <>
         <GroupedList>

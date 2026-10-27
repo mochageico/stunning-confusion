@@ -9,8 +9,9 @@ Stage files by name when committing (never `git add -A`). After each stage, upda
 **Progress** line and add an "As built" note under the stage, like
 `MIXED_REVIEW_PLAN.md` does.
 
-**Progress:** stages 1–2 built (ladder, grading and passages logic, all pure; nothing
-calls them yet).
+**Progress:** stages 1–3 built (ladder, grading, passages and migration logic, all
+pure, plus a dev-only dry run that saves nothing). Before stage 4: run the dry run on
+the test account and the main account and read the reports with the user.
 
 Mockups: the "My Verses ladder sketches" design canvas (claude.ai artifact
 77ZK89BZsaNcsiS8UgXqHL): My Verses by group and by chapter, verse page ladder,
@@ -373,6 +374,38 @@ needed).
   with the user before stage 4.
 - **Done when:** the check covers every mapping row and a mixed-stage chapter; the dry
   run's report on the user's real account looks right to the user.
+
+### As built (stage 3)
+
+- `src/lib/ladderMigration.ts`: `mapLegacyItem`, `legacyStageLabel`, `migrateQueue`
+  (returns `{ changed, report }`), `describeLadderState`, `oldStagesLine`,
+  `passageTitle`, `migrationReportText` (the report as plain text, to copy).
+- Dry run: **Settings > Developer > Ladder dry run** (`src/dev/LadderDryRun.tsx`),
+  shown only in development builds (`__DEV__`). It runs `migrateQueue` on the queue
+  already loaded for the signed-in account (no extra Firestore read) and shows each
+  passage: old stages, new step, next review, a "Mixed" badge when its members took
+  the lowest. "Copy report" (web) / "Share report" (phone) gives the text. Writes
+  nothing. Demo: `?s=settings`, scroll to Developer.
+- Choices made while building:
+  - **Leftover reviews carry into the step** (daily 10 → Every 2 days with 3 done),
+    held one short of the step's count, so no verse moves up on its first review
+    (weekly 40 → Every 4 weeks, 11 of 12 done). Every 6 months always starts at 0.
+  - The streak thresholds are the plan's (Standard counts). The carried count is
+    capped by the thoroughness passed in (Standard until stage 4 adds the setting).
+  - A reviewing verse with no phase reads as daily. An active refresher counts from
+    its return phase and progress, whatever phase it's in now.
+  - **"Disagree" means different steps.** Same step with different counts takes the
+    fewest, no catch-up (nothing joined). Different steps take the lowest, with the
+    catch-up only when the lowest is below Every week (the catch-up only exists there;
+    Every week vs Every 4 weeks just lands at Every week). The catch-up's count is held
+    one short too (daily 5 joining → Every day, 2 of 3 done).
+  - Due dates: each verse keeps its own, then the passage takes its earliest (reconcile).
+  - `retained` verses come out `status: 'reviewing'`, `retentionPhase: 'monthly'`
+    (decision 3). Anything still counting `retained` (Memorized counts, the
+    activity feed) moves to "reached Every 6 months" in stages 4b / 8.
+  - Idempotent: verses with `ladderStep` keep their position; a second run returns no
+    changes. A half-migrated passage (interrupted run) maps the rest and agrees.
+- `npm run check:migration` (61 checks).
 
 ## Stage 4 — Engine swap and settings
 
