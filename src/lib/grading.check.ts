@@ -1,12 +1,12 @@
 // Assertions for turning one verse's result into a grade, run by `npm run check:grading`.
 
 import {
-  applySpotCheck,
   canSelfCheckMoveUp,
   gradeRecall,
   gradeSelfCheck,
   gradeSwap,
   pickSpotCheck,
+  spotCheckCanMoveUp,
   spotCheckLeadIn,
   swapMisses,
 } from './grading';
@@ -74,25 +74,26 @@ const seq = (...values: number[]) => {
   return () => values[i++ % values.length];
 };
 check('no Got it, no spot check', pickSpotCheck(['stumbled', 'blanked'], seq(0)) === null);
-check('a roll over the odds skips it', pickSpotCheck(['gotIt', 'gotIt'], seq(0.5)) === null);
-check('a roll under the odds checks a Got it verse', pickSpotCheck(['stumbled', 'gotIt', 'gotIt'], seq(0.1, 0)) === 1);
-check('…picked among the Got it verses only', pickSpotCheck(['gotIt', 'blanked', 'gotIt'], seq(0.1, 0.99)) === 2);
+check('a Got it always gets a spot check', pickSpotCheck(['gotIt', 'gotIt'], seq(0.99)) === 1);
+check('…picked among the Got it verses only', pickSpotCheck(['stumbled', 'gotIt', 'blanked', 'gotIt'], seq(0)) === 1);
+check('…the last Got it at the top of the roll', pickSpotCheck(['gotIt', 'blanked', 'gotIt'], seq(0.99)) === 2);
 check('lead-in: the last 3 words of the verse before', spotCheckLeadIn('There is therefore now no condemnation for those who are in Christ Jesus.') === '…in Christ Jesus.');
 check('lead-in: a short verse is shown whole', spotCheckLeadIn('Jesus wept.') === 'Jesus wept.');
 check('lead-in: extra spaces are ignored', spotCheckLeadIn('  one   two  three  ') === 'one two three');
 check('lead-in: no verse before', spotCheckLeadIn(null) === null && spotCheckLeadIn('  ') === null);
 check(
-  'missed spot check: the checked verse is a stumble',
-  JSON.stringify(applySpotCheck(['clean', 'clean', 'clean'], 1, false)) === JSON.stringify(['clean', 'stumble', 'clean'])
+  'missed spot check holds a short passage',
+  passageOutcome(['clean', 'clean', 'clean'], { canMoveUp: spotCheckCanMoveUp(false) }) === 'held'
 );
 check(
-  'passed spot check changes nothing',
-  JSON.stringify(applySpotCheck(['clean', 'clean'], 0, true)) === JSON.stringify(['clean', 'clean'])
+  'missed spot check holds a 12+ passage too',
+  passageOutcome(Array(15).fill('clean'), { canMoveUp: spotCheckCanMoveUp(false) }) === 'held'
 );
 check(
-  'a missed spot check holds a short passage',
-  passageOutcome(applySpotCheck(['clean', 'clean', 'clean'], 0, false)) === 'held'
+  'missed spot check: a blank still drops',
+  passageOutcome(['clean', 'blank'], { canMoveUp: spotCheckCanMoveUp(false) }) === 'down'
 );
+check('passed spot check can move up', passageOutcome(['clean', 'clean'], { canMoveUp: spotCheckCanMoveUp(true) }) === 'up');
 
 if (failures > 0) {
   console.log(`\n${failures} check(s) failed.`);

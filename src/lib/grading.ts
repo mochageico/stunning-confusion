@@ -73,16 +73,13 @@ export const gradeSelfCheck = (answer: SelfCheckAnswer): ReviewGrade =>
  */
 export const canSelfCheckMoveUp = (lastSelfChecked: boolean | undefined): boolean => !lastSelfChecked;
 
-/** How often a self-check with a "Got it" gets a spot check. */
-export const SPOT_CHECK_CHANCE = 1 / 3;
-
 /**
- * Which "Got it" verse to spot check, or null for no spot check this time.
- * `rand` is Math.random's shape so a check can pin it.
+ * Which "Got it" verse to spot check: one at random, every time. null when
+ * nothing was Got it. `rand` is Math.random's shape so a check can pin it.
  */
 export const pickSpotCheck = (answers: readonly SelfCheckAnswer[], rand: () => number = Math.random): number | null => {
   const gotIt = answers.flatMap((a, i) => (a === 'gotIt' ? [i] : []));
-  if (gotIt.length === 0 || rand() >= SPOT_CHECK_CHANCE) return null;
+  if (gotIt.length === 0) return null;
   return gotIt[Math.min(gotIt.length - 1, Math.floor(rand() * gotIt.length))];
 };
 
@@ -101,6 +98,9 @@ export const spotCheckLeadIn = (previousVerseText: string | null | undefined, wo
   return all.length > words ? `…${tail}` : tail;
 };
 
-/** A missed spot check makes the checked verse a stumble; a passed one changes nothing. */
-export const applySpotCheck = (grades: readonly ReviewGrade[], checkedIndex: number, passed: boolean): ReviewGrade[] =>
-  grades.map((g, i) => (i === checkedIndex && !passed && g === 'clean' ? 'stumble' : g));
+/**
+ * A missed spot check holds the whole review, whatever the passage's size:
+ * pass the result as passageOutcome's `canMoveUp` (with the every-other
+ * rule). Stumbles and blanks still apply.
+ */
+export const spotCheckCanMoveUp = (passed: boolean): boolean => passed;

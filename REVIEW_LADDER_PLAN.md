@@ -56,8 +56,10 @@ Moves up by **reviews**, not calendar days. Standard counts:
 ### Thoroughness setting
 
 One multiplier on every step's review count (each step needs at least 2):
-Light 0.5× (~8 months to every 6 months), **Standard 1×** (~17 months, default),
-Thorough 1.5× (~2 years), Navigators 2× (~3 years). Replaces today's
+Light 0.5× (~14 months to every 6 months), **Standard 1×** (~28 months, default),
+Thorough 1.5× (~3½ years), Navigators 2× (~4½ years), with no slips. The settings
+screen calculates these from the table (`daysToTop` in `ladder.ts`) rather than
+showing fixed text. Replaces today's
 dailyPhaseWeeks / weeklyPhaseMonths / monthlyPhaseYears.
 
 ## 2. Passages: verses are reviewed together
@@ -106,9 +108,10 @@ Every counting format reports per verse: **clean, stumble or blank**.
 - **Self-check:** three buttons per verse, Got it / Stumbled / Blanked. Limits:
   - **Every other review:** a self-check can hold or drop a passage but can't move it
     up twice in a row; the next must be recall or Find the wrong word.
-  - **Spot check:** after "Got it", the app sometimes asks for one random verse,
+  - **Spot check:** after "Got it", the app always asks for one random Got it verse,
     showing the last 3 words of the verse before as context
-    ("…in Christ Jesus. **2** ___"). Missing it = the self-check counts as a stumble.
+    ("…in Christ Jesus. **2** ___"). Missing it holds the whole review, whatever the passage's size (it can't move
+    up; stumbles and blanks still apply).
 - **Practice (never credits):** Scramble, Put in order, Which section, Teach-It.
 - **Combining a session:** each verse takes the result of the counting round that
   covered it (worst if covered twice). A passage review only counts toward moving up
@@ -155,8 +158,6 @@ Every counting format reports per verse: **clean, stumble or blank**.
 ## Open
 
 - Rename "Fix the transitions".
-- Stage 1's "choices to confirm" (as-built note under Stage 1): time-to-top figures, and
-  whether a missed spot check holds the whole review.
 
 ---
 
@@ -261,27 +262,25 @@ needed).
   of the step" is `reviews: 0`.
 - `src/lib/grading.ts`: `gradeRecall` (accuracy 0..1, `cleanPct`, revealed, hinted),
   `swapMisses` + `gradeSwap(misses, verses, swapCanBeClean)`, `gradeSelfCheck`,
-  `canSelfCheckMoveUp`, `pickSpotCheck` (1 in 3, among Got it verses),
-  `spotCheckLeadIn`, `applySpotCheck`.
+  `canSelfCheckMoveUp`, `pickSpotCheck` (every time, one random Got it verse),
+  `spotCheckLeadIn`, `spotCheckCanMoveUp`.
 - `QueueItem` gained the decision-2 fields and `ReviewGrade` in `src/types.ts` (nothing
   writes them yet). `ReviewLog`'s new fields wait for stage 4.
 - `scheduledDaysBetween` in `logicalDate.ts` is the elapsed-day logic pulled out of
   `computeMissedCycles` (which now calls it), so lateness and the old miss count share it.
-- Choices made while building, to confirm:
+- Choices made while building:
   - **Thoroughness rounds half up** (Light Every day = 4, Thorough Every day = 11). The
     catch-up's 3/2/2 is the same at every thoroughness.
-  - **Time to the top doesn't match §1's estimates.** Straight from the table, Standard
-    is 843 days (~28 months), Light 422 (~14), Thorough ~3.5 years, Navigators ~4.6
-    years. The §1 figures (~17 months etc.) are off, or the counts are; settings copy
-    should use `daysToTop` rather than fixed text.
+  - **Time to the top** is calculated (`daysToTop`): Standard 843 days, Light 422,
+    Thorough 1265, Navigators 1686. §1's estimates were corrected to match.
   - **Lateness counts whole calendar days** (due 9pm yesterday, 8am today = 1 day late),
     unlike `computeMissedCycles`, which compares exact times.
   - **Find the wrong word grades by rate:** `gradeSwap` takes the misses and the verse
     count of whatever the drill covered and gives every verse in it the same grade
     (0.49 / 0.5 / 1 / 1.01 only make sense as a rate). Stage 5 decides the scope.
-  - **A missed spot check makes only the checked verse a stumble.** So a 12+ verse
-    passage still moves up (forgiven) after one. If it should hold the whole review,
-    stage 5 passes `canMoveUp: false` instead.
+  - **A missed spot check holds the whole review** (decided with the user): stage 5
+    passes `spotCheckCanMoveUp(passed)` as `passageOutcome`'s `canMoveUp`, together
+    with the every-other rule (both must allow it).
 - `npm run check:ladder`, `npm run check:grading`.
 
 ## Stage 2 — Passages logic (pure)
@@ -365,7 +364,7 @@ verses.
   lives in the engine (decision 4), so a stopped session needs no special case.
   `todayOrder` sorts by ladder step. The self-check becomes Got it / Stumbled /
   Blanked; the every-other rule hides self-check where it can't count; the spot check
-  runs after "Got it".
+  runs after every self-check with a "Got it"; a miss holds the review.
 - **Find the wrong word** (`SpotSwapDrill`): after the check, a Yes/No "knew the
   replacement" per found swap; `onScored` reports misses per verse.
 - **Recall, Pick up the thread, Guided learning, First words, Walk the constellation,
