@@ -51,7 +51,7 @@ export const THOROUGHNESS_PRESETS: readonly { value: Thoroughness; label: string
   { value: 0.5, label: 'Light' },
   { value: 1, label: 'Standard' },
   { value: 1.5, label: 'Thorough' },
-  { value: 2, label: 'Navigators' },
+  { value: 2, label: 'Intense' },
 ];
 
 export const DEFAULT_THOROUGHNESS: Thoroughness = 1;

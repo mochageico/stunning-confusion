@@ -73,7 +73,7 @@ const EXPECTED: Record<string, (number | null)[]> = {
   Light: [4, 2, 2, 4, 3, 6, 3, null],
   Standard: [7, 4, 4, 8, 6, 12, 6, null],
   Thorough: [11, 6, 6, 12, 9, 18, 9, null],
-  Navigators: [14, 8, 8, 16, 12, 24, 12, null],
+  Intense: [14, 8, 8, 16, 12, 24, 12, null],
 };
 for (const p of THOROUGHNESS_PRESETS) {
   check(`${p.label} (${p.value}×) step counts`, JSON.stringify(counts(p.value)) === JSON.stringify(EXPECTED[p.label]), counts(p.value));
@@ -81,7 +81,7 @@ for (const p of THOROUGHNESS_PRESETS) {
 check('every step needs at least 2 reviews at Light', counts(0.5).every((n) => n === null || n >= 2));
 check('Standard reaches the top in 843 days', daysToTop(1) === 843, daysToTop(1));
 check('Light is about half of Standard', daysToTop(0.5) === 4 + 4 + 8 + 28 + 42 + 168 + 168, daysToTop(0.5));
-check('Navigators is double Standard', daysToTop(2) === 2 * daysToTop(1));
+check('Intense is double Standard', daysToTop(2) === 2 * daysToTop(1));
 
 console.log('catch-up');
 check('catch-up is 3 / 2 / 2', JSON.stringify(CATCH_UP_REVIEWS) === JSON.stringify([3, 2, 2]));
