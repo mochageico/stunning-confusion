@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { isLibraryRecording } from '../../lib/libraryAudio';
 import { LibraryCredit } from '../VersePlayButton';
-import { MoveVertical, Pause, Pencil, Play, RefreshCw, Repeat, Sliders } from 'lucide-react-native';
+import { Minus, MoveVertical, Pause, Pencil, Play, Plus, RefreshCw, Repeat, Shuffle, Sliders } from 'lucide-react-native';
 import { scriptOfVerse } from '../../lib/textScript';
 import { ChipRow } from '../ui';
 import { Dropdown } from '../Dropdown';
@@ -10,7 +10,7 @@ import MemoryGrid from '../MemoryGrid';
 import ListenPhotoView from '../ListenPhotoView';
 import { AppButton, AppIconButton, AppText, type useScaledSpace } from '../design';
 import { EmptyState, SegmentedControl } from '../blocks';
-import { EMPTY_PHOTO_CACHE, LISTEN_REPEATS, LISTEN_SPEEDS, ListenProgress } from './shared';
+import { EMPTY_PHOTO_CACHE, LISTEN_REPEATS, LISTEN_SPEED_MAX, LISTEN_SPEED_MIN, LISTEN_SPEED_STEP, ListenProgress } from './shared';
 import type { PracticeModalsProps } from '../PracticeModals';
 import type { useThemeColors } from '../theme';
 import { playlistSource, type ListenPlayback, type ListenSource } from './useListenPlayback';
@@ -83,6 +83,8 @@ export default function ListenPanel({
     listenPlaying,
     listenSpeed,
     setListenSpeed,
+    shuffle,
+    toggleShuffle,
     currentVerseIndex,
     setCurrentVerseIndex,
     repeatMode,
@@ -109,6 +111,11 @@ export default function ListenPanel({
     handleVerseClick,
     segmentStatusLabel,
   } = listen;
+
+  const stepSpeed = (delta: number) =>
+    setListenSpeed((cur) =>
+      Math.min(LISTEN_SPEED_MAX, Math.max(LISTEN_SPEED_MIN, Math.round((cur + delta) * 10) / 10))
+    );
 
   // Playlist editor: closed, a new playlist (null), or one being edited.
   const [editing, setEditing] = useState<ListenPlaylist | null | undefined>(undefined);
@@ -241,7 +248,9 @@ export default function ListenPanel({
             if (isActive) {
               cardClassName += 'bg-accent-soft';
             } else if (selectionStart !== null) {
-              if (!inSelectionRange) {
+              // Only a closed range dims what's outside it; a lone start
+              // just marks where playback begins.
+              if (segmentClosed && !inSelectionRange) {
                 cardClassName += 'opacity-40';
               } else {
                 cardClassName += segmentClosed ? 'bg-success-soft' : 'bg-warning-soft';
@@ -341,7 +350,7 @@ export default function ListenPanel({
               </>
             ) : (
               <AppText variant="caption" className="font-sans text-ink-3 flex-1">
-                Tap the first verse to loop
+                Tap a verse to start there, then a later one to loop
               </AppText>
             )}
           </View>
@@ -389,49 +398,89 @@ export default function ListenPanel({
                 nothing is hidden by that: every pill states its own
                 value whether or not it's open. */}
             <View className="gap-1.5">
-              {openSetting !== null && (
+              {openSetting === 'repeats' && (
                 <View className="bg-surface-2 border border-line rounded-card p-2.5 gap-2">
                   <AppText variant="caption" className="font-sans font-semibold text-ink-2">
-                    {openSetting === 'speed' ? 'Playback speed' : 'Times each verse plays before moving on'}
+                    Times each verse plays before moving on
                   </AppText>
-                  {openSetting === 'speed' ? (
-                    <ChipRow
-                      value={listenSpeed}
-                      onChange={(v) => { setListenSpeed(Number(v)); setOpenSetting(null); }}
-                      options={LISTEN_SPEEDS.map((s) => ({ id: s, label: `${s.toFixed(1)}×` }))}
-                    />
-                  ) : (
-                    <ChipRow
-                      value={repeatsPerVerse}
-                      onChange={(v) => { setRepeatsPerVerse(Number(v)); setOpenSetting(null); }}
-                      options={LISTEN_REPEATS.map((n) => ({ id: n, label: `${n}×` }))}
-                    />
-                  )}
+                  <ChipRow
+                    value={repeatsPerVerse}
+                    onChange={(v) => { setRepeatsPerVerse(Number(v)); setOpenSetting(null); }}
+                    options={LISTEN_REPEATS.map((n) => ({ id: n, label: `${n}×` }))}
+                  />
                 </View>
               )}
 
               <View className="flex-row gap-1.5">
-                <AppButton // button-ok: a Listen setting pill that draws its own on/off state
-                  size="sm"
-                  onPress={() => setOpenSetting((cur) => (cur === 'speed' ? null : 'speed'))}
-                  className={`flex-row items-center justify-center gap-1 flex-1 rounded-full border ${openSetting === 'speed' ? 'bg-surface-2 border-line-strong' : 'bg-surface border-line-strong'}`}
-                >
-                  {/* An icon rather than the word "speed": spelled out,
-                      this pill clipped to "1.0x s..." at 1.5x font
-                      scale. The expander names it in full once open. */}
-                  <Sliders size={10} color={palette.ink3} />
-                  <AppText variant="micro" numberOfLines={1} className="font-sans font-semibold text-ink">
-                    {listenSpeed.toFixed(1)}×
-                  </AppText>
-                </AppButton>
+                {/* Speed. Closed it is a small pill; tapping it opens a
+                    stepper in place -- minus on the left, the value (tap
+                    to close) in the middle, plus on the right. */}
+                {openSetting === 'speed' ? (
+                  <View className="flex-row items-center rounded-full border bg-surface-2 border-line-strong shrink-0">
+                    <AppIconButton
+                      variant="bare"
+                      Icon={Minus}
+                      diameter={28}
+                      iconSize={12}
+                      onPress={() => stepSpeed(-LISTEN_SPEED_STEP)}
+                      disabled={listenSpeed <= LISTEN_SPEED_MIN}
+                      accessibilityLabel="Slower"
+                    />
+                    <AppButton // button-ok: a Listen setting pill that draws its own on/off state
+                      size="sm"
+                      onPress={() => setOpenSetting(null)}
+                      accessibilityLabel={`Playback speed ${listenSpeed.toFixed(1)}×, tap to close`}
+                    >
+                      <AppText variant="micro" numberOfLines={1} className="font-sans font-semibold text-ink">
+                        {listenSpeed.toFixed(1)}×
+                      </AppText>
+                    </AppButton>
+                    <AppIconButton
+                      variant="bare"
+                      Icon={Plus}
+                      diameter={28}
+                      iconSize={12}
+                      onPress={() => stepSpeed(LISTEN_SPEED_STEP)}
+                      disabled={listenSpeed >= LISTEN_SPEED_MAX}
+                      accessibilityLabel="Faster"
+                    />
+                  </View>
+                ) : (
+                  <AppButton // button-ok: a Listen setting pill that draws its own on/off state
+                    size="sm"
+                    onPress={() => setOpenSetting('speed')}
+                    accessibilityLabel={`Playback speed ${listenSpeed.toFixed(1)}×`}
+                    className="flex-row items-center justify-center gap-1 rounded-full border shrink-0 bg-surface border-line-strong"
+                  >
+                    <Sliders size={10} color={palette.ink3} />
+                    <AppText variant="micro" numberOfLines={1} className="font-sans font-semibold text-ink">
+                      {listenSpeed.toFixed(1)}×
+                    </AppText>
+                  </AppButton>
+                )}
 
                 <AppButton // button-ok: a Listen setting pill that draws its own on/off state
                   size="sm"
                   onPress={() => setOpenSetting((cur) => (cur === 'repeats' ? null : 'repeats'))}
-                  className={`flex-1 rounded-full border ${openSetting === 'repeats' ? 'bg-surface-2 border-line-strong' : 'bg-surface border-line-strong'}`}
+                  className={`rounded-full border shrink-0 ${openSetting === 'repeats' ? 'bg-surface-2 border-line-strong' : 'bg-surface border-line-strong'}`}
                 >
                   <AppText variant="micro" numberOfLines={1} className="font-sans font-semibold text-ink">
                     {repeatsPerVerse}× each
+                  </AppText>
+                </AppButton>
+
+                {/* Plays the passages in a random order; verses inside a
+                    passage stay in order. */}
+                <AppButton // button-ok: a Listen setting pill that draws its own on/off state
+                  size="sm"
+                  onPress={toggleShuffle}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: shuffle }}
+                  className={`flex-row items-center gap-1 rounded-full border shrink-0 ${shuffle ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
+                >
+                  <Shuffle size={10} color={shuffle ? palette.accent : palette.ink3} />
+                  <AppText variant="micro" numberOfLines={1} className={`font-sans font-semibold ${shuffle ? 'text-accent' : 'text-ink-2'}`}>
+                    Shuffle
                   </AppText>
                 </AppButton>
 

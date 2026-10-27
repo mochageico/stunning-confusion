@@ -7,7 +7,7 @@ import { isReviewDue } from '../../state/useAppState';
 import { libraryTimingsKey, resolveVerseAudio } from '../../lib/libraryAudio';
 import { useLibraryTimings } from '../../state/useLibraryAudio';
 import { chapterPhotoKey, sortChapterPhotos } from '../../lib/chapterPhotos';
-import { groupPassages } from './shared';
+import { groupPassages, shufflePassages } from './shared';
 
 // ============================================================================
 // LISTEN PLAYBACK
@@ -71,7 +71,22 @@ export function useListenPlayback({
   // ==========================================
   const [playSource, setPlaySource] = useState<ListenSource>(initialSource);
 
-  const [activePlayVerses, setActivePlayVerses] = useState<VerseState[]>(verses);
+  // The verses in the order the source lists them. activePlayVerses below is
+  // this, reshuffled passage by passage when Shuffle is on.
+  const [baseVerses, setBaseVerses] = useState<VerseState[]>(verses);
+
+  // Shuffle reorders whole passages (a run of consecutive verses from one
+  // chapter) and leaves the verses inside each in order, so a passage still
+  // reads straight through. The seed re-rolls the order on each toggle on.
+  const [shuffle, setShuffle] = useState(false);
+
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+
+  const activePlayVerses = useMemo(
+    () => (shuffle ? shufflePassages(baseVerses) : baseVerses),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shuffle, shuffleSeed, baseVerses]
+  );
 
   // "Verse by Verse" (existing card list) vs "Memory Grid" -- purely a
   // display choice, doesn't affect playback state at all. Tapping a grid
@@ -93,12 +108,12 @@ export function useListenPlayback({
   // Sync / load different playlists based on selected source
   useEffect(() => {
     if (playSource === 'selection') {
-      setActivePlayVerses(groupPassages(verses));
+      setBaseVerses(groupPassages(verses));
     } else if (playSource.startsWith('playlist:')) {
       // A playlist plays in the order it was saved -- the editor lets you
       // reorder its passages, so it isn't regrouped here. A deleted playlist
       // falls back to the verses this session opened on.
-      setActivePlayVerses(activePlaylist && activePlaylist.verses.length > 0 ? activePlaylist.verses : groupPassages(verses));
+      setBaseVerses(activePlaylist && activePlaylist.verses.length > 0 ? activePlaylist.verses : groupPassages(verses));
     } else {
       let dbLearning: VerseState[] = [];
       let dbReviewing: VerseState[] = [];
@@ -132,11 +147,11 @@ export function useListenPlayback({
       }
 
       if (playSource === 'memorization') {
-        setActivePlayVerses(dbLearning.length > 0 ? groupPassages(dbLearning) : verses);
+        setBaseVerses(dbLearning.length > 0 ? groupPassages(dbLearning) : verses);
       } else if (playSource === 'reviewing') {
-        setActivePlayVerses(dbReviewing.length > 0 ? groupPassages(dbReviewing) : verses);
+        setBaseVerses(dbReviewing.length > 0 ? groupPassages(dbReviewing) : verses);
       } else if (playSource === 'priming') {
-        setActivePlayVerses(dbPriming.length > 0 ? groupPassages(dbPriming) : verses);
+        setBaseVerses(dbPriming.length > 0 ? groupPassages(dbPriming) : verses);
       } else if (playSource === 'all') {
         // "Today's Verses" -- everything actually relevant today (still
         // being learned, due for review, or coming up in the priming
@@ -146,7 +161,7 @@ export function useListenPlayback({
         // three, so Isaiah 55:1-8 under review plays straight into 55:9
         // being learned.
         const dbToday = groupPassages([...dbLearning, ...dbReviewing, ...dbPriming]);
-        setActivePlayVerses(dbToday.length > 0 ? dbToday : verses);
+        setBaseVerses(dbToday.length > 0 ? dbToday : verses);
       }
     }
     // Reset playback position back to the first verse
@@ -155,6 +170,16 @@ export function useListenPlayback({
     setSelectionEnd(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playSource, verses, allVerses, memoryQueue, primingLookahead, reviewsPaused, activePlaylist]);
+
+  // Toggling Shuffle changes the order under the playhead, so start over from
+  // the top of the new order.
+  const toggleShuffle = () => {
+    setShuffle((on) => !on);
+    setShuffleSeed((n) => n + 1);
+    setCurrentVerseIndex(0);
+    setSelectionStart(null);
+    setSelectionEnd(null);
+  };
 
   // Header reference text
   const referenceText = useMemo(() => {
@@ -535,11 +560,13 @@ export function useListenPlayback({
   // Finds the next playable index after `from`, restricted to the active
   // selection range when one is set. Returns null if there's nowhere to go
   // (caller decides whether that means "loop back to the start" or "stop").
+  // A start with no end yet is open-ended: it plays from there to the end of
+  // the list.
   const findNextPlayableIndex = (from: number): number | null => {
     const inRange = (i: number) => {
       if (selectionStart === null) return true;
-      const end = selectionEnd ?? selectionStart;
-      return i >= selectionStart && i <= end;
+      if (selectionEnd === null) return i >= selectionStart;
+      return i >= selectionStart && i <= selectionEnd;
     };
     const candidates = playableIndices.filter(inRange);
     if (candidates.length === 0) return null;
@@ -550,11 +577,17 @@ export function useListenPlayback({
   const firstPlayableIndexInRange = (): number => {
     const inRange = (i: number) => {
       if (selectionStart === null) return true;
-      const end = selectionEnd ?? selectionStart;
-      return i >= selectionStart && i <= end;
+      if (selectionEnd === null) return i >= selectionStart;
+      return i >= selectionStart && i <= selectionEnd;
     };
     return playableIndices.filter(inRange)[0] ?? 0;
   };
+
+  // Where a loop returns to. Normally the first verse in range, but an
+  // open-ended start only says where to begin: looping goes back to the top
+  // of the list so nothing before it is skipped.
+  const loopTargetIndex = (): number =>
+    selectionStart !== null && selectionEnd === null ? playableIndices[0] ?? 0 : firstPlayableIndexInRange();
 
   // Guards against a race that showed up specifically on LOOPING BACK to an
   // earlier verse (e.g. a 1-3 selection finishing verse 3 and returning to
@@ -823,7 +856,7 @@ export function useListenPlayback({
     if (next !== null) {
       leaveCurrentVerse(next);
     } else if (repeatMode === 'playlist') {
-      const first = firstPlayableIndexInRange();
+      const first = loopTargetIndex();
       setVerseRepeatsDone(0);
       if (first === currentVerseIndex) {
         // Looping a range that is only this verse -- see replayCurrentSegment.
@@ -879,25 +912,24 @@ export function useListenPlayback({
     }
   };
 
-  // Tapping a verse in the reading pane jumps playback to it and marks the
-  // start of a loop range; a second tap marks the end. Every list loops this
-  // way, not just Selected verses. Tapping the SAME verse twice is a one-verse loop: end ===
-  // start is just the shortest valid range, not a special case.
+  // Tapping a verse in the reading pane jumps playback to it. That first tap
+  // only says where to start: the rest of the list stays undimmed and plays
+  // on from there. A second tap further down closes a range, which then dims
+  // everything else and loops. Tapping the SAME verse twice is a one-verse
+  // loop: end === start is just the shortest valid range, not a special case.
   const handleVerseClick = (index: number) => {
-    if (selectionStart === null || (selectionStart !== null && selectionEnd !== null)) {
+    if (selectionStart === null || selectionEnd !== null) {
       setSelectionStart(index);
       setSelectionEnd(null);
       setCurrentVerseIndex(index);
+    } else if (index < selectionStart) {
+      // Tapped back above the start -- treat it as re-placing the start
+      // rather than as an impossible backwards range.
+      setSelectionStart(index);
+      setCurrentVerseIndex(index);
     } else {
-      if (index < selectionStart) {
-        // Tapped back above the start -- treat it as re-placing the start
-        // rather than as an impossible backwards range.
-        setSelectionStart(index);
-        setCurrentVerseIndex(index);
-      } else {
-        // Includes index === selectionStart: closes a single-verse segment.
-        setSelectionEnd(index);
-      }
+      // Includes index === selectionStart: closes a single-verse segment.
+      setSelectionEnd(index);
     }
   };
 
@@ -907,7 +939,7 @@ export function useListenPlayback({
 
   if (selectionStart !== null) {
     if (selectionEnd === null) {
-      segmentStatusLabel = 'Tap end verse';
+      segmentStatusLabel = 'Playing from here';
     } else {
       const count = selectionEnd - selectionStart + 1;
       segmentStatusLabel = count === 1 ? 'Looping 1 verse' : `Looping ${count} verses`;
@@ -928,6 +960,8 @@ export function useListenPlayback({
     listenPlaying,
     listenSpeed,
     setListenSpeed,
+    shuffle,
+    toggleShuffle,
     currentVerseIndex,
     setCurrentVerseIndex,
     repeatMode,
