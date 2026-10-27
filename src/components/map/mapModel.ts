@@ -1,5 +1,5 @@
 import type { Echo, QueueItem, StarRef, VerseLink } from '../../types';
-import { echoesFor, refsOverlap, starKey, starLit, starStage, suggestedNext } from '../../lib/constellations';
+import { echoesFor, refsOverlap, starIsTop, starKey, starLit, starStage, suggestedNext } from '../../lib/constellations';
 import { echoGhosts, LayoutResult, MapStar, Pt, starLabel, STAR_RADIUS, LABEL_GAP, LABEL_HEIGHT } from '../../lib/mapLayout';
 import type { VerseStage } from '../../lib/stageProgress';
 import { CONSTELLATIONS } from '../../content/constellations';
@@ -21,6 +21,8 @@ export interface StarLook {
   lit: boolean;
   /** Least advanced held verse; null when the star holds none. */
   stage: VerseStage | null;
+  /** Every held verse is on the top step (every 6 months): drawn with the halo and glint. */
+  top: boolean;
   /** A curated star worth adding next: soft dashed ring. */
   suggested: boolean;
 }
@@ -38,6 +40,7 @@ export function starLooks(result: LayoutResult, queue: QueueItem[]): Record<stri
       key: s.key,
       lit: stage !== null,
       stage,
+      top: starIsTop(s.ref, queue),
       suggested: !!s.curated && suggested.has(`${s.curated.constellationId}/${s.curated.starId}`),
     };
   }

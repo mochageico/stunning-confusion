@@ -4,7 +4,7 @@
 import type { Echo, QueueItem, StarRef, VerseLink } from '../types';
 import { CONSTELLATIONS } from '../content/constellations';
 import { starVerses, walkCredit, walkOrder } from './mapWalk';
-import { canLabel, echoesFor, echoVisible, isLearned, starKey, starLit, starStage, suggestedNext, userConstellations } from './constellations';
+import { canLabel, echoesFor, echoVisible, isLearned, starIsTop, starKey, starLit, starStage, suggestedNext, userConstellations } from './constellations';
 
 let failures = 0;
 function check(label: string, condition: boolean, detail?: unknown) {
@@ -39,13 +39,20 @@ check('another chapter does not light it', !starLit(ps, [item('Psalms', 22, 1)])
 
 // Another translation counts at its furthest stage.
 const q2 = [item('Psalms', 23, 1, learning), item('Psalms', 23, 1, {}, 'KJV')];
-check('a verse in two translations counts at its furthest', starStage(ref('Psalms', 23, 1), q2) === 'weekly', starStage(ref('Psalms', 23, 1), q2));
+check('a verse in two translations counts at its furthest', starStage(ref('Psalms', 23, 1), q2) === 'steady', starStage(ref('Psalms', 23, 1), q2));
 
-// Learned: every verse held and Daily or later.
+// Learned: every verse held and Settling or later.
 const allDaily = [1, 2, 3, 4].map((v) => item('Psalms', 23, v, daily));
-check('learned when every verse is Daily or later', isLearned(ps, allDaily));
+check('learned when every verse is Settling or later', isLearned(ps, allDaily));
 check('not learned while one verse is still learning', !isLearned(ps, q1));
 check('not learned with a verse missing', !isLearned(ps, allDaily.slice(1)));
+
+// The top step (every 6 months): every held verse must be on it.
+const top = { ladderStep: 7, ladderReviews: 0 };
+check('a star is top when every held verse is on the top step', starIsTop(ps, [1, 2, 3, 4].map((v) => item('Psalms', 23, v, top))));
+check('one verse below the top keeps the star off it', !starIsTop(ps, [...[1, 2, 3].map((v) => item('Psalms', 23, v, top)), item('Psalms', 23, 4, daily)]));
+check('waiting verses do not hold a top star back', starIsTop(ps, [item('Psalms', 23, 1, top), item('Psalms', 23, 2, queued)]));
+check('a star with nothing held is not top', !starIsTop(ps, []));
 
 // canLabel needs both ends.
 const rom = ref('Romans', 8, 38);

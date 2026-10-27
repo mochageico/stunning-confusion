@@ -9,7 +9,7 @@ import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { PRIORITY_LABELS } from '../components/QueueSources';
-import { CompleteChips, StageDot, StageStrip, VerseStageRow, stageCaption } from '../components/VerseStages';
+import { TopChips, StageDot, StageStrip, VerseStageRow, stageCaption } from '../components/VerseStages';
 import VersesByBook from '../components/VersesByBook';
 import ConstellationMap from '../components/map/ConstellationMap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -200,9 +200,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const learnedThen = learnedCount(shownCounts);
   const forecastLine = ahead
     ? `By ${horizonDayLabel}, ${learnedThen === total ? `all ${total}` : `${learnedThen} of your ${total}`} verses learned${
-        shownCounts.complete > 0 ? `, ${shownCounts.complete} Complete` : ''
+        shownCounts.kept > 0 ? `, ${shownCounts.kept} Kept` : ''
       }.`
-    : `${learnedNow} of your ${total} verses learned so far${counts.complete > 0 ? `, ${counts.complete} Complete` : ''}.`;
+    : `${learnedNow} of your ${total} verses learned so far${counts.kept > 0 ? `, ${counts.kept} Kept` : ''}.`;
 
 
   // Waiting verses, in learning order. Sorted by orderIndex BEFORE grouping,
@@ -323,7 +323,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 
   // Nothing has moved past Learning yet: teach the road instead of showing
   // four empty sections with no explanation.
-  const isNew = counts.daily + counts.weekly + counts.monthly + counts.complete === 0;
+  const isNew = counts.settling + counts.steady + counts.kept === 0;
   const nextUp = byStage.learning.length > 0 ? [...byStage.learning].sort((a, b) => a.progress.remaining - b.progress.remaining)[0] : null;
 
   const sectionHeader = (stage: VerseStage, title: string) => (
@@ -357,7 +357,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         {STAGE_LABEL[stage]}
       </AppText>
       <AppText variant="caption" className="font-sans text-ink-2 flex-1">
-        {stage === 'daily' ? 'None yet. Verses come here after Learning.' : 'None yet'}
+        {stage === 'settling' ? 'None yet. Verses come here after Learning.' : 'None yet'}
       </AppText>
     </View>
   );
@@ -456,15 +456,17 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     if (!listsReady || total === 0 || view === 'map') return [];
     if (view === 'book') return [{ kind: 'book', key: 'book' }];
     const out: ListItem[] = [{ kind: 'waiting', key: 'waiting', stage: 'waiting' }];
-    for (const stage of ['learning', 'daily', 'weekly', 'monthly'] as const) {
+    for (const stage of ['learning', 'settling', 'steady', 'kept'] as const) {
       if (byStage[stage].length === 0) {
         out.push({ kind: 'empty', key: `empty-${stage}`, stage });
         continue;
       }
       out.push({ kind: 'header', key: `header-${stage}`, stage });
-      byStage[stage].forEach((group, i) => out.push({ kind: 'row', key: group.key, stage, group, first: i === 0 }));
+      // The top step (every 6 months) is done climbing: compact chips after Kept's other rows.
+      const rows = stage === 'kept' ? byStage[stage].filter((g) => !g.progress.top) : byStage[stage];
+      rows.forEach((group, i) => out.push({ kind: 'row', key: group.key, stage, group, first: i === 0 }));
+      if (stage === 'kept' && rows.length < byStage[stage].length) out.push({ kind: 'top', key: 'top', stage });
     }
-    out.push({ kind: 'complete', key: 'complete', stage: 'complete' });
     return out;
   }, [listsReady, total, view, byStage]);
   // Where each stage starts in that run, for the strip's jump.
@@ -480,10 +482,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const STAGE_TITLE: Record<VerseStage, string> = {
     waiting: 'Waiting to start',
     learning: 'Learning now',
-    daily: 'Daily',
-    weekly: 'Weekly',
-    monthly: 'Monthly',
-    complete: 'Complete',
+    settling: 'Settling',
+    steady: 'Steady',
+    kept: 'Kept',
   };
   // The gaps the old single column had: 24 between stages, 10 under a
   // stage's heading, 8 between rows.
@@ -508,16 +509,18 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
       case 'row':
         body = <VerseStageRow group={item.group!} now={now} onOpen={openGroup} />;
         break;
-      case 'complete':
-        body =
-          counts.complete === 0 ? (
-            emptyStage('complete')
-          ) : (
-            <View style={{ gap: space(10) }}>
-              {sectionHeader('complete', STAGE_TITLE.complete)}
-              <CompleteChips groups={byStage.complete} onPress={openGroup} />
+      case 'top':
+        body = (
+          <View style={{ gap: space(8) }}>
+            <View className="flex-row items-center" style={{ gap: space(8), paddingHorizontal: space(4) }}>
+              <StageDot stage="kept" top />
+              <AppText variant="label" className="font-sans font-semibold text-ink">
+                Every 6 months, for good
+              </AppText>
             </View>
-          );
+            <TopChips groups={byStage.kept.filter((g) => g.progress.top)} onPress={openGroup} />
+          </View>
+        );
         break;
       case 'book':
         body = (
@@ -690,10 +693,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                   {(
                     [
                       ['learning', 'a few days'],
-                      ['daily', `every day for ${dailyPhaseWeeks} ${dailyPhaseWeeks === 1 ? 'week' : 'weeks'}`],
-                      ['weekly', `once a week for ${weeklyPhaseMonths} ${weeklyPhaseMonths === 1 ? 'month' : 'months'}`],
-                      ['monthly', `once a month for ${monthlyPhaseYears} ${monthlyPhaseYears === 1 ? 'year' : 'years'}`],
-                      ['complete', 'yours for good'],
+                      ['settling', 'reviewed every 1–4 days'],
+                      ['steady', 'reviewed every 1–2 weeks'],
+                      ['kept', 'every 4–8 weeks, then every 6 months for good'],
                     ] as [VerseStage, string][]
                   ).map(([stage, length]) => (
                     <View key={stage} className="flex-row items-center" style={{ gap: space(10) }}>
@@ -715,8 +717,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                         {referenceFor(nextUp.book, nextUp.chapter, nextUp.verses)}
                       </AppText>
                       {nextUp.progress.remaining > 0
-                        ? ` reaches Daily after ${nextUp.progress.remaining} more perfect ${nextUp.progress.remaining === 1 ? 'recall' : 'recalls'}.`
-                        : ' reaches Daily once today’s reviews are done.'}
+                        ? ` reaches Settling after ${nextUp.progress.remaining} more perfect ${nextUp.progress.remaining === 1 ? 'recall' : 'recalls'}.`
+                        : ' reaches Settling once today’s reviews are done.'}
                     </AppText>
                   </View>
                 )}
@@ -769,7 +771,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           <ListRow
             Icon={History}
             title="History"
-            value={`${counts.complete} complete`}
+            value={`${counts.kept} kept`}
             onPress={() => go('fullHistory')}
           />
         </GroupedList>
@@ -782,7 +784,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 
 /** One item of My Verses' list: a stage's heading, one verse row, or a whole block. */
 type ListItem = {
-  kind: 'waiting' | 'empty' | 'header' | 'row' | 'complete' | 'book';
+  kind: 'waiting' | 'empty' | 'header' | 'row' | 'top' | 'book';
   key: string;
   stage?: VerseStage;
   group?: StageGroup;

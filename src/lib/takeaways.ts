@@ -8,7 +8,7 @@ import { STAGE_ORDER, VerseStage, verseStage } from './stageProgress';
 // ----------------------------------------------------------------------------
 // MIXED_REVIEW_PLAN.md, stage 6. A takeaway is the main point of one section,
 // in the user's own words. The app asks for it once, when every verse of the
-// section has reached weekly reviews (or later). "Later" leaves an empty dashed
+// section has reached Steady (or later). "Later" leaves an empty dashed
 // stop on the path; Teach-It's "Save as takeaway draft" fills in the ask.
 //
 // Sections are the user's own (lib/sections.ts), so a chapter with none has no
@@ -20,7 +20,7 @@ import { STAGE_ORDER, VerseStage, verseStage } from './stageProgress';
 // ============================================================================
 
 /** The first stage that asks for a takeaway. */
-export const READY_STAGE: VerseStage = 'weekly';
+export const READY_STAGE: VerseStage = 'steady';
 
 const rank = (stage: VerseStage): number => STAGE_ORDER.indexOf(stage);
 
@@ -35,7 +35,7 @@ export interface SectionStatus {
   start: number;
   end: number;
   label?: string;
-  /** Every verse of the section is in the queue and at weekly or later. */
+  /** Every verse of the section is in the queue and at Steady or later. */
   ready: boolean;
   /** Verses in the section the user has (in any stage past waiting) / how many it has. */
   have: number;
@@ -152,7 +152,7 @@ export type PathEntry =
   | { kind: 'next'; key: string; side: 'left' | 'right'; status: SectionStatus; range: string };
 
 /**
- * The section that unlocks next: not yet at weekly, no takeaway yet, every
+ * The section that unlocks next: not yet at Steady, no takeaway yet, every
  * verse in the queue, and the furthest along. Ties go to the earlier passage.
  * Null when nothing is on its way.
  */

@@ -87,6 +87,9 @@ const iso = (offsetDays: number, hour = 9) => {
 const TEXT: Record<string, string> = {
   'Romans 8:1': 'Therefore, there is now no condemnation for those who are in Christ Jesus.',
   'Romans 8:2': 'For in Christ Jesus the law of the Spirit of life set you free from the law of sin and death.',
+  'Romans 8:3': 'For what the law was powerless to do in that it was weakened by the flesh, God did by sending His own Son in the likeness of sinful flesh, as a sin offering. He thus condemned sin in the flesh,',
+  'Romans 8:4': 'so that the requirement of the law might be fulfilled in us, who do not walk according to the flesh but according to the Spirit.',
+  'Romans 8:5': 'For those who live according to the flesh have their minds set on the things of the flesh, but those who live according to the Spirit have their minds set on the things of the Spirit.',
   'Romans 8:28': 'And we know that God works all things together for the good of those who love Him, who are called according to His purpose.',
   'Romans 8:29': 'For those God foreknew, He also predestined to be conformed to the image of His Son, so that He would be the firstborn among many brothers.',
   'Romans 8:31': 'What then shall we say in response to these things? If God is for us, who can be against us?',
@@ -121,22 +124,34 @@ type Spec = {
   touches?: number[]; // days-ago of each touch log
   streak?: number;
   origin?: 'individual' | 'group';
+  // Ladder place (src/lib/ladder.ts): step 0-7 and reviews done at it. Without
+  // `step` a reviewing verse is placed from its old streak, like an account
+  // that hasn't been migrated yet.
+  step?: number;
+  reviews?: number;
+  catchUp?: boolean;
+  slipped?: boolean;
 };
 const SPECS: Spec[] = [
   { ref: 'Romans 8:28', status: 'learning', phase: 'none', touches: [0, 1] },
   { ref: 'Romans 8:29', status: 'learning', phase: 'none', touches: [1] },
-  { ref: 'Romans 8:1', status: 'reviewing', phase: 'daily', due: -1, touches: [1, 2, 3, 4, 5], streak: 9 },
-  { ref: 'Romans 8:2', status: 'reviewing', phase: 'daily', due: 0, touches: [1, 2, 3, 4], streak: 8 },
-  { ref: 'Philippians 4:6', status: 'reviewing', phase: 'weekly', due: 0, touches: [7, 14, 21], streak: 3 },
-  { ref: 'Philippians 4:7', status: 'reviewing', phase: 'weekly', due: 0, touches: [7, 14, 21], streak: 3 },
-  { ref: 'Psalms 119:11', status: 'reviewing', phase: 'monthly', due: 0, touches: [30, 60], streak: 2 },
-  { ref: 'John 3:16', status: 'reviewing', phase: 'monthly', due: 18, touches: [12, 42], streak: 4 },
-  { ref: 'Psalms 23:1', status: 'reviewing', phase: 'weekly', due: 3, touches: [4, 11], streak: 5 },
-  { ref: 'Psalms 23:2', status: 'reviewing', phase: 'weekly', due: 3, touches: [4, 11], streak: 5 },
-  { ref: 'Psalms 23:3', status: 'reviewing', phase: 'weekly', due: 3, touches: [4, 11], streak: 5 },
-  { ref: 'John 1:1', status: 'retained', phase: 'monthly', due: 60, touches: [2, 6, 9], streak: 12 },
-  { ref: 'John 1:2', status: 'retained', phase: 'monthly', due: 60, touches: [2, 6, 9], streak: 12 },
-  { ref: 'John 1:3', status: 'retained', phase: 'monthly', due: 60, touches: [2, 6, 9], streak: 12 },
+  // Romans 8:1-2: a passage in its short catch-up (Every 2 days), verse 2 slipped last time.
+  // Verses 3-4 are still Learning right after it, and 8:5 is a separate passage in Steady.
+  { ref: 'Romans 8:1', status: 'reviewing', phase: 'daily', due: -1, touches: [1, 2, 3, 4, 5], streak: 9, step: 1, reviews: 1, catchUp: true },
+  { ref: 'Romans 8:2', status: 'reviewing', phase: 'daily', due: -1, touches: [1, 2, 3, 4], streak: 8, step: 1, reviews: 1, catchUp: true, slipped: true },
+  { ref: 'Romans 8:3', status: 'learning', phase: 'none', touches: [0] },
+  { ref: 'Romans 8:4', status: 'learning', phase: 'none', touches: [1] },
+  { ref: 'Romans 8:5', status: 'reviewing', phase: 'weekly', due: 2, touches: [8, 15], streak: 4, step: 3, reviews: 4 },
+  { ref: 'Philippians 4:6', status: 'reviewing', phase: 'weekly', due: 0, touches: [7, 14, 21], streak: 3, step: 3, reviews: 3 },
+  { ref: 'Philippians 4:7', status: 'reviewing', phase: 'weekly', due: 0, touches: [7, 14, 21], streak: 3, step: 3, reviews: 3 },
+  { ref: 'Psalms 119:11', status: 'reviewing', phase: 'monthly', due: 0, touches: [30, 60], streak: 2, step: 5, reviews: 2 },
+  { ref: 'John 3:16', status: 'reviewing', phase: 'monthly', due: 18, touches: [12, 42], streak: 4, step: 6, reviews: 1 },
+  { ref: 'Psalms 23:1', status: 'reviewing', phase: 'weekly', due: 3, touches: [4, 11], streak: 5, step: 4, reviews: 2 },
+  { ref: 'Psalms 23:2', status: 'reviewing', phase: 'weekly', due: 3, touches: [4, 11], streak: 5, step: 4, reviews: 2 },
+  { ref: 'Psalms 23:3', status: 'reviewing', phase: 'weekly', due: 3, touches: [4, 11], streak: 5, step: 4, reviews: 2 },
+  { ref: 'John 1:1', status: 'retained', phase: 'monthly', due: 60, touches: [2, 6, 9], streak: 12, step: 7, reviews: 0 },
+  { ref: 'John 1:2', status: 'retained', phase: 'monthly', due: 60, touches: [2, 6, 9], streak: 12, step: 7, reviews: 0 },
+  { ref: 'John 1:3', status: 'retained', phase: 'monthly', due: 60, touches: [2, 6, 9], streak: 12, step: 7, reviews: 0 },
   { ref: 'Romans 8:31', status: 'queued', origin: 'group' },
   { ref: 'Romans 8:32', status: 'queued', origin: 'group' },
   { ref: 'Romans 8:37', status: 'queued' },
@@ -189,8 +204,26 @@ function buildQueue(specs: Spec[] = SPECS) {
       touchLogs: (s.touches ?? []).map((d) => ({ timestamp: iso(-d, 8 + (d % 5)), drillType: d % 2 ? 'speak' : 'type' })),
       reviewLogs: demoLogs(s),
       reviewsToday: 0,
+      ...ladderFields(s),
     };
   });
+}
+
+/** The ladder fields of a seeded verse; none when the spec leaves it to the old streak. */
+function ladderFields(s: Pick<Spec, 'step' | 'reviews' | 'catchUp' | 'slipped'>) {
+  if (s.step === undefined) return {};
+  return {
+    ladderStep: s.step,
+    ladderReviews: s.reviews ?? 0,
+    ...(s.catchUp ? { catchUp: true as const } : {}),
+    ...(s.slipped ? { slipped: true as const } : {}),
+  };
+}
+
+/** A seeded verse with its ladder fields removed, for demo queues that reuse a row as a template. */
+function withoutLadder<T extends Record<string, unknown>>(q: T) {
+  const { ladderStep, ladderReviews, catchUp, slipped, ...rest } = q;
+  return rest;
 }
 
 // ?s=map: the constellation map. The usual queue plus a few verses the map
@@ -200,9 +233,9 @@ function buildQueue(specs: Spec[] = SPECS) {
 // dotted line stays). nolinks=1 shows the empty state instead.
 const MAP_SPECS: Spec[] = [
   ...SPECS,
-  { ref: 'Matthew 11:28', status: 'reviewing', phase: 'daily', due: 1, touches: [1, 2, 3], streak: 6 },
-  { ref: 'Matthew 11:29', status: 'reviewing', phase: 'daily', due: 1, touches: [1, 2, 3], streak: 6 },
-  { ref: 'Matthew 11:30', status: 'reviewing', phase: 'daily', due: 1, touches: [1, 2, 3], streak: 6 },
+  { ref: 'Matthew 11:28', status: 'reviewing', phase: 'daily', due: 1, touches: [1, 2, 3], streak: 6, step: 0, reviews: 6 },
+  { ref: 'Matthew 11:29', status: 'reviewing', phase: 'daily', due: 1, touches: [1, 2, 3], streak: 6, step: 0, reviews: 6 },
+  { ref: 'Matthew 11:30', status: 'reviewing', phase: 'daily', due: 1, touches: [1, 2, 3], streak: 6, step: 0, reviews: 6 },
   { ref: 'Matthew 4:4', status: 'reviewing', phase: 'daily', due: 0, touches: [1, 2], streak: 5 },
   { ref: 'Romans 1:17', status: 'reviewing', phase: 'weekly', due: 2, touches: [5, 12], streak: 4 },
   { ref: 'Habakkuk 2:4', status: 'learning', phase: 'none', touches: [0] },
@@ -248,10 +281,14 @@ function buildBigQueue() {
       const f = i / 700;
       const status = f < 0.25 ? 'retained' : f < 0.86 ? 'reviewing' : f < 0.93 ? 'learning' : 'queued';
       const phase = f < 0.6 ? 'monthly' : f < 0.75 ? 'weekly' : f < 0.86 ? 'daily' : 'none';
+      // Spread across the ladder by position, top step first.
+      const step = status === 'retained' ? 7 : phase === 'monthly' ? 5 + (i % 2) : phase === 'weekly' ? 3 + (i % 2) : phase === 'daily' ? i % 3 : undefined;
       const spec: Spec = {
         ref: `${book} ${chapter}:${verse}`,
         status,
         phase,
+        step,
+        reviews: step === undefined ? undefined : i % 4,
         due: status === 'queued' ? undefined : (i % 37) - 3,
         touches: status === 'queued' ? undefined : [1, 2, 3],
         streak: status === 'queued' ? 0 : 3 + (i % 9),
@@ -277,6 +314,7 @@ function buildBigQueue() {
         touchLogs: (spec.touches ?? []).map((d) => ({ timestamp: iso(-d, 8), drillType: 'type' })),
         reviewLogs: demoLogs(spec),
         reviewsToday: 0,
+        ...ladderFields(spec),
       });
     }
   }
@@ -353,13 +391,15 @@ const MATT7_TEXT = [
 function buildMixQueue() {
   const base = buildQueue().map((q) => (q.book === 'Psalms' && q.chapter === 119 ? { ...q, nextReviewDueDate: iso(5, 6) } : q));
   const matt = MATT7_TEXT.map((text, i) => ({
-    ...base[2],
+    ...withoutLadder(base[2]),
     verseId: `BSB_MAT_7_${i + 1}`,
     book: 'Matthew',
     chapter: 7,
     verseNumber: i + 1,
     text,
     retentionPhase: 'daily',
+    ladderStep: 0,
+    ladderReviews: 3,
     nextReviewDueDate: iso(0, 6),
   }));
   return [...matt, ...base].map((q, i) => ({ ...q, orderIndex: i }));
@@ -371,13 +411,15 @@ function buildMixQueue() {
 function buildTakeawayQueue() {
   const base = buildQueue();
   const matt = MATT7_TEXT.map((text, i) => ({
-    ...base[2],
+    ...withoutLadder(base[2]),
     verseId: `BSB_MAT_7_${i + 1}`,
     book: 'Matthew',
     chapter: 7,
     verseNumber: i + 1,
     text,
     retentionPhase: i < 12 ? 'weekly' : 'daily',
+    ladderStep: i < 12 ? 3 : 0,
+    ladderReviews: i < 12 ? 2 : 5,
     nextReviewDueDate: iso(5, 6),
   }));
   return [...matt, ...base].map((q, i) => ({ ...q, orderIndex: i }));

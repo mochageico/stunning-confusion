@@ -1,7 +1,7 @@
 import React from 'react';
-import { Circle, G, Line, Text as SvgText } from 'react-native-svg';
+import { Circle, Defs, G, Line, LinearGradient, Path, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
 
-import type { ThemeColors } from '../theme';
+import { TOP_HALO, TOP_RING, type ThemeColors } from '../theme';
 import { LABEL_GAP, LABEL_HEIGHT, LayoutResult, Pt, STAR_RADIUS, starLabel } from '../../lib/mapLayout';
 import type { VerseStage } from '../../lib/stageProgress';
 import type { EchoView, FoundEcho, StarLook } from './mapModel';
@@ -23,15 +23,68 @@ export function stageRing(palette: ThemeColors, stage: VerseStage): string {
   switch (stage) {
     case 'learning':
       return palette.stageLearning;
-    case 'daily':
+    case 'settling':
       return palette.stageDaily;
-    case 'weekly':
+    case 'steady':
       return palette.stageWeekly;
-    case 'monthly':
-      return palette.stageMonthly;
     default:
       return palette.stageComplete;
   }
+}
+
+// The top star (every 6 months): "halo and glint" -- a cut ice-blue/white ring
+// (hard-stop gradient), a small four-point glint at its top right, inside a
+// soft blue halo. REVIEW_LADDER_PLAN.md Part 1 §1.
+const RING_ID = 'topRing';
+const HALO_ID = 'topHalo';
+const HALO_RADIUS = 18;
+
+const isLightColor = (hex: string) => {
+  const h = hex.replace('#', '');
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return (r * 299 + g * 587 + b * 114) / 1000 > 140;
+};
+
+/** The shared gradients, defined once for every top star on the map. */
+function TopDefs() {
+  return (
+    <Defs>
+      <LinearGradient id={RING_ID} x1="0" y1="0" x2="1" y2="1">
+        <Stop offset="0" stopColor={TOP_RING.white} />
+        <Stop offset="0.25" stopColor={TOP_RING.white} />
+        <Stop offset="0.25" stopColor={TOP_RING.ice} />
+        <Stop offset="0.5" stopColor={TOP_RING.ice} />
+        <Stop offset="0.5" stopColor={TOP_RING.pale} />
+        <Stop offset="0.75" stopColor={TOP_RING.pale} />
+        <Stop offset="0.75" stopColor={TOP_RING.steel} />
+        <Stop offset="1" stopColor={TOP_RING.steel} />
+      </LinearGradient>
+      <RadialGradient id={HALO_ID} cx="0.5" cy="0.5" r="0.5">
+        <Stop offset="0" stopColor={TOP_HALO} stopOpacity={0.6} />
+        <Stop offset="0.6" stopColor={TOP_HALO} stopOpacity={0.5} />
+        <Stop offset="1" stopColor={TOP_HALO} stopOpacity={0} />
+      </RadialGradient>
+    </Defs>
+  );
+}
+
+/** A lit star on the top step: halo, cut ring, ink center and the glint. */
+function TopStar({ x, y, palette, lightMap }: { x: number; y: number; palette: ThemeColors; lightMap: boolean }) {
+  const ringR = STAR_RADIUS + 3;
+  const gx = x + ringR * 0.72;
+  const gy = y - ringR * 0.72;
+  const s = 4.5;
+  const t = s * 0.22;
+  const glint = `M${gx} ${gy - s}L${gx + t} ${gy - t}L${gx + s} ${gy}L${gx + t} ${gy + t}L${gx} ${gy + s}L${gx - t} ${gy + t}L${gx - s} ${gy}L${gx - t} ${gy - t}Z`;
+  return (
+    <>
+      <Circle cx={x} cy={y} r={HALO_RADIUS} fill={`url(#${HALO_ID})`} />
+      {lightMap && <Circle cx={x} cy={y} r={ringR + 1.5} fill="none" stroke={TOP_RING.steel} strokeWidth={0.6} strokeOpacity={0.6} />}
+      <Circle cx={x} cy={y} r={ringR} fill="none" stroke={`url(#${RING_ID})`} strokeWidth={2.5} />
+      <Circle cx={x} cy={y} r={STAR_RADIUS - 1.5} fill={palette.ink} />
+      <Path d={glint} fill={TOP_RING.white} stroke={lightMap ? TOP_RING.steel : 'none'} strokeWidth={lightMap ? 0.6 : 0} />
+    </>
+  );
 }
 
 /** A label with a halo, centered under the point. */
@@ -114,8 +167,10 @@ export const MapDrawing = React.memo(function MapDrawing({
   paper,
 }: DrawingProps) {
   const lit = (k: string) => looks[k]?.lit ?? false;
+  const lightMap = isLightColor(paper);
   return (
     <G opacity={dim ? 0.5 : 1}>
+      <TopDefs />
       {/* Lines first, under the stars. Brighter where both ends are lit. */}
       {result.lines.map((l) => {
         const a = positions[l.from];
@@ -179,7 +234,9 @@ export const MapDrawing = React.memo(function MapDrawing({
         return (
           <G key={s.key} opacity={grow}>
             {selected && <Circle cx={p[0]} cy={p[1]} r={18} fill={palette.accent} fillOpacity={0.16} stroke={palette.accent} strokeWidth={1.5} />}
-            {look?.lit ? (
+            {look?.lit && look.top ? (
+              <TopStar x={p[0]} y={p[1]} palette={palette} lightMap={lightMap} />
+            ) : look?.lit ? (
               <>
                 {/* A soft glow: stars on paper by day, in the sky by night. */}
                 <Circle cx={p[0]} cy={p[1]} r={13} fill={palette.ink} fillOpacity={0.07} />

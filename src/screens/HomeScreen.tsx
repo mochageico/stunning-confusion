@@ -13,6 +13,7 @@ import { formatDate } from '../lib/format';
 import { translationLabel } from '../data';
 import { useThemeColors } from '../components/theme';
 import { MIX_NAMES } from '../lib/formatNames';
+import { verseStage } from '../lib/stageProgress';
 
 const LOOKAHEAD_OPTIONS = [
   { id: 10, label: '10' },
@@ -161,12 +162,12 @@ function TouchDots({ verseNumber, done, needed }: { verseNumber: number; done: n
   );
 }
 
-// Due reviews are grouped by how often they come back. The stage shows as a
-// colored dot, always beside its name, so color is never the only signal.
+// Due reviews are grouped by where they are on the ladder. The group shows as
+// a colored dot, always beside its name, so color is never the only signal.
 const REVIEW_STAGES = [
-  { key: 'daily', label: 'Daily', dot: 'bg-stage-daily' },
-  { key: 'weekly', label: 'Weekly', dot: 'bg-stage-weekly' },
-  { key: 'monthly', label: 'Monthly', dot: 'bg-stage-monthly' },
+  { key: 'settling', label: 'Settling', dot: 'bg-stage-daily' },
+  { key: 'steady', label: 'Steady', dot: 'bg-stage-weekly' },
+  { key: 'kept', label: 'Kept', dot: 'bg-stage-complete' },
 ] as const;
 
 function StageHeading({ label, dot, count }: { label: string; dot: string; count: number }) {
@@ -245,13 +246,13 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const isLearningDay = isTodayLearningDay();
 
   const groupedLearning = groupQueueItems(learningItems);
-  const dailyReviewItems = dueReviewItems.filter((item) => item.retentionPhase === 'daily');
-  const weeklyReviewItems = dueReviewItems.filter((item) => item.retentionPhase === 'weekly');
-  const monthlyReviewItems = dueReviewItems.filter((item) => item.retentionPhase === 'monthly');
+  const settlingReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'settling');
+  const steadyReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'steady');
+  const keptReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'kept');
 
-  const groupedDailyReviewing = groupQueueItems(dailyReviewItems);
-  const groupedWeeklyReviewing = groupQueueItems(weeklyReviewItems);
-  const groupedMonthlyReviewing = groupQueueItems(monthlyReviewItems);
+  const groupedSettlingReviewing = groupQueueItems(settlingReviewItems);
+  const groupedSteadyReviewing = groupQueueItems(steadyReviewItems);
+  const groupedKeptReviewing = groupQueueItems(keptReviewItems);
   const groupedPriming = groupQueueItems(queuedLookahead);
 
   const mapQueueToVerseStates = (items: QueueItem[]): VerseState[] => {
@@ -290,11 +291,11 @@ export default function HomeScreen({ state }: { state: AppState }) {
     }
   };
 
-  // "Review All Due" -- chains through every due group (daily, then weekly,
-  // then monthly, same order they're already listed in below) in one
+  // "Review All Due" -- chains through every due group (Settling, then Steady,
+  // then Kept, same order they're already listed in below) in one
   // continuous session instead of returning to Home between each.
   const handleReviewAllDue = () => {
-    const groups = [...groupedDailyReviewing, ...groupedWeeklyReviewing, ...groupedMonthlyReviewing].map(
+    const groups = [...groupedSettlingReviewing, ...groupedSteadyReviewing, ...groupedKeptReviewing].map(
       (g) => g.items
     );
     startReviewSession(groups);
@@ -316,9 +317,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const hasVerses = memoryQueue.length > 0;
   const hasQueued = memoryQueue.some((item) => item.status === 'queued');
   const reviewGroupsByStage = {
-    daily: groupedDailyReviewing,
-    weekly: groupedWeeklyReviewing,
-    monthly: groupedMonthlyReviewing,
+    settling: groupedSettlingReviewing,
+    steady: groupedSteadyReviewing,
+    kept: groupedKeptReviewing,
   };
   const listenToEverything = () => {
     const allDashItems = [...learningItems, ...dueReviewItems, ...queuedLookahead];
@@ -448,7 +449,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                     />
                   </View>
 
-                  {/* Daily, then weekly, then monthly: the same order
+                  {/* Settling, then Steady, then Kept: the same order
                       handleReviewAllDue chains them in. */}
                   {REVIEW_STAGES.map((stage) => {
                     const groups = reviewGroupsByStage[stage.key];

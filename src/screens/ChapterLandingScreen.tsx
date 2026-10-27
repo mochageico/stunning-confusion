@@ -11,6 +11,7 @@ import { ChipRow, DiscreteSlider, FadeInView } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
 import ChapterPhotoStrip from '../components/ChapterPhotoStrip';
 import ChapterLibraryPlayer from '../components/ChapterLibraryPlayer';
+import { WeakSpotDot } from '../components/VerseStages';
 import { LIBRARY_READER, libraryTimingsKey } from '../lib/libraryAudio';
 import { useLibraryTimings } from '../state/useLibraryAudio';
 import { usePickerTranslations } from '../state/usePickerTranslations';
@@ -835,7 +836,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                       onPress={() => (editing ? tapVerseWhileEditing(v.verse) : dragSelect.handleTap(v.verse))}
                       accessibilityRole="button"
                       accessibilityState={editing ? undefined : { selected: isSelected }}
-                      accessibilityLabel={`Verse ${v.verse}, ${STATUS_WORD[v.status] ?? 'not started'}`}
+                      accessibilityLabel={`Verse ${v.verse}, ${STATUS_WORD[v.status] ?? 'not started'}${v.slipped ? ', slipped last time' : ''}`}
                       accessibilityHint={editing ? 'Starts a new section at this verse.' : undefined}
                       className={`flex-1 ${rtl ? 'flex-row-reverse' : 'flex-row'} ${isSelected ? 'bg-accent-soft' : ''}`}
                     >
@@ -859,6 +860,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                             {v.verse}
                           </AppText>
                           <View className={`w-2 h-2 rounded-full ${STATUS_DOT[v.status] ?? 'bg-fill'}`} />
+                          {v.slipped && <WeakSpotDot size={8} />}
                         </View>
                         <View className="flex-1" style={{ gap: space(4) }}>
                           {verseWord && !editing ? (
@@ -925,7 +927,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                     onPress={() => dragSelect.handleTap(v.verse)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`Verse ${v.verse}, ${STATUS_WORD[v.status] ?? 'not started'}`}
+                    accessibilityLabel={`Verse ${v.verse}, ${STATUS_WORD[v.status] ?? 'not started'}${v.slipped ? ', slipped last time' : ''}`}
                     style={{ width: tileWidth, minHeight: space(64), padding: space(10), gap: space(4) }}
                     className={`rounded-btn border ${isSelected ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
                   >
@@ -937,7 +939,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                       >
                         {v.verse}
                       </AppText>
-                      <View className={`w-2 h-2 rounded-full ${STATUS_DOT[v.status] ?? 'bg-fill'}`} />
+                      <View className="flex-row items-center" style={{ gap: space(4) }}>
+                        {v.slipped && <WeakSpotDot size={8} />}
+                        <View className={`w-2 h-2 rounded-full ${STATUS_DOT[v.status] ?? 'bg-fill'}`} />
+                      </View>
                     </View>
                     <AppText variant="caption" script={chapterScript} className="font-serif text-ink-2" numberOfLines={2}>
                       {textSnippet}
