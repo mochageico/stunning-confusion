@@ -9,7 +9,8 @@ Stage files by name when committing (never `git add -A`). After each stage, upda
 **Progress** line and add an "As built" note under the stage, like
 `MIXED_REVIEW_PLAN.md` does.
 
-**Progress:** stage 1 built (ladder + grading logic, pure; nothing calls it yet).
+**Progress:** stages 1–2 built (ladder, grading and passages logic, all pure; nothing
+calls them yet).
 
 Mockups: the "My Verses ladder sketches" design canvas (claude.ai artifact
 77ZK89BZsaNcsiS8UgXqHL): My Verses by group and by chapter, verse page ladder,
@@ -57,7 +58,7 @@ Moves up by **reviews**, not calendar days. Standard counts:
 
 One multiplier on every step's review count (each step needs at least 2):
 Light 0.5× (~14 months to every 6 months), **Standard 1×** (~28 months, default),
-Thorough 1.5× (~3½ years), Navigators 2× (~4½ years), with no slips. The settings
+Thorough 1.5× (~3½ years), Intense 2× (~4½ years), with no slips. The settings
 screen calculates these from the table (`daysToTop` in `ladder.ts`) rather than
 showing fixed text. Replaces today's
 dailyPhaseWeeks / weeklyPhaseMonths / monthlyPhaseYears.
@@ -272,7 +273,7 @@ needed).
   - **Thoroughness rounds half up** (Light Every day = 4, Thorough Every day = 11). The
     catch-up's 3/2/2 is the same at every thoroughness.
   - **Time to the top** is calculated (`daysToTop`): Standard 843 days, Light 422,
-    Thorough 1265, Navigators 1686. §1's estimates were corrected to match.
+    Thorough 1265, Intense 1686. §1's estimates were corrected to match.
   - **Lateness counts whole calendar days** (due 9pm yesterday, 8am today = 1 day late),
     unlike `computeMissedCycles`, which compares exact times.
   - **Find the wrong word grades by rate:** `gradeSwap` takes the misses and the verse
@@ -307,6 +308,51 @@ needed).
   the end and the front, join during a catch-up, gap fill and merge, two translations,
   a single-verse passage, a reopened top passage, partial coverage then day rollover,
   win-back allowed vs. not, and a 19-day absence spread under the cap.
+
+### As built (stage 2)
+
+- `src/lib/passages.ts`: `passages`, `passageOf`, `ladderStateOf`, `passageState`,
+  `reconcile` (returns `{ changed, joins }`; a join carries the new verse numbers and
+  whether the catch-up restarted, for the "Romans 8:21–22 join verses 1–20" toast),
+  `recordGrade`, `settleStaleDays`, `firmUpsFor`, `winBack`, `spreadOverdue`.
+  Every function returns only the items it changed; optional keys are deleted, never
+  written as undefined.
+- Types: `dayResult` gained `selfCheck?: true` and `noUp?: true` (a missed spot
+  check), so the every-other rule and the spot check survive a review split across
+  screens. `firmUp` gained `verses` (the slipped verse numbers), because a clean
+  practice clears the weak-spot dot before the firm-up is tried.
+- Choices made while building:
+  - **A verse leaving Learning is one with no `ladderStep`.** reconcile only runs on a
+    migrated queue (stage 3 sets `ladderStep` first); the engine (4b) graduates a
+    verse by setting `status: 'reviewing'` and leaving `ladderStep` off.
+  - **A passage made only of new verses** (nothing to join) starts at Every day with
+    the full count, no catch-up.
+  - **Disagreeing members** (migration) take the lowest step, then fewest reviews, the
+    earliest due date, and keep a catch-up only if the lowest had one. Stage 3 sets
+    `catchUp` itself where §2's "same short catch-up" applies.
+  - **Not due = practice.** A grade on a passage that isn't due (or while paused) is
+    recorded as practice, so a passage covered twice in a day moves up once. Only a
+    clean grade's dot-clearing happens either way.
+  - **A self-check review** is any review where at least one verse's grade came from a
+    self-check. A self-check move-up sets `lastSelfChecked`; any full review that isn't
+    a self-check clears it.
+  - **Firm-up:** offered only when the review could have moved up (not after a missed
+    spot check or a blocked self-check), on the next scheduled day (skips the
+    Sabbath). Any later outcome on the passage replaces it, so Today (stage 7) should
+    show the firm-up before an Every day passage's own review. A failed attempt costs
+    nothing and can be retried that day; an unused one expires in `settleStaleDays`.
+    Winning back a step's last review moves the passage up a step.
+  - **Penalty-only (partly covered) reviews** count as the review: next due from the day
+    it happened, so lateness isn't charged on top. A grade on a new day settles the old
+    day first (the app left open past midnight).
+  - **Chapter weekday:** the first passage of a chapter to reach Every week sets
+    `chapterReviewAnchorDay` to that day's weekday, like graduating out of Daily did.
+  - **spreadOverdue** takes the cap in minutes (15 s a verse, like the time estimate),
+    counts what's already due each day, places in strict priority order (Settling,
+    then most overdue), gives a too-long passage a day to itself, skips Sabbath and
+    paused days, and rewrites today's overdue due dates too.
+- `npm run check:passages` (97 checks). `check:appstate` already reported drift on a
+  clean `main` before this stage; nothing here touches AppState.
 
 ## Stage 3 — Migration (pure + dry run)
 

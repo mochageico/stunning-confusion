@@ -87,6 +87,7 @@
     "check:retention": "node scripts/run-retention-check.cjs",
     "check:ladder": "node scripts/run-ladder-check.cjs",
     "check:grading": "node scripts/run-grading-check.cjs",
+    "check:passages": "node scripts/run-passages-check.cjs",
     "check:appstate": "node scripts/check-appstate-keys.cjs",
     "shots": "node scripts/capture-screens.cjs",
     "scan:fonts": "node scripts/scan-fonts.cjs",

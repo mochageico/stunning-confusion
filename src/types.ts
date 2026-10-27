@@ -266,12 +266,14 @@ export interface QueueItem {
   ladderReviews?: number;      // reviews counted at the current step, 0 = the step's first review still ahead
   catchUp?: true;              // the short catch-up after a join (3/2/2) is running. Only ever true.
   // This verse's result for its passage's current review, kept until the
-  // passage is fully covered and the outcome is applied.
-  dayResult?: { day: string; grade: ReviewGrade; via?: ReviewLog['via'] };
-  lastSelfChecked?: true;      // the passage's last counted review was a self-check (every-other rule)
+  // passage is fully covered and the outcome is applied. `selfCheck`: the
+  // grade came from a self-check (every-other rule). `noUp`: its round
+  // can't move the passage up (a missed spot check).
+  dayResult?: { day: string; grade: ReviewGrade; via?: ReviewLog['via']; selfCheck?: true; noUp?: true };
+  lastSelfChecked?: true;      // the passage's last move up came from a self-check (every-other rule)
   // A review that can be won back after a hold or a back-one: reciting the
-  // slipped verses clean on `day` restores `restore`.
-  firmUp?: { day: string; restore: { step: number; reviews: number } };
+  // slipped verses (`verses`, verse numbers) clean on `day` restores `restore`.
+  firmUp?: { day: string; restore: { step: number; reviews: number }; verses: number[] };
   slipped?: true;              // weak-spot dot: slipped in the passage's last review
 }
 
