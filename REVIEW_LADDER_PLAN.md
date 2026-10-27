@@ -12,8 +12,9 @@ Stage files by name when committing (never `git add -A`). After each stage, upda
 **Progress:** stages 1–3 built (ladder, grading, passages and migration logic, all
 pure, plus a dev-only dry run that saves nothing). Main account dry run read with the user
 2026-10-27 (led to the retained-verse spreading) and approved. Stage 4 built
-(settings, automatic migration on load, grading through passages); its live run on
-the account is still to do.
+(settings, automatic migration on load, grading through passages) and checked live on
+the main account by the user 2026-10-27: migrated, reopening changed nothing, a passage
+review counted. Step drops and the next-day penalty-only case wait for stage 5 / a day.
 
 **No test account (user, 2026-10-27):** the only users are the owner and their
 brother, and a rare edge case going wrong in the move is acceptable. Wherever a stage
@@ -509,9 +510,10 @@ it runs long (4a settings + migration run, 4b grading path).
 - `check:appstate` snapshot updated on purpose (the new keys, plus drift that was already
   there). `check:maplayout` and `check:milestones` fail the same way without this
   stage's changes.
-- **Not done in this session:** the live run on the account (migrate once, a second load
-  does nothing, up / held / down, partly covered → penalty-only next day). The logic for
-  each is in `check:ladderengine`; the live run needs the user signed in.
+- **Live run (user, on the phone, 2026-10-27):** the main account migrated with nothing
+  missing and no pile-up due, a second open changed nothing, and a passage reviewed end
+  to end counted. Not tried live: a blank (no screen can give one until stage 5) and the
+  partly covered → penalty-only case (needs the next day); both are in `check:ladderengine`.
 
 ## Stage 5 — Every credit path reports grades
 
