@@ -73,7 +73,9 @@ export const ListenProgress = React.memo(function ListenProgress({
  * value here is one somebody would actually choose. 0.6/0.8 for learning a
  * hard verse, 1.2 and up for review passes.
  */
-export const LISTEN_SPEEDS = [0.6, 0.8, 1.0, 1.2, 1.5, 2.0];
+export const LISTEN_SPEED_MIN = 0.5;
+export const LISTEN_SPEED_MAX = 2.0;
+export const LISTEN_SPEED_STEP = 0.1;
 /** Times each verse can repeat before playback moves on. */
 export const LISTEN_REPEATS = [1, 2, 3, 4, 5];
 /** Recall's words-hidden stops: 0-100% in steps of 5. Only 100 grades. */
@@ -100,6 +102,29 @@ export function groupPassages(list: VerseState[]): VerseState[] {
     else groups.set(key, [v]);
   }
   return [...groups.values()].flatMap((group) => group.sort((a, b) => a.verse - b.verse));
+}
+
+/**
+ * Random passage order for Listen's Shuffle. A passage is a run of consecutive
+ * verses from one chapter and translation; passages move as units and keep
+ * their verses in order, so shuffling never splits a passage.
+ */
+export function shufflePassages(list: VerseState[]): VerseState[] {
+  const passages: VerseState[][] = [];
+  for (const v of list) {
+    const last = passages[passages.length - 1];
+    const prev = last?.[last.length - 1];
+    if (prev && prev.book === v.book && prev.chapter === v.chapter && prev.translationId === v.translationId && v.verse === prev.verse + 1) {
+      last.push(v);
+    } else {
+      passages.push([v]);
+    }
+  }
+  for (let i = passages.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [passages[i], passages[j]] = [passages[j], passages[i]];
+  }
+  return passages.flat();
 }
 
 // ============================================================
