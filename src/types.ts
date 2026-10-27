@@ -258,7 +258,25 @@ export interface QueueItem {
   // before it, so the next jump-ins aim there. A clean join clears it. Same
   // only-ever-true rule as guidedSetAside.
   guidedShakyJoin?: true;
+
+  // Review ladder (REVIEW_LADDER_PLAN.md). All optional and additive: the
+  // legacy fields above keep being written, mapped, for older readers. A
+  // passage's schedule is written identically on every member verse.
+  ladderStep?: number;         // 0-7, index into LADDER (src/lib/ladder.ts)
+  ladderReviews?: number;      // reviews counted at the current step, 0 = the step's first review still ahead
+  catchUp?: true;              // the short catch-up after a join (3/2/2) is running. Only ever true.
+  // This verse's result for its passage's current review, kept until the
+  // passage is fully covered and the outcome is applied.
+  dayResult?: { day: string; grade: ReviewGrade; via?: ReviewLog['via'] };
+  lastSelfChecked?: true;      // the passage's last counted review was a self-check (every-other rule)
+  // A review that can be won back after a hold or a back-one: reciting the
+  // slipped verses clean on `day` restores `restore`.
+  firmUp?: { day: string; restore: { step: number; reviews: number } };
+  slipped?: true;              // weak-spot dot: slipped in the passage's last review
 }
+
+/** One verse's result in a counting review round. */
+export type ReviewGrade = 'clean' | 'stumble' | 'blank';
 
 export interface VerseTimestamp {
   verse: number;

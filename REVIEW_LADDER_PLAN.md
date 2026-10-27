@@ -9,7 +9,7 @@ Stage files by name when committing (never `git add -A`). After each stage, upda
 **Progress** line and add an "As built" note under the stage, like
 `MIXED_REVIEW_PLAN.md` does.
 
-**Progress:** nothing built.
+**Progress:** stage 1 built (ladder + grading logic, pure; nothing calls it yet).
 
 Mockups: the "My Verses ladder sketches" design canvas (claude.ai artifact
 77ZK89BZsaNcsiS8UgXqHL): My Verses by group and by chapter, verse page ladder,
@@ -155,6 +155,8 @@ Every counting format reports per verse: **clean, stumble or blank**.
 ## Open
 
 - Rename "Fix the transitions".
+- Stage 1's "choices to confirm" (as-built note under Stage 1): time-to-top figures, and
+  whether a missed spot check holds the whole review.
 
 ---
 
@@ -248,6 +250,39 @@ needed).
 - **Done when:** both checks cover every row of the §4 table, both passage sizes, the
   step floors, lateness across a Sabbath and a pause, each thoroughness preset's
   counts, and the swap thresholds at their edges (0.49, 0.5, 1.0, 1.01).
+
+### As built (stage 1)
+
+- `src/lib/ladder.ts`: `LADDER` (label, intervalDays, baseReviews, group, colorToken,
+  `top` on the last step), `LADDER_GROUPS` (names + descriptions), `THOROUGHNESS_PRESETS`,
+  `stepReviewCount`, `CATCH_UP_REVIEWS`, `reviewsToMoveUp`, `daysToTop`, `catchUpDays`,
+  `nextDue`, `passageOutcome`, `applyOutcome`, `lateness`. `LadderState` is
+  `{ step, reviews, catchUp? }`; `reviews` counts reviews done at the step, so "review 1
+  of the step" is `reviews: 0`.
+- `src/lib/grading.ts`: `gradeRecall` (accuracy 0..1, `cleanPct`, revealed, hinted),
+  `swapMisses` + `gradeSwap(misses, verses, swapCanBeClean)`, `gradeSelfCheck`,
+  `canSelfCheckMoveUp`, `pickSpotCheck` (1 in 3, among Got it verses),
+  `spotCheckLeadIn`, `applySpotCheck`.
+- `QueueItem` gained the decision-2 fields and `ReviewGrade` in `src/types.ts` (nothing
+  writes them yet). `ReviewLog`'s new fields wait for stage 4.
+- `scheduledDaysBetween` in `logicalDate.ts` is the elapsed-day logic pulled out of
+  `computeMissedCycles` (which now calls it), so lateness and the old miss count share it.
+- Choices made while building, to confirm:
+  - **Thoroughness rounds half up** (Light Every day = 4, Thorough Every day = 11). The
+    catch-up's 3/2/2 is the same at every thoroughness.
+  - **Time to the top doesn't match §1's estimates.** Straight from the table, Standard
+    is 843 days (~28 months), Light 422 (~14), Thorough ~3.5 years, Navigators ~4.6
+    years. The §1 figures (~17 months etc.) are off, or the counts are; settings copy
+    should use `daysToTop` rather than fixed text.
+  - **Lateness counts whole calendar days** (due 9pm yesterday, 8am today = 1 day late),
+    unlike `computeMissedCycles`, which compares exact times.
+  - **Find the wrong word grades by rate:** `gradeSwap` takes the misses and the verse
+    count of whatever the drill covered and gives every verse in it the same grade
+    (0.49 / 0.5 / 1 / 1.01 only make sense as a rate). Stage 5 decides the scope.
+  - **A missed spot check makes only the checked verse a stumble.** So a 12+ verse
+    passage still moves up (forgiven) after one. If it should hold the whole review,
+    stage 5 passes `canMoveUp: false` instead.
+- `npm run check:ladder`, `npm run check:grading`.
 
 ## Stage 2 — Passages logic (pure)
 
