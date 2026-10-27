@@ -69,7 +69,7 @@ createGroupDesc: string
 createGroupName: string
 createGroupPlan: (circleId: string, input: { name: string; description: string; }) => Promise<void>
 createGroupPrivacy: "private" | "public"
-creditGuided: (items: QueueItem[], kind: "touch" | "review", drill: "speak" | "type") => Promise<QueueItem[]>
+creditGuided: (items: QueueItem[], kind: "touch" | "review", drill: "speak" | "type", accuracy?: ReadonlyMap<string, number> | undefined) => Promise<QueueItem[]>
 currentScreen: "home" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "planDesigner" | "activePlan" | "addVerses" | "mySchedule" | "verseSources" | "savedPlans" | "memoryCalendar" | "verseRoad" | "versePage" | "referenceDrill" | "threadDrill" | "guided" | "mixedReview" | "takeaways" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
 currentTab: "home" | "verses" | "community" | "record" | "profile"
 customPlanName: string

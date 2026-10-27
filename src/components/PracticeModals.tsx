@@ -3,13 +3,15 @@ import { Pressable, useWindowDimensions, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronUp, ClipboardCheck, Headphones, Pause, Play, X } from 'lucide-react-native';
 
-import { VerseState, QueueItem, Recording, ChapterPhoto, ChapterSections, ListenPlaylist, ReviewLog } from '../types';
+import { VerseState, QueueItem, Recording, ChapterPhoto, ChapterSections, ListenPlaylist } from '../types';
+import type { ReviewCompletedOpts } from '../state/useAppState';
 import type { OutlineExtra } from '../lib/outline';
+import type { SelfCheckAnswer } from '../lib/grading';
 import { isRtl, scriptOfVerse } from '../lib/textScript';
 import { WaveBars } from './ui';
 import { AppButton, AppIconButton, AppText, FontScaleOverrideProvider, useFontScale, useScaledSpace } from './design';
 import { PRACTICE_TEXT_SCALE, useAppPrefs } from '../lib/appPrefs';
-import { Badge, Dialog } from './blocks';
+import { Badge } from './blocks';
 import { OneTimeTip } from './OneTimeTip';
 
 import { useThemeColors } from './theme';
@@ -18,6 +20,7 @@ import { useListenPlayback, type ListenSource } from './practice/useListenPlayba
 import { useRecall, type LearnMode } from './practice/useRecall';
 import ListenPanel from './practice/ListenPanel';
 import RecallPanel from './practice/RecallPanel';
+import ManualLogSheet, { logManualAnswers } from './practice/ManualLogSheet';
 import type { TakeawayDraft } from '../lib/sectionDrills';
 
 export interface PracticeModalsProps {
@@ -37,7 +40,7 @@ export interface PracticeModalsProps {
     versesToUpdate: VerseState[],
     newStatus: 'memorized' | 'learning',
     customDrillType?: 'speak' | 'type' | 'reveal',
-    opts?: { perfect?: boolean; quiet?: boolean; via?: ReviewLog['via'] }
+    opts?: ReviewCompletedOpts
   ) => void;
   // Opens Pick up the thread through this verse, after a passing Recall has
   // been logged. Absent: the offer isn't shown.
@@ -287,20 +290,22 @@ function PracticeModalsInner({
   // ==========================================
   const [showManualLog, setShowManualLog] = useState(false);
 
-  // `perfect` maps onto handleReviewCompleted's contract in useAppState.ts:
-  // undefined = "the drill couldn't measure accuracy, treat as a claimed
-  // perfect run" (banks a mastery touch), false = counts as a review only.
-  const submitManualLog = (outcome: 'perfect' | 'passed' | 'practice') => {
+  // A self-check per verse (practice/ManualLogSheet says what each answer does).
+  const submitManualLog = (answers: SelfCheckAnswer[]) => {
     setShowManualLog(false);
-    if (outcome === 'practice') {
-      onUpdateStatus(verses, 'learning', 'reveal');
-    } else if (outcome === 'passed') {
-      onUpdateStatus(verses, 'memorized', 'reveal', { perfect: false });
-    } else {
-      onUpdateStatus(verses, 'memorized', 'reveal');
-    }
+    logManualAnswers(verses, answers, onUpdateStatus);
     handleGroupComplete();
   };
+  const manualSelfCheckedLast = verses.some((v) =>
+    (memoryQueue || []).some(
+      (q) =>
+        q.lastSelfChecked &&
+        q.book === v.book &&
+        q.chapter === v.chapter &&
+        q.verseNumber === v.verse &&
+        (!v.translationId || (q.translationId || 'ESV') === v.translationId)
+    )
+  );
 
   // Minimized Listen mode: a small persistent bar instead of the full
   // overlay, floating just above the tab bar in the same pill style as the
@@ -407,21 +412,15 @@ function PracticeModalsInner({
         </View>
       </View>
 
-      {/* Manual log. Same sheet and the same three outcomes as the one on
-          Today's review rows. */}
-      <Dialog
+      {/* Manual log. The same sheet as the one on Today's review rows. */}
+      <ManualLogSheet
         visible={showManualLog}
-        onClose={() => setShowManualLog(false)}
-        placement="sheet"
         title={`Log ${referenceText}`}
-        message="For a review you actually did somewhere else — out loud in the car, from a card, anywhere but here."
-      >
-        <View style={{ gap: 8 }}>
-          <AppButton variant="primary" label="Perfect — no mistakes" onPress={() => submitManualLog('perfect')} />
-          <AppButton variant="secondary" label="Got it, with a stumble" onPress={() => submitManualLog('passed')} />
-          <AppButton variant="quiet" label="Needs practice" onPress={() => submitManualLog('practice')} />
-        </View>
-      </Dialog>
+        verses={verses}
+        selfCheckedLast={manualSelfCheckedLast}
+        onClose={() => setShowManualLog(false)}
+        onLog={submitManualLog}
+      />
 
       {/* First-time tips: one for learning, one for the first verse back
           for a check. Each shows once (see OneTimeTip). Above the panel when

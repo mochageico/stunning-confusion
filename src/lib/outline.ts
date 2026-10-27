@@ -149,6 +149,11 @@ export interface OutlineVerseResult {
   verse: OutlineVerse;
   /** 0..1 */
   accuracy: number;
+  /**
+   * 0..1 over the hidden words only: what a review is graded on
+   * (REVIEW_LADDER_PLAN.md §4). The whole verse's when nothing was hidden.
+   */
+  hiddenAccuracy: number;
   /** At least REVIEW_PASS_ACCURACY of the words right. */
   passed: boolean;
   /** Not one word missed. */
@@ -161,10 +166,13 @@ export interface OutlineVerseResult {
 /** A verse's graded words, as GradedRecitation returns them, turned into its result. */
 export function gradeOutlineVerse(row: OutlineRow, outcomes: WordOutcome[], mode: 'speak' | 'type'): OutlineVerseResult {
   const summary = summarizeOutcomes(outcomes);
+  // The shown words are the first shownCount graded ones (shownIndices).
+  const hidden = outcomes.slice(row.shownCount);
   return {
     key: row.key,
     verse: row.verse,
     accuracy: summary.accuracy,
+    hiddenAccuracy: hidden.length > 0 ? summarizeOutcomes(hidden).accuracy : summary.accuracy,
     passed: summary.passesReview,
     perfect: summary.isPerfect,
     mode,

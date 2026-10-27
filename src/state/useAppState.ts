@@ -53,6 +53,7 @@ import {
   VerseState,
   VerseTimestamp,
 } from '../types';
+import type { GradeInput } from '../lib/grading';
 import { getMemoryCalendarProjection } from '../lib/reviewCalendar';
 import { formatDuration } from '../lib/format';
 import { useSocial } from './useSocial';
@@ -204,6 +205,10 @@ export type ReviewCompletedOpts = {
   selfCheck?: boolean;
   /** false: this round can't move the passage up (a missed spot check). */
   canMoveUp?: boolean;
+  /** What the screen saw for a verse past Learning; the engine grades it with the user's settings. Wins over `grade`. */
+  graded?: GradeInput;
+  /** handleUpdateVerseStatus: each verse's own `graded`, for a call covering several. */
+  gradeFor?: (v: VerseState) => GradeInput | undefined;
 };
 
 /** Where Pick up the thread opens: the verse to recite through, from a Recall that just passed. */

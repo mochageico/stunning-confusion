@@ -104,3 +104,42 @@ export const spotCheckLeadIn = (previousVerseText: string | null | undefined, wo
  * rule). Stumbles and blanks still apply.
  */
 export const spotCheckCanMoveUp = (passed: boolean): boolean => passed;
+
+/** Share of words right in a graded run: perfect and close words over all of them (summarizeOutcomes' accuracy). */
+export const wordAccuracy = (outcomes: readonly ('perfect' | 'close' | 'missed')[]): number =>
+  outcomes.length === 0 ? 0 : outcomes.filter((o) => o !== 'missed').length / outcomes.length;
+
+/**
+ * What a screen reports for one verse; the engine turns it into a grade
+ * with the user's settings (resolveGrade). Screens never need to know the
+ * clean setting.
+ */
+export type GradeInput =
+  | ({ kind: 'recall' } & RecallResult)
+  /** Find the wrong word: the misses and verse count of whatever the drill covered. */
+  | { kind: 'swap'; misses: number; verses: number }
+  | { kind: 'self'; answer: SelfCheckAnswer }
+  /** Already decided (Mixed review grades with the same settings). */
+  | { kind: 'grade'; grade: ReviewGrade; selfCheck?: boolean };
+
+export interface GradeSettings {
+  cleanPct: number;
+  swapCanBeClean: boolean;
+}
+
+export const resolveGrade = (input: GradeInput, s: GradeSettings): ReviewGrade => {
+  switch (input.kind) {
+    case 'recall':
+      return gradeRecall(input, s.cleanPct);
+    case 'swap':
+      return gradeSwap(input.misses, input.verses, s.swapCanBeClean);
+    case 'self':
+      return gradeSelfCheck(input.answer);
+    case 'grade':
+      return input.grade;
+  }
+};
+
+/** Whether the grade came from the user's own check (the every-other rule applies). */
+export const isSelfCheckInput = (input: GradeInput): boolean =>
+  input.kind === 'self' || (input.kind === 'grade' && !!input.selfCheck);

@@ -128,6 +128,10 @@ export function useRecall({
 
   const [verseStrikes, setVerseStrikes] = useState(0);
 
+  // Verses (index into `verses`) where a word was revealed as a hint: a hint
+  // makes that verse a stumble at best (REVIEW_LADDER_PLAN.md §4).
+  const [hintedVerses, setHintedVerses] = useState<Set<number>>(new Set());
+
   // Set in Settings, not here (see lib/practicePrefs); read once on open.
   const [strikeLimit, setStrikeLimit] = useState<StrikeLimit>(DEFAULT_STRIKE_LIMIT);
 
@@ -312,6 +316,8 @@ export function useRecall({
   // recall it.
   const handleReciteHint = () => {
     if (recitePointer >= reciteWordObjects.length) return;
+    const verseIdx = wordVerse(recitePointer);
+    if (verseIdx !== undefined) setHintedVerses((prev) => (prev.has(verseIdx) ? prev : new Set(prev).add(verseIdx)));
     commitReciteOutcome(recitePointer, 'missed');
   };
 
@@ -320,6 +326,7 @@ export function useRecall({
     setReciteOutcomes({});
     setReciteSource({});
     setVerseStrikes(0);
+    setHintedVerses(new Set());
     setTypedInput('');
     setShowStrikeResetAlert(false);
     setIsFinishedRecite(false);
@@ -734,6 +741,7 @@ export function useRecall({
     flashError,
     isFinishedRecite,
     finalOutcomes,
+    hintedVerses,
     isListeningSpeak,
     localToast,
     speechAvailable,

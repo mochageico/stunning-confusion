@@ -14,6 +14,7 @@ import { TOP_STEP } from '../lib/ladder';
 import { migrateQueue } from '../lib/ladderMigration';
 import { reconcile } from '../lib/passages';
 import { gradeVerse, joinMessage, mergeChanged } from '../lib/ladderEngine';
+import { GradeInput, isSelfCheckInput, resolveGrade } from '../lib/grading';
 import {
   estimateReviewMinutes,
   forecastMemoryLoad,
@@ -82,6 +83,8 @@ export function useReviewEngine({
     sabbathDay,
     sabbathEnabled,
     thoroughness,
+    cleanPct,
+    swapCanBeClean,
   } = plan;
 
   // The missed-review popup is retired with the review ladder (late reviews
@@ -713,9 +716,10 @@ export function useReviewEngine({
    * - Past Learning: the verse's grade goes to its passage's current
    *   review (gradeVerse); the outcome is applied once every verse in the
    *   passage has one today. Not due = practice, except a firm-up attempt.
-   * `opts.grade` is the verse's grade; a caller that only knows pass/fail
-   * gets clean for a pass and a stumble for a fail (stage 5 has every
-   * screen pass real grades).
+   * `opts.graded` is what the screen saw (accuracy, a self-check answer,
+   * Find the wrong word misses), graded here with the user's settings;
+   * `opts.grade` an already decided grade. A caller with neither gets clean
+   * for a pass and a stumble for a fail.
    * Returns the toasts instead of showing them, so a multi-verse caller can
    * show one.
    */
@@ -787,13 +791,14 @@ export function useReviewEngine({
 
     const day = localDayKey(getLogicalDate(dayStartHour));
     if (firmUpGradesRef.current.day !== day) firmUpGradesRef.current = { day, grades: new Map() };
-    const grade: ReviewGrade = opts?.grade ?? (success ? 'clean' : 'stumble');
+    const input = opts?.graded;
+    const grade: ReviewGrade = input ? resolveGrade(input, { cleanPct, swapCanBeClean }) : opts?.grade ?? (success ? 'clean' : 'stumble');
     const g = gradeVerse(memoryQueueRef.current, live.verseId, grade, {
       clock: reviewClock,
       thoroughness,
       via: opts?.via,
       drillType,
-      selfCheck: opts?.selfCheck,
+      selfCheck: opts?.selfCheck || (input ? isSelfCheckInput(input) : false),
       canMoveUp: opts?.canMoveUp,
       firmUpGrades: firmUpGradesRef.current.grades,
     });
@@ -964,7 +969,9 @@ export function useReviewEngine({
           (!v.translationId || (q.translationId || 'ESV') === v.translationId)
       );
       if (itemInQueue) {
-        const result = await gradeQueueItem(itemInQueue, success, drillType, opts);
+        // A grade per verse (Recall, Pick up the thread, ...) rides on gradeFor.
+        const graded = opts?.gradeFor?.(v);
+        const result = await gradeQueueItem(itemInQueue, success, drillType, graded ? { ...opts, graded } : opts);
         if (result.early) early.push(itemInQueue);
         messages.push(...result.messages);
       }
@@ -1064,8 +1071,14 @@ export function useReviewEngine({
   // translationId, so Psalm 23:1 in BSB and in Hebrew stay separate items.
   // Resolves to the credited items as they stand afterwards, read from the
   // live queue, so the caller can tell whether a third run graduated the
-  // verse or graduation is being held for due reviews.
-  const creditGuided = async (items: QueueItem[], kind: 'touch' | 'review', drill: 'speak' | 'type'): Promise<QueueItem[]> => {
+  // verse or graduation is being held for due reviews. `accuracy` (by
+  // verseId) grades a review clean, stumble or blank.
+  const creditGuided = async (
+    items: QueueItem[],
+    kind: 'touch' | 'review',
+    drill: 'speak' | 'type',
+    accuracy?: ReadonlyMap<string, number>
+  ): Promise<QueueItem[]> => {
     if (items.length > 0) {
       const states: VerseState[] = items.map((i) => ({
         book: i.book,
@@ -1075,7 +1088,12 @@ export function useReviewEngine({
         status: 'memorized',
         translationId: i.translationId,
       }));
-      await handleUpdateVerseStatus(states, 'memorized', drill, { perfect: kind === 'touch', quiet: true, via: 'guided' });
+      const gradeFor = (v: VerseState): GradeInput | undefined => {
+        const item = items.find((i) => i.book === v.book && i.chapter === v.chapter && i.verseNumber === v.verse && i.translationId === v.translationId);
+        const a = item ? accuracy?.get(item.verseId) : undefined;
+        return a === undefined ? undefined : { kind: 'recall', accuracy: a };
+      };
+      await handleUpdateVerseStatus(states, 'memorized', drill, { perfect: kind === 'touch', quiet: true, via: 'guided', gradeFor });
     }
     const ids = new Set(items.map((i) => i.verseId));
     return memoryQueueRef.current.filter((q) => ids.has(q.verseId));

@@ -3,15 +3,19 @@ import { ScrollView, View } from 'react-native';
 import { Check, Info, Shuffle } from 'lucide-react-native';
 
 import { buildSwapVerses, scoreSwapAttempt, DEFAULT_SWAPS_PER_VERSE, DrillVerse, SwapVerse } from '../../lib/drills';
+import { swapMisses } from '../../lib/grading';
 import { isRtl, scriptOfVerse, wordGap } from '../../lib/textScript';
 import { AppButton, AppText } from '../design';
 import { ChipRow } from '../ui';
+import { SegmentedControl } from '../blocks';
 import { useThemeColors } from '../theme';
 
 // ============================================================================
 // SPOT-THE-SWAP -- a few words per verse are replaced with real words from
 // elsewhere in the passage; tap the imposters. Ungraded here; a host that
-// passes onScored (Mixed review's Find the wrong word) grades it itself.
+// passes onScored (Mixed review's Find the wrong word) grades it itself, and
+// then each caught swap asks whether the user knew the real word (Yes by
+// default): a No counts as a miss (REVIEW_LADDER_PLAN.md §4).
 // ============================================================================
 
 /** One verse's result from a checked attempt, for a host that grades it. */
@@ -21,7 +25,16 @@ export interface SwapVerseScore {
   caught: number;
   totalDecoys: number;
   falseAlarms: number;
+  /** Caught swaps whose real word the user said they didn't know. */
+  unknown: number;
+  /** Swaps not found + words wrongly flagged + real words not known (swapMisses). */
+  misses: number;
 }
+
+const YES_NO = [
+  { id: 'yes' as const, label: 'Yes' },
+  { id: 'no' as const, label: 'No' },
+];
 
 export default React.memo(function SpotSwapDrill({
   verses,
@@ -52,11 +65,14 @@ export default React.memo(function SpotSwapDrill({
   const [swapVerses, setSwapVerses] = useState<SwapVerse[]>(() => build(DEFAULT_SWAPS_PER_VERSE));
   const [swapSelected, setSwapSelected] = useState<Set<number>>(new Set());
   const [swapSubmitted, setSwapSubmitted] = useState(false);
+  // Caught swaps (token indices) whose real word the user didn't know.
+  const [unknownWords, setUnknownWords] = useState<Set<number>>(new Set());
 
   const resetSwap = (perVerse: number = swapsPerVerse) => {
     setSwapVerses(build(perVerse));
     setSwapSelected(new Set());
     setSwapSubmitted(false);
+    setUnknownWords(new Set());
   };
 
   // A new passage (a chained review swaps `verses` in place) needs new decoys.
@@ -70,15 +86,33 @@ export default React.memo(function SpotSwapDrill({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verses]);
 
+  const scores = (unknown: Set<number>): SwapVerseScore[] =>
+    swapVerses.map((sv) => {
+      const one = scoreSwapAttempt([sv], swapSelected);
+      const notKnown = sv.tokens.filter((t) => t.isDecoy && swapSelected.has(t.index) && unknown.has(t.index)).length;
+      return {
+        verse: Number(sv.id.slice(sv.id.lastIndexOf('-') + 1)),
+        caught: one.caught,
+        totalDecoys: one.totalDecoys,
+        falseAlarms: one.falseAlarms,
+        unknown: notKnown,
+        misses: swapMisses({ unfound: one.totalDecoys - one.caught, wrongFlags: one.falseAlarms, unknownReplacements: notKnown }),
+      };
+    });
+
   const submit = () => {
     setSwapSubmitted(true);
     onComplete?.();
-    onScored?.(
-      swapVerses.map((sv) => {
-        const one = scoreSwapAttempt([sv], swapSelected);
-        return { verse: Number(sv.id.slice(sv.id.lastIndexOf('-') + 1)), caught: one.caught, totalDecoys: one.totalDecoys, falseAlarms: one.falseAlarms };
-      })
-    );
+    onScored?.(scores(unknownWords));
+  };
+
+  // Each answer re-reports the score, so the host always holds the latest.
+  const setKnew = (index: number, knew: boolean) => {
+    const next = new Set(unknownWords);
+    if (knew) next.delete(index);
+    else next.add(index);
+    setUnknownWords(next);
+    onScored?.(scores(next));
   };
 
   const score = scoreSwapAttempt(swapVerses, swapSelected);
@@ -144,13 +178,31 @@ export default React.memo(function SpotSwapDrill({
             {swapVerses.flatMap((sv) =>
               sv.tokens
                 .filter((t) => t.isDecoy)
-                .map((t) => (
-                  <AppText variant="label" script={script} key={t.index} className="font-serif text-ink-2">
-                    {/* Read right to left in Hebrew, so the arrow points left: imposter ← real word. */}
-                    <AppText variant="inherit" className="text-danger line-through">{t.display}</AppText> {isRtl(script) ? '←' : '→'}{' '}
-                    <AppText variant="inherit" className="text-success font-bold">{t.original}</AppText>
-                  </AppText>
-                ))
+                .map((t) => {
+                  const line = (
+                    <AppText variant="label" script={script} key={t.index} className="font-serif text-ink-2">
+                      {/* Read right to left in Hebrew, so the arrow points left: imposter ← real word. */}
+                      <AppText variant="inherit" className="text-danger line-through">{t.display}</AppText> {isRtl(script) ? '←' : '→'}{' '}
+                      <AppText variant="inherit" className="text-success font-bold">{t.original}</AppText>
+                    </AppText>
+                  );
+                  // Graded: a caught swap asks whether the real word was known.
+                  if (!onScored || !swapSelected.has(t.index)) return line;
+                  return (
+                    <View key={t.index} className="gap-1 pb-1">
+                      {line}
+                      <AppText variant="caption" className="font-sans text-ink-3">
+                        Did you know the real word?
+                      </AppText>
+                      <SegmentedControl
+                        options={YES_NO}
+                        value={unknownWords.has(t.index) ? 'no' : 'yes'}
+                        onChange={(v) => setKnew(t.index, v === 'yes')}
+                        accessibilityLabel={`Did you know ${t.original}?`}
+                      />
+                    </View>
+                  );
+                })
             )}
           </View>
         )}
@@ -161,7 +213,8 @@ export default React.memo(function SpotSwapDrill({
           <View className="bg-surface-2 border border-line rounded-card p-2.5">
             <AppText variant="caption" className="font-sans font-bold text-ink text-center">
               Caught {score.caught} of {score.totalDecoys}
-              {score.falseAlarms > 0 ? ` · ${score.falseAlarms} wrongly flagged` : ''} — {resultNote}
+              {score.falseAlarms > 0 ? ` · ${score.falseAlarms} wrongly flagged` : ''}
+              {onScored && unknownWords.size > 0 ? ` · ${unknownWords.size} real word${unknownWords.size === 1 ? '' : 's'} not known` : ''} — {resultNote}
             </AppText>
           </View>
         ) : !showSwapCount ? null : (

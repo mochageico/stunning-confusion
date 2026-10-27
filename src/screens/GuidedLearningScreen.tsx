@@ -69,13 +69,13 @@ const rangeOf = (vs: { book: string; chapter: number; verse: number }[]) =>
 const verseResult = (o: WordOutcome[]) => {
   const right = o.filter((x) => x !== 'missed').length;
   const pct = o.length === 0 ? 1 : right / o.length;
-  return { passed: pct >= reviewPassAccuracy(), perfect: o.length > 0 && right === o.length };
+  return { passed: pct >= reviewPassAccuracy(), perfect: o.length > 0 && right === o.length, accuracy: pct };
 };
 
 interface StageResult {
   mode: RecitationMode;
   /** One per verse in the stretch, by index into the verses given to the stage. */
-  perVerse: { index: number; passed: boolean; perfect: boolean }[];
+  perVerse: { index: number; passed: boolean; perfect: boolean; accuracy: number }[];
   /** Where it went wrong, joins included (threadSlips); indices as in perVerse. */
   slips: ThreadSlip[];
 }
@@ -522,6 +522,8 @@ function Sitting({
   const bank = (entries: { id: string; outcome: GuidedOutcome }[], mode: RecitationMode) => {
     const touches: QueueItem[] = [];
     const reviews: QueueItem[] = [];
+    // A review is graded clean, stumble or blank on its words.
+    const accuracy = new Map<string, number>();
     entries.forEach(({ id, outcome }) => {
       const item = itemOf(id);
       if (!item) return;
@@ -529,6 +531,7 @@ function Sitting({
       if (!kind) return;
       creditedRef.current.add(id);
       (kind === 'touch' ? touches : reviews).push(item);
+      if (outcome.accuracy !== undefined) accuracy.set(id, outcome.accuracy);
     });
     bankedRef.current += touches.length + reviews.length;
     (async () => {
@@ -547,7 +550,7 @@ function Sitting({
           setNotes((prev) => [...prev, ...msgs]);
         }
       }
-      if (reviews.length > 0) await state.creditGuided(reviews, 'review', mode);
+      if (reviews.length > 0) await state.creditGuided(reviews, 'review', mode, accuracy);
     })();
   };
 
@@ -749,7 +752,10 @@ function Sitting({
           }
           onDone={({ mode, perVerse, slips }) => {
             bank(
-              perVerse.map((r) => ({ id: step.verseIds[r.index], outcome: { activity: 'cold' as const, passed: r.passed, perfect: r.perfect, mode } })),
+              perVerse.map((r) => ({
+                id: step.verseIds[r.index],
+                outcome: { activity: 'cold' as const, passed: r.passed, perfect: r.perfect, accuracy: r.accuracy, mode },
+              })),
               mode
             );
             markJoins(step.verseIds, 0, step.verseIds.length - 1, slips);
@@ -849,10 +855,11 @@ function Sitting({
       kind === 'stitch'
         ? `Say ${rangeOf(verses)} from the start`
         : `from v${verses[cue.startVerse].verse} through the end of v${verses[cue.endVerse].verse}`;
-    const outcomeFor = (index: number, passed: boolean, perfect: boolean, mode: RecitationMode): GuidedOutcome => ({
+    const outcomeFor = (index: number, passed: boolean, perfect: boolean, mode: RecitationMode, accuracy?: number): GuidedOutcome => ({
       activity,
       passed,
       perfect,
+      ...(accuracy !== undefined ? { accuracy } : {}),
       mode,
       startsPastHalf: index === cue.startVerse && !threadStartVerseCounts(verses, cue),
     });
@@ -874,7 +881,7 @@ function Sitting({
         }
         onDone={({ mode, perVerse, slips }) => {
           bank(
-            perVerse.map((r) => ({ id: step.verseIds[r.index], outcome: outcomeFor(r.index, r.passed, r.perfect, mode) })),
+            perVerse.map((r) => ({ id: step.verseIds[r.index], outcome: outcomeFor(r.index, r.passed, r.perfect, mode, r.accuracy) })),
             mode
           );
           markJoins(step.verseIds, cue.startVerse, cue.endVerse, slips);
@@ -1017,7 +1024,7 @@ function Sitting({
         ]}
         onDone={({ mode, perVerse }) => {
           const r = perVerse[0];
-          if (!partly) bank([{ id: step.verseId, outcome: { activity, passed: r.passed, perfect: r.perfect, mode } }], mode);
+          if (!partly) bank([{ id: step.verseId, outcome: { activity, passed: r.passed, perfect: r.perfect, accuracy: r.accuracy, mode } }], mode);
           // dispatch clears the notice, so it is set again just after.
           const message = !r.perfect ? (partly ? 'Not quite. Back to a drill.' : 'Not quite. Back two steps.') : null;
           dispatch({ type: 'result', perfect: r.perfect });

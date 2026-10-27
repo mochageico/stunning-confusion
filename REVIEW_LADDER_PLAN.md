@@ -15,6 +15,9 @@ pure, plus a dev-only dry run that saves nothing). Main account dry run read wit
 (settings, automatic migration on load, grading through passages) and checked live on
 the main account by the user 2026-10-27: migrated, reopening changed nothing, a passage
 review counted. Step drops and the next-day penalty-only case wait for stage 5 / a day.
+Stage 5 built 2026-10-27 (every credit path reports clean / stumble / blank, the
+three-button self-check with the spot check, Find the wrong word's "knew the real word"
+toggles); the live check on the main account (half Recall, half Mixed review) is still to do.
 
 **No test account (user, 2026-10-27):** the only users are the owner and their
 brother, and a rare edge case going wrong in the move is acceptable. Wherever a stage
@@ -534,6 +537,59 @@ verses.
 - **Done when:** tsc, `check:mix`, `check:guided`, `check:thread`, `check:swap`,
   `check:outline` updated and passing; on the test account, one passage reviewed half
   in Recall and half in Mixed review moved up once, not twice.
+
+### As built (stage 5)
+
+- **The engine grades, screens report.** `ReviewCompletedOpts` gained `graded`
+  (`GradeInput` in `grading.ts`: a recall accuracy, Find the wrong word misses, a
+  self-check answer, or an already decided grade) and `gradeFor` (one per verse, for
+  `handleUpdateVerseStatus` calls covering several). `resolveGrade` turns it into clean /
+  stumble / blank with the user's `cleanPct` and `swapCanBeClean`, so no screen needs the
+  settings. A self-check input sets the every-other flag itself.
+- **Shared self-check** (`src/components/practice/SelfCheck.tsx`): "Got it" goes straight
+  to the spot check; "Missed some" opens Got it / Stumbled / Blanked per verse, then the
+  spot check on one random Got it verse, with the last 3 words of the verse before. The
+  spot check is said or typed (`GradedRecitation`) and passes at the review pass mark;
+  "I can't say it" misses it, which sends `canMoveUp: false`. Used by Mixed review (Recite,
+  First words, counted Practice rounds, Keep going through `ThreadRound`), Pick up the
+  thread and the map walk. The spot check is skipped where nothing could count (practice,
+  not due).
+- **Mixed review** (`mix.ts`): `MixVerseResult` carries `answer` / `swap` / `spotMissed`;
+  `MixCredit` carries `grade`, `selfCheck`, `canMoveUp`. `startMix(plan, settings)` holds
+  the clean setting. A verse covered twice takes its **worse** grade: it is sent again only
+  when a later round went worse (the engine keeps the worse of a day's grades).
+  `mixSummary` gives `grades`, `clean`, `stumbled`, `blanked`. `todayOrder` sorts by
+  `ladderStep` (a verse with none ranks by its old phase). Show text is hidden in a
+  counting round when one of its verses has `lastSelfChecked` (the engine holds it anyway,
+  so a counted Practice round keeps its self-check). The recap still shows Clean /
+  Slipped; per-passage tags are stage 7.
+- **Find the wrong word** (`SpotSwapDrill`): with `onScored`, each caught swap asks "Did
+  you know the real word?" Yes / No (Yes by default); every answer re-reports.
+  `SwapVerseScore` gained `unknown` and `misses`. **Scope: the round.** Its total misses
+  over its verse count grade every verse in it (stage 1's rate decision).
+- **First words** grades only the words it hid: `OutlineVerseResult.hiddenAccuracy`, and
+  Mixed review's First words drops the shown words from each verse.
+- **Recall**: each verse is graded on its own words (`gradeFor` over `finalOutcomes`); a
+  revealed hint makes that verse a stumble at best (`hintedVerses` in `useRecall`). Every
+  result button passes it, "Log as needs practice" too, so a verse past Learning gets its
+  real grade whichever button is tapped.
+- **Pick up the thread, Guided learning, Walk the constellation** keep their old rule that
+  only a passing verse is credited (no penalty for a miss), but what they credit now
+  carries its grade: a 91% verse at a 95% clean setting counts as a stumble. Guided carries
+  each verse's accuracy (`GuidedOutcome.accuracy`, `creditGuided`'s new `accuracy` map).
+- **Manual log** (`src/components/practice/ManualLogSheet.tsx`, on Today's rows and in the
+  practice screen): Got it / Stumbled / Blanked per verse, logged as a self-check. No spot
+  check (the review happened elsewhere). It says so when the every-other rule means it
+  can't move the passage up. Learning verses keep the old meanings (Got it = a claimed
+  perfect run, Stumbled = no touch, Blanked = practice).
+- Checks: `check:grading` (resolveGrade), `check:mix` (grades, worse-of-two, spot check,
+  swap rate, ladder order), `check:outline` (hidden accuracy). `check:appstate` snapshot
+  updated for `creditGuided`'s new parameter. `check:layout`'s 3 errors (ActivityHeatmap,
+  LoadingScreen) were there before this stage.
+- Checked in the web demo (signed out, nothing saved): the per-verse picker, the spot
+  check's lead-in, the Yes / No toggles and the recap, and the manual log sheet.
+- **Not done yet:** the live run on the main account (one passage half in Recall, half in
+  Mixed review, moving up once).
 
 ## Stage 6 — Showing the ladder
 
