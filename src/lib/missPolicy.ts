@@ -3,7 +3,7 @@
 // a freeze or a plain streak reset. Pure -- operates on QueueItem drafts and
 // never touches React state or Firestore.
 import type { MemoryPlan, QueueItem } from '../types';
-import { countPausedDaysInRange, countSabbathDaysInRange, getLogicalDate } from './logicalDate';
+import { getLogicalDate, scheduledDaysBetween } from './logicalDate';
 
 export type MissTag = 'grace' | 'daily-extended' | 'refresher-start' | 'refresher-extended' | 'frozen' | 'streak-reset' | 'none';
 
@@ -152,9 +152,6 @@ export const computeMissedCycles = (
   const cycleLengthDays = item.retentionPhase === 'weekly' ? 7 : item.retentionPhase === 'monthly' ? 30 : 1;
   const dueDate = new Date(item.nextReviewDueDate);
   const now = getLogicalDate(dayStartHour);
-  const rawElapsedDays = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 3600 * 1000));
-  const sabbathDaysElapsed = sabbathEnabled ? countSabbathDaysInRange(dueDate, now, sabbathDay) : 0;
-  const pausedDaysElapsed = countPausedDaysInRange(dueDate, now, pausedAt, pausedUntil);
-  const adjustedElapsedDays = Math.max(0, rawElapsedDays - sabbathDaysElapsed - pausedDaysElapsed);
+  const adjustedElapsedDays = scheduledDaysBetween(dueDate, now, sabbathEnabled, sabbathDay, pausedAt, pausedUntil);
   return Math.max(0, Math.floor(adjustedElapsedDays / cycleLengthDays));
 };

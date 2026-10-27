@@ -85,6 +85,8 @@
     "check:translations": "node scripts/run-translations-check.cjs",
     "check:textscript": "node scripts/run-textscript-check.cjs",
     "check:retention": "node scripts/run-retention-check.cjs",
+    "check:ladder": "node scripts/run-ladder-check.cjs",
+    "check:grading": "node scripts/run-grading-check.cjs",
     "check:appstate": "node scripts/check-appstate-keys.cjs",
     "shots": "node scripts/capture-screens.cjs",
     "scan:fonts": "node scripts/scan-fonts.cjs",

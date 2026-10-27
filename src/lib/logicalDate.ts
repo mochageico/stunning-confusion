@@ -122,3 +122,20 @@ export const countPausedDaysInRange = (from: Date, to: Date, pausedAt: string | 
   if (rangeStart >= rangeEnd) return 0;
   return Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / (24 * 3600 * 1000));
 };
+
+// Whole days from `from` to `to` that count as scheduled time: Sabbath and
+// paused days don't. How overdue a review is, for both the old missed-cycle
+// count (missPolicy.ts) and the ladder's late reviews (ladder.ts).
+export const scheduledDaysBetween = (
+  from: Date,
+  to: Date,
+  sabbathEnabled: boolean,
+  sabbathDay: string,
+  pausedAt: string | null,
+  pausedUntil: string | null
+): number => {
+  const rawElapsedDays = Math.floor((to.getTime() - from.getTime()) / (24 * 3600 * 1000));
+  const sabbathDaysElapsed = sabbathEnabled ? countSabbathDaysInRange(from, to, sabbathDay) : 0;
+  const pausedDaysElapsed = countPausedDaysInRange(from, to, pausedAt, pausedUntil);
+  return Math.max(0, rawElapsedDays - sabbathDaysElapsed - pausedDaysElapsed);
+};
