@@ -2,6 +2,7 @@ import type { ChapterSections, QueueItem, ReviewGrade } from '../types';
 import { buildScrambleRounds, buildSwapVerses, DrillVerse } from './drills';
 import { FORMATS, FormatId } from './formatNames';
 import { DEFAULT_CLEAN_PCT, GradeSettings, gradeRecall, gradeSelfCheck, gradeSwap, SelfCheckAnswer } from './grading';
+import { translationOf } from './passages';
 import { MIN_SECTION_DRILL_SECTIONS } from './sectionDrills';
 import { chapterStretches, normalizeDraft, Section, sectionsFromStarts } from './sections';
 
@@ -177,8 +178,9 @@ const toVerse = (item: QueueItem): DrillVerse & { id: string } => ({
   translationId: item.translationId,
 });
 
-const chapterKeyOf = (item: Pick<QueueItem, 'translationId' | 'book' | 'chapter'>): string =>
-  `${item.translationId || ''}|${item.book}|${item.chapter}`;
+/** translation|book|chapter, with an untagged verse counted as ESV the way passages.ts does. */
+export const chapterKeyOf = (item: Pick<QueueItem, 'translationId' | 'book' | 'chapter'>): string =>
+  `${translationOf(item)}|${item.book}|${item.chapter}`;
 
 /** Where a verse not moved onto the ladder yet would sit: Every day, Every week, Every 4 weeks. */
 const PHASE_STEP: Partial<Record<QueueItem['retentionPhase'], number>> = { daily: 0, weekly: 3, monthly: 5 };
@@ -192,6 +194,15 @@ export const todayOrder = (due: QueueItem[]): QueueItem[] => {
   const rank = (i: QueueItem) => i.ladderStep ?? PHASE_STEP[i.retentionPhase] ?? Number.MAX_SAFE_INTEGER;
   return due.map((item, pos) => ({ item, pos })).sort((a, b) => rank(a.item) - rank(b.item) || a.pos - b.pos).map((x) => x.item);
 };
+
+/**
+ * Due items not yet graded on `day` (a localDayKey). A passage stays due until
+ * every member has a grade for the day (passages.ts), so a session stopped
+ * after 4 of 6 sections leaves the whole chapter due. Leaving out what already
+ * has today's grade lets the next session pick up where the last one stopped;
+ * saying it again could only lower that grade (the engine keeps the worse).
+ */
+export const notGradedOn = (due: QueueItem[], day: string): QueueItem[] => due.filter((i) => i.dayResult?.day !== day);
 
 /** Unbroken runs of verse numbers. */
 const runsOf = <V extends { verse: number }>(sorted: V[]): V[][] => {

@@ -38,6 +38,13 @@ export interface Passage {
 const isPastLearning = (q: QueueItem) => q.status === 'reviewing' || q.status === 'retained';
 
 /**
+ * A verse's translation for grouping. Verses saved by older builds carry no
+ * translationId; they are ESV, which is how every list shows them
+ * (stageProgress), so they share a passage with their tagged neighbours.
+ */
+export const translationOf = (q: { translationId?: string | null }): string => q.translationId || 'ESV';
+
+/**
  * Unbroken runs of verses past Learning, per translation + book + chapter.
  * A verse still in Learning (or not started) breaks a run like a gap does.
  */
@@ -45,7 +52,7 @@ export const passages = (queue: readonly QueueItem[]): Passage[] => {
   const byChapter = new Map<string, QueueItem[]>();
   for (const q of queue) {
     if (!isPastLearning(q)) continue;
-    const k = `${q.translationId}|${q.book}|${q.chapter}`;
+    const k = `${translationOf(q)}|${q.book}|${q.chapter}`;
     const list = byChapter.get(k);
     if (list) list.push(q);
     else byChapter.set(k, [q]);
@@ -56,7 +63,8 @@ export const passages = (queue: readonly QueueItem[]): Passage[] => {
     let run: QueueItem[] = [];
     const flush = () => {
       if (run.length === 0) return;
-      const { translationId, book, chapter } = run[0];
+      const { book, chapter } = run[0];
+      const translationId = translationOf(run[0]);
       const first = run[0].verseNumber;
       out.push({ key: `${translationId}|${book}|${chapter}|${first}`, translationId, book, chapter, first, last: run[run.length - 1].verseNumber, items: run });
       run = [];

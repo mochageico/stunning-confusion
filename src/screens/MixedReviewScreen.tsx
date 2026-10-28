@@ -24,6 +24,8 @@ import { drillSections, DrillSection } from '../lib/sectionDrills';
 import { summarizeOutcomes, WordOutcome } from '../lib/recitation';
 import { normalizeToken, scriptOfVerse } from '../lib/textScript';
 import { loadPracticePrefs } from '../lib/practicePrefs';
+import { getLogicalDate, localDayKey } from '../lib/logicalDate';
+import { translationOf } from '../lib/passages';
 import { openSettingsAt } from './SettingsScreen';
 import { mapQueueItemsToVerseStates } from '../lib/appData';
 import { FORMATS, FormatId, formatLabel, formatTag, MIX_NAMES } from '../lib/formatNames';
@@ -47,6 +49,8 @@ import {
   readMixCounts,
   readMixFormats,
   startMix,
+  chapterKeyOf,
+  notGradedOn,
   todayOrder,
   verseGrade,
 } from '../lib/mix';
@@ -549,11 +553,10 @@ function StartSheet({
   const { navigateTo, memoryQueue, sectionsForChapter, getEstimatedReviewTime, cognitiveLoadSensitivity } = state;
   const { chapters } = useMemo(() => buildUnits({ due, pool: memoryQueue, sectionsFor: sectionsForChapter }), [due, memoryQueue, sectionsForChapter]);
   const [off, setOff] = useState<Set<string>>(new Set());
-  const keyOf = (i: QueueItem) => `${i.translationId || ''}|${i.book}|${i.chapter}`;
-  const chosen = due.filter((i) => !off.has(keyOf(i)));
+  const chosen = due.filter((i) => !off.has(chapterKeyOf(i)));
   const chosenChapters = chapters.filter((c) => !off.has(c.key));
   const minutes = chosen.length === 0 ? 0 : Math.max(1, getEstimatedReviewTime(chosen, cognitiveLoadSensitivity));
-  const countOf = (key: string) => due.filter((i) => keyOf(i) === key).length;
+  const countOf = (key: string) => due.filter((i) => chapterKeyOf(i) === key).length;
   const practiceOn = enabled.filter((f) => !counts[f]).length;
   const countingOn = enabled.filter((f) => counts[f]).length;
 
@@ -871,7 +874,7 @@ function Session({
     const prev = verses[i - 1] ?? (i === 0 ? contextVerse : null);
     if (prev && prev.chapter === v.chapter && prev.verse === v.verse - 1) return prev.text;
     const before = memoryQueueRef.current.find(
-      (q) => q.book === v.book && q.chapter === v.chapter && q.verseNumber === v.verse - 1 && (q.translationId || '') === (v.translationId || '')
+      (q) => q.book === v.book && q.chapter === v.chapter && q.verseNumber === v.verse - 1 && translationOf(q) === translationOf(v)
     );
     return before?.text ?? null;
   };
@@ -964,7 +967,7 @@ function Session({
 
 export default function MixedReviewScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
-  const { memoryQueue, reviewsPaused, navigateTo, sectionsForChapter, cleanPct, swapCanBeClean } = state;
+  const { memoryQueue, reviewsPaused, navigateTo, sectionsForChapter, cleanPct, swapCanBeClean, dayStartHour } = state;
 
   const [enabled, setEnabled] = useState<FormatId[] | null>(null);
   const [counts, setCounts] = useState<MixCounts>(() => readMixCounts(undefined));
@@ -975,11 +978,14 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
     });
   }, []);
 
-  // Today's due reviews, in Today's order. The planner takes the filtered list.
-  const due = useMemo(
-    () => (reviewsPaused ? [] : todayOrder(memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate)))),
-    [memoryQueue, reviewsPaused]
-  );
+  // Today's due reviews, in Today's order, less any verse already graded
+  // today: a session stopped partway resumes at the first section not done.
+  // The planner takes the filtered list.
+  const due = useMemo(() => {
+    if (reviewsPaused) return [];
+    const today = localDayKey(getLogicalDate(dayStartHour));
+    return todayOrder(notGradedOn(memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate)), today));
+  }, [memoryQueue, reviewsPaused, dayStartHour]);
 
   const [session, setSession] = useState<{ state: MixState; startedAt: number } | null>(null);
 

@@ -177,6 +177,17 @@ console.log('gaps, merges, translations');
   check('two translations are two passages', passages(ta).length === 2);
   check('…a join in ESV leaves BSB where it was', sameState(stateAt(ta, 1), { step: 3, reviews: 2 }) && sameState(stateAt(ta, 1, 'ESV'), { step: 0, reviews: 0, catchUp: true }));
 
+  // Verses saved before translations were tagged read as ESV everywhere, so
+  // they join their tagged neighbours (Genesis 1:1 and 1:3 untagged, 1:2 and 4–31 ESV).
+  const untagged = (v: number) => {
+    const q = item({ v, t: 'ESV', book: 'Genesis', ch: 1, step: 2, reviews: 3 });
+    delete (q as Partial<QueueItem>).translationId;
+    return q;
+  };
+  const gen = [untagged(1), item({ v: 2, t: 'ESV', book: 'Genesis', ch: 1, step: 2, reviews: 3 }), untagged(3), ...range(4, 31, { t: 'ESV', book: 'Genesis', ch: 1, step: 2, reviews: 3 })];
+  const genPs = passages(gen);
+  check('an untagged verse is ESV: Genesis 1:1–31 is one passage', genPs.length === 1 && genPs[0].items.length === 31 && genPs[0].translationId === 'ESV', genPs.map((p) => `${p.translationId}:${p.first}-${p.last}`));
+
   // Migration-style disagreement: the lowest step, then fewest reviews, earliest due.
   const mixed = [
     item({ v: 1, step: 5, reviews: 0, due: at(30).toISOString() }),
