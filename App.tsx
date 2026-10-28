@@ -68,6 +68,7 @@ import { APP_FONTS, AppButton, AppIconButton, AppText, ChoiceCard, FontScaleOver
 import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from './src/components/blocks';
 import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
 import BlocksGallery from './src/dev/BlocksGallery';
+import RecapGallery from './src/dev/RecapGallery';
 import { useToastMessage } from './src/lib/toastStore';
 import { useMapFullscreen } from './src/lib/mapFullscreen';
 import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent, useColorSchemeInUse } from './src/components/theme';
@@ -757,10 +758,12 @@ export default function App() {
             </SafeAreaView>
           ) : DEMO_FONT_SCALE ? (
             <FontScaleOverrideProvider scale={DEMO_FONT_SCALE}>
-              {DEMO_SCREEN === 'blocks' ? <BlocksGallery /> : <AppShell />}
+              {DEMO_SCREEN === 'blocks' ? <BlocksGallery /> : DEMO_SCREEN === 'ladderRecap' ? <RecapGallery /> : <AppShell />}
             </FontScaleOverrideProvider>
           ) : DEMO_SCREEN === 'blocks' ? (
             <BlocksGallery />
+          ) : DEMO_SCREEN === 'ladderRecap' ? (
+            <RecapGallery />
           ) : (
             <AppShell />
           )}

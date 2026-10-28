@@ -133,6 +133,89 @@ export const outcomeMessage = (a: ReviewApplied, thoroughness: Thoroughness, hel
   }
 };
 
+// ---------------------------------------------------------------------------
+// The recap's per-passage line
+// ---------------------------------------------------------------------------
+
+export type ReviewTag = 'Clean' | 'Held' | 'Forgiven' | 'Back 1' | 'Down a step' | 'Won back';
+
+/** What one passage's review did, for the Mixed review recap (stage 7). */
+export interface ReviewNote {
+  /** When it was applied (ms), so a recap can show only its own session. */
+  at: number;
+  title: string;
+  tag: ReviewTag;
+  /** One line saying why: the count, the stumbles, the step it fell to. */
+  reason: string;
+  /** Every verse of the passage, so the recap can match it to a session. */
+  verseIds: string[];
+  /** The verses that weren't clean (the weak-spot dots the review left), verse order. */
+  slipped: { verseId: string; verseNumber: number }[];
+  /** A firm-up was offered for the next scheduled day. */
+  firmUp: boolean;
+}
+
+const TAG_OF: Record<ReviewApplied['outcome'], ReviewTag> = {
+  up: 'Clean',
+  forgiven: 'Forgiven',
+  held: 'Held',
+  back: 'Back 1',
+  down: 'Down a step',
+};
+
+/** The recap line for an applied review. Same facts as `outcomeMessage`, shorter. */
+export const reviewNote = (a: ReviewApplied, thoroughness: Thoroughness, heldReason: HeldReason = null, at: number = Date.now()): ReviewNote => {
+  const stumbles = a.grades.filter((g) => g.grade === 'stumble').length;
+  const blanks = a.grades.filter((g) => g.grade === 'blank').length;
+  let reason: string;
+  switch (a.outcome) {
+    case 'up': {
+      if (a.to.step === TOP_STEP && a.from.step < TOP_STEP) reason = 'Reached Every 6 months, for good.';
+      else if (a.to.step > a.from.step) reason = `Moved up to ${stepInfo(a.to.step).label}.`;
+      else {
+        const need = reviewsToMoveUp(a.to, thoroughness);
+        reason = need === null ? 'Review counted.' : `Review ${a.to.reviews} of ${need} at ${stepInfo(a.to.step).label}.`;
+      }
+      break;
+    }
+    case 'forgiven':
+      reason = `${plural(stumbles, 'stumble')} forgiven in a long passage, so the review counted.`;
+      break;
+    case 'held':
+      if (stumbles > 0) reason = `${plural(stumbles, 'stumble')}, so this review didn't count.`;
+      else if (heldReason === 'spotCheck') reason = "The spot check slipped, so this review didn't count.";
+      else if (heldReason === 'selfCheck') reason = "Two self-checks in a row can't both count. Recite it next time.";
+      else reason = "This review didn't count.";
+      break;
+    case 'back':
+      reason = `${plural(stumbles, 'stumble')}, so it goes back one review.`;
+      break;
+    case 'down':
+      reason = `${blanks > 1 ? `${blanks} blanks` : 'A blank'} moved it down to ${stepInfo(a.to.step).label}.`;
+      break;
+  }
+  return {
+    at,
+    title: passageLabel(a.passage),
+    tag: TAG_OF[a.outcome],
+    reason,
+    verseIds: a.passage.items.map((q) => q.verseId),
+    slipped: a.grades.filter((g) => g.grade !== 'clean').map((g) => ({ verseId: g.verseId, verseNumber: g.verseNumber })),
+    firmUp: !!a.firmUp,
+  };
+};
+
+/** The recap line for a firm-up that won the lost review back. */
+export const wonBackNote = (p: Passage, at: number = Date.now()): ReviewNote => ({
+  at,
+  title: passageLabel(p),
+  tag: 'Won back',
+  reason: 'You recited the slipped verses clean, so the review is back.',
+  verseIds: p.items.map((q) => q.verseId),
+  slipped: [],
+  firmUp: false,
+});
+
 /** The history entry's `result` for older readers: a counted review is a pass, otherwise the verse's own grade decides. */
 const legacyResult = (outcome: ReviewApplied['outcome'], grade: ReviewGrade): ReviewLog['result'] =>
   outcome === 'up' || outcome === 'forgiven' || grade === 'clean' ? 'pass' : 'miss';
@@ -280,6 +363,8 @@ export interface GradeVerseResult {
   wonBack: boolean;
   /** This review took the passage to Every 6 months. */
   reachedTop: boolean;
+  /** The recap lines this grade produced: the review's outcome, and a firm-up won back. */
+  notes: ReviewNote[];
   messages: string[];
 }
 
@@ -298,6 +383,7 @@ export const gradeVerse = (
   const thoroughness = opts.thoroughness ?? DEFAULT_THOROUGHNESS;
   const day = localDayKey(getLogicalDate(opts.clock.dayStartHour, now));
   const messages: string[] = [];
+  const notes: ReviewNote[] = [];
   let work = [...queue];
   const touched = new Set<string>();
   const take = (changed: QueueItem[]) => {
@@ -317,6 +403,7 @@ export const gradeVerse = (
     const w = winBack(work, verseId, grades, { day, clock: opts.clock, thoroughness, now });
     if (w.won) {
       wonBack = true;
+      notes.push(wonBackNote(p0, now.getTime()));
       const slipped = new Set(p0.items[0].firmUp!.verses);
       const logged = w.changed.map((q) => {
         if (!slipped.has(q.verseNumber)) return q;
@@ -353,6 +440,7 @@ export const gradeVerse = (
       heldReason = noUp ? 'spotCheck' : 'selfCheck';
     }
     messages.push(outcomeMessage(r.applied, thoroughness, heldReason));
+    notes.push(reviewNote(r.applied, thoroughness, heldReason, now.getTime()));
   }
   take([...map.values()]);
 
@@ -365,6 +453,7 @@ export const gradeVerse = (
     settled: r.settled,
     wonBack,
     reachedTop: !!r.applied && r.applied.to.step === TOP_STEP && r.applied.from.step < TOP_STEP,
+    notes,
     messages,
   };
 };

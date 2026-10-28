@@ -8,11 +8,13 @@ import {
   mergeChanged,
   outcomeMessage,
   prepareLadderQueue,
+  reviewNote,
   verseRanges,
   DEFAULT_LADDER_PREFS,
 } from './ladderEngine';
 import { localDayKey } from './logicalDate';
 import { passageOf, passageState, reconcile } from './passages';
+import { dayLabel, firmUpItems, lateNoteFor, welcomeBack } from './todayCards';
 import type { ReviewClock } from './retention';
 
 let failures = 0;
@@ -169,6 +171,56 @@ const joinedQ = [...range(1, 20, { step: 3, reviews: 1, due: at(19).toISOString(
 const { joins } = reconcile(joinedQ, { clock: CLOCK, now: at(12, 10) });
 check('"Romans 8:21–22 join verses 1–20."', joins.length === 1 && joinMessage(joins[0]).startsWith('Romans 8:21–22 join verses 1–20.'), joins.map(joinMessage));
 check('outcomeMessage covers a move up', outcomeMessage({ passage: passageOf(range(1, 20, { step: 3 }), id(1))!, outcome: 'up', from: { step: 2, reviews: 3 }, to: { step: 3, reviews: 0 }, grades: [], penaltyOnly: false, firmUp: false }, 1) === 'Romans 8:1–20 moved up to Every week!');
+
+console.log('recap lines');
+const notesOf = (r: ReturnType<typeof gradeVerse>) => r.notes;
+check('a clean review: tag and count', (() => {
+  const c = gradeAll(fresh, [[1, 'clean'], [2, 'clean'], [3, 'clean']], at(12, 10));
+  const n = notesOf(c.last);
+  return n.length === 1 && n[0].tag === 'Clean' && n[0].title === 'Romans 8:1–3' && /^Review 3 of 7 at Every day\.$/.test(n[0].reason) && n[0].slipped.length === 0 && !n[0].firmUp;
+})());
+check('a partly covered review has no line yet', notesOf(gradeAll(fresh, [[1, 'clean']], at(12, 10)).last).length === 0);
+check('held: tag, count, firm-up', (() => {
+  const n = notesOf(held.last)[0];
+  return n.tag === 'Held' && n.reason === "1 stumble, so this review didn't count." && n.firmUp && n.slipped.length === 1 && n.slipped[0].verseNumber === 2;
+})(), notesOf(held.last));
+check('down a step: tag and reason', (() => {
+  const n = notesOf(down.last)[0];
+  return n.tag === 'Down a step' && n.reason === 'A blank moved it down to Every 4 days.' && n.slipped.some((x) => x.verseNumber === 2);
+})(), notesOf(down.last));
+check('a firm-up won back is its own line', notesOf(w).some((n) => n.tag === 'Won back' && n.title === 'Romans 8:1–3'), notesOf(w));
+check('a practice (not due) grade gives no line', gradeVerse(fresh, id(1), 'clean', { clock: CLOCK, now: at(11, 10) }).notes.length === 0);
+check('forgiven and back one', (() => {
+  const base = { passage: passageOf(range(1, 3, { step: 3 }), id(1))!, from: { step: 3, reviews: 2 }, to: { step: 3, reviews: 3 }, penaltyOnly: false, firmUp: false };
+  const g = (grade: ReviewGrade, v: number) => ({ verseId: id(v), verseNumber: v, grade });
+  const f = reviewNote({ ...base, outcome: 'forgiven', grades: [g('stumble', 1), g('stumble', 2)] }, 1);
+  const b = reviewNote({ ...base, outcome: 'back', to: { step: 3, reviews: 1 }, grades: [g('stumble', 1), g('stumble', 2), g('stumble', 3)] }, 1);
+  const sc = reviewNote({ ...base, outcome: 'held', grades: [g('clean', 1)] }, 1, 'spotCheck');
+  return f.tag === 'Forgiven' && f.reason.startsWith('2 stumbles forgiven') && b.tag === 'Back 1' && b.reason === '3 stumbles, so it goes back one review.' && sc.reason === "The spot check slipped, so this review didn't count.";
+})());
+
+console.log("today's ladder cards");
+check('dayLabel', dayLabel('2026-10-12', '2026-10-12') === 'Today' && dayLabel('2026-10-13', '2026-10-12') === 'Tomorrow' && dayLabel('2026-10-15', '2026-10-12') === 'Thursday, Oct 15');
+check('welcomeBack: lines and totals', (() => {
+  const wb = welcomeBack(
+    [
+      { day: '2026-10-12', passages: [passageOf(range(1, 3, { step: 0 }), id(1))!] },
+      { day: '2026-10-13', passages: [passageOf(range(1, 4, { step: 0 }), id(1))!, passageOf(range(1, 2, { step: 0 }), id(1))!] },
+    ],
+    '2026-10-12'
+  );
+  return !!wb && wb.verses === 9 && wb.days.length === 2 && wb.days[1].label === 'Tomorrow' && wb.days[1].passages === 2 && wb.days[1].verses === 6;
+})());
+check('welcomeBack: nothing spread', welcomeBack([], '2026-10-12') === null);
+check('firm-up item: only the slipped verses, only on its day', (() => {
+  const items = firmUpItems(held.queue, '2026-10-13');
+  return items.length === 1 && items[0].title === 'Romans 8:1–3' && items[0].verses.length === 1 && items[0].verses[0].verseNumber === 2 && items[0].line.startsWith('Verse 2 slipped last time.') && firmUpItems(held.queue, '2026-10-12').length === 0;
+})(), firmUpItems(held.queue, '2026-10-13'));
+check('late note: only for rows in a passage that moved back', (() => {
+  const p = passageOf(range(1, 3, { step: 3, reviews: 3 }), id(1))!;
+  const late = [{ passage: p, missed: 2, from: 3, to: 1 }];
+  return lateNoteFor(p.items.slice(0, 1), late) === 'Late: moved back 2 reviews' && lateNoteFor([item({ v: 9 })], late) === null && lateNoteFor(p.items, [{ passage: p, missed: 1, from: 0, to: 0 }]) === null && lateNoteFor(p.items, [{ passage: p, missed: 1, from: 2, to: 1 }]) === 'Late: moved back 1 review';
+})());
 
 if (failures > 0) {
   console.log(`\n${failures} check(s) failed`);

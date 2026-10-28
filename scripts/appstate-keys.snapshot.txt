@@ -54,6 +54,7 @@ clearAudioDownloads: () => Promise<void>
 clearGroupChallengeMembershipsForCircle: (circleId: string) => void
 clearGroupPlanMembershipsForCircle: (circleId: string) => void
 clearImportedAudio: () => void
+clearSlipped: (verseIds: string[]) => Promise<void>
 closeChallengeLeaderboard: () => void
 closeCircleChat: () => void
 closeCirclePreview: () => void
@@ -160,6 +161,7 @@ joinedGroupPlanMemberships: GroupPlanMembership[]
 lastRecordingDuration: number
 lastShareChoice: string[]
 lateMovesBack: boolean
+lateNotes: LateNote[]
 learningCount: number
 learningDays: string[]
 leaveCircle: (circleId: string) => Promise<void>
@@ -286,6 +288,7 @@ respondToCard: (scope: ChatScope, containerId: string, messageId: string, status
 responsesByMessageId: { [x: string]: ChatResponse[]; }
 resumeReviews: () => void
 retentionRigor: "light" | "standard" | "deep" | "custom"
+reviewNotes: ReviewNote[]
 reviewSessionPosition: number
 reviewSessionTotal: number
 reviewsPaused: boolean

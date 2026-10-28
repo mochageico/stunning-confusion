@@ -20,6 +20,10 @@
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
 // modalLearn, modalListen, modalSave, modalProgress, modalMissed.
+// ladderRecap: not a screen of the app. It shows the Mixed review recap's ladder rows and
+// the Fix the transitions offer (src/dev/RecapGallery.tsx). settings: page=reviews opens
+// Settings on Reviews. home: welcome=1 shows the Welcome back card, firm=1 the Win back a
+// review item (Romans 8:2), late=1 the late note on Romans 8:1-2.
 // blocks: not a screen of the app. It shows every shared building block
 // (src/dev/BlocksGallery.tsx) in place of the app.
 // Extra params: ios=1 reproduces iPhone font rendering in the browser (no
@@ -56,6 +60,9 @@ import type { AppState } from '../state/useAppState';
 import type { CircleMember, DMThread, SharedTakeaway, TakeawayReply } from '../types';
 import { formatLabel } from '../lib/formatNames';
 import { weekBounds } from '../lib/circleTotals';
+import { openSettingsAt } from '../screens/SettingsScreen';
+import { localDayKey } from '../lib/logicalDate';
+import { passages } from '../lib/passages';
 
 /** Flip to true to see demo data on a phone. Dev builds only. */
 const DEMO_ON_DEVICE = false;
@@ -218,6 +225,13 @@ function ladderFields(s: Pick<Spec, 'step' | 'reviews' | 'catchUp' | 'slipped'>)
     ...(s.catchUp ? { catchUp: true as const } : {}),
     ...(s.slipped ? { slipped: true as const } : {}),
   };
+}
+
+/** firm=1: Romans 8:1-2 carry a firm-up for today on verse 2, so Today offers "Win back a review". */
+function withDemoFirmUp<T extends { book: string; chapter: number; verseNumber: number }>(on: boolean, queue: T[]): T[] {
+  if (!on) return queue;
+  const firmUp = { day: localDayKey(new Date()), restore: { step: 0, reviews: 3 }, verses: [2] };
+  return queue.map((q) => (q.book === 'Romans' && q.chapter === 8 && q.verseNumber <= 2 ? { ...q, firmUp } : q));
 }
 
 /** A seeded verse with its ladder fields removed, for demo queues that reuse a row as a template. */
@@ -624,7 +638,7 @@ export function useDemoState(real: AppState): AppState {
     if (!DEMO_ENABLED || booted.current || real.loadingAuth) return;
     booted.current = true;
     if (params.get('big') === '1') real.setMemoryQueue(buildBigQueue() as any);
-    else if (params.get('empty') !== '1') real.setMemoryQueue((s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : s === 'map' ? buildQueue(MAP_SPECS) : buildQueue()) as any);
+    else if (params.get('empty') !== '1') real.setMemoryQueue(withDemoFirmUp(params.get('firm') === '1', (s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : s === 'map' ? buildQueue(MAP_SPECS) : buildQueue()) as any) as any);
     real.setUserRecordings(recordings as any);
     // The Record tab starts with no passage until one is chosen; the demo
     // picks Romans 8 unless `nopassage=1` asks for the empty state.
@@ -751,6 +765,10 @@ export function useDemoState(real: AppState): AppState {
       real.openThreadDrill({ book: 'Romans', chapter: 8, verse: 2, translationId: 'BSB' });
     // navigateTo, not setCurrentScreen: it also switches to the screen's tab
     // (the Verses tab's screens render only while that tab is current).
+    else if (s === 'settings' && params.get('page')) {
+      openSettingsAt(params.get('page') as Parameters<typeof openSettingsAt>[0]);
+      real.navigateTo('settings');
+    }
     else if (s !== 'home' && s !== 'auth' && s !== 'onboarding' && s !== 'tour' && !s.startsWith('modal'))
       real.navigateTo(s as any);
   }, [real.loadingAuth]);
@@ -842,6 +860,21 @@ export function useDemoState(real: AppState): AppState {
       ],
     },
   };
+  // home: the welcome-back spread and the late note, which come from the app's
+  // opening load (no signed-in user here to run it).
+  if (params.get('welcome') === '1' || params.get('late') === '1') {
+    const ps = passages(buildQueue() as any);
+    if (params.get('welcome') === '1') {
+      overrides.welcomeBackDays = [0, 1, 2].map((d, i) => ({
+        day: localDayKey(new Date(Date.now() + d * DAY)),
+        passages: ps.slice(i * 2, i * 2 + 2),
+      })) as any;
+    }
+    if (params.get('late') === '1') {
+      const rom = ps.find((p) => p.book === 'Romans' && p.chapter === 8);
+      if (rom) overrides.lateNotes = [{ passage: rom, missed: 2, from: 3, to: 1 }] as any;
+    }
+  }
   if (s === 'onboarding') overrides.showOnboarding = true;
   if (s === 'tour') overrides.showTour = true;
   if (s === 'groupDetail') overrides.viewingGroupDetail = true;

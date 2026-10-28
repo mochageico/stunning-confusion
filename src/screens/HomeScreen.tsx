@@ -13,6 +13,9 @@ import { formatDate } from '../lib/format';
 import { translationLabel } from '../data';
 import { useThemeColors } from '../components/theme';
 import { MIX_NAMES } from '../lib/formatNames';
+import { FirmUpCard, WelcomeBackCard } from '../components/TodayCards';
+import { firmUpItems, lateNoteFor, welcomeBack } from '../lib/todayCards';
+import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import ManualLogSheet, { logManualAnswers } from '../components/practice/ManualLogSheet';
 import type { SelfCheckAnswer } from '../lib/grading';
 import { verseStage } from '../lib/stageProgress';
@@ -77,10 +80,13 @@ function TodayRow({
   actions,
   children,
   inline = false,
+  note,
 }: {
   label: string;
   first: boolean;
   onOpenChapter: () => void;
+  /** A small line under the reference ("Late: moved back 2 reviews"). */
+  note?: string | null;
   actions: React.ReactNode;
   children?: React.ReactNode;
   /** The reference gets its own line, and `children` share the next one
@@ -130,6 +136,11 @@ function TodayRow({
           {actions}
         </View>
       </View>
+      {note ? (
+        <AppText variant="caption" className="font-sans text-ink-3">
+          {note}
+        </AppText>
+      ) : null}
       {children}
     </View>
   );
@@ -210,6 +221,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
     pausedUntil,
     resumeReviews,
     setShowTour,
+    welcomeBackDays,
+    lateNotes,
+    dayStartHour,
   } = state;
 
   // While paused (Settings -> Pause Reviews), nothing should read as "due" --
@@ -222,6 +236,13 @@ export default function HomeScreen({ state }: { state: AppState }) {
   // Which due group (if any) has its manual-log sheet open. Holds the group
   // itself rather than a boolean so the sheet knows what it's logging.
   const [manualLogGroup, setManualLogGroup] = useState<GroupedItem | null>(null);
+
+  // Today's ladder cards: welcome back after time away (until dismissed), and
+  // the firm-up item for a passage that slipped on its last review.
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const todayKey = localDayKey(getLogicalDate(dayStartHour));
+  const welcome = welcomeDismissed || isPausedNow ? null : welcomeBack(welcomeBackDays, todayKey);
+  const firmUps = isPausedNow ? [] : firmUpItems(memoryQueue, todayKey);
 
   const firstName = (user?.displayName || 'Friend').split(' ')[0];
 
@@ -419,13 +440,16 @@ export default function HomeScreen({ state }: { state: AppState }) {
             {/* A section that just reached weekly reviews: asked once, quietly. */}
             <TakeawayAsk state={state} quiet />
 
+            {welcome && <WelcomeBackCard data={welcome} onDismiss={() => setWelcomeDismissed(true)} />}
+            <FirmUpCard items={firmUps} onStart={(verses) => handleGroupPractice('learn', verses)} />
+
             <CollapsibleCard
               storageKey="home.reviews"
               title="Review"
               summary={isPausedNow ? 'Paused' : `${dueReviewItems.length} due`}
               defaultCollapsed={dueReviewItems.length === 0}
               accessory={
-                <HelpTooltip text="Verses you've already learned, back for a quick check so you don't forget them. Each one comes back every day for a while, then once a week, then once a month — and then it stops." />
+                <HelpTooltip text="Verses you've already learned, back for a quick check so you don't forget them. Each passage comes back every day for a while, then every few days, then every week or two, then every month or two, and finally every 6 months for good." />
               }
             >
               {dueReviewItems.length > 0 ? (
@@ -456,6 +480,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                             label={group.label}
                             first={i === 0}
                             onOpenChapter={() => navigateTo('chapterLanding', group.book, group.chapter)}
+                            note={lateNoteFor(group.items, lateNotes)}
                             actions={
                               <>
                                 {/* For a review genuinely done off-app, without
