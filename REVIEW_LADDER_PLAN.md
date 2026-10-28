@@ -10,7 +10,8 @@ Stage files by name when committing (never `git add -A`). After each stage, upda
 `MIXED_REVIEW_PLAN.md` does.
 
 **Progress:** stages 1–2 built (ladder, grading and passages logic, all pure; nothing
-calls them yet).
+calls them yet). Stage 6 built (display only, on demo data; runs on the old streaks until
+stage 3/4 migrate an account). Stage 5 is running locally.
 
 Mockups: the "My Verses ladder sketches" design canvas (claude.ai artifact
 77ZK89BZsaNcsiS8UgXqHL): My Verses by group and by chapter, verse page ladder,
@@ -441,6 +442,57 @@ with stages 2–5.
   (`DemoHarness.tsx`) so every screen has a demo.
 - **Done when:** tsc, `check:layout`, `check:stages`, screenshots at 1.5× on SE width,
   light and dark.
+
+### As built (stage 6)
+
+- `stageProgress.ts`: `VerseStage` is now waiting / learning / settling / steady / kept
+  (`STAGE_LABEL`, `REVIEW_STAGES`); the top step is a flag (`progress.top`, `isTopStep`),
+  not a stage. `ladderPlace(item)` reads `ladderStep` / `ladderReviews` / `catchUp`.
+  **A reviewing verse with no `ladderStep` is placed from its old streak** by
+  `legacyLadderState` (the stage 3 mapping table), so the screens work before and after
+  migration. Stage 3 should import it rather than re-derive the table. Refreshers are
+  gone from the display (a refresher shows at the place it returns to).
+- `StagePlan` is now `{ masteryTouches, thoroughness? }`; thoroughness falls back to
+  Standard until Settings > Reviews (stage 7) passes it.
+- New: `ladderEstimates` (arrival date at each step, played forward with `applyOutcome`,
+  so catch-up and thoroughness count), `roadEstimates` (by group, built on it),
+  `passageRuns` / `passageGapNotes` (display twin of `passages.ts`, which needs a
+  migrated queue), `versesWord`, `LOG_STAGE` (old log stage -> group). `referenceFor`
+  now uses an en dash ("Romans 8:21–22"). A Learning row next to a passage carries
+  `joins` ("Joins verses 1–20 when it moves up").
+- Theme: Settling = `stageDaily` green, Steady = `stageWeekly` blue, Kept =
+  `stageComplete` gold; new `stageTop` / `stageTopEdge` tokens (ice-blue platinum, light
+  and dark) in `theme.tsx`, `global.css`, `tailwind.config.js`. `stageMonthly` stays
+  until the screens that still draw it move over (stage 8). Labels stay ink.
+- Screens: `VerseStages.tsx` (strip of five, `fillFor`, `TopChips`, `WeakSpotDot`,
+  `slippedNote`), My Verses by stage (Kept's every-6-months passages are chips under
+  their own heading), By book (top squares in platinum, the gap note, "Whole chapter
+  kept"), The road (summit = every 6 months), the verse page (four-stop road plus all
+  eight steps with review counts and estimated dates, "reviewed together with verses
+  …", the weak-spot line), Today's due list grouped Settling / Steady / Kept, the
+  chapter page's weak-spot dot (`VerseState.slipped`, set in `useAppState`).
+- **Weak-spot dot is a hollow amber ring**, not a filled dot, so it can't be mistaken for
+  the chapter page's amber Learning dot.
+- **Map:** `starIsTop` (every held verse on the top step) -> `StarLook.top`; `MapDrawing`
+  draws the halo-and-glint star (hard-stop ring gradient, 4-point glint, radial halo, thin
+  edge on light maps). The ring colors live in `theme.tsx` (`TOP_RING`, `TOP_HALO`) for
+  the hex-color lint. Bars and dots use a flat platinum fill with an edge, **not** a pearly
+  gradient (no gradient library in the app); the star has the real gradient.
+- `forecast.ts`, `constellations.ts` (`LEARNED_STAGE` = settling) and `takeaways.ts`
+  (`READY_STAGE` = steady) were renamed to the new stages only; their real rework is stage 8.
+- Demo harness seeds the ladder fields (a catch-up passage with a slipped verse, Learning
+  verses beside it, a gap, every step, the top step) and the big queue spreads across
+  the steps.
+- Checks: `check:stages` rewritten (legacy mapping rows, steps, thoroughness, catch-up,
+  top, estimates, grouping, joins, runs, gap notes), `check:constellations` (+ top star).
+  tsc clean outside `functions/`. `check:layout` back at its 3 existing errors;
+  `check:maplayout`, `check:milestones` and `check:appstate` fail the same way on a clean
+  `main`. Screenshots checked at SE width 1.5×, light and dark (My Verses, By book, road,
+  verse page, map, chapter page).
+- **Not done here (stage 7/8):** Settings > Reviews, the plan screens' phase-length links
+  ("Change how long each stage lasts"), the Dashboard and Memory Calendar's
+  daily/weekly/monthly groupings, `ReferenceDrill` / `ThreadDrill` tab labels, the
+  Chapter page's "set status" override and the review recap.
 
 ## Stage 7 — Settings, recap, welcome back, firm-up
 

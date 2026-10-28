@@ -1,108 +1,153 @@
 import { QueueItem, ReviewLog } from '../types';
 import { ALL_BIBLE_BOOKS } from '../data';
+import {
+  DEFAULT_THOROUGHNESS,
+  LADDER,
+  LADDER_GROUPS,
+  TOP_STEP,
+  applyOutcome,
+  reviewsToMoveUp,
+  stepInfo,
+  type LadderGroup,
+  type LadderState,
+  type Thoroughness,
+} from './ladder';
 
 // ============================================================================
-// WHERE EACH VERSE IS ON THE ROAD
+// WHERE EACH VERSE IS ON THE LADDER
 // ----------------------------------------------------------------------------
-// Pure logic behind My Verses' stage list, the road, and the verse page: which
-// stage a verse is in, how far through that stage it is, and roughly when it
-// moves up. Thresholds are copied from handleReviewCompleted's success path in
-// useAppState.ts (the same numbers reviewCalendar.ts copies), so "Week 3 of 7"
-// here and the engine's own promotion never disagree.
+// Pure logic behind My Verses' groups, the road, and the verse page: which
+// group a verse is in (Waiting, Learning, Settling, Steady, Kept), where it
+// sits on the ladder's eight steps, how far through that step it is, and
+// roughly when it moves up. REVIEW_LADDER_PLAN.md Part 1 §1.
+//
+// The step comes from `ladderStep` / `ladderReviews` on the queue item. Until
+// the account is migrated (stage 3/4) those aren't there, so a reviewing verse
+// without them is placed from its old daily / weekly / monthly streak by the
+// same mapping the migration uses (legacyLadderState).
 //
 // Every date ahead is an estimate that assumes each review goes well -- the
 // same promise the Memory Calendar makes. Sabbath skips and chapter anchor
 // days can move the real date by a few days; the copy says "about" for that.
 // ============================================================================
 
-export type VerseStage = 'waiting' | 'learning' | 'daily' | 'weekly' | 'monthly' | 'complete';
+export type VerseStage = 'waiting' | 'learning' | 'settling' | 'steady' | 'kept';
 
-export const STAGE_ORDER: VerseStage[] = ['waiting', 'learning', 'daily', 'weekly', 'monthly', 'complete'];
+export const STAGE_ORDER: VerseStage[] = ['waiting', 'learning', 'settling', 'steady', 'kept'];
 
 export const STAGE_LABEL: Record<VerseStage, string> = {
   waiting: 'Waiting',
   learning: 'Learning',
-  daily: 'Daily',
-  weekly: 'Weekly',
-  monthly: 'Monthly',
-  complete: 'Complete',
+  settling: LADDER_GROUPS.settling.name,
+  steady: LADDER_GROUPS.steady.name,
+  kept: LADDER_GROUPS.kept.name,
 };
 
+/** The reviewing groups, in ladder order. */
+export const REVIEW_STAGES: readonly LadderGroup[] = ['settling', 'steady', 'kept'];
+
 export interface StagePlan {
-  dailyPhaseWeeks: number;
-  weeklyPhaseMonths: number;
-  monthlyPhaseYears: number;
+  /** Perfect recalls that move a verse out of Learning. */
   masteryTouches: number;
+  /** Review thoroughness (Settings > Reviews). Standard until the setting lands. */
+  thoroughness?: Thoroughness;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const addDays = (d: Date, n: number) => new Date(d.getTime() + n * DAY_MS);
 
-/** Monthly reviews land on the 4th occurrence of the anchor weekday, so a "month" is 28 days. */
-const CYCLE_DAYS: Record<'daily' | 'weekly' | 'monthly', number> = { daily: 1, weekly: 7, monthly: 28 };
+/**
+ * Where an unmigrated reviewing verse sits, from its old streak (the stage 3
+ * mapping in REVIEW_LADDER_PLAN.md): daily d -> Every day (d < 7), Every 2
+ * days (d < 11), Every 4 days (d < 15), else Every week; weekly w -> Every
+ * week (w < 8), Every 2 weeks (w < 14), else Every 4 weeks; monthly m ->
+ * Every 4 weeks (m < 12), Every 8 weeks (m < 18), else Every 6 months;
+ * retained -> Every 6 months. An active refresher uses its return place.
+ */
+export function legacyLadderState(item: QueueItem): LadderState {
+  if (item.status === 'retained') return { step: TOP_STEP, reviews: 0 };
+  const refreshing = item.refresherActive && item.refresherReturnPhase;
+  const phase = refreshing ? item.refresherReturnPhase : item.retentionPhase;
+  const n = Math.max(0, refreshing ? item.refresherReturnProgress || 1 : item.currentStreakCount || 0);
+  if (phase === 'weekly') {
+    if (n < 8) return { step: 3, reviews: n };
+    if (n < 14) return { step: 4, reviews: n - 8 };
+    return { step: 5, reviews: 0 };
+  }
+  if (phase === 'monthly') {
+    if (n < 12) return { step: 5, reviews: n };
+    if (n < 18) return { step: 6, reviews: n - 12 };
+    return { step: TOP_STEP, reviews: 0 };
+  }
+  if (n < 7) return { step: 0, reviews: n };
+  if (n < 11) return { step: 1, reviews: n - 7 };
+  if (n < 15) return { step: 2, reviews: n - 11 };
+  return { step: 3, reviews: 0 };
+}
 
 export const verseStage = (item: QueueItem): VerseStage => {
-  if (item.status === 'retained') return 'complete';
+  if (item.status === 'retained') return 'kept';
   if (item.status === 'queued') return 'waiting';
-  if (item.status === 'learning' || item.retentionPhase === 'none') return 'learning';
-  // A verse on a refresher is shown in the stage it will return to: the
-  // refresher is a detour, not a step back down the road.
-  if (item.refresherActive && item.refresherReturnPhase) return item.refresherReturnPhase;
-  return item.retentionPhase;
+  if (item.status === 'learning' || (item.ladderStep === undefined && item.retentionPhase === 'none')) return 'learning';
+  return LADDER[ladderPlace(item)!.step].group;
 };
 
-/** Review counts that move a verse out of each stage (engine thresholds). */
-export const stageTargets = (plan: StagePlan, dailyExtensionDays = 0) => ({
-  daily: plan.dailyPhaseWeeks * 7 + dailyExtensionDays,
-  weekly: Math.round(plan.weeklyPhaseMonths * (52 / 12)),
-  monthly: plan.monthlyPhaseYears * 12,
-});
+/** The ladder place of a verse past Learning; null while it is Waiting or Learning. */
+export function ladderPlace(item: QueueItem): LadderState | null {
+  if (item.status === 'queued' || item.status === 'learning') return null;
+  if (item.ladderStep === undefined && item.status !== 'retained' && item.retentionPhase === 'none') return null;
+  if (item.ladderStep === undefined) return legacyLadderState(item);
+  const step = Math.min(TOP_STEP, Math.max(0, Math.floor(item.ladderStep)));
+  return item.catchUp && step < 3
+    ? { step, reviews: item.ladderReviews ?? 0, catchUp: true }
+    : { step, reviews: item.ladderReviews ?? 0 };
+}
+
+/** On the top step: Every 6 months, for good. */
+export const isTopStep = (item: QueueItem): boolean => ladderPlace(item)?.step === TOP_STEP;
 
 export interface StageProgress {
   stage: VerseStage;
-  /** How far through the current stage, 0-1. */
+  /** Ladder step 0-7 for a verse past Learning, else null. */
+  step: number | null;
+  /** On the top step (Every 6 months). */
+  top: boolean;
+  /** The short catch-up after joining a passage is running. */
+  catchUp: boolean;
+  /** How far through the current step, 0-1. The top step is always full. */
   fraction: number;
-  /** "Week 3 of 7", "Month 5 of 6", "Year 2 of 5", "2 of 3 practices". Empty for waiting/complete. */
+  /** "Every 2 weeks, 3 of 6 reviews", "2 of 3 practices". Empty for waiting. */
   position: string;
-  /** Good reviews (or practices) still needed before it moves up. */
+  /** Reviews (or practices) still needed before it moves up. */
   remaining: number;
-  /** Estimated day it moves up, if every review goes well. Null when unknown or on hold. */
+  /** Estimated day it moves up a step, if every review goes well. Null at the top or when unknown. */
   movesUpOn: Date | null;
-  /** Set while a missed review has it on a refresher. Its place in `stage` is kept, not lost. */
-  refresher: { remaining: number; unit: 'day' | 'week'; via: 'daily' | 'weekly' } | null;
-  /** Arrived in this stage recently (within its first cycle, or the last 7 days for Daily). */
+  /** Arrived on this step recently (its first review ahead). */
   justMovedUp: boolean;
+  /** Slipped in its passage's last review: the weak-spot dot. */
+  slipped: boolean;
   /** Learning only: practices banked out of those needed, for the dots. */
   steps?: { done: number; total: number };
 }
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
-/** Where a reviewing verse sits inside daily/weekly/monthly, given its streak there. */
-function positionIn(phase: 'daily' | 'weekly' | 'monthly', streak: number, plan: StagePlan, dailyExtensionDays: number) {
-  const target = stageTargets(plan, dailyExtensionDays)[phase];
-  const done = clamp(streak, 0, target);
-  const fraction = target > 0 ? done / target : 0;
-  let position: string;
-  if (phase === 'daily') {
-    const weeks = Math.max(1, Math.ceil(target / 7));
-    position = `Week ${clamp(Math.ceil(done / 7), 1, weeks)} of ${weeks}`;
-  } else if (phase === 'weekly') {
-    const months = Math.max(1, plan.weeklyPhaseMonths);
-    position = `Month ${clamp(Math.ceil((done * months) / Math.max(1, target)), 1, months)} of ${months}`;
-  } else {
-    const years = Math.max(1, plan.monthlyPhaseYears);
-    position = `Year ${clamp(Math.ceil(done / 12), 1, years)} of ${years}`;
-  }
-  return { target, fraction, position, remaining: Math.max(0, target - streak) };
-}
-
 export function stageProgress(item: QueueItem, plan: StagePlan, today: Date = new Date()): StageProgress {
   const stage = verseStage(item);
-  const base: StageProgress = { stage, fraction: 0, position: '', remaining: 0, movesUpOn: null, refresher: null, justMovedUp: false };
+  const base: StageProgress = {
+    stage,
+    step: null,
+    top: false,
+    catchUp: false,
+    fraction: 0,
+    position: '',
+    remaining: 0,
+    movesUpOn: null,
+    justMovedUp: false,
+    slipped: !!item.slipped,
+  };
 
   if (stage === 'waiting') return base;
-  if (stage === 'complete') return { ...base, fraction: 1 };
 
   if (stage === 'learning') {
     const total = Math.max(1, plan.masteryTouches);
@@ -116,87 +161,99 @@ export function stageProgress(item: QueueItem, plan: StagePlan, today: Date = ne
     };
   }
 
-  const next = item.nextReviewDueDate ? new Date(item.nextReviewDueDate) : null;
-
-  if (item.refresherActive && item.refresherReturnPhase) {
-    const held = positionIn(stage as 'weekly' | 'monthly', item.refresherReturnProgress || 1, plan, 0);
-    const via = item.refresherReturnPhase === 'monthly' ? 'weekly' : 'daily';
-    return {
-      ...base,
-      fraction: held.fraction,
-      position: held.position,
-      remaining: held.remaining,
-      refresher: {
-        remaining: Math.max(0, (item.refresherTargetUnits || 1) - item.currentStreakCount),
-        unit: via === 'weekly' ? 'week' : 'day',
-        via,
-      },
-    };
+  const place = ladderPlace(item)!;
+  const info = stepInfo(place.step);
+  const top = !!info.top;
+  if (top) {
+    return { ...base, step: place.step, top: true, fraction: 1, position: `${info.label}, for good`, justMovedUp: place.reviews === 0 && item.status !== 'retained' };
   }
 
-  const phase = stage as 'daily' | 'weekly' | 'monthly';
-  const p = positionIn(phase, item.currentStreakCount, plan, item.dailyPhaseExtensionDays || 0);
-  // The review that brings the streak up to target is the one that moves it
-  // up, so it lands (remaining - 1) cycles after the next due date.
-  const movesUpOn = next && p.remaining > 0 ? addDays(next, (p.remaining - 1) * CYCLE_DAYS[phase]) : null;
+  const thoroughness = plan.thoroughness ?? DEFAULT_THOROUGHNESS;
+  const need = reviewsToMoveUp(place, thoroughness) ?? 1;
+  const done = clamp(place.reviews, 0, need);
+  const remaining = need - done;
+  const next = item.nextReviewDueDate ? new Date(item.nextReviewDueDate) : null;
+  // The review that brings the count up to the target is the one that moves
+  // it up, so it lands (remaining - 1) steps' intervals after the next due date.
+  const movesUpOn = next && remaining > 0 ? addDays(next, (remaining - 1) * info.intervalDays) : null;
   const justMovedUp =
-    phase === 'daily'
+    place.step === 0
       ? !!item.dateStarted && today.getTime() - new Date(item.dateStarted).getTime() < 7 * DAY_MS
-      : item.currentStreakCount <= 1;
+      : place.reviews === 0;
 
-  return { ...base, fraction: p.fraction, position: p.position, remaining: p.remaining, movesUpOn, justMovedUp };
+  return {
+    ...base,
+    step: place.step,
+    catchUp: !!place.catchUp,
+    fraction: need > 0 ? done / need : 0,
+    position: `${info.label}, ${done} of ${need} reviews`,
+    remaining,
+    movesUpOn,
+    justMovedUp,
+  };
 }
 
-/** Rough length of a whole stage, for estimating the stops after the next one. */
-const stageLengthDays = (stage: VerseStage, plan: StagePlan): number => {
-  if (stage === 'daily') return plan.dailyPhaseWeeks * 7;
-  if (stage === 'weekly') return Math.round(plan.weeklyPhaseMonths * (365 / 12));
-  if (stage === 'monthly') return Math.round(plan.monthlyPhaseYears * 365);
-  return 0;
-};
-
 /**
- * Estimated arrival at each stop still ahead of the verse, if every review
- * goes well. Waiting verses get none: nothing is scheduled until they start.
+ * Estimated arrival at each step still ahead of the verse (index = step; null
+ * for steps it has passed or is on), if every review goes well. Plays the
+ * engine's own applyOutcome forward, so catch-up and thoroughness count. A
+ * Learning verse is placed at Every day tomorrow; Waiting gets none.
  */
-export function roadEstimates(item: QueueItem, plan: StagePlan, today: Date = new Date()): Partial<Record<VerseStage, Date>> {
-  const progress = stageProgress(item, plan, today);
-  const out: Partial<Record<VerseStage, Date>> = {};
-  if (progress.stage === 'waiting' || progress.stage === 'complete') return out;
+export function ladderEstimates(item: QueueItem, plan: StagePlan, today: Date = new Date()): (Date | null)[] {
+  const out: (Date | null)[] = LADDER.map(() => null);
+  const stage = verseStage(item);
+  if (stage === 'waiting') return out;
+  const thoroughness = plan.thoroughness ?? DEFAULT_THOROUGHNESS;
 
-  let cursor: Date | null;
-  if (progress.stage === 'learning') {
-    // Practices only need an hour between them, so Daily is a day or so away.
-    cursor = addDays(today, progress.remaining > 0 ? 1 : 0);
-  } else if (progress.refresher) {
-    const unitDays = progress.refresher.unit === 'week' ? 7 : 1;
-    const back = addDays(today, progress.refresher.remaining * unitDays);
-    cursor = addDays(back, progress.remaining * CYCLE_DAYS[progress.stage as 'weekly' | 'monthly']);
+  let state: LadderState;
+  let date: Date | null;
+  if (stage === 'learning') {
+    state = { step: 0, reviews: 0 };
+    date = addDays(today, 1);
+    out[0] = date;
   } else {
-    cursor = progress.movesUpOn;
+    state = ladderPlace(item)!;
+    date = item.nextReviewDueDate ? new Date(item.nextReviewDueDate) : null;
   }
-  if (!cursor) return out;
+  if (!date) return out;
 
-  const ahead = STAGE_ORDER.slice(STAGE_ORDER.indexOf(progress.stage) + 1);
-  for (const stage of ahead) {
-    out[stage] = cursor;
-    cursor = addDays(cursor, stageLengthDays(stage, plan));
+  for (let i = 0; i < 400 && state.step < TOP_STEP; i++) {
+    const after = applyOutcome(state, 'up', thoroughness);
+    if (after.step > state.step) out[after.step] = date;
+    date = addDays(date, stepInfo(after.step).intervalDays);
+    state = after;
   }
   return out;
 }
 
-const LOG_STAGE: Record<ReviewLog['stage'], VerseStage> = {
+/** Estimated arrival at each group still ahead (its first step), same promise as ladderEstimates. */
+export function roadEstimates(item: QueueItem, plan: StagePlan, today: Date = new Date()): Partial<Record<VerseStage, Date>> {
+  const steps = ladderEstimates(item, plan, today);
+  const out: Partial<Record<VerseStage, Date>> = {};
+  const current = verseStage(item);
+  if (current === 'learning' && steps[0]) out.settling = steps[0];
+  for (const group of REVIEW_STAGES) {
+    if (STAGE_ORDER.indexOf(group) <= STAGE_ORDER.indexOf(current)) continue;
+    const first = LADDER.findIndex((s) => s.group === group);
+    if (steps[first]) out[group] = steps[first]!;
+  }
+  return out;
+}
+
+/** The group an old review-log stage (daily / weekly / monthly) belongs to. */
+export const LOG_STAGE: Record<ReviewLog['stage'], VerseStage> = {
   learning: 'learning',
-  daily: 'daily',
-  weekly: 'weekly',
-  monthly: 'monthly',
-  retained: 'complete',
+  daily: 'settling',
+  weekly: 'steady',
+  monthly: 'kept',
+  retained: 'kept',
 };
 
 /**
- * When the verse reached each stop it has passed, read from its review log.
+ * When the verse reached each group it has passed, read from its review log.
  * The log only goes back to 2026-09-26, so older verses have gaps -- a stop
- * with no entry here simply shows no date.
+ * with no entry here simply shows no date. Old logs name daily / weekly /
+ * monthly, which are the Settling / Steady / Kept groups' ancestors.
  */
 export function arrivalDates(item: QueueItem): Partial<Record<VerseStage, Date>> {
   const out: Partial<Record<VerseStage, Date>> = {};
@@ -218,8 +275,8 @@ export function arrivalDates(item: QueueItem): Partial<Record<VerseStage, Date>>
   }
   const current = verseStage(item);
   if (prev && rank(current) > rank(LOG_STAGE[prev.stage]) && !out[current]) out[current] = new Date(prev.at);
-  // Moving up to Daily stamps dateStarted, which predates the log for older verses.
-  if (!out.daily && item.dateStarted && rank(current) >= rank('daily')) out.daily = new Date(item.dateStarted);
+  // Moving up to the first review step stamps dateStarted, which predates the log for older verses.
+  if (!out.settling && item.dateStarted && rank(current) >= rank('settling')) out.settling = new Date(item.dateStarted);
   return out;
 }
 
@@ -235,6 +292,8 @@ export interface StageGroup {
   translationId: string;
   items: QueueItem[];
   progress: StageProgress;
+  /** Learning rows only: "Joins verses 1–20 when it moves up", when it sits next to a passage. */
+  joins?: string;
 }
 
 const BOOK_INDEX = new Map(ALL_BIBLE_BOOKS.map((b, i) => [b.name.toLowerCase(), i]));
@@ -248,19 +307,60 @@ export const canonicalCompare = (a: QueueItem, b: QueueItem) =>
 
 /** Two neighbouring verses share a row only when nothing about their progress differs. */
 const progressSignature = (p: StageProgress, item: QueueItem) =>
-  [p.stage, p.position, p.remaining, p.refresher ? `r${p.refresher.remaining}` : '', item.nextReviewDueDate?.slice(0, 10) ?? '', item.origin || 'individual'].join('|');
+  [p.stage, p.step ?? '', p.position, p.remaining, p.catchUp ? 'c' : '', item.nextReviewDueDate?.slice(0, 10) ?? '', item.origin || 'individual'].join('|');
 
+/** "Romans 8:1–20" (en dash, like the rest of the ladder copy); one verse reads "Romans 8:1". */
 export const referenceFor = (book: string, chapter: number, verses: number[]) =>
-  `${book} ${chapter}:${verses[0]}${verses.length > 1 ? `-${verses[verses.length - 1]}` : ''}`;
+  `${book} ${chapter}:${verses[0]}${verses.length > 1 ? `–${verses[verses.length - 1]}` : ''}`;
+
+/** "verse 5" / "verses 1–20". */
+export const versesWord = (start: number, end: number) => (start === end ? `verse ${start}` : `verses ${start}–${end}`);
+
+/** An unbroken run of verses past Learning in one chapter and translation: a passage. */
+export interface PassageRun {
+  book: string;
+  chapter: number;
+  translationId: string;
+  start: number;
+  end: number;
+}
+
+/** Every passage in the list, in Bible order. Display-side twin of passages.ts, which needs a migrated queue. */
+export function passageRuns(queue: QueueItem[]): PassageRun[] {
+  // Bucket by chapter and translation first: two translations of the same
+  // verses interleave when sorted by verse number, and are separate passages.
+  const buckets = new Map<string, QueueItem[]>();
+  for (const q of queue) {
+    if (ladderPlace(q) === null) continue;
+    const key = `${q.book}|${q.chapter}|${q.translationId || 'ESV'}`;
+    const list = buckets.get(key);
+    if (list) list.push(q);
+    else buckets.set(key, [q]);
+  }
+  const out: PassageRun[] = [];
+  for (const list of buckets.values()) {
+    const verses = [...new Set(list.map((q) => q.verseNumber))].sort((x, y) => x - y);
+    const { book, chapter } = list[0];
+    const translationId = list[0].translationId || 'ESV';
+    let run: PassageRun | null = null;
+    for (const v of verses) {
+      if (run && v === run.end + 1) run.end = v;
+      else out.push((run = { book, chapter, translationId, start: v, end: v }));
+    }
+  }
+  return out.sort((x, y) => bookIndex(x.book) - bookIndex(y.book) || x.chapter - y.chapter || x.start - y.start || x.translationId.localeCompare(y.translationId));
+}
 
 /**
  * Every verse except Waiting ones (My Verses keeps its own drag-to-reorder
  * list for those), grouped into runs of neighbouring verses at the same point
- * on the road, then bucketed by stage. Review stages list the verse closest to
- * moving up first; Learning keeps queue order; Complete reads in Bible order.
+ * on the ladder -- a passage, once a migrated account keeps its members in
+ * step -- then bucketed by group. Review groups list the passage closest to
+ * moving up first (higher steps first on a tie); Learning keeps queue order;
+ * Kept's top step reads in Bible order after the rest.
  */
 export function groupByStage(queue: QueueItem[], plan: StagePlan, today: Date = new Date()): Record<VerseStage, StageGroup[]> {
-  const out: Record<VerseStage, StageGroup[]> = { waiting: [], learning: [], daily: [], weekly: [], monthly: [], complete: [] };
+  const out: Record<VerseStage, StageGroup[]> = { waiting: [], learning: [], settling: [], steady: [], kept: [] };
   const sorted = queue.filter((i) => i.status !== 'queued').sort(canonicalCompare);
 
   let current: StageGroup | null = null;
@@ -296,18 +396,62 @@ export function groupByStage(queue: QueueItem[], plan: StagePlan, today: Date = 
     }
   }
 
+  // A Learning row next to a passage says it will join it when it moves up.
+  if (out.learning.length > 0) {
+    const runs = passageRuns(queue);
+    for (const g of out.learning) {
+      const first = g.verses[0];
+      const last = g.verses[g.verses.length - 1];
+      const near = runs.filter(
+        (r) => r.book === g.book && r.chapter === g.chapter && r.translationId === g.translationId && (r.end === first - 1 || r.start === last + 1)
+      );
+      if (near.length === 0) continue;
+      const where = near.map((r) => versesWord(r.start, r.end));
+      g.joins = near.length > 1 ? `Joins ${where[0]} and ${where[1].replace(/^verses? /, '')} into one passage when it moves up` : `Joins ${where[0]} when it moves up`;
+    }
+  }
+
   const minOrder = (g: StageGroup) => Math.min(...g.items.map((i) => i.orderIndex));
   out.learning.sort((a, b) => minOrder(a) - minOrder(b));
-  for (const stage of ['daily', 'weekly', 'monthly'] as const) {
-    // Refreshers last within their stage: they aren't moving up until they're back.
-    out[stage].sort((a, b) => Number(!!a.progress.refresher) - Number(!!b.progress.refresher) || a.progress.remaining - b.progress.remaining);
+  for (const stage of REVIEW_STAGES) {
+    // The top step is done climbing: after the rest, in Bible order (already sorted).
+    out[stage].sort((a, b) => Number(a.progress.top) - Number(b.progress.top) || (a.progress.top ? 0 : a.progress.remaining - b.progress.remaining || (b.progress.step ?? 0) - (a.progress.step ?? 0)));
   }
   return out;
 }
 
 /** Verse count per stage, for the strip across the top of My Verses. */
 export function stageCounts(queue: QueueItem[]): Record<VerseStage, number> {
-  const out: Record<VerseStage, number> = { waiting: 0, learning: 0, daily: 0, weekly: 0, monthly: 0, complete: 0 };
+  const out: Record<VerseStage, number> = { waiting: 0, learning: 0, settling: 0, steady: 0, kept: 0 };
   for (const item of queue) out[verseStage(item)]++;
   return out;
+}
+
+/**
+ * "Verses 3–4 aren't on your list, so verses 1–2 and 5 are reviewed as
+ * separate passages." One line per gap between two passages in a chapter (the
+ * first two). When every gap verse is already on the list (Waiting or
+ * Learning), it says they join once learned instead. `runs` are one
+ * chapter's passages, in verse order.
+ */
+export function passageGapNotes(runs: PassageRun[], onList: (verse: number) => boolean): string[] {
+  const notes: string[] = [];
+  for (let i = 1; i < runs.length && notes.length < 2; i++) {
+    const a = runs[i - 1];
+    const b = runs[i];
+    if (a.translationId !== b.translationId) continue;
+    const gapStart = a.end + 1;
+    const gapEnd = b.start - 1;
+    let allOn = true;
+    for (let v = gapStart; v <= gapEnd; v++) if (!onList(v)) allOn = false;
+    const gap = versesWord(gapStart, gapEnd);
+    const lead = `${gap[0].toUpperCase()}${gap.slice(1)}`;
+    const both = `${versesWord(a.start, a.end)} and ${b.start === b.end ? b.start : `${b.start}–${b.end}`}`;
+    notes.push(
+      allOn
+        ? `${lead} ${gapStart === gapEnd ? 'is' : 'are'} on the way. Once learned, ${both} join into one passage.`
+        : `${lead} ${gapStart === gapEnd ? "isn't" : "aren't"} on your list, so ${both} are reviewed as separate passages.`
+    );
+  }
+  return notes;
 }

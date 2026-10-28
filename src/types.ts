@@ -6,6 +6,8 @@ export interface VerseState {
   text: string;
   status: 'memorized' | 'learning' | 'untouched';
   dueDate?: string;
+  /** Slipped in its passage's last review: the weak-spot dot on the chapter page. */
+  slipped?: boolean;
   /**
    * Which translation `text` is from. Practice needs it twice: to know the
    * writing system (Hebrew/Greek words split and compare differently -- see

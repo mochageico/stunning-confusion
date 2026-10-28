@@ -81,11 +81,24 @@ const STATUS = {
   dark: { success: '#5CC993', warning: '#E3B04B', danger: '#F2998F' },
 } as const;
 
-/** Review stages. The same four everywhere a stage is shown. */
+/**
+ * Review stages, the same everywhere a stage is shown: Learning red,
+ * Settling green (stageDaily), Steady blue (stageWeekly), Kept gold
+ * (stageComplete). stageMonthly is the old Monthly purple, kept until the
+ * screens that still draw it move over. stageTop / stageTopEdge are the
+ * top step (every 6 months): cool ice-blue "platinum" with a darker edge,
+ * so it reads as a step above gold on light and dark.
+ */
 const STAGES = {
-  light: { stageLearning: '#D24034', stageDaily: '#2E9A68', stageWeekly: '#3A6BD6', stageMonthly: '#6E4BB8', stageComplete: '#C99A18' },
-  dark: { stageLearning: '#F2887D', stageDaily: '#4CC38A', stageWeekly: '#7BA1F2', stageMonthly: '#B79CF0', stageComplete: '#E8BE45' },
+  light: { stageLearning: '#D24034', stageDaily: '#2E9A68', stageWeekly: '#3A6BD6', stageMonthly: '#6E4BB8', stageComplete: '#C99A18', stageTop: '#A9CBEA', stageTopEdge: '#6F98C4' },
+  dark: { stageLearning: '#F2887D', stageDaily: '#4CC38A', stageWeekly: '#7BA1F2', stageMonthly: '#B79CF0', stageComplete: '#E8BE45', stageTop: '#E3F0FB', stageTopEdge: '#9CC0E2' },
 } as const;
+
+/** The top star's soft blue halo on the map ("halo and glint", REVIEW_LADDER_PLAN.md §1). */
+export const TOP_HALO = '#A8CCF0';
+
+/** The top star's cut ring, glint and outer edge: fixed on every map and scheme. */
+export const TOP_RING = { white: '#FFFFFF', ice: '#9CC0E2', pale: '#E3F0FB', steel: '#6F98C4' } as const;
 
 /**
  * Chapter section brackets (the colored bars on the chapter page and, later,
@@ -130,6 +143,8 @@ export interface ThemeColors {
   stageWeekly: string;
   stageMonthly: string;
   stageComplete: string;
+  stageTop: string;
+  stageTopEdge: string;
   bracket1: string;
   bracket2: string;
   bracket3: string;
@@ -218,6 +233,8 @@ const CSS_VARS: Record<keyof ThemeColors, string> = {
   stageWeekly: '--stage-weekly',
   stageMonthly: '--stage-monthly',
   stageComplete: '--stage-complete',
+  stageTop: '--stage-top',
+  stageTopEdge: '--stage-top-edge',
   bracket1: '--bracket-1',
   bracket2: '--bracket-2',
   bracket3: '--bracket-3',

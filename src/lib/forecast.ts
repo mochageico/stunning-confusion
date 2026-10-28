@@ -69,29 +69,15 @@ export function projectStartDates(queue: QueueItem[], plan: CalendarPlanSettings
   return out;
 }
 
-/** Rough length of a whole stage, matching stageProgress's road estimates. */
-const stageLengthDays = (stage: VerseStage, plan: StagePlan): number => {
-  if (stage === 'daily') return plan.dailyPhaseWeeks * 7;
-  if (stage === 'weekly') return Math.round(plan.weeklyPhaseMonths * (365 / 12));
-  if (stage === 'monthly') return Math.round(plan.monthlyPhaseYears * 365);
-  return 0;
-};
-
 /**
  * When the verse reaches each stop still ahead of it. A waiting verse follows
- * the whole road from its projected start: Learning that day, Daily the next
- * (practices only need an hour between them), then each stage's full length.
+ * the whole ladder from its projected start: Learning that day, Settling the
+ * next (practices only need an hour between them), then each step's reviews.
  */
 export function futureArrivals(item: QueueItem, plan: StagePlan, startDate: Date | undefined, today: Date = new Date()): Partial<Record<VerseStage, Date>> {
   if (item.status !== 'queued') return roadEstimates(item, plan, today);
   if (!startDate) return {};
-  const out: Partial<Record<VerseStage, Date>> = { learning: startDate };
-  let cursor = addDays(startDate, 1);
-  for (const stage of ['daily', 'weekly', 'monthly', 'complete'] as VerseStage[]) {
-    out[stage] = cursor;
-    cursor = addDays(cursor, stageLengthDays(stage, plan));
-  }
-  return out;
+  return { learning: startDate, ...roadEstimates({ ...item, status: 'learning', touchLogs: [] }, plan, startDate) };
 }
 
 /** The stage a verse will be in on `date`, if every review goes well. */
@@ -114,13 +100,13 @@ export function forecastCounts(
   today: Date = new Date()
 ): Record<VerseStage, number> {
   if (date.getTime() <= today.getTime()) return stageCounts(queue);
-  const out: Record<VerseStage, number> = { waiting: 0, learning: 0, daily: 0, weekly: 0, monthly: 0, complete: 0 };
+  const out: Record<VerseStage, number> = { waiting: 0, learning: 0, settling: 0, steady: 0, kept: 0 };
   for (const item of queue) out[stageOn(item, plan, date, starts.get(item.verseId), today)]++;
   return out;
 }
 
-/** Learned means past Learning: in review or Complete. */
-export const learnedCount = (c: Record<VerseStage, number>) => c.daily + c.weekly + c.monthly + c.complete;
+/** Learned means past Learning: Settling, Steady or Kept. */
+export const learnedCount = (c: Record<VerseStage, number>) => c.settling + c.steady + c.kept;
 
 /**
  * When every one of these verses (say, a chapter's) will be learned. 'done'
@@ -131,9 +117,9 @@ export function allLearnedBy(items: QueueItem[], plan: StagePlan, starts: Map<st
   for (const item of items) {
     const stage = verseStage(item);
     if (stage !== 'waiting' && stage !== 'learning') continue;
-    const daily = futureArrivals(item, plan, starts.get(item.verseId), today).daily;
-    if (!daily) return null;
-    if (!last || daily.getTime() > last.getTime()) last = daily;
+    const settling = futureArrivals(item, plan, starts.get(item.verseId), today).settling;
+    if (!settling) return null;
+    if (!last || settling.getTime() > last.getTime()) last = settling;
   }
   return last ?? 'done';
 }

@@ -5,17 +5,19 @@ import { Check, ChevronRight, Flag } from 'lucide-react-native';
 import { AppText, useFontScale, useScaledSpace } from './design';
 import { Badge } from './blocks';
 import { useThemeColors } from './theme';
-import { STAGE_FILL } from './VerseStages';
+import { STAGE_FILL, TOP_FILL, fillFor } from './VerseStages';
 import { ALL_BIBLE_BOOKS, BOOKS, getBookByName } from '../data';
 import { fetchChapterText } from '../state/useScripture';
 import { QueueItem } from '../types';
-import { STAGE_LABEL, STAGE_ORDER, StagePlan, VerseStage, bookIndex, verseStage } from '../lib/stageProgress';
+import { STAGE_LABEL, STAGE_ORDER, StagePlan, VerseStage, bookIndex, isTopStep, passageGapNotes, passageRuns, verseStage } from '../lib/stageProgress';
 import { allLearnedBy } from '../lib/forecast';
 
 // ============================================================================
 // My Verses › By book. The whole Bible at a glance (which books you have
 // verses in), then each of those books in Bible order with a square per verse
-// of every chapter you're working in, colored by stage. Tapping a chapter
+// of every chapter you're working in, colored by group (the top step, every
+// 6 months, in its own platinum). A chapter whose passages have a gap between
+// them says what would join them. Tapping a chapter
 // opens its page, where verses are added and their stage can be set.
 // ============================================================================
 
@@ -31,6 +33,8 @@ interface ChapterSummary {
   translationId: string;
   /** Verse number -> the furthest stage it has reached in any translation. */
   stages: Map<number, VerseStage>;
+  /** Verse numbers on the top step (every 6 months). */
+  tops: Set<number>;
   items: QueueItem[];
 }
 
@@ -45,13 +49,14 @@ function summarize(queue: QueueItem[]) {
     const key = `${book.id}_${item.chapter}`;
     let ch = chapters.get(key);
     if (!ch) {
-      ch = { key, book: book.name, bookId: book.id, chapter: item.chapter, translationId: item.translationId || 'ESV', stages: new Map(), items: [] };
+      ch = { key, book: book.name, bookId: book.id, chapter: item.chapter, translationId: item.translationId || 'ESV', stages: new Map(), tops: new Set(), items: [] };
       chapters.set(key, ch);
     }
     ch.items.push(item);
     const stage = verseStage(item);
     const prev = ch.stages.get(item.verseNumber);
     if (!prev || rank(stage) > rank(prev)) ch.stages.set(item.verseNumber, stage);
+    if (isTopStep(item)) ch.tops.add(item.verseNumber);
     if (!versesPerBook.has(book.name)) versesPerBook.set(book.name, new Set());
     versesPerBook.get(book.name)!.add(`${item.chapter}:${item.verseNumber}`);
   }
@@ -160,9 +165,9 @@ export default function VersesByBook({
     </View>
   );
 
-  const swatch = (stage: VerseStage | 'none') => (
+  const swatch = (stage: VerseStage | 'none' | 'top') => (
     <View
-      className={`rounded-sm ${stage === 'none' ? 'bg-fill' : stage === 'waiting' ? 'bg-surface border border-ink-3' : STAGE_FILL[stage]}`}
+      className={`rounded-sm ${stage === 'none' ? 'bg-fill' : stage === 'top' ? TOP_FILL : stage === 'waiting' ? 'bg-surface border border-ink-3' : STAGE_FILL[stage]}`}
       // layout-ok: a square holds no text.
       style={{ width: 12, height: 12 }}
     />
@@ -190,11 +195,11 @@ export default function VersesByBook({
       </View>
 
       <View className="flex-row flex-wrap" style={{ columnGap: space(12), rowGap: space(6), paddingHorizontal: space(4) }}>
-        {(['none', ...STAGE_ORDER] as (VerseStage | 'none')[]).map((s) => (
+        {(['none', ...STAGE_ORDER, 'top'] as (VerseStage | 'none' | 'top')[]).map((s) => (
           <View key={s} className="flex-row items-center" style={{ gap: space(5) }}>
             {swatch(s)}
             <AppText variant="caption" className="font-sans text-ink-2">
-              {s === 'none' ? 'Not added' : STAGE_LABEL[s]}
+              {s === 'none' ? 'Not added' : s === 'top' ? 'Every 6 months' : STAGE_LABEL[s]}
             </AppText>
           </View>
         ))}
@@ -249,14 +254,20 @@ function ChapterRow({
   const highest = Math.max(...chapter.stages.keys());
   // Until the chapter's length is known, draw up to the last verse you have.
   const total = Math.max(verseCount ?? highest, highest);
-  const allComplete = verseCount !== undefined && held >= verseCount && Array.from(chapter.stages.values()).every((s) => s === 'complete');
+  const allKept = verseCount !== undefined && held >= verseCount && Array.from(chapter.stages.values()).every((s) => s === 'kept');
   const toGo = verseCount !== undefined ? verseCount - held : null;
   const title = `${chapter.book} ${chapter.chapter}`;
   const countLabel = verseCount !== undefined ? `${held} of ${verseCount}` : `${held} ${held === 1 ? 'verse' : 'verses'}`;
   const sq = Math.round(13 * Math.min(scale, 1.3));
 
+  // Passages with verses missing between them are reviewed separately.
+  const gapNotes = passageGapNotes(
+    passageRuns(chapter.items).filter((r) => r.translationId === chapter.translationId),
+    (v) => chapter.stages.has(v)
+  );
+
   let badge: { label: string; tone: 'success' | 'accent' } | null = null;
-  if (allComplete) badge = { label: 'Whole chapter complete', tone: 'success' };
+  if (allKept) badge = { label: 'Whole chapter kept', tone: 'success' };
   else if (toGo === 0) badge = { label: 'The whole chapter', tone: 'accent' };
   else if (toGo !== null && toGo <= 2 && held >= 3) badge = { label: `${toGo} ${toGo === 1 ? 'verse' : 'verses'} from the whole chapter`, tone: 'success' };
 
@@ -285,7 +296,7 @@ function ChapterRow({
             return (
               <View
                 key={i}
-                className={`rounded-sm ${!s ? 'bg-fill' : s === 'waiting' ? 'bg-surface border border-ink-3' : STAGE_FILL[s]}`}
+                className={`rounded-sm ${!s ? 'bg-fill' : s === 'waiting' ? 'bg-surface border border-ink-3' : fillFor(s, chapter.tops.has(i + 1))}`}
                 // layout-ok: a square holds no text.
                 style={{ width: sq, height: sq }}
               />
@@ -299,7 +310,7 @@ function ChapterRow({
           {Array.from(chapter.stages.entries()).map(([v, s]) => (
             <View
               key={v}
-              className={`rounded-sm ${s === 'waiting' ? 'bg-surface border border-ink-3' : STAGE_FILL[s]}`}
+              className={`rounded-sm ${s === 'waiting' ? 'bg-surface border border-ink-3' : fillFor(s, chapter.tops.has(v))}`}
               // layout-ok: a mark on the track.
               style={{ position: 'absolute', top: -2, width: 5, height: 12, left: `${((v - 1) / total) * 98}%` }}
             />
@@ -309,8 +320,14 @@ function ChapterRow({
 
       {badge && <Badge label={badge.label} tone={badge.tone} />}
 
-      {/* Only "all learned": the Complete date is years off for most
-          chapters, which read as discouraging rather than motivating. */}
+      {gapNotes.map((note) => (
+        <AppText key={note} variant="caption" className="font-sans text-ink-2">
+          {note}
+        </AppText>
+      ))}
+
+      {/* Only "all learned": the date a verse is Kept for good is years off
+          for most chapters, which read as discouraging rather than motivating. */}
       {learnedBy && (
         <View className="flex-row items-center bg-surface-2 rounded-btn" style={{ paddingVertical: space(8), paddingHorizontal: space(10), gap: space(8) }}>
           {learnedBy === 'done' ? (

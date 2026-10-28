@@ -8,7 +8,7 @@ import { verseStage } from './stageProgress';
 // book of the Bible is. "You hold more verses than Ruth. Next: Philippians,
 // 19 to go." No points, no streaks, nothing that can go backwards loudly.
 //
-//   - Verses held = verses past Learning (Daily, Weekly, Monthly, Complete),
+//   - Verses held = verses past Learning (Settling, Steady, Kept),
 //     the same stage words as My Verses (verseStage). A verse in two
 //     translations counts once.
 //   - The ladder is the books sorted by length. Pure on a plain number, so a

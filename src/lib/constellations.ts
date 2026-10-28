@@ -1,5 +1,5 @@
 import type { Constellation, Echo, QueueItem, StarRef, VerseLink } from '../types';
-import { STAGE_ORDER, VerseStage, verseStage } from './stageProgress';
+import { STAGE_ORDER, VerseStage, isTopStep, verseStage } from './stageProgress';
 
 // ============================================================================
 // CONSTELLATION MAP -- the rules behind the stars
@@ -13,7 +13,7 @@ import { STAGE_ORDER, VerseStage, verseStage } from './stageProgress';
 const rank = (stage: VerseStage): number => STAGE_ORDER.indexOf(stage);
 
 /** A star counts as learned, and its lines can be labeled, from this stage on. */
-export const LEARNED_STAGE: VerseStage = 'daily';
+export const LEARNED_STAGE: VerseStage = 'settling';
 
 /** Key and lookup id of a star: book|chapter|start-end. */
 export const starKey = (r: StarRef): string => `${r.book}|${r.chapter}|${r.start}-${r.end}`;
@@ -42,10 +42,26 @@ export function starStage(ref: StarRef, queue: QueueItem[]): VerseStage | null {
   return STAGE_ORDER[Math.min(...held.values())];
 }
 
+/**
+ * The star is at the top of the ladder (Every 6 months): every verse of it
+ * the user holds is on the top step, so even its least advanced one is.
+ */
+export function starIsTop(ref: StarRef, queue: QueueItem[]): boolean {
+  let any = false;
+  for (const q of queue) {
+    if (q.book !== ref.book || q.chapter !== ref.chapter) continue;
+    if (q.verseNumber < ref.start || q.verseNumber > ref.end) continue;
+    if (rank(verseStage(q)) <= rank('waiting')) continue;
+    if (!isTopStep(q)) return false;
+    any = true;
+  }
+  return any;
+}
+
 /** The star lights up when the user holds any verse in it. */
 export const starLit = (ref: StarRef, queue: QueueItem[]): boolean => heldRanks(ref, queue).size > 0;
 
-/** Learned = every verse of the star is held and past Learning (Daily or later). */
+/** Learned = every verse of the star is held and past Learning (Settling or later). */
 export function isLearned(ref: StarRef, queue: QueueItem[]): boolean {
   const held = heldRanks(ref, queue);
   if (held.size < ref.end - ref.start + 1) return false;
@@ -58,7 +74,7 @@ export const canLabel = (link: Pick<VerseLink, 'a' | 'b'>, queue: QueueItem[]): 
 
 /**
  * Curated stars worth suggesting: not held yet, with a line coming in from a
- * star at Daily or later. Returns star ids.
+ * star at Settling or later. Returns star ids.
  */
 export function suggestedNext(c: Constellation, queue: QueueItem[]): string[] {
   const byId = new Map(c.stars.map((s) => [s.id, s]));

@@ -7,23 +7,29 @@ import { Badge } from './blocks';
 import { useThemeColors } from './theme';
 import { translationLabel } from '../data';
 import { STAGE_LABEL, STAGE_ORDER, StageGroup, StagePlan, VerseStage, referenceFor } from '../lib/stageProgress';
+import { LADDER_GROUPS } from '../lib/ladder';
 
 // ============================================================================
-// The pieces My Verses, the road and the verse page share: a stage's dot, the
-// strip of every stage with its count, the bar for how far through a stage a
-// verse is, and one verse row. Stage colors are dots and bars only (theme
-// rules: Daily and Monthly fail contrast as text), so every label is ink.
+// The pieces My Verses, the road and the verse page share: a group's dot, the
+// strip of every group with its count, the bar for how far through a step a
+// verse is, and one passage row. Stage colors are dots and bars only (theme
+// rules: Settling and Kept fail contrast as text), so every label is ink.
+// The top step (every 6 months) is its own cool "platinum" fill.
 // ============================================================================
 
-/** Fill for a stage's dot. Waiting is an empty ring: nothing has started. Complete is gold. */
+/** Fill for a group's dot. Waiting is an empty ring: nothing has started. */
 export const STAGE_FILL: Record<VerseStage, string> = {
   waiting: 'bg-surface border-2 border-ink-3',
   learning: 'bg-stage-learning',
-  daily: 'bg-stage-daily',
-  weekly: 'bg-stage-weekly',
-  monthly: 'bg-stage-monthly',
-  complete: 'bg-stage-complete',
+  settling: 'bg-stage-daily',
+  steady: 'bg-stage-weekly',
+  kept: 'bg-stage-complete',
 };
+
+/** Fill for the top step, inside Kept. */
+export const TOP_FILL = 'bg-stage-top border border-stage-top-edge';
+
+export const fillFor = (stage: VerseStage, top?: boolean) => (top ? TOP_FILL : STAGE_FILL[stage]);
 
 export function stageCaption(stage: VerseStage, plan: StagePlan): string {
   const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
@@ -31,15 +37,11 @@ export function stageCaption(stage: VerseStage, plan: StagePlan): string {
     case 'waiting':
       return "In the order you'll learn them. Press and hold one to move it.";
     case 'learning':
-      return `${plural(plan.masteryTouches, 'perfect recall')}, at least an hour apart, and it moves up to Daily.`;
-    case 'daily':
-      return `Every day for ${plural(plan.dailyPhaseWeeks, 'week')}.`;
-    case 'weekly':
-      return `Once a week for ${plural(plan.weeklyPhaseMonths, 'month')}.`;
-    case 'monthly':
-      return `Once a month for ${plural(plan.monthlyPhaseYears, 'year')}.`;
-    case 'complete':
-      return 'Done with scheduled reviews. Practice them any time.';
+      return `${plural(plan.masteryTouches, 'perfect recall')}, at least an hour apart, and it joins Settling.`;
+    case 'settling':
+    case 'steady':
+    case 'kept':
+      return `${LADDER_GROUPS[stage].description}.`;
   }
 }
 
@@ -63,21 +65,21 @@ export function dayWord(date: Date, now: Date = new Date()): string {
   });
 }
 
-export function StageDot({ stage, size = 10 }: { stage: VerseStage; size?: number }) {
+export function StageDot({ stage, size = 10, top }: { stage: VerseStage; size?: number; top?: boolean }) {
   const scale = useFontScale();
   const d = Math.round(size * Math.min(scale, 1.3));
   // layout-ok: a dot holds no text.
-  return <View className={`rounded-full ${STAGE_FILL[stage]}`} style={{ width: d, height: d }} />;
+  return <View className={`rounded-full ${fillFor(stage, top)}`} style={{ width: d, height: d }} />;
 }
 
-/** How far through its stage a verse is. Faded while a refresher has it on hold. */
-export function StageBar({ stage, fraction, faded = false, thick = false }: { stage: VerseStage; fraction: number; faded?: boolean; thick?: boolean }) {
+/** How far through its step a passage is. */
+export function StageBar({ stage, fraction, top = false, thick = false }: { stage: VerseStage; fraction: number; top?: boolean; thick?: boolean }) {
   const h = thick ? 8 : 6;
   return (
     // layout-ok: a progress track holds no text.
     <View className="bg-hairline rounded-full overflow-hidden" style={{ height: h }}>
       <View
-        className={`rounded-full ${STAGE_FILL[stage]} ${faded ? 'opacity-40' : ''}`}
+        className={`rounded-full ${fillFor(stage, top)}`}
         // layout-ok: the filled part of the track.
         style={{ height: h, width: `${Math.max(3, Math.round(fraction * 100))}%` }}
       />
@@ -86,9 +88,9 @@ export function StageBar({ stage, fraction, faded = false, thick = false }: { st
 }
 
 /**
- * Every stage with its count, in road order. A single row with a line through
- * the dots; at large text sizes the six labels can't share one row, so it
- * becomes two rows of three and drops the line.
+ * Every group with its count, in ladder order. A single row with a line
+ * through the dots; at large text sizes the five labels can't share one row,
+ * so it becomes two rows of three and drops the line.
  */
 export function StageStrip({
   counts,
@@ -110,7 +112,7 @@ export function StageStrip({
         <View
           className="bg-line"
           // layout-ok: the connecting line behind the dots.
-          style={{ position: 'absolute', left: '8%', right: '8%', top: dot / 2 - 1, height: 2 }}
+          style={{ position: 'absolute', left: '10%', right: '10%', top: dot / 2 - 1, height: 2 }}
         />
       )}
       <View className="flex-row flex-wrap" style={{ rowGap: space(12) }}>
@@ -124,7 +126,7 @@ export function StageStrip({
               accessibilityRole={onPressStage ? 'button' : undefined}
               accessibilityLabel={`${STAGE_LABEL[stage]}: ${n} ${n === 1 ? 'verse' : 'verses'}${deltas && deltas[stage] ? `, ${deltas[stage] > 0 ? 'up' : 'down'} ${Math.abs(deltas[stage])} from today` : ''}`}
               className="items-center active:opacity-60"
-              style={{ width: oneRow ? `${100 / 6}%` : `${100 / 3}%`, gap: space(4) }}
+              style={{ width: oneRow ? `${100 / 5}%` : `${100 / 3}%`, gap: space(4) }}
             >
               <View
                 className={`rounded-full ${STAGE_FILL[stage]} ${stage === 'waiting' ? '' : 'border-[3px] border-surface'}`}
@@ -134,8 +136,8 @@ export function StageStrip({
               <AppText variant="title" className={`font-sans font-bold ${n === 0 ? 'text-ink-3' : 'text-ink'}`}>
                 {n}
               </AppText>
-              {/* Six labels share a phone's width; on a narrow one the longest
-                  ("Complete") shrinks a little rather than being cut off. */}
+              {/* Five labels share a phone's width; on a narrow one the longest
+                  ("Learning") shrinks a little rather than being cut off. */}
               <AppText variant="micro" className="font-sans font-medium text-ink-2" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {STAGE_LABEL[stage]}
               </AppText>
@@ -157,20 +159,35 @@ export function StageStrip({
 /** The badges a row can carry, most useful first. */
 function rowBadges(group: StageGroup, now: Date): { label: string; tone: 'success' | 'accent' | 'warning' }[] {
   const p = group.progress;
-  if (p.refresher) {
-    const n = p.refresher.remaining;
-    const unit = `${p.refresher.unit}${n === 1 ? '' : 's'}`;
-    return [{ label: `Refresher: ${p.refresher.via}, ${n} more ${unit}`, tone: 'warning' }];
-  }
   const out: { label: string; tone: 'success' | 'accent' | 'warning' }[] = [];
+  if (p.catchUp) out.push({ label: 'Catching up', tone: 'accent' });
   if (p.movesUpOn && dayDiff(p.movesUpOn, now) < 7) out.push({ label: `Moves up ${dayWord(p.movesUpOn, now)}`, tone: 'success' });
-  else if (p.justMovedUp) out.push({ label: 'Just moved up', tone: 'accent' });
+  else if (p.justMovedUp && !p.catchUp) out.push({ label: 'Just moved up', tone: 'accent' });
   return out;
 }
 
+/** Verse numbers in a group that slipped in the passage's last review, as "verse 3" / "verses 3, 5". */
+export function slippedNote(group: Pick<StageGroup, 'items'>): string | null {
+  const nums = group.items.filter((i) => i.slipped).map((i) => i.verseNumber);
+  if (nums.length === 0) return null;
+  return `${nums.length === 1 ? 'Verse' : 'Verses'} ${nums.join(', ')} slipped last time`;
+}
+
 /**
- * One row on My Verses for a Learning, Daily, Weekly or Monthly verse (or a
- * run of neighbours at the same point). Tapping opens the verse page.
+ * The weak-spot dot: a small warning-colored ring, a hint and never a score.
+ * A ring, not a filled dot, so it can't be mistaken for a status dot (the
+ * chapter page's Learning dot is the same amber).
+ */
+export function WeakSpotDot({ size = 8 }: { size?: number }) {
+  const scale = useFontScale();
+  const d = Math.round(size * Math.min(scale, 1.3));
+  // layout-ok: a dot holds no text.
+  return <View className="rounded-full bg-surface border-2 border-warning" style={{ width: d, height: d }} />;
+}
+
+/**
+ * One row on My Verses for a Learning verse or a passage (a run of
+ * neighbours at the same point on the ladder). Tapping opens the verse page.
  */
 export const VerseStageRow = React.memo(function VerseStageRow({
   group,
@@ -190,14 +207,15 @@ export const VerseStageRow = React.memo(function VerseStageRow({
   const next = first.nextReviewDueDate ? new Date(first.nextReviewDueDate) : null;
   const nextLabel = p.stage !== 'learning' && next ? `Next: ${dayWord(next, now)}` : null;
   const meta = `${translationLabel(group.translationId)}${group.verses.length > 1 ? ` · ${group.verses.length} verses` : ''}`;
-  const position = p.refresher ? `${p.position}, on hold` : p.position;
+  const position = p.position;
   const badges = rowBadges(group, now);
+  const slipped = slippedNote(group);
 
   return (
     <Pressable
       onPress={() => onOpen(group)}
       accessibilityRole="button"
-      accessibilityLabel={[reference, STAGE_LABEL[p.stage], position, nextLabel, ...badges.map((b) => b.label)].filter(Boolean).join('. ')}
+      accessibilityLabel={[reference, STAGE_LABEL[p.stage], position, nextLabel, slipped, group.joins, ...badges.map((b) => b.label)].filter(Boolean).join('. ')}
       className="flex-row items-center bg-surface border border-line rounded-card active:opacity-70"
       style={{ paddingVertical: space(12), paddingLeft: space(14), paddingRight: space(10), gap: space(10) }}
     >
@@ -206,6 +224,7 @@ export const VerseStageRow = React.memo(function VerseStageRow({
           <AppText variant="label" className="font-sans font-semibold text-ink">
             {reference}
           </AppText>
+          {slipped && <WeakSpotDot />}
           <AppText variant="micro" className="font-sans font-medium text-ink-3">
             {meta}
           </AppText>
@@ -227,10 +246,15 @@ export const VerseStageRow = React.memo(function VerseStageRow({
                 {p.position}
               </AppText>
             </View>
+            {group.joins && (
+              <AppText variant="caption" className="font-sans text-ink-2">
+                {group.joins}
+              </AppText>
+            )}
           </>
         ) : (
           <>
-            <StageBar stage={p.stage} fraction={p.fraction} faded={!!p.refresher} />
+            <StageBar stage={p.stage} fraction={p.fraction} top={p.top} />
             <View className="flex-row flex-wrap items-center" style={{ gap: space(8) }}>
               <AppText variant="caption" className="font-sans text-ink-2">
                 {position}
@@ -239,6 +263,11 @@ export const VerseStageRow = React.memo(function VerseStageRow({
                 <Badge key={b.label} label={b.label} tone={b.tone} />
               ))}
             </View>
+            {slipped && (
+              <AppText variant="caption" className="font-sans text-ink-2">
+                {slipped}
+              </AppText>
+            )}
           </>
         )}
       </View>
@@ -265,8 +294,8 @@ export function LearningDots({ done, total }: { done: number; total: number }) {
   );
 }
 
-/** Complete verses as compact chips, so a long list of them stays short. */
-export const CompleteChips = React.memo(function CompleteChips({ groups, onPress }: { groups: StageGroup[]; onPress: (group: StageGroup) => void }) {
+/** Verses on the top step (every 6 months) as compact chips, so a long list of them stays short. */
+export const TopChips = React.memo(function TopChips({ groups, onPress }: { groups: StageGroup[]; onPress: (group: StageGroup) => void }) {
   const space = useScaledSpace();
   return (
     <View className="bg-surface border border-line rounded-card flex-row flex-wrap" style={{ padding: space(12), gap: space(8) }}>
@@ -277,14 +306,15 @@ export const CompleteChips = React.memo(function CompleteChips({ groups, onPress
             key={g.key}
             onPress={() => onPress(g)}
             accessibilityRole="button"
-            accessibilityLabel={`${reference}, complete`}
+            accessibilityLabel={`${reference}, every 6 months${g.items.some((i) => i.slipped) ? ', slipped last time' : ''}`}
             className="flex-row items-center bg-surface-2 border border-line rounded-btn active:opacity-70"
             style={{ paddingHorizontal: space(10), paddingVertical: space(6), gap: space(6) }}
           >
-            <StageDot stage="complete" size={8} />
+            <StageDot stage="kept" top size={8} />
             <AppText variant="caption" className="font-sans font-medium text-ink">
               {reference}
             </AppText>
+            {g.items.some((i) => i.slipped) && <WeakSpotDot size={6} />}
           </Pressable>
         );
       })}

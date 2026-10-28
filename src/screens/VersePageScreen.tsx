@@ -8,33 +8,38 @@ import { AppButton, AppText, useFontScale, useScaledSpace } from '../components/
 import { Dialog, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { Dropdown } from '../components/Dropdown';
 import { useThemeColors } from '../components/theme';
-import { STAGE_FILL, StageBar, dayWord } from '../components/VerseStages';
+import { StageBar, WeakSpotDot, dayWord, fillFor, slippedNote } from '../components/VerseStages';
 import { textScriptFor, translationLabel } from '../data';
 import { isRtl } from '../lib/textScript';
 import ConnectSheet from '../components/map/ConnectSheet';
 import { QueueItem, ReviewLog, VerseState } from '../types';
 import {
+  LOG_STAGE,
   STAGE_LABEL,
   STAGE_ORDER,
+  StagePlan,
   VerseStage,
   arrivalDates,
+  ladderEstimates,
+  passageRuns,
   referenceFor,
-  roadEstimates,
   stageProgress,
+  versesWord,
 } from '../lib/stageProgress';
+import { LADDER, stepReviewCount } from '../lib/ladder';
 
 // ============================================================================
 // One verse's page (or a run of neighbours that sit at the same point on the
-// road -- one row on My Verses). Where it is on the road, with real dates for
-// the stops it has passed and estimates for the ones ahead; how far through
-// its current stage it is; and its history from the review log.
+// ladder -- one row on My Verses). Where it is on the road (Learning, Settling,
+// Steady, Kept) and on the ladder's eight steps, with real dates for the
+// groups it has passed and estimates for the steps ahead; how far through its
+// current step it is; and its history from the review log.
 //
 // One page per verse: learning it in two translations is two independent
 // queue items, and the dropdown switches between them.
 // ============================================================================
 
-const ROAD: VerseStage[] = ['learning', 'daily', 'weekly', 'monthly', 'complete'];
-const NEXT: Partial<Record<VerseStage, VerseStage>> = { learning: 'daily', daily: 'weekly', weekly: 'monthly', monthly: 'complete' };
+const ROAD: VerseStage[] = ['learning', 'settling', 'steady', 'kept'];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const shortDate = (d: Date, now: Date) =>
@@ -56,9 +61,6 @@ export default function VersePageScreen({ state }: { state: AppState }) {
     promoteToLearning,
     removeQueueItems,
     triggerToast,
-    dailyPhaseWeeks,
-    weeklyPhaseMonths,
-    monthlyPhaseYears,
     masteryTouches,
     verseLinks,
     addVerseLink,
@@ -69,7 +71,7 @@ export default function VersePageScreen({ state }: { state: AppState }) {
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
-  const plan = { dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches };
+  const plan: StagePlan = { masteryTouches };
   const now = new Date();
   const ref = versePageRef;
 
@@ -112,7 +114,7 @@ export default function VersePageScreen({ state }: { state: AppState }) {
   const progress = stageProgress(first, plan, now);
   const stage = progress.stage;
   const arrivals = arrivalDates(first);
-  const estimates = roadEstimates(first, plan, now);
+  const stepDates = ladderEstimates(first, plan, now);
   const currentIdx = ROAD.indexOf(stage); // -1 while waiting
   const next = first.nextReviewDueDate ? new Date(first.nextReviewDueDate) : null;
   const ids = items.map((i) => i.verseId);
@@ -130,23 +132,35 @@ export default function VersePageScreen({ state }: { state: AppState }) {
 
   // ---- the sentence under the bar ----
   let explainer: string;
+  const step = progress.step;
   if (stage === 'waiting') explainer = "Not started yet. It starts when it reaches the front of Waiting, or you can start it now.";
-  else if (stage === 'complete') explainer = 'Done with scheduled reviews. Practice it any time to keep it fresh.';
+  else if (progress.top) explainer = 'Reviewed every 6 months, for good. Practice it any time to keep it fresh.';
   else if (stage === 'learning')
     explainer =
       progress.remaining > 0
-        ? `${plural(progress.remaining, 'more perfect recall')}, at least an hour apart, and it moves up to Daily.`
-        : 'It moves up to Daily once today’s reviews are done.';
-  else if (progress.refresher) {
-    const r = progress.refresher;
-    explainer = `A missed review put it on a refresher: ${r.via} reviews for ${plural(r.remaining, r.unit)} more. Then it goes back to ${STAGE_LABEL[stage]} right where it was.`;
-  } else {
-    const to = NEXT[stage];
-    explainer =
-      progress.movesUpOn && to
-        ? `Moves up to ${STAGE_LABEL[to]} ${progress.movesUpOn.getTime() - now.getTime() < 7 * DAY_MS ? '' : 'around '}${dayWord(progress.movesUpOn, now)} if every review goes well.`
-        : `${plural(progress.remaining, 'more review')} and it moves up.`;
+        ? `${plural(progress.remaining, 'more perfect recall')}, at least an hour apart, and it joins Settling.`
+        : 'It joins Settling once today’s reviews are done.';
+  else {
+    const to = LADDER[(step ?? 0) + 1].label;
+    const when = progress.movesUpOn
+      ? `${progress.movesUpOn.getTime() - now.getTime() < 7 * DAY_MS ? '' : 'around '}${dayWord(progress.movesUpOn, now)}`
+      : null;
+    explainer = progress.catchUp
+      ? `A short catch-up after joining its passage: a few reviews every day, then every 2 and 4 days, then Every week.${when ? ` Next step ${when}.` : ''}`
+      : when
+        ? `Moves up to ${to} ${when} if every review goes well.`
+        : `${plural(progress.remaining, 'more review')} and it moves up to ${to}.`;
   }
+
+  // The passage this verse is reviewed in, when it reaches past the verses shown.
+  const run = passageRuns(memoryQueue).find(
+    (r) => r.book === ref.book && r.chapter === ref.chapter && r.translationId === ref.translationId && r.start <= ref.verses[0] && r.end >= ref.verses[ref.verses.length - 1]
+  );
+  const partOf =
+    run && stage !== 'learning' && stage !== 'waiting' && (run.start < Math.min(...ref.verses) || run.end > Math.max(...ref.verses))
+      ? `Reviewed together with ${versesWord(run.start, run.end)}.`
+      : null;
+  const slipped = slippedNote({ items });
 
   // ---- history ----
   const logs: ReviewLog[] = first.reviewLogs || [];
@@ -170,7 +184,7 @@ export default function VersePageScreen({ state }: { state: AppState }) {
     else if (l.result === 'miss') story.push({ at, text: l.refresher ? 'Missed a refresher review.' : 'Missed a review.' });
     else if (l.result === 'skipped')
       story.push({ at, text: `${l.cycles && l.cycles > 1 ? `${l.cycles} review dates` : 'A review date'} passed without a review${l.forgiven ? ', and was forgiven' : ''}.` });
-    else if (l.result === 'placed') story.push({ at, text: `Placed in ${STAGE_LABEL[l.stage === 'retained' ? 'complete' : l.stage]} by hand.` });
+    else if (l.result === 'placed') story.push({ at, text: `Placed in ${STAGE_LABEL[LOG_STAGE[l.stage]]} by hand.` });
   }
   story.sort((a, b) => b.at.getTime() - a.at.getTime());
 
@@ -179,18 +193,49 @@ export default function VersePageScreen({ state }: { state: AppState }) {
   const stopSize = Math.round(22 * Math.min(scale, 1.3));
   const stopDate = (s: VerseStage, i: number) => {
     if (i <= currentIdx) return arrivals[s] ? shortDate(arrivals[s]!, now) : '';
-    return estimates[s] ? estimateDate(estimates[s]!, now) : '';
+    const first = LADDER.findIndex((st) => st.group === s);
+    const at = s === 'learning' ? null : stepDates[first];
+    return at ? estimateDate(at, now) : '';
   };
   const stopMarker = (s: VerseStage, i: number) => {
     const passed = i < currentIdx;
     const current = i === currentIdx;
     return (
       <View
-        className={`rounded-full items-center justify-center ${passed || current ? STAGE_FILL[s] : 'bg-surface border-2 border-line-strong'} ${current ? 'border-4 border-accent-soft' : ''}`}
+        className={`rounded-full items-center justify-center ${passed || current ? fillFor(s, current && progress.top) : 'bg-surface border-2 border-line-strong'} ${current ? 'border-4 border-accent-soft' : ''}`}
         // layout-ok: a stop marker holds only an icon.
         style={{ width: current ? stopSize + 8 : stopSize, height: current ? stopSize + 8 : stopSize }}
       >
         {passed && <Check size={Math.round(12 * scale)} color={palette.onAccent} strokeWidth={3.4} />}
+      </View>
+    );
+  };
+
+  // ---- the ladder: all eight steps ----
+  const ladderRow = (i: number) => {
+    const info = LADDER[i];
+    const here = step === i;
+    const passed = step !== null ? i < step : false;
+    const need = stepReviewCount(i, plan.thoroughness);
+    const when = !passed && !here && stepDates[i] ? estimateDate(stepDates[i]!, now) : '';
+    return (
+      <View key={info.label} className="flex-row items-center" style={{ gap: space(10) }}>
+        <View
+          className={`rounded-full items-center justify-center ${passed || here ? fillFor(info.group, !!info.top) : 'bg-surface border-2 border-line-strong'}`}
+          // layout-ok: a step marker holds only an icon.
+          style={{ width: stopSize - 4, height: stopSize - 4 }}
+        >
+          {passed && <Check size={Math.round(11 * scale)} color={palette.onAccent} strokeWidth={3.4} />}
+        </View>
+        {/* The detail wraps under the label when the text is large, instead of squeezing it. */}
+        <View className="flex-1 flex-row flex-wrap items-baseline justify-between" style={{ columnGap: space(8) }}>
+          <AppText variant="label" className={`font-sans ${here ? 'font-bold text-ink' : 'font-medium text-ink'}`}>
+            {info.label}
+          </AppText>
+          <AppText variant="caption" className="font-sans text-ink-2">
+            {here ? (progress.top ? 'for good' : progress.position.split(', ')[1]) : info.top ? (when ? `for good · ${when}` : 'for good') : [need ? `${need} reviews` : '', when].filter(Boolean).join(' · ')}
+          </AppText>
+        </View>
       </View>
     );
   };
@@ -259,18 +304,18 @@ export default function VersePageScreen({ state }: { state: AppState }) {
               <View
                 className="bg-line"
                 // layout-ok: the road's line.
-                style={{ position: 'absolute', left: '10%', right: '10%', top: (stopSize + 8) / 2 - 1.5, height: 3 }}
+                style={{ position: 'absolute', left: '12.5%', right: '12.5%', top: (stopSize + 8) / 2 - 1.5, height: 3 }}
               />
               {currentIdx > 0 && (
                 <View
-                  className={STAGE_FILL[stage]}
+                  className={fillFor(stage, progress.top)}
                   // layout-ok: the part of the road already travelled.
-                  style={{ position: 'absolute', left: '10%', width: `${currentIdx * 20}%`, top: (stopSize + 8) / 2 - 1.5, height: 3 }}
+                  style={{ position: 'absolute', left: '12.5%', width: `${currentIdx * 25}%`, top: (stopSize + 8) / 2 - 1.5, height: 3 }}
                 />
               )}
               <View className="flex-row">
                 {ROAD.map((s, i) => (
-                  <View key={s} className="items-center" style={{ width: '20%', gap: space(5) }}>
+                  <View key={s} className="items-center" style={{ width: '25%', gap: space(5) }}>
                     <View style={{ height: stopSize + 8, justifyContent: 'center' }}>{stopMarker(s, i)}</View>
                     <AppText variant="micro" className={`font-sans text-ink ${i === currentIdx ? 'font-bold' : 'font-semibold'}`} numberOfLines={1}>
                       {STAGE_LABEL[s]}
@@ -287,21 +332,43 @@ export default function VersePageScreen({ state }: { state: AppState }) {
           <View className="bg-surface-2 rounded-btn" style={{ padding: space(14), gap: space(8) }}>
             <View className="flex-row flex-wrap items-baseline justify-between" style={{ gap: space(8) }}>
               <AppText variant="body" className="font-sans font-bold text-ink">
-                {stage === 'waiting' ? 'Waiting to start' : stage === 'complete' ? 'Complete' : `${STAGE_LABEL[stage]}, ${progress.position.toLowerCase()}`}
+                {stage === 'waiting' ? 'Waiting to start' : stage === 'learning' ? `Learning, ${progress.position}` : progress.position}
               </AppText>
-              {next && stage !== 'learning' && stage !== 'complete' && (
+              {next && stage !== 'learning' && stage !== 'waiting' && (
                 <AppText variant="caption" className="font-sans text-ink-2">
                   Next review: {dayWord(next, now)}
                 </AppText>
               )}
             </View>
-            {stage !== 'waiting' && stage !== 'complete' && <StageBar stage={stage} fraction={progress.fraction} faded={!!progress.refresher} thick />}
+            {stage !== 'waiting' && <StageBar stage={stage} fraction={progress.fraction} top={progress.top} thick />}
             <AppText variant="label" className="font-sans text-ink">
               {explainer}
             </AppText>
+            {partOf && (
+              <AppText variant="caption" className="font-sans text-ink-2">
+                {partOf}
+              </AppText>
+            )}
+            {slipped && (
+              <View className="flex-row items-center" style={{ gap: space(8) }}>
+                <WeakSpotDot />
+                <AppText variant="caption" className="font-sans text-ink-2 flex-1">
+                  {slipped}
+                </AppText>
+              </View>
+            )}
           </View>
 
-          {Object.keys(estimates).length > 0 && (
+          {stage !== 'waiting' && (
+            <View style={{ gap: space(10) }}>
+              <AppText variant="section" className="font-sans font-semibold text-ink-3">
+                The ladder
+              </AppText>
+              {LADDER.map((_, i) => ladderRow(i))}
+            </View>
+          )}
+
+          {stepDates.some(Boolean) && (
             <AppText variant="caption" className="font-sans text-ink-3">
               Dates ahead are estimates, if every review goes well.
             </AppText>
