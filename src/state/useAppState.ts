@@ -2039,18 +2039,16 @@ export function useAppState() {
         const data = snap.data() as Recording | undefined;
         // Still processing — keep waiting.
         if (!data || data.studioStatus === 'pending') return;
-        setUserRecordings((prev) =>
-          prev.map((r) =>
-            r.id === recordingId
-              ? {
-                  ...r,
-                  studioAudioUrl: data.studioAudioUrl,
-                  studioAudioPath: data.studioAudioPath,
-                  studioStatus: data.studioStatus,
-                }
-              : r
-          )
-        );
+        const studioFields = {
+          studioAudioUrl: data.studioAudioUrl,
+          studioAudioPath: data.studioAudioPath,
+          studioStatus: data.studioStatus,
+        };
+        setUserRecordings((prev) => prev.map((r) => (r.id === recordingId ? { ...r, ...studioFields } : r)));
+        // RecordingDetailScreen reads selectedRecording, a copy taken when the
+        // recording was opened. Opened while still pending, it would otherwise
+        // say "Polishing audio…" until the user left and came back.
+        setSelectedRecording((prev) => (prev?.id === recordingId ? { ...prev, ...studioFields } : prev));
         // A render landing switches the playback target from the raw take to
         // the studio version. Normally nothing is cached yet (cacheableTarget
         // refuses to cache while 'pending'), but a legacy recording whose raw
