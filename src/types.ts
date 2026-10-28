@@ -546,7 +546,7 @@ export interface Challenge {
   status: 'pending' | 'active' | 'declined' | 'completed' | 'cancelled';
   createdAt: string;
   respondedAt?: string;
-  fromProgress: number; // verses out of 'queued' status, 0..totalVerses -- same completion definition as MemorizationGoal
+  fromProgress: number; // verses learned (past Learning, Settling or later), 0..totalVerses
   toProgress: number;
 }
 
@@ -578,7 +578,7 @@ export interface GroupChallengeParticipant {
   uid: string;
   name: string;
   avatarUrl: string;
-  progress: number; // verses out of 'queued' status, 0..the parent challenge's totalVerses
+  progress: number; // verses learned (past Learning, Settling or later), 0..the parent challenge's totalVerses
   joinedAt: string;
 }
 
