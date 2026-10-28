@@ -575,7 +575,8 @@ verses.
   real grade whichever button is tapped.
 - **Pick up the thread, Guided learning, Walk the constellation** keep their old rule that
   only a passing verse is credited (no penalty for a miss), but what they credit now
-  carries its grade: a 91% verse at a 95% clean setting counts as a stumble. Guided carries
+  carries its grade: a 91% verse at a 95% clean setting counts as a stumble. **Confirmed by
+  the user 2026-10-27: keep no penalty for a miss in these three.** Guided carries
   each verse's accuracy (`GuidedOutcome.accuracy`, `creditGuided`'s new `accuracy` map).
 - **Manual log** (`src/components/practice/ManualLogSheet.tsx`, on Today's rows and in the
   practice screen): Got it / Stumbled / Blanked per verse, logged as a self-check. No spot
