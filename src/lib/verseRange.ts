@@ -12,11 +12,10 @@ export type VerseRange = {
   endVerse?: number;
 };
 
-// Pure -- counts how many of `queue`'s items fall inside `range` and have
-// progressed out of 'queued' status. This is the app's existing
-// "verses out of queued status" completion definition (used for goal-style
-// ranges), reused here for both challenge types rather than inventing a
-// separate notion of "done".
+// Pure -- counts how many of `queue`'s items fall inside `range` and are
+// learned: past Learning, so Settling or later ('reviewing' / 'retained').
+// A verse still queued, in Learning, or waiting on today's reviews to lock in
+// doesn't count yet.
 export const countRangeProgress = (queue: QueueItem[], range: VerseRange): number =>
   queue.filter((item) => {
     if (item.book !== range.book) return false;
@@ -25,5 +24,5 @@ export const countRangeProgress = (queue: QueueItem[], range: VerseRange): numbe
       if (range.startVerse != null && item.verseNumber < range.startVerse) return false;
       if (range.endVerse != null && item.verseNumber > range.endVerse) return false;
     }
-    return item.status !== 'queued';
+    return item.status === 'reviewing' || item.status === 'retained';
   }).length;

@@ -449,16 +449,23 @@ export function useChallenges({
   // keyed so this can be called cheaply from every place a verse might leave
   // 'queued' status (promoteToLearning, handleReviewCompleted,
   // overrideVerseMemoryStatus) without re-writing when nothing changed --
-  // countRangeProgress only increases when a verse first leaves 'queued', so
+  // countRangeProgress only changes when a verse is learned (or reset), so
   // most calls here are no-ops by design, not just an optimization.
   const challengeProgressSyncRef = useRef<Record<string, number>>({});
+
+  // Latest lists for syncChallengeProgress, which review handlers can call
+  // from a stale render's closure. 1:1 challenges come from the always-on
+  // listener (every thread), not activeChallenges, which only holds the
+  // thread that happens to be open.
+  const latestRef = useRef({ challenges: myChallengeBadges, memberships: joinedGroupChallenges });
+  latestRef.current = { challenges: myChallengeBadges, memberships: joinedGroupChallenges };
 
   const syncChallengeProgress = () => {
     if (!auth.currentUser) return;
     const myUid = auth.currentUser.uid;
     const freshQueue = getQueue();
 
-    activeChallenges.forEach((challenge) => {
+    latestRef.current.challenges.forEach((challenge) => {
       if (challenge.status !== 'active') return;
       if (challenge.fromUid !== myUid && challenge.toUid !== myUid) return;
       const cacheKey = `c_${challenge.id}`;
@@ -472,12 +479,14 @@ export function useChallenges({
       const bothDone = newProgress >= challenge.totalVerses && otherProgress >= challenge.totalVerses;
       const patch: any = isFrom ? { fromProgress: newProgress } : { toProgress: newProgress };
       if (bothDone) patch.status = 'completed';
-      updateDoc(doc(db, 'challenges', challenge.id), patch).catch((err) =>
-        handleFirestoreError(err, OperationType.UPDATE, `challenges/${challenge.id}`)
-      );
+      updateDoc(doc(db, 'challenges', challenge.id), patch).catch((err) => {
+        // Forget the cached value so the next sync tries again.
+        delete challengeProgressSyncRef.current[cacheKey];
+        handleFirestoreError(err, OperationType.UPDATE, `challenges/${challenge.id}`);
+      });
     });
 
-    joinedGroupChallenges.forEach((membership) => {
+    latestRef.current.memberships.forEach((membership) => {
       const cacheKey = `g_${membership.challengeId}`;
       const newProgress = countRangeProgress(freshQueue, membership);
       if (challengeProgressSyncRef.current[cacheKey] === newProgress) return;
@@ -485,6 +494,7 @@ export function useChallenges({
       updateDoc(doc(db, 'circles', membership.circleId, 'challenges', membership.challengeId, 'participants', myUid), {
         progress: newProgress,
       }).catch((err) => {
+        delete challengeProgressSyncRef.current[cacheKey];
         // A 'not-found' here means the challenge (or at least my participant
         // doc) was deleted by its creator while I still hold a membership
         // record -- memoryPlans/{uid} is owner-write only, so they could
@@ -507,6 +517,16 @@ export function useChallenges({
       });
     });
   };
+
+  // Catch up whenever the challenge lists load or change, so a verse learned
+  // while a chat or circle was closed (or offline) still reaches the card.
+  // Skipped while the queue is empty: it may just not have loaded yet, and
+  // that would write a progress of 0.
+  useEffect(() => {
+    if (getQueue().length === 0) return;
+    syncChallengeProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myChallengeBadges, joinedGroupChallenges]);
 
   /** My group-challenge memberships from memoryPlans/{uid} (loadUserData). */
   const applyJoinedGroupChallenges = (memberships: GroupChallengeMembership[]) => {
