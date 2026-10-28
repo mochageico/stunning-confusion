@@ -7,13 +7,16 @@ import { reviewPassAccuracy, WordOutcome } from '../../lib/recitation';
 import { scriptOfVerse } from '../../lib/textScript';
 import { AppButton, AppText, useScaledSpace } from '../design';
 import GradedRecitation, { ButtonPair, canSpeakVerses, RecitationVerse, RoundFrame, SpanText } from '../GradedRecitation';
+import { SelfCheckFlow } from '../practice/SelfCheck';
+import type { SelfCheckAnswer } from '../../lib/grading';
 
 // ============================================================================
 // ONE STEP OF WALK THE CONSTELLATION
 // ----------------------------------------------------------------------------
 // The blank circle is on the map above (WalkConstellation); this is the part
 // under it: recite what's there by voice, by typing first letters, or look at
-// the text and say how it went. The first two are GradedRecitation, the same
+// the text and say how each verse went (Got it / Stumbled / Blanked, then a
+// spot check: practice/SelfCheck). The first two are GradedRecitation, the same
 // way ThreadRound uses it. The whole star is recited, from its first word to
 // its last. WalkConstellation owns the walk around it and the crediting.
 // ============================================================================
@@ -22,14 +25,16 @@ export type WalkMode = 'speak' | 'type' | 'self';
 
 export interface WalkRoundResult {
   mode: WalkMode;
-  /** One entry per verse of the star, in order. `outcomes` is null for a self-check, where `ok` is the user's own call. */
-  perVerse: { index: number; outcomes: WordOutcome[] | null; ok: boolean; perfect: boolean }[];
+  /** One entry per verse of the star, in order. `outcomes` is null for a self-check, where `answer` is the user's own call and `ok` means Got it. */
+  perVerse: { index: number; outcomes: WordOutcome[] | null; ok: boolean; perfect: boolean; answer?: SelfCheckAnswer }[];
+  /** Self-check: the spot check's result (false holds the review); null when none ran. */
+  spotPassed?: boolean | null;
 }
 
 /** What the screen says about one verse's credit, under the graded text. */
 export type WalkCreditPreview = (index: number, passed: boolean, perfect: boolean, mode: WalkMode) => string;
 
-type Stage = 'cue' | 'speak' | 'type' | 'reveal';
+type Stage = 'cue' | 'speak' | 'type' | 'reveal' | 'pickSlip' | 'spot';
 
 /** Whether a verse's words clear the review bar, and whether every one was right. */
 const verseResult = (o: WordOutcome[]) => {
@@ -43,12 +48,15 @@ export default function WalkRound({
   creditPreview,
   onFinish,
   onSkip,
+  spotCheck = true,
 }: {
   verses: RecitationVerse[];
   creditPreview: WalkCreditPreview;
   onFinish: (result: WalkRoundResult) => void;
   /** Passes this star by, logging nothing. */
   onSkip: () => void;
+  /** Off where nothing here could count as a review. */
+  spotCheck?: boolean;
 }) {
   const space = useScaledSpace();
   const last = verses.length - 1;
@@ -99,15 +107,31 @@ export default function WalkRound({
     );
   }
 
+  if (stage === 'pickSlip' || stage === 'spot') {
+    return (
+      <SelfCheckFlow
+        verses={span.map((sv) => verses[sv.index])}
+        allGotIt={stage === 'spot'}
+        spotCheck={spotCheck}
+        onBack={() => setStage('reveal')}
+        onDone={(r) =>
+          onFinish({
+            mode: 'self',
+            perVerse: span.map((sv, k) => ({ index: sv.index, outcomes: null, ok: r.answers[k] === 'gotIt', perfect: false, answer: r.answers[k] })),
+            spotPassed: r.spotPassed,
+          })
+        }
+      />
+    );
+  }
+
   if (stage === 'reveal') {
-    const selfDone = (ok: boolean) =>
-      onFinish({ mode: 'self', perVerse: span.map((sv) => ({ index: sv.index, outcomes: null, ok, perfect: false })) });
     return (
       <RoundFrame
         footer={
           <ButtonPair
-            left={<AppButton size="lg" variant="secondary" label="Missed some" onPress={() => selfDone(false)} />}
-            right={<AppButton size="lg" variant="primary" label="Got it" onPress={() => selfDone(true)} />}
+            left={<AppButton size="lg" variant="secondary" label="Missed some" onPress={() => setStage('pickSlip')} />}
+            right={<AppButton size="lg" variant="primary" label="Got it" onPress={() => setStage('spot')} />}
           />
         }
       >

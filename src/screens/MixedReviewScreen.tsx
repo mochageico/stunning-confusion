@@ -3,7 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { Check, Eye, Keyboard, Layers, Mic, X } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
-import { ChapterSections, QueueItem } from '../types';
+import { ChapterSections, QueueItem, ReviewGrade } from '../types';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { TakeawayAsk } from '../components/TakeawayAsk';
@@ -11,6 +11,8 @@ import { Badge, EmptyState, GroupedList, ListRow, ScreenHeader } from '../compon
 import { bracketColor, useThemeColors } from '../components/theme';
 import GradedRecitation, { ButtonPair, canSpeakVerses, RecitationMode, RoundFrame, SpanText } from '../components/GradedRecitation';
 import ThreadRound, { ThreadRoundResult } from '../components/ThreadRound';
+import { SelfCheckFlow, SelfCheckResult } from '../components/practice/SelfCheck';
+import type { GradeSettings } from '../lib/grading';
 import ScrambleDrill from '../components/drills/ScrambleDrill';
 import SpotSwapDrill, { SwapVerseScore } from '../components/drills/SpotSwapDrill';
 import SectionOrderDrill from '../components/drills/SectionOrderDrill';
@@ -45,6 +47,7 @@ import {
   readMixFormats,
   startMix,
   todayOrder,
+  verseGrade,
 } from '../lib/mix';
 
 // ============================================================================
@@ -61,13 +64,20 @@ import {
 // What a format reports (stage 4 left these to the screen):
 //   - Recite and First words: one GradedRecitation over the unit, first to
 //     last. First words keeps the first FIRST_WORDS_SHOWN words of each verse
-//     showing. "Show text" is a self-check (never perfect).
+//     showing and grades only the hidden ones. "Show text" is a self-check:
+//     Got it / Stumbled / Blanked per verse, then a spot check (never
+//     perfect). It's hidden when the last counted review of one of the
+//     unit's passages was a self-check (the every-other rule).
 //   - Keep going: ThreadRound cued inside the started verse just before the
 //     unit, so every unit verse is said whole. The cue verse never counts.
-//   - Find the wrong word: per verse, caught / (decoys + wrongly flagged),
-//     against the same 90% bar, and never perfect (it's spotting, not saying).
-//     Only the first check counts, so the reshuffle is gone after it.
-//   - Practice rounds report nothing; the reducer would ignore it anyway.
+//   - Find the wrong word: the round's misses (unfound, wrongly flagged, real
+//     word not known) over its verse count grade every verse in it, never
+//     perfect (it's spotting, not saying). Only the first check counts, so
+//     the reshuffle is gone after it.
+//   - Practice rounds report nothing; the reducer would ignore it anyway. One
+//     switched to Counts ends in the same self-check.
+// Each verse's grade goes to the engine as it is; the engine decides when a
+// passage has been covered and what that does to it.
 // ============================================================================
 
 const FIRST_WORDS_SHOWN = 3;
@@ -94,6 +104,24 @@ const unitName = (u: MixUnit) => u.label || (u.start === u.end ? `Verse ${u.star
 const gradedResult = (outcomes: WordOutcome[], mode: RecitationMode): MixVerseResult => {
   const sum = summarizeOutcomes(outcomes);
   return { mode, accuracy: sum.accuracy, perfect: sum.isPerfect };
+};
+
+/** A self-check's answers, per verse id. A missed spot check holds the review. */
+const selfResults = (verses: DueVerse[], r: SelfCheckResult): Record<string, MixVerseResult> => {
+  const out: Record<string, MixVerseResult> = {};
+  verses.forEach((v, i) => {
+    out[v.id] = { mode: 'self', answer: r.answers[i], ...(r.spotPassed === false ? { spotMissed: true } : {}) };
+  });
+  return out;
+};
+
+const GRADE_WORD: Record<ReviewGrade, string> = { clean: 'Clean', stumble: 'Stumbled', blank: 'Blanked' };
+
+/** Under each verse of a graded round: its grade, or Clean / Slipped when the round is practice. */
+const gradePreview = (r: MixVerseResult, counts: boolean, settings: GradeSettings): string => {
+  const g = verseGrade(r, settings);
+  if (!counts) return g === 'clean' ? 'Clean' : 'Slipped';
+  return GRADE_WORD[g];
 };
 
 // ----------------------------------------------------------------------------
@@ -151,6 +179,9 @@ function ReciteRound({
   verses,
   firstWords,
   counts,
+  settings,
+  allowSelfCheck,
+  previousText,
   onDone,
 }: {
   verses: DueVerse[];
@@ -158,13 +189,17 @@ function ReciteRound({
   firstWords: boolean;
   /** False when the user switched this format to Practice: same round, no credit. */
   counts: boolean;
+  settings: GradeSettings;
+  /** False when a self-check can't count here (the every-other rule): no Show text. */
+  allowSelfCheck: boolean;
+  /** The verse before verses[i], for the spot check's lead-in. */
+  previousText: (i: number) => string | null;
   onDone: (perVerse: Record<string, MixVerseResult>) => void;
 }) {
   const space = useScaledSpace();
   const script = scriptOfVerse(verses[verses.length - 1]);
-  const [stage, setStage] = useState<'ready' | RecitationMode | 'reveal' | 'pickSlip'>('ready');
+  const [stage, setStage] = useState<'ready' | RecitationMode | 'reveal' | 'pickSlip' | 'spot'>('ready');
   const [attempt, setAttempt] = useState(0);
-  const [slipped, setSlipped] = useState<Set<number>>(new Set());
   const [canSpeak] = useState(() => canSpeakVerses([verses[verses.length - 1]]));
   const last = verses.length - 1;
   const span = useMemo(() => threadSpan(verses, { startVerse: 0, startWord: 0, endVerse: last, cueWords: [] }), [verses, last]);
@@ -209,14 +244,20 @@ function ReciteRound({
     </View>
   );
 
+  // First words grades only the words it hid: `shown` holds flat graded indices across the span.
+  const resultsOf = (perVerse: WordOutcome[][], mode: RecitationMode): MixVerseResult[] => {
+    let offset = 0;
+    return span.map((_sv, k) => {
+      const o = perVerse[k] ?? [];
+      const hidden = shown ? o.filter((_x, j) => !shown.has(offset + j)) : o;
+      offset += o.length;
+      return gradedResult(hidden, mode);
+    });
+  };
   const finishGraded = (perVerse: WordOutcome[][], mode: RecitationMode) => {
     const out: Record<string, MixVerseResult> = {};
-    span.forEach((sv, k) => (out[verses[sv.index].id] = gradedResult(perVerse[k] ?? [], mode)));
-    onDone(out);
-  };
-  const finishSelf = (missed: Set<number>) => {
-    const out: Record<string, MixVerseResult> = {};
-    verses.forEach((v, i) => (out[v.id] = { mode: 'self', gotIt: !missed.has(i) }));
+    const results = resultsOf(perVerse, mode);
+    span.forEach((sv, k) => (out[verses[sv.index].id] = results[k]));
     onDone(out);
   };
 
@@ -238,70 +279,42 @@ function ReciteRound({
           setAttempt((a) => a + 1);
         }}
         onResult={finishGraded}
-        gradedDetail={(perVerse) => (
-          <View className="border-t border-line" style={{ paddingTop: space(10), gap: space(6) }}>
-            {span.map((sv, k) => {
-              const sum = summarizeOutcomes(perVerse[k] ?? []);
-              return (
-                <View key={sv.index} className="flex-row items-start justify-between" style={{ gap: space(8) }}>
-                  <AppText variant="label" className="font-sans font-semibold text-ink" style={{ minWidth: space(36) }}>
-                    v{verses[sv.index].verse}
-                  </AppText>
-                  <AppText variant="caption" className={`font-sans flex-1 text-right ${sum.passesReview ? 'text-ink-2' : 'text-ink-3'}`}>
-                    {!counts ? (sum.passesReview ? 'Clean' : 'Slipped') : sum.passesReview ? 'Reviewed' : 'Slipped: counts as a miss'}
-                  </AppText>
-                </View>
-              );
-            })}
-          </View>
-        )}
+        gradedDetail={(perVerse) => {
+          const results = resultsOf(perVerse, stage);
+          return (
+            <View className="border-t border-line" style={{ paddingTop: space(10), gap: space(6) }}>
+              {span.map((sv, k) => {
+                const clean = verseGrade(results[k], settings) === 'clean';
+                return (
+                  <View key={sv.index} className="flex-row items-start justify-between" style={{ gap: space(8) }}>
+                    <AppText variant="label" className="font-sans font-semibold text-ink" style={{ minWidth: space(36) }}>
+                      v{verses[sv.index].verse}
+                    </AppText>
+                    <AppText variant="caption" className={`font-sans flex-1 text-right ${clean ? 'text-ink-2' : 'text-ink-3'}`}>
+                      {gradePreview(results[k], counts, settings)}
+                    </AppText>
+                  </View>
+                );
+              })}
+            </View>
+          );
+        }}
       />
     );
   }
 
-  if (stage === 'pickSlip') {
+  if (stage === 'pickSlip' || stage === 'spot') {
     return (
-      <RoundFrame
-        footer={
-          <ButtonPair
-            left={<AppButton variant="quiet" label="Back" onPress={() => setStage('reveal')} />}
-            right={<AppButton size="lg" variant="primary" label="Next" disabled={slipped.size === 0} onPress={() => finishSelf(slipped)} />}
-          />
-        }
-      >
-        <AppText variant="title" className="font-sans font-bold text-ink text-center">
-          Which verses slipped?
-        </AppText>
-        <View className="flex-row flex-wrap justify-center" style={{ gap: space(8) }}>
-          {verses.map((v, i) => {
-            const on = slipped.has(i);
-            return (
-              <Pressable
-                key={v.id}
-                onPress={() =>
-                  setSlipped((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(i)) next.delete(i);
-                    else next.add(i);
-                    return next;
-                  })
-                }
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: on }}
-                className={`border rounded-btn ${on ? 'bg-accent-soft border-accent' : 'bg-surface border-line'}`}
-                style={{ paddingHorizontal: space(16), paddingVertical: space(10) }}
-              >
-                <AppText variant="label" className="font-sans font-semibold text-ink">
-                  v{v.verse}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </View>
-        <AppText variant="caption" className="font-sans text-ink-3 text-center">
-          {counts ? 'The rest count as reviewed.' : 'Practice only: nothing is recorded.'}
-        </AppText>
-      </RoundFrame>
+      <SelfCheckFlow
+        verses={verses}
+        allGotIt={stage === 'spot'}
+        // Practice can't move anything up, so there's nothing to spot check.
+        spotCheck={counts}
+        previousText={previousText}
+        note={counts ? undefined : 'Practice only: nothing is recorded.'}
+        onBack={() => setStage('reveal')}
+        onDone={(r) => onDone(selfResults(verses, r))}
+      />
     );
   }
 
@@ -311,7 +324,7 @@ function ReciteRound({
         footer={
           <ButtonPair
             left={<AppButton size="lg" variant="secondary" label="Missed some" onPress={() => setStage('pickSlip')} />}
-            right={<AppButton size="lg" variant="primary" label="Got it" onPress={() => finishSelf(new Set())} />}
+            right={<AppButton size="lg" variant="primary" label="Got it" onPress={() => setStage('spot')} />}
           />
         }
       >
@@ -337,7 +350,7 @@ function ReciteRound({
           label="Type first letters"
           onPress={() => setStage('type')}
         />
-        <AppButton variant="quiet" Icon={Eye} label="Show text and check myself" onPress={() => setStage('reveal')} />
+        {allowSelfCheck && <AppButton variant="quiet" Icon={Eye} label="Show text and check myself" onPress={() => setStage('reveal')} />}
       </View>
     </RoundFrame>
   );
@@ -351,12 +364,16 @@ function KeepGoingRound({
   context,
   verses,
   counts,
+  settings,
+  allowSelfCheck,
   onDone,
   onFallback,
 }: {
   context: DueVerse;
   verses: DueVerse[];
   counts: boolean;
+  settings: GradeSettings;
+  allowSelfCheck: boolean;
   onDone: (perVerse: Record<string, MixVerseResult>) => void;
   /** No cue could be found in the context verse: say it as Recite instead. */
   onFallback: () => void;
@@ -383,7 +400,9 @@ function KeepGoingRound({
     r.perVerse.forEach((pv) => {
       if (pv.index === 0) return; // The cue verse is only the way in.
       const id = all[pv.index].id;
-      out[id] = pv.outcomes ? gradedResult(pv.outcomes, r.mode === 'self' ? 'type' : r.mode) : { mode: 'self', gotIt: pv.ok };
+      out[id] = pv.outcomes
+        ? gradedResult(pv.outcomes, r.mode === 'self' ? 'type' : r.mode)
+        : { mode: 'self', answer: pv.answer ?? (pv.ok ? 'gotIt' : 'stumbled'), ...(r.spotPassed === false ? { spotMissed: true } : {}) };
     });
     onDone(out);
   };
@@ -394,8 +413,12 @@ function KeepGoingRound({
       verses={all}
       cue={cue}
       hideVerseNumber={false}
-      creditPreview={(index, passed) => (index === 0 ? 'Only the way in' : !counts ? (passed ? 'Clean' : 'Slipped') : passed ? 'Reviewed' : 'Slipped: counts as a miss')}
+      creditPreview={(index, _passed, _perfect, mode, outcomes) =>
+        index === 0 ? 'Only the way in' : gradePreview(gradedResult(outcomes, mode === 'self' ? 'type' : mode), counts, settings)
+      }
       onFinish={finish}
+      allowSelfCheck={allowSelfCheck}
+      spotCheck={counts}
       onDifferentCue={() => {
         const next = pick();
         if (next) {
@@ -422,13 +445,13 @@ function FindWrongWordRound({
 }) {
   const space = useScaledSpace();
   const [scored, setScored] = useState<SwapVerseScore[] | null>(null);
+  // The round's misses over its verses grade every verse in it (gradeSwap's rate).
   const result = () => {
     const out: Record<string, MixVerseResult> = {};
+    if (!scored) return out;
+    const swap = { misses: scored.reduce((n, sc) => n + sc.misses, 0), verses: verses.length };
     verses.forEach((v) => {
-      const sc = scored?.find((x) => x.verse === v.verse);
-      if (!sc) return;
-      const asked = sc.totalDecoys + sc.falseAlarms;
-      out[v.id] = { mode: 'type', accuracy: asked === 0 ? 1 : sc.caught / asked, perfect: false };
+      if (scored.some((x) => x.verse === v.verse)) out[v.id] = { mode: 'type', swap, perfect: false };
     });
     return out;
   };
@@ -457,6 +480,7 @@ function PracticeRound({
   sections,
   script,
   counts,
+  previousText,
   onNext,
 }: {
   format: FormatId;
@@ -465,14 +489,23 @@ function PracticeRound({
   script: ReturnType<typeof scriptOfVerse>;
   /** Switched to Counts in Settings: these drills don't grade, so the user checks themself. */
   counts: boolean;
+  /** The verse before verses[i], for the spot check's lead-in. */
+  previousText: (i: number) => string | null;
   onNext: (perVerse?: Record<string, MixVerseResult>) => void;
 }) {
   const space = useScaledSpace();
-  const selfCheck = (gotIt: boolean) => {
-    const out: Record<string, MixVerseResult> = {};
-    verses.forEach((v) => (out[v.id] = { mode: 'self', gotIt }));
-    onNext(out);
-  };
+  const [checking, setChecking] = useState<'pick' | 'spot' | null>(null);
+  if (checking) {
+    return (
+      <SelfCheckFlow
+        verses={verses}
+        allGotIt={checking === 'spot'}
+        previousText={previousText}
+        onBack={() => setChecking(null)}
+        onDone={(r) => onNext(selfResults(verses, r))}
+      />
+    );
+  }
   return (
     <View className="flex-1" style={{ gap: space(10) }}>
       <View className="flex-1">
@@ -483,8 +516,8 @@ function PracticeRound({
       </View>
       {counts ? (
         <ButtonPair
-          left={<AppButton variant="secondary" label="Not really" onPress={() => selfCheck(false)} />}
-          right={<AppButton variant="secondary" label="Got it" onPress={() => selfCheck(true)} />}
+          left={<AppButton variant="secondary" label="Missed some" onPress={() => setChecking('pick')} />}
+          right={<AppButton variant="secondary" label="Got it" onPress={() => setChecking('spot')} />}
         />
       ) : (
         // Secondary: most drills have a primary button of their own.
@@ -649,10 +682,12 @@ function Session({
         for (const c of credits) {
           const item = memoryQueueRef.current.find((q) => q.verseId === c.verseId);
           if (!item) continue;
-          await handleReviewCompleted(item, c.outcome === 'pass', c.mode === 'self' ? 'reveal' : c.mode, {
+          await handleReviewCompleted(item, c.grade === 'clean', c.mode === 'self' ? 'reveal' : c.mode, {
             quiet: true,
             via: 'mix',
             perfect: c.perfect,
+            graded: { kind: 'grade', grade: c.grade, selfCheck: c.selfCheck },
+            canMoveUp: c.canMoveUp,
           });
         }
       })
@@ -701,7 +736,7 @@ function Session({
   // ==========================================================================
   if (s.status === 'finished' || s.status === 'stopped') {
     const sum = mixSummary(s);
-    const reviewed = sum.passed.length + sum.missed.length;
+    const reviewed = sum.grades.size;
     const unitsDone = new Set(s.credits.map((c) => c.unitIndex)).size;
     const minutes = Math.max(1, Math.round(((endedAt ?? Date.now()) - startedAt) / 60000));
     const stopped = s.status === 'stopped';
@@ -721,7 +756,7 @@ function Session({
           <View className="flex-row" style={{ gap: space(10) }}>
             <View className="flex-1 bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(2) }}>
               <AppText variant="title" className="font-sans font-bold text-ink">
-                {sum.passed.length}
+                {sum.clean.length}
               </AppText>
               <AppText variant="caption" className="font-sans text-ink-2">
                 Clean
@@ -818,6 +853,20 @@ function Session({
   const color = unit.kind === 'section' && !isOpener && unit.sectionIndex !== undefined ? bracketColor(palette, unit.sectionIndex) : palette.line;
   const format: FormatId = asRecite.has(round.index) ? 'recite' : round.format;
   const result = (perVerse?: Record<string, MixVerseResult>) => send({ type: 'result', perVerse });
+  // Every other review: a self-check can't move a passage up twice in a row,
+  // so where one of these verses' passages was last moved up by a
+  // self-check, a counting round offers no Show text (the engine holds it
+  // either way). Read live: an earlier round may have just set it.
+  const allowSelfCheck = !round.counts || !round.verseIds.some((id) => memoryQueueRef.current.find((q) => q.verseId === id)?.lastSelfChecked);
+  const previousText = (i: number): string | null => {
+    const v = verses[i];
+    const prev = verses[i - 1] ?? (i === 0 ? contextVerse : null);
+    if (prev && prev.chapter === v.chapter && prev.verse === v.verse - 1) return prev.text;
+    const before = memoryQueueRef.current.find(
+      (q) => q.book === v.book && q.chapter === v.chapter && q.verseNumber === v.verse - 1 && (q.translationId || '') === (v.translationId || '')
+    );
+    return before?.text ?? null;
+  };
 
   let body: React.ReactNode;
   // Which drill shows goes by the format; whether it credits goes by
@@ -831,6 +880,7 @@ function Session({
         sections={sectionsHere}
         script={script}
         counts={round.counts}
+        previousText={previousText}
         onNext={result}
       />
     );
@@ -841,6 +891,8 @@ function Session({
         context={contextVerse}
         verses={verses}
         counts={round.counts}
+        settings={s.settings}
+        allowSelfCheck={allowSelfCheck}
         onDone={result}
         onFallback={() => setAsRecite((prev) => new Set(prev).add(round.index))}
       />
@@ -848,7 +900,18 @@ function Session({
   } else if (format === 'findWrongWord') {
     body = <FindWrongWordRound key={round.index} verses={verses} counts={round.counts} onDone={result} />;
   } else {
-    body = <ReciteRound key={`${round.index}:${format}`} verses={verses} firstWords={format === 'firstWords'} counts={round.counts} onDone={result} />;
+    body = (
+      <ReciteRound
+        key={`${round.index}:${format}`}
+        verses={verses}
+        firstWords={format === 'firstWords'}
+        counts={round.counts}
+        settings={s.settings}
+        allowSelfCheck={allowSelfCheck}
+        previousText={previousText}
+        onDone={result}
+      />
+    );
   }
 
   return (
@@ -893,7 +956,7 @@ function Session({
 
 export default function MixedReviewScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
-  const { memoryQueue, reviewsPaused, navigateTo, sectionsForChapter } = state;
+  const { memoryQueue, reviewsPaused, navigateTo, sectionsForChapter, cleanPct, swapCanBeClean } = state;
 
   const [enabled, setEnabled] = useState<FormatId[] | null>(null);
   const [counts, setCounts] = useState<MixCounts>(() => readMixCounts(undefined));
@@ -940,7 +1003,7 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
       counts={counts}
       onStart={(chosen) => {
         const plan = buildMixPlan({ due: chosen, pool: memoryQueue, sectionsFor: sectionsForChapter, enabled, counts }, Math.random);
-        setSession({ state: mixReducer(startMix(plan), { type: 'start' }), startedAt: Date.now() });
+        setSession({ state: mixReducer(startMix(plan, { cleanPct, swapCanBeClean }), { type: 'start' }), startedAt: Date.now() });
       }}
     />
   );

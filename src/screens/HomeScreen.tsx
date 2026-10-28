@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Volume2, BookMarked, ChevronRight, ClipboardCheck, Compass, Layers, Plus, Route, Target } from 'lucide-react-native';
 
@@ -13,6 +13,8 @@ import { formatDate } from '../lib/format';
 import { translationLabel } from '../data';
 import { useThemeColors } from '../components/theme';
 import { MIX_NAMES } from '../lib/formatNames';
+import ManualLogSheet, { logManualAnswers } from '../components/practice/ManualLogSheet';
+import type { SelfCheckAnswer } from '../lib/grading';
 import { verseStage } from '../lib/stageProgress';
 
 const LOOKAHEAD_OPTIONS = [
@@ -271,24 +273,14 @@ export default function HomeScreen({ state }: { state: AppState }) {
     startPractice(mode, vStates);
   };
 
-  // Manual log for a review actually done off-app. Mirrors the sheet inside
-  // PracticeModals exactly (same three outcomes, same handleUpdateVerseStatus
-  // contract) -- 'reveal' marks the touch as self-reported rather than
-  // machine-graded, and an omitted `perfect` is treated as a claimed perfect
-  // run (banks a mastery touch), while `perfect: false` counts the review
-  // without one.
-  const submitManualLog = (outcome: 'perfect' | 'passed' | 'practice') => {
-    const group = manualLogGroup;
+  // Manual log for a review actually done off-app: a self-check per verse,
+  // the same sheet as inside PracticeModals (practice/ManualLogSheet).
+  const manualLogVerses = useMemo(() => (manualLogGroup ? mapQueueToVerseStates(manualLogGroup.items) : []), [manualLogGroup]);
+  const submitManualLog = (answers: SelfCheckAnswer[]) => {
+    const vStates = manualLogVerses;
     setManualLogGroup(null);
-    if (!group) return;
-    const vStates = mapQueueToVerseStates(group.items);
-    if (outcome === 'practice') {
-      handleUpdateVerseStatus(vStates, 'learning', 'reveal');
-    } else if (outcome === 'passed') {
-      handleUpdateVerseStatus(vStates, 'memorized', 'reveal', { perfect: false });
-    } else {
-      handleUpdateVerseStatus(vStates, 'memorized', 'reveal');
-    }
+    if (vStates.length === 0) return;
+    logManualAnswers(vStates, answers, handleUpdateVerseStatus);
   };
 
   // "Review All Due" -- chains through every due group (Settling, then Steady,
@@ -636,21 +628,15 @@ export default function HomeScreen({ state }: { state: AppState }) {
         }
       />
 
-      {/* Manual log for a group reviewed off-app. Same three outcomes as the
-          sheet inside PracticeModals. */}
-      <Dialog
+      {/* Manual log for a group reviewed off-app. The same sheet as inside PracticeModals. */}
+      <ManualLogSheet
         visible={!!manualLogGroup}
-        onClose={() => setManualLogGroup(null)}
-        placement="sheet"
         title={manualLogGroup ? `Log ${manualLogGroup.label}` : undefined}
-        message="For a review you actually did somewhere else — out loud in the car, from a card, anywhere but here."
-      >
-        <View style={{ gap: space(8) }}>
-          <AppButton variant="primary" label="Perfect — no mistakes" onPress={() => submitManualLog('perfect')} />
-          <AppButton variant="secondary" label="Got it, with a stumble" onPress={() => submitManualLog('passed')} />
-          <AppButton variant="quiet" label="Needs practice" onPress={() => submitManualLog('practice')} />
-        </View>
-      </Dialog>
+        verses={manualLogVerses}
+        selfCheckedLast={!!manualLogGroup?.items.some((i) => i.lastSelfChecked)}
+        onClose={() => setManualLogGroup(null)}
+        onLog={submitManualLog}
+      />
     </FadeInView>
   );
 }

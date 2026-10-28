@@ -15,6 +15,7 @@ import { readMixCounts, MIX_COUNTS_PREF } from '../../lib/mix';
 import { loadPracticePrefs } from '../../lib/practicePrefs';
 import { starVerses, walkCredit, WalkCredit, walkOrder } from '../../lib/mapWalk';
 import WalkRound, { WalkMode, WalkRoundResult } from './WalkRound';
+import { GradeInput, wordAccuracy } from '../../lib/grading';
 
 // ============================================================================
 // WALK THE CONSTELLATION (CONSTELLATION_PLAN.md, stage 6)
@@ -40,7 +41,7 @@ export interface WalkDeps {
     verses: VerseState[],
     status: 'memorized',
     drill: 'speak' | 'type' | 'reveal',
-    opts: { perfect: boolean; quiet: boolean; via: 'map' }
+    opts: { perfect: boolean; quiet: boolean; via: 'map'; gradeFor?: (v: VerseState) => GradeInput | undefined; canMoveUp?: boolean }
   ) => Promise<unknown>;
   validateTouch: (item: QueueItem, drill: 'speak' | 'type' | 'reveal') => boolean;
   isReviewDue: (nextReviewDueDate: string | null) => boolean;
@@ -218,8 +219,23 @@ export default function WalkConstellation({
       translationId: v.translationId,
     });
     const drill = result.mode === 'self' ? 'reveal' : result.mode;
+    // A review carries each verse's grade; a missed spot check means it can't move the passage up.
+    const gradeFor = (vs: VerseState): GradeInput | undefined => {
+      const k = verses.findIndex((v) => v.book === vs.book && v.chapter === vs.chapter && v.verse === vs.verse);
+      const pv = result.perVerse.find((x) => x.index === k);
+      if (!pv) return undefined;
+      return pv.outcomes ? { kind: 'recall', accuracy: wordAccuracy(pv.outcomes) } : { kind: 'self', answer: pv.answer ?? (pv.ok ? 'gotIt' : 'stumbled') };
+    };
     if (touches.length > 0) await deps.handleUpdateVerseStatus(touches.map(toState), 'memorized', drill, { perfect: true, quiet: true, via: 'map' });
-    if (reviews.length > 0) await deps.handleUpdateVerseStatus(reviews.map(toState), 'memorized', drill, { perfect: false, quiet: true, via: 'map' });
+    if (reviews.length > 0) {
+      await deps.handleUpdateVerseStatus(reviews.map(toState), 'memorized', drill, {
+        perfect: false,
+        quiet: true,
+        via: 'map',
+        gradeFor,
+        ...(result.spotPassed === false ? { canMoveUp: false } : {}),
+      });
+    }
   };
 
   const header = (
@@ -276,6 +292,8 @@ export default function WalkConstellation({
             creditPreview={(index, passed, perfect, mode) => decide(index, passed, perfect, mode).label}
             onFinish={(r) => void finishRound(r)}
             onSkip={() => advance(0, true)}
+            // A spot check only where a review could count.
+            spotCheck={!deps.reviewsPaused && verses.some((v) => v.item.status === 'reviewing' && deps.isReviewDue(v.item.nextReviewDueDate))}
           />
         </View>
       )}

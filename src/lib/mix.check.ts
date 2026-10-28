@@ -3,7 +3,7 @@
 // spec: honesty, no repeats in a row, fallbacks, stretches, and stopping
 // mid-session keeping earlier credit.
 
-import type { ChapterSections, QueueItem } from '../types';
+import type { ChapterSections, QueueItem, ReviewGrade } from '../types';
 import { FORMATS, FormatId } from './formatNames';
 import {
   buildMixPlan,
@@ -165,6 +165,17 @@ console.log('Units');
     'Today order: daily, then weekly, then monthly',
     ordered[0].book === 'Psalms' && ordered[6].book === 'Matthew' && ordered[ordered.length - 1].book === 'John',
     ordered.map((i) => i.book)
+  );
+
+  const stepped = todayOrder([
+    item('John', 11, 35, JOHN11, { retentionPhase: 'daily', ladderStep: 4 }),
+    item('Psalms', 23, 1, PSALM23, { retentionPhase: 'monthly', ladderStep: 1 }),
+    item('Psalms', 23, 2, PSALM23, { retentionPhase: 'weekly' }),
+  ]);
+  check(
+    'Today order goes by ladder step; a verse with no step ranks by its old phase',
+    stepped.map((i) => `${i.book}${i.verseNumber}`).join() === 'Psalms1,Psalms2,John35',
+    stepped.map((i) => `${i.book}${i.verseNumber}`)
   );
 
   const { chapters, units } = buildUnits(fullInput());
@@ -384,28 +395,69 @@ console.log('Credit');
   const plan = buildMixPlan({ due: psalm.slice(0, 2), pool: psalm, sectionsFor: () => null, enabled: ['recite'] }, seeded(1));
   const round = plan.rounds[0];
   const [a, b] = round.verseIds;
-  const credits = roundCredits(round, { [a]: { mode: 'speak', accuracy: 0.9, perfect: false }, [b]: { mode: 'type', accuracy: 0.89 } }, new Set());
-  check('90% is a pass', credits.find((c) => c.verseId === a)?.outcome === 'pass');
-  check('Under 90% is a miss, like Recall', credits.find((c) => c.verseId === b)?.outcome === 'miss');
-  check('A pass that missed words is not perfect', credits.find((c) => c.verseId === a)?.perfect === false);
-  const self = roundCredits(round, { [a]: { mode: 'self', gotIt: true, perfect: true }, [b]: { mode: 'self', gotIt: false } }, new Set());
-  check('Self-check Got it passes, never perfect', self[0].outcome === 'pass' && self[0].perfect === false);
-  check('Self-check Not really is a miss', self[1].outcome === 'miss');
-  check('A verse with no result gets no credit', roundCredits(round, { [a]: { mode: 'speak', accuracy: 1, perfect: true } }, new Set()).length === 1);
-  check('A verse already credited this session is not credited again', roundCredits(round, { [a]: { mode: 'speak', accuracy: 1 } }, new Set([a])).length === 0);
+  const none = new Map<string, ReviewGrade>();
+  const credits = roundCredits(round, { [a]: { mode: 'speak', accuracy: 0.9, perfect: false }, [b]: { mode: 'type', accuracy: 0.89 } }, none);
+  check('90% is clean at the default', credits.find((c) => c.verseId === a)?.grade === 'clean');
+  check('Under 90% is a stumble', credits.find((c) => c.verseId === b)?.grade === 'stumble');
+  check('Under 50% is a blank', roundCredits(round, { [a]: { mode: 'speak', accuracy: 0.4 } }, none)[0].grade === 'blank');
+  check(
+    'The clean setting decides: 92% is a stumble at 95',
+    roundCredits(round, { [a]: { mode: 'speak', accuracy: 0.92 } }, none, { cleanPct: 95, swapCanBeClean: true })[0].grade === 'stumble'
+  );
+  check('A clean that missed words is not perfect', credits.find((c) => c.verseId === a)?.perfect === false);
+  check('Graded credits are not self-checks', credits.every((c) => !c.selfCheck && c.canMoveUp));
+  const self = roundCredits(
+    round,
+    { [a]: { mode: 'self', answer: 'gotIt', perfect: true }, [b]: { mode: 'self', answer: 'blanked', spotMissed: true } },
+    none
+  );
+  check('Self-check Got it is clean, never perfect, and marked a self-check', self[0].grade === 'clean' && self[0].perfect === false && self[0].selfCheck);
+  check('Self-check Blanked is a blank', self[1].grade === 'blank');
+  check('A missed spot check stops the move up', self[1].canMoveUp === false && self[0].canMoveUp === true);
+  check(
+    'Self-check Stumbled is a stumble',
+    roundCredits(round, { [a]: { mode: 'self', answer: 'stumbled' } }, none)[0].grade === 'stumble'
+  );
+  const swap = roundCredits(round, { [a]: { mode: 'type', swap: { misses: 1, verses: 2 } }, [b]: { mode: 'type', swap: { misses: 1, verses: 2 } } }, none);
+  check('Find the wrong word grades by the round rate (0.5 a verse is a stumble)', swap.every((c) => c.grade === 'stumble'));
+  check(
+    'Find the wrong word with clean off is a stumble at best',
+    roundCredits(round, { [a]: { mode: 'type', swap: { misses: 0, verses: 2 } } }, none, { cleanPct: 90, swapCanBeClean: false })[0].grade === 'stumble'
+  );
+  check('A verse with no result gets no credit', roundCredits(round, { [a]: { mode: 'speak', accuracy: 1, perfect: true } }, none).length === 1);
+  const cleanBefore = new Map<string, ReviewGrade>([[a, 'clean']]);
+  check('A verse already clean this session is not credited again by a clean', roundCredits(round, { [a]: { mode: 'speak', accuracy: 1 } }, cleanBefore).length === 0);
+  check(
+    '...but is credited again when it went worse',
+    roundCredits(round, { [a]: { mode: 'speak', accuracy: 0.6 } }, cleanBefore)[0]?.grade === 'stumble'
+  );
+  check(
+    'A stumble is not undone by a later clean',
+    roundCredits(round, { [a]: { mode: 'speak', accuracy: 1 } }, new Map<string, ReviewGrade>([[a, 'stumble']])).length === 0
+  );
 
-  // Overlapping stretches share a verse: one credit for it, the first.
+  // Overlapping stretches share a verse: covered twice, it takes the worse grade.
   const pPlan = buildMixPlan({ due: psalm, pool: psalm, sectionsFor: () => null, enabled: ['recite'] }, seeded(1));
   const shared = pPlan.units[0].verseIds.filter((id) => pPlan.units[1].verseIds.includes(id));
   const done = runAll(pPlan);
   check('Stretches overlap by a verse', shared.length === 1, pPlan.units.map((u) => u.verseIds));
-  check('...and the shared verse is credited once', done.credits.filter((c) => c.verseId === shared[0]).length === 1);
+  check('...and the shared verse, clean twice, is credited once', done.credits.filter((c) => c.verseId === shared[0]).length === 1);
   check('A full run credits every due verse once', done.credits.length === psalm.length && mixSummary(done).notCovered.length === 0);
+  // Clean in the first stretch, stumbled in the second.
+  let worse = mixReducer(startMix(pPlan), { type: 'start' });
+  let n = 0;
+  while (worse.status === 'running') {
+    const acc = n === 1 ? (id: string) => (id === shared[0] ? 0.7 : 1) : 1;
+    worse = mixReducer(worse, { type: 'result', perVerse: resultFor(pPlan, worse, acc) });
+    n++;
+  }
+  check('Covered twice: clean then a stumble is sent again', worse.credits.filter((c) => c.verseId === shared[0]).map((c) => c.grade).join() === 'clean,stumble');
+  check('...and the recap takes the worse', mixSummary(worse).grades.get(shared[0]) === 'stumble' && mixSummary(worse).stumbled.join() === shared[0]);
 
   // A whole session, all formats, everything passed.
   const full = runAll(buildMixPlan(fullInput(), seeded(9)));
   const sum = mixSummary(full);
-  check('All formats, all passed: every due verse passes', sum.passed.length === sum.verses && sum.missed.length === 0, sum);
+  check('All formats, all passed: every due verse is clean', sum.clean.length === sum.verses && sum.missed.length === 0, sum);
   check('Finished status at the end', full.status === 'finished');
 
   // A miss shows in Where you slipped.
@@ -413,7 +465,7 @@ console.log('Credit');
   const target = matt[6].verseId; // Matthew 7:7, the "Ask" section.
   const slipped = runAll(slipPlan, (id) => (id === target ? 0.5 : 1));
   const slipSum = mixSummary(slipped);
-  check('A miss is recorded as a miss', slipSum.missed.join() === target, slipSum.missed);
+  check('A slip is recorded as a stumble', slipSum.missed.join() === target && slipSum.stumbled.join() === target, slipSum.missed);
   check('...and its section is in Where you slipped', slipSum.slippedUnits.length === 1 && slipPlan.units[slipSum.slippedUnits[0]].label === 'Ask');
 }
 
@@ -443,7 +495,7 @@ console.log('Reducer');
   const after = mixReducer(stopped, { type: 'result', perVerse: resultFor(plan, { ...stopped, pos: stopped.pos }) });
   check('Nothing after stop changes the credit', after.credits.length === stopped.credits.length && after.status === 'stopped');
   const stopSum = mixSummary(stopped);
-  check('The recap counts the rest as not reviewed', stopSum.passed.length === before.length && stopSum.notCovered.length === stopSum.verses - before.length);
+  check('The recap counts the rest as not reviewed', stopSum.clean.length === before.length && stopSum.notCovered.length === stopSum.verses - before.length);
 
   // Stopping before starting is fine and credits nothing.
   const early = mixReducer(startMix(plan), { type: 'stop' });

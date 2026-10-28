@@ -9,6 +9,19 @@ Stage files by name when committing (never `git add -A`). After each stage, upda
 **Progress** line and add an "As built" note under the stage, like
 `MIXED_REVIEW_PLAN.md` does.
 
+**Progress:** stages 1–3 built (ladder, grading, passages and migration logic, all
+pure, plus a dev-only dry run that saves nothing). Main account dry run read with the user
+2026-10-27 (led to the retained-verse spreading) and approved. Stage 4 built
+(settings, automatic migration on load, grading through passages) and checked live on
+the main account by the user 2026-10-27: migrated, reopening changed nothing, a passage
+review counted. Step drops and the next-day penalty-only case wait for stage 5 / a day.
+Stage 5 built 2026-10-27 (every credit path reports clean / stumble / blank, the
+three-button self-check with the spot check, Find the wrong word's "knew the real word"
+toggles); the live check on the main account (half Recall, half Mixed review) is still to do.
+
+**No test account (user, 2026-10-27):** the only users are the owner and their
+brother, and a rare edge case going wrong in the move is acceptable. Wherever a stage
+below says "test account", use the main account, keeping the backup step in 4a.
 **Progress:** stages 1–2 built (ladder, grading and passages logic, all pure; nothing
 calls them yet). Stage 6 built (display only, on demo data; runs on the old streaks until
 stage 3/4 migrate an account). Stage 5 is running locally.
@@ -375,6 +388,44 @@ needed).
 - **Done when:** the check covers every mapping row and a mixed-stage chapter; the dry
   run's report on the user's real account looks right to the user.
 
+### As built (stage 3)
+
+- `src/lib/ladderMigration.ts`: `mapLegacyItem`, `legacyStageLabel`, `migrateQueue`
+  (returns `{ changed, report }`), `describeLadderState`, `oldStagesLine`,
+  `passageTitle`, `migrationReportText` (the report as plain text, to copy).
+- Dry run: **Settings > Developer > Ladder dry run** (`src/dev/LadderDryRun.tsx`),
+  shown only in development builds (`__DEV__`). It runs `migrateQueue` on the queue
+  already loaded for the signed-in account (no extra Firestore read) and shows each
+  passage: old stages, new step, next review, a "Mixed" badge when its members took
+  the lowest. "Copy report" (web) / "Share report" (phone) gives the text. Writes
+  nothing. Demo: `?s=settings`, scroll to Developer.
+- Choices made while building:
+  - **Leftover reviews carry into the step** (daily 10 → Every 2 days with 3 done),
+    held one short of the step's count, so no verse moves up on its first review
+    (weekly 40 → Every 4 weeks, 11 of 12 done). Every 6 months always starts at 0.
+  - The streak thresholds are the plan's (Standard counts). The carried count is
+    capped by the thoroughness passed in (Standard until stage 4 adds the setting).
+  - A reviewing verse with no phase reads as daily. An active refresher counts from
+    its return phase and progress, whatever phase it's in now.
+  - **"Disagree" means different steps.** Same step with different counts takes the
+    fewest, no catch-up (nothing joined). Different steps take the lowest, with the
+    catch-up only when the lowest is below Every week (the catch-up only exists there;
+    Every week vs Every 4 weeks just lands at Every week). The catch-up's count is held
+    one short too (daily 5 joining → Every day, 2 of 3 done).
+  - Due dates: each verse keeps its own, then the passage takes its earliest (reconcile).
+  - **Retained verses had no due date** (the old system was done with them), and no
+    date reads as due now: the user's first dry run (2026-10-27) would have made ~450
+    verses due on day one. Top-step passages with no date are now **spread across the
+    next 26 weeks** (decided with the user), weighted by verse count, each on its
+    chapter's weekday (whole weeks from today if the chapter has none). Retained
+    verses that do have a date keep it.
+  - `retained` verses come out `status: 'reviewing'`, `retentionPhase: 'monthly'`
+    (decision 3). Anything still counting `retained` (Memorized counts, the
+    activity feed) moves to "reached Every 6 months" in stages 4b / 8.
+  - Idempotent: verses with `ladderStep` keep their position; a second run returns no
+    changes. A half-migrated passage (interrupted run) maps the rest and agrees.
+- `npm run check:migration` (71 checks).
+
 ## Stage 4 — Engine swap and settings
 
 **Local · Opus · writes Firestore.** The riskiest stage; split into two sessions if
@@ -401,6 +452,75 @@ it runs long (4a settings + migration run, 4b grading path).
   blank dropped a step, and a partly covered passage got its penalty-only outcome the
   next day. Then the user's main account.
 
+### As built (stage 4, 4a + 4b in one session)
+
+- **Migration starts automatically** on the first load in this build (the user chose
+  this over a dev-only button, 2026-10-27, knowing phones on the old build would grade
+  migrated verses the old way until stage 9).
+- `src/lib/ladderEngine.ts` (pure, `npm run check:ladderengine`, 37 checks):
+  - `LadderPrefs` / `DEFAULT_LADDER_PREFS` / `ladderPrefsFrom` (bad or missing values fall
+    back to the defaults), `LADDER_VERSION = 2`.
+  - `prepareLadderQueue`: what runs on every open, in order: `migrateQueue`,
+    `settleStaleDays`, lateness (when on; logged as `skipped` + `outcome: 'late'`), then
+    `spreadOverdue` with the review time cap. Lateness and the spread are skipped while
+    paused. The spread gives every overdue passage a new date, so the next open charges
+    nothing again.
+  - `gradeVerse`: a firm-up attempt first (when the passage has one today), then
+    `recordGrade`; adds history entries and returns the toast text (`outcomeMessage`,
+    `joinMessage`: "Romans 8:21–22 join verses 1–20.").
+- **Load path** (`useAppState` `loadUserData`): the queue loader now keeps the ladder
+  fields (it copies fields one by one and would have dropped them). Then
+  `prepareLadderQueue` with the settings just read; if the account isn't at
+  `ladderVersion: 2` and anything moves, the queue is backed up first
+  (`src/lib/ladderBackup.ts`: AsyncStorage `ladderBackup:{uid}`, plus a JSON download on
+  web); changed verses are written in batches of 450; `ladderVersion: 2` is written last,
+  only if every batch went through. A failed batch leaves the verses differing from the
+  auto-sync's baseline, so the auto-sync retries them. A new account or an empty queue
+  gets `ladderVersion: 2` straight away. `welcomeBackDays` (AppState) holds the spread for
+  stage 7's card.
+- **The migration runs on every open, not only once.** It only touches verses past Learning
+  with no `ladderStep`, so it's a no-op once done, and it catches verses an old build
+  wrote back without the ladder fields: those are mapped from their legacy streak again
+  instead of looking like new arrivals (which would have restarted their passage's
+  catch-up).
+- **Settings** (`usePlanSettings`): `thoroughness`, `cleanPct`, `lateMovesBack`,
+  `swapCanBeClean`, `ladderVersion`; `updateLadderSettings(patch)` commits live to the
+  root of `memoryPlans/{uid}` like `updateRhythm`. No screen sets them yet (stage 7).
+- **Engine** (`useReviewEngine`): `handleReviewCompleted` → `gradeQueueItem`.
+  - Learning is unchanged, except leaving it: the verse gets `status: 'reviewing'` with no
+    `ladderStep` and `reconcile` gives it its passage's schedule (the toast says what it
+    joined).
+  - Past Learning goes through `gradeVerse`. `ReviewCompletedOpts` gained `grade`,
+    `selfCheck`, `canMoveUp`. **Until stage 5, a caller that only says pass/fail gets clean
+    for a pass and a stumble for a fail** (the gentler reading, since the old fail line
+    was 90%).
+  - Every changed member goes out in one batch. Toasts only come when a passage's outcome
+    is applied or a verse joins; `handleUpdateVerseStatus` shows those in place of its
+    generic toast.
+  - Firm-up grades are kept per day in a ref, because screens grade verses one call at a
+    time and winning back needs every slipped verse clean.
+  - Reaching Every 6 months posts the activity event: one chapter event when the whole
+    chapter (that translation) is at the top, otherwise one per verse, like before.
+  - Retired: the miss policy, refreshers, `reviewsRequired`, `dailyPhaseExtensionDays` and
+    the load-time missed-review scan. The popup's state stays, always empty, until stage 8
+    deletes the popup.
+  - Placing verses by hand (`overrideVerseMemoryStatus`) clears their ladder fields and
+    maps them with `migrateQueue`, so they land in their passage like migrated verses.
+  - "Reset today's reviews" (dev) now sets verses due now instead of yesterday, which
+    would have read as late.
+- **History entries:** `step`, `grade`, `outcome` on `ReviewLog`. `result` is `pass` for
+  up / forgiven / wonBack and otherwise follows the verse's own grade (clean = pass), so a
+  clean verse in a held review doesn't show as a miss on its page. Joins aren't logged (the
+  only fitting legacy result, `placed`, reads as "by hand" on the verse page).
+- `memorizedCount` counts verses at Every 6 months (plus any `retained` not moved yet).
+- `check:appstate` snapshot updated on purpose (the new keys, plus drift that was already
+  there). `check:maplayout` and `check:milestones` fail the same way without this
+  stage's changes.
+- **Live run (user, on the phone, 2026-10-27):** the main account migrated with nothing
+  missing and no pile-up due, a second open changed nothing, and a passage reviewed end
+  to end counted. Not tried live: a blank (no screen can give one until stage 5) and the
+  partly covered → penalty-only case (needs the next day); both are in `check:ladderengine`.
+
 ## Stage 5 — Every credit path reports grades
 
 **Local · Opus · writes Firestore** (through the engine). A mistake credits the wrong
@@ -420,6 +540,60 @@ verses.
 - **Done when:** tsc, `check:mix`, `check:guided`, `check:thread`, `check:swap`,
   `check:outline` updated and passing; on the test account, one passage reviewed half
   in Recall and half in Mixed review moved up once, not twice.
+
+### As built (stage 5)
+
+- **The engine grades, screens report.** `ReviewCompletedOpts` gained `graded`
+  (`GradeInput` in `grading.ts`: a recall accuracy, Find the wrong word misses, a
+  self-check answer, or an already decided grade) and `gradeFor` (one per verse, for
+  `handleUpdateVerseStatus` calls covering several). `resolveGrade` turns it into clean /
+  stumble / blank with the user's `cleanPct` and `swapCanBeClean`, so no screen needs the
+  settings. A self-check input sets the every-other flag itself.
+- **Shared self-check** (`src/components/practice/SelfCheck.tsx`): "Got it" goes straight
+  to the spot check; "Missed some" opens Got it / Stumbled / Blanked per verse, then the
+  spot check on one random Got it verse, with the last 3 words of the verse before. The
+  spot check is said or typed (`GradedRecitation`) and passes at the review pass mark;
+  "I can't say it" misses it, which sends `canMoveUp: false`. Used by Mixed review (Recite,
+  First words, counted Practice rounds, Keep going through `ThreadRound`), Pick up the
+  thread and the map walk. The spot check is skipped where nothing could count (practice,
+  not due).
+- **Mixed review** (`mix.ts`): `MixVerseResult` carries `answer` / `swap` / `spotMissed`;
+  `MixCredit` carries `grade`, `selfCheck`, `canMoveUp`. `startMix(plan, settings)` holds
+  the clean setting. A verse covered twice takes its **worse** grade: it is sent again only
+  when a later round went worse (the engine keeps the worse of a day's grades).
+  `mixSummary` gives `grades`, `clean`, `stumbled`, `blanked`. `todayOrder` sorts by
+  `ladderStep` (a verse with none ranks by its old phase). Show text is hidden in a
+  counting round when one of its verses has `lastSelfChecked` (the engine holds it anyway,
+  so a counted Practice round keeps its self-check). The recap still shows Clean /
+  Slipped; per-passage tags are stage 7.
+- **Find the wrong word** (`SpotSwapDrill`): with `onScored`, each caught swap asks "Did
+  you know the real word?" Yes / No (Yes by default); every answer re-reports.
+  `SwapVerseScore` gained `unknown` and `misses`. **Scope: the round.** Its total misses
+  over its verse count grade every verse in it (stage 1's rate decision).
+- **First words** grades only the words it hid: `OutlineVerseResult.hiddenAccuracy`, and
+  Mixed review's First words drops the shown words from each verse.
+- **Recall**: each verse is graded on its own words (`gradeFor` over `finalOutcomes`); a
+  revealed hint makes that verse a stumble at best (`hintedVerses` in `useRecall`). Every
+  result button passes it, "Log as needs practice" too, so a verse past Learning gets its
+  real grade whichever button is tapped.
+- **Pick up the thread, Guided learning, Walk the constellation** keep their old rule that
+  only a passing verse is credited (no penalty for a miss), but what they credit now
+  carries its grade: a 91% verse at a 95% clean setting counts as a stumble. **Confirmed by
+  the user 2026-10-27: keep no penalty for a miss in these three.** Guided carries
+  each verse's accuracy (`GuidedOutcome.accuracy`, `creditGuided`'s new `accuracy` map).
+- **Manual log** (`src/components/practice/ManualLogSheet.tsx`, on Today's rows and in the
+  practice screen): Got it / Stumbled / Blanked per verse, logged as a self-check. No spot
+  check (the review happened elsewhere). It says so when the every-other rule means it
+  can't move the passage up. Learning verses keep the old meanings (Got it = a claimed
+  perfect run, Stumbled = no touch, Blanked = practice).
+- Checks: `check:grading` (resolveGrade), `check:mix` (grades, worse-of-two, spot check,
+  swap rate, ladder order), `check:outline` (hidden accuracy). `check:appstate` snapshot
+  updated for `creditGuided`'s new parameter. `check:layout`'s 3 errors (ActivityHeatmap,
+  LoadingScreen) were there before this stage.
+- Checked in the web demo (signed out, nothing saved): the per-verse picker, the spot
+  check's lead-in, the Yes / No toggles and the recap, and the manual log sheet.
+- **Not done yet:** the live run on the main account (one passage half in Recall, half in
+  Mixed review, moving up once).
 
 ## Stage 6 — Showing the ladder
 

@@ -1,7 +1,7 @@
-import type { ChapterSections, QueueItem } from '../types';
+import type { ChapterSections, QueueItem, ReviewGrade } from '../types';
 import { buildScrambleRounds, buildSwapVerses, DrillVerse } from './drills';
 import { FORMATS, FormatId } from './formatNames';
-import { reviewPassAccuracy } from './recitation';
+import { DEFAULT_CLEAN_PCT, GradeSettings, gradeRecall, gradeSelfCheck, gradeSwap, SelfCheckAnswer } from './grading';
 import { MIN_SECTION_DRILL_SECTIONS } from './sectionDrills';
 import { chapterStretches, normalizeDraft, Section, sectionsFromStarts } from './sections';
 
@@ -25,10 +25,11 @@ import { chapterStretches, normalizeDraft, Section, sectionsFromStarts } from '.
 // Open-question defaults used here (the plan's "Open questions"):
 //   1. A chapter with 3+ sections opens with one Practice round (Put in order
 //      or Which section), followed straight away by a counting round.
-//   2. Chapters follow Today's order: daily, then weekly, then monthly.
-//   3. A counting round below 90% is a miss, exactly like Recall. (Pick up the
-//      thread on its own never penalizes a miss; Keep going in the mix does,
-//      until the user says otherwise.)
+//   2. Chapters follow Today's order: lowest ladder step first.
+//   3. Every counting round grades each verse clean, stumble or blank
+//      (REVIEW_LADDER_PLAN.md §4, grading.ts). Whether a passage moves up is
+//      the engine's call, once every verse in it has a grade for the day, so
+//      a session stopped halfway needs no special case here.
 //
 // Every random choice takes `rng` so the checks are repeatable. Tested by
 // mix.check.ts (`npm run check:mix`).
@@ -179,18 +180,16 @@ const toVerse = (item: QueueItem): DrillVerse & { id: string } => ({
 const chapterKeyOf = (item: Pick<QueueItem, 'translationId' | 'book' | 'chapter'>): string =>
   `${item.translationId || ''}|${item.book}|${item.chapter}`;
 
-const PHASE_ORDER: QueueItem['retentionPhase'][] = ['daily', 'weekly', 'monthly'];
+/** Where a verse not moved onto the ladder yet would sit: Every day, Every week, Every 4 weeks. */
+const PHASE_STEP: Partial<Record<QueueItem['retentionPhase'], number>> = { daily: 0, weekly: 3, monthly: 5 };
 
 /**
- * Due items in Today's order: daily, then weekly, then monthly, each in queue
- * order (Home lists them that way and "Review all due" runs them that way).
- * Anything in another phase goes last rather than being dropped.
+ * Due items in Today's order: lowest ladder step first (Every day before
+ * Every week), each step in queue order. A verse with no step yet ranks by
+ * its old phase; anything else goes last rather than being dropped.
  */
 export const todayOrder = (due: QueueItem[]): QueueItem[] => {
-  const rank = (i: QueueItem) => {
-    const r = PHASE_ORDER.indexOf(i.retentionPhase);
-    return r < 0 ? PHASE_ORDER.length : r;
-  };
+  const rank = (i: QueueItem) => i.ladderStep ?? PHASE_STEP[i.retentionPhase] ?? Number.MAX_SAFE_INTEGER;
   return due.map((item, pos) => ({ item, pos })).sort((a, b) => rank(a.item) - rank(b.item) || a.pos - b.pos).map((x) => x.item);
 };
 
@@ -401,63 +400,87 @@ export type MixAnswerMode = 'speak' | 'type' | 'self';
 /** What a round reports for one verse. */
 export interface MixVerseResult {
   mode: MixAnswerMode;
-  /** Graded share of words right, 0..1. Self-checked results leave it out. */
+  /** Graded share of words right, 0..1 (First words: its hidden words only). */
   accuracy?: number;
-  /** Self-checked: the user's own Got it / Not really. Ignored when accuracy is given. */
-  gotIt?: boolean;
+  /** Self-checked: Got it, Stumbled or Blanked. Ignored when accuracy is given. */
+  answer?: SelfCheckAnswer;
+  /** Find the wrong word: the round's misses and verse count. Its rate grades every verse in it. */
+  swap?: { misses: number; verses: number };
   /** No missed words (summarizeOutcomes().isPerfect). */
   perfect?: boolean;
+  /** The round's spot check was missed: this review can't move the passage up. */
+  spotMissed?: boolean;
 }
 
 export interface MixCredit {
   verseId: string;
-  /** pass/miss as handleReviewCompleted's `success`. */
-  outcome: 'pass' | 'miss';
+  grade: ReviewGrade;
+  /** The grade is the user's own (the every-other rule applies). */
+  selfCheck: boolean;
+  /** false after a missed spot check. */
+  canMoveUp: boolean;
   mode: MixAnswerMode;
-  /** opts.perfect. Never true for a self-check or a miss. */
+  /** opts.perfect. Never true for a self-check or a grade under clean. */
   perfect: boolean;
   format: FormatId;
   roundIndex: number;
   unitIndex: number;
 }
 
-/**
- * What one verse's result is worth (open question 3's default): graded at
- * 90% or more is a pass, under it a miss, exactly like Recall. A self-check
- * passes on Got it and misses on Not really.
- */
-export const verseOutcome = (r: MixVerseResult): 'pass' | 'miss' => {
-  if (typeof r.accuracy === 'number') return r.accuracy >= reviewPassAccuracy() ? 'pass' : 'miss';
-  return r.gotIt ? 'pass' : 'miss';
+export const DEFAULT_GRADE_SETTINGS: GradeSettings = { cleanPct: DEFAULT_CLEAN_PCT, swapCanBeClean: true };
+
+/** One verse's grade (grading.ts): accuracy, then a Find the wrong word rate, then the self-check answer. */
+export const verseGrade = (r: MixVerseResult, settings: GradeSettings = DEFAULT_GRADE_SETTINGS): ReviewGrade => {
+  if (typeof r.accuracy === 'number') return gradeRecall({ accuracy: r.accuracy }, settings.cleanPct);
+  if (r.swap) return gradeSwap(r.swap.misses, r.swap.verses, settings.swapCanBeClean);
+  return gradeSelfCheck(r.answer ?? 'stumbled');
 };
+
+const GRADE_RANK: Record<ReviewGrade, number> = { clean: 0, stumble: 1, blank: 2 };
+const isWorse = (a: ReviewGrade, than: ReviewGrade) => GRADE_RANK[a] > GRADE_RANK[than];
 
 /**
  * The credits one round earns. Nothing from a Practice round. Nothing for a
  * verse the round isn't about (Keep going's context verse, a stray id). A
- * verse already credited this session keeps its first credit: neighboring
- * stretches share a verse, and handleReviewCompleted should hear about each
- * verse once.
+ * verse covered twice (neighboring stretches share one) takes its worse
+ * grade: it is credited again only when this round went worse, and the
+ * engine keeps the worse of a day's grades.
  */
 export const roundCredits = (
   round: MixRound,
   perVerse: Record<string, MixVerseResult> | undefined,
-  already: ReadonlySet<string>
+  earlier: ReadonlyMap<string, ReviewGrade>,
+  settings: GradeSettings = DEFAULT_GRADE_SETTINGS
 ): MixCredit[] => {
   if (!round.counts || !perVerse) return [];
   const out: MixCredit[] = [];
   round.verseIds.forEach((id) => {
     const r = perVerse[id];
-    if (!r || already.has(id)) return;
-    const outcome = verseOutcome(r);
+    if (!r) return;
+    const grade = verseGrade(r, settings);
+    const before = earlier.get(id);
+    if (before && !isWorse(grade, before)) return;
     out.push({
       verseId: id,
-      outcome,
+      grade,
+      selfCheck: r.mode === 'self',
+      canMoveUp: !r.spotMissed,
       mode: r.mode,
-      perfect: outcome === 'pass' && r.mode !== 'self' && r.perfect === true,
+      perfect: grade === 'clean' && r.mode !== 'self' && r.perfect === true,
       format: round.format,
       roundIndex: round.index,
       unitIndex: round.unitIndex,
     });
+  });
+  return out;
+};
+
+/** Each credited verse's grade so far: the worst, since only a worse grade is credited again. */
+export const gradesSoFar = (credits: readonly MixCredit[]): Map<string, ReviewGrade> => {
+  const out = new Map<string, ReviewGrade>();
+  credits.forEach((c) => {
+    const before = out.get(c.verseId);
+    if (!before || isWorse(c.grade, before)) out.set(c.verseId, c.grade);
   });
   return out;
 };
@@ -474,6 +497,8 @@ export interface MixLogEntry {
 
 export interface MixState {
   plan: MixPlan;
+  /** The user's clean setting and Find the wrong word switch, read once at the start. */
+  settings: GradeSettings;
   status: 'ready' | 'running' | 'finished' | 'stopped';
   /** The round on screen (rounds.length once finished). */
   pos: number;
@@ -493,8 +518,9 @@ export type MixEvent =
   /** Stop for today. What already counted stays counted. */
   | { type: 'stop' };
 
-export const startMix = (plan: MixPlan): MixState => ({
+export const startMix = (plan: MixPlan, settings: GradeSettings = DEFAULT_GRADE_SETTINGS): MixState => ({
   plan,
+  settings,
   status: 'ready',
   pos: 0,
   credits: [],
@@ -533,8 +559,8 @@ export const mixReducer = (s: MixState, event: MixEvent): MixState => {
 
   if (event.type === 'skip') return advance(s, { roundIndex: round.index, format: round.format, skipped: true }, []);
   if (event.type === 'result') {
-    const already = new Set(s.credits.map((c) => c.verseId));
-    return advance(s, { roundIndex: round.index, format: round.format, skipped: false }, roundCredits(round, event.perVerse, already));
+    const earned = roundCredits(round, event.perVerse, gradesSoFar(s.credits), s.settings);
+    return advance(s, { roundIndex: round.index, format: round.format, skipped: false }, earned);
   }
   return s;
 };
@@ -546,11 +572,16 @@ export const mixReducer = (s: MixState, event: MixEvent): MixState => {
 export interface MixSummary {
   /** Due verses in the session. */
   verses: number;
-  passed: string[];
+  /** Each covered verse's grade for the day (the worst, when covered twice). */
+  grades: Map<string, ReviewGrade>;
+  clean: string[];
+  stumbled: string[];
+  blanked: string[];
+  /** Stumbled or blanked. */
   missed: string[];
   /** Due verses no counting round covered (skipped or not reached). Not reviewed today. */
   notCovered: string[];
-  /** Units with at least one miss: the recap's "Where you slipped". */
+  /** Units with at least one verse under clean: the recap's "Where you slipped". */
   slippedUnits: number[];
   /** Formats that ran (not skipped), in first-use order. */
   formatsUsed: FormatId[];
@@ -558,18 +589,22 @@ export interface MixSummary {
 
 export const mixSummary = (s: MixState): MixSummary => {
   const all = Array.from(new Set(s.plan.units.flatMap((u) => u.verseIds)));
-  const credited = new Map(s.credits.map((c) => [c.verseId, c]));
-  const missed = s.credits.filter((c) => c.outcome === 'miss');
+  const grades = gradesSoFar(s.credits);
+  const covered = Array.from(grades.keys());
+  const withGrade = (g: ReviewGrade) => covered.filter((id) => grades.get(id) === g);
   const formatsUsed: FormatId[] = [];
   s.log.forEach((e) => {
     if (!e.skipped && !formatsUsed.includes(e.format)) formatsUsed.push(e.format);
   });
   return {
     verses: all.length,
-    passed: s.credits.filter((c) => c.outcome === 'pass').map((c) => c.verseId),
-    missed: missed.map((c) => c.verseId),
-    notCovered: all.filter((id) => !credited.has(id)),
-    slippedUnits: Array.from(new Set(missed.map((c) => c.unitIndex))),
+    grades,
+    clean: withGrade('clean'),
+    stumbled: withGrade('stumble'),
+    blanked: withGrade('blank'),
+    missed: covered.filter((id) => grades.get(id) !== 'clean'),
+    notCovered: all.filter((id) => !grades.has(id)),
+    slippedUnits: Array.from(new Set(s.credits.filter((c) => c.grade !== 'clean').map((c) => c.unitIndex))),
     formatsUsed,
   };
 };

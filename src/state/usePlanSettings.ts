@@ -4,6 +4,7 @@ import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { DEFAULT_PLANS, DEFAULT_RHYTHM } from '../data';
 import { MemoryPlan, Rhythm } from '../types';
 import { isPauseInEffect } from '../lib/reviewCalendar';
+import { DEFAULT_LADDER_PREFS, type LadderPrefs } from '../lib/ladderEngine';
 import type { ScreenName } from './useAppState';
 
 // ============================================================================
@@ -61,6 +62,17 @@ export function usePlanSettings({ navigateTo, triggerToast }: UsePlanSettingsDep
   // Paused right now? While it is, nothing reads as due anywhere -- Home,
   // the time estimate, the calendar and Listen all go through this.
   const reviewsPaused = isPauseInEffect(pausedAt, pausedUntil);
+
+  // Review ladder settings (REVIEW_LADDER_PLAN.md decision 5): user-level,
+  // like Rhythm, at the root of memoryPlans/{uid}, and committed live.
+  // `ladderVersion` is 2 once this account's queue has been moved onto the
+  // ladder (see the load path in useAppState).
+  const [thoroughness, setThoroughness] = useState<LadderPrefs['thoroughness']>(DEFAULT_LADDER_PREFS.thoroughness);
+  const [cleanPct, setCleanPct] = useState<number>(DEFAULT_LADDER_PREFS.cleanPct);
+  const [lateMovesBack, setLateMovesBack] = useState<boolean>(DEFAULT_LADDER_PREFS.lateMovesBack);
+  const [swapCanBeClean, setSwapCanBeClean] = useState<boolean>(DEFAULT_LADDER_PREFS.swapCanBeClean);
+  const [ladderVersion, setLadderVersion] = useState<number | null>(null);
+  const ladderPrefs: LadderPrefs = { thoroughness, cleanPct, lateMovesBack, swapCanBeClean };
 
   // The name of the Review Settings currently open in the editor. Naming is
   // what forks a built-in preset into your own copy -- see handleSavePlan.
@@ -162,6 +174,33 @@ export function usePlanSettings({ navigateTo, triggerToast }: UsePlanSettingsDep
     if (patch.pausedAt !== undefined) setPausedAt(patch.pausedAt);
     if (patch.pausedUntil !== undefined) setPausedUntil(patch.pausedUntil);
     void persistRhythm(patch);
+  };
+
+  // Every ladder setting control calls this; same live-commit shape as
+  // updateRhythm.
+  const updateLadderSettings = async (patch: Partial<LadderPrefs>) => {
+    if (patch.thoroughness !== undefined) setThoroughness(patch.thoroughness);
+    if (patch.cleanPct !== undefined) setCleanPct(patch.cleanPct);
+    if (patch.lateMovesBack !== undefined) setLateMovesBack(patch.lateMovesBack);
+    if (patch.swapCanBeClean !== undefined) setSwapCanBeClean(patch.swapCanBeClean);
+    if (!auth.currentUser) return;
+    try {
+      await setDoc(
+        doc(db, 'memoryPlans', auth.currentUser.uid),
+        { ...ladderPrefs, ...patch, updatedAt: new Date() },
+        { merge: true }
+      );
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `memoryPlans/${auth.currentUser.uid}`);
+    }
+  };
+
+  // Loads the saved ladder settings into state (useAppState's load path).
+  const applyLadderPrefs = (prefs: LadderPrefs) => {
+    setThoroughness(prefs.thoroughness);
+    setCleanPct(prefs.cleanPct);
+    setLateMovesBack(prefs.lateMovesBack);
+    setSwapCanBeClean(prefs.swapCanBeClean);
   };
 
   // ==========================================
@@ -472,6 +511,15 @@ export function usePlanSettings({ navigateTo, triggerToast }: UsePlanSettingsDep
     pausedUntil,
     setPausedUntil,
     reviewsPaused,
+    thoroughness,
+    cleanPct,
+    lateMovesBack,
+    swapCanBeClean,
+    ladderPrefs,
+    ladderVersion,
+    setLadderVersion,
+    updateLadderSettings,
+    applyLadderPrefs,
     customPlanName,
     setCustomPlanName,
     savedPlans,

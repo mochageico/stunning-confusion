@@ -91,6 +91,9 @@ const g2 = gradeOutlineVerse(rows[1], outcomes(20, 2), 'speak');
 check('90% passes, not perfect', g2.passed && !g2.perfect, g2);
 const g3 = gradeOutlineVerse(rows[2], outcomes(20, 3), 'speak');
 check('85% does not pass', !g3.passed, g3);
+check('hidden accuracy leaves out the shown words', gradeOutlineVerse(rows[1], outcomes(20, 2), 'speak').hiddenAccuracy === 1, gradeOutlineVerse(rows[1], outcomes(20, 2), 'speak'));
+check('...and counts a miss among the hidden ones', gradeOutlineVerse(rows[1], (['perfect', 'perfect', 'perfect', 'missed'] as WordOutcome[]), 'speak').hiddenAccuracy === 0);
+check('nothing hidden: the whole verse', gradeOutlineVerse(rows[1], outcomes(3, 1), 'speak').hiddenAccuracy === gradeOutlineVerse(rows[1], outcomes(3, 1), 'speak').accuracy);
 check('the result remembers how many words showed', g1.shownCount === 3 && g1.mode === 'type' && g2.mode === 'speak');
 
 console.log('A run, last to first');

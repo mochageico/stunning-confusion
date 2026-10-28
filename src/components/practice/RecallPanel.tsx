@@ -17,6 +17,7 @@ import SectionOrderDrill from '../drills/SectionOrderDrill';
 import WhichSectionDrill from '../drills/WhichSectionDrill';
 import TeachItDrill from '../drills/TeachItDrill';
 import type { OutlineVerseResult } from '../../lib/outline';
+import { GradeInput, wordAccuracy } from '../../lib/grading';
 import { DrillSetting, DrillSettings, HIDE_LEVELS } from './shared';
 import type { PracticeModalsProps } from '../PracticeModals';
 import type { TextScript, VerseState } from '../../types';
@@ -80,6 +81,7 @@ export default function RecallPanel({
     flashError,
     isFinishedRecite,
     finalOutcomes,
+    hintedVerses,
     isListeningSpeak,
     localToast,
     speechAvailable,
@@ -126,7 +128,23 @@ export default function RecallPanel({
       status: 'memorized',
       translationId: r.verse.translationId,
     };
-    onUpdateStatus([verse], 'memorized', r.mode, { perfect: false, quiet: true, via: 'outline' });
+    onUpdateStatus([verse], 'memorized', r.mode, {
+      perfect: false,
+      quiet: true,
+      via: 'outline',
+      // Graded on the words it hid, not the first words it showed.
+      graded: { kind: 'recall', accuracy: r.hiddenAccuracy },
+    });
+  };
+
+  // Each verse of a finished Recall is graded on its own words (a verse past
+  // Learning gets clean, stumble or blank); a revealed hint makes it a
+  // stumble at best. Learning verses still go by the run as a whole.
+  const gradeFor = (v: VerseState): GradeInput | undefined => {
+    const i = verses.findIndex((x) => x.book === v.book && x.chapter === v.chapter && x.verse === v.verse);
+    if (i < 0 || !finalOutcomes) return undefined;
+    const own = finalOutcomes.filter((_o, w) => reciteWordObjects[w]?.verseIdx === i);
+    return { kind: 'recall', accuracy: wordAccuracy(own), hinted: hintedVerses.has(i) };
   };
 
   return (
@@ -579,7 +597,7 @@ export default function RecallPanel({
                         variant="primary"
                         Icon={Check}
                         label="Log perfect recall"
-                        onPress={() => { onUpdateStatus(verses, 'memorized', drill, { perfect: true }); handleGroupComplete(); }}
+                        onPress={() => { onUpdateStatus(verses, 'memorized', drill, { perfect: true, gradeFor }); handleGroupComplete(); }}
                       />
                       <AppText variant="caption" className="text-center text-ink-3 font-sans px-4">
                         Counts as a review, and as one of the perfect recalls a new verse needs.
@@ -592,7 +610,7 @@ export default function RecallPanel({
                         variant="primary"
                         Icon={Check}
                         label="Count as a review"
-                        onPress={() => { onUpdateStatus(verses, 'memorized', drill, { perfect: false }); handleGroupComplete(); }}
+                        onPress={() => { onUpdateStatus(verses, 'memorized', drill, { perfect: false, gradeFor }); handleGroupComplete(); }}
                       />
                       <AppText variant="caption" className="text-center text-ink-3 font-sans px-4">
                         {assisted
@@ -606,7 +624,7 @@ export default function RecallPanel({
                         size="lg"
                         variant="primary"
                         label="Log as needs practice"
-                        onPress={() => { onUpdateStatus(verses, 'learning', drill); handleGroupComplete(); }}
+                        onPress={() => { onUpdateStatus(verses, 'learning', drill, { gradeFor }); handleGroupComplete(); }}
                       />
                       <AppText variant="caption" className="text-center text-ink-3 font-sans px-4">
                         A review needs {passPct}% of the words right.
@@ -623,7 +641,7 @@ export default function RecallPanel({
                       variant="secondary"
                       label={allNotDue ? `Pick up the thread to v${threadTarget.verse}` : `Count it and pick up the thread to v${threadTarget.verse}`}
                       onPress={() => {
-                        if (!allNotDue) onUpdateStatus(verses, 'memorized', drill, { perfect: isMasteryEligible });
+                        if (!allNotDue) onUpdateStatus(verses, 'memorized', drill, { perfect: isMasteryEligible, gradeFor });
                         onPickUpThread?.(threadTarget);
                       }}
                     />

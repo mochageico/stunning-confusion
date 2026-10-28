@@ -23,9 +23,10 @@ activeModal: "listen" | "learn" | null
 activeQuiz: { threadId: string; messageId: string; fromName: string; attachment: QuizAttachment; } | null
 activeRecordingRequest: ActiveRecordingRequest | null
 activityEvents: ActivityEvent[]
-activityLast15Days: { day: string; count: number; }[]
-activityLast90Days: { day: string; count: number; }[]
+activityLast15Days: { day: string; weekday: number; month: number; practice: number; reviews: number; count: number; }[]
+activityLast90Days: { day: string; weekday: number; month: number; practice: number; reviews: number; count: number; }[]
 addChapterPhoto: (book: string, chapter: number, source: PhotoSource) => Promise<boolean>
+addVerseLink: (a: StarRef, b: StarRef, extra?: { label?: string | undefined; curated?: string | undefined; solo?: boolean | undefined; }) => Promise<VerseLink>
 addVerseRangeToQueue: (book: string, chapter: number, startVerse: number, endVerse: number, translationId?: string) => Promise<{ added: number; alreadyThere: number; missingText: number; error?: string | undefined; }>
 addVersesToGroupPlan: (circleId: string, planId: string, book: string, chapter: number, startVerse: number, endVerse: number) => Promise<void>
 addVersesToQueue: (versesToAdd: VerseState[], translationId: string) => void
@@ -48,6 +49,7 @@ chapterViewMode: "list" | "grid" | "memoryGrid"
 circleFriends: CircleMember[]
 circleStats: { [x: string]: CircleStatsState; }
 circleTakeaways: { [x: string]: CircleTakeawayList; }
+cleanPct: number
 clearAudioDownloads: () => Promise<void>
 clearGroupChallengeMembershipsForCircle: (circleId: string) => void
 clearGroupPlanMembershipsForCircle: (circleId: string) => void
@@ -67,7 +69,7 @@ createGroupDesc: string
 createGroupName: string
 createGroupPlan: (circleId: string, input: { name: string; description: string; }) => Promise<void>
 createGroupPrivacy: "private" | "public"
-creditGuided: (items: QueueItem[], kind: "touch" | "review", drill: "speak" | "type") => Promise<QueueItem[]>
+creditGuided: (items: QueueItem[], kind: "touch" | "review", drill: "speak" | "type", accuracy?: ReadonlyMap<string, number> | undefined) => Promise<QueueItem[]>
 currentScreen: "home" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "planDesigner" | "activePlan" | "addVerses" | "mySchedule" | "verseSources" | "savedPlans" | "memoryCalendar" | "verseRoad" | "versePage" | "referenceDrill" | "threadDrill" | "guided" | "mixedReview" | "takeaways" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
 currentTab: "home" | "verses" | "community" | "record" | "profile"
 customPlanName: string
@@ -86,6 +88,7 @@ deleteListenPlaylist: (id: string) => void
 deleteRecording: (recording: Recording) => Promise<void>
 deleteTakeaway: (id: string) => Promise<void>
 deleteTakeawayReply: (circleId: string, docId: string, replyId: string) => Promise<void>
+deleteVerseLink: (id: string) => Promise<void>
 disbandCircle: (circleId: string) => Promise<void>
 dismissAccountabilityNudge: (nudgeId: string) => Promise<void>
 dismissNotificationAsk: () => void
@@ -156,6 +159,7 @@ joinedGroupPlanDetails: GroupPlan[]
 joinedGroupPlanMemberships: GroupPlanMembership[]
 lastRecordingDuration: number
 lastShareChoice: string[]
+lateMovesBack: boolean
 learningCount: number
 learningDays: string[]
 leaveCircle: (circleId: string) => Promise<void>
@@ -190,6 +194,7 @@ loadingFeedRecordings: boolean
 loadingFriends: boolean
 loadingMyCircles: boolean
 loadingPublicCircles: boolean
+mapLayout: MapLayout | null
 markAccountabilityNudgeRead: (nudgeId: string) => Promise<void>
 masteryTouches: number
 maxReviewCap: number
@@ -251,6 +256,7 @@ primingLookahead: number
 promoteToLearning: (verseIds: string[]) => void
 publicCircles: Circle[]
 pullVerseIntoLearning: (verseId: string) => boolean
+queueReady: boolean
 reactionsByMessageId: { [x: string]: MessageReaction[]; }
 readMarkerFor: (scope: ChatScope, containerId: string) => string | undefined
 receivedAccountabilityNudges: AccountabilityNudge[]
@@ -264,6 +270,7 @@ recordingSelectedVerses: { verse: number; text: string; }[]
 recordingTranslation: string
 refresherDailyDays: number
 refresherWeeklyWeeks: number
+relabelVerseLink: (id: string, label: string) => Promise<void>
 removeCircleMember: (circleId: string, memberUid: string) => Promise<void>
 removeFriend: (friend: Friend) => Promise<void>
 removeQueueItems: (verseIds: string[]) => void
@@ -274,7 +281,7 @@ reportContent: (input: { kind: ReportKind; targetUid?: string | undefined; targe
 requestNotificationPermission: () => Promise<boolean>
 requireCommunityGuidelines: () => void
 resetImportTaps: () => void
-resolveMissedReviewChoice: (choice: "grace" | "escalate" | "reset", overrides?: Record<string, "grace" | "escalate" | "reset"> | undefined) => void
+resolveMissedReviewChoice: (_choice: "grace" | "escalate" | "reset", _overrides?: Record<string, "grace" | "escalate" | "reset"> | undefined) => void
 respondToCard: (scope: ChatScope, containerId: string, messageId: string, status: "willDo" | "notNow" | "done", extra?: { sharedRecordingId?: string | undefined; score?: number | undefined; }) => Promise<void>
 responsesByMessageId: { [x: string]: ChatResponse[]; }
 resumeReviews: () => void
@@ -289,6 +296,7 @@ saveChapterOffline: (recordings: Recording[]) => Promise<void>
 saveChapterSections: (book: string, chapter: number, draft: SectionDraft) => Promise<void>
 saveChatRecording: (sharedRecordingId: string) => Promise<void>
 saveListenPlaylist: (playlist: ListenPlaylist) => void
+saveMapLayout: (layout: MapLayout) => void
 saveOutlineExtra: (book: string, chapter: number, extra: OutlineExtra) => Promise<void>
 saveRecordedAudio: () => Promise<void>
 saveRecordingDialog: boolean
@@ -403,11 +411,10 @@ setShowAudioSelector: (value: SetStateAction<boolean>) => void
 setShowCreatePlanForm: (value: SetStateAction<boolean>) => void
 setShowMissedReviewPrompt: (value: SetStateAction<boolean>) => void
 setShowOnboarding: (value: SetStateAction<boolean>) => void
-setShowTour: (value: SetStateAction<boolean>) => void
+setShowTour: (value: SetStateAction<boolean | "questions">) => void
 setStudioAbOverride: (value: SetStateAction<boolean | null>) => void
 setStudioPlaybackEnabled: (enabled: boolean) => void
 setThreadDrillPreset: (value: SetStateAction<ThreadDrillPreset | null>) => void
-setToastMessage: (value: SetStateAction<string | null>) => void
 setTypedRecordingName: (value: SetStateAction<string>) => void
 setUser: (value: any) => void
 setUserRecordings: (value: SetStateAction<Recording[]>) => void
@@ -421,17 +428,18 @@ showAudioSelector: boolean
 showCreatePlanForm: boolean
 showMissedReviewPrompt: boolean
 showOnboarding: boolean
-showTour: boolean
+showTour: boolean | "questions"
 signOut: () => Promise<void>
 startPractice: (mode: "listen" | "learn", passageVerses: VerseState[], opts?: { listenSource?: ListenSource | undefined; learnTab?: LearnMode | undefined; } | undefined) => void
 startRecordingForRequest: (scope: "circle" | "dm", containerId: string, message: ChatMessage) => void
 startReviewSession: (groups: QueueItem[][]) => void
 studioAbOverride: boolean | null
 studioPlaybackEnabled: boolean
+swapCanBeClean: boolean
 takeawayReplies: { [x: string]: TakeawayReply[]; }
 takeaways: { [x: string]: Takeaway; }
+thoroughness: 2 | 1 | 0.5 | 1.5
 threadDrillPreset: ThreadDrillPreset | null
-toastMessage: string | null
 toggleImportPlayback: () => void
 toggleReaction: (scope: "circle" | "dm", containerId: string, messageId: string, emoji: string) => Promise<void>
 toggleSelectAll: () => void
@@ -453,6 +461,7 @@ updateCircleSettings: (circleId: string, fields: Partial<Pick<Circle, "name" | "
 updateDefaultRecordingVisibility: (vis: "circle" | "private" | "public") => Promise<void>
 updateDisplayName: (name: string) => Promise<void>
 updateGroupPlan: (circleId: string, planId: string, fields: Partial<Pick<GroupPlan, "name" | "description" | "versesPerWeek">>) => Promise<void>
+updateLadderSettings: (patch: Partial<LadderPrefs>) => Promise<void>
 updateMemoryQueue: (updater: (prev: QueueItem[]) => QueueItem[]) => void
 updateMemoryQueueVisibility: (vis: "private" | "friends") => Promise<void>
 updateNotificationPrefs: (patch: Partial<NotificationPrefs>) => Promise<void>
@@ -464,6 +473,7 @@ userSearchQuery: string
 userSearchResults: { uid: string; displayName: string; avatarUrl: string; }[]
 validateTouch: (item: QueueItem, _type: "speak" | "type" | "reveal") => boolean
 verseDoodles: { [x: string]: string[]; }
+verseLinks: { [x: string]: VerseLink; }
 versePageRef: VersePageRef | null
 verseTapTimestamps: { [x: number]: number; }
 verses: VerseState[]
@@ -472,3 +482,4 @@ viewingGroupDetail: boolean
 viewingGroupPlan: GroupPlan | null
 watchTakeawayReplies: (circleId: string, docId: string) => () => void
 weeklyPhaseMonths: number
+welcomeBackDays: SpreadDay[]

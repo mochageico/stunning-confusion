@@ -3,6 +3,9 @@
 import {
   canSelfCheckMoveUp,
   gradeRecall,
+  isSelfCheckInput,
+  resolveGrade,
+  wordAccuracy,
   gradeSelfCheck,
   gradeSwap,
   pickSpotCheck,
@@ -94,6 +97,18 @@ check(
   passageOutcome(['clean', 'blank'], { canMoveUp: spotCheckCanMoveUp(false) }) === 'down'
 );
 check('passed spot check can move up', passageOutcome(['clean', 'clean'], { canMoveUp: spotCheckCanMoveUp(true) }) === 'up');
+
+// ---- resolveGrade: what a screen reports, graded with the user's settings ----
+const S = { cleanPct: 90, swapCanBeClean: true };
+check('resolve: recall at 92% is clean at 90', resolveGrade({ kind: 'recall', accuracy: 0.92 }, S) === 'clean');
+check('resolve: recall at 92% is a stumble at 95', resolveGrade({ kind: 'recall', accuracy: 0.92 }, { ...S, cleanPct: 95 }) === 'stumble');
+check('resolve: swap rate over the drill', resolveGrade({ kind: 'swap', misses: 1, verses: 4 }, S) === 'clean');
+check('resolve: swap with clean off is a stumble', resolveGrade({ kind: 'swap', misses: 0, verses: 4 }, { ...S, swapCanBeClean: false }) === 'stumble');
+check('resolve: self-check answers', resolveGrade({ kind: 'self', answer: 'stumbled' }, S) === 'stumble');
+check('resolve: a decided grade passes through', resolveGrade({ kind: 'grade', grade: 'blank' }, S) === 'blank');
+check('self-check input: self and a self-checked grade', isSelfCheckInput({ kind: 'self', answer: 'gotIt' }) && isSelfCheckInput({ kind: 'grade', grade: 'clean', selfCheck: true }));
+check('self-check input: recall is not', !isSelfCheckInput({ kind: 'recall', accuracy: 1 }) && !isSelfCheckInput({ kind: 'grade', grade: 'clean' }));
+check('word accuracy: close counts, empty is 0', wordAccuracy(['perfect', 'close', 'missed', 'perfect']) === 0.75 && wordAccuracy([]) === 0);
 
 if (failures > 0) {
   console.log(`\n${failures} check(s) failed.`);

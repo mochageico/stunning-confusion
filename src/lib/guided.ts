@@ -572,6 +572,8 @@ export interface GuidedOutcome {
   passed: boolean;
   /** summarizeOutcomes().isPerfect: no missed words (near-misses allowed). */
   perfect: boolean;
+  /** Share of words right, 0..1: what a review is graded on (clean, stumble or blank). */
+  accuracy?: number;
   mode: GuidedAnswerMode;
   /** Threads only: the cue landed past half of this (the start) verse. */
   startsPastHalf?: boolean;

@@ -10,6 +10,7 @@ import { Dropdown } from '../components/Dropdown';
 import { AppButton, AppIconButton, AppText, Switch, useScaledSpace } from '../components/design';
 import { EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import ThreadRound, { ThreadAnswerMode, ThreadRoundResult, ThreadVerse } from '../components/ThreadRound';
+import { GradeInput, wordAccuracy } from '../lib/grading';
 import {
   buildThreadPassages,
   MIN_THREAD_VERSES,
@@ -372,12 +373,27 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
     }
 
     // Logged after the screen moves on, so a slow write never holds up the next cue.
+    // A review carries each verse's grade: its words graded against the
+    // clean setting, or the user's own Got it; a missed spot check means it
+    // can't move the passage up.
     const drill = result.mode === 'self' ? 'reveal' : result.mode;
+    const gradeFor = (vs: VerseState): GradeInput | undefined => {
+      const k = verses.findIndex((v) => v.verse === vs.verse && v.chapter === vs.chapter);
+      const pv = result.perVerse.find((x) => x.index === k);
+      if (!pv) return undefined;
+      return pv.outcomes ? { kind: 'recall', accuracy: wordAccuracy(pv.outcomes) } : { kind: 'self', answer: pv.answer ?? (pv.ok ? 'gotIt' : 'stumbled') };
+    };
     if (touches.length > 0) {
       await handleUpdateVerseStatus(touches.map(toVerseState), 'memorized', drill, { perfect: true, quiet: true, via: 'thread' });
     }
     if (reviews.length > 0) {
-      await handleUpdateVerseStatus(reviews.map(toVerseState), 'memorized', drill, { perfect: false, quiet: true, via: 'thread' });
+      await handleUpdateVerseStatus(reviews.map(toVerseState), 'memorized', drill, {
+        perfect: false,
+        quiet: true,
+        via: 'thread',
+        gradeFor,
+        ...(result.spotPassed === false ? { canMoveUp: false } : {}),
+      });
     }
   };
 
@@ -660,6 +676,8 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
             creditPreview={(index, passed, perfect, mode) => decide(stretch, cue, index, passed, perfect, mode).label}
             onFinish={finishRound}
             onDifferentCue={differentCue}
+            // A spot check only where a review could count.
+            spotCheck={!reviewsPaused && stretch.some((v) => v.item.status === 'reviewing' && isReviewDue(v.item.nextReviewDueDate))}
           />
         ) : (
           <EmptyState Icon={Route} title="No cue to give" message="These verses don't have two words in a row that appear only once." />

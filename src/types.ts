@@ -158,6 +158,11 @@ export interface ReviewLog {
   via?: 'thread' | 'guided' | 'outline' | 'mix' | 'map'; // pass: earned in Pick up the thread, Guided learning, First words, Mixed review or Walk the constellation rather than Recall or a manual log
   cycles?: number;             // skipped: how many review dates passed
   forgiven?: true;             // skipped: resolved with no penalty
+  // Review ladder (REVIEW_LADDER_PLAN.md decision 6). `stage` above keeps the
+  // mapped legacy value; these say what really happened.
+  step?: number;               // the ladder step the review happened at
+  grade?: ReviewGrade;         // this verse's grade in the passage's review
+  outcome?: 'up' | 'held' | 'forgiven' | 'back' | 'down' | 'late' | 'joined' | 'wonBack'; // what the review did to the passage
 }
 
 // A circle-scoped, manager-curated shared memorization plan. Members join it
