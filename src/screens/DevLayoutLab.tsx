@@ -3,10 +3,9 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { AppText, CollapsibleCard, FontScaleOverrideProvider } from '../components/design';
 import { Dropdown } from '../components/Dropdown';
-import { MissPolicySection, type MissPolicy } from '../components/MissPolicySection';
+import { ReviewSettings } from '../components/ReviewSettings';
 import { RhythmEditor } from '../components/RhythmEditor';
 import { QueueSources } from '../components/QueueSources';
-import PlanDesignerScreen from './PlanDesignerScreen';
 import HomeScreen from './HomeScreen';
 import type { AppState } from '../state/useAppState';
 import type { Rhythm, GroupPlan, GroupPlanMembership } from '../types';
@@ -53,12 +52,9 @@ export default function DevLayoutLab() {
               <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFF' }}>{scale.toFixed(1)}× font scale</Text>
             </View>
             <ScrollView contentContainerStyle={{ padding: SCREEN_PADDING, gap: 20, paddingBottom: 60 }}>
-              <SpecimenLabel text="BEFORE — 4-across, height: 92" />
-              <BeforeMissPolicy scale={scale} />
-
-              <SpecimenLabel text="AFTER — stacked OptionCards" />
+              <SpecimenLabel text="Review Settings — Retention Level open" />
               <FontScaleOverrideProvider scale={scale}>
-                <LiveMissPolicy />
+                <LiveReviewSettings />
               </FontScaleOverrideProvider>
 
               <SpecimenLabel text="CollapsibleCard — open as many as you like" />
@@ -84,11 +80,6 @@ export default function DevLayoutLab() {
               <SpecimenLabel text="Queue sources — group plan priority" />
               <FontScaleOverrideProvider scale={scale}>
                 <LiveQueueSources />
-              </FontScaleOverrideProvider>
-
-              <SpecimenLabel text="Plan Designer — whole screen" />
-              <FontScaleOverrideProvider scale={scale}>
-                <LivePlanDesigner />
               </FontScaleOverrideProvider>
             </ScrollView>
           </View>
@@ -197,88 +188,6 @@ function SpecimenLabel({ text }: { text: string }) {
   );
 }
 
-/** The new component, driven by local state so the lab is fully interactive. */
-function LiveMissPolicy() {
-  const [missPolicy, setMissPolicy] = useState<MissPolicy>('standard');
-  const [askEveryTime, setAskEveryTime] = useState(true);
-  const [graceCount, setGraceCount] = useState(1);
-  const [dailyDays, setDailyDays] = useState(7);
-  const [weeklyWeeks, setWeeklyWeeks] = useState(4);
-  return (
-    <MissPolicySection
-      missPolicy={missPolicy}
-      setMissPolicy={setMissPolicy}
-      missPolicyAskEveryTime={askEveryTime}
-      setMissPolicyAskEveryTime={setAskEveryTime}
-      graceCount={graceCount}
-      setGraceCount={setGraceCount}
-      refresherDailyDays={dailyDays}
-      setRefresherDailyDays={setDailyDays}
-      refresherWeeklyWeeks={weeklyWeeks}
-      setRefresherWeeklyWeeks={setWeeklyWeeks}
-    />
-  );
-}
-
-/**
- * Enough of AppState for PlanDesignerScreen to render standalone — no signed-in
- * user, no saved plan, no Firebase. Cast at the call site rather than stubbing
- * the full (very large) AppState type: this is a harness, and TypeScript
- * checking the real screen against the real type is what matters, not this mock.
- */
-function useMockPlanState() {
-  const [s, setS] = useState({
-    learningDays: ['M', 'T', 'W', 'Th', 'F'],
-    newVersesPace: 2,
-    maxReviewCap: 10,
-    masteryTouches: 3,
-    reviewsRequired: 2,
-    sabbathEnabled: false,
-    sabbathDay: 'Su',
-    dayStartHour: 0,
-    cognitiveLoadSensitivity: 'medium',
-    retentionRigor: 'standard',
-    dailyPhaseWeeks: 7,
-    weeklyPhaseMonths: 6,
-    monthlyPhaseYears: 5,
-    missPolicy: 'standard',
-    missPolicyAskEveryTime: true,
-    graceCount: 1,
-    refresherDailyDays: 7,
-    refresherWeeklyWeeks: 4,
-    customPlanName: '',
-  });
-  const set = (key: string) => (value: unknown) => setS((prev) => ({ ...prev, [key]: value }));
-  const noop = () => {};
-  return {
-    ...s,
-    setLearningDays: set('learningDays'),
-    setNewVersesPace: set('newVersesPace'),
-    setMaxReviewCap: set('maxReviewCap'),
-    setMasteryTouches: set('masteryTouches'),
-    setReviewsRequired: set('reviewsRequired'),
-    setSabbathEnabled: set('sabbathEnabled'),
-    setSabbathDay: set('sabbathDay'),
-    setDayStartHour: set('dayStartHour'),
-    setCognitiveLoadSensitivity: set('cognitiveLoadSensitivity'),
-    setRetentionRigor: set('retentionRigor'),
-    setDailyPhaseWeeks: set('dailyPhaseWeeks'),
-    setWeeklyPhaseMonths: set('weeklyPhaseMonths'),
-    setMonthlyPhaseYears: set('monthlyPhaseYears'),
-    setMissPolicy: set('missPolicy'),
-    setMissPolicyAskEveryTime: set('missPolicyAskEveryTime'),
-    setGraceCount: set('graceCount'),
-    setRefresherDailyDays: set('refresherDailyDays'),
-    setRefresherWeeklyWeeks: set('refresherWeeklyWeeks'),
-    setCustomPlanName: set('customPlanName'),
-    isEditingBuiltInPlan: false,
-    navigateTo: noop,
-    handleBack: noop,
-    handleSavePlan: noop,
-    triggerToast: noop,
-  };
-}
-
 /**
  * Enough of AppState for HomeScreen, with a small fake queue so the Learning,
  * Due reviews and Priming sections all have content to render.
@@ -367,16 +276,6 @@ function LiveHome() {
   );
 }
 
-/** The real Plan Designer at true device width. */
-function LivePlanDesigner() {
-  const mock = useMockPlanState();
-  return (
-    <PhoneFrame>
-      <PlanDesignerScreen state={mock as unknown as AppState} />
-    </PhoneFrame>
-  );
-}
-
 /**
  * Three CollapsibleCards to prove independence: opening one must never close
  * another, and each card's choice must persist across a reload. Storage keys
@@ -404,85 +303,16 @@ function CollapseSpecimen({ scale }: { scale: number }) {
   );
 }
 
-// ============================================================
-// The original markup, frozen for comparison.
-//
-// Font sizes are multiplied by `scale` inline rather than left to
-// `allowFontScaling`, because React Native Web ignores the OS font setting
-// entirely. Multiplying by hand reproduces what iOS actually does to this
-// markup -- the fixed `height: 92` stays fixed, which is the whole point.
-// ============================================================
-const BEFORE_TIERS = [
-  { key: 'lenient', label: 'Lenient', desc: 'More free misses before anything changes, and shorter refreshers when it does.' },
-  { key: 'standard', label: 'Standard', desc: 'The default. One free miss, then a short refresher stint before the verse returns to its phase.' },
-  {
-    key: 'graceDiscretion',
-    label: 'Grace at Your Discretion',
-    desc: "Nothing ever escalates on its own — missed time simply doesn't count, and you pick up exactly where you left off.",
-  },
-];
-
-function BeforeMissPolicy({ scale }: { scale: number }) {
-  const active = 'standard';
+/** The Review Settings accordion, driven by local state. */
+function LiveReviewSettings() {
+  const [prefs, setPrefs] = useState({ thoroughness: 1 as 0.5 | 1 | 1.5 | 2, cleanPct: 90, lateMovesBack: true });
+  const [masteryTouches, setMasteryTouches] = useState(3);
   return (
-    <View className="border-2 border-[#1A1A1A] rounded-xl p-3.5 bg-white shadow-sm" style={{ gap: 16 }}>
-      <View className="flex-row items-center justify-between border-b border-neutral-100 pb-2">
-        <Text
-          className="font-sans font-extrabold uppercase tracking-widest text-[#1A1A1A]"
-          style={{ fontSize: 12 * scale }}
-        >
-          Missed Review Handling
-        </Text>
-      </View>
-
-      <View className="flex-row gap-2">
-        {BEFORE_TIERS.map((tier) => {
-          const isActive = tier.key === active;
-          return (
-            <View
-              key={tier.key}
-              className={`flex-1 border-2 rounded-xl p-2.5 justify-between shadow-sm ${
-                isActive ? 'border-[#1A1A1A] bg-[#1A1A1A]' : 'border-[#E5E5E5] bg-white'
-              }`}
-              style={{ height: 92 }}
-            >
-              <Text
-                className={`font-serif font-black leading-tight ${isActive ? 'text-white' : 'text-[#1A1A1A]'}`}
-                style={{ fontSize: 11 * scale }}
-              >
-                {tier.label}
-              </Text>
-              <Text
-                className={`font-sans leading-tight ${isActive ? 'text-neutral-200' : 'text-neutral-500'}`}
-                style={{ fontSize: 8 * scale }}
-              >
-                {tier.desc}
-              </Text>
-            </View>
-          );
-        })}
-        <View className="flex-1 rounded-xl p-2.5 justify-between border-2 border-[#E5E5E5] bg-white" style={{ height: 92 }}>
-          <Text className="font-serif font-black leading-tight text-[#1A1A1A]" style={{ fontSize: 11 * scale }}>
-            Custom
-          </Text>
-          <Text className="font-mono leading-tight text-neutral-500" style={{ fontSize: 8 * scale }}>
-            Fine-tune
-          </Text>
-        </View>
-      </View>
-
-      {/* One of the three label+badge rows that push their value off-screen. */}
-      <View className="flex-row justify-between items-center">
-        <Text className="font-sans font-bold text-[#1A1A1A]" style={{ fontSize: 12 * scale }}>
-          Weekly -&gt; Daily Refresher
-        </Text>
-        <Text
-          className="bg-[#F3F2F1] border border-neutral-300 px-2 py-0.5 rounded font-mono text-[#1A1A1A]"
-          style={{ fontSize: 12 * scale }}
-        >
-          7 days
-        </Text>
-      </View>
-    </View>
+    <ReviewSettings
+      prefs={prefs}
+      masteryTouches={masteryTouches}
+      onChange={(patch) => setPrefs((p) => ({ ...p, ...patch }))}
+      onMasteryChange={setMasteryTouches}
+    />
   );
 }

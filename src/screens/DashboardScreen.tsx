@@ -6,6 +6,9 @@ import { FadeInView } from '../components/ui';
 import { AppText, useFontScale, useScaledSpace } from '../components/design';
 import { GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 import { ActivityHeatmap } from '../components/ActivityHeatmap';
+import { StageDot } from '../components/VerseStages';
+import { LADDER_GROUPS } from '../lib/ladder';
+import { STAGE_LABEL, verseStage } from '../lib/stageProgress';
 
 // Opens from Profile (and Today's streak); the back link names which.
 const BACK_LABELS: Partial<Record<string, string>> = {
@@ -18,11 +21,6 @@ const BACK_LABELS: Partial<Record<string, string>> = {
 // new persistence needed.
 const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100, 365];
 const MEMORIZED_MILESTONES = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000];
-
-// A retained set can run to hundreds of verses; rendering every chip into a
-// horizontal ScrollView would cost more than anyone scrolls through. Show a
-// generous prefix and count the rest.
-const MAX_CHIPS_PER_ROW = 60;
 
 // A whole memorized chapter is 20-odd chips saying almost the same thing.
 // Collapse each book+chapter into one chip, with its verse numbers folded
@@ -133,13 +131,6 @@ function MilestoneGrid({
   );
 }
 
-const STAGE_DOT: Record<string, string> = {
-  learning: 'bg-stage-learning',
-  daily: 'bg-stage-daily',
-  weekly: 'bg-stage-weekly',
-  monthly: 'bg-stage-monthly',
-  completed: 'bg-stage-complete',
-};
 
 export default function DashboardScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
@@ -161,18 +152,16 @@ export default function DashboardScreen({ state }: { state: AppState }) {
   // Each retention row carries the verses themselves, not just a tally -- the
   // count answers "how many?" and the strip under it answers "which ones?"
   // without leaving the screen.
-  const retentionRows = [
-    { key: 'learning', label: 'Learning', items: memoryQueue.filter((item) => item.status === 'learning') },
-    { key: 'daily', label: 'Daily', items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'daily') },
-    { key: 'weekly', label: 'Weekly', items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'weekly') },
-    { key: 'monthly', label: 'Monthly', items: memoryQueue.filter((item) => item.status === 'reviewing' && item.retentionPhase === 'monthly') },
-    { key: 'completed', label: 'Complete', items: memoryQueue.filter((item) => item.status === 'retained') },
-  ];
+  const retentionRows = (['learning', 'settling', 'steady', 'kept', 'secure'] as const).map((key) => ({
+    key,
+    label: STAGE_LABEL[key],
+    note: key === 'learning' ? '' : LADDER_GROUPS[key].description,
+    items: memoryQueue.filter((item) => verseStage(item) === key),
+  }));
 
-  // "Verses memorized" means verses learned -- anything that's graduated out
-  // of the initial Learning phase into spaced review (any of Daily/Weekly/
-  // Monthly) or fully Completed, not just the narrower "Completed" count.
-  const versesLearnedCount = retentionRows[1].items.length + retentionRows[2].items.length + retentionRows[3].items.length + memorizedCount;
+  // "Verses memorized" means verses learned -- anything past Learning, in any
+  // of Settling, Steady, Kept or Secure.
+  const versesLearnedCount = retentionRows.slice(1).reduce((n, row) => n + row.items.length, 0);
 
   const tiles = [
     { label: 'Verses memorized', value: versesLearnedCount },
@@ -217,8 +206,6 @@ export default function DashboardScreen({ state }: { state: AppState }) {
           <View className="bg-surface border border-line rounded-card overflow-hidden">
             {retentionRows.map((row, i) => {
               const references = summarizeReferences(row.items);
-              const shown = references.slice(0, MAX_CHIPS_PER_ROW);
-              const overflow = references.length - shown.length;
               return (
                 <View
                   key={row.key}
@@ -226,7 +213,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
                   style={{ paddingVertical: space(12), gap: space(8) }}
                 >
                   <View className="flex-row items-center" style={{ paddingHorizontal: space(14), gap: space(8) }}>
-                    <View className={`w-2.5 h-2.5 rounded-full ${STAGE_DOT[row.key]}`} />
+                    <StageDot stage={row.key} />
                     <AppText variant="body" className="font-sans text-ink flex-1">
                       {row.label}
                     </AppText>
@@ -234,6 +221,11 @@ export default function DashboardScreen({ state }: { state: AppState }) {
                       {row.items.length}
                     </AppText>
                   </View>
+                  {row.note ? (
+                    <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(14) }}>
+                      {row.note}
+                    </AppText>
+                  ) : null}
                   {row.items.length === 0 ? (
                     <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(14) }}>
                       No verses here yet
@@ -244,27 +236,23 @@ export default function DashboardScreen({ state }: { state: AppState }) {
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={{ gap: space(6), paddingHorizontal: space(14), alignItems: 'center' }}
                     >
-                      {shown.map((reference) => (
-                        <View key={reference.key} className="bg-surface-2 border border-line rounded-btn" style={{ paddingHorizontal: space(8), paddingVertical: space(3) }}>
+                      {references.map((reference) => (
+                        <View
+                          key={reference.key}
+                          className={`bg-surface-2 rounded-btn ${row.key === 'secure' ? 'border-[1.5px] border-stage-top-edge' : 'border border-line'}`}
+                          style={{ paddingHorizontal: space(8), paddingVertical: space(3) }}
+                        >
                           <AppText variant="caption" className="font-sans font-medium text-ink-2">
                             {reference.label}
                           </AppText>
                         </View>
                       ))}
-                      {overflow > 0 && (
-                        <AppText variant="caption" className="font-sans font-semibold text-ink-3">
-                          +{overflow} more
-                        </AppText>
-                      )}
                     </ScrollView>
                   )}
                 </View>
               );
             })}
           </View>
-          <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-            Daily, Weekly and Monthly verses come back for review on that schedule. Complete verses have finished the road and no longer come back.
-          </AppText>
         </View>
 
         {/* Past 90 days. Profile once carried its own 15-day strip of this

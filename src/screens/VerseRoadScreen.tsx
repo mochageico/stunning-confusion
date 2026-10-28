@@ -26,6 +26,7 @@ const LINE: Record<VerseStage | 'top', string> = {
   settling: 'bg-stage-daily',
   steady: 'bg-stage-weekly',
   kept: 'bg-stage-complete',
+  secure: 'bg-stage-top',
   top: 'bg-stage-top',
 };
 
@@ -36,6 +37,7 @@ const TICK: Record<VerseStage, string> = {
   settling: 'border-stage-daily',
   steady: 'border-stage-weekly',
   kept: 'border-stage-complete',
+  secure: 'border-stage-top',
 };
 
 type Segment = VerseStage | 'top';
@@ -80,8 +82,8 @@ export default function VerseRoadScreen({ state }: { state: AppState }) {
   );
 
   const stopSize = Math.round(26 * Math.min(scale, 1.3));
-  const topGroups = byStage.kept.filter((g) => g.progress.top);
-  const keptGroups = byStage.kept.filter((g) => !g.progress.top);
+  const topGroups = byStage.secure;
+  const keptGroups = byStage.kept;
   const topCount = topGroups.reduce((n, g) => n + g.verses.length, 0);
   const Stop = ({ stage, top, above, below }: { stage: VerseStage; top?: boolean; above?: Segment; below?: Segment }) => (
     <View className="flex-row items-stretch">
@@ -104,10 +106,10 @@ export default function VerseRoadScreen({ state }: { state: AppState }) {
       </View>
       <View className="flex-1" style={{ paddingVertical: space(12), paddingLeft: space(10), gap: space(2) }}>
         <AppText variant="title" className="font-sans font-bold text-ink" accessibilityRole="header">
-          {top ? `Every 6 months · ${topCount}` : `${STAGE_LABEL[stage]} · ${counts[stage]}`}
+          {top ? `${STAGE_LABEL.secure} · ${topCount}` : `${STAGE_LABEL[stage]} · ${counts[stage]}`}
         </AppText>
         <AppText variant="caption" className="font-sans text-ink-2">
-          {top ? 'Reviewed twice a year, for good' : stageCaption(stage, plan)}
+          {top ? stageCaption('secure', plan) : stageCaption(stage, plan)}
         </AppText>
       </View>
     </View>
@@ -187,12 +189,12 @@ export default function VerseRoadScreen({ state }: { state: AppState }) {
           title="The road"
           onBack={handleBack}
           backLabel="My Verses"
-          subtitle="Every passage climbs from Learning to Every 6 months. The closer one is to its next step, the higher it sits."
+          subtitle="Every passage climbs from Learning to Secure. The closer one is to its next step, the higher it sits."
         />
 
         <View>
           {/* Summit: the top step, every 6 months, for good */}
-          <Stop stage="kept" top below="top" />
+          <Stop stage="secure" top below="top" />
           {topGroups.length > 0 && (
             <View className="flex-row items-stretch">
               <Rail line="top" />

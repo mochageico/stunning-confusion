@@ -36,7 +36,7 @@ const STEPS: { tab: Tab; place: string; text: string }[] = [
   {
     tab: 'verses',
     place: 'Verses',
-    text: "My Verses is every verse you've picked. My Schedule is which days you learn new ones. Review Settings is how often learned verses come back.",
+    text: "My Verses is every verse you've picked. Plan is which days you learn new ones and how often learned verses come back. Calendar shows what's due next.",
   },
   {
     tab: 'verses',

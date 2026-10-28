@@ -733,6 +733,27 @@ Mixed: pure projections **Cloud OK · Sonnet**; anything that writes Firestore
 - **Done when:** tsc, every `npm run check:*` passes, no import of `missPolicy` or
   `retentionPhase` logic left outside the legacy-field mapping.
 
+### As built (stage 8, with the redesign from the Stage 8 sketches)
+
+- **Secure** is its own group (the every-6-months step); **Kept** is every 4-8 weeks. `VerseStage`
+  and `LadderGroup` gained `secure`; the dashboard, My Verses, the road, the map and the drill
+  filters follow. Light-mode gold is brighter (`#E0A915`).
+- **One plan per account, "Memory Plan Designer"**, in the Verses tab as **My Verses / Plan /
+  Calendar** (`VersesTabs`, `switchVersesTab`). Plan = My Schedule + Review Settings (Retention
+  Level, perfect recalls, accuracy, late reviews; each opens its own preview). Saved plans, the plan
+  editor, the My Schedule screen, `MissPolicySection`, `missPolicy.ts`, the missed-review popup and
+  the Settings > Reviews page are gone. Settings has one "Memory Plan Designer" row. "Thoroughness"
+  is now **Retention Level**. Perfect recalls (`masteryTouches`) is user-level at the doc root
+  (`updateMasteryTouches`).
+- **Find the wrong word counts** moved to Settings > Review formats.
+- **Calendar** is the next 14 days as a list (`ladderCalendar.ts` plays the ladder forward per
+  passage); tapping a day opens the old day sheet. Today has a collapsible **Next 7 days** under
+  "Listen to all of today's verses" and a Welcome back card with an X.
+- Dashboard keeps its tiles and scrolling strips (no "+N more"), with Learning / Settling / Steady /
+  Kept / Secure rows. The chapter page's "Already know this?" now places verses on a ladder step.
+- `reviewLog` maps the top step to `retained`; `circleTotals` does not count a won-back firm-up as a
+  new review. `check:calendar` was retargeted at the ladder projection.
+
 ## Stage 9 — Real phone and release
 
 **Local · Opus**, with the user.

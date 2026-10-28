@@ -57,6 +57,7 @@ const item = (verse: number, logs: ReviewLog[], over: Partial<QueueItem> = {}, t
 
 check('a pass, a miss and grace are reviews', isReviewLog(log('x', 'pass', 'daily')) && isReviewLog(log('x', 'miss', 'weekly')) && isReviewLog(log('x', 'grace', 'monthly')));
 check('Learning practice, skipped and placed are not', !isReviewLog(log('x', 'pass', 'learning')) && !isReviewLog(log('x', 'skipped', 'daily')) && !isReviewLog(log('x', 'placed', 'weekly')));
+check('a firm-up that wins a review back is not a new review', !isReviewLog({ ...log('x', 'pass', 'daily'), outcome: 'wonBack' }));
 
 w = weekBounds(at(10, 23), 0);
 const queue: QueueItem[] = [

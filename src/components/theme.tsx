@@ -90,7 +90,7 @@ const STATUS = {
  * so it reads as a step above gold on light and dark.
  */
 const STAGES = {
-  light: { stageLearning: '#D24034', stageDaily: '#2E9A68', stageWeekly: '#3A6BD6', stageMonthly: '#6E4BB8', stageComplete: '#C99A18', stageTop: '#A9CBEA', stageTopEdge: '#6F98C4' },
+  light: { stageLearning: '#D24034', stageDaily: '#2E9A68', stageWeekly: '#3A6BD6', stageMonthly: '#6E4BB8', stageComplete: '#E0A915', stageTop: '#A9CBEA', stageTopEdge: '#6F98C4' },
   dark: { stageLearning: '#F2887D', stageDaily: '#4CC38A', stageWeekly: '#7BA1F2', stageMonthly: '#B79CF0', stageComplete: '#E8BE45', stageTop: '#E3F0FB', stageTopEdge: '#9CC0E2' },
 } as const;
 

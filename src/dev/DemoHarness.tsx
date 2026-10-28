@@ -12,17 +12,17 @@
 //   - A phone (Expo Go / dev client): set DEMO_ON_DEVICE below to true.
 // It is inert in production builds whatever the flags say (__DEV__ gate).
 //
-// Screens: home, books, chapters, chapterLanding, audioFeed, planDesigner,
-// activePlan, map (My Verses' Map view; see MAP_SPECS), addVerses, mySchedule, verseSources, savedPlans, memoryCalendar, verseRoad, versePage,
+// Screens: home, books, chapters, chapterLanding, audioFeed, memoryPlan,
+// activePlan, map (My Verses' Map view; see MAP_SPECS), addVerses, verseSources, memoryCalendar, verseRoad, versePage,
 // referenceDrill, threadDrill, guided, sections, outline, sectionOrder,
 // whichSection, teachIt, mixedReview, takeaways, takeawayAsk,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,
 // find, create, preview, groupDetail, record, profile, onboarding, tour, auth,
-// modalLearn, modalListen, modalSave, modalProgress, modalMissed.
+// modalLearn, modalListen, modalSave, modalProgress.
 // ladderRecap: not a screen of the app. It shows the Mixed review recap's ladder rows and
-// the Fix the transitions offer (src/dev/RecapGallery.tsx). settings: page=reviews opens
-// Settings on Reviews. home: welcome=1 shows the Welcome back card, firm=1 the Win back a
+// the Fix the transitions offer (src/dev/RecapGallery.tsx). settings: page=formats opens
+// Settings on Review formats; memoryPlan is the Verses tab's Plan section. home: welcome=1 shows the Welcome back card, firm=1 the Win back a
 // review item (Romans 8:2), late=1 the late note on Romans 8:1-2.
 // blocks: not a screen of the app. It shows every shared building block
 // (src/dev/BlocksGallery.tsx) in place of the app.
@@ -755,7 +755,8 @@ export function useDemoState(real: AppState): AppState {
       real.navigateTo('activePlan');
       tapWhenShown('Map', 'radio');
     }
-    else if (s === 'planDesigner') real.openActivePlanDesigner();
+    else if (s === 'memoryPlan') real.navigateTo('memoryPlan');
+    else if (s === 'memoryCalendar') real.navigateTo('memoryCalendar');
     else if (s === 'guided') real.openGuided('BSB|Psalms|23|1');
     else if (s === 'versePage') real.openVersePage({ book: 'Philippians', chapter: 4, verses: [6, 7], translationId: 'BSB' });
     // preset=1 opens Pick up the thread the way a passing Recall does: on a
@@ -952,14 +953,6 @@ export function useDemoState(real: AppState): AppState {
     overrides.playingRecordingId = recordings[0].id;
     overrides.nowPlayingRecording = recordings[0] as any;
     overrides.playingRecProgress = 40;
-  }
-  if (s === 'modalMissed') {
-    const q = buildQueue();
-    overrides.showMissedReviewPrompt = true;
-    overrides.missedReviewQueue = [
-      { item: q[4], missedCycles: 1 },
-      { item: q[6], missedCycles: 2 },
-    ] as any;
   }
   return { ...real, ...overrides } as AppState;
 }

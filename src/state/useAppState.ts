@@ -32,8 +32,6 @@ import { auth, db, storage, handleFirestoreError, OperationType } from '../fireb
 import { pendingSignUpDisplayName } from './useEmailAuth';
 import {
   BOOKS,
-  BUILT_IN_PLAN_ID,
-  DEFAULT_PLANS,
   DEFAULT_RHYTHM,
   DEFAULT_TRANSLATION_ID,
   getBookByName,
@@ -43,7 +41,6 @@ import {
 import { useChapterText } from './useScripture';
 import {
   GroupChallengeMembership,
-  MemoryPlan,
   QueueItem,
   Recording,
   Rhythm,
@@ -54,7 +51,7 @@ import {
   VerseTimestamp,
 } from '../types';
 import type { GradeInput } from '../lib/grading';
-import { getMemoryCalendarProjection } from '../lib/reviewCalendar';
+import { getMemoryCalendarProjection } from '../lib/ladderCalendar';
 import { formatDuration } from '../lib/format';
 import { useSocial } from './useSocial';
 import { useLocalPrefs } from './useLocalPrefs';
@@ -92,7 +89,6 @@ import {
   buildVerseId,
   JOINED_GROUP_PLANS_FIELD,
   mapQueueItemsToVerseStates,
-  normalizeAdoptedPlan,
   resolveChapterAudio,
   stripUndefined,
 } from '../lib/appData';
@@ -114,12 +110,10 @@ export type ScreenName =
   | 'chapters'
   | 'chapterLanding'
   | 'audioFeed'
-  | 'planDesigner'
   | 'activePlan'
   | 'addVerses'
-  | 'mySchedule'
+  | 'memoryPlan'
   | 'verseSources'
-  | 'savedPlans'
   | 'memoryCalendar'
   | 'verseRoad'
   | 'versePage'
@@ -163,14 +157,12 @@ const HOME_TAB_SCREENS: ScreenName[] = [
 // you're on (Today's Coming up next card, or My Verses), so Back returns there.
 const VERSES_TAB_SCREENS: ScreenName[] = [
   'activePlan',
-  'mySchedule',
+  'memoryPlan',
   'verseSources',
   'memoryCalendar',
   'verseRoad',
   'versePage',
   'takeaways',
-  'savedPlans',
-  'planDesigner',
 ];
 
 /**
@@ -238,7 +230,6 @@ export function useAppState() {
   const [lateNotes, setLateNotes] = useState<LateNote[]>([]);
   // Review Settings (retention plan) and Rhythm (your pace) -- see usePlanSettings.
   const plan = usePlanSettings({
-    navigateTo: (...args) => navigateTo(...args),
     triggerToast: (...args) => triggerToast(...args),
   });
   const {
@@ -250,34 +241,14 @@ export function useAppState() {
     setNewVersesPace,
     maxReviewCap,
     setMaxReviewCap,
-    retentionRigor,
-    setRetentionRigor,
-    dailyPhaseWeeks,
-    setDailyPhaseWeeks,
-    weeklyPhaseMonths,
-    setWeeklyPhaseMonths,
-    monthlyPhaseYears,
-    setMonthlyPhaseYears,
     masteryTouches,
     setMasteryTouches,
-    reviewsRequired,
-    setReviewsRequired,
     sabbathEnabled,
     setSabbathEnabled,
     sabbathDay,
     setSabbathDay,
     dayStartHour,
     setDayStartHour,
-    missPolicy,
-    setMissPolicy,
-    missPolicyAskEveryTime,
-    setMissPolicyAskEveryTime,
-    graceCount,
-    setGraceCount,
-    refresherDailyDays,
-    setRefresherDailyDays,
-    refresherWeeklyWeeks,
-    setRefresherWeeklyWeeks,
     pausedAt,
     setPausedAt,
     pausedUntil,
@@ -290,22 +261,8 @@ export function useAppState() {
     setLadderVersion,
     updateLadderSettings,
     applyLadderPrefs,
-    customPlanName,
-    setCustomPlanName,
-    savedPlans,
-    setSavedPlans,
-    editingPlanId,
-    setEditingPlanId,
-    syncDesignerFromPlan,
-    planTopLevelFields,
     updateRhythm,
-    handleActivatePlan,
-    handleDeletePlan,
-    handleEditPlan,
-    openActivePlanDesigner,
-    handleCreateNewPlan,
-    isEditingBuiltInPlan,
-    handleSavePlan,
+    updateMasteryTouches,
     pauseReviews,
     resumeReviews,
   } = plan;
@@ -899,6 +856,13 @@ export function useAppState() {
     setSelectedVerseNumbers([]);
   };
 
+  // The Verses tab's My Verses / Plan / Calendar switcher. These three are
+  // siblings, not a trail: switching never adds to the back history.
+  const switchVersesTab = (screen: 'activePlan' | 'memoryPlan' | 'memoryCalendar') => {
+    setCurrentScreen(screen);
+    setSelectedVerseNumbers([]);
+  };
+
   const handleBack = () => {
     if (backHistory.length > 0) {
       const prev = backHistory[backHistory.length - 1];
@@ -1168,15 +1132,8 @@ export function useAppState() {
         );
       }
 
-      // Tracks whichever plan ends up active, whether from an existing doc
-      // or the freshly-created DEFAULT_PLANS[0] -- used after step 3 below
-      // to run the missed-review popup scan against the real settings that
-      // were just loaded, instead of racing React state that may not have
-      // flushed yet.
-      let resolvedActivePlan: MemoryPlan = DEFAULT_PLANS[0];
-      // Same reason as resolvedActivePlan: the missed-review scan below runs
-      // before React has flushed the rhythm setters, so it reads this rather
-      // than the live state.
+      // Read below by the ladder step, which runs before React has flushed the
+      // rhythm setters, so it uses this rather than the live state.
       let resolvedRhythm: Rhythm = DEFAULT_RHYTHM;
       // The ladder settings and whether this account's queue is on the
       // ladder yet, for the same reason.
@@ -1187,7 +1144,6 @@ export function useAppState() {
       // 2. Memory Plan
       if (planSnap && planSnap.exists()) {
         const planData = planSnap.data();
-        let plansList: MemoryPlan[] = planData.savedPlans || [];
 
         // ---- RHYTHM ----
         // Read from the doc ROOT, which is where pacing has always been
@@ -1226,37 +1182,10 @@ export function useAppState() {
         applyLadderPrefs(resolvedLadderPrefs);
         resolvedLadderVersion = typeof planData.ladderVersion === 'number' ? planData.ladderVersion : null;
 
-        // ---- PLANS ----
-        // An account with no savedPlans array at all (or one emptied by an
-        // older migration) starts from the shipped plan rather than
-        // reconstructing a pseudo-plan out of the root keys -- those keys are
-        // Rhythm now, and carry nothing about retention that DEFAULT_PLANS
-        // doesn't already say.
-        if (plansList.length === 0) {
-          plansList = [{ ...DEFAULT_PLANS[0], ...normalizeAdoptedPlan(planData), id: BUILT_IN_PLAN_ID, isBuiltIn: true }];
-        }
-
-        // Back-compat: plans saved before retention-rigor/mastery-touches/
-        // missPolicy existed won't have these fields in Firestore — default
-        // them to prior hardcoded behavior so existing plans don't change
-        // silently. Pacing fields that pre-split plans still carry are left
-        // untouched in the stored object and simply never read.
-        plansList = plansList.map((p) => ({
-          ...p,
-          retentionRigor: p.retentionRigor || 'standard',
-          dailyPhaseWeeks: p.dailyPhaseWeeks ?? 7,
-          weeklyPhaseMonths: p.weeklyPhaseMonths ?? 6,
-          monthlyPhaseYears: p.monthlyPhaseYears ?? 5,
-          masteryTouches: p.masteryTouches ?? 3,
-          reviewsRequired: p.reviewsRequired ?? 1,
-          missPolicy: p.missPolicy || 'standard',
-          missPolicyAskEveryTime: p.missPolicyAskEveryTime ?? false,
-          graceCount: p.graceCount ?? 1,
-          refresherDailyDays: p.refresherDailyDays ?? 7,
-          refresherWeeklyWeeks: p.refresherWeeklyWeeks ?? 4,
-        }));
-
-        setSavedPlans(plansList);
+        // ---- PERFECT RECALLS ----
+        // User-level like the rest of the plan; the doc root has always
+        // mirrored the active plan's value, so older accounts read it from there.
+        setMasteryTouches(planData.masteryTouches ?? rootActive.masteryTouches ?? 3);
 
         // Joined Group Plans: resolve membership records into the real
         // GroupPlan docs they point to. This also fixes a pre-existing bug
@@ -1269,20 +1198,11 @@ export function useAppState() {
         groupPlansLoad = loadJoinedGroupPlans(memberships);
 
         applyJoinedGroupChallenges((planData.joinedGroupChallenges as GroupChallengeMembership[]) || []);
-
-        // Find the active plan and sync current state
-        const active = plansList.find((p) => p.isActive) || plansList[0];
-        if (active) {
-          syncDesignerFromPlan(active);
-          resolvedActivePlan = active;
-        }
       } else {
         console.log('Creating new memory plan...');
-        setSavedPlans(DEFAULT_PLANS);
         try {
           await setDoc(planRef, {
-            savedPlans: DEFAULT_PLANS,
-            ...planTopLevelFields(DEFAULT_PLANS[0]),
+            masteryTouches: 3,
             ...DEFAULT_RHYTHM,
             ...resolvedLadderPrefs,
             // A new account has nothing to move onto the ladder.
@@ -1804,13 +1724,8 @@ export function useAppState() {
 
   // The review engine: scheduling, the daily pull, adding verses, grading (see useReviewEngine).
   const {
-    missedReviewQueue,
-    setMissedReviewQueue,
-    showMissedReviewPrompt,
-    setShowMissedReviewPrompt,
     getTodayAbbreviation,
     isTodayLearningDay,
-    resolveMissedReviewChoice,
     validateTouch,
     getEstimatedReviewTime,
     getMemoryLoadForecast,
@@ -1966,7 +1881,7 @@ export function useAppState() {
       if (profileStatsSyncTimerRef.current) clearTimeout(profileStatsSyncTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [publicMemorizedCount, learningCount, memoryStreak, user, memoryQueue, savedPlans, memoryQueueVisibility]);
+  }, [publicMemorizedCount, learningCount, memoryStreak, user, memoryQueue, memoryQueueVisibility]);
 
   // Real chapter text for whichever book/chapter the user is currently browsing,
   // fetched from Firestore's scripture library (falls back to empty until loaded).
@@ -2623,9 +2538,8 @@ export function useAppState() {
       const days = getMemoryCalendarProjection(
         memoryQueue,
         {
-          dailyPhaseWeeks,
-          weeklyPhaseMonths,
-          monthlyPhaseYears,
+          thoroughness,
+          dayStartHour,
           learningDays,
           newVersesPace,
           sabbathEnabled,
@@ -2644,14 +2558,14 @@ export function useAppState() {
       return days.map((d, i) =>
         i === 0
           ? { date: d.date, reviews: dueNow, learning: dueNow > 0 ? d.learningCount : 0 }
-          : { date: d.date, reviews: d.dueReviews.length, learning: d.learningCount + d.newVersesPulled }
+          : { date: d.date, reviews: d.dueVerses, learning: d.learningCount + d.newVersesPulled }
       );
     } catch (err) {
       console.error('Failed to project review reminders:', err);
       return [];
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil, dayStartHour, reviewsPaused]);
+  }, [user?.uid, memoryQueue, thoroughness, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil, dayStartHour, reviewsPaused]);
 
   const openPushTarget = (target: PushTarget) => {
     switch (target.type) {
@@ -2782,13 +2696,10 @@ export function useAppState() {
     // change persists. The raw setters stay exported for the load path and
     // the layout lab's mock state only.
     updateRhythm,
+    updateMasteryTouches,
     learningDays, setLearningDays,
     newVersesPace, setNewVersesPace,
     maxReviewCap, setMaxReviewCap,
-    retentionRigor, setRetentionRigor,
-    dailyPhaseWeeks, setDailyPhaseWeeks,
-    weeklyPhaseMonths, setWeeklyPhaseMonths,
-    monthlyPhaseYears, setMonthlyPhaseYears,
     activeModal, setActiveModal,
     modalVerses, setModalVerses, listenSource, practiceLearnTab,
     threadDrillPreset, setThreadDrillPreset,
@@ -2847,15 +2758,9 @@ export function useAppState() {
     selectedChapterAudios, setSelectedChapterAudios,
     showAudioSelector, setShowAudioSelector,
     masteryTouches, setMasteryTouches,
-    reviewsRequired, setReviewsRequired,
     sabbathEnabled, setSabbathEnabled,
     sabbathDay, setSabbathDay,
     dayStartHour, setDayStartHour,
-    missPolicy, setMissPolicy,
-    missPolicyAskEveryTime, setMissPolicyAskEveryTime,
-    graceCount, setGraceCount,
-    refresherDailyDays, setRefresherDailyDays,
-    refresherWeeklyWeeks, setRefresherWeeklyWeeks,
     pausedAt, setPausedAt,
     pausedUntil, setPausedUntil,
     reviewsPaused,
@@ -2865,9 +2770,6 @@ export function useAppState() {
     lateNotes,
     reviewNotes,
     clearSlipped,
-    missedReviewQueue,
-    showMissedReviewPrompt, setShowMissedReviewPrompt,
-    resolveMissedReviewChoice,
     joinedGroupPlanMemberships,
     joinedGroupPlanDetails,
     viewingGroupPlan, setViewingGroupPlan,
@@ -2916,12 +2818,10 @@ export function useAppState() {
     seekRecordingBy,
     seekRecordingToTime,
     selectedUserProfile, setSelectedUserProfile,
-    customPlanName, setCustomPlanName,
-    savedPlans, setSavedPlans,
-    editingPlanId, setEditingPlanId,
 
     // navigation
     navigateTo,
+    switchVersesTab,
     handleBack,
     versePageRef, setVersePageRef,
     openVersePage,
@@ -2970,15 +2870,6 @@ export function useAppState() {
     setGroupPlanPriority,
     clearGroupPlanMembershipsForCircle,
 
-    // Review Settings handlers (your own saved presets -- not shareable, and a
-    // separate concept from Group Plans)
-    handleActivatePlan,
-    handleDeletePlan,
-    handleEditPlan,
-    openActivePlanDesigner,
-    isEditingBuiltInPlan,
-    handleCreateNewPlan,
-    handleSavePlan,
     loadUserData,
 
     // formatting helpers

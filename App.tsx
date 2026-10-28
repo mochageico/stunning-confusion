@@ -22,11 +22,9 @@ import BooksScreen from './src/screens/BooksScreen';
 import ChaptersScreen from './src/screens/ChaptersScreen';
 import ChapterLandingScreen from './src/screens/ChapterLandingScreen';
 import AudioFeedScreen from './src/screens/AudioFeedScreen';
-import PlanDesignerScreen from './src/screens/PlanDesignerScreen';
+import MemoryPlanScreen from './src/screens/MemoryPlanScreen';
 import ActivePlanScreen from './src/screens/ActivePlanScreen';
-import SavedPlansScreen from './src/screens/SavedPlansScreen';
 import AddVersesScreen from './src/screens/AddVersesScreen';
-import MyScheduleScreen from './src/screens/MyScheduleScreen';
 import VerseSourcesScreen from './src/screens/VerseSourcesScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import VerseRoadScreen from './src/screens/VerseRoadScreen';
@@ -174,8 +172,8 @@ function Screens({ state }: { state: AppState }) {
 
   if (state.currentTab === 'verses') {
     switch (state.currentScreen) {
-      case 'mySchedule':
-        return <MyScheduleScreen state={state} />;
+      case 'memoryPlan':
+        return <MemoryPlanScreen state={state} />;
       case 'verseSources':
         return <VerseSourcesScreen state={state} />;
       case 'memoryCalendar':
@@ -186,10 +184,6 @@ function Screens({ state }: { state: AppState }) {
         return <VerseRoadScreen state={state} />;
       case 'versePage':
         return <VersePageScreen state={state} />;
-      case 'savedPlans':
-        return <SavedPlansScreen state={state} />;
-      case 'planDesigner':
-        return <PlanDesignerScreen state={state} />;
       default:
         return <ActivePlanScreen state={state} />;
     }
@@ -283,146 +277,6 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
         </AppText>
       </View>
     </Dialog>
-  );
-}
-
-// Fires on app open when the active plan's "ask me every time" miss-policy
-// setting is on and at least one verse has silently missed review cycles
-// (see the scan in loadUserData and resolveMissedCycles in useAppState.ts).
-// Offers the same 3 outcomes as the reactive per-item catch-up -- this is
-// just the proactive, bulk version of the exact same choice.
-type MissChoice = 'grace' | 'escalate' | 'reset';
-
-// `short` is the per-verse segment label. "Catch-up" is the user-facing word
-// for what the engine calls a refresher (same as MissPolicySection).
-const MISS_CHOICES: { id: MissChoice; label: string; short: string; desc: string }[] = [
-  {
-    id: 'grace',
-    label: 'Pick up where I left off',
-    short: 'Carry on',
-    desc: 'No penalty. Each verse carries on exactly where it was.',
-  },
-  {
-    id: 'escalate',
-    label: 'A short catch‑up', // non-breaking hyphen: never "catch- / up" at large text
-    short: 'Catch up',
-    desc: 'Verses you review weekly get a few days of daily reviews, and monthly ones a few weeks of weekly reviews, then carry on as before.',
-  },
-  {
-    id: 'reset',
-    label: 'Start the count over',
-    short: 'Start over',
-    desc: 'Keep the same pace, with no extra reviews, but progress toward the next step starts again.',
-  },
-];
-
-const PACE_LABEL: Record<string, string> = {
-  daily: 'reviewed daily',
-  weekly: 'reviewed weekly',
-  monthly: 'reviewed monthly',
-};
-
-// A Dialog, so the body scrolls and Apply stays pinned inside the card. The
-// old hand-built overlay capped the card at 85% height without scrolling,
-// which pushed Apply off the card on an 844pt phone.
-function MissedReviewPromptModal({ state }: { state: AppState }) {
-  const { missedReviewQueue, setShowMissedReviewPrompt, resolveMissedReviewChoice, missPolicy } = state;
-  const defaultChoice: MissChoice = missPolicy === 'graceDiscretion' ? 'grace' : 'escalate';
-  const [bulkChoice, setBulkChoice] = React.useState<MissChoice>(defaultChoice);
-  const [customizing, setCustomizing] = React.useState(false);
-  const [overrides, setOverrides] = React.useState<Record<string, MissChoice>>({});
-
-  const verseCount = missedReviewQueue.length;
-
-  return (
-    <Dialog
-      visible
-      onClose={() => setShowMissedReviewPrompt(false)}
-      title="Missed reviews"
-      message={`You missed reviews on ${verseCount} ${verseCount === 1 ? 'verse' : 'verses'}. What should happen to ${
-        verseCount === 1 ? 'it' : 'them'
-      }?`}
-      actions={
-        <AppButton
-          variant="primary"
-          label="Apply"
-          onPress={() => resolveMissedReviewChoice(bulkChoice, customizing ? overrides : undefined)}
-        />
-      }
-    >
-      {customizing ? (
-        // One row per verse, each with its own choice. Starts from the
-        // choice made above it, so switching modes never loses a pick.
-        <View className="bg-surface border border-line rounded-card overflow-hidden">
-          {missedReviewQueue.map(({ item, missedCycles }, i) => (
-            <MissedVerseRow
-              key={item.verseId}
-              first={i === 0}
-              reference={`${item.book} ${item.chapter}:${item.verseNumber}`}
-              detail={`Missed ${missedCycles === 1 ? 'once' : `${missedCycles} times`}${
-                PACE_LABEL[item.retentionPhase] ? `, ${PACE_LABEL[item.retentionPhase]}` : ''
-              }`}
-              value={overrides[item.verseId] || bulkChoice}
-              onChange={(choice) => setOverrides((prev) => ({ ...prev, [item.verseId]: choice }))}
-            />
-          ))}
-        </View>
-      ) : (
-        MISS_CHOICES.map((choice) => (
-          <ChoiceCard
-            key={choice.id}
-            title={choice.label}
-            description={choice.desc}
-            selected={bulkChoice === choice.id}
-            onPress={() => setBulkChoice(choice.id)}
-          />
-        ))
-      )}
-      {/* In the scrolling body, not beside Apply: at large text two buttons
-          wrap to two rows and squeeze the choices into a sliver. */}
-      <View className="flex-row">
-        <AppButton
-          size="sm"
-          variant="quiet"
-          label={customizing ? 'Same for all verses' : 'Choose for each verse'}
-          onPress={() => setCustomizing((v) => !v)}
-        />
-      </View>
-    </Dialog>
-  );
-}
-
-function MissedVerseRow({
-  first,
-  reference,
-  detail,
-  value,
-  onChange,
-}: {
-  first: boolean;
-  reference: string;
-  detail: string;
-  value: MissChoice;
-  onChange: (choice: MissChoice) => void;
-}) {
-  const space = useScaledSpace();
-  return (
-    <View className={first ? '' : 'border-t border-hairline'} style={{ padding: space(12), gap: space(8) }}>
-      <View style={{ gap: space(1) }}>
-        <AppText variant="body" className="font-sans font-semibold text-ink">
-          {reference}
-        </AppText>
-        <AppText variant="caption" className="font-sans text-ink-3">
-          {detail}
-        </AppText>
-      </View>
-      <SegmentedControl
-        value={value}
-        onChange={onChange}
-        accessibilityLabel={`What happens to ${reference}`}
-        options={MISS_CHOICES.map((c) => ({ id: c.id, label: c.short }))}
-      />
-    </View>
   );
 }
 
@@ -624,7 +478,6 @@ function AppShell() {
       )}
 
       {state.saveRecordingDialog && <SaveRecordingDialog state={state} />}
-      {state.showMissedReviewPrompt && <MissedReviewPromptModal state={state} />}
 
       {/* First-run setup -- same full-screen-overlay convention as the
           practice modal above, sitting above the tab router rather than

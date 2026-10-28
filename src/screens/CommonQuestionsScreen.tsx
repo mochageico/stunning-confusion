@@ -33,7 +33,7 @@ const ANSWERS: { q: string; a: string }[] = [
   },
   {
     q: "Can I change how much I'm doing?",
-    a: "Any time. The Verses tab → My Schedule sets which days you take on new verses and how many. Nothing you've already learned is affected.",
+    a: "Any time. The Verses tab → Plan → My Schedule sets which days you take on new verses and how many. Nothing you've already learned is affected.",
   },
   {
     q: 'Where did that tip go?',

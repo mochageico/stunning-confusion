@@ -15,7 +15,7 @@ import ConstellationMap from '../components/map/ConstellationMap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMapFullscreen } from '../lib/mapFullscreen';
 import { writtenCount } from '../lib/takeaways';
-import { ladderPosition, landmarkText, versesHeld } from '../lib/milestones';
+import { VersesTabs } from '../components/VersesTabs';
 import { reorderQueueGroups } from '../lib/queueReorder';
 import { STAGE_LABEL, STAGE_ORDER, StageGroup, VerseStage, groupByStage, referenceFor, stageCounts } from '../lib/stageProgress';
 import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, learnedCount, projectStartDates } from '../lib/forecast';
@@ -87,7 +87,6 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     updateMemoryQueue,
     triggerToast,
     promoteToLearning,
-    savedPlans,
     joinedGroupPlanDetails,
     joinedGroupPlanMemberships,
     removeQueueItems,
@@ -96,10 +95,9 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     handleUpdateVerseStatus,
     validateTouch,
     takeaways,
-    dailyPhaseWeeks,
-    weeklyPhaseMonths,
-    monthlyPhaseYears,
+    thoroughness,
     masteryTouches,
+    switchVersesTab,
     sabbathEnabled,
     sabbathDay,
     pausedAt,
@@ -128,7 +126,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   // Which waiting list is being reordered (its section key), if any.
   const [reordering, setReordering] = useState<string | null>(null);
 
-  const plan = { dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches };
+  const plan = { thoroughness, masteryTouches };
   // One clock per visit, so the memoized rows below don't all redraw
   // because a fresh Date was handed to them.
   const now = useMemo(() => new Date(), []);
@@ -147,15 +145,10 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const byStage = useMemo(
     () => groupByStage(memoryQueue, plan, now),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches]
+    [memoryQueue, thoroughness, masteryTouches]
   );
   const counts = useMemo(() => stageCounts(memoryQueue), [memoryQueue]);
   const takeawayCount = useMemo(() => writtenCount(takeaways), [takeaways]);
-  // "You hold more verses than the book of Ruth." Nothing before the first landmark.
-  const landmark = useMemo(() => {
-    const held = versesHeld(memoryQueue);
-    return held > 0 ? landmarkText(ladderPosition(held)) : '';
-  }, [memoryQueue]);
   const total = memoryQueue.length;
 
   // ---- Looking ahead ----
@@ -185,7 +178,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const shownCounts = useMemo(
     () => (ahead ? forecastCounts(memoryQueue, forecastPlan, horizonDate(horizon, now), starts, now) : counts),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [horizon, counts, starts, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, masteryTouches]
+    [horizon, counts, starts, thoroughness, masteryTouches]
   );
   const deltas = ahead
     ? (Object.fromEntries(STAGE_ORDER.map((st) => [st, shownCounts[st] - counts[st]])) as Record<VerseStage, number>)
@@ -224,8 +217,6 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   ]
     .filter(Boolean)
     .join(' · ');
-
-  const activePlan = savedPlans.find((p) => p.isActive) || savedPlans[0];
 
   // Group rows used to say a generic "Group", which told you a verse wasn't
   // yours but not which plan put it there -- so the priority setting had no
@@ -323,7 +314,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 
   // Nothing has moved past Learning yet: teach the road instead of showing
   // four empty sections with no explanation.
-  const isNew = counts.settling + counts.steady + counts.kept === 0;
+  const isNew = counts.settling + counts.steady + counts.kept + counts.secure === 0;
   const nextUp = byStage.learning.length > 0 ? [...byStage.learning].sort((a, b) => a.progress.remaining - b.progress.remaining)[0] : null;
 
   const sectionHeader = (stage: VerseStage, title: string) => (
@@ -456,16 +447,18 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     if (!listsReady || total === 0 || view === 'map') return [];
     if (view === 'book') return [{ kind: 'book', key: 'book' }];
     const out: ListItem[] = [{ kind: 'waiting', key: 'waiting', stage: 'waiting' }];
-    for (const stage of ['learning', 'settling', 'steady', 'kept'] as const) {
+    for (const stage of ['learning', 'settling', 'steady', 'kept', 'secure'] as const) {
       if (byStage[stage].length === 0) {
         out.push({ kind: 'empty', key: `empty-${stage}`, stage });
         continue;
       }
+      // Secure is done climbing: compact chips (with their own heading) instead of a row each.
+      if (stage === 'secure') {
+        out.push({ kind: 'top', key: 'top', stage });
+        continue;
+      }
       out.push({ kind: 'header', key: `header-${stage}`, stage });
-      // The top step (every 6 months) is done climbing: compact chips after Kept's other rows.
-      const rows = stage === 'kept' ? byStage[stage].filter((g) => !g.progress.top) : byStage[stage];
-      rows.forEach((group, i) => out.push({ kind: 'row', key: group.key, stage, group, first: i === 0 }));
-      if (stage === 'kept' && rows.length < byStage[stage].length) out.push({ kind: 'top', key: 'top', stage });
+      byStage[stage].forEach((group, i) => out.push({ kind: 'row', key: group.key, stage, group, first: i === 0 }));
     }
     return out;
   }, [listsReady, total, view, byStage]);
@@ -485,6 +478,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     settling: 'Settling',
     steady: 'Steady',
     kept: 'Kept',
+    secure: 'Secure',
   };
   // The gaps the old single column had: 24 between stages, 10 under a
   // stage's heading, 8 between rows.
@@ -512,13 +506,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
       case 'top':
         body = (
           <View style={{ gap: space(8) }}>
-            <View className="flex-row items-center" style={{ gap: space(8), paddingHorizontal: space(4) }}>
-              <StageDot stage="kept" top />
-              <AppText variant="label" className="font-sans font-semibold text-ink">
-                Every 6 months, for good
-              </AppText>
-            </View>
-            <TopChips groups={byStage.kept.filter((g) => g.progress.top)} onPress={openGroup} />
+            {sectionHeader('secure', STAGE_TITLE.secure)}
+            <TopChips groups={byStage.secure} onPress={openGroup} />
           </View>
         );
         break;
@@ -565,11 +554,12 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
           {/* Fullscreen hides these but keeps the map where it is in the tree, so it isn't rebuilt. */}
           {!mapFullscreen && (
             <ScreenHeader
-              title="My Verses"
+              title="Verses"
               subtitle={summary}
               actions={<AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => go('addVerses')} />}
             />
           )}
+          {!mapFullscreen && <VersesTabs value="activePlan" onChange={switchVersesTab} />}
           {!mapFullscreen && viewSwitch}
           <ConstellationMap
             queue={memoryQueue}
@@ -621,25 +611,21 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             have is here, in every stage -- it used to stop at Learning and
             send you to the Memory Calendar for the rest. */}
         <ScreenHeader
-          title="My Verses"
+          title="Verses"
           subtitle={summary}
           actions={<AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => go('addVerses')} />}
         />
+        <VersesTabs value="activePlan" onChange={switchVersesTab} />
 
         <OneTimeTip
           id="versesTab"
-          text="Everything about your verses lives here: the list itself, My Schedule for which days you learn new ones, and Review Settings for how often learned verses come back."
+          text="Everything about your verses lives here: the list itself, the Plan for which days you learn new ones and how often learned verses come back, and the Calendar for what's due next."
         />
 
         {total === 0 ? (
           <EmptyState title="No verses yet" message="Tap Add verses, or add them from a chapter's page." />
         ) : (
           <>
-            {landmark ? (
-              <AppText variant="label" className="font-sans text-ink-2">
-                {landmark}
-              </AppText>
-            ) : null}
             {viewSwitch}
 
             {/* Every stage at a glance; tap one to jump to it. The switch
@@ -695,7 +681,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                       ['learning', 'a few days'],
                       ['settling', 'reviewed every 1–4 days'],
                       ['steady', 'reviewed every 1–2 weeks'],
-                      ['kept', 'every 4–8 weeks, then every 6 months for good'],
+                      ['kept', 'reviewed every 4–8 weeks'],
+                      ['secure', 'reviewed every 6 months, for good'],
                     ] as [VerseStage, string][]
                   ).map(([stage, length]) => (
                     <View key={stage} className="flex-row items-center" style={{ gap: space(10) }}>
@@ -722,11 +709,6 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                     </AppText>
                   </View>
                 )}
-                <Pressable onPress={() => go('savedPlans')} accessibilityRole="button" className="active:opacity-60 self-start">
-                  <AppText variant="label" className="font-sans font-semibold text-accent">
-                    Change how long each stage lasts
-                  </AppText>
-                </Pressable>
               </View>
             )}
 
@@ -739,29 +721,13 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         {/* How the list above gets worked through. Each opens its own screen.
             "Where verses come from" only appears once a group plan competes
             with your own verses. */}
-        <GroupedList header="How these verses are scheduled">
-          <ListRow
-            title="My Schedule"
-            value={`${learningDays.length} days · ${newVersesPace} a day`}
-            onPress={() => go('mySchedule')}
-          />
-          {joinedGroupPlanMemberships.length > 0 && (
+        {joinedGroupPlanMemberships.length > 0 && (
+          <GroupedList header="Where your verses come from">
             <ListRow title="Where verses come from" value={sourcesValue} onPress={() => go('verseSources')} />
-          )}
-          <ListRow
-            title="Review Settings"
-            value={activePlan ? activePlan.name : 'None chosen'}
-            onPress={() => go('savedPlans')}
-          />
-        </GroupedList>
+          </GroupedList>
+        )}
 
         <GroupedList header="Your progress">
-          <ListRow
-            Icon={CalendarDays}
-            title="Memory Calendar"
-            value={reviewsPaused ? 'Paused' : dueTodayCount === 1 ? '1 due today' : `${dueTodayCount} due today`}
-            onPress={() => go('memoryCalendar')}
-          />
           <ListRow
             Icon={Bookmark}
             title="Takeaways"

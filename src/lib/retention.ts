@@ -50,24 +50,6 @@ export const nextDueDateISO = (days: number, clock: ReviewClock, now: Date = new
   return advancePastSabbath(shifted, clock.sabbathEnabled, clock.sabbathDay).toISOString();
 };
 
-// A "starting fresh from now" due date for an item whose catch-up has just
-// been resolved (any of the three missed-review popup outcomes needs this --
-// even 'grace'/frozen leaves the old due date in the past, so it must still
-// move forward). Mirrors the anchor-day logic used when a Weekly/Monthly
-// item's own cycle completes normally.
-export const computeNextDueDate = (item: QueueItem, clock: ReviewClock, now: Date = new Date()): string => {
-  const tomorrow = new Date(getLogicalDate(clock.dayStartHour, now));
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  if (item.retentionPhase === 'weekly' && item.chapterReviewAnchorDay) {
-    return nthOccurrenceOfWeekday(tomorrow, item.chapterReviewAnchorDay, 1, clock.sabbathEnabled, clock.sabbathDay).toISOString();
-  }
-  if (item.retentionPhase === 'monthly' && item.chapterReviewAnchorDay) {
-    return nthOccurrenceOfWeekday(tomorrow, item.chapterReviewAnchorDay, 4, clock.sabbathEnabled, clock.sabbathDay).toISOString();
-  }
-  const cycleLengthDays = item.retentionPhase === 'weekly' ? 7 : item.retentionPhase === 'monthly' ? 30 : 1;
-  return nextDueDateISO(cycleLengthDays, clock, now);
-};
-
 /** A learning touch only counts if the last one was at least an hour ago. */
 export const isTouchSpaced = (item: QueueItem, now: number = Date.now()): boolean => {
   if (!item.touchLogs || item.touchLogs.length === 0) return true;

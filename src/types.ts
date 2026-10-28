@@ -385,49 +385,13 @@ export interface Rhythm {
   // low/medium/high).
   cognitiveLoadSensitivity: 'low' | 'medium' | 'high';
   // Pause: a proactive "nothing is due, nothing counts as missed" window
-  // (vacations, etc), distinct from the reactive miss-policy on the plan.
+  // (vacations, etc), distinct from what late reviews do (Late reviews move you back).
   // Treated like Sabbath but for a date range instead of a single weekday.
   // Null pausedUntil with a set pausedAt means paused indefinitely until
   // resumed manually. User-level, so activating a different plan can no
   // longer silently un-pause you.
   pausedAt: string | null;
   pausedUntil: string | null;
-}
-
-// A memorization METHOD: how a verse graduates, and what happens when you
-// miss one. Nothing about your schedule or speed lives here -- see Rhythm.
-// This is what's shareable, swappable, and comparable between people.
-export interface MemoryPlan {
-  id: string;
-  name: string;
-  // The one shipped plan (id BUILT_IN_PLAN_ID) is immutable: editing it
-  // prompts for a new name and forks a copy, rather than mutating the
-  // baseline everyone starts from. Absent/false on user-created plans.
-  isBuiltIn?: boolean;
-  // Retention rigor: how many weeks/months/years a verse spends in each
-  // review phase before graduating. 'light'/'standard'/'deep' are named
-  // presets (5-4-3 / 7-6-5 / 9-8-7); 'custom' means the three *PhaseX
-  // fields below were hand-set and don't match a named preset.
-  retentionRigor: 'light' | 'standard' | 'deep' | 'custom';
-  dailyPhaseWeeks: number;
-  weeklyPhaseMonths: number;
-  monthlyPhaseYears: number;
-  // Mastery-gate settings: how many successful touches graduate a verse,
-  // and how many reviews are required per cycle.
-  masteryTouches: number;
-  reviewsRequired: number;
-  // Missed-review handling: how many free misses before escalating, how
-  // long the weekly->daily and monthly->weekly refreshers run, and whether
-  // to just apply the preset automatically or ask via a popup each time
-  // there's something to catch up on. 'graceDiscretion' is a distinct mode,
-  // not just longer numbers -- see applyMissToItem's freeze branch.
-  missPolicy: 'lenient' | 'standard' | 'graceDiscretion' | 'custom';
-  missPolicyAskEveryTime: boolean;
-  graceCount: number;
-  refresherDailyDays: number;
-  refresherWeeklyWeeks: number;
-  isActive: boolean;
-  updatedAt: string | Date;
 }
 
 export interface Circle {

@@ -4,7 +4,6 @@
 
 import { QueueItem } from '../types';
 import {
-  computeNextDueDate,
   estimateReviewMinutes,
   forecastMemoryLoad,
   isReviewDue,
@@ -12,7 +11,6 @@ import {
   nextDueDateISO,
   ReviewClock,
 } from './retention';
-import { applyMissToItem, computeMissedCycles, resolveMissedCycles } from './missPolicy';
 import { countPausedDaysInRange, countSabbathDaysInRange, getLogicalDate, localDayKey } from './logicalDate';
 
 let failures = 0;
@@ -32,7 +30,6 @@ const dayOf = (iso: string) => localDayKey(new Date(iso));
 
 const CLOCK: ReviewClock = { dayStartHour: 0, sabbathEnabled: false, sabbathDay: 'S', pausedAt: null, pausedUntil: null };
 const SABBATH: ReviewClock = { ...CLOCK, sabbathEnabled: true };
-const POLICY = { graceCount: 1, refresherDailyDays: 7, refresherWeeklyWeeks: 4 };
 
 function item(overrides: Partial<QueueItem> = {}): QueueItem {
   return {
@@ -74,44 +71,13 @@ check('Saturday Sabbath pushes it to Sunday', dayOf(nextDueDateISO(1, SABBATH, a
 const now = at(10, 16);
 const before = now.getTime();
 nextDueDateISO(3, CLOCK, now);
-computeNextDueDate(item(), CLOCK, now);
 check('the caller’s date is never changed', now.getTime() === before);
-check('daily item: tomorrow', dayOf(computeNextDueDate(item(), CLOCK, now)) === '2026-10-17');
-check('weekly item, no anchor: a week out', dayOf(computeNextDueDate(item({ retentionPhase: 'weekly' }), CLOCK, now)) === '2026-10-23');
-check(
-  'weekly item anchored on Wednesday: next Wednesday',
-  dayOf(computeNextDueDate(item({ retentionPhase: 'weekly', chapterReviewAnchorDay: 'W' }), CLOCK, now)) === '2026-10-21'
-);
-check(
-  'monthly item anchored on Wednesday: four Wednesdays out',
-  dayOf(computeNextDueDate(item({ retentionPhase: 'monthly', chapterReviewAnchorDay: 'W' }), CLOCK, now)) === '2026-11-11'
-);
 
 console.log('touch spacing');
 check('first touch always counts', isTouchSpaced(item(), at(10, 16).getTime()));
 const touched = item({ touchLogs: [{ timestamp: at(10, 16, 12).toISOString(), drillType: 'type' }] });
 check('30 minutes later does not count', !isTouchSpaced(touched, at(10, 16, 12).getTime() + 30 * 60 * 1000));
 check('an hour later counts', isTouchSpaced(touched, at(10, 16, 13).getTime()));
-
-console.log('missed reviews');
-const draft = item({ retentionPhase: 'daily' });
-check('first miss uses grace', applyMissToItem(draft, POLICY) === 'grace' && draft.graceMissesUsed === 1);
-check('second miss extends Daily', applyMissToItem(draft, POLICY) === 'daily-extended' && draft.dailyPhaseExtensionDays === 1);
-const weekly = item({ retentionPhase: 'weekly', graceMissesUsed: 1, currentStreakCount: 5 });
-check(
-  'a miss out of Weekly starts a Daily refresher',
-  applyMissToItem(weekly, POLICY) === 'refresher-start' &&
-    weekly.retentionPhase === 'daily' &&
-    weekly.refresherTargetUnits === 7 &&
-    weekly.refresherReturnProgress === 5
-);
-const frozen = resolveMissedCycles(item({ currentStreakCount: 9 }), 3, 'graceDiscretion', POLICY);
-check('grace-discretion plans freeze the gap', frozen.tag === 'frozen' && frozen.updatedItem.currentStreakCount === 9);
-const reset = resolveMissedCycles(item({ currentStreakCount: 9 }), 3, 'standard', POLICY, 'reset');
-check('a reset only clears the streak', reset.tag === 'streak-reset' && reset.updatedItem.currentStreakCount === 0);
-check('nothing missed when not reviewing', computeMissedCycles(item({ status: 'learning' }), 0, false, 'S', null, null) === 0);
-const longAgo = item({ nextReviewDueDate: new Date(Date.now() - 3.5 * 24 * 3600 * 1000).toISOString() });
-check('three daily cycles missed', computeMissedCycles(longAgo, 0, false, 'S', null, null) === 3, computeMissedCycles(longAgo, 0, false, 'S', null, null));
 
 console.log('time estimates');
 const queue = [
