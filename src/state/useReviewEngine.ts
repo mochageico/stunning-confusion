@@ -13,7 +13,10 @@ import { DAY_ABBREVS, getLogicalDate, localDayKey, nextOccurrenceOfWeekday } fro
 import { TOP_STEP } from '../lib/ladder';
 import { migrateQueue } from '../lib/ladderMigration';
 import { reconcile } from '../lib/passages';
-import { gradeVerse, joinMessage, mergeChanged } from '../lib/ladderEngine';
+import { gradeVerse, joinMessage, mergeChanged, type ReviewNote } from '../lib/ladderEngine';
+
+/** How many recap lines the engine keeps (a long day's worth). */
+const REVIEW_NOTES_KEPT = 80;
 import { GradeInput, isSelfCheckInput, resolveGrade } from '../lib/grading';
 import {
   estimateReviewMinutes,
@@ -92,6 +95,9 @@ export function useReviewEngine({
   // empty, until stage 8 deletes the popup itself.
   const [missedReviewQueue, setMissedReviewQueue] = useState<{ item: QueueItem; missedCycles: number }[]>([]);
   const [showMissedReviewPrompt, setShowMissedReviewPrompt] = useState(false);
+  // What each passage's review did this session, newest last: the Mixed
+  // review recap reads its own session's lines from here. Not saved.
+  const [reviewNotes, setReviewNotes] = useState<ReviewNote[]>([]);
 
   // Firm-up attempts: grades given today to verses whose passage has a
   // firm-up today, kept across calls because verses are graded one at a
@@ -805,6 +811,7 @@ export function useReviewEngine({
     let queue = mergeChanged(memoryQueueRef.current, g.changed);
     const ids = new Set(g.changed.map((q) => q.verseId));
     messages.push(...g.messages);
+    if (g.notes.length > 0) setReviewNotes((prev) => [...prev, ...g.notes].slice(-REVIEW_NOTES_KEPT));
 
     // This review may have cleared the last one due today: release any
     // verses that banked all their touches while reviews were pending.
@@ -844,6 +851,25 @@ export function useReviewEngine({
     // A quiet caller (Pick up the thread) shows its own per-verse results.
     if (!opts?.quiet && messages.length > 0) triggerToast(messages.join(' '));
     if (early) return 'early';
+  };
+
+  /**
+   * Clears the weak-spot dot on these verses (the "Fix the transitions"
+   * drill, finished). Nothing else changes: no credit, no schedule.
+   */
+  const clearSlipped = async (verseIds: string[]) => {
+    const ids = new Set(verseIds);
+    const touched = memoryQueueRef.current.filter((q) => ids.has(q.verseId) && q.slipped);
+    if (touched.length === 0) return;
+    const hit = new Set(touched.map((q) => q.verseId));
+    const queue = memoryQueueRef.current.map((q) => {
+      if (!hit.has(q.verseId)) return q;
+      const next = { ...q };
+      delete next.slipped;
+      return next;
+    });
+    updateMemoryQueue(() => queue);
+    await persistItems(queue, hit);
   };
 
   const triggerMockDueReviews = async () => {
@@ -1119,6 +1145,8 @@ export function useReviewEngine({
     addVerseRangeToQueue,
     overrideVerseMemoryStatus,
     handleReviewCompleted,
+    reviewNotes,
+    clearSlipped,
     triggerMockDueReviews,
     handleUpdateVerseStatus,
     setGuidedSetAside,

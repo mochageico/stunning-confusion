@@ -22,6 +22,7 @@ import {
   Share2,
   ShieldCheck,
   SlidersHorizontal,
+  TrendingUp,
   Trash2,
   Type,
 } from 'lucide-react-native';
@@ -53,6 +54,8 @@ import { PassMark, PracticeTextSize, SchemeChoice, setAppPref, useAppPrefs } fro
 import { printVerses, shareVersesAsText } from '../lib/exportVerses';
 import { resetTips } from '../lib/tips';
 import { LadderDryRun } from '../dev/LadderDryRun';
+import { ReviewSettings } from '../components/ReviewSettings';
+import { THOROUGHNESS_PRESETS } from '../lib/ladder';
 import { forgetAllSpeechSlips, forgetSpeechSlip, SLIP_LEARN_AFTER, useSpeechSlips } from '../lib/speechSlips';
 
 // ============================================================================
@@ -72,6 +75,7 @@ type Page =
   | 'account'
   | 'formats'
   | 'recall'
+  | 'reviews'
   | 'text'
   | 'audio'
   | 'offline'
@@ -86,6 +90,7 @@ const PAGE_TITLE: Record<Page, string> = {
   account: 'Account',
   formats: 'Review formats',
   recall: 'Recall and typing',
+  reviews: 'Reviews',
   text: 'Bible and text',
   audio: 'Playback and sharing',
   offline: 'Offline audio',
@@ -603,6 +608,11 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     newVersesPace,
     savedPlans,
     selectedTranslationId,
+    thoroughness,
+    cleanPct,
+    lateMovesBack,
+    swapCanBeClean,
+    updateLadderSettings,
   } = state;
 
   const prefs = useAppPrefs();
@@ -731,6 +741,12 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           value={`${mix.counting} count · ${mix.practice} practice`}
           onPress={() => setPage('formats')}
         />
+        <ListRow
+          Icon={TrendingUp}
+          title="Reviews"
+          value={`${THOROUGHNESS_PRESETS.find((p) => p.value === thoroughness)?.label ?? 'Standard'} · clean at ${cleanPct}%`}
+          onPress={() => setPage('reviews')}
+        />
         <ListRow Icon={PenLine} title="Recall and typing" value={`Pass at ${Math.round(prefs.passMark * 100)}%`} onPress={() => setPage('recall')} />
         <ListRow
           Icon={CalendarDays}
@@ -796,6 +812,9 @@ export default function SettingsScreen({ state }: { state: AppState }) {
   );
 
   const pages: Record<Exclude<Page, 'home'>, React.ReactNode> = {
+    reviews: (
+      <ReviewSettings prefs={{ thoroughness, cleanPct, lateMovesBack, swapCanBeClean }} onChange={updateLadderSettings} />
+    ),
     ladderDryRun: page === 'ladderDryRun' ? <LadderDryRun queue={memoryQueue} clock={reviewClock} /> : null,
     account: (
       <>

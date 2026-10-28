@@ -98,7 +98,7 @@ import {
 } from '../lib/appData';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { isReviewLog } from '../lib/circleTotals';
-import { LADDER_VERSION, ladderPrefsFrom, prepareLadderQueue } from '../lib/ladderEngine';
+import { LADDER_VERSION, ladderPrefsFrom, prepareLadderQueue, type LateNote } from '../lib/ladderEngine';
 import { TOP_STEP } from '../lib/ladder';
 import type { SpreadDay } from '../lib/passages';
 import { backupQueueBeforeLadder } from '../lib/ladderBackup';
@@ -233,6 +233,9 @@ export function useAppState() {
   // Welcome back: the days overdue passages were spread over when the app
   // opened (empty when nothing was overdue). Today's card reads it (stage 7).
   const [welcomeBackDays, setWelcomeBackDays] = useState<SpreadDay[]>([]);
+  // Passages that fell back for being late when the app opened: Today's
+  // rows say so (stage 7).
+  const [lateNotes, setLateNotes] = useState<LateNote[]>([]);
   // Review Settings (retention plan) and Rhythm (your pace) -- see usePlanSettings.
   const plan = usePlanSettings({
     navigateTo: (...args) => navigateTo(...args),
@@ -1420,6 +1423,7 @@ export function useAppState() {
         updateMemoryQueue(() => ladder.queue);
         cacheLoadingVerses(ladder.queue);
         setWelcomeBackDays(ladder.spread);
+        setLateNotes(ladder.late);
 
         let ladderWritten = true;
         if (ladder.changed.length > 0) {
@@ -1563,6 +1567,8 @@ export function useAppState() {
         // runs transiently between sign-out and the auth gate re-appearing.
         setVerses([]);
         updateMemoryQueue(() => []);
+        setWelcomeBackDays([]);
+        setLateNotes([]);
         queueHydratedRef.current = true;
         setLearningDays(DEFAULT_RHYTHM.learningDays);
         setNewVersesPace(DEFAULT_RHYTHM.newVersesPace);
@@ -1823,6 +1829,8 @@ export function useAppState() {
     setGuidedShakyJoins,
     pullVerseIntoLearning,
     creditGuided,
+    reviewNotes,
+    clearSlipped,
   } = useReviewEngine({
     plan,
     memoryQueue,
@@ -2854,6 +2862,9 @@ export function useAppState() {
     pauseReviews, resumeReviews,
     thoroughness, cleanPct, lateMovesBack, swapCanBeClean, updateLadderSettings,
     welcomeBackDays,
+    lateNotes,
+    reviewNotes,
+    clearSlipped,
     missedReviewQueue,
     showMissedReviewPrompt, setShowMissedReviewPrompt,
     resolveMissedReviewChoice,

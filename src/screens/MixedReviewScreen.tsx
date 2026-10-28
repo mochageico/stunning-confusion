@@ -11,6 +11,7 @@ import { Badge, EmptyState, GroupedList, ListRow, ScreenHeader } from '../compon
 import { bracketColor, useThemeColors } from '../components/theme';
 import GradedRecitation, { ButtonPair, canSpeakVerses, RecitationMode, RoundFrame, SpanText } from '../components/GradedRecitation';
 import ThreadRound, { ThreadRoundResult } from '../components/ThreadRound';
+import { FixTransitions, PassageOutcomes, transitionTargets } from '../components/practice/ReviewRecap';
 import { SelfCheckFlow, SelfCheckResult } from '../components/practice/SelfCheck';
 import type { GradeSettings } from '../lib/grading';
 import ScrambleDrill from '../components/drills/ScrambleDrill';
@@ -664,7 +665,7 @@ function Session({
 }) {
   const space = useScaledSpace();
   const palette = useThemeColors();
-  const { memoryQueueRef, sectionsForChapter, handleReviewCompleted, startPractice, navigateTo } = state;
+  const { memoryQueueRef, sectionsForChapter, handleReviewCompleted, startPractice, navigateTo, reviewNotes, clearSlipped } = state;
 
   const sRef = useRef<MixState>(initial);
   const [s, setS] = useState<MixState>(initial);
@@ -741,6 +742,9 @@ function Session({
     const minutes = Math.max(1, Math.round(((endedAt ?? Date.now()) - startedAt) / 60000));
     const stopped = s.status === 'stopped';
     const missedSet = new Set(sum.missed);
+    // What each passage's review did this session, from the engine.
+    const notes = reviewNotes.filter((n) => n.at >= startedAt);
+    const fixTargets = transitionTargets(notes, memoryQueueRef.current);
     return (
       <FadeInView style={{ flex: 1 }}>
         <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
@@ -771,6 +775,8 @@ function Session({
               </AppText>
             </View>
           </View>
+
+          <PassageOutcomes notes={notes} />
 
           {/* A section may have just reached weekly reviews with this session's credits. */}
           <TakeawayAsk state={state} />
@@ -808,6 +814,8 @@ function Session({
               })}
             </GroupedList>
           )}
+
+          <FixTransitions queue={memoryQueueRef.current} targets={fixTargets} onClear={(id) => void clearSlipped([id])} />
 
           {sum.formatsUsed.length > 0 && (
             <View style={{ gap: space(8) }}>

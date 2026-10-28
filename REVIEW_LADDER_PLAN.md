@@ -18,13 +18,15 @@ review counted. Step drops and the next-day penalty-only case wait for stage 5 /
 Stage 5 built 2026-10-27 (every credit path reports clean / stumble / blank, the
 three-button self-check with the spot check, Find the wrong word's "knew the real word"
 toggles); the live check on the main account (half Recall, half Mixed review) is still to do.
+Stage 6 built (display only). Stage 7 built (Settings > Reviews, recap lines and Fix the
+transitions, Today's Welcome back / Win back a review / late notes); the live run is still to do.
 
 **No test account (user, 2026-10-27):** the only users are the owner and their
 brother, and a rare edge case going wrong in the move is acceptable. Wherever a stage
 below says "test account", use the main account, keeping the backup step in 4a.
 **Progress:** stages 1–2 built (ladder, grading and passages logic, all pure; nothing
 calls them yet). Stage 6 built (display only, on demo data; runs on the old streaks until
-stage 3/4 migrate an account). Stage 5 is running locally.
+stage 3/4 migrate an account). Stage 7 built (screens; live run still to do).
 
 Mockups: the "My Verses ladder sketches" design canvas (claude.ai artifact
 77ZK89BZsaNcsiS8UgXqHL): My Verses by group and by chapter, verse page ladder,
@@ -683,6 +685,33 @@ demo stubs them). **Local** for one end-to-end pass on the test account afterwar
   review"), late notes on rows.
 - **Done when:** tsc, `check:layout`, screenshots; then locally on the test account:
   a stumble → firm-up the next day → review won back.
+
+### As built (stage 7)
+
+- **Settings > Reviews** (`ReviewSettings.tsx`, a new page on Settings under "Practice and
+  review"): Thoroughness presets with the computed time to Every 6 months (`daysToTop`)
+  and the per-step table, "Accuracy needed for clean" (85/90/95/100), "Late reviews move
+  you back", "Find the wrong word can count as a clean review". Commits live through
+  `updateLadderSettings`. The old "A review passes at" (Recall and typing) is untouched; it
+  no longer decides ladder grades (stage 8 can retire or relabel it).
+- **Recap** (`ReviewRecap.tsx`): the engine now returns `notes` from `gradeVerse`
+  (`reviewNote`, `wonBackNote` in `ladderEngine.ts`) and `useReviewEngine` keeps them in
+  `reviewNotes` (session memory, not saved). The recap lists this session's lines: tag
+  (Clean / Held / Forgiven / Back 1 / Down a step / Won back), the reason, and the firm-up
+  line. A passage only gets a line once every verse has been covered.
+- **Fix the transitions** (working name kept): offered for up to 3 slipped verses that still
+  carry the dot, Start / Skip. Each is a Pick up the thread round (`seamCue`) from the second
+  half of the verse before; no credit. Saying the verse clears its dot (`clearSlipped`).
+- **Today** (`TodayCards.tsx`, `todayCards.ts`): "Welcome back" (from `welcomeBackDays`,
+  dismissible), "Win back a review" per passage with a firm-up today (practices just the
+  slipped verses; `gradeVerse` already wins it back when they're all clean), and "Late:
+  moved back N reviews" under a row (`lateNotes`, set on load). **Not done:** the firm-up's
+  "running start" (the verse before) was left out, because grading an extra verse could count
+  toward a real review of the same passage.
+- Demo: `?s=ladderRecap` (the recap pieces), `?s=settings&page=reviews`,
+  `?s=home&welcome=1&firm=1&late=1`. Checks: `check:ladderengine` (recap lines, cards).
+  Checked at SE width, 1.5x text, light and dark. `check:layout` has only its 3 old errors.
+- **Not done yet:** the live run on the test account (stumble, firm-up next day, review won back).
 
 ## Stage 8 — Everything else that reads stages
 
