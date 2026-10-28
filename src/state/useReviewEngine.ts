@@ -10,8 +10,7 @@ import { formatDate } from '../lib/format';
 import { VerseRange } from '../lib/verseRange';
 import { buildVerseId } from '../lib/appData';
 import { DAY_ABBREVS, getLogicalDate, localDayKey, nextOccurrenceOfWeekday } from '../lib/logicalDate';
-import { TOP_STEP } from '../lib/ladder';
-import { migrateQueue } from '../lib/ladderMigration';
+import { FIRST_WEEKLY_STEP, nextDue, stepInfo, TOP_STEP } from '../lib/ladder';
 import { reconcile } from '../lib/passages';
 import { gradeVerse, joinMessage, mergeChanged, type ReviewNote } from '../lib/ladderEngine';
 
@@ -90,11 +89,6 @@ export function useReviewEngine({
     swapCanBeClean,
   } = plan;
 
-  // The missed-review popup is retired with the review ladder (late reviews
-  // are handled on load, REVIEW_LADDER_PLAN.md §3). Its state stays, always
-  // empty, until stage 8 deletes the popup itself.
-  const [missedReviewQueue, setMissedReviewQueue] = useState<{ item: QueueItem; missedCycles: number }[]>([]);
-  const [showMissedReviewPrompt, setShowMissedReviewPrompt] = useState(false);
   // What each passage's review did this session, newest last: the Mixed
   // review recap reads its own session's lines from here. Not saved.
   const [reviewNotes, setReviewNotes] = useState<ReviewNote[]>([]);
@@ -121,15 +115,6 @@ export function useReviewEngine({
 
   // Next-due date `days` from today, nudged off the Sabbath.
   const nextDueDateISO = (days: number) => nextDueDateISOFor(days, reviewClock);
-
-  // Retired with the missed-review popup (see above): closes it.
-  const resolveMissedReviewChoice = (
-    _choice: 'grace' | 'escalate' | 'reset',
-    _overrides?: Record<string, 'grace' | 'escalate' | 'reset'>
-  ) => {
-    setShowMissedReviewPrompt(false);
-    setMissedReviewQueue([]);
-  };
 
   const validateTouch = (item: QueueItem, _type: 'speak' | 'type' | 'reveal'): boolean => isTouchSpaced(item);
 
@@ -476,44 +461,30 @@ export function useReviewEngine({
     return { added: newItems.length, alreadyThere, missingText: toAdd.length - found.length };
   };
 
-  // Manually places a set of verses at a specific point in the memory-
-  // progression ladder, bypassing the normal learn-then-graduate flow --
-  // for verses already memorized outside the app (e.g. "I already know all
-  // of Ephesians, put it straight into Weekly review"). Creates a fresh
-  // QueueItem for any verse not yet queued; overwrites an existing one's
-  // phase/streak/schedule fields in place otherwise. Every demotion-
-  // softening/mastery-touch field is cleared to a blank slate for the new
-  // phase, since this is a deliberate manual reset, not a real graduation.
+  // Manually places a set of verses at a specific point on the ladder,
+  // bypassing the normal learn-then-review climb -- for verses already
+  // memorized outside the app (e.g. "I already know all of Ephesians 1, put
+  // it straight into Steady"). Creates a fresh QueueItem for any verse not yet
+  // queued; overwrites an existing one's schedule fields in place otherwise.
+  // Every demotion-softening/mastery-touch field is cleared to a blank slate,
+  // since this is a deliberate manual reset, not a real move up.
   //
-  // targetWeekday (weekly/monthly only) lets a batch's review cycle land on
-  // a chosen day of the week -- since a phase's due date always recurs by a
-  // fixed number of days from wherever it first starts (7 for weekly, 30
-  // for monthly), picking which day the FIRST one lands on is all that's
-  // needed to keep every future cycle on that same weekday.
+  // `targetWeekday` (Every week and longer) is the chapter's review weekday:
+  // those steps are whole weeks, so picking the day the first review lands on
+  // keeps every later one there.
   const overrideVerseMemoryStatus = (
     versesToOverride: VerseState[],
-    targetPhase: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained',
+    // Learning, or a place on the ladder: the step, and how many of that
+    // step's reviews are already done.
+    target: 'learning' | { step: number; reviews: number },
     translationId: string,
-    targetWeekday?: string,
-    // How far into the phase's graduation cycle to start (1 = just began,
-    // same as the old hardcoded behavior). Only meaningful for
-    // daily/weekly/monthly -- ignored for learning/retained, which have no
-    // partial-progress concept. Callers should clamp this to
-    // [1, graduation threshold for targetPhase] themselves (the UI reads
-    // dailyPhaseWeeks/weeklyPhaseMonths/monthlyPhaseYears to compute that
-    // same threshold handleReviewCompleted graduates on).
-    progressCount?: number
+    targetWeekday?: string
   ) => {
     const nowISO = new Date().toISOString();
     const existingByVerseId = new Map(memoryQueueRef.current.map((q) => [q.verseId, q]));
-    const cycleDays = targetPhase === 'daily' ? 1 : targetPhase === 'weekly' ? 7 : 30;
-
-    const dueDateISO: string | null =
-      targetPhase === 'learning' || targetPhase === 'retained'
-        ? null
-        : targetWeekday && (targetPhase === 'weekly' || targetPhase === 'monthly')
-          ? nextOccurrenceOfWeekday(getLogicalDate(dayStartHour), targetWeekday, sabbathEnabled, sabbathDay).toISOString()
-          : nextDueDateISO(cycleDays);
+    const place = target === 'learning' ? null : { step: Math.min(TOP_STEP, Math.max(0, target.step)), reviews: Math.max(0, target.reviews) };
+    const weekday = place && place.step >= FIRST_WEEKLY_STEP ? targetWeekday ?? DAY_ABBREVS[getLogicalDate(dayStartHour).getDay()] : undefined;
+    const dueDateISO: string | null = place ? nextDue(place.step, weekday, reviewClock) : null;
 
     const nextQueue = [...memoryQueueRef.current];
     const additions: QueueItem[] = [];
@@ -564,26 +535,26 @@ export function useReviewEngine({
       delete base.firmUp;
       delete base.slipped;
 
-      if (targetPhase === 'learning') {
+      if (!place) {
         base.status = 'learning';
         base.retentionPhase = 'none';
         base.dateStarted = nowISO;
         base.lastReviewDate = null;
         base.nextReviewDueDate = null;
         base.currentStreakCount = 0;
-      } else if (targetPhase === 'retained') {
-        base.status = 'retained';
-        base.retentionPhase = 'none';
-        base.dateStarted = base.dateStarted || nowISO;
-        base.nextReviewDueDate = null;
-        base.currentStreakCount = 0;
       } else {
+        // The old streak and phase fields keep a sensible mapped value for
+        // older readers (a friend's view of your verses).
+        const group = stepInfo(place.step).group;
         base.status = 'reviewing';
-        base.retentionPhase = targetPhase;
+        base.retentionPhase = group === 'settling' ? 'daily' : group === 'steady' ? 'weekly' : 'monthly';
+        base.ladderStep = place.step;
+        base.ladderReviews = place.reviews;
         base.dateStarted = base.dateStarted || nowISO;
         base.lastReviewDate = base.lastReviewDate || nowISO;
-        base.currentStreakCount = Math.max(1, progressCount ?? 1);
+        base.currentStreakCount = Math.max(1, place.reviews);
         base.nextReviewDueDate = dueDateISO;
+        if (weekday && !base.chapterReviewAnchorDay) base.chapterReviewAnchorDay = weekday;
       }
       // Everything above is a deliberate reset, but the history stays --
       // those reviews really happened. Note the move itself.
@@ -604,20 +575,13 @@ export function useReviewEngine({
       return;
     }
 
-    // Placed verses go onto the ladder from the stage they were given, the
-    // same mapping the migration uses (their ladder fields were cleared
-    // above), so the passage they land in agrees on one schedule.
-    // Stage 8 replaces this screen's daily / weekly / monthly choices.
+    // Placed verses carry their own ladder place; neighbours in the same
+    // passage agree on one schedule (the lowest step wins).
     const placed = [...nextQueue, ...additions];
-    updateMemoryQueue(() => mergeChanged(placed, migrateQueue(placed, { clock: reviewClock, thoroughness }).changed));
+    updateMemoryQueue(() => mergeChanged(placed, reconcile(placed, { clock: reviewClock }).changed));
     syncChallengeProgress();
 
-    const phaseLabel =
-      targetPhase === 'learning'
-        ? 'Learning'
-        : targetPhase === 'retained'
-          ? 'Retained'
-          : `${targetPhase[0].toUpperCase()}${targetPhase.slice(1)} Review`;
+    const phaseLabel = place ? `${stepInfo(place.step).group[0].toUpperCase()}${stepInfo(place.step).group.slice(1)}, ${stepInfo(place.step).label.toLowerCase()}` : 'Learning';
     const dueNote = dueDateISO
       ? ` Next due ${new Date(dueDateISO).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}.`
       : '';
@@ -1126,13 +1090,8 @@ export function useReviewEngine({
   };
 
   return {
-    missedReviewQueue,
-    setMissedReviewQueue,
-    showMissedReviewPrompt,
-    setShowMissedReviewPrompt,
     getTodayAbbreviation,
     isTodayLearningDay,
-    resolveMissedReviewChoice,
     validateTouch,
     getEstimatedReviewTime,
     getMemoryLoadForecast,

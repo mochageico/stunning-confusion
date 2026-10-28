@@ -21,6 +21,7 @@ import { formatLabel } from '../lib/formatNames';
 import { Recording } from '../types';
 import { BIBLE_TRANSLATIONS, copyrightFor, textScriptFor, translationLabel } from '../data';
 import { isRtl, joinWords, splitWords } from '../lib/textScript';
+import { FIRST_WEEKLY_STEP, LADDER, LADDER_GROUPS, stepReviewCount, type LadderGroup } from '../lib/ladder';
 import { AppButton, AppIconButton, AppText, AppTextInput, RangeCaption, useFontScale, useScaledSpace } from '../components/design';
 import { Dialog, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { useDragSelect } from '../components/useDragSelect';
@@ -54,12 +55,13 @@ import {
 
 import { useThemeColors } from '../components/theme';
 import { OneTimeTip } from '../components/OneTimeTip';
-const OVERRIDE_PHASE_OPTIONS: { id: 'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'; label: string }[] = [
+type OverrideStage = 'learning' | LadderGroup;
+const OVERRIDE_STAGE_OPTIONS: { id: OverrideStage; label: string }[] = [
   { id: 'learning', label: 'Learning' },
-  { id: 'daily', label: 'Daily' },
-  { id: 'weekly', label: 'Weekly' },
-  { id: 'monthly', label: 'Monthly' },
-  { id: 'retained', label: 'Complete' },
+  { id: 'settling', label: LADDER_GROUPS.settling.name },
+  { id: 'steady', label: LADDER_GROUPS.steady.name },
+  { id: 'kept', label: LADDER_GROUPS.kept.name },
+  { id: 'secure', label: LADDER_GROUPS.secure.name },
 ];
 const OVERRIDE_WEEKDAY_OPTIONS = [
   { id: 'M', label: 'Mon' },
@@ -133,9 +135,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     setFeedChapterFilter,
     triggerToast,
     startPractice,
-    dailyPhaseWeeks,
-    weeklyPhaseMonths,
-    monthlyPhaseYears,
+    thoroughness,
     sectionsForChapter,
     saveChapterSections,
   } = state;
@@ -145,39 +145,19 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   // straight into Weekly review"). Local to this screen since it only ever
   // acts on the current selection; resets whenever it's closed/reopened.
   const [showStatusOverride, setShowStatusOverride] = useState(false);
-  const [overridePhase, setOverridePhase] = useState<'learning' | 'daily' | 'weekly' | 'monthly' | 'retained'>('weekly');
+  const [overrideStage, setOverrideStage] = useState<OverrideStage>('steady');
+  // The step within the group (an index into LADDER), for Settling, Steady and Kept.
+  const [overrideStep, setOverrideStep] = useState<number>(FIRST_WEEKLY_STEP);
   const [overrideWeekday, setOverrideWeekday] = useState<string | null>(null);
-  // How far into the phase's graduation cycle these verses should start,
-  // as a percent of the way to graduating -- mirrors the same threshold
-  // handleReviewCompleted graduates a real review streak on (see
-  // dailyGraduationDays/weeklyGraduationReviews/monthlyGraduationReviews in
-  // useAppState.ts). 0% = just began (streak 1, same as the old hardcoded
-  // behavior); 100% = graduates on the very next successful review, same as
-  // if it had organically climbed there. Percent stops (not a raw 1..N
-  // count) because the graduation target can be 50+ reviews for
-  // Weekly/Monthly -- a labeled stop per review would be unreadable.
+  // How far through the step these verses already are, as a percent of its
+  // reviews. 0% = just arrived; the top reaches the step's last review, so the
+  // next one moves them up. Percent stops (not a raw count) because a step can
+  // need a dozen reviews or more at a high Retention Level.
   const [overrideProgressPercent, setOverrideProgressPercent] = useState(0);
-  const overrideProgressMax =
-    overridePhase === 'daily'
-      ? dailyPhaseWeeks * 7
-      : overridePhase === 'weekly'
-        ? Math.round(weeklyPhaseMonths * (52 / 12))
-        : overridePhase === 'monthly'
-          ? monthlyPhaseYears * 12
-          : 1;
-  const overrideProgressCount = Math.max(1, Math.round((overrideProgressPercent / 100) * overrideProgressMax));
-  // A raw review count ("37 of 49") doesn't tell you where that lands on a
-  // calendar -- surface the enclosing week/month/year too, using the same
-  // cadence each phase graduates on (1 review/day for Daily, ~1/week for
-  // Weekly, 1/month for Monthly).
-  const overrideProgressUnit =
-    overridePhase === 'daily'
-      ? `Week ${Math.max(1, Math.ceil(overrideProgressCount / 7))} of ${dailyPhaseWeeks}`
-      : overridePhase === 'weekly'
-        ? `Month ${Math.max(1, Math.ceil(overrideProgressCount / (52 / 12)))} of ${weeklyPhaseMonths}`
-        : overridePhase === 'monthly'
-          ? `Year ${Math.max(1, Math.ceil(overrideProgressCount / 12))} of ${monthlyPhaseYears}`
-          : '';
+  const overrideSteps = LADDER.map((info, i) => ({ info, i })).filter(({ info }) => info.group === overrideStage);
+  const overrideStepIndex = overrideStage === 'learning' ? 0 : overrideSteps.some(({ i }) => i === overrideStep) ? overrideStep : overrideSteps[0]?.i ?? 0;
+  const overrideStepNeed = overrideStage === 'learning' ? null : stepReviewCount(overrideStepIndex, thoroughness);
+  const overrideReviews = overrideStepNeed === null ? 0 : Math.min(overrideStepNeed - 1, Math.round((overrideProgressPercent / 100) * overrideStepNeed));
 
   const activeChapterKey = `${selectedBook}_${selectedChapter}`;
 
@@ -1128,10 +1108,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               onPress={() => {
                 overrideVerseMemoryStatus(
                   selectedVerses(),
-                  overridePhase,
+                  overrideStage === 'learning' ? 'learning' : { step: overrideStepIndex, reviews: overrideReviews },
                   selectedTranslationId,
-                  overrideWeekday ?? undefined,
-                  overrideProgressCount
+                  overrideStepIndex >= FIRST_WEEKLY_STEP ? overrideWeekday ?? undefined : undefined
                 );
                 setSelectedVerseNumbers([]);
                 setShowStatusOverride(false);
@@ -1146,17 +1125,40 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           </AppText>
           <ChipRow
             wrap
-            value={overridePhase}
+            value={overrideStage}
             onChange={(id) => {
-              setOverridePhase(id);
-              if (id !== 'weekly' && id !== 'monthly') setOverrideWeekday(null);
+              setOverrideStage(id);
+              setOverrideStep(LADDER.findIndex((info) => info.group === id));
+              setOverrideWeekday(null);
               setOverrideProgressPercent(0);
             }}
-            options={OVERRIDE_PHASE_OPTIONS}
+            options={OVERRIDE_STAGE_OPTIONS}
           />
+          {overrideStage !== 'learning' && (
+            <AppText variant="caption" className="font-sans text-ink-3">
+              {LADDER_GROUPS[overrideStage].description}.
+            </AppText>
+          )}
         </View>
 
-        {(overridePhase === 'weekly' || overridePhase === 'monthly') && (
+        {overrideStage !== 'learning' && overrideSteps.length > 1 && (
+          <View style={{ gap: space(8) }}>
+            <AppText variant="label" className="font-sans font-medium text-ink">
+              How often
+            </AppText>
+            <ChipRow
+              wrap
+              value={overrideStepIndex}
+              onChange={(id) => {
+                setOverrideStep(id as number);
+                setOverrideProgressPercent(0);
+              }}
+              options={overrideSteps.map(({ info, i }) => ({ id: i, label: info.label }))}
+            />
+          </View>
+        )}
+
+        {overrideStepIndex >= FIRST_WEEKLY_STEP && overrideStage !== 'learning' && (
           <View style={{ gap: space(8) }}>
             <AppText variant="label" className="font-sans font-medium text-ink">
               Review {them} on
@@ -1173,16 +1175,14 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           </View>
         )}
 
-        {(overridePhase === 'daily' || overridePhase === 'weekly' || overridePhase === 'monthly') && (
+        {overrideStage !== 'learning' && overrideStepNeed !== null && (
           <View style={{ gap: space(8) }}>
             <View className="flex-row flex-wrap items-baseline justify-between" style={{ columnGap: space(8) }}>
               <AppText variant="label" className="font-sans font-medium text-ink">
                 How far along
               </AppText>
               <AppText variant="label" className="font-sans text-ink-2">
-                {overrideProgressPercent >= 100
-                  ? 'Moves on after the next review'
-                  : `${overrideProgressUnit} (${overrideProgressCount} of ${overrideProgressMax})`}
+                {overrideReviews} of {overrideStepNeed} reviews
               </AppText>
             </View>
             <DiscreteSlider
@@ -1192,7 +1192,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               showStopLabels={false}
               accessibilityLabel="How far along"
             />
-            <RangeCaption min="Just started" max="Ready to move on" />
+            <RangeCaption min="Just arrived" max="Ready to move up" />
           </View>
         )}
       </Dialog>

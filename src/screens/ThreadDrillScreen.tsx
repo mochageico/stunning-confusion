@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { verseStage } from '../lib/stageProgress';
 import { ScrollView, View } from 'react-native';
 import { RefreshCw, Route, X } from 'lucide-react-native';
 
@@ -75,9 +76,10 @@ const STRETCH_SIZES = [
 const REVIEW_SETS = [
   { id: 'all' as const, label: 'All started' },
   { id: 'learning' as const, label: 'Learning' },
-  { id: 'daily' as const, label: 'Daily reviews' },
-  { id: 'weekly' as const, label: 'Weekly reviews' },
-  { id: 'monthly' as const, label: 'Monthly reviews' },
+  { id: 'settling' as const, label: 'Settling' },
+  { id: 'steady' as const, label: 'Steady' },
+  { id: 'kept' as const, label: 'Kept' },
+  { id: 'secure' as const, label: 'Secure' },
 ];
 type ReviewSet = (typeof REVIEW_SETS)[number]['id'];
 
@@ -151,7 +153,7 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
   const isTarget = (v: PoolVerse) => {
     const i = v.item;
     if (reviewSet === 'learning' && i.status !== 'learning') return false;
-    if (reviewSet !== 'all' && reviewSet !== 'learning' && (i.status !== 'reviewing' || i.retentionPhase !== reviewSet)) return false;
+    if (reviewSet !== 'all' && reviewSet !== 'learning' && verseStage(i) !== reviewSet) return false;
     if (dueTodayOnly && !(i.status === 'reviewing' && !reviewsPaused && isReviewDue(i.nextReviewDueDate))) return false;
     return true;
   };

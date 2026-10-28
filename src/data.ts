@@ -1,4 +1,4 @@
-import { VerseState, Recording, MemoryPlan, Rhythm } from './types';
+import { VerseState, Recording, Rhythm } from './types';
 import { BibleBook, BibleTranslation, TextScript, TranslationCapabilities } from './types';
 
 // Shared by the Save-Recording dialog (App.tsx) and SettingsScreen's default-
@@ -531,38 +531,6 @@ export const SUGGESTED_FEED_RECORDINGS: Recording[] = [
     avatar: 'GT',
     category: 'global',
     versesStr: 'Full Chapter'
-  }
-];
-
-// The one shipped memory plan. Previously there were three (Example Plan /
-// Warrior Track / Gentle Drip), but they were identical on every retention
-// field and differed ONLY in pacing -- they were three schedules wearing
-// plan costumes, which is exactly what made "pick a plan" confusing. Pacing
-// now lives in Rhythm (one per user), so a plan is purely a memorization
-// method and there is only one sensible starting point.
-//
-// This plan is immutable: PlanDesignerScreen forks a renamed copy on first
-// edit (see handleSavePlan's fork branch) rather than mutating the baseline.
-export const BUILT_IN_PLAN_ID = 'standard-plan';
-
-export const DEFAULT_PLANS: MemoryPlan[] = [
-  {
-    id: BUILT_IN_PLAN_ID,
-    name: 'Standard',
-    isBuiltIn: true,
-    retentionRigor: 'standard',
-    dailyPhaseWeeks: 7,
-    weeklyPhaseMonths: 6,
-    monthlyPhaseYears: 5,
-    masteryTouches: 3,
-    reviewsRequired: 1,
-    missPolicy: 'standard',
-    missPolicyAskEveryTime: false,
-    graceCount: 1,
-    refresherDailyDays: 7,
-    refresherWeeklyWeeks: 4,
-    isActive: true,
-    updatedAt: new Date().toISOString()
   }
 ];
 

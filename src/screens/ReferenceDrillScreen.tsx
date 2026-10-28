@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { verseStage } from '../lib/stageProgress';
 import { Pressable, ScrollView, View } from 'react-native';
 import { RefreshCw, Target, X } from 'lucide-react-native';
 
@@ -43,16 +44,17 @@ const SESSION_LENGTHS = [
 ];
 
 // Which slice of the review system to quiz from. 'all' is every started
-// verse (the original, and still the default). The three retentionPhase
-// values let you drill one review set at a time -- e.g. "just my Monthly
-// verses", the ones most at risk of having quietly faded. 'learning' is the
-// other end: verses still being learned, not yet on a spaced schedule.
+// verse (the original, and still the default). The ladder groups let you
+// drill one set at a time -- e.g. "just my Kept verses", the ones most at risk
+// of having quietly faded. 'learning' is the other end: verses still being
+// learned, not yet on a schedule.
 const REVIEW_SETS = [
   { id: 'all' as const, label: 'All started' },
   { id: 'learning' as const, label: 'Learning' },
-  { id: 'daily' as const, label: 'Daily reviews' },
-  { id: 'weekly' as const, label: 'Weekly reviews' },
-  { id: 'monthly' as const, label: 'Monthly reviews' },
+  { id: 'settling' as const, label: 'Settling' },
+  { id: 'steady' as const, label: 'Steady' },
+  { id: 'kept' as const, label: 'Kept' },
+  { id: 'secure' as const, label: 'Secure' },
 ];
 const DIRECTIONS = [
   { id: 'both' as const, label: 'Both ways' },
@@ -124,14 +126,11 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
           if (endVerse && Number.isFinite(toV) && i.verseNumber > toV) return false;
         }
 
-        // Review-set filter. 'learning' is a status; the three phase names are
-        // only meaningful on items that have actually reached 'reviewing'.
-        // 'retained' items carry retentionPhase 'monthly' from their last
-        // phase, so they're deliberately excluded from the phase buckets --
-        // those mean "currently on this review cadence".
+        // Review-set filter: 'learning' is a status; the others are the ladder
+        // groups, read from where the verse sits on the ladder.
         if (reviewSet === 'learning' && i.status !== 'learning') return false;
         if (reviewSet !== 'all' && reviewSet !== 'learning') {
-          if (i.status !== 'reviewing' || i.retentionPhase !== reviewSet) return false;
+          if (verseStage(i) !== reviewSet) return false;
         }
 
         if (dueTodayOnly && !(i.status === 'reviewing' && isReviewDue(i.nextReviewDueDate))) return false;

@@ -2,318 +2,208 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { AppState } from '../state/useAppState';
-import { QueueItem } from '../types';
-import { getMemoryCalendarProjection, CalendarDayProjection, RetentionPhase } from '../lib/reviewCalendar';
+import type { CalendarDayProjection } from '../lib/ladderCalendar';
+import { useCalendarDays } from '../state/useCalendarDays';
+import { LADDER, LADDER_GROUPS, type LadderGroup } from '../lib/ladder';
 import { FadeInView } from '../components/ui';
 import { AppText, useScaledSpace } from '../components/design';
-import { Dialog, GroupedList, ListRow, ScreenHeader, SegmentedControl } from '../components/blocks';
+import { Dialog, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
+import { VersesTabs } from '../components/VersesTabs';
+import { heaviestDay } from '../components/TodayCards';
 
-const PHASE_LABEL: Record<RetentionPhase, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
+// MEMORY CALENDAR -- the Verses tab's Calendar section: the next two weeks as
+// a list, one row a day. Bar length is how long the day takes, split by where
+// each passage sits on the ladder. Tap a day for its passages. Every date is
+// the ladder played forward assuming each review goes well (ladderCalendar.ts).
 
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; // Sunday-first, matches Date.getDay()
+const DAYS_AHEAD = 14;
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// Rolling windows, not calendar-month-boundary paging -- "what's coming up
-// starting today" is more useful for a study-planning tool than "what
-// happened earlier this calendar month before today", and it keeps the
-// projection safely inside reviewCalendar.ts's ~60-day cap without needing
-// month-to-month navigation plumbing.
-const WEEK_VIEW_DAYS = 7;
-const MONTH_VIEW_WEEKS = 5;
-
-const PHASE_COLORS: Record<RetentionPhase, { dot: string; text: string; bg: string; border: string }> = {
-  // Stage color on the dot and stripe only; stage text is too light to read.
-  daily: { dot: 'bg-stage-daily', text: 'text-ink', bg: 'bg-surface', border: 'border-line border-l-stage-daily' },
-  weekly: { dot: 'bg-stage-weekly', text: 'text-ink', bg: 'bg-surface', border: 'border-line border-l-stage-weekly' },
-  monthly: { dot: 'bg-stage-monthly', text: 'text-ink', bg: 'bg-surface', border: 'border-line border-l-stage-monthly' },
+const GROUP_FILL: Record<LadderGroup | 'learning', string> = {
+  settling: 'bg-stage-daily',
+  steady: 'bg-stage-weekly',
+  kept: 'bg-stage-complete',
+  secure: 'bg-stage-top',
+  learning: 'bg-stage-learning',
 };
+const GROUP_ORDER: LadderGroup[] = ['settling', 'steady', 'kept', 'secure'];
 
-interface GroupedDueVerse {
-  book: string;
-  chapter: number;
-  verses: number[];
-  phase: RetentionPhase;
-}
+const shortDay = (d: Date, i: number) => (i === 0 ? 'Today' : `${DAY_NAMES[d.getDay()]} ${d.getDate()}`);
+const longDay = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+const minutesWord = (m: number) => `${m} min`;
 
-// Same lightweight "consecutive verse run" grouping HomeScreen/ActivePlanScreen
-// already each have their own local copy of -- kept local here too rather
-// than extracting a shared helper for one more screen's read-only display.
-function groupDueReviews(dueReviews: { item: QueueItem; phase: RetentionPhase }[]): GroupedDueVerse[] {
-  const sorted = [...dueReviews].sort((a, b) =>
-    a.item.book === b.item.book && a.item.chapter === b.item.chapter
-      ? a.item.verseNumber - b.item.verseNumber
-      : `${a.item.book}${a.item.chapter}`.localeCompare(`${b.item.book}${b.item.chapter}`)
-  );
-  const groups: GroupedDueVerse[] = [];
-  sorted.forEach(({ item, phase }) => {
-    const last = groups[groups.length - 1];
-    if (last && last.book === item.book && last.chapter === item.chapter && last.phase === phase && last.verses[last.verses.length - 1] === item.verseNumber - 1) {
-      last.verses.push(item.verseNumber);
-    } else {
-      groups.push({ book: item.book, chapter: item.chapter, verses: [item.verseNumber], phase });
-    }
-  });
-  return groups;
-}
-
-function versesLabel(verses: number[]): string {
-  return verses.length === 1 ? `${verses[0]}` : `${verses[0]}-${verses[verses.length - 1]}`;
-}
-
-// Same consecutive-run grouping as groupDueReviews, for the new verses a
-// projected day would START (rather than review). Splits on originPlanId as
-// well as book/chapter so a run never merges verses from two different
-// sources under one plan label.
-function groupNewVerses(
-  items: QueueItem[],
-  planNameById: (planId?: string) => string | undefined
-): { book: string; chapter: number; verses: number[]; planName?: string }[] {
-  const groups: { book: string; chapter: number; verses: number[]; planId?: string; planName?: string }[] = [];
-  items.forEach((item) => {
-    const last = groups[groups.length - 1];
-    if (
-      last &&
-      last.book === item.book &&
-      last.chapter === item.chapter &&
-      last.planId === item.originPlanId &&
-      last.verses[last.verses.length - 1] === item.verseNumber - 1
-    ) {
-      last.verses.push(item.verseNumber);
-    } else {
-      groups.push({
-        book: item.book,
-        chapter: item.chapter,
-        verses: [item.verseNumber],
-        planId: item.originPlanId,
-        planName: planNameById(item.originPlanId),
-      });
-    }
-  });
-  return groups;
+function versesLabel(first: number, last: number) {
+  return first === last ? `${first}` : `${first}–${last}`;
 }
 
 export default function MemoryCalendarScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
-  const {
-    handleBack,
-    navigateTo,
-    memoryQueue,
-    dailyPhaseWeeks,
-    weeklyPhaseMonths,
-    monthlyPhaseYears,
-    learningDays,
-    newVersesPace,
-    sabbathEnabled,
-    sabbathDay,
-    joinedGroupPlanDetails,
-    joinedGroupPlanMemberships,
-    pausedAt,
-    pausedUntil,
-    cognitiveLoadSensitivity,
-    getEstimatedReviewTime,
-  } = state;
+  const { navigateTo, switchVersesTab, joinedGroupPlanDetails } = state;
 
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('month');
-  const [selectedDayIdx, setSelectedDayIdx] = useState<number | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
+  const days = useCalendarDays(state, DAYS_AHEAD);
 
-  // Month view is a rolling grid, not a calendar-month boundary -- starts on
-  // the most recent Sunday on/before today so full weeks render, padded with
-  // faded past-days-of-this-week cells before today.
-  const gridStart = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - d.getDay());
-    return d;
-  }, [today]);
+  const totals = useMemo(() => {
+    const reviews = days.reduce((n, d) => n + d.dueReviews.length, 0);
+    const minutes = days.reduce((n, d) => n + d.minutes, 0);
+    const busy = days.filter((d) => !d.isSabbath && !d.isPaused && d.minutes > 0);
+    const max = Math.max(1, ...days.map((d) => d.minutes));
+    // The heavy day is one that clearly stands out, not simply the biggest.
+    const heavy = heaviestDay(days);
+    // Days after today with the least on them, for starting something new.
+    const light = [...busy.slice(1)].sort((a, b) => a.minutes - b.minutes || a.date.getTime() - b.date.getTime()).slice(0, 2);
+    return { reviews, minutes, max, heavy, light };
+  }, [days]);
 
-  // Week view's grid starts at today, not gridStart (that's only for the
-  // month view's Sunday-aligned rows) -- using gridStart here regardless of
-  // viewMode meant the projection only ever got queried for a few days
-  // (today through the following Saturday) in week view, leaving the rest
-  // of the 7-day row with no data to show.
-  const activeGridStart = viewMode === 'week' ? today : gridStart;
-  const totalGridDays = viewMode === 'week' ? WEEK_VIEW_DAYS : MONTH_VIEW_WEEKS * 7;
-  const daysFromTodayThroughGridEnd = Math.round((activeGridStart.getTime() - today.getTime()) / 86400000) + totalGridDays;
-
-  const projection = useMemo(
-    () =>
-      getMemoryCalendarProjection(
-        memoryQueue,
-        {
-          dailyPhaseWeeks,
-          weeklyPhaseMonths,
-          monthlyPhaseYears,
-          learningDays,
-          newVersesPace,
-          sabbathEnabled,
-          sabbathDay,
-          joinedPlans: joinedGroupPlanDetails,
-          memberships: joinedGroupPlanMemberships,
-          pausedAt,
-          pausedUntil,
-        },
-        Math.max(daysFromTodayThroughGridEnd, 1)
-      ),
-    [memoryQueue, dailyPhaseWeeks, weeklyPhaseMonths, monthlyPhaseYears, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil, daysFromTodayThroughGridEnd]
-  );
-
-  // Estimated minutes for a projected day, reusing the same per-verse math
-  // the Home screen's "about N min today" uses. This is what the 7-day
-  // Memory Load Forecast on the queue screen used to show; it belongs here,
-  // next to the day it describes and the verses that make it up.
-  const planNameById = (planId?: string) =>
-    planId ? joinedGroupPlanDetails.find((p) => p.planId === planId)?.name : undefined;
-
-  const loadMinsFor = (day: CalendarDayProjection | null) => {
-    if (!day) return 0;
-    const dayItems = [
-      ...day.dueReviews.map((r) => r.item),
-      ...day.newVerseItems,
-    ];
-    return dayItems.length === 0 ? 0 : getEstimatedReviewTime(dayItems, cognitiveLoadSensitivity);
-  };
-
-  // projection[0] is always TODAY -- look up a projection day by its offset
-  // from today (may be negative for the faded pre-today grid padding, which
-  // simply has no data to show).
-  const projectionByOffset = (offset: number): CalendarDayProjection | null => (offset >= 0 && offset < projection.length ? projection[offset] : null);
-
-  const gridDays = useMemo(() => {
-    return Array.from({ length: viewMode === 'week' ? WEEK_VIEW_DAYS : MONTH_VIEW_WEEKS * 7 }, (_, i) => {
-      const date = new Date(viewMode === 'week' ? today : gridStart);
-      date.setDate(date.getDate() + i);
-      const offsetFromToday = Math.round((date.getTime() - today.getTime()) / 86400000);
-      return { date, offsetFromToday, data: projectionByOffset(offsetFromToday) };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, today, gridStart, projection]);
-
-  const selectedDay = selectedDayIdx != null ? gridDays[selectedDayIdx] : null;
-
+  const selected = selectedIdx != null ? days[selectedIdx] : null;
   const openChapter = (book: string, chapter: number) => {
-    setSelectedDayIdx(null);
-    navigateTo('chapterLanding', book, chapter);
+    setSelectedIdx(null);
+    navigateTo('chapterLanding', book, chapter, { keepBack: true });
   };
 
-  const dueGroups = selectedDay?.data ? groupDueReviews(selectedDay.data.dueReviews) : [];
-  const newGroups = selectedDay?.data ? groupNewVerses(selectedDay.data.newVerseItems, planNameById) : [];
-  const dayTitle =
-    selectedDay?.offsetFromToday === 0
-      ? 'Today'
-      : selectedDay?.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const newGroups = useMemo(() => {
+    if (!selected) return [] as { key: string; label: string; book: string; chapter: number; plan?: string }[];
+    const out: { key: string; label: string; book: string; chapter: number; plan?: string }[] = [];
+    const items = [...selected.newVerseItems].sort((a, b) => (a.book === b.book && a.chapter === b.chapter ? a.verseNumber - b.verseNumber : `${a.book}${a.chapter}`.localeCompare(`${b.book}${b.chapter}`)));
+    let last: { book: string; chapter: number; first: number; lastVerse: number; plan?: string } | null = null;
+    const flush = () => {
+      if (last) out.push({ key: `${last.book}${last.chapter}:${last.first}`, book: last.book, chapter: last.chapter, label: `${last.book} ${last.chapter}:${versesLabel(last.first, last.lastVerse)}`, plan: last.plan });
+    };
+    for (const item of items) {
+      const plan = item.originPlanId ? joinedGroupPlanDetails.find((p) => p.planId === item.originPlanId)?.name : undefined;
+      if (last && last.book === item.book && last.chapter === item.chapter && last.lastVerse === item.verseNumber - 1 && last.plan === plan) {
+        last.lastVerse = item.verseNumber;
+      } else {
+        flush();
+        last = { book: item.book, chapter: item.chapter, first: item.verseNumber, lastVerse: item.verseNumber, plan };
+      }
+    }
+    flush();
+    return out;
+  }, [selected, joinedGroupPlanDetails]);
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-        <ScreenHeader
-          title="Memory Calendar"
-          subtitle="Your reviews ahead, if every one goes well. A miss moves things, so treat this as a preview, not a promise."
-          onBack={handleBack}
-          backLabel="My Verses"
-        />
+      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(16) }}>
+        {/* A tab of the Verses section, so no back link. */}
+        <ScreenHeader title="Verses" />
+        <VersesTabs value="memoryCalendar" onChange={switchVersesTab} />
 
-        <View style={{ gap: space(12) }}>
-          <SegmentedControl
-            value={viewMode}
-            onChange={(mode) => {
-              setViewMode(mode);
-              setSelectedDayIdx(null);
-            }}
-            accessibilityLabel="Calendar view"
-            options={[
-              { id: 'week', label: 'Week' },
-              { id: 'month', label: 'Month' },
-            ]}
-          />
+        <AppText variant="label" className="font-sans text-ink-2">
+          The next two weeks. Bar length is how long that day takes. Tap a day to see its passages. If every review goes well; a late
+          one moves a passage back, so treat this as a preview, not a promise.
+        </AppText>
 
-          {/* What the dots mean. Stage colors appear on dots only. */}
-          <View className="flex-row flex-wrap items-center justify-center" style={{ columnGap: space(14), rowGap: space(4) }}>
-            {(['daily', 'weekly', 'monthly'] as RetentionPhase[]).map((phase) => (
-              <View key={phase} className="flex-row items-center" style={{ gap: space(5) }}>
-                <View className={`w-2 h-2 rounded-full ${PHASE_COLORS[phase].dot}`} />
-                <AppText variant="caption" className="font-sans text-ink-2">
-                  {PHASE_LABEL[phase]}
-                </AppText>
-              </View>
-            ))}
-            <View className="flex-row items-center" style={{ gap: space(5) }}>
-              <View className="w-2 h-2 rounded-full bg-fill" />
-              <AppText variant="caption" className="font-sans text-ink-2">
-                Learning
-              </AppText>
-            </View>
+        <View className="flex-row" style={{ gap: space(8) }}>
+          <View className="flex-1 bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(2) }}>
+            <AppText variant="title" className="font-sans font-bold text-ink">
+              {totals.reviews}
+            </AppText>
+            <AppText variant="caption" className="font-sans text-ink-2">
+              reviews in 2 weeks
+            </AppText>
+          </View>
+          <View className="flex-1 bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(2) }}>
+            <AppText variant="title" className="font-sans font-bold text-ink">
+              {minutesWord(totals.minutes)}
+            </AppText>
+            <AppText variant="caption" className="font-sans text-ink-2">
+              in total
+            </AppText>
           </View>
         </View>
 
-        {viewMode === 'week' ? (
-          <View className="flex-row" style={{ gap: space(4) }}>
-            {gridDays.map((day, idx) => (
-              <DayCell
-                key={idx}
-                day={day}
-                isToday={day.offsetFromToday === 0}
-                large
-                loadMins={loadMinsFor(day.data)}
-                onPress={() => setSelectedDayIdx(idx)}
-              />
-            ))}
-          </View>
-        ) : (
-          <View style={{ gap: space(4) }}>
-            {/* The weekday is said once, in this row, not again in every cell. */}
-            <View className="flex-row" style={{ gap: space(4) }}>
-              {DAY_LABELS.map((label) => (
-                <View key={label} className="flex-1 items-center">
-                  <AppText variant="caption" className="font-sans font-medium text-ink-3">
-                    {label}
+        <View className="bg-surface border border-line rounded-card overflow-hidden">
+          {days.map((d, i) => {
+            const heavy = totals.heavy === d;
+            const reviewMinutes = GROUP_ORDER.reduce((n, g) => n + d.groupSeconds[g], 0) / 60;
+            const learningMinutes = Math.max(0, d.minutes - reviewMinutes);
+            const barPct = Math.max(4, Math.round((d.minutes / totals.max) * 100));
+            return (
+              <Pressable
+                key={d.date.toISOString()}
+                onPress={() => setSelectedIdx(i)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  d.isSabbath
+                    ? `${longDay(d.date)}, Sabbath, no reviews`
+                    : `${longDay(d.date)}, ${d.dueReviews.length} ${d.dueReviews.length === 1 ? 'review' : 'reviews'}, about ${minutesWord(d.minutes)}${heavy ? ', your heaviest day' : ''}`
+                }
+                className={`flex-row items-center active:opacity-70 ${i > 0 ? 'border-t border-hairline' : ''} ${heavy ? 'bg-warning-soft' : ''}`}
+                style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(10), minHeight: 48 }}
+              >
+                <AppText variant="label" className={`font-sans ${i === 0 ? 'font-bold' : ''} ${d.isSabbath ? 'text-ink-3' : 'text-ink'}`} style={{ width: space(58) }}>
+                  {shortDay(d.date, i)}
+                </AppText>
+                {d.isSabbath ? (
+                  <AppText variant="caption" className="font-sans text-ink-3 flex-1">
+                    Sabbath, no reviews
                   </AppText>
-                </View>
-              ))}
+                ) : d.isPaused ? (
+                  <AppText variant="caption" className="font-sans text-ink-3 flex-1">
+                    Paused
+                  </AppText>
+                ) : (
+                  <>
+                    <View className="flex-1">
+                      {/* layout-ok: a stacked bar holds no text. */}
+                      <View className="flex-row" style={{ width: `${barPct}%`, height: 12, gap: 2 }}>
+                        {GROUP_ORDER.map((g) =>
+                          d.groupSeconds[g] > 0 ? <View key={g} className={`rounded-sm ${GROUP_FILL[g]}`} style={{ flex: d.groupSeconds[g] / 60 }} /> : null
+                        )}
+                        {learningMinutes > 0 ? <View className={`rounded-sm ${GROUP_FILL.learning}`} style={{ flex: learningMinutes }} /> : null}
+                      </View>
+                    </View>
+                    <AppText variant="caption" className={`font-sans text-right ${heavy ? 'text-warning font-semibold' : 'text-ink-2'}`} style={{ minWidth: space(72) }}>
+                      {d.dueReviews.length} · {minutesWord(d.minutes)}
+                    </AppText>
+                  </>
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View className="flex-row flex-wrap" style={{ columnGap: space(14), rowGap: space(4), paddingHorizontal: space(4) }}>
+          {([...GROUP_ORDER.filter((g) => g !== 'secure'), 'secure', 'learning'] as (LadderGroup | 'learning')[]).map((g) => (
+            <View key={g} className="flex-row items-center" style={{ gap: space(6) }}>
+              {/* layout-ok: a legend dot holds no text. */}
+              <View className={`rounded-full ${GROUP_FILL[g]}`} style={{ width: 8, height: 8 }} />
+              <AppText variant="caption" className="font-sans text-ink-2">
+                {g === 'learning' ? 'Learning' : LADDER_GROUPS[g].name}
+              </AppText>
             </View>
-            {Array.from({ length: MONTH_VIEW_WEEKS }, (_, week) => (
-              <View key={week} className="flex-row" style={{ gap: space(4) }}>
-                {gridDays.slice(week * 7, week * 7 + 7).map((day, i) => (
-                  <DayCell
-                    key={i}
-                    day={day}
-                    isToday={day.offsetFromToday === 0}
-                    faded={day.offsetFromToday < 0}
-                    loadMins={loadMinsFor(day.data)}
-                    onPress={() => setSelectedDayIdx(week * 7 + i)}
-                  />
-                ))}
-              </View>
-            ))}
+          ))}
+        </View>
+
+        {totals.light.length > 0 && (
+          <View className="bg-success-soft rounded-card" style={{ padding: space(12) }}>
+            <AppText variant="label" className="font-sans text-success">
+              Lightest days: {totals.light.map((d) => shortDay(d.date, days.indexOf(d))).join(' and ')}. Good days to start a new chapter.
+            </AppText>
           </View>
         )}
       </ScrollView>
 
       {/* One day's detail. */}
       <Dialog
-        visible={selectedDay != null}
-        onClose={() => setSelectedDayIdx(null)}
+        visible={selected != null}
+        onClose={() => setSelectedIdx(null)}
         placement="sheet"
-        title={dayTitle}
-        message={selectedDay?.data?.isSabbath ? 'Sabbath. Nothing is scheduled.' : undefined}
+        title={selected ? longDay(selected.date) : ''}
+        message={selected?.isSabbath ? 'Sabbath. Nothing is scheduled.' : selected?.isPaused ? 'Reviews are paused.' : undefined}
       >
-        {selectedDay?.offsetFromToday != null && selectedDay.offsetFromToday < 0 ? (
-          <AppText variant="label" className="font-sans text-ink-3">
-            This day has already passed.
-          </AppText>
-        ) : (
+        {selected && !selected.isSabbath && (
           <>
-            {dueGroups.length > 0 && (
-              <GroupedList header="Due for review">
-                {dueGroups.map((g, idx) => (
+            {selected.dueReviews.length > 0 && (
+              <GroupedList header={`Due for review · about ${minutesWord(selected.minutes)}`}>
+                {selected.dueReviews.map((r) => (
                   <ListRow
-                    key={idx}
-                    title={`${g.book} ${g.chapter}:${versesLabel(g.verses)}`}
-                    value={PHASE_LABEL[g.phase]}
-                    onPress={() => openChapter(g.book, g.chapter)}
+                    key={r.key}
+                    title={r.label}
+                    subtitle={`${LADDER_GROUPS[r.group].name} · ${LADDER[r.step].label}${r.need ? ` · review ${r.reviews + 1} of ${r.need}` : ', for good'}`}
+                    onPress={() => openChapter(r.book, r.chapter)}
                   />
                 ))}
               </GroupedList>
@@ -325,120 +215,26 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
                 priority. */}
             {newGroups.length > 0 && (
               <GroupedList header="Starting this day">
-                {newGroups.map((g, idx) => (
-                  <ListRow
-                    key={idx}
-                    title={`${g.book} ${g.chapter}:${versesLabel(g.verses)}`}
-                    value={g.planName}
-                    onPress={() => openChapter(g.book, g.chapter)}
-                  />
+                {newGroups.map((g) => (
+                  <ListRow key={g.key} title={g.label} value={g.plan} onPress={() => openChapter(g.book, g.chapter)} />
                 ))}
               </GroupedList>
             )}
 
-            {selectedDay?.data && selectedDay.data.learningCount > 0 && (
+            {selected.learningCount > 0 && (
               <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-                Plus {selectedDay.data.learningCount} {selectedDay.data.learningCount === 1 ? 'verse' : 'verses'} you're
-                learning, which aren't tied to a day.
+                Plus {selected.learningCount} {selected.learningCount === 1 ? 'verse' : 'verses'} you're learning, which aren't tied to a day.
               </AppText>
             )}
 
-            {selectedDay?.data &&
-              !selectedDay.data.isSabbath &&
-              dueGroups.length === 0 &&
-              newGroups.length === 0 &&
-              selectedDay.data.learningCount === 0 && (
-                <AppText variant="label" className="font-sans text-ink-3">
-                  Nothing scheduled this day.
-                </AppText>
-              )}
+            {selected.dueReviews.length === 0 && newGroups.length === 0 && selected.learningCount === 0 && (
+              <AppText variant="label" className="font-sans text-ink-3">
+                Nothing scheduled this day.
+              </AppText>
+            )}
           </>
         )}
       </Dialog>
     </FadeInView>
-  );
-}
-
-function DayCell({
-  day,
-  isToday,
-  faded,
-  large,
-  loadMins,
-  onPress,
-}: {
-  day: { date: Date; offsetFromToday: number; data: CalendarDayProjection | null };
-  isToday: boolean;
-  faded?: boolean;
-  large?: boolean;
-  /** Estimated minutes for this day -- the old queue-screen forecast, per cell. */
-  loadMins: number;
-  onPress: () => void;
-}) {
-  const space = useScaledSpace();
-  const phasesPresent = Array.from(new Set((day.data?.dueReviews || []).map((r) => r.phase)));
-  const totalDue = day.data?.dueReviews.length || 0;
-  const hasLearning = (day.data?.learningCount || 0) > 0;
-  // Week view has room to name what's actually due, which is the thing the
-  // old bar chart could never show. Month cells stay dots-only.
-  const firstRef = day.data?.dueReviews[0]?.item;
-  const extraRefs = Math.max(0, totalDue - 1);
-  const weekday = day.date.toLocaleDateString('en-US', { weekday: 'short' });
-
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={day.offsetFromToday < 0}
-      accessibilityRole="button"
-      accessibilityLabel={`${day.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${
-        totalDue > 0 ? `, ${totalDue} due` : ''
-      }${loadMins > 0 ? `, about ${loadMins} ${loadMins === 1 ? 'minute' : 'minutes'}` : ''}`}
-      className={`flex-1 items-center rounded-btn border ${isToday ? 'border-accent bg-accent-soft' : 'border-line'} ${
-        faded ? 'opacity-30' : isToday ? '' : 'bg-surface'
-      }`}
-      style={{ gap: space(large ? 6 : 3), paddingVertical: space(large ? 10 : 6), minWidth: 0 }}
-    >
-      {large && (
-        <AppText variant="micro" className={`font-sans font-medium ${isToday ? 'text-accent' : 'text-ink-3'}`}>
-          {weekday}
-        </AppText>
-      )}
-      <AppText
-        variant={large ? 'title' : 'label'}
-        className={`font-sans font-semibold ${isToday ? 'text-accent' : 'text-ink'}`}
-        style={{ fontVariant: ['tabular-nums'] }}
-      >
-        {day.date.getDate()}
-      </AppText>
-
-      {!faded && (
-        <View className="items-center px-0.5" style={{ gap: space(2), minHeight: space(14) }}>
-          <View className="flex-row" style={{ gap: 2 }}>
-            {phasesPresent.map((phase) => (
-              <View key={phase} className={`w-1.5 h-1.5 rounded-full ${PHASE_COLORS[phase].dot}`} />
-            ))}
-            {hasLearning && <View className="w-1.5 h-1.5 rounded-full bg-fill" />}
-          </View>
-
-          {large && firstRef && (
-            <AppText variant="micro" className="font-sans font-medium text-ink-2 text-center" numberOfLines={2}>
-              {firstRef.book.slice(0, 3)} {firstRef.chapter}:{firstRef.verseNumber}
-              {extraRefs > 0 ? ` +${extraRefs}` : ''}
-            </AppText>
-          )}
-          {large && !firstRef && day.data && day.data.newVersesPulled > 0 && (
-            <AppText variant="micro" className="font-sans font-medium text-ink-3 text-center" numberOfLines={1}>
-              +{day.data.newVersesPulled} new
-            </AppText>
-          )}
-
-          {loadMins > 0 && (
-            <AppText variant="micro" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
-              {loadMins}m
-            </AppText>
-          )}
-        </View>
-      )}
-    </Pressable>
   );
 }

@@ -27,6 +27,8 @@ export function stageRing(palette: ThemeColors, stage: VerseStage): string {
       return palette.stageDaily;
     case 'steady':
       return palette.stageWeekly;
+    case 'secure':
+      return palette.stageTop;
     default:
       return palette.stageComplete;
   }

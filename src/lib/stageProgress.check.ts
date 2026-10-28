@@ -58,10 +58,10 @@ const onStep = (step: number, reviews: number, overrides: Partial<QueueItem> = {
 console.log('groups');
 check('queued is waiting', verseStage(item({ status: 'queued', retentionPhase: 'none' })) === 'waiting');
 check('learning', verseStage(item({ status: 'learning', retentionPhase: 'none' })) === 'learning');
-check('retained is kept', verseStage(item({ status: 'retained', retentionPhase: 'none' })) === 'kept');
+check('retained is Secure', verseStage(item({ status: 'retained', retentionPhase: 'none' })) === 'secure');
 check('steps 0-2 are Settling', [0, 1, 2].every((s) => verseStage(onStep(s, 0)) === 'settling'));
 check('steps 3-4 are Steady', [3, 4].every((s) => verseStage(onStep(s, 0)) === 'steady'));
-check('steps 5-7 are Kept', [5, 6, 7].every((s) => verseStage(onStep(s, 0)) === 'kept'));
+check('steps 5-6 are Kept, step 7 is Secure', [5, 6].every((s) => verseStage(onStep(s, 0)) === 'kept') && verseStage(onStep(7, 0)) === 'secure');
 check('ladderStep wins over the old phase', verseStage(onStep(4, 2, { retentionPhase: 'daily', currentStreakCount: 3 })) === 'steady');
 check('only step 7 is the top', isTopStep(onStep(7, 0)) && !isTopStep(onStep(6, 0)) && !isTopStep(item({ status: 'learning', retentionPhase: 'none' })));
 
@@ -114,7 +114,7 @@ check('a stray catchUp above Every 4 days is ignored', !cuHigh.catchUp && cuHigh
 
 console.log('the top');
 const top = stageProgress(onStep(7, 0), PLAN, TODAY);
-check('Every 6 months reads "for good"', top.top && top.stage === 'kept' && top.position === 'Every 6 months, for good' && top.fraction === 1, top);
+check('Every 6 months reads "for good"', top.top && top.stage === 'secure' && top.position === 'Every 6 months, for good' && top.fraction === 1, top);
 check('nothing to move up to', top.movesUpOn === null && top.remaining === 0);
 check('retained verses are on the top', stageProgress(item({ status: 'retained', retentionPhase: 'none' }), PLAN, TODAY).top);
 
@@ -194,14 +194,14 @@ check('neighbours at the same point share a row, a slipped one included', g.sett
 check('a neighbour further along gets its own row', g.settling.some((x) => x.verses.join(',') === '8'));
 check('closest to moving up first', g.settling[0].verses.join(',') === '8', g.settling.map((x) => x.key));
 check('Steady groups on their own', g.steady.length === 1 && g.steady[0].book === 'Joshua');
-check('the top step groups inside Kept, flagged', g.kept.length === 1 && g.kept[0].verses.length === 2 && g.kept[0].progress.top);
+check('the top step groups as Secure, flagged', g.secure.length === 1 && g.secure[0].verses.length === 2 && g.secure[0].progress.top);
 check('waiting verses are left to the reorder list', g.waiting.length === 0);
 const joinsAfter = g.learning.find((x) => x.verses[0] === 9);
 const joinsBefore = g.learning.find((x) => x.verses[0] === 5);
 check('a Learning verse after a passage says it joins it', joinsAfter?.joins === 'Joins verses 6–8 when it moves up', joinsAfter?.joins);
 check('...and one before it says the same', joinsBefore?.joins === 'Joins verses 6–8 when it moves up', joinsBefore?.joins);
 const counts = stageCounts(q);
-check('counts every verse', counts.settling === 3 && counts.steady === 1 && counts.kept === 2 && counts.learning === 2 && counts.waiting === 1, counts);
+check('counts every verse', counts.settling === 3 && counts.steady === 1 && counts.kept === 0 && counts.secure === 2 && counts.learning === 2 && counts.waiting === 1, counts);
 
 console.log('passages and references');
 const runs = passageRuns([
@@ -236,14 +236,14 @@ check('2 a day on Mon, Wed, Fri', startDay('w1') === 12 && startDay('w2') === 12
 check('no learning days, nothing starts', projectStartDates(fq, { ...FPLAN, learningDays: [] }, FTODAY).size === 0);
 check('an open-ended pause starts nothing', projectStartDates(fq, { ...FPLAN, pausedAt: '2026-10-01T00:00:00Z', pausedUntil: null }, FTODAY).size === 0);
 const now = forecastCounts(fq, FPLAN, FTODAY, starts, FTODAY);
-check('now is the counts as they stand', now.waiting === 5 && now.settling === 1 && now.kept === 1, now);
+check('now is the counts as they stand', now.waiting === 5 && now.settling === 1 && now.secure === 1, now);
 const m1 = forecastCounts(fq, FPLAN, horizonDate('m1', FTODAY), starts, FTODAY);
 check('in a month all five are in Settling', m1.waiting === 0 && m1.learning === 0 && m1.settling === 5, m1);
 check('the Every 4 days verse due to move up is Steady by then', m1.steady === 1, m1);
 check('the total never changes', Object.values(m1).reduce((a, b) => a + b, 0) === fq.length);
 check('learned counts Settling onward', learnedCount(m1) === 7, learnedCount(m1));
 const y1 = forecastCounts(fq, FPLAN, horizonDate('y1', FTODAY), starts, FTODAY);
-check('in a year the five and the Steady verse are Kept', y1.kept === 7, y1);
+check('in a year the five and the Steady verse are Kept', y1.kept === 6 && y1.secure === 1, y1);
 check('a waiting verse with no start stays waiting', stageOn(waiting[0], PLAN, horizonDate('y1', FTODAY), undefined, FTODAY) === 'waiting');
 const learnedBy = allLearnedBy(waiting, PLAN, starts, FTODAY);
 check('all learned the day after the last starts', learnedBy instanceof Date && learnedBy.getDate() === 17, learnedBy);

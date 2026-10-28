@@ -1,6 +1,6 @@
 // Plain data helpers for app state: the canonical verse id, normalizers for
 // loosely-typed Firestore docs, and small shape mappers. Pure -- no React.
-import type { GroupPlan, MemoryPlan, QueueItem, Recording, VerseState } from '../types';
+import type { GroupPlan, QueueItem, Recording, VerseState } from '../types';
 
 // Canonical QueueItem.verseId shape, translation-prefixed so the same
 // book/chapter/verse in two different translations are two independent
@@ -112,30 +112,3 @@ export function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 // Firestore COLLECTION was always 'groupPlans' (circles/{id}/groupPlans), so
 // this single field is the only place the old wording survives.
 export const JOINED_GROUP_PLANS_FIELD = 'joinedStudyPlans';
-
-// Normalizes a loosely-typed shared/friend plan doc into a real MemoryPlan.
-// Retention fields only: adopting someone else's plan must never touch the
-// adopter's Rhythm, and pre-split shared docs still carry the author's
-// learningDays/newVersesPace/maxReviewCap, which are deliberately ignored
-// here rather than copied over.
-//
-// `isActive`/`updatedAt` are set for the adopter; callers supply id + name.
-export function normalizeAdoptedPlan(plan: any): MemoryPlan {
-  return {
-    id: '',
-    name: plan.name || 'Custom Plan',
-    retentionRigor: plan.retentionRigor || 'standard',
-    dailyPhaseWeeks: plan.dailyPhaseWeeks ?? 7,
-    weeklyPhaseMonths: plan.weeklyPhaseMonths ?? 6,
-    monthlyPhaseYears: plan.monthlyPhaseYears ?? 5,
-    masteryTouches: plan.masteryTouches ?? 3,
-    reviewsRequired: plan.reviewsRequired ?? 1,
-    missPolicy: plan.missPolicy || 'standard',
-    missPolicyAskEveryTime: plan.missPolicyAskEveryTime ?? false,
-    graceCount: plan.graceCount ?? 1,
-    refresherDailyDays: plan.refresherDailyDays ?? 7,
-    refresherWeeklyWeeks: plan.refresherWeeklyWeeks ?? 4,
-    isActive: true,
-    updatedAt: new Date().toISOString(),
-  };
-}

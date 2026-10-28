@@ -24,9 +24,10 @@ export const STAGE_FILL: Record<VerseStage, string> = {
   settling: 'bg-stage-daily',
   steady: 'bg-stage-weekly',
   kept: 'bg-stage-complete',
+  secure: 'bg-stage-top border border-stage-top-edge',
 };
 
-/** Fill for the top step, inside Kept. */
+/** Fill for the top step (Secure): a cool platinum with a thin edge. */
 export const TOP_FILL = 'bg-stage-top border border-stage-top-edge';
 
 export const fillFor = (stage: VerseStage, top?: boolean) => (top ? TOP_FILL : STAGE_FILL[stage]);
@@ -41,6 +42,7 @@ export function stageCaption(stage: VerseStage, plan: StagePlan): string {
     case 'settling':
     case 'steady':
     case 'kept':
+    case 'secure':
       return `${LADDER_GROUPS[stage].description}.`;
   }
 }
@@ -112,7 +114,7 @@ export function StageStrip({
         <View
           className="bg-line"
           // layout-ok: the connecting line behind the dots.
-          style={{ position: 'absolute', left: '10%', right: '10%', top: dot / 2 - 1, height: 2 }}
+          style={{ position: 'absolute', left: '8%', right: '8%', top: dot / 2 - 1, height: 2 }}
         />
       )}
       <View className="flex-row flex-wrap" style={{ rowGap: space(12) }}>
@@ -126,7 +128,7 @@ export function StageStrip({
               accessibilityRole={onPressStage ? 'button' : undefined}
               accessibilityLabel={`${STAGE_LABEL[stage]}: ${n} ${n === 1 ? 'verse' : 'verses'}${deltas && deltas[stage] ? `, ${deltas[stage] > 0 ? 'up' : 'down'} ${Math.abs(deltas[stage])} from today` : ''}`}
               className="items-center active:opacity-60"
-              style={{ width: oneRow ? `${100 / 5}%` : `${100 / 3}%`, gap: space(4) }}
+              style={{ width: oneRow ? `${100 / 6}%` : `${100 / 3}%`, gap: space(4) }}
             >
               <View
                 className={`rounded-full ${STAGE_FILL[stage]} ${stage === 'waiting' ? '' : 'border-[3px] border-surface'}`}

@@ -8,7 +8,7 @@ import type { ReviewGrade } from '../types';
 import { getLogicalDate, nthOccurrenceOfWeekday, scheduledDaysBetween } from './logicalDate';
 import { nextDueDateISO, type ReviewClock } from './retention';
 
-export type LadderGroup = 'settling' | 'steady' | 'kept';
+export type LadderGroup = 'settling' | 'steady' | 'kept' | 'secure';
 
 export interface LadderStepInfo {
   label: string;
@@ -17,7 +17,7 @@ export interface LadderStepInfo {
   baseReviews: number | null;
   group: LadderGroup;
   /** Theme palette key for the step's color. The top step also sets `top`. */
-  colorToken: 'stageDaily' | 'stageWeekly' | 'stageComplete';
+  colorToken: 'stageDaily' | 'stageWeekly' | 'stageComplete' | 'stageTop';
   /** The every-6-months step ("halo and glint"). */
   top?: true;
 }
@@ -32,7 +32,7 @@ export const LADDER: readonly LadderStepInfo[] = [
   { label: 'Every 2 weeks', intervalDays: 14, baseReviews: 6, group: 'steady', colorToken: 'stageWeekly' },
   { label: 'Every 4 weeks', intervalDays: 28, baseReviews: 12, group: 'kept', colorToken: 'stageComplete' },
   { label: 'Every 8 weeks', intervalDays: 56, baseReviews: 6, group: 'kept', colorToken: 'stageComplete' },
-  { label: 'Every 6 months', intervalDays: 182, baseReviews: null, group: 'kept', colorToken: 'stageComplete', top: true },
+  { label: 'Every 6 months', intervalDays: 182, baseReviews: null, group: 'secure', colorToken: 'stageTop', top: true },
 ];
 
 export const TOP_STEP = LADDER.length - 1;
@@ -42,7 +42,8 @@ export const FIRST_WEEKLY_STEP = 3;
 export const LADDER_GROUPS: Record<LadderGroup, { name: string; description: string }> = {
   settling: { name: 'Settling', description: 'Reviewed every 1–4 days' },
   steady: { name: 'Steady', description: 'Reviewed every 1–2 weeks' },
-  kept: { name: 'Kept', description: 'Reviewed every 4–8 weeks, then every 6 months for good' },
+  kept: { name: 'Kept', description: 'Reviewed every 4–8 weeks' },
+  secure: { name: 'Secure', description: 'Reviewed every 6 months, for good' },
 };
 
 export type Thoroughness = 0.5 | 1 | 1.5 | 2;

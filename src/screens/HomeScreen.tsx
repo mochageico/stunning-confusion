@@ -13,7 +13,8 @@ import { formatDate } from '../lib/format';
 import { translationLabel } from '../data';
 import { useThemeColors } from '../components/theme';
 import { MIX_NAMES } from '../lib/formatNames';
-import { FirmUpCard, WelcomeBackCard } from '../components/TodayCards';
+import { FirmUpCard, NextSevenDays, WelcomeBackCard } from '../components/TodayCards';
+import { useCalendarDays } from '../state/useCalendarDays';
 import { firmUpItems, lateNoteFor, welcomeBack } from '../lib/todayCards';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import ManualLogSheet, { logManualAnswers } from '../components/practice/ManualLogSheet';
@@ -181,6 +182,7 @@ const REVIEW_STAGES = [
   { key: 'settling', label: 'Settling', dot: 'bg-stage-daily' },
   { key: 'steady', label: 'Steady', dot: 'bg-stage-weekly' },
   { key: 'kept', label: 'Kept', dot: 'bg-stage-complete' },
+  { key: 'secure', label: 'Secure', dot: 'bg-stage-top' },
 ] as const;
 
 function StageHeading({ label, dot, count }: { label: string; dot: string; count: number }) {
@@ -244,6 +246,8 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const welcome = welcomeDismissed || isPausedNow ? null : welcomeBack(welcomeBackDays, todayKey);
   const firmUps = isPausedNow ? [] : firmUpItems(memoryQueue, todayKey);
 
+  const weekAhead = useCalendarDays(state, 7);
+
   const firstName = (user?.displayName || 'Friend').split(' ')[0];
 
   const space = useScaledSpace();
@@ -272,10 +276,12 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const settlingReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'settling');
   const steadyReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'steady');
   const keptReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'kept');
+  const secureReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'secure');
 
   const groupedSettlingReviewing = groupQueueItems(settlingReviewItems);
   const groupedSteadyReviewing = groupQueueItems(steadyReviewItems);
   const groupedKeptReviewing = groupQueueItems(keptReviewItems);
+  const groupedSecureReviewing = groupQueueItems(secureReviewItems);
   const groupedPriming = groupQueueItems(queuedLookahead);
 
   const mapQueueToVerseStates = (items: QueueItem[]): VerseState[] => {
@@ -308,7 +314,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
   // then Kept, same order they're already listed in below) in one
   // continuous session instead of returning to Home between each.
   const handleReviewAllDue = () => {
-    const groups = [...groupedSettlingReviewing, ...groupedSteadyReviewing, ...groupedKeptReviewing].map(
+    const groups = [...groupedSettlingReviewing, ...groupedSteadyReviewing, ...groupedKeptReviewing, ...groupedSecureReviewing].map(
       (g) => g.items
     );
     startReviewSession(groups);
@@ -333,6 +339,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     settling: groupedSettlingReviewing,
     steady: groupedSteadyReviewing,
     kept: groupedKeptReviewing,
+    secure: groupedSecureReviewing,
   };
   const listenToEverything = () => {
     const allDashItems = [...learningItems, ...dueReviewItems, ...queuedLookahead];
@@ -598,6 +605,8 @@ export default function HomeScreen({ state }: { state: AppState }) {
             </CollapsibleCard>
 
             <AppButton size="lg" variant="secondary" Icon={Volume2} label="Listen to all of today's verses" onPress={listenToEverything} />
+
+            <NextSevenDays days={weekAhead} onOpenCalendar={() => navigateTo('memoryCalendar')} />
           </>
         )}
 

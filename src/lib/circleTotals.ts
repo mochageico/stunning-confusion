@@ -57,12 +57,13 @@ const inWeek = (iso: string | undefined, week: WeekBounds): boolean => {
 // ----------------------------------------------------------------------------
 
 /**
- * A review is a counted attempt at a verse past Learning: a pass, a miss, or
- * a miss covered by grace. Learning practice, skipped dates and hand
- * placements are not reviews.
+ * A review is a counted attempt at a verse past Learning: a pass or a miss
+ * (older logs also have a miss covered by grace). Learning practice, skipped
+ * dates, hand placements and a firm-up that wins a slipped review back (the
+ * review itself was already counted) are not reviews.
  */
 export const isReviewLog = (log: ReviewLog): boolean =>
-  log.stage !== 'learning' && (log.result === 'pass' || log.result === 'miss' || log.result === 'grace');
+  log.stage !== 'learning' && log.outcome !== 'wonBack' && (log.result === 'pass' || log.result === 'miss' || log.result === 'grace');
 
 /** Reviews logged this week, across the whole queue (each translation's copy is its own review). */
 export function reviewsInWeek(queue: QueueItem[], week: WeekBounds): number {

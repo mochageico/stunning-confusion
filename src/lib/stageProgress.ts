@@ -31,9 +31,9 @@ import {
 // days can move the real date by a few days; the copy says "about" for that.
 // ============================================================================
 
-export type VerseStage = 'waiting' | 'learning' | 'settling' | 'steady' | 'kept';
+export type VerseStage = 'waiting' | 'learning' | 'settling' | 'steady' | 'kept' | 'secure';
 
-export const STAGE_ORDER: VerseStage[] = ['waiting', 'learning', 'settling', 'steady', 'kept'];
+export const STAGE_ORDER: VerseStage[] = ['waiting', 'learning', 'settling', 'steady', 'kept', 'secure'];
 
 export const STAGE_LABEL: Record<VerseStage, string> = {
   waiting: 'Waiting',
@@ -41,10 +41,11 @@ export const STAGE_LABEL: Record<VerseStage, string> = {
   settling: LADDER_GROUPS.settling.name,
   steady: LADDER_GROUPS.steady.name,
   kept: LADDER_GROUPS.kept.name,
+  secure: LADDER_GROUPS.secure.name,
 };
 
 /** The reviewing groups, in ladder order. */
-export const REVIEW_STAGES: readonly LadderGroup[] = ['settling', 'steady', 'kept'];
+export const REVIEW_STAGES: readonly LadderGroup[] = ['settling', 'steady', 'kept', 'secure'];
 
 export interface StagePlan {
   /** Perfect recalls that move a verse out of Learning. */
@@ -86,7 +87,7 @@ export function legacyLadderState(item: QueueItem): LadderState {
 }
 
 export const verseStage = (item: QueueItem): VerseStage => {
-  if (item.status === 'retained') return 'kept';
+  if (item.status === 'retained') return 'secure';
   if (item.status === 'queued') return 'waiting';
   if (item.status === 'learning' || (item.ladderStep === undefined && item.retentionPhase === 'none')) return 'learning';
   return LADDER[ladderPlace(item)!.step].group;
@@ -246,7 +247,7 @@ export const LOG_STAGE: Record<ReviewLog['stage'], VerseStage> = {
   daily: 'settling',
   weekly: 'steady',
   monthly: 'kept',
-  retained: 'kept',
+  retained: 'secure',
 };
 
 /**
@@ -360,7 +361,7 @@ export function passageRuns(queue: QueueItem[]): PassageRun[] {
  * Kept's top step reads in Bible order after the rest.
  */
 export function groupByStage(queue: QueueItem[], plan: StagePlan, today: Date = new Date()): Record<VerseStage, StageGroup[]> {
-  const out: Record<VerseStage, StageGroup[]> = { waiting: [], learning: [], settling: [], steady: [], kept: [] };
+  const out: Record<VerseStage, StageGroup[]> = { waiting: [], learning: [], settling: [], steady: [], kept: [], secure: [] };
   const sorted = queue.filter((i) => i.status !== 'queued').sort(canonicalCompare);
 
   let current: StageGroup | null = null;
@@ -422,7 +423,7 @@ export function groupByStage(queue: QueueItem[], plan: StagePlan, today: Date = 
 
 /** Verse count per stage, for the strip across the top of My Verses. */
 export function stageCounts(queue: QueueItem[]): Record<VerseStage, number> {
-  const out: Record<VerseStage, number> = { waiting: 0, learning: 0, settling: 0, steady: 0, kept: 0 };
+  const out: Record<VerseStage, number> = { waiting: 0, learning: 0, settling: 0, steady: 0, kept: 0, secure: 0 };
   for (const item of queue) out[verseStage(item)]++;
   return out;
 }

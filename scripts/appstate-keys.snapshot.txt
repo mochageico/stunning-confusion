@@ -71,10 +71,8 @@ createGroupName: string
 createGroupPlan: (circleId: string, input: { name: string; description: string; }) => Promise<void>
 createGroupPrivacy: "private" | "public"
 creditGuided: (items: QueueItem[], kind: "touch" | "review", drill: "speak" | "type", accuracy?: ReadonlyMap<string, number> | undefined) => Promise<QueueItem[]>
-currentScreen: "home" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "planDesigner" | "activePlan" | "addVerses" | "mySchedule" | "verseSources" | "savedPlans" | "memoryCalendar" | "verseRoad" | "versePage" | "referenceDrill" | "threadDrill" | "guided" | "mixedReview" | "takeaways" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
+currentScreen: "home" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "activePlan" | "addVerses" | "memoryPlan" | "verseSources" | "memoryCalendar" | "verseRoad" | "versePage" | "referenceDrill" | "threadDrill" | "guided" | "mixedReview" | "takeaways" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
 currentTab: "home" | "verses" | "community" | "record" | "profile"
-customPlanName: string
-dailyPhaseWeeks: number
 dayStartHour: number
 declineChallenge: (challenge: Challenge) => Promise<void>
 declineFriendRequest: (request: FriendRequest) => Promise<void>
@@ -96,7 +94,6 @@ dismissNotificationAsk: () => void
 dismissOnboarding: () => Promise<void>
 dmThreads: DMThread[]
 downloadingRecordingIds: Set<string>
-editingPlanId: string | null
 endGroupChallenge: (challenge: GroupChallenge, status?: "completed" | "cancelled") => Promise<void>
 feedBookFilter: string
 feedChapterFilter: string
@@ -112,15 +109,10 @@ getMemoryLoadForecast: (queue: QueueItem[], sensitivity: "low" | "medium" | "hig
 getNextPullPreview: () => DailyPullResult
 getTodayAbbreviation: () => string
 getTodayDateString: () => string
-graceCount: number
 guidedPassageKey: string | null
 guidelinesAcceptedAt: string | null | undefined
 guidelinesPromptOpen: boolean
-handleActivatePlan: (planId: string) => Promise<void>
 handleBack: () => void
-handleCreateNewPlan: () => void
-handleDeletePlan: (planId: string) => Promise<void>
-handleEditPlan: (plan: MemoryPlan) => void
 handleFinishImportTagging: () => void
 handleMarkImportTap: (verseNumber: number) => void
 handleMarkVerseTap: (verseNumber: number) => void
@@ -128,7 +120,6 @@ handlePauseRecording: () => void
 handleResetRecording: () => Promise<void>
 handleResumeRecording: () => void
 handleReviewCompleted: (item: QueueItem, success: boolean, drillType?: "speak" | "type" | "reveal" | undefined, opts?: ReviewCompletedOpts | undefined) => Promise<void | "early">
-handleSavePlan: () => Promise<void>
 handleStartRecording: () => Promise<void>
 handleStopRecording: () => Promise<void>
 handleUpdateVerseStatus: (versesToUpdate: VerseState[], newStatus: "learning" | "memorized", customDrillType?: "speak" | "type" | "reveal" | undefined, opts?: ReviewCompletedOpts | undefined) => Promise<void>
@@ -142,7 +133,6 @@ inviteCodeInput: string
 isChatRecordingSaved: (sharedRecordingId: string) => boolean
 isCircleChatUnread: (circleId: string) => boolean
 isDMThreadUnread: (t: DMThread) => boolean
-isEditingBuiltInPlan: boolean
 isEditingCircleSettings: boolean
 isEditingSync: boolean
 isRecording: boolean
@@ -208,11 +198,7 @@ memoryQueue: QueueItem[]
 memoryQueueRef: RefObject<QueueItem[]>
 memoryQueueVisibility: "private" | "friends"
 memoryStreak: number
-missPolicy: "standard" | "custom" | "lenient" | "graceDiscretion"
-missPolicyAskEveryTime: boolean
-missedReviewQueue: { item: QueueItem; missedCycles: number; }[]
 modalVerses: VerseState[]
-monthlyPhaseYears: number
 myChallengeBadges: Challenge[]
 myCircles: Circle[]
 navigateTo: (screen: ScreenName, book?: string | null, chapter?: number | null, options?: { keepBack?: boolean | undefined; }) => void
@@ -224,7 +210,6 @@ notificationAskReason: string | null
 notificationPermission: "granted" | "denied" | "undetermined" | "unsupported"
 notificationPrefs: NotificationPrefs
 nowPlayingRecording: Recording | null
-openActivePlanDesigner: () => void
 openChallengeLeaderboard: GroupChallengeParticipant[]
 openChallengeLeaderboardId: string | null
 openChallengeLeaderboardModal: (challenge: GroupChallenge) => Promise<void>
@@ -238,7 +223,7 @@ openQuiz: (threadId: string, message: ChatMessage) => void
 openThreadDrill: (preset: ThreadDrillPreset | null) => void
 openVersePage: (ref: VersePageRef) => void
 outgoingFriendRequests: FriendRequest[]
-overrideVerseMemoryStatus: (versesToOverride: VerseState[], targetPhase: "learning" | "daily" | "weekly" | "monthly" | "retained", translationId: string, targetWeekday?: string | undefined, progressCount?: number | undefined) => void
+overrideVerseMemoryStatus: (versesToOverride: VerseState[], target: "learning" | { step: number; reviews: number; }, translationId: string, targetWeekday?: string | undefined) => void
 pauseReviews: (untilISO: string | null) => void
 pausedAt: string | null
 pausedUntil: string | null
@@ -270,8 +255,6 @@ recordingRangeStart: number | null
 recordingSeconds: number
 recordingSelectedVerses: { verse: number; text: string; }[]
 recordingTranslation: string
-refresherDailyDays: number
-refresherWeeklyWeeks: number
 relabelVerseLink: (id: string, label: string) => Promise<void>
 removeCircleMember: (circleId: string, memberUid: string) => Promise<void>
 removeFriend: (friend: Friend) => Promise<void>
@@ -283,16 +266,13 @@ reportContent: (input: { kind: ReportKind; targetUid?: string | undefined; targe
 requestNotificationPermission: () => Promise<boolean>
 requireCommunityGuidelines: () => void
 resetImportTaps: () => void
-resolveMissedReviewChoice: (_choice: "grace" | "escalate" | "reset", _overrides?: Record<string, "grace" | "escalate" | "reset"> | undefined) => void
 respondToCard: (scope: ChatScope, containerId: string, messageId: string, status: "willDo" | "notNow" | "done", extra?: { sharedRecordingId?: string | undefined; score?: number | undefined; }) => Promise<void>
 responsesByMessageId: { [x: string]: ChatResponse[]; }
 resumeReviews: () => void
-retentionRigor: "light" | "standard" | "deep" | "custom"
 reviewNotes: ReviewNote[]
 reviewSessionPosition: number
 reviewSessionTotal: number
 reviewsPaused: boolean
-reviewsRequired: number
 sabbathDay: string
 sabbathEnabled: boolean
 saveChapterOffline: (recordings: Recording[]) => Promise<void>
@@ -309,7 +289,6 @@ saveTakeaway: (spot: TakeawaySpot, fields: { text: string; note?: string | undef
 saveTakeawayDraft: (d: TakeawayDraft) => boolean
 saveVerseDoodle: (key: string, strokes: string[]) => void
 saveVerseSyncOffsets: (verseTimestamps: VerseTimestamp[]) => Promise<void>
-savedPlans: MemoryPlan[]
 searchUsers: (rawQuery: string) => Promise<void>
 searchingUsers: boolean
 sectionsForChapter: (book: string, chapter: number) => ChapterSections | null
@@ -349,16 +328,12 @@ setCreateGroupName: (value: SetStateAction<string>) => void
 setCreateGroupPrivacy: (value: SetStateAction<"private" | "public">) => void
 setCurrentScreen: (value: SetStateAction<ScreenName>) => void
 setCurrentTab: (value: SetStateAction<TabName>) => void
-setCustomPlanName: (value: SetStateAction<string>) => void
-setDailyPhaseWeeks: (value: SetStateAction<number>) => void
 setDayStartHour: (value: SetStateAction<number>) => void
-setEditingPlanId: (value: SetStateAction<string | null>) => void
 setFeedBookFilter: (value: SetStateAction<string>) => void
 setFeedChapterFilter: (value: SetStateAction<string>) => void
 setFeedRecordings: (value: SetStateAction<Recording[]>) => void
 setFeedTranslationFilter: (value: SetStateAction<string>) => void
 setFindSearchQuery: (value: SetStateAction<string>) => void
-setGraceCount: (value: SetStateAction<number>) => void
 setGroupPlanPriority: (planId: string, priority: "group" | "individual" | "additive") => Promise<void>
 setGuidedPassageKey: (value: SetStateAction<string | null>) => void
 setGuidedSetAside: (verseId: string, on: boolean) => void
@@ -374,10 +349,7 @@ setMasteryTouches: (value: SetStateAction<number>) => void
 setMaxReviewCap: (value: SetStateAction<number>) => void
 setMemoryGridColumns: (columns: 2 | 4) => void
 setMemoryQueue: (value: SetStateAction<QueueItem[]>) => void
-setMissPolicy: (value: SetStateAction<"standard" | "custom" | "lenient" | "graceDiscretion">) => void
-setMissPolicyAskEveryTime: (value: SetStateAction<boolean>) => void
 setModalVerses: (value: SetStateAction<VerseState[]>) => void
-setMonthlyPhaseYears: (value: SetStateAction<number>) => void
 setNewPlanDesc: (value: SetStateAction<string>) => void
 setNewPlanName: (value: SetStateAction<string>) => void
 setNewVersesPace: (value: SetStateAction<number>) => void
@@ -393,14 +365,9 @@ setRecordingRangeEnd: (value: SetStateAction<number | null>) => void
 setRecordingRangeStart: (value: SetStateAction<number | null>) => void
 setRecordingSeconds: (value: SetStateAction<number>) => void
 setRecordingTranslation: (value: SetStateAction<string>) => void
-setRefresherDailyDays: (value: SetStateAction<number>) => void
-setRefresherWeeklyWeeks: (value: SetStateAction<number>) => void
-setRetentionRigor: (value: SetStateAction<"light" | "standard" | "deep" | "custom">) => void
-setReviewsRequired: (value: SetStateAction<number>) => void
 setSabbathDay: (value: SetStateAction<string>) => void
 setSabbathEnabled: (value: SetStateAction<boolean>) => void
 setSaveRecordingDialog: (value: SetStateAction<boolean>) => void
-setSavedPlans: (value: SetStateAction<MemoryPlan[]>) => void
 setSelectedAddBook: (value: SetStateAction<string>) => void
 setSelectedAddChapter: (value: SetStateAction<number>) => void
 setSelectedBook: (value: SetStateAction<string | null>) => void
@@ -412,7 +379,6 @@ setSelectedUserProfile: (value: any) => void
 setSelectedVerseNumbers: (value: SetStateAction<number[]>) => void
 setShowAudioSelector: (value: SetStateAction<boolean>) => void
 setShowCreatePlanForm: (value: SetStateAction<boolean>) => void
-setShowMissedReviewPrompt: (value: SetStateAction<boolean>) => void
 setShowOnboarding: (value: SetStateAction<boolean>) => void
 setShowTour: (value: SetStateAction<boolean | "questions">) => void
 setStudioAbOverride: (value: SetStateAction<boolean | null>) => void
@@ -426,10 +392,8 @@ setVersePageRef: (value: SetStateAction<VersePageRef | null>) => void
 setVerses: (value: SetStateAction<VerseState[]>) => void
 setViewingGroupDetail: (value: SetStateAction<boolean>) => void
 setViewingGroupPlan: (value: SetStateAction<GroupPlan | null>) => void
-setWeeklyPhaseMonths: (value: SetStateAction<number>) => void
 showAudioSelector: boolean
 showCreatePlanForm: boolean
-showMissedReviewPrompt: boolean
 showOnboarding: boolean
 showTour: boolean | "questions"
 signOut: () => Promise<void>
@@ -439,6 +403,7 @@ startReviewSession: (groups: QueueItem[][]) => void
 studioAbOverride: boolean | null
 studioPlaybackEnabled: boolean
 swapCanBeClean: boolean
+switchVersesTab: (screen: "activePlan" | "memoryPlan" | "memoryCalendar") => void
 takeawayReplies: { [x: string]: TakeawayReply[]; }
 takeaways: { [x: string]: Takeaway; }
 thoroughness: 2 | 1 | 0.5 | 1.5
@@ -465,6 +430,7 @@ updateDefaultRecordingVisibility: (vis: "circle" | "private" | "public") => Prom
 updateDisplayName: (name: string) => Promise<void>
 updateGroupPlan: (circleId: string, planId: string, fields: Partial<Pick<GroupPlan, "name" | "description" | "versesPerWeek">>) => Promise<void>
 updateLadderSettings: (patch: Partial<LadderPrefs>) => Promise<void>
+updateMasteryTouches: (n: number) => Promise<void>
 updateMemoryQueue: (updater: (prev: QueueItem[]) => QueueItem[]) => void
 updateMemoryQueueVisibility: (vis: "private" | "friends") => Promise<void>
 updateNotificationPrefs: (patch: Partial<NotificationPrefs>) => Promise<void>
@@ -484,5 +450,4 @@ viewMemberProfileById: (uid: string) => Promise<void>
 viewingGroupDetail: boolean
 viewingGroupPlan: GroupPlan | null
 watchTakeawayReplies: (circleId: string, docId: string) => () => void
-weeklyPhaseMonths: number
 welcomeBackDays: SpreadDay[]

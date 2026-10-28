@@ -8,7 +8,8 @@
 // anyone in a group plan and badly wrong on an 'additive' membership.
 
 import { QueueItem, GroupPlan, GroupPlanMembership } from '../types';
-import { getMemoryCalendarProjection, CalendarPlanSettings } from './reviewCalendar';
+import { CalendarPlanSettings } from './reviewCalendar';
+import { getMemoryCalendarProjection } from './ladderCalendar';
 
 let failures = 0;
 function check(label: string, condition: boolean, detail?: unknown) {
@@ -43,9 +44,6 @@ function queued(verseId: string, orderIndex: number, originPlanId?: string): Que
 }
 
 const BASE: CalendarPlanSettings = {
-  dailyPhaseWeeks: 7,
-  weeklyPhaseMonths: 6,
-  monthlyPhaseYears: 5,
   // Every day is a learning day, so the projection window is all pull days
   // and nothing is masked by the weekday filter.
   learningDays: ['Su', 'M', 'T', 'W', 'Th', 'F', 'S'],
@@ -82,7 +80,7 @@ console.log('reviewCalendar — new-verse projection');
     { d1: days[1].newVerseItems.map((i) => i.verseId), d2: days[2].newVerseItems.map((i) => i.verseId) }
   );
   check(
-    'learningCount accumulates the projected pulls',
+    'learningCount counts the projected pulls while they are being learned',
     days[2].learningCount === days[1].learningCount + days[2].newVersesPulled
   );
 }
@@ -208,6 +206,38 @@ console.log('reviewCalendar — new-verse projection');
     8
   );
   check('an expired pause changes nothing', expired[0].dueReviews.length === 1);
+}
+
+
+// -------------------------------------------------------------- the ladder
+{
+  // Three neighbouring verses at Every day, review 6 of 7, due today: one
+  // passage, not three reviews; the 7th review moves it to Every 2 days.
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const verse = (n: number): QueueItem => ({
+    ...queued(`p${n}`, n),
+    verseNumber: n + 1,
+    status: 'reviewing',
+    retentionPhase: 'daily',
+    ladderStep: 0,
+    ladderReviews: 6,
+    nextReviewDueDate: today.toISOString(),
+  });
+  const queue = [verse(0), verse(1), verse(2)];
+  const days = getMemoryCalendarProjection(queue, { ...BASE, newVersesPace: 0 }, 6);
+  check('a passage is one review, whatever its verse count', days[0].dueReviews.length === 1 && days[0].dueReviews[0].verses === 3 && days[0].dueVerses === 3, days[0].dueReviews);
+  check('today it is review 6 of 7 at Every day', days[0].dueReviews[0].step === 0 && days[0].dueReviews[0].reviews === 6 && days[0].dueReviews[0].group === 'settling');
+  check(
+    'the 7th review moves it to Every 2 days: next two days later, then every 2 days',
+    days[1].dueReviews.length === 0 && days[2].dueReviews[0]?.step === 1 && days[2].dueReviews[0].reviews === 0 && days[4].dueReviews[0]?.reviews === 1,
+    days.map((d) => d.dueReviews.map((r) => `${r.step}.${r.reviews}`))
+  );
+  check('minutes count 15 seconds a verse', days[0].minutes === 1, days[0].minutes);
+  const three = queue.map((q) => ({ ...q, ladderReviews: 3 }));
+  const standard = getMemoryCalendarProjection(three, { ...BASE, newVersesPace: 0 }, 3);
+  const light = getMemoryCalendarProjection(three, { ...BASE, newVersesPace: 0, thoroughness: 0.5 }, 3);
+  check('Light thoroughness moves it up sooner than Standard', light[2].dueReviews[0]?.step === 1 && standard[2].dueReviews[0]?.step === 0, { light: light.map((d) => d.dueReviews[0]?.step), standard: standard.map((d) => d.dueReviews[0]?.step) });
 }
 
 console.log(failures === 0 ? '\ncheck:calendar — all assertions passed.' : `\ncheck:calendar — ${failures} FAILED.`);

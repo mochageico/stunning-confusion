@@ -54,7 +54,6 @@ import { PassMark, PracticeTextSize, SchemeChoice, setAppPref, useAppPrefs } fro
 import { printVerses, shareVersesAsText } from '../lib/exportVerses';
 import { resetTips } from '../lib/tips';
 import { LadderDryRun } from '../dev/LadderDryRun';
-import { ReviewSettings } from '../components/ReviewSettings';
 import { THOROUGHNESS_PRESETS } from '../lib/ladder';
 import { forgetAllSpeechSlips, forgetSpeechSlip, SLIP_LEARN_AFTER, useSpeechSlips } from '../lib/speechSlips';
 
@@ -75,7 +74,6 @@ type Page =
   | 'account'
   | 'formats'
   | 'recall'
-  | 'reviews'
   | 'text'
   | 'audio'
   | 'offline'
@@ -90,7 +88,6 @@ const PAGE_TITLE: Record<Page, string> = {
   account: 'Account',
   formats: 'Review formats',
   recall: 'Recall and typing',
-  reviews: 'Reviews',
   text: 'Bible and text',
   audio: 'Playback and sharing',
   offline: 'Offline audio',
@@ -254,7 +251,15 @@ function useMixChoices() {
  * Which section and Teach-It are warm-ups that never count, by the user's rule;
  * Scramble can, because you read every word to solve it.
  */
-function FormatsPage({ mix }: { mix: ReturnType<typeof useMixChoices> }) {
+function FormatsPage({
+  mix,
+  swapCanBeClean,
+  onSwapChange,
+}: {
+  mix: ReturnType<typeof useMixChoices>;
+  swapCanBeClean: boolean;
+  onSwapChange: (on: boolean) => void;
+}) {
   const space = useScaledSpace();
   return (
     <View style={{ gap: space(8) }}>
@@ -297,6 +302,31 @@ function FormatsPage({ mix }: { mix: ReturnType<typeof useMixChoices> }) {
       <Caption>
         {`${formatLabel('recite')} fills in when nothing else fits a section. Every ${MIX_NAMES.practiceTag} round is followed by one that counts, and a drill that doesn't grade you asks "Got it?" when it counts.`}
       </Caption>
+
+      <View style={{ gap: space(8), paddingTop: space(12) }}>
+        <SectionHeader title="Find the wrong word" />
+        <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+          <ToggleRow
+            label="Can count as a clean review"
+            hint="Off: Find the wrong word is practice only and never moves a passage."
+            value={swapCanBeClean}
+            onChange={onSwapChange}
+          />
+          <View className="bg-surface-2 rounded-btn" style={{ padding: space(12), gap: space(8) }}>
+            <AppText variant="body" className="font-serif text-ink">
+              The Lord is my shepherd, I shall not want
+            </AppText>
+            <AppText variant="caption" className="font-sans text-ink-2">
+              You spot the wrong word. The review ends as:
+            </AppText>
+            <View className={`rounded-btn ${swapCanBeClean ? 'bg-success-soft' : 'bg-fill'}`} style={{ padding: space(10) }}>
+              <AppText variant="label" className={`font-sans font-semibold ${swapCanBeClean ? 'text-success' : 'text-ink-2'}`}>
+                {swapCanBeClean ? 'Clean review' : 'Practice only, no credit'}
+              </AppText>
+            </View>
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -606,11 +636,8 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     memoryQueue,
     learningDays,
     newVersesPace,
-    savedPlans,
     selectedTranslationId,
     thoroughness,
-    cleanPct,
-    lateMovesBack,
     swapCanBeClean,
     updateLadderSettings,
   } = state;
@@ -721,11 +748,10 @@ export default function SettingsScreen({ state }: { state: AppState }) {
   const inputBox = 'bg-surface border border-line rounded-btn text-ink font-sans';
   const inputStyle = { paddingHorizontal: space(12), paddingVertical: space(10) };
 
-  const activePlan = savedPlans.find((p) => p.isActive) || savedPlans[0];
   const accentName = ACCENTS.find((a) => a.id === accentId)?.name ?? '';
   const schemeName = SCHEMES.find((s) => s.id === prefs.colorScheme)?.label ?? '';
   // Into a Verses-tab screen and back again: Back there returns here.
-  const openVersesScreen = (screen: 'mySchedule' | 'savedPlans') => navigateTo(screen, null, null, { keepBack: true });
+  const openMemoryPlan = () => navigateTo('memoryPlan', null, null, { keepBack: true });
 
   const home = (
     <>
@@ -741,24 +767,12 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           value={`${mix.counting} count · ${mix.practice} practice`}
           onPress={() => setPage('formats')}
         />
-        <ListRow
-          Icon={TrendingUp}
-          title="Reviews"
-          value={`${THOROUGHNESS_PRESETS.find((p) => p.value === thoroughness)?.label ?? 'Standard'} · clean at ${cleanPct}%`}
-          onPress={() => setPage('reviews')}
-        />
         <ListRow Icon={PenLine} title="Recall and typing" value={`Pass at ${Math.round(prefs.passMark * 100)}%`} onPress={() => setPage('recall')} />
         <ListRow
-          Icon={CalendarDays}
-          title="My Schedule"
-          value={`${learningDays.length} days · ${newVersesPace} a day`}
-          onPress={() => openVersesScreen('mySchedule')}
-        />
-        <ListRow
           Icon={SlidersHorizontal}
-          title="Review Settings"
-          value={activePlan ? activePlan.name : 'None chosen'}
-          onPress={() => openVersesScreen('savedPlans')}
+          title="Memory Plan Designer"
+          value={`${learningDays.length} days · ${newVersesPace} a day · ${THOROUGHNESS_PRESETS.find((p) => p.value === thoroughness)?.label ?? 'Standard'}`}
+          onPress={openMemoryPlan}
         />
         <ListRow Icon={PauseCircle} title="Pause reviews" value={pausedAt ? 'Paused' : 'Off'} onPress={openPause} />
       </GroupedList>
@@ -812,9 +826,6 @@ export default function SettingsScreen({ state }: { state: AppState }) {
   );
 
   const pages: Record<Exclude<Page, 'home'>, React.ReactNode> = {
-    reviews: (
-      <ReviewSettings prefs={{ thoroughness, cleanPct, lateMovesBack, swapCanBeClean }} onChange={updateLadderSettings} />
-    ),
     ladderDryRun: page === 'ladderDryRun' ? <LadderDryRun queue={memoryQueue} clock={reviewClock} /> : null,
     account: (
       <>
@@ -853,7 +864,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         </GroupedList>
       </>
     ),
-    formats: <FormatsPage mix={mix} />,
+    formats: <FormatsPage mix={mix} swapCanBeClean={swapCanBeClean} onSwapChange={(on) => updateLadderSettings({ swapCanBeClean: on })} />,
     recall: <RecallPage />,
     text: <TextPage state={state} />,
     audio: (

@@ -100,13 +100,13 @@ export function forecastCounts(
   today: Date = new Date()
 ): Record<VerseStage, number> {
   if (date.getTime() <= today.getTime()) return stageCounts(queue);
-  const out: Record<VerseStage, number> = { waiting: 0, learning: 0, settling: 0, steady: 0, kept: 0 };
+  const out: Record<VerseStage, number> = { waiting: 0, learning: 0, settling: 0, steady: 0, kept: 0, secure: 0 };
   for (const item of queue) out[stageOn(item, plan, date, starts.get(item.verseId), today)]++;
   return out;
 }
 
-/** Learned means past Learning: Settling, Steady or Kept. */
-export const learnedCount = (c: Record<VerseStage, number>) => c.settling + c.steady + c.kept;
+/** Learned means past Learning: Settling, Steady, Kept or Secure. */
+export const learnedCount = (c: Record<VerseStage, number>) => c.settling + c.steady + c.kept + c.secure;
 
 /**
  * When every one of these verses (say, a chapter's) will be learned. 'done'

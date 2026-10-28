@@ -57,13 +57,13 @@ check(
 );
 check('weekly and longer steps are whole weeks', LADDER.slice(3).every((s) => s.intervalDays % 7 === 0));
 check(
-  'groups: 3 Settling, 2 Steady, 3 Kept',
+  'groups: 3 Settling, 2 Steady, 2 Kept, 1 Secure',
   JSON.stringify(LADDER.map((s) => s.group)) ===
-    JSON.stringify(['settling', 'settling', 'settling', 'steady', 'steady', 'kept', 'kept', 'kept'])
+    JSON.stringify(['settling', 'settling', 'settling', 'steady', 'steady', 'kept', 'kept', 'secure'])
 );
 check(
   'colors follow the groups',
-  LADDER.every((s) => s.colorToken === { settling: 'stageDaily', steady: 'stageWeekly', kept: 'stageComplete' }[s.group])
+  LADDER.every((s) => s.colorToken === { settling: 'stageDaily', steady: 'stageWeekly', kept: 'stageComplete', secure: 'stageTop' }[s.group])
 );
 check('only the top step is flagged top', LADDER.filter((s) => s.top).length === 1);
 
