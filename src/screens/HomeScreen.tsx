@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Volume2, BookMarked, ChevronRight, ClipboardCheck, Compass, Layers, Plus, Route, Target } from 'lucide-react-native';
 
@@ -199,6 +200,8 @@ function StageHeading({ label, dot, count }: { label: string; dot: string; count
   );
 }
 
+const WELCOME_DISMISSED_KEY = 'home:welcomeDismissedDay';
+
 export default function HomeScreen({ state }: { state: AppState }) {
   const {
     user,
@@ -241,9 +244,20 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
   // Today's ladder cards: welcome back after time away (until dismissed), and
   // the firm-up item for a passage that slipped on its last review.
-  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  // The day it was dismissed is kept on the device, so closing it hides it for
+  // the rest of that day, across screen changes and app restarts.
   const todayKey = localDayKey(getLogicalDate(dayStartHour));
-  const welcome = welcomeDismissed || isPausedNow ? null : welcomeBack(welcomeBackDays, todayKey);
+  const [welcomeDismissedDay, setWelcomeDismissedDay] = useState<string | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem(WELCOME_DISMISSED_KEY)
+      .then((day) => setWelcomeDismissedDay((cur) => cur ?? day))
+      .catch(() => {});
+  }, []);
+  const dismissWelcome = () => {
+    setWelcomeDismissedDay(todayKey);
+    AsyncStorage.setItem(WELCOME_DISMISSED_KEY, todayKey).catch(() => {});
+  };
+  const welcome = welcomeDismissedDay === todayKey || isPausedNow ? null : welcomeBack(welcomeBackDays, todayKey);
   const firmUps = isPausedNow ? [] : firmUpItems(memoryQueue, todayKey);
 
   const weekAhead = useCalendarDays(state, 7);
@@ -447,7 +461,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
             {/* A section that just reached weekly reviews: asked once, quietly. */}
             <TakeawayAsk state={state} quiet />
 
-            {welcome && <WelcomeBackCard data={welcome} onDismiss={() => setWelcomeDismissed(true)} />}
+            {welcome && <WelcomeBackCard data={welcome} onDismiss={dismissWelcome} />}
             <FirmUpCard items={firmUps} onStart={(verses) => handleGroupPractice('learn', verses)} />
 
             <CollapsibleCard

@@ -252,8 +252,8 @@ export default function ListenPanel({
               // just marks where playback begins.
               if (segmentClosed && !inSelectionRange) {
                 cardClassName += 'opacity-40';
-              } else {
-                cardClassName += segmentClosed ? 'bg-success-soft' : 'bg-warning-soft';
+              } else if (segmentClosed) {
+                cardClassName += 'bg-success-soft';
               }
             }
 
@@ -450,7 +450,7 @@ export default function ListenPanel({
                     size="sm"
                     onPress={() => setOpenSetting('speed')}
                     accessibilityLabel={`Playback speed ${listenSpeed.toFixed(1)}×`}
-                    className="flex-row items-center justify-center gap-1 rounded-full border shrink-0 bg-surface border-line-strong"
+                    className="flex-1 flex-row items-center justify-center gap-1 rounded-full border bg-surface border-line-strong"
                   >
                     <Sliders size={10} color={palette.ink3} />
                     <AppText variant="micro" numberOfLines={1} className="font-sans font-semibold text-ink">
@@ -462,7 +462,7 @@ export default function ListenPanel({
                 <AppButton // button-ok: a Listen setting pill that draws its own on/off state
                   size="sm"
                   onPress={() => setOpenSetting((cur) => (cur === 'repeats' ? null : 'repeats'))}
-                  className={`rounded-full border shrink-0 ${openSetting === 'repeats' ? 'bg-surface-2 border-line-strong' : 'bg-surface border-line-strong'}`}
+                  className={`flex-1 rounded-full border ${openSetting === 'repeats' ? 'bg-surface-2 border-line-strong' : 'bg-surface border-line-strong'}`}
                 >
                   <AppText variant="micro" numberOfLines={1} className="font-sans font-semibold text-ink">
                     {repeatsPerVerse}× each
@@ -476,7 +476,7 @@ export default function ListenPanel({
                   onPress={toggleShuffle}
                   accessibilityRole="switch"
                   accessibilityState={{ checked: shuffle }}
-                  className={`flex-row items-center gap-1 rounded-full border shrink-0 ${shuffle ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
+                  className={`flex-1 flex-row items-center justify-center gap-1 rounded-full border ${shuffle ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
                 >
                   <Shuffle size={10} color={shuffle ? palette.accent : palette.ink3} />
                   <AppText variant="micro" numberOfLines={1} className={`font-sans font-semibold ${shuffle ? 'text-accent' : 'text-ink-2'}`}>
@@ -491,7 +491,7 @@ export default function ListenPanel({
                   onPress={() => setRepeatMode((m) => (m === 'playlist' ? 'off' : 'playlist'))}
                   accessibilityRole="switch"
                   accessibilityState={{ checked: repeatMode === 'playlist' }}
-                  className={`flex-row items-center gap-1 rounded-full border shrink-0 ${repeatMode === 'playlist' ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
+                  className={`flex-1 flex-row items-center justify-center gap-1 rounded-full border ${repeatMode === 'playlist' ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
                 >
                   <Repeat size={10} color={repeatMode === 'playlist' ? palette.accent : palette.ink3} />
                   <AppText variant="micro" numberOfLines={1} className={`font-sans font-semibold ${repeatMode === 'playlist' ? 'text-accent' : 'text-ink-2'}`}>
