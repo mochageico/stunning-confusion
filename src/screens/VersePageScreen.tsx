@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { Check } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronUp } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
@@ -40,6 +40,8 @@ import { LADDER, stepReviewCount } from '../lib/ladder';
 // ============================================================================
 
 const ROAD: VerseStage[] = ['learning', 'settling', 'steady', 'kept'];
+/** Verses shown before "Show all". A passage of this many or fewer isn't collapsible. */
+const COLLAPSED_VERSES = 5;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const shortDate = (d: Date, now: Date) =>
@@ -70,6 +72,8 @@ export default function VersePageScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  // A long passage shows its first few verses until asked for the rest.
+  const [showAllVerses, setShowAllVerses] = useState(false);
 
   const plan: StagePlan = { masteryTouches };
   const now = new Date();
@@ -118,6 +122,7 @@ export default function VersePageScreen({ state }: { state: AppState }) {
   const currentIdx = ROAD.indexOf(stage); // -1 while waiting
   const next = first.nextReviewDueDate ? new Date(first.nextReviewDueDate) : null;
   const ids = items.map((i) => i.verseId);
+  const collapsible = items.length > COLLAPSED_VERSES;
   const script = textScriptFor(ref.translationId, ref.book);
   const rtl = isRtl(script);
 
@@ -264,7 +269,7 @@ export default function VersePageScreen({ state }: { state: AppState }) {
             (not nested in the text, where it clipped the first line on iOS),
             and Hebrew right to left. */}
         <View className="bg-surface border border-line rounded-card" style={{ paddingVertical: space(14), paddingHorizontal: space(16), gap: space(10) }}>
-          {items.map((item) => (
+          {(collapsible && !showAllVerses ? items.slice(0, COLLAPSED_VERSES) : items).map((item) => (
             <View key={item.verseId} className={rtl ? 'flex-row-reverse' : 'flex-row'} style={{ gap: space(10) }}>
               {items.length > 1 && (
                 <AppText
@@ -280,6 +285,18 @@ export default function VersePageScreen({ state }: { state: AppState }) {
               </AppText>
             </View>
           ))}
+          {collapsible && (
+            <View className="items-start">
+              <AppButton
+                size="sm"
+                variant="quiet"
+                Icon={showAllVerses ? ChevronUp : ChevronDown}
+                label={showAllVerses ? 'Show fewer verses' : `Show all ${items.length} verses`}
+                accessibilityState={{ expanded: showAllVerses }}
+                onPress={() => setShowAllVerses(!showAllVerses)}
+              />
+            </View>
+          )}
         </View>
 
         {/* Where it is on the road */}
