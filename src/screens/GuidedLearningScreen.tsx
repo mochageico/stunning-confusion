@@ -18,6 +18,8 @@ import { threadSlips, ThreadSlip, threadSpan, threadStartVerseCounts, ThreadCue 
 import { reviewPassAccuracy, WordOutcome } from '../lib/recitation';
 import { blankExceptFirstLetter, joinWords, normalizeToken, scriptOfVerse, splitWords } from '../lib/textScript';
 import { loadPracticePrefs, savePracticePrefs } from '../lib/practicePrefs';
+import { getLogicalDate, localDayKey } from '../lib/logicalDate';
+import { gradedOnDay } from '../lib/retention';
 import {
   buildPassages,
   coldCheckQueue,
@@ -639,7 +641,10 @@ function Sitting({
     const readyIds = new Set(ready.map((i) => i.verseId));
     const window = stitchWindow(items);
     const next = nextNewVerse(items);
-    const dueCount = reviewsPaused ? 0 : state.memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate)).length;
+    const dayKey = localDayKey(getLogicalDate(dayStartHour));
+    const dueCount = reviewsPaused
+      ? 0
+      : state.memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate) && !gradedOnDay(q, dayKey)).length;
     const learnDay = env.pace > 0;
 
     const plan = [

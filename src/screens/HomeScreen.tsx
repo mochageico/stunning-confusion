@@ -18,6 +18,7 @@ import { FirmUpCard, NextSevenDays, WelcomeBackCard } from '../components/TodayC
 import { useCalendarDays } from '../state/useCalendarDays';
 import { firmUpItems, lateNoteFor, welcomeBack } from '../lib/todayCards';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
+import { gradedOnDay } from '../lib/retention';
 import ManualLogSheet, { logManualAnswers } from '../components/practice/ManualLogSheet';
 import type { SelfCheckAnswer } from '../lib/grading';
 import { verseStage } from '../lib/stageProgress';
@@ -277,7 +278,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
   );
   const dueReviewItems = isPausedNow
     ? []
-    : memoryQueue.filter((item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate));
+    : memoryQueue.filter((item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate) && !gradedOnDay(item, todayKey));
   const queuedLookahead = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead);
 
   const estMinutes = getEstimatedReviewTime(memoryQueue, cognitiveLoadSensitivity);

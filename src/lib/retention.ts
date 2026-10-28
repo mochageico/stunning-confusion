@@ -4,7 +4,7 @@
 // active plan's settings; nothing here reads React state or Firestore.
 import type { QueueItem } from '../types';
 import { isDayPaused } from './reviewCalendar';
-import { advancePastSabbath, DAY_ABBREVS, getLogicalDate, nthOccurrenceOfWeekday } from './logicalDate';
+import { advancePastSabbath, DAY_ABBREVS, getLogicalDate, localDayKey, nthOccurrenceOfWeekday } from './logicalDate';
 
 /** The active plan's settings that move due dates around. */
 export interface ReviewClock {
@@ -31,6 +31,14 @@ export function isReviewDue(dueDateISO: string | null | undefined, referenceDate
   const due = new Date(dueDateISO);
   return due.toDateString() === referenceDate.toDateString() || due.getTime() < referenceDate.getTime();
 }
+
+/**
+ * This verse already has its grade for `day` (a localDayKey): reviewed on its
+ * own, or in a mixed review. Its passage stays due until every member has a
+ * grade (passages.ts), but this verse is done for the day, so Today stops
+ * listing, counting or timing it.
+ */
+export const gradedOnDay = (item: Pick<QueueItem, 'dayResult'>, day: string): boolean => item.dayResult?.day === day;
 
 // Has any OTHER verse of this book+chapter already established a shared
 // review-anchor weekday? Undefined if no chunk of this chapter has ever
@@ -90,8 +98,11 @@ export const computeDayReviewLoad = (
   // Nothing is due while reviews are paused, so a paused day costs nothing
   // -- the same rule Home's review list and the calendar follow.
   if (isDayPaused(date, isToday, pausedAt, pausedUntil)) return { seconds, count };
+  const dayKey = localDayKey(date);
   queue.forEach((item) => {
     if (item.status !== 'reviewing') return;
+    // Graded today already: nothing left for this verse to cost today.
+    if (isToday && gradedOnDay(item, dayKey)) return;
     const due = item.nextReviewDueDate ? new Date(item.nextReviewDueDate) : null;
     const isDue = isToday ? isReviewDue(item.nextReviewDueDate, date) : !!due && due.toDateString() === date.toDateString();
     if (!isDue) return;
