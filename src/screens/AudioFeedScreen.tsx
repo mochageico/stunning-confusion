@@ -263,7 +263,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
             <EmptyState
               Icon={Volume2}
               title="No recordings match"
-              message="Try a wider search, or share your own: record on the Record tab and choose Circle or Public."
+              message="Try a wider search, or share your own: record on the Record tab and choose Friends & Circles."
             />
           </View>
         ) : (
