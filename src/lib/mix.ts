@@ -193,6 +193,15 @@ export const todayOrder = (due: QueueItem[]): QueueItem[] => {
   return due.map((item, pos) => ({ item, pos })).sort((a, b) => rank(a.item) - rank(b.item) || a.pos - b.pos).map((x) => x.item);
 };
 
+/**
+ * Due items not yet graded on `day` (a localDayKey). A passage stays due until
+ * every member has a grade for the day (passages.ts), so a session stopped
+ * after 4 of 6 sections leaves the whole chapter due. Leaving out what already
+ * has today's grade lets the next session pick up where the last one stopped;
+ * saying it again could only lower that grade (the engine keeps the worse).
+ */
+export const notGradedOn = (due: QueueItem[], day: string): QueueItem[] => due.filter((i) => i.dayResult?.day !== day);
+
 /** Unbroken runs of verse numbers. */
 const runsOf = <V extends { verse: number }>(sorted: V[]): V[][] => {
   const runs: V[][] = [];

@@ -18,6 +18,7 @@ import {
   MixState,
   mixSummary,
   MixVerseResult,
+  notGradedOn,
   readMixCounts,
   readMixFormats,
   roundCredits,
@@ -543,6 +544,26 @@ console.log('Counts or Practice, per format');
   const fwPlan = buildMixPlan({ ...fullInput(['findWrongWord', 'recite']), counts: { findWrongWord: false } }, seeded(8));
   const fwOk = fwPlan.rounds.every((r, i) => r.format !== 'findWrongWord' || (!r.counts && fwPlan.rounds[i + 1]?.counts));
   check('Find the wrong word set to Practice: never counts, always followed', fwOk, fwPlan.rounds.map((r) => `${r.format}:${r.counts}`));
+}
+
+// ------------------------------------------------- resuming a day ----
+console.log('Picking up where the last session stopped');
+{
+  // Matthew 7:1-11 graded earlier today (sections 1-3), the rest not yet; 7:12 graded yesterday.
+  const day = '2026-10-22';
+  const graded = matt.map((q) =>
+    q.verseNumber <= 11
+      ? { ...q, dayResult: { day, grade: 'clean' as ReviewGrade } }
+      : q.verseNumber === 12
+        ? { ...q, dayResult: { day: '2026-10-21', grade: 'clean' as ReviewGrade } }
+        : q
+  );
+  const left = notGradedOn(graded, day);
+  check('Verses graded today are left out', left.every((q) => q.verseNumber >= 12) && left.length === 18, left.map((q) => q.verseNumber));
+  check('A grade from an earlier day does not count as done', left.some((q) => q.verseNumber === 12));
+  const plan = buildMixPlan({ ...fullInput(['recite']), due: left }, seeded(9));
+  const first = plan.units[plan.rounds.find((r) => r.role !== 'opener')!.unitIndex];
+  check('The next session starts at the first section not done (Golden rule)', first.start === 12 && first.label === 'Golden rule', first);
 }
 
 console.log(failures === 0 ? '\nAll mix checks passed.' : `\n${failures} mix check(s) FAILED.`);

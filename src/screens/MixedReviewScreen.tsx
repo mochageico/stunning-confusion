@@ -24,6 +24,7 @@ import { drillSections, DrillSection } from '../lib/sectionDrills';
 import { summarizeOutcomes, WordOutcome } from '../lib/recitation';
 import { normalizeToken, scriptOfVerse } from '../lib/textScript';
 import { loadPracticePrefs } from '../lib/practicePrefs';
+import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { openSettingsAt } from './SettingsScreen';
 import { mapQueueItemsToVerseStates } from '../lib/appData';
 import { FORMATS, FormatId, formatLabel, formatTag, MIX_NAMES } from '../lib/formatNames';
@@ -47,6 +48,7 @@ import {
   readMixCounts,
   readMixFormats,
   startMix,
+  notGradedOn,
   todayOrder,
   verseGrade,
 } from '../lib/mix';
@@ -964,7 +966,7 @@ function Session({
 
 export default function MixedReviewScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
-  const { memoryQueue, reviewsPaused, navigateTo, sectionsForChapter, cleanPct, swapCanBeClean } = state;
+  const { memoryQueue, reviewsPaused, navigateTo, sectionsForChapter, cleanPct, swapCanBeClean, dayStartHour } = state;
 
   const [enabled, setEnabled] = useState<FormatId[] | null>(null);
   const [counts, setCounts] = useState<MixCounts>(() => readMixCounts(undefined));
@@ -975,11 +977,14 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
     });
   }, []);
 
-  // Today's due reviews, in Today's order. The planner takes the filtered list.
-  const due = useMemo(
-    () => (reviewsPaused ? [] : todayOrder(memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate)))),
-    [memoryQueue, reviewsPaused]
-  );
+  // Today's due reviews, in Today's order, less any verse already graded
+  // today: a session stopped partway resumes at the first section not done.
+  // The planner takes the filtered list.
+  const due = useMemo(() => {
+    if (reviewsPaused) return [];
+    const today = localDayKey(getLogicalDate(dayStartHour));
+    return todayOrder(notGradedOn(memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate)), today));
+  }, [memoryQueue, reviewsPaused, dayStartHour]);
 
   const [session, setSession] = useState<{ state: MixState; startedAt: number } | null>(null);
 
