@@ -14,6 +14,23 @@ import type { Recording } from '../types';
  *      because post-processing didn't work out.
  */
 
+/**
+ * A render normally lands within seconds. Past this, the function has died
+ * without writing a terminal status (timeout, OOM, the trigger never firing)
+ * and nothing will ever flip it — so stop showing "Polishing audio…" forever
+ * and treat it like 'failed': just the original take.
+ */
+const STUDIO_PENDING_GIVE_UP_MS = 15 * 60 * 1000;
+
+/** True while a studio render is genuinely still expected to arrive. */
+export function isStudioPending(recording: Pick<Recording, 'id' | 'studioStatus'> | null | undefined): boolean {
+  if (recording?.studioStatus !== 'pending') return false;
+  // Ids are `rec_${Date.now()}` (see persistRecording); anything else has no
+  // readable age, so it is not worth waiting on.
+  const startedAt = Number(recording.id.match(/^rec_(\d+)$/)?.[1]);
+  return Number.isFinite(startedAt) && Date.now() - startedAt < STUDIO_PENDING_GIVE_UP_MS;
+}
+
 /** True when a processed render exists and is ready to play. */
 export function hasStudioAudio(recording: Pick<Recording, 'studioAudioUrl' | 'studioStatus'> | null | undefined): boolean {
   return !!recording?.studioAudioUrl && recording.studioStatus === 'ready';
@@ -64,10 +81,9 @@ export function hasPlayableAudio(
 }
 
 /** Copy for the studio badge/toggle, so the states read consistently. */
-export function studioStatusLabel(recording: Pick<Recording, 'studioStatus'> | null | undefined): string | null {
+export function studioStatusLabel(recording: Pick<Recording, 'id' | 'studioStatus'> | null | undefined): string | null {
+  if (isStudioPending(recording)) return 'Polishing audio…';
   switch (recording?.studioStatus) {
-    case 'pending':
-      return 'Polishing audio…';
     case 'ready':
       return 'Studio';
     default:
