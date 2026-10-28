@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronDown, ChevronRight } from 'lucide-react-native';
 
 import { AppText, useFontScale, useScaledSpace } from './design';
 import { Badge } from './blocks';
@@ -155,6 +155,75 @@ export function StageStrip({
         })}
       </View>
     </View>
+  );
+}
+
+/** Learned stages first, Waiting last: the grey remainder of the bar. */
+const BAR_ORDER: VerseStage[] = ['learning', 'settling', 'steady', 'kept', 'secure', 'waiting'];
+
+/**
+ * Every stage as one slim bar, each stage as wide as its count. The counts
+ * themselves live in the stage headers below, so the bar carries no text.
+ */
+export function StageCountBar({ counts }: { counts: Record<VerseStage, number> }) {
+  return (
+    // layout-ok: a progress bar holds no text.
+    <View className="flex-row" style={{ gap: 2 }}>
+      {BAR_ORDER.filter((s) => counts[s] > 0).map((s) => (
+        <View
+          key={s}
+          className={`rounded-full ${s === 'waiting' ? 'bg-line-strong' : s === 'secure' ? 'bg-stage-top' : STAGE_FILL[s]}`}
+          // layout-ok: a segment of the bar.
+          style={{ flex: counts[s], height: 8, minWidth: 6 }}
+        />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * A stage's heading on My Verses. Tapping it opens or closes the stage's
+ * rows; the chevron says which. A stage with reviews due carries a small
+ * "n due" badge, so a closed stage still tells you where today's work is.
+ */
+export function StageSectionHeader({
+  stage,
+  title,
+  count,
+  due,
+  open,
+  onToggle,
+}: {
+  stage: VerseStage;
+  title: string;
+  count: number;
+  due: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const palette = useThemeColors();
+  const scale = useFontScale();
+  const space = useScaledSpace();
+  const Chevron = open ? ChevronDown : ChevronRight;
+  return (
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      accessibilityLabel={`${title}, ${count} ${count === 1 ? 'verse' : 'verses'}${due > 0 ? `, ${due} due` : ''}`}
+      className="flex-row items-center bg-surface border border-line rounded-card active:opacity-70"
+      style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(10) }}
+    >
+      <StageDot stage={stage} />
+      <AppText variant="title" className="font-sans font-bold text-ink flex-1">
+        {title}
+      </AppText>
+      {due > 0 && <Badge label={`${due} due`} tone="accent" />}
+      <AppText variant="label" className="font-sans font-semibold text-ink-2">
+        {count}
+      </AppText>
+      <Chevron size={Math.round(18 * scale)} color={palette.ink3} />
+    </Pressable>
   );
 }
 
