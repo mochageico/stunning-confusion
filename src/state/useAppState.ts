@@ -2009,6 +2009,7 @@ export function useAppState() {
             text: activeChapterTextData.verses[String(verseNum)],
             status,
             dueDate,
+            ...(queueItem?.slipped ? { slipped: true } : {}),
             translationId: selectedTranslationId,
           };
         })
