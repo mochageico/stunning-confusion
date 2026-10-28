@@ -930,3 +930,24 @@ export const cleanUpDeletedRecording = onDocumentDeleted(
     }
   }
 );
+
+// A saved recording is a bookmark of someone else's sharedRecordings copy,
+// not a copy of its own. When the owner deletes the recording or makes it
+// private, the shared copy goes -- and so must every bookmark of it, or
+// it would linger in other people's libraries with audio they no longer
+// have the owner's permission to hear. The app also drops bookmarks it can
+// no longer read when it loads; this catches them without waiting for that.
+// Needs the collection-group index on recordings.savedFromRecordingId
+// (firestore.indexes.json).
+export const onSharedRecordingDeleted = onDocumentDeleted(
+  { document: 'sharedRecordings/{recordingId}', database: FIRESTORE_DATABASE_ID, region: 'us-east1' },
+  async (event) => {
+    const { recordingId } = event.params;
+    const bookmarks = await db.collectionGroup('recordings').where('savedFromRecordingId', '==', recordingId).get();
+    if (bookmarks.empty) return;
+    const writer = db.bulkWriter();
+    bookmarks.docs.forEach((d) => writer.delete(d.ref));
+    await writer.close();
+    logger.info('Removed bookmarks of an unshared recording', { recordingId, count: bookmarks.size });
+  }
+);

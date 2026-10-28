@@ -193,7 +193,11 @@ service cloud.firestore {
     }
 
     // Denormalized, read-only-to-others copy of a recording once its owner
-    // sets sharedVisibility to 'circle' or 'public'. Firestore rules can't
+    // shares it with friends & circles ('circle'), or sends it into a chat
+    // ('direct'). There is deliberately no public tier: recitations of
+    // copyrighted translations are only ever shared with people the reader
+    // knows, so reads go through sharedWithUids alone (legacy 'public' docs
+    // stay readable to the friends and circle-mates they were snapshotted for). Firestore rules can't
     // cheaply check "is this reader a co-member of ANY of the owner's
     // circles" (no loops over arbitrary-length lists), so instead of a live
     // check, sharedWithUids is a snapshot of exactly who could see it at
@@ -202,16 +206,17 @@ service cloud.firestore {
     // won't retroactively see older shares; new shares include them.
     match /sharedRecordings/{recordingId} {
       allow read: if isSignedIn() &&
-        (resource.data.visibility == 'public' ||
-         isOwner(resource.data.ownerId) ||
+        (isOwner(resource.data.ownerId) ||
          resource.data.sharedWithUids.hasAny([request.auth.uid]));
       // Update checks the EXISTING doc's owner too, not just the incoming
       // one -- otherwise anyone could overwrite someone else's shared copy
       // simply by writing their own uid into ownerId.
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.visibility in ['circle', 'direct'];
       allow update: if isSignedIn()
         && resource.data.ownerId == request.auth.uid
-        && request.resource.data.ownerId == request.auth.uid;
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.visibility in ['circle', 'direct'];
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
     }
 

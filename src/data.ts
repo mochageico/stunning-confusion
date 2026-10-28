@@ -1,17 +1,20 @@
-import { VerseState, Recording, Rhythm } from './types';
+import { VerseState, Recording, Rhythm, RecordingVisibility } from './types';
 import { BibleBook, BibleTranslation, TextScript, TranslationCapabilities } from './types';
 
-// Shared by the Save-Recording dialog (App.tsx) and SettingsScreen's default-
-// visibility picker, so both always offer the exact same 3 choices.
-// The label is the whole control. These carried a `desc` restating them
-// ("Public" / "Anyone signed in"), which in a three-across row left each
-// description about 68pt of width -- "Anyone signed in" simply ran out of
-// the button. The words Private/Circle/Public already mean what they say.
-export const RECORDING_VISIBILITY_OPTIONS: Array<{ id: 'private' | 'circle' | 'public'; label: string }> = [
+// Shared by the Save-Recording dialog (App.tsx), RecordingDetailScreen and
+// SettingsScreen's default-visibility picker, so all three offer the exact
+// same choices. No 'Public': recitations of copyrighted translations can only
+// be shared with people the reader knows. 'circle' covers friends too.
+export const RECORDING_VISIBILITY_OPTIONS: Array<{ id: RecordingVisibility; label: string }> = [
   { id: 'private', label: 'Private' },
-  { id: 'circle', label: 'Circle' },
-  { id: 'public', label: 'Public' },
+  { id: 'circle', label: 'Friends & Circles' },
 ];
+
+// What each choice means, said once under the switch.
+export const RECORDING_VISIBILITY_HINT: Record<RecordingVisibility, string> = {
+  private: 'Only you can hear it.',
+  circle: 'Your friends and people in your circles can hear it.',
+};
 
 // Fixed reaction set for DM + Circle chat messages (ReactionBar). Kept small
 // and fixed rather than a full emoji picker -- one reaction per user per
