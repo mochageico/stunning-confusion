@@ -3,7 +3,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import type { Recording } from '../types';
-import { hasStudioAudio } from './studioAudio';
+import { hasStudioAudio, isStudioPending } from './studioAudio';
 
 /**
  * On-device cache for recitation audio.
@@ -99,7 +99,7 @@ const inFlight = new Set<string>();
  */
 export function cacheableTarget(
   recording:
-    | Pick<Recording, 'audioUrl' | 'audioPath' | 'studioAudioUrl' | 'studioAudioPath' | 'studioStatus'>
+    | Pick<Recording, 'id' | 'audioUrl' | 'audioPath' | 'studioAudioUrl' | 'studioAudioPath' | 'studioStatus'>
     | null
     | undefined,
   studioEnabled: boolean
@@ -109,8 +109,9 @@ export function cacheableTarget(
   // 'pending' means a studio render is still coming. The raw take is what
   // plays right now, but it stops being the playback target the moment that
   // render lands — caching it would spend a download and a slice of the cap
-  // on a file about to be superseded. Wait for a terminal status.
-  if (recording.studioStatus === 'pending') return null;
+  // on a file about to be superseded. Wait for a terminal status — or for
+  // the render to be overdue enough that it is never coming.
+  if (isStudioPending(recording)) return null;
 
   if (studioEnabled && hasStudioAudio(recording) && recording.studioAudioPath) {
     return { storagePath: recording.studioAudioPath, remoteUrl: recording.studioAudioUrl! };
