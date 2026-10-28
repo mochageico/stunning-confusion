@@ -6,6 +6,7 @@ import { QueueItem } from '../types';
 import {
   estimateReviewMinutes,
   forecastMemoryLoad,
+  gradedOnDay,
   isReviewDue,
   isTouchSpaced,
   nextDueDateISO,
@@ -92,6 +93,15 @@ check('today: learning plus due reviews', estimateReviewMinutes(queue, 'medium',
 check('high sensitivity costs more', estimateReviewMinutes(queue, 'high', CLOCK, at(10, 16)) === 6);
 const paused = { ...CLOCK, pausedAt: at(10, 15).toISOString(), pausedUntil: null };
 check('paused: reviews cost nothing', estimateReviewMinutes(queue, 'medium', paused, at(10, 16)) === 3);
+// A verse graded today (on its own or in a mixed review) is done for the day
+// even though its passage stays due until every member is graded.
+const todayKey = localDayKey(at(10, 16));
+const withGrade = (day: string) => queue.map((q) => (q.verseId === 'c' ? { ...q, dayResult: { day, grade: 'clean' as const } } : q));
+check('gradedOnDay: today’s grade counts', gradedOnDay(withGrade(todayKey)[2], todayKey));
+check('gradedOnDay: yesterday’s grade does not', !gradedOnDay(withGrade('2026-10-15')[2], todayKey));
+// 2 learning × 90s + 1 remaining review × 15s = 195s → 4 minutes; with both graded, 180s → 3.
+check('graded today: its review cost drops out', estimateReviewMinutes(withGrade(todayKey).map((q) => (q.verseId === 'd' ? { ...q, dayResult: { day: todayKey, grade: 'clean' as const } } : q)), 'medium', CLOCK, at(10, 16)) === 3);
+check('graded yesterday: still costs today', estimateReviewMinutes(withGrade('2026-10-15'), 'medium', CLOCK, at(10, 16)) === 4);
 const forecast = forecastMemoryLoad(queue, 'medium', ['M', 'W', 'F'], 2, 7, CLOCK, at(10, 16));
 check('one row per day', forecast.length === 7);
 check('today matches the today estimate', forecast[0].loadMins === 4);
