@@ -23,6 +23,8 @@ import { STAGE_LABEL, STAGE_ORDER, StageGroup, VerseStage, groupByStage, referen
 import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, learnedCount, projectStartDates } from '../lib/forecast';
 import { translationLabel } from '../data';
 import { matchesVerseQuery } from '../lib/verseSearch';
+import { getLogicalDate, localDayKey } from '../lib/logicalDate';
+import { gradedOnDay } from '../lib/retention';
 
 import { useThemeColors } from '../components/theme';
 import { OneTimeTip } from '../components/OneTimeTip';
@@ -100,6 +102,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     removeQueueItems,
     isReviewDue,
     reviewsPaused,
+    dayStartHour,
     handleUpdateVerseStatus,
     validateTouch,
     takeaways,
@@ -232,8 +235,11 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     [...memoryQueue].sort((a, b) => a.orderIndex - b.orderIndex).filter((item) => item.status === 'queued')
   );
 
-  // Nothing is due while reviews are paused -- same as Today.
-  const itemIsDue = (item: QueueItem) => !reviewsPaused && item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate);
+  // Nothing is due while reviews are paused -- same as Today. A verse already
+  // graded today is done for the day, though its passage waits on the rest.
+  const dayKey = localDayKey(getLogicalDate(dayStartHour));
+  const itemIsDue = (item: QueueItem) =>
+    !reviewsPaused && item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate) && !gradedOnDay(item, dayKey);
   const dueTodayCount = memoryQueue.filter(itemIsDue).length;
 
   // Due verses per stage, for the badge on each stage's heading. A passage
@@ -243,7 +249,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     for (const stage of STAGE_ORDER) out[stage] = byStage[stage].filter((g) => g.items.some(itemIsDue));
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [byStage, reviewsPaused]);
+  }, [byStage, reviewsPaused, dayKey]);
   const dueCount = (stage: VerseStage) => dueGroups[stage].reduce((n, g) => n + g.verses.length, 0);
   // What the stage lists draw: everything, or just what's due.
   const shownGroups = dueOnly ? dueGroups : byStage;
