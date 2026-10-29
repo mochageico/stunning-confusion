@@ -1336,6 +1336,7 @@ export function useAppState() {
           },
           prefs: resolvedLadderPrefs,
           capMinutes: resolvedRhythm.maxReviewCap,
+          sensitivity: resolvedRhythm.cognitiveLoadSensitivity,
         });
         const migrating = resolvedLadderVersion !== LADDER_VERSION;
         if (migrating && ladder.migration.changed.length > 0) {
@@ -1747,6 +1748,8 @@ export function useAppState() {
     creditGuided,
     reviewNotes,
     clearSlipped,
+    pullMovedToday,
+    getNewVerseRoom,
   } = useReviewEngine({
     plan,
     memoryQueue,
@@ -2769,6 +2772,8 @@ export function useAppState() {
     lateNotes,
     reviewNotes,
     clearSlipped,
+    pullMovedToday,
+    getNewVerseRoom,
     joinedGroupPlanMemberships,
     joinedGroupPlanDetails,
     viewingGroupPlan, setViewingGroupPlan,

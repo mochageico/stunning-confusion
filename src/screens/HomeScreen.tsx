@@ -14,9 +14,10 @@ import { formatDate } from '../lib/format';
 import { translationLabel } from '../data';
 import { useThemeColors } from '../components/theme';
 import { MIX_NAMES } from '../lib/formatNames';
-import { FirmUpCard, NextSevenDays, WelcomeBackCard } from '../components/TodayCards';
+import { BalanceNote, FirmUpCard, MovedSheet, NextSevenDays, WelcomeBackCard } from '../components/TodayCards';
 import { useCalendarDays } from '../state/useCalendarDays';
-import { firmUpItems, lateNoteFor, welcomeBack } from '../lib/todayCards';
+import { firmUpItems, lateNoteFor, movedNote, welcomeBack } from '../lib/todayCards';
+import { movedFromDay } from '../lib/passages';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { gradedOnDay } from '../lib/retention';
 import ManualLogSheet, { logManualAnswers } from '../components/practice/ManualLogSheet';
@@ -202,6 +203,7 @@ function StageHeading({ label, dot, count }: { label: string; dot: string; count
 }
 
 const WELCOME_DISMISSED_KEY = 'home:welcomeDismissedDay';
+const BALANCE_DISMISSED_KEY = 'home:balanceNoteDismissedDay';
 
 export default function HomeScreen({ state }: { state: AppState }) {
   const {
@@ -230,6 +232,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
     welcomeBackDays,
     lateNotes,
     dayStartHour,
+    balanceDays,
+    pullMovedToday,
+    getNewVerseRoom,
   } = state;
 
   // While paused (Settings -> Pause Reviews), nothing should read as "due" --
@@ -261,6 +266,30 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const welcome = welcomeDismissedDay === todayKey || isPausedNow ? null : welcomeBack(welcomeBackDays, todayKey);
   const firmUps = isPausedNow ? [] : firmUpItems(memoryQueue, todayKey);
 
+  // Balance my review days: passages set for today that were moved later. The
+  // note closes for the rest of the day, like the welcome-back card.
+  const [balanceDismissedDay, setBalanceDismissedDay] = useState<string | null>(null);
+  const [showMovedList, setShowMovedList] = useState(false);
+  const [showMovedConfirm, setShowMovedConfirm] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(BALANCE_DISMISSED_KEY)
+      .then((day) => setBalanceDismissedDay((cur) => cur ?? day))
+      .catch(() => {});
+  }, []);
+  const dismissBalanceNote = () => {
+    setBalanceDismissedDay(todayKey);
+    AsyncStorage.setItem(BALANCE_DISMISSED_KEY, todayKey).catch(() => {});
+  };
+  const moved = !balanceDays || isPausedNow ? null : movedNote(movedFromDay(memoryQueue, todayKey), todayKey);
+  const showBalanceNote = !!moved && balanceDismissedDay !== todayKey;
+  const anyMoved = !!moved;
+  useEffect(() => {
+    if (!anyMoved) {
+      setShowMovedList(false);
+      setShowMovedConfirm(false);
+    }
+  }, [anyMoved]);
+
   const weekAhead = useCalendarDays(state, 7);
 
   const firstName = (user?.displayName || 'Friend').split(' ')[0];
@@ -282,9 +311,18 @@ export default function HomeScreen({ state }: { state: AppState }) {
   const queuedLookahead = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead);
 
   const estMinutes = getEstimatedReviewTime(memoryQueue, cognitiveLoadSensitivity);
+  // What today would come to with the moved passages back on it.
+  const movedIds = new Set(moved?.verseIds ?? []);
+  const estWithMoved = moved
+    ? getEstimatedReviewTime(
+        memoryQueue.map((q) => (movedIds.has(q.verseId) ? { ...q, nextReviewDueDate: new Date().toISOString() } : q)),
+        cognitiveLoadSensitivity
+      )
+    : estMinutes;
   // shieldActive and isLearningDay are computed in the original for potential future use
   // (isTodayLearningDay is consumed by triggerDailyPull elsewhere); kept here 1:1 for parity.
-  const shieldActive = estMinutes >= maxReviewCap;
+  // The shield is up when not even one more verse fits under the daily limit.
+  const shieldActive = getNewVerseRoom() === 0;
   const isLearningDay = isTodayLearningDay();
 
   const groupedLearning = groupQueueItems(learningItems);
@@ -474,6 +512,16 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 <HelpTooltip text="Verses you've already learned, back for a quick check so you don't forget them. Each passage comes back every day for a while, then every few days, then every week or two, then every month or two, and finally every 6 months for good." />
               }
             >
+              {showBalanceNote && moved && (
+                <BalanceNote
+                  note={moved}
+                  limit={maxReviewCap}
+                  onSee={() => setShowMovedList(true)}
+                  onDoToday={() => setShowMovedConfirm(true)}
+                  onDismiss={dismissBalanceNote}
+                />
+              )}
+
               {dueReviewItems.length > 0 ? (
                 <>
                   {/* Mixed review is the main way in; reciting every group
@@ -637,11 +685,49 @@ export default function HomeScreen({ state }: { state: AppState }) {
         </GroupedList>
       </ScrollView>
 
+      {moved && (
+        <>
+          <MovedSheet
+            visible={showMovedList}
+            note={moved}
+            onClose={() => setShowMovedList(false)}
+            onDoOne={(ids) => pullMovedToday(ids)}
+            onDoAll={() => {
+              setShowMovedList(false);
+              setShowMovedConfirm(true);
+            }}
+          />
+          <Dialog
+            visible={showMovedConfirm}
+            onClose={() => setShowMovedConfirm(false)}
+            title={moved.items.length === 1 ? 'Do it today?' : moved.items.length === 2 ? 'Do both today?' : 'Do all today?'}
+            message={
+              estWithMoved > maxReviewCap
+                ? `That brings today to about ${estWithMoved} minutes, over the ${maxReviewCap}-minute limit you set. Otherwise they come back ${moved.when}, and either way they count.`
+                : `That brings today to about ${estWithMoved} minutes. Otherwise they come back ${moved.when}, and either way they count.`
+            }
+            actions={
+              <>
+                <AppButton variant="quiet" label="Cancel" onPress={() => setShowMovedConfirm(false)} />
+                <AppButton
+                  variant="primary"
+                  label={moved.items.length === 1 ? 'Do it today' : moved.items.length === 2 ? 'Do both today' : 'Do all today'}
+                  onPress={() => {
+                    pullMovedToday(moved.verseIds);
+                    setShowMovedConfirm(false);
+                  }}
+                />
+              </>
+            }
+          />
+        </>
+      )}
+
       <Dialog
         visible={showPullShieldConfirm}
         onClose={() => setShowPullShieldConfirm(false)}
         title="Start more verses anyway?"
-        message={`Today already has about ${estMinutes} minutes of review, which meets the ${maxReviewCap}-minute limit you set. Starting more verses now adds to that on purpose.`}
+        message={`Today already has about ${estMinutes} minutes planned, and another verse would go past the ${maxReviewCap}-minute limit you set. Starting more verses now adds to that on purpose.`}
         actions={
           <>
             <AppButton variant="quiet" label="Cancel" onPress={() => setShowPullShieldConfirm(false)} />

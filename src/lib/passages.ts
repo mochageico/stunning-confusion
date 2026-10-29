@@ -7,7 +7,7 @@
 // one. Nothing here reads React state or Firestore; every function returns
 // only the items it changed, so writes stay small.
 import type { QueueItem, ReviewGrade, ReviewLog } from '../types';
-import { type BalanceSettings, creditsEarly, dayLoads, levelDue, scheduledDayOf } from './balance';
+import { type BalanceSettings, balanceWindow, creditsEarly, dayLoads, levelDue, scheduledDayOf } from './balance';
 import { canSelfCheckMoveUp } from './grading';
 import {
   applyOutcome,
@@ -21,7 +21,15 @@ import {
   type Thoroughness,
 } from './ladder';
 import { advancePastSabbath, DAY_ABBREVS, getLogicalDate, localDayKey, MAX_LEARNING_DAY_SCAN } from './logicalDate';
-import { findChapterReviewAnchor, isReviewDue, REVIEW_SECONDS_PER_VERSE, type ReviewClock } from './retention';
+import {
+  estimateLoadSeconds,
+  findChapterReviewAnchor,
+  isReviewDue,
+  type LoadSensitivity,
+  REVIEW_SECONDS_PER_VERSE,
+  type ReviewClock,
+  sensitivityMultiplier,
+} from './retention';
 import { isDayPaused, isPauseInEffect } from './reviewCalendar';
 
 export interface Passage {
@@ -319,6 +327,7 @@ const applyReview = (
       verses: members.length,
       loads: dayLoads(queue, new Set(p.items.map((q) => q.verseId))),
       capMinutes: settings.balance!.capMinutes,
+      loadFactor: settings.balance!.loadFactor,
       clock: settings.clock,
       now: settings.now ?? new Date(),
     });
@@ -604,3 +613,70 @@ export const spreadOverdue = (
   close();
   return { changed, days };
 };
+
+/**
+ * Balance my review days, on the day itself: when today runs past the daily
+ * limit, some of today's Every week (or longer) passages wait until the next
+ * usable day, largest first, until today fits. A passage moves at most once
+ * (it keeps `scheduledDue`, the day it was due), never when already graded
+ * today, and never onto a day it would overfill. Settling steps never move.
+ */
+export const easeToday = (
+  queue: readonly QueueItem[],
+  opts: { clock: ReviewClock; balance: BalanceSettings; sensitivity: LoadSensitivity; now?: Date }
+): { changed: QueueItem[]; moved: Passage[] } => {
+  const none = { changed: [] as QueueItem[], moved: [] as Passage[] };
+  const now = opts.now ?? new Date();
+  const { clock, balance } = opts;
+  if (isPauseInEffect(clock.pausedAt, clock.pausedUntil, now) || !(balance.capMinutes > 0)) return none;
+  const factor = sensitivityMultiplier(opts.sensitivity);
+  const cap = balance.capMinutes * 60;
+  let seconds = estimateLoadSeconds([...queue], opts.sensitivity, clock, now);
+  if (seconds <= cap) return none;
+
+  const today = getLogicalDate(clock.dayStartHour, now);
+  const todayKey = localDayKey(today);
+  const loads = dayLoads(queue);
+  const movable = passages(queue)
+    .filter((p) => {
+      if (p.items.some((q) => q.ladderStep === undefined)) return false;
+      const first = p.items[0];
+      if (first.ladderStep! < FIRST_WEEKLY_STEP || !first.nextReviewDueDate) return false;
+      if (localDayKey(new Date(first.nextReviewDueDate)) !== todayKey) return false;
+      return !p.items.some((q) => q.scheduledDue || q.dayResult?.day === todayKey);
+    })
+    .sort((a, b) => b.items.length - a.items.length || a.key.localeCompare(b.key));
+
+  const changed: QueueItem[] = [];
+  const moved: Passage[] = [];
+  for (const p of movable) {
+    if (seconds <= cap) break;
+    // The next usable day, if it is inside this step's window.
+    let target: Date | null = null;
+    for (let k = 1; k <= balanceWindow(passageState(p).step) && !target; k++) {
+      const d = new Date(today);
+      d.setHours(12, 0, 0, 0);
+      d.setDate(d.getDate() + k);
+      const sabbath = clock.sabbathEnabled && DAY_ABBREVS[d.getDay()] === clock.sabbathDay;
+      if (!sabbath && !isDayPaused(d, false, clock.pausedAt, clock.pausedUntil)) target = d;
+    }
+    if (!target) continue;
+    const targetKey = localDayKey(target);
+    const cost = p.items.length * REVIEW_SECONDS_PER_VERSE;
+    if (((loads.get(targetKey) ?? 0) + cost) * factor > cap) continue;
+    const due = target.toISOString();
+    for (const q of p.items) changed.push({ ...q, nextReviewDueDate: due, scheduledDue: q.nextReviewDueDate! });
+    loads.set(targetKey, (loads.get(targetKey) ?? 0) + cost);
+    seconds -= cost * factor;
+    moved.push(p);
+  }
+  return { changed, moved };
+};
+
+/** The passages set later than `todayKey`, the day they were scheduled for (what Today's note lists). */
+export const movedFromDay = (queue: readonly QueueItem[], todayKey: string): Passage[] =>
+  passages(queue).filter((p) => {
+    const first = p.items[0];
+    if (p.items.some((q) => q.ladderStep === undefined) || !first.scheduledDue || !first.nextReviewDueDate) return false;
+    return scheduledDayOf(first) === todayKey && localDayKey(new Date(first.nextReviewDueDate)) > todayKey;
+  });

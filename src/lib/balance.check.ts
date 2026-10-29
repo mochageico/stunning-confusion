@@ -5,8 +5,9 @@
 import type { QueueItem, ReviewGrade } from '../types';
 import { BALANCE_WINDOW, balanceWindow, creditsEarly, dayLoads, earliestCreditDay, levelDue, scheduledDayOf } from './balance';
 import { localDayKey } from './logicalDate';
-import { recordGrade } from './passages';
-import type { ReviewClock } from './retention';
+import { easeToday, movedFromDay, recordGrade } from './passages';
+import { estimateReviewMinutes, newVerseRoom, type ReviewClock } from './retention';
+import { movedNote } from './todayCards';
 
 let failures = 0;
 function check(label: string, condition: boolean, detail?: unknown) {
@@ -164,6 +165,53 @@ console.log('counting from the scheduled day');
   check('balance off: ahead of the due day is practice only', off.last.practice && off.last.applied === null);
   const aheadPartial = reviewPassage(shifted, [1, 2], 18, true);
   check('reviewed ahead, a partly covered passage waits for the rest', aheadPartial.last.applied === null && aheadPartial.last.covered === 2 && !aheadPartial.last.practice);
+}
+
+console.log('relief valve: easing a day that runs past the limit');
+{
+  // Today is Monday the 12th. Two weekly passages are due today: 20 verses (5 min) and 12 verses (3 min).
+  const big = verses(1, 20, { book: 'Psalms', ch: 119, due: at(12).toISOString() });
+  const mid = verses(1, 12, { book: 'Luke', ch: 2, due: at(12).toISOString() });
+  const settlingDue = verses(1, 8, { book: 'Mark', ch: 1, step: 1, due: at(12).toISOString() });
+  const ease = (queue: QueueItem[], capMinutes: number, clock = CLOCK) =>
+    easeToday(queue, { clock, balance: { capMinutes }, sensitivity: 'medium', now: at(12) });
+  const under = ease([...big, ...mid], 10);
+  check('under the limit: nothing moves', under.moved.length === 0 && under.changed.length === 0);
+  // 8 minutes due, limit 5: the larger passage goes, which is enough.
+  const over = ease([...big, ...mid], 5);
+  check('over the limit: the largest passage moves first, only as many as needed', over.moved.length === 1 && over.moved[0].book === 'Psalms', over.moved.map((p) => p.key));
+  check('it moves to the next day and remembers today', over.changed.every((q) => dayOf(q.nextReviewDueDate) === key(13) && dayOf(q.scheduledDue) === key(12)));
+  const after = merge([...big, ...mid], over.changed);
+  check('afterwards today fits the limit', estimateReviewMinutes(after, 'medium', CLOCK, at(12)) <= 5);
+  const list = movedFromDay(after, key(12));
+  check('the moved list finds it from the scheduled day', list.length === 1 && list[0].book === 'Psalms');
+  check('...and not on other days', movedFromDay(after, key(13)).length === 0);
+  const note = movedNote(list, key(12));
+  check('the note reads "Moved 1 passage to tomorrow"', note !== null && note.headline === 'Moved 1 passage to tomorrow' && note.items[0].detail === 'Every week · 20 verses · about 5 min', note);
+  const twice = ease(after, 2);
+  check('a passage that has moved is never moved again', twice.moved.every((p) => p.book !== 'Psalms'));
+  const withSettling = ease([...big, ...settlingDue], 2);
+  check('Settling reviews never move', withSettling.moved.every((p) => p.items[0].ladderStep! >= 3) && withSettling.changed.every((q) => q.book !== 'Mark'));
+  const graded = merge([...big, ...mid], big.map((q) => ({ ...q, dayResult: { day: key(12), grade: 'clean' as ReviewGrade } })));
+  check('a passage already graded today stays', ease(graded, 1).moved.every((p) => p.book !== 'Psalms'));
+  const full = [...big, ...mid, ...verses(1, 40, { book: 'John', ch: 3, due: at(13).toISOString() })];
+  check('it will not move onto a day that would go over the limit', ease(full, 5).moved.length === 0);
+  const sabbathNext = ease([...big, ...mid], 5, { ...CLOCK, sabbathEnabled: true, sabbathDay: 'T' });
+  check('a Sabbath tomorrow with a one-day window: it stays', sabbathNext.moved.length === 0);
+  const paused = ease([...big, ...mid], 5, { ...CLOCK, pausedAt: at(1).toISOString(), pausedUntil: null });
+  check('while reviews are paused nothing moves', paused.moved.length === 0);
+}
+
+console.log('new verses that fit the time left');
+{
+  const learning = (n: number) => Array.from({ length: n }, (_, i) => ({ ...mk(i + 1, { book: 'Acts', ch: 2 }), status: 'learning' as const }));
+  const due = (n: number) => verses(1, n, { book: 'Luke', ch: 2, due: at(12).toISOString() });
+  // 10 minute limit = 600s. 20 due reviews = 300s: 300s left, 90s a verse -> 3.
+  check('3 fit in 5 minutes left', newVerseRoom(due(20), 'medium', 10, CLOCK, at(12)) === 3);
+  check('none fit in under a verse', newVerseRoom(due(38), 'medium', 10, CLOCK, at(12)) === 0);
+  check('none fit at the limit', newVerseRoom(due(40), 'medium', 10, CLOCK, at(12)) === 0);
+  check('verses already in Learning use the room', newVerseRoom([...due(20), ...learning(2)], 'medium', 10, CLOCK, at(12)) === 1);
+  check('high sensitivity costs more', newVerseRoom(due(20), 'high', 10, CLOCK, at(12)) === 1);
 }
 
 console.log('');

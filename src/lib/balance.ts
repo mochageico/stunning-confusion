@@ -26,6 +26,8 @@ export const balanceWindow = (step: number): number => BALANCE_WINDOW[Math.min(M
 export interface BalanceSettings {
   /** The daily review time limit, in minutes. */
   capMinutes: number;
+  /** The load-sensitivity multiplier the limit is judged with (retention.ts sensitivityMultiplier). Default 1. */
+  loadFactor?: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -66,6 +68,7 @@ export const levelDue = (a: {
   verses: number;
   loads: ReadonlyMap<string, number>;
   capMinutes: number;
+  loadFactor?: number;
   clock: ReviewClock;
   now: Date;
 }): { due: string; scheduledDue?: string } => {
@@ -76,7 +79,7 @@ export const levelDue = (a: {
   const cost = a.verses * REVIEW_SECONDS_PER_VERSE;
   const anchorDate = new Date(a.anchor);
   const anchorLoad = a.loads.get(localDayKey(anchorDate)) ?? 0;
-  if (anchorLoad + cost <= cap) return stay;
+  if ((anchorLoad + cost) * (a.loadFactor ?? 1) <= cap) return stay;
 
   const todayKey = localDayKey(getLogicalDate(a.clock.dayStartHour, a.now));
   let best: { date: Date; load: number; dist: number; k: number } | null = null;

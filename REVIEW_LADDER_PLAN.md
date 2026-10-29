@@ -797,5 +797,22 @@ Settings > Reviews. Code: `src/lib/balance.ts` + `balance.check.ts` (`npm run ch
 - **A review inside the window counts** (`recordGrade`: `creditsEarly`), from the scheduled
   day less the window. The Today list still shows only what is due.
 - Welcome-back spread drops `scheduledDue` (its date replaces the shift).
-- **Not built yet (stage 2):** the relief valve on the day itself ("Moved 2 passages to
-  tomorrow" note, See which, Do them today) and capping the new-verse pull to the time left.
+
+**Stage 2 built 2026-10-29 (the day itself):**
+- **Relief valve** (`easeToday`, run on load after the welcome-back spread): if today passes
+  the limit, today's Every week (or longer) passages that are ungraded and never moved
+  wait until the next usable day inside their window, largest first, until today fits.
+  Skips a day that would itself go over, Settling steps, and anything while paused.
+  The passage keeps `scheduledDue` (= the day it was due), so it moves at most once.
+- **Today's note** (`movedFromDay` + `movedNote`, `BalanceNote`, `MovedSheet`): "Moved N
+  passages to tomorrow", See which (a sheet with Do today per passage and Do both today),
+  Do them today (a confirm card showing the minutes). Derived from the queue, so it
+  survives a restart; the × closes it for the day (AsyncStorage `home:balanceNoteDismissedDay`).
+  Doing them today sets the due date to now (`pullMovedToday`); `scheduledDue` stays, so
+  the valve doesn't move them again.
+- **New verses fit the time left** (`newVerseRoom`, `getNewVerseRoom`): the pull is capped to
+  however many 90 s Learning verses fit under the limit (times the load setting). The
+  shield is up when none fit; the "start anyway" card still bypasses it.
+- Load setting multiplier is now part of `BalanceSettings.loadFactor`, so leveling,
+  the valve and the shield judge the limit the same way.
+- Not done: the valve runs on app load only (not when the app stays open past midnight).

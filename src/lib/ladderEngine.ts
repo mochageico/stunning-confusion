@@ -23,6 +23,7 @@ import {
   passageOf,
   passages,
   passageState,
+  easeToday,
   recordGrade,
   type ReviewApplied,
   settleStaleDays,
@@ -32,7 +33,7 @@ import {
 } from './passages';
 import { appendReviewLog } from './reviewLog';
 import { isPauseInEffect } from './reviewCalendar';
-import type { ReviewClock } from './retention';
+import { type LoadSensitivity, type ReviewClock, sensitivityMultiplier } from './retention';
 
 /** memoryPlans/{uid}.ladderVersion once an account's queue is on the ladder. */
 export const LADDER_VERSION = 2;
@@ -284,15 +285,19 @@ export interface LoadResult {
  * 4. overdue passages are spread over the next few days under the review
  *    time cap (welcome back), which also gives each a new due date so the
  *    same lateness isn't charged on the next open.
- * Steps 3 and 4 are skipped while reviews are paused: nothing is late then.
+ * 5. Balance my review days (when on): a day still past the limit sets some
+ *    of its weekly-and-longer reviews a day later (easeToday).
+ * Steps 3 to 5 are skipped while reviews are paused: nothing is late then.
  */
 export const prepareLadderQueue = (
   loaded: readonly QueueItem[],
-  opts: { clock: ReviewClock; prefs: LadderPrefs; capMinutes: number; now?: Date }
+  opts: { clock: ReviewClock; prefs: LadderPrefs; capMinutes: number; sensitivity?: LoadSensitivity; now?: Date }
 ): LoadResult => {
   const now = opts.now ?? new Date();
   const { clock, prefs } = opts;
-  const settings = { clock, thoroughness: prefs.thoroughness, now, balance: prefs.balanceDays ? { capMinutes: opts.capMinutes } : undefined };
+  const sensitivity = opts.sensitivity ?? 'medium';
+  const balance = prefs.balanceDays ? { capMinutes: opts.capMinutes, loadFactor: sensitivityMultiplier(sensitivity) } : undefined;
+  const settings = { clock, thoroughness: prefs.thoroughness, now, balance };
 
   const migration = migrateQueue(loaded, settings);
   let queue = mergeChanged(loaded, migration.changed);
@@ -328,6 +333,8 @@ export const prepareLadderQueue = (
     const s = spreadOverdue(queue, opts.capMinutes, clock, now);
     queue = mergeChanged(queue, s.changed);
     spread = s.days;
+    // Balance my review days: a day still past the limit sets some of its weekly-and-longer reviews a day later.
+    if (balance) queue = mergeChanged(queue, easeToday(queue, { clock, balance, sensitivity, now }).changed);
   }
 
   const original = new Map(loaded.map((q) => [q.verseId, JSON.stringify(q)]));

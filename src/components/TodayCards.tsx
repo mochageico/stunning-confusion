@@ -1,11 +1,12 @@
 import { Pressable, View } from 'react-native';
-import { X } from 'lucide-react-native';
+import { ArrowRight, X } from 'lucide-react-native';
 
 import type { QueueItem } from '../types';
-import type { FirmUpItem, WelcomeBack } from '../lib/todayCards';
+import type { FirmUpItem, MovedNote, WelcomeBack } from '../lib/todayCards';
 import type { CalendarDayProjection } from '../lib/ladderCalendar';
 import type { LadderGroup } from '../lib/ladder';
 import { AppButton, AppIconButton, AppText, CollapsibleCard, useScaledSpace } from './design';
+import { Dialog } from './blocks';
 import { useThemeColors } from './theme';
 
 // ============================================================================
@@ -84,6 +85,103 @@ export function FirmUpCard({
         </View>
       ))}
     </View>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Balance my review days: "Moved 2 passages to tomorrow"
+// ----------------------------------------------------------------------------
+
+/** A quiet note inside the Review card; closes for the day. */
+export function BalanceNote({
+  note,
+  limit,
+  onSee,
+  onDoToday,
+  onDismiss,
+}: {
+  note: MovedNote;
+  /** The daily review limit, in minutes. */
+  limit: number;
+  onSee: () => void;
+  onDoToday: () => void;
+  onDismiss: () => void;
+}) {
+  const space = useScaledSpace();
+  const palette = useThemeColors();
+  return (
+    <View className="bg-surface-2 border border-hairline rounded-btn" style={{ padding: space(12), gap: space(8) }}>
+      <View className="flex-row items-start" style={{ gap: space(10) }}>
+        <View style={{ paddingTop: space(2) }}>
+          <ArrowRight size={20} color={palette.stageWeekly} />
+        </View>
+        <View className="flex-1" style={{ gap: space(3) }}>
+          <AppText variant="label" className="font-sans font-semibold text-ink">
+            {note.headline}
+          </AppText>
+          <AppText variant="caption" className="font-sans text-ink-2">
+            {`Today was over your ${limit}-minute limit. Weekly and longer reviews can wait a day without losing anything.`}
+          </AppText>
+        </View>
+        <AppIconButton Icon={X} variant="bare" diameter={32} iconColor={palette.ink3} accessibilityLabel="Close" onPress={onDismiss} />
+      </View>
+      <View className="flex-row flex-wrap justify-end" style={{ gap: space(8) }}>
+        <AppButton size="sm" variant="quiet" label="See which" onPress={onSee} />
+        <AppButton size="sm" variant="secondary" label="Do them today" onPress={onDoToday} />
+      </View>
+    </View>
+  );
+}
+
+/** The list behind "See which": each moved passage, with a way to do it today. */
+export function MovedSheet({
+  visible,
+  note,
+  onClose,
+  onDoOne,
+  onDoAll,
+}: {
+  visible: boolean;
+  note: MovedNote;
+  onClose: () => void;
+  onDoOne: (verseIds: string[]) => void;
+  onDoAll: () => void;
+}) {
+  const space = useScaledSpace();
+  return (
+    <Dialog
+      visible={visible}
+      onClose={onClose}
+      placement="sheet"
+      title={`Moved to ${note.when}`}
+      message="Weekly and longer reviews can wait a day without losing anything. Reviewing one today still counts."
+      actions={
+        <>
+          <AppButton variant="quiet" label="Close" onPress={onClose} />
+          <AppButton variant="primary" label={note.items.length === 1 ? 'Do it today' : note.items.length === 2 ? 'Do both today' : 'Do all today'} onPress={onDoAll} />
+        </>
+      }
+    >
+      <View style={{ gap: space(4) }}>
+        {note.items.map((item, i) => (
+          <View
+            key={item.key}
+            className={`flex-row items-center ${i === 0 ? '' : 'border-t border-hairline'}`}
+            style={{ paddingVertical: space(10), gap: space(12) }}
+          >
+            <View className="flex-1" style={{ gap: space(2) }}>
+              <AppText variant="label" className="font-sans font-semibold text-ink">
+                {item.title}
+              </AppText>
+              <AppText variant="caption" className="font-sans text-ink-3">
+                {item.detail}
+              </AppText>
+            </View>
+            <AppButton size="sm" variant="secondary" label="Do today" onPress={() => onDoOne(item.verseIds)} />
+          </View>
+        ))}
+      </View>
+    </Dialog>
   );
 }
 
