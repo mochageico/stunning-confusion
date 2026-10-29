@@ -542,7 +542,7 @@ function ToastLayer({ state }: { state: AppState }) {
 // Goes away by itself once the server answers again.
 function OfflinePill({ state }: { state: AppState }) {
   const palette = useThemeColors();
-  if (!state.offline) return null;
+  if (!state.noSignal) return null;
   const waiting = state.pendingSends;
   return (
     <View className="self-center flex-row items-center gap-1.5 bg-surface border border-line py-1 px-3 rounded-full">

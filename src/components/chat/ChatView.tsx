@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Send } from 'lucide-react-native';
+import { CloudOff, Plus, Send } from 'lucide-react-native';
 
 import type { AppState } from '../../state/useAppState';
 import type { ChatScope } from '../../state/useSocial';
@@ -10,6 +10,7 @@ import type { ChatMessage } from '../../types';
 import { REACTION_EMOJIS } from '../../data';
 import { formatClockTime, formatDate } from '../../lib/format';
 import { useKeyboardHeight } from '../ui';
+import { useThemeColors } from '../theme';
 import { ReactionBar } from '../ReactionBar';
 import { AppButton, AppIconButton, AppText, AppTextInput, useScaledSpace } from '../design';
 import { Avatar, Dialog } from '../blocks';
@@ -63,6 +64,7 @@ export function ChatView({
   onChallenge?: () => void;
 }) {
   const space = useScaledSpace();
+  const palette = useThemeColors();
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
   const scrollRef = useRef<ScrollView>(null);
@@ -225,7 +227,17 @@ export function ChatView({
         )}
       </ScrollView>
 
-      {composerReplacement ?? (
+      {composerReplacement ?? (state.noSignal ? (
+        // Offline (OFFLINE_MODE_PLAN.md stage 6): the chat shows what was
+        // last seen; sending waits for signal.
+        <View
+          className="flex-row items-center justify-center border-t border-hairline bg-surface"
+          style={{ gap: space(8), paddingHorizontal: space(12), paddingTop: space(14), paddingBottom: Math.max(bottomPad, 14) }}
+        >
+          <CloudOff size={14} color={palette.ink3} />
+          <AppText variant="label" className="font-sans text-ink-3">Needs signal to send</AppText>
+        </View>
+      ) : (
         <View
           className="flex-row items-end border-t border-hairline bg-surface"
           style={{ gap: space(8), paddingHorizontal: space(12), paddingTop: space(10), paddingBottom: Math.max(bottomPad, 12) }}
@@ -245,7 +257,7 @@ export function ChatView({
           />
           <AppIconButton Icon={Send} variant="filled" diameter={40} onPress={send} disabled={!draft.trim()} accessibilityLabel="Send" />
         </View>
-      )}
+      ))}
 
       <MessageMenu
         message={menuFor}

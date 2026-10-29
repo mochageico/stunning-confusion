@@ -1,6 +1,6 @@
 # Offline mode — plan
 
-Brainstormed 2026-10-29. Stages 1–5 built 2026-10-29 (5 in part); none tested on the phone in airplane mode yet.
+Brainstormed 2026-10-29. Stages 1–6, 8 and 9 built 2026-10-29; 3–5 tested on the phone in airplane mode. Stage 7 (recordings) not built.
 
 ## Why
 
@@ -36,11 +36,11 @@ Each stage ships on its own and is useful by itself.
    - the review-ladder catch-up in `loadUserData` (late reviews, welcome-back spread, migration) does **not** run — it waits for the first online load;
    - due reviews still show, since they come from dates.
 4. **Coming back online.** *(Built 2026-10-29: while offline the server is tried every 30 s and whenever the app comes to the front (`getDocFromServer` on the plan doc). Once it answers, anything the auto-sync hadn't noted yet goes on the "to send" list, the auto-sync pauses, and a full `loadUserData` runs -- `applyOutbox`/`mergeVerse` from stage 1 do the merge, and the ladder catch-up runs then. Circles reload too.)* Load from the server as normal, then merge in the "to send" list per verse: union `touchLogs` and `reviewLogs` by timestamp (keep both), and take the verse's step, due date and day result from whichever side has the latest review. Then send. Needs its own check script, like `check:queue`.
-5. **Offline pill and pending count.** *(Built in part 2026-10-29: a quiet "Offline — N verses will sync later" pill above the tab bar while the app opened without the server. Not yet: noticing signal lost mid-session -- the writes are still safe on the "to send" list, the pill just doesn't show.)* Detect offline from failed or timed-out server reads (or add `@react-native-community/netinfo` — a native module, so a new build; run `npx expo install --check` first).
-6. **Community read-only.** Save the last-seen chat and circle lists to the phone; grey out sending.
+5. **Offline pill and pending count.** *(Built in part 2026-10-29: a quiet "Offline — N verses will sync later" pill above the tab bar while the app opened without the server. Signal lost mid-session is noticed too: a listener on the plan doc with `includeMetadataChanges` reports "from cache" once the SDK can't reach the server; the pill shows after 5 s of that. The same listener hearing the server again triggers the reconnect early. `noSignal` in AppState covers both.)* Detect offline from failed or timed-out server reads (or add `@react-native-community/netinfo` — a native module, so a new build; run `npx expo install --check` first).
+6. **Community read-only.** *(Built 2026-10-29: `src/lib/communityCopyStore.ts` keeps your circles, message threads and the last 50 messages of up to 30 opened chats. Listeners answering from the SDK's cache show that copy until the server answers. The chat composer becomes "Needs signal to send" while `noSignal`. Removed on account deletion.)* Save the last-seen chat and circle lists to the phone; grey out sending.
 7. **Offline recordings.** Keep the audio file on the phone with an upload queue; upload and process when back online.
-8. **Speech.** Test Apple's recogniser in airplane mode on the phone. If it fails, fall back to self-check with a note.
-9. **Adding verses from saved chapters.** Check that the whole Add Verses flow works from cached chapters, with writes going to the "to send" list.
+8. **Speech.** *(Built in part 2026-10-29: with no signal the recogniser is asked to run on the device (`requiresOnDeviceRecognition`) where the phone supports it. If it still fails, the existing fall-back (check yourself or type) takes over, with no note yet. Needs an airplane-mode test.)* Test Apple's recogniser in airplane mode on the phone. If it fails, fall back to self-check with a note.
+9. **Adding verses from saved chapters.** *(Built 2026-10-29: chapters were already read cache-first and adding goes through the queue, so the "to send" list. A chapter not saved on the phone now says so plainly instead of leaving the Add button spinning.)* Check that the whole Add Verses flow works from cached chapters, with writes going to the "to send" list.
 
 ## Open questions
 

@@ -208,6 +208,7 @@ newPlanDesc: string
 newPlanName: string
 newVersesPace: number
 nextTakeawayAsk: PendingAsk | null
+noSignal: boolean
 notificationAskReason: string | null
 notificationPermission: "granted" | "denied" | "undetermined" | "unsupported"
 notificationPrefs: NotificationPrefs

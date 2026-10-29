@@ -18,6 +18,7 @@ import {
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import type { ActivityEvent, Circle, CircleMember, Friend, GroupChallenge, GroupPlan } from '../types';
 import { normalizeGroupPlan } from '../lib/appData';
+import { loadCircles, saveCircles } from '../lib/communityCopyStore';
 import { removeSharesBy } from './useCircleTakeaways';
 
 // ============================================================================
@@ -153,8 +154,13 @@ export function useCircles({
       const validCircles = results.filter((c): c is Circle => c !== null && c !== 'error');
       setMyCircles(validCircles);
       loadCircleFriends(validCircles);
+      // Kept for offline (lib/communityCopyStore), unless a circle failed to load.
+      if (!results.includes('error')) saveCircles(uid, validCircles);
     } catch (err) {
       console.error('Failed to load my circles:', err);
+      // No signal: the circles last seen on this device, read-only.
+      const saved = await loadCircles(uid);
+      if (saved && auth.currentUser?.uid === uid) setMyCircles((now) => (now.length > 0 ? now : saved));
     } finally {
       setLoadingMyCircles(false);
     }

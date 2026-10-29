@@ -59,10 +59,20 @@ export async function fetchChapterText(translationId: string, bookId: string, ch
   // An unknown translation id (e.g. a queue item written before the
   // translation was retired from BIBLE_TRANSLATIONS) still resolves against
   // Firestore, which is where every historically-imported translation lives.
-  const data =
-    translation?.source === 'apiBible'
-      ? await fetchApiBibleChapter(translation, bookId, chapter)
-      : await fetchFromFirestore(translationId, bookId, chapter);
+  let data: ChapterText | null;
+  try {
+    data =
+      translation?.source === 'apiBible'
+        ? await fetchApiBibleChapter(translation, bookId, chapter)
+        : await fetchFromFirestore(translationId, bookId, chapter);
+  } catch (err: any) {
+    // No signal (OFFLINE_MODE_PLAN.md stage 9): only chapters opened before
+    // are on the phone. Said plainly rather than as the SDK's error.
+    if (String(err?.code ?? '').includes('unavailable') || /offline|network/i.test(String(err?.message ?? ''))) {
+      throw new Error("This chapter isn't saved on this phone yet. It needs signal the first time it's opened.");
+    }
+    throw err;
+  }
 
   if (!data) return null;
 

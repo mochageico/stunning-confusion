@@ -452,7 +452,14 @@ export function useReviewEngine({
     const alreadyThere = targets.length - toAdd.length;
     if (toAdd.length === 0) return { ...empty, alreadyThere };
 
-    const chapterData = await fetchChapterText(translationId, bookId, chapter);
+    // A failed fetch (no signal and the chapter not saved on this phone)
+    // comes back as the message, rather than leaving the Add button spinning.
+    let chapterData: Awaited<ReturnType<typeof fetchChapterText>>;
+    try {
+      chapterData = await fetchChapterText(translationId, bookId, chapter);
+    } catch (err) {
+      return { ...empty, alreadyThere, error: err instanceof Error ? err.message : String(err) };
+    }
     if (!chapterData) {
       return { ...empty, alreadyThere, error: `Couldn't find ${book} ${chapter} in the scripture library yet.` };
     }
