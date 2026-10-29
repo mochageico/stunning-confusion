@@ -121,7 +121,7 @@ export const outcomeMessage = (a: ReviewApplied, thoroughness: Thoroughness, hel
     case 'up':
     case 'forgiven': {
       const forgiven = a.outcome === 'forgiven' ? ` ${plural(stumbles, 'stumble')} forgiven in a long passage.` : '';
-      if (a.to.step === TOP_STEP && a.from.step < TOP_STEP) return `${title} reached Every 6 months, for good. 🌟${forgiven}`;
+      if (a.to.step === TOP_STEP && a.from.step < TOP_STEP) return `${title} reached Every 6 months, for good.${forgiven}`;
       if (a.to.step > a.from.step) return `${title} moved up to ${stepInfo(a.to.step).label}!${forgiven}`;
       const need = reviewsToMoveUp(a.to, thoroughness);
       const where = need === null ? stepInfo(a.to.step).label : `${a.to.reviews} of ${need} at ${stepInfo(a.to.step).label}`;

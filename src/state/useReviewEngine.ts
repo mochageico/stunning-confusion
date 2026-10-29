@@ -195,7 +195,7 @@ export function useReviewEngine({
 
     if (shieldActive && pulledVerseIds.length > 0) {
       triggerToast(
-        `Review Shield held back your own queue (${estTime}m of ${maxReviewCap}m used), but your additive plan still pulled. 🛡️`
+        `Review Shield held back your own queue (${estTime}m of ${maxReviewCap}m used), but your additive plan still pulled.`
       );
     }
 
@@ -260,7 +260,7 @@ export function useReviewEngine({
 
     const fits = trimmed && fromIndividual.length > 0 ? ` That fills today's ${maxReviewCap} minutes.` : '';
     triggerToast(
-      `Successfully pulled ${pulledVerseIds.length} new ${pulledVerseIds.length === 1 ? 'verse' : 'verses'} into your learning queue!${breakdown}${fits} 🚀`
+      `Successfully pulled ${pulledVerseIds.length} new ${pulledVerseIds.length === 1 ? 'verse' : 'verses'} into your learning queue!${breakdown}${fits}`
     );
   };
 
@@ -414,7 +414,7 @@ export function useReviewEngine({
     updateMemoryQueue((prev) => [...prev, ...newItems]);
     const skippedNote = skipped > 0 ? ` (${skipped} already on your list, skipped)` : '';
     triggerToast(
-      `Added ${newItems.length} ${newItems.length === 1 ? 'verse' : 'verses'} to your list!${skippedNote} 📖`
+      `Added ${newItems.length} ${newItems.length === 1 ? 'verse' : 'verses'} to your list!${skippedNote}`
     );
   };
 
@@ -809,7 +809,7 @@ export function useReviewEngine({
       queue = released.queue;
       released.ids.forEach((id) => ids.add(id));
       messages.push(
-        `All reviews done! ${released.count} verse${released.count > 1 ? 's' : ''} locked in and moved up to review. 🔓`,
+        `All reviews done! ${released.count} verse${released.count > 1 ? 's' : ''} locked in and moved up to review.`,
         ...released.messages
       );
     }

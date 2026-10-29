@@ -62,7 +62,7 @@ export function useChallenges({
   // activeChallenges is scoped to whichever DM thread is currently open
   // (live, like activeDMMessages); myChallengeBadges is a lighter
   // always-on listener (pending/active challenges across ALL my threads)
-  // purely so MessagesScreen's inbox rows can show a 🏆 badge without
+  // purely so MessagesScreen's inbox rows can show a trophy badge without
   // opening each thread.
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
   const [loadingActiveChallenges, setLoadingActiveChallenges] = useState(false);
@@ -224,7 +224,7 @@ export function useChallenges({
   }, [activeDMThread?.id]);
 
   // Lightweight always-on listener (not tied to any open thread) purely so
-  // MessagesScreen's inbox rows can show a 🏆 badge without opening each
+  // MessagesScreen's inbox rows can show a trophy badge without opening each
   // thread individually.
   useEffect(() => {
     if (!user) {

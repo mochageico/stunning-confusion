@@ -187,7 +187,7 @@ export function useAudioDownloads({
       return target && !audioCache.pinned.has(target.storagePath);
     });
     if (pending.length === 0) {
-      triggerToast('Already saved for offline. ✓');
+      triggerToast('Already saved for offline.');
       return;
     }
     markDownloading(pending.map((r) => r.id), true);
@@ -209,7 +209,7 @@ export function useAudioDownloads({
     markDownloading(pending.map((r) => r.id), false);
     triggerToast(
       saved === pending.length
-        ? `Saved ${saved} recording${saved === 1 ? '' : 's'} offline. ⬇️`
+        ? `Saved ${saved} recording${saved === 1 ? '' : 's'} offline.`
         : `Saved ${saved} of ${pending.length} — check your connection.`
     );
   };

@@ -180,8 +180,8 @@ export function usePlanSettings({ triggerToast }: UsePlanSettingsDeps) {
     setPauseState(new Date().toISOString(), untilISO);
     triggerToast(
       untilISO
-        ? `Paused until ${new Date(untilISO).toLocaleDateString()} -- nothing will be due while you're away. 🌴`
-        : "Paused -- nothing will be due until you resume. 🌴"
+        ? `Paused until ${new Date(untilISO).toLocaleDateString()} -- nothing will be due while you're away.`
+        : "Paused -- nothing will be due until you resume."
     );
   };
 
