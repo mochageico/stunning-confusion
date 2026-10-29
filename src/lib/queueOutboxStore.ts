@@ -19,6 +19,7 @@ const writeRaw = (uid: string, outbox: Outbox) =>
   writeDeviceDoc(docFor(uid), Object.keys(outbox).length === 0 ? null : JSON.stringify(outbox));
 
 const loaded = new Map<string, Outbox>();
+const countListeners = new Set<(uid: string, count: number) => void>();
 let chain: Promise<unknown> = Promise.resolve();
 
 /** Runs `step` after every earlier change has finished, whether or not it failed. */
@@ -45,7 +46,13 @@ async function current(uid: string): Promise<Outbox> {
     console.error('[outbox] could not read the to-send list; starting empty:', err);
   }
   loaded.set(uid, outbox);
+  notify(uid, outbox);
   return outbox;
+}
+
+function notify(uid: string, outbox: Outbox) {
+  const count = Object.keys(outbox).length;
+  countListeners.forEach((listener) => listener(uid, count));
 }
 
 function update(uid: string, change: (outbox: Outbox) => Outbox): Promise<void> {
@@ -54,6 +61,7 @@ function update(uid: string, change: (outbox: Outbox) => Outbox): Promise<void> 
     const after = change(before);
     if (after === before) return;
     loaded.set(uid, after);
+    notify(uid, after);
     await writeRaw(uid, after);
   });
 }
@@ -76,4 +84,21 @@ export function outboxRecord(
 /** Takes writes Firestore confirmed off the list (only the version that was sent). */
 export function outboxConfirm(uid: string, writes: { verseId: string; json: string }[], deletes: string[]): Promise<void> {
   return update(uid, (o) => confirmSent(o, writes, deletes));
+}
+
+/**
+ * Calls `listener` with how many verses this account has waiting to send,
+ * now (once the list is read) and after every change. Returns the unsubscribe.
+ */
+export function subscribeOutboxCount(uid: string, listener: (count: number) => void): () => void {
+  const onChange = (changed: string, count: number) => {
+    if (changed === uid) listener(count);
+  };
+  countListeners.add(onChange);
+  void loadOutbox(uid).then((o) => {
+    if (countListeners.has(onChange)) listener(Object.keys(o).length);
+  });
+  return () => {
+    countListeners.delete(onChange);
+  };
 }

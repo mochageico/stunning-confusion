@@ -212,6 +212,7 @@ notificationAskReason: string | null
 notificationPermission: "granted" | "denied" | "undetermined" | "unsupported"
 notificationPrefs: NotificationPrefs
 nowPlayingRecording: Recording | null
+offline: { copySavedAt: string | null; } | null
 openChallengeLeaderboard: GroupChallengeParticipant[]
 openChallengeLeaderboardId: string | null
 openChallengeLeaderboardModal: (challenge: GroupChallenge) => Promise<void>
@@ -230,6 +231,7 @@ pauseReviews: (untilISO: string | null) => void
 pausedAt: string | null
 pausedUntil: string | null
 pendingRecordingSource: "live" | "import"
+pendingSends: number
 photoCache: ReadonlyMap<string, string>
 photosForChapter: (book: string, chapter: number) => ChapterPhoto[]
 pickImportAudio: () => Promise<void>

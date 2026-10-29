@@ -5,7 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import { BookOpen, Check, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
+import { BookOpen, Check, CloudOff, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
 
 import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
@@ -415,6 +415,7 @@ function AppShell() {
           {/* The tour card sits here rather than over the screen, so the
               screen it's describing stays fully in view above it. */}
           {state.showTour === true && <TourCard state={state} />}
+          <OfflinePill state={state} />
           <NowPlayingBar state={state} />
           <FloatingTabBar
             tabs={TABS}
@@ -532,6 +533,23 @@ function ToastLayer({ state }: { state: AppState }) {
           <AppText variant="label" className="text-on-accent font-bold font-sans">{toastMessage}</AppText>
         </View>
       </FadeInView>
+    </View>
+  );
+}
+
+// Quiet note while the app runs from the copy on the phone
+// (OFFLINE_MODE_PLAN.md stage 5), with how many verses are waiting to send.
+// Goes away by itself once the server answers again.
+function OfflinePill({ state }: { state: AppState }) {
+  const palette = useThemeColors();
+  if (!state.offline) return null;
+  const waiting = state.pendingSends;
+  return (
+    <View className="self-center flex-row items-center gap-1.5 bg-surface border border-line py-1 px-3 rounded-full">
+      <CloudOff size={12} color={palette.ink3} />
+      <AppText variant="caption" className="text-ink-3">
+        {waiting > 0 ? `Offline — ${waiting} ${waiting === 1 ? 'verse' : 'verses'} will sync later` : 'Offline — will sync later'}
+      </AppText>
     </View>
   );
 }
