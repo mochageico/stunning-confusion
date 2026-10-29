@@ -23,6 +23,8 @@ import {
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
 import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
 import { setPlaybackProgress } from '../lib/playbackProgress';
+import { applyOutbox } from '../lib/queueOutbox';
+import { loadOutbox, outboxConfirm, outboxRecord, outboxSettle } from '../lib/queueOutboxStore';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   setAudioModeAsync,
@@ -1059,12 +1061,16 @@ export function useAppState() {
           handleFirestoreError(e, OperationType.GET, path);
           return undefined;
         });
-      const [profileSnap, planSnap, vSnap, qSnap] = await Promise.all([
+      const [profileSnap, planSnap, vSnap, qSnap, outbox] = await Promise.all([
         settle(getDoc(profileRef), `profiles/${currentUser.uid}`),
         settle(getDoc(planRef), `memoryPlans/${currentUser.uid}`),
         settle(getDocs(versesCol), `users/${currentUser.uid}/verses`),
         settle(getDocs(queueCol), `users/${currentUser.uid}/memoryQueue`),
+        // Verse changes from an earlier run that never reached Firestore
+        // (lib/queueOutbox): put back on top of the queue below.
+        loadOutbox(currentUser.uid),
       ]);
+      const outboxIds = Object.keys(outbox);
       console.log('User data fetched. Verses:', vSnap?.size, 'Queue:', qSnap?.size);
 
       // 1. Profile
@@ -1261,7 +1267,7 @@ export function useAppState() {
       // queued, rather than the demo Genesis/Psalms/John/Romans set already
       // partway "learned". Real content now comes from the Add Verses flow
       // or joining a circle's group plan, both backed by real imported text.
-      if (qSnap && qSnap.empty) {
+      if (qSnap && qSnap.empty && outboxIds.length === 0) {
         updateMemoryQueue(() => []);
         prevSyncedQueueIdsRef.current = new Set();
         syncedQueueJsonRef.current = new Map();
@@ -1334,6 +1340,23 @@ export function useAppState() {
         syncedQueueJsonRef.current = new Map(loadedQueue.map((i) => [i.verseId, JSON.stringify(i)]));
         syncedQueueItemRef.current = new Map(loadedQueue.map((i) => [i.verseId, i]));
 
+        // The "to send" list goes back on top, AFTER the baseline above: the
+        // baseline is what Firestore holds, so everything put back differs
+        // from it and is written below. Deletions still owed are taken out
+        // here and kept in the baseline as asked-for deletes, so the delete
+        // goes out (now, or from the auto-sync if this attempt fails).
+        const owed = outboxIds.length > 0 ? applyOutbox(loadedQueue, outbox) : null;
+        const queueWithOwed = owed ? owed.queue : loadedQueue;
+        const owedIds = owed ? outboxIds.filter((id) => !owed.settled.includes(id) && !owed.deleteIds.includes(id)) : [];
+        if (owed) {
+          owed.deleteIds.forEach((id) => pendingQueueDeletionsRef.current.add(id));
+          if (owed.settled.length > 0) outboxSettle(currentUser.uid, owed.settled).catch(() => undefined);
+          console.log(
+            `[outbox] ${outboxIds.length} waiting from last time: ${owedIds.length} to write, ` +
+              `${owed.deleteIds.length} to delete, ${owed.settled.length} already done`
+          );
+        }
+
         // The review ladder (REVIEW_LADDER_PLAN.md stage 4a), with the
         // settings just read rather than React state that hasn't flushed:
         // the migration (only verses not on the ladder yet; a no-op once
@@ -1341,7 +1364,7 @@ export function useAppState() {
         // reviews and the welcome-back spread. The migration is backed up
         // first, its writes go out in batches, and ladderVersion is set
         // LAST, so an interrupted run simply runs again next time.
-        const ladder = prepareLadderQueue(loadedQueue, {
+        const ladder = prepareLadderQueue(queueWithOwed, {
           clock: {
             dayStartHour: resolvedRhythm.dayStartHour,
             sabbathEnabled: resolvedRhythm.sabbathEnabled,
@@ -1355,25 +1378,45 @@ export function useAppState() {
         });
         const migrating = resolvedLadderVersion !== LADDER_VERSION;
         if (migrating && ladder.migration.changed.length > 0) {
-          await backupQueueBeforeLadder(currentUser.uid, loadedQueue);
+          await backupQueueBeforeLadder(currentUser.uid, queueWithOwed);
         }
         updateMemoryQueue(() => ladder.queue);
         cacheLoadingVerses(ladder.queue);
         setWelcomeBackDays(ladder.spread);
         setLateNotes(ladder.late);
 
+        // The ladder's changes plus anything put back from the "to send"
+        // list, each written as it now stands in the queue.
+        const ladderChangedIds = new Set(ladder.changed.map((q) => q.verseId));
+        const owedSet = new Set(owedIds);
+        const toWrite = [...ladder.changed, ...ladder.queue.filter((q) => owedSet.has(q.verseId) && !ladderChangedIds.has(q.verseId))];
+        const toDelete = owed ? owed.deleteIds : [];
+
         let ladderWritten = true;
-        if (ladder.changed.length > 0) {
+        if (toWrite.length > 0 || toDelete.length > 0) {
           try {
-            for (let start = 0; start < ladder.changed.length; start += 450) {
+            for (let start = 0; start < toWrite.length; start += 450) {
               const batch = writeBatch(db);
-              const chunk = ladder.changed.slice(start, start + 450);
+              const chunk = toWrite.slice(start, start + 450);
               chunk.forEach((item) => batch.set(doc(db, 'users', currentUser.uid, 'memoryQueue', item.verseId), item));
               await batch.commit();
               chunk.forEach((item) => {
                 syncedQueueJsonRef.current.set(item.verseId, JSON.stringify(item));
                 syncedQueueItemRef.current.set(item.verseId, item);
               });
+              outboxSettle(currentUser.uid, chunk.map((q) => q.verseId)).catch(() => undefined);
+            }
+            if (toDelete.length > 0) {
+              const batch = writeBatch(db);
+              toDelete.forEach((id) => batch.delete(doc(db, 'users', currentUser.uid, 'memoryQueue', id)));
+              await batch.commit();
+              toDelete.forEach((id) => {
+                prevSyncedQueueIdsRef.current.delete(id);
+                syncedQueueJsonRef.current.delete(id);
+                syncedQueueItemRef.current.delete(id);
+                pendingQueueDeletionsRef.current.delete(id);
+              });
+              outboxSettle(currentUser.uid, toDelete).catch(() => undefined);
             }
           } catch (e) {
             ladderWritten = false;
@@ -1381,7 +1424,7 @@ export function useAppState() {
           }
           console.log(
             `[ladder] ${ladder.migration.changed.length} moved onto the ladder, ${ladder.settled.length} partly covered settled, ` +
-              `${ladder.late.length} late, ${ladder.spread.length} spread day(s); ${ladder.changed.length} verse(s) written`
+              `${ladder.late.length} late, ${ladder.spread.length} spread day(s); ${toWrite.length} verse(s) written`
           );
         }
         if (migrating && ladderWritten) {
@@ -1705,6 +1748,15 @@ export function useAppState() {
         else changed.push({ item, json });
       }
 
+      if (changed.length === 0 && removedIds.length === 0) return;
+      // Onto the device's "to send" list first (lib/queueOutbox), so these
+      // survive the app closing before Firestore has them -- with no signal
+      // the commits below wait until it comes back. If the list can't be
+      // saved, the write still goes ahead, as it always did.
+      await outboxRecord(uid, changed, removedIds, (id) => syncedQueueJsonRef.current.get(id) ?? null).catch((err) =>
+        console.error('[outbox] could not save the to-send list:', err)
+      );
+
       try {
         // Batches of 400 writes, well inside Firestore's per-request limits
         // even when every verse changed at once (a bulk status change).
@@ -1728,6 +1780,11 @@ export function useAppState() {
           syncedQueueItemRef.current.delete(id);
         });
         removedIds.forEach((id) => pendingQueueDeletionsRef.current.delete(id));
+        outboxConfirm(
+          uid,
+          changed.map(({ item, json }) => ({ verseId: item.verseId, json })),
+          removedIds
+        ).catch((err) => console.error('[outbox] could not update the to-send list:', err));
         // Keep unexplained ids in the baseline: they still exist in Firestore,
         // so dropping them here would let a later shrink delete them silently.
         prevSyncedQueueIdsRef.current = new Set([...currentIds, ...unexplained]);

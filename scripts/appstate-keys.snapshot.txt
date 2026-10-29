@@ -235,7 +235,6 @@ photosForChapter: (book: string, chapter: number) => ChapterPhoto[]
 pickImportAudio: () => Promise<void>
 pickedRecordingVisibility: "circle" | "private"
 playChatRecording: (sharedRecordingId: string) => Promise<void>
-playingRecProgress: number
 playingRecordingId: string | null
 postChatMessage: (scope: "circle" | "dm", containerId: string, text: string, attachment?: ChatAttachment | undefined) => Promise<boolean>
 postTakeawayReply: (circleId: string, docId: string, text: string) => Promise<boolean>
@@ -359,7 +358,7 @@ setNewVersesPace: (value: SetStateAction<number>) => void
 setPausedAt: (value: SetStateAction<string | null>) => void
 setPausedUntil: (value: SetStateAction<string | null>) => void
 setPickedRecordingVisibility: (value: SetStateAction<RecordingVisibility>) => void
-setPlayingRecProgress: (value: SetStateAction<number>) => void
+setPlayingRecProgress: (next: number | ((prev: number) => number)) => void
 setPlayingRecordingId: (value: SetStateAction<string | null>) => void
 setPrimingLookahead: (value: SetStateAction<number>) => void
 setRecordingBook: (value: SetStateAction<string>) => void
