@@ -17,6 +17,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
   writeBatch,
@@ -28,6 +29,29 @@ import { applyOutbox } from '../lib/queueOutbox';
 import { loadOutbox, outboxConfirm, outboxRecord, subscribeOutboxCount } from '../lib/queueOutboxStore';
 import { queueFromBaseline, type LocalSettings } from '../lib/localCopy';
 import { loadLocalCopy, saveLocalCopy } from '../lib/localCopyStore';
+import {
+  asListed,
+  findWaiting,
+  firestoreFields,
+  markTried,
+  msUntilNextDue,
+  nextDue,
+  patchWaiting,
+  setDocWritten,
+  waitingFileName,
+  withWaiting,
+  type WaitingUpload,
+} from '../lib/recordingUploads';
+import {
+  OFFLINE_RECORDINGS_SUPPORTED,
+  changeUploads,
+  dropUpload,
+  keepForUpload,
+  loadUploads,
+  readWaitingAudio,
+  sweepStrayAudio,
+  waitingAudioUri,
+} from '../lib/recordingUploadStore';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   setAudioModeAsync,
@@ -1587,8 +1611,13 @@ export function useAppState() {
       }
 
       // Offline, the rest would only come back empty from the SDK's cache.
-      // It loads with everything else once signal is back.
-      if (!qSnap) return;
+      // It loads with everything else once signal is back. Recordings made
+      // with no signal are on the phone, so those do show.
+      if (!qSnap) {
+        const uploads = await loadUploads(currentUser.uid).catch(() => []);
+        if (uploads.length > 0) setUserRecordings(withWaiting([], uploads, waitingAudioUri));
+        return;
+      }
 
       // 4-7. Saved recordings, Bible page photos, chapter sections and
       // takeaways (all private to this user), fetched together. Each catches
@@ -1599,7 +1628,8 @@ export function useAppState() {
             query(collection(db, 'users', currentUser.uid, 'recordings'), orderBy('createdAt', 'desc'))
           );
           const loaded = recordingsSnap.docs.map((docSnap) => docSnap.data() as Recording);
-          setUserRecordings(loaded);
+          // Plus any recorded with no signal that haven't uploaded yet.
+          setUserRecordings(withWaiting(loaded, await loadUploads(currentUser.uid), waitingAudioUri));
           void hydrateSavedRecordings(currentUser.uid, loaded);
         } catch (e) {
           handleFirestoreError(e, OperationType.GET, `users/${currentUser.uid}/recordings`);
@@ -2599,6 +2629,17 @@ export function useAppState() {
       studioStatus: 'pending',
     };
 
+    // No signal: kept on the phone and uploaded later (see the waiting
+    // uploads below). The web can't keep a file, so there it needs signal.
+    if (noSignal) {
+      if (!OFFLINE_RECORDINGS_SUPPORTED) {
+        triggerToast('Saving a recording needs signal -- try again once you’re back online.');
+        return;
+      }
+      await keepRecordingForLater(uid, params.uri, newRec, ext, contentType, titleSuffix);
+      return;
+    }
+
     const recordingDocRef = doc(db, 'users', uid, 'recordings', id);
 
     triggerToast('Uploading recitation...');
@@ -2655,6 +2696,13 @@ export function useAppState() {
         await deleteDoc(recordingDocRef).catch((rollbackErr) =>
           console.error('Failed to roll back recording doc after upload error:', rollbackErr)
         );
+        // Signal gone mid-upload: keep the take on the phone and try again
+        // later, rather than losing it.
+        if (OFFLINE_RECORDINGS_SUPPORTED) {
+          console.error('Recording upload failed; keeping it on the phone to upload later:', uploadErr);
+          await keepRecordingForLater(uid, params.uri, newRec, ext, contentType, titleSuffix);
+          return;
+        }
         throw uploadErr;
       }
 
@@ -2690,6 +2738,201 @@ export function useAppState() {
       handleFirestoreError(err, OperationType.WRITE, `users/${uid}/recordings/${id}`);
     }
   };
+
+  // ==========================================
+  // RECORDINGS WAITING TO UPLOAD (OFFLINE_MODE_PLAN.md stage 7). Recorded
+  // with no signal (or the upload failed): the take is kept on the phone with
+  // an entry on a list saved beside it (lib/recordingUploadStore). It shows
+  // in the lists as "waiting to upload" and plays from the phone. Once signal
+  // is back each one uploads in the same order as persistRecording -- doc,
+  // then audio, which starts the studio function -- and only then comes off
+  // the list, so closing the app at any point loses nothing.
+  // ==========================================
+  const keepRecordingForLater = async (
+    uid: string,
+    uri: string,
+    rec: Recording,
+    ext: string,
+    contentType: string,
+    titleSuffix: string
+  ) => {
+    // studioStatus is claimed only when it really uploads.
+    const { studioStatus: _studio, audioUrl: _url, ...recording } = rec;
+    const entry: WaitingUpload = {
+      recording,
+      fileName: waitingFileName(uid, rec.id, ext),
+      contentType,
+      docWritten: false,
+      attempts: 0,
+      lastTriedAt: null,
+    };
+    try {
+      await keepForUpload(uid, uri, entry);
+    } catch (err) {
+      console.error('Failed to keep the recording on the phone:', err);
+      triggerToast('Couldn’t save the recording on this phone -- please try again.');
+      return;
+    }
+    setUserRecordings((prev) => [asListed(entry, waitingAudioUri(entry)), ...prev.filter((r) => r.id !== rec.id)]);
+    triggerToast(`${titleSuffix} saved on this phone -- it will upload once there’s signal.`);
+  };
+
+  // An edit made while it waits goes onto the list, and up with it.
+  const editWaitingRecording = async (recording: Recording, patch: Partial<Recording>) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    await changeUploads(uid, (q) => patchWaiting(q, recording.id, patch));
+    const updated = { ...recording, ...patch };
+    if (selectedRecording?.id === recording.id) setSelectedRecording(updated);
+    setUserRecordings((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+  };
+
+  const deleteWaitingRecording = async (recording: Recording) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const entry = findWaiting(await loadUploads(uid), recording.id);
+    if (entry) {
+      await dropUpload(uid, entry);
+      // Half-way uploaded: its doc may already be in Firestore. The
+      // cleanUpDeletedRecording function takes any audio with it.
+      if (entry.docWritten) {
+        deleteDoc(doc(db, 'users', uid, 'recordings', recording.id)).catch((err) =>
+          console.error('Failed to delete a half-uploaded recording:', err)
+        );
+      }
+    }
+    setUserRecordings((prev) => prev.filter((r) => r.id !== recording.id));
+  };
+
+  // Uploads one. True if it's done (or gone), false to try again later.
+  const uploadWaitingRecording = async (uid: string, entry: WaitingUpload): Promise<boolean> => {
+    const id = entry.recording.id;
+    const audioPath = entry.recording.audioPath;
+    const recordingDocRef = doc(db, 'users', uid, 'recordings', id);
+    if (!audioPath) {
+      await dropUpload(uid, entry);
+      return true;
+    }
+    const uploadedAt = Date.now();
+    const recordedAt = Number(id.match(/^rec_(\d+)$/)?.[1]) || uploadedAt;
+    const fields = firestoreFields(entry, uploadedAt);
+    let docWritten = entry.docWritten;
+    try {
+      if (!docWritten) {
+        // Dated when it was recorded, so it sorts among the others by that.
+        await setDoc(recordingDocRef, stripUndefined({ ...fields, createdAt: Timestamp.fromMillis(recordedAt) }));
+        docWritten = true;
+        await changeUploads(uid, (q) => setDocWritten(q, id, true));
+      } else {
+        // Already there from an attempt that stopped half-way: never written
+        // whole again, in case a studio render landed on it.
+        const { studioStatus: _studio, ...editable } = fields;
+        await updateDoc(recordingDocRef, stripUndefined(editable));
+      }
+      const fileRef = storageRef(storage, audioPath);
+      await uploadBytesResumable(fileRef, await readWaitingAudio(entry), { contentType: entry.contentType });
+      const audioUrl = await getDownloadURL(fileRef);
+      await updateDoc(recordingDocRef, { audioUrl });
+
+      const latest = findWaiting(await loadUploads(uid), id);
+      if (!latest) {
+        // Deleted while it uploaded: take it back out.
+        await deleteDoc(recordingDocRef).catch(() => {});
+        return true;
+      }
+      // Edited while it uploaded: those edits too.
+      if (latest.recording !== entry.recording) {
+        const { studioStatus: _s, ...edits } = firestoreFields(latest, uploadedAt);
+        await updateDoc(recordingDocRef, stripUndefined(edits));
+      }
+      const savedRec: Recording = { ...firestoreFields(latest, uploadedAt), audioUrl };
+      if (normalizeRecordingVisibility(savedRec.sharedVisibility) !== 'private') {
+        await publishSharedRecordingRef.current(uid, savedRec).catch((err) =>
+          console.error('Failed to publish shared recording copy:', err)
+        );
+      }
+      if (defaultRecordingVisibilityRef.current === null) {
+        const vis = normalizeRecordingVisibility(savedRec.sharedVisibility);
+        setDefaultRecordingVisibility(vis);
+        updateDoc(doc(db, 'profiles', uid), { defaultRecordingVisibility: vis }).catch((err) =>
+          console.error('Failed to save default recording visibility:', err)
+        );
+      }
+      await dropUpload(uid, latest);
+      setUserRecordings((prev) => prev.map((r) => (r.id === id ? savedRec : r)));
+      setSelectedRecording((prev) => (prev?.id === id ? savedRec : prev));
+      watchStudioRender(uid, id);
+      return true;
+    } catch (err) {
+      console.error('A recording waiting to upload failed; will try again:', err);
+      // As in persistRecording: no doc without its audio. If even that
+      // can't reach the server, the next attempt finds the doc written.
+      if (docWritten) {
+        try {
+          await deleteDoc(recordingDocRef);
+          await changeUploads(uid, (q) => setDocWritten(q, id, false));
+        } catch {
+          // Stays marked written.
+        }
+      }
+      return false;
+    }
+  };
+
+  // The latest of these for the upload loop, which outlives a render:
+  // sharing needs the friends and circles as they are when it uploads.
+  const publishSharedRecordingRef = useRef<(uid: string, rec: Recording) => Promise<void>>(async () => {});
+  const defaultRecordingVisibilityRef = useRef(defaultRecordingVisibility);
+  defaultRecordingVisibilityRef.current = defaultRecordingVisibility;
+  const noSignalRef = useRef(noSignal);
+  noSignalRef.current = noSignal;
+  const uploadingRef = useRef(false);
+  const [uploadsTick, setUploadsTick] = useState(0);
+
+  // Uploads whatever is waiting while there's signal, oldest first. One that
+  // fails waits longer each time (recordingUploads.retryWait) and the loop
+  // stops there, since the next would most likely fail the same way.
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid || noSignal || !OFFLINE_RECORDINGS_SUPPORTED) return;
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    const stillOn = () => !cancelled && !noSignalRef.current && auth.currentUser?.uid === uid;
+    const run = async () => {
+      if (uploadingRef.current) return;
+      uploadingRef.current = true;
+      let uploaded = 0;
+      try {
+        await sweepStrayAudio(uid).catch((err) => console.error('[uploads] sweep failed:', err));
+        while (stillOn()) {
+          const entry = nextDue(await loadUploads(uid), Date.now());
+          if (!entry) break;
+          await changeUploads(uid, (q) => markTried(q, entry.recording.id, Date.now()));
+          if (!(await uploadWaitingRecording(uid, entry))) break;
+          uploaded++;
+        }
+      } catch (err) {
+        console.error('[uploads] could not upload waiting recordings:', err);
+      } finally {
+        uploadingRef.current = false;
+      }
+      if (uploaded > 0) {
+        triggerToast(uploaded === 1 ? 'A recording made offline has uploaded.' : `${uploaded} recordings made offline have uploaded.`);
+      }
+      if (!stillOn()) return;
+      const wait = msUntilNextDue(await loadUploads(uid), Date.now());
+      if (wait !== null) retry = setTimeout(() => setUploadsTick((t) => t + 1), Math.max(wait, 1000));
+    };
+    // A short wait after signal returns or the app opens, so the circles and
+    // friends a shared recording goes to have loaded first.
+    const start = setTimeout(() => void run(), 10_000);
+    return () => {
+      cancelled = true;
+      clearTimeout(start);
+      if (retry) clearTimeout(retry);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, noSignal, uploadsTick]);
 
   // Chat cards: recordings shared into a chat, recording requests, quizzes
   // (see useChatCards).
@@ -2815,6 +3058,8 @@ export function useAppState() {
     );
   };
 
+  publishSharedRecordingRef.current = publishSharedRecording;
+
   // Changes who can hear one of my own recordings after it was saved.
   // Private deletes the shared copy outright -- feeds, chat cards and other
   // people's saved bookmarks all read that copy, so they all lose it at once
@@ -2823,6 +3068,11 @@ export function useAppState() {
     const uid = auth.currentUser?.uid;
     if (!uid || recording.savedFromRecordingId) return;
     if (normalizeRecordingVisibility(recording.sharedVisibility) === vis) return;
+    if (recording.uploadPending) {
+      await editWaitingRecording(recording, { sharedVisibility: vis });
+      triggerToast(vis === 'private' ? 'Only you will hear it.' : 'It will be shared with your friends and circles once it uploads.');
+      return;
+    }
     try {
       if (vis === 'private') {
         await deleteDoc(doc(db, 'sharedRecordings', recording.id)).catch((err) => {
@@ -2898,6 +3148,10 @@ export function useAppState() {
   const deleteRecording = async (recording: Recording) => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
+    if (recording.uploadPending) {
+      await deleteWaitingRecording(recording);
+      return;
+    }
     // A "Save to My Library" copy points at the original owner's files and
     // shared copy — deleting it only drops the saver's own doc.
     const ownsAudio = !recording.savedFromRecordingId && (recording.audioPath ?? '').startsWith(`recordings/${uid}/`);
@@ -2940,6 +3194,11 @@ export function useAppState() {
   const saveVerseSyncOffsets = async (verseTimestamps: VerseTimestamp[]) => {
     const uid = auth.currentUser?.uid;
     if (!uid || !selectedRecording) return;
+    if (selectedRecording.uploadPending) {
+      await editWaitingRecording(selectedRecording, { verseTimestamps });
+      triggerToast('Verse sync offsets updated!');
+      return;
+    }
 
     try {
       await updateDoc(doc(db, 'users', uid, 'recordings', selectedRecording.id), { verseTimestamps });
@@ -2960,6 +3219,11 @@ export function useAppState() {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
     const trimmed = newSpeaker.trim() || 'Me';
+    if (recording.uploadPending) {
+      await editWaitingRecording(recording, { user: trimmed });
+      triggerToast('Speaker updated!');
+      return;
+    }
     try {
       await updateDoc(doc(db, 'users', uid, 'recordings', recording.id), { user: trimmed });
       const updated = { ...recording, user: trimmed };
@@ -2989,11 +3253,16 @@ export function useAppState() {
         return u ? { ...r, priority: u.priority } : r;
       })
     );
+    const waiting = new Set(userRecordings.filter((r) => r.uploadPending).map((r) => r.id));
     await Promise.all(
       updates.map(({ id, priority }) =>
-        updateDoc(doc(db, 'users', uid, 'recordings', id), { priority }).catch((err) =>
-          handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/recordings/${id}`)
-        )
+        waiting.has(id)
+          ? changeUploads(uid, (q) => patchWaiting(q, id, { priority })).catch((err) =>
+              console.error('Failed to reorder a recording waiting to upload:', err)
+            )
+          : updateDoc(doc(db, 'users', uid, 'recordings', id), { priority }).catch((err) =>
+              handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/recordings/${id}`)
+            )
       )
     );
   };
