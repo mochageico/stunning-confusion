@@ -156,6 +156,7 @@ export function ActivityHeatmap({ days }: { days: HeatmapDay[] }) {
             Less
           </AppText>
           {shades.map((shade, i) => (
+            // layout-ok: a legend swatch holds no text.
             <View key={i} style={{ width: 11, height: 11, borderWidth: 1, backgroundColor: shade.fill, borderColor: shade.edge }} className="rounded-sm" />
           ))}
           <AppText variant="micro" className="font-sans text-ink-3" style={{ marginLeft: 2 }}>

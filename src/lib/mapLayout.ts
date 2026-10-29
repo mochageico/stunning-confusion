@@ -324,7 +324,23 @@ function pickSpot(q: SpotQuery): Pt {
       oy = 0;
     }
   }
-  for (const r of [LINK_LENGTH, LINK_LENGTH * 1.35, LINK_LENGTH * 1.8]) {
+  // Only what can touch a candidate matters: candidates sit within `reach` of `around`, and a star
+  // counts when it's within 2 links of the candidate on both axes. Filtering once keeps pickSpot
+  // from walking every star and line in a big group for each of its 48 candidates.
+  const radii = [LINK_LENGTH, LINK_LENGTH * 1.35, LINK_LENGTH * 1.8];
+  const reach = radii[radii.length - 1];
+  let ext = 0;
+  for (const u of q.unit) ext = Math.max(ext, Math.abs(u.dx), Math.abs(u.dy));
+  const near = reach + ext + LINK_LENGTH * 2;
+  const nearby = q.placed.filter((n) => Math.abs(n.x - q.around.x) <= near && Math.abs(n.y - q.around.y) <= near);
+  const lines: [number, number, number, number][] = [];
+  for (const [a, b] of q.edges) {
+    if (!a.placed || !b.placed || a === q.around || b === q.around) continue;
+    if (Math.min(a.x, b.x) > q.around.x + reach || Math.max(a.x, b.x) < q.around.x - reach) continue;
+    if (Math.min(a.y, b.y) > q.around.y + reach || Math.max(a.y, b.y) < q.around.y - reach) continue;
+    lines.push([a.x, a.y, b.x, b.y]);
+  }
+  for (const r of radii) {
     for (let i = 0; i < steps; i++) {
       const ang = base + (i * Math.PI * 2) / steps;
       const cx = q.around.x + Math.cos(ang) * r;
@@ -333,17 +349,19 @@ function pickSpot(q: SpotQuery): Pt {
       let hits = 0;
       for (const u of q.unit) {
         const p = { x: cx + u.dx, y: cy + u.dy, w: u.w };
-        for (const n of q.placed) {
+        for (const n of nearby) {
           const dx = Math.abs(n.x - p.x);
           const dy = Math.abs(n.y - p.y);
           if (dx > LINK_LENGTH * 2 || dy > LINK_LENGTH * 2) continue;
           clearance = Math.min(clearance, Math.hypot(dx, dy) - MIN_SPACING);
           if (dx < (p.w + n.w) / 2 + BOX_PAD && dy < BOX_H + BOX_PAD) hits++;
         }
-        const box = starBox([p.x, p.y], p.w);
-        for (const o of q.obstacles) {
-          const [rx, ry] = rectsOverlap(box, o, 0);
-          if (rx > 0 && ry > 0) hits += 4;
+        if (q.obstacles.length) {
+          const box = starBox([p.x, p.y], p.w);
+          for (const o of q.obstacles) {
+            const [rx, ry] = rectsOverlap(box, o, 0);
+            if (rx > 0 && ry > 0) hits += 4;
+          }
         }
       }
       let score = Math.min(clearance, LINK_LENGTH) - hits * 120 - (r - LINK_LENGTH) * 0.4;
@@ -351,9 +369,8 @@ function pickSpot(q: SpotQuery): Pt {
       score += (Math.cos(ang) * ox + Math.sin(ang) * oy) * 30;
       const p1: Pt = [q.around.x, q.around.y];
       const p2: Pt = [cx, cy];
-      for (const [a, b] of q.edges) {
-        if (!a.placed || !b.placed || a === q.around || b === q.around) continue;
-        if (crosses(p1, p2, [a.x, a.y], [b.x, b.y])) score -= 40;
+      for (const [ax, ay, bx, by] of lines) {
+        if (crosses(p1, p2, [ax, ay], [bx, by])) score -= 40;
       }
       if (score > bestScore + 1e-9) {
         bestScore = score;
@@ -385,6 +402,10 @@ function settle(g: Group, fresh: boolean) {
     v.vx = 0;
     v.vy = 0;
   }
+  const eMinX = new Float64Array(g.edges.length);
+  const eMaxX = new Float64Array(g.edges.length);
+  const eMinY = new Float64Array(g.edges.length);
+  const eMaxY = new Float64Array(g.edges.length);
   for (let it = 0; it < iters; it++) {
     // Springs on links (d3's link force: stiffness shared by degree).
     for (const [a, b] of g.edges) {
@@ -426,12 +447,23 @@ function settle(g: Group, fresh: boolean) {
     }
     // Keep stars off lines they aren't part of.
     if (it % 3 === 0) {
+      // Positions don't change in this pass, so each line's padded bounds are worked out once.
+      const ne = g.edges.length;
+      for (let e = 0; e < ne; e++) {
+        const [a, b] = g.edges[e];
+        eMinX[e] = Math.min(a.x, b.x) - SEG_CLEAR;
+        eMaxX[e] = Math.max(a.x, b.x) + SEG_CLEAR;
+        eMinY[e] = Math.min(a.y, b.y) - SEG_CLEAR;
+        eMaxY[e] = Math.max(a.y, b.y) + SEG_CLEAR;
+      }
       for (const v of nodes) {
         if (!v.mobile) continue;
-        for (const [a, b] of g.edges) {
+        const vx = v.x;
+        const vy = v.y;
+        for (let e = 0; e < ne; e++) {
+          if (vx < eMinX[e] || vx > eMaxX[e] || vy < eMinY[e] || vy > eMaxY[e]) continue;
+          const [a, b] = g.edges[e];
           if (a === v || b === v) continue;
-          if (v.x < Math.min(a.x, b.x) - SEG_CLEAR || v.x > Math.max(a.x, b.x) + SEG_CLEAR) continue;
-          if (v.y < Math.min(a.y, b.y) - SEG_CLEAR || v.y > Math.max(a.y, b.y) + SEG_CLEAR) continue;
           const ex = b.x - a.x;
           const ey = b.y - a.y;
           const len2 = ex * ex + ey * ey;
