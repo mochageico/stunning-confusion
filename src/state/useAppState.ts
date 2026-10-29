@@ -1305,6 +1305,7 @@ export function useAppState() {
             ...(typeof data.ladderReviews === 'number' ? { ladderReviews: data.ladderReviews } : {}),
             ...(data.catchUp === true ? { catchUp: true as const } : {}),
             ...(data.dayResult ? { dayResult: data.dayResult } : {}),
+            ...(data.dayReview ? { dayReview: data.dayReview } : {}),
             ...(data.lastSelfChecked === true ? { lastSelfChecked: true as const } : {}),
             ...(data.firmUp ? { firmUp: data.firmUp } : {}),
             ...(data.slipped === true ? { slipped: true as const } : {}),

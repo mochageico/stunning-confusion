@@ -103,7 +103,26 @@ dailyPhaseWeeks / weeklyPhaseMonths / monthlyPhaseYears.
   floor(days overdue / interval). Each moves the passage back one review, never below
   review 1 of its current step. Less than one interval late is free. Then today's
   review is graded normally on top.
-- Off: a late passage waits where it was.
+- **Dropping a step (user, 2026-10-29):** a passage at least 2 of its intervals and
+  at least 2 weeks late (scheduled days) moves down one step instead, landing one
+  review short of moving back up, so one clean review returns it. Never more than one
+  step per absence. Every 6 months is for good: it is never late. Every day has
+  nowhere to drop and loses reviews as above. A catch-up lands one short of its own
+  count. Since a review never moves a passage back (§4), this is the only way a
+  neglected passage comes back to being reviewed more often.
+
+  | Step | Drops after |
+  | --- | --- |
+  | Every 2 days, 4 days, week | 2 weeks late |
+  | Every 2 weeks | 4 weeks |
+  | Every 4 weeks | 8 weeks |
+  | Every 8 weeks | 16 weeks |
+  | Every 6 months | never |
+
+  Shown on the passage's Today row ("Away a while: now Every week. One clean review
+  moves it back up."), on the Welcome back card, in the verse's history, and in
+  Settings > Reviews.
+- Off: a late passage waits where it was (no drops either).
 - **Long absence:** overdue passages are spread over the next few days automatically
   (Settling first, then most overdue). Today shows a "Welcome back" card.
 - This replaces the missed-cycle catch-up in `handleReviewCompleted`, the
@@ -131,22 +150,34 @@ Every counting format reports per verse: **clean, stumble or blank**.
     up; stumbles and blanks still apply).
 - **Practice (never credits):** Scramble, Put in order, Which section, Teach-It.
 - **Combining a session:** each verse takes the result of the counting round that
-  covered it (worst if covered twice). A passage review only counts toward moving up
+  covered it (best if covered twice; changed from worst 2026-10-29). A passage review only counts toward moving up
   if every verse was covered by a counting round. Stopping halfway keeps the covered
   verses' results (stumbles and blanks still apply) but the passage stays on its
   review count.
 
+- **Best run of the day (2026-10-29):** once a passage's review is applied, a
+  better run later the same day redoes it from where the passage stood before
+  (`dayReview` on each member, dropped the next day). Each verse keeps its best
+  result of the day; the redo only replaces the outcome when it comes out better
+  (held < forgiven or up), and its history entry replaces the first one.
+  A worse run is practice. Anything that moves the passage in between (a join, a
+  win-back) ends the chance to redo.
+
 ### Passage outcome
 
-| | Under 12 verses | 12+ verses |
-| --- | --- | --- |
-| All clean | +1 review | +1 review |
-| 1–2 stumbles | Held (doesn't count) | Forgiven (+1 review) |
-| 3+ stumbles | Back one review, never below the start of the step | Same |
-| A blank | Down one step (blank beats stumbles; one penalty per review) | Same |
+**A review never moves a passage back (user, 2026-10-29):** at worst it holds
+where it was. Only lateness ("Late reviews move you back", §3) moves a passage
+back. Before this, 3+ stumbles moved it back a review and a blank dropped it a
+step. Stumbles also scale with the passage's size (changed the same day; it used to
+be 1–2 held under 12 verses, forgiven at 12+):
 
-- Down a step can move a passage between groups (Every week → Every 4 days = back to
-  Settling).
+| | Rule | 5 verses | 6–11 | 12 | 20 | 40 |
+| --- | --- | --- | --- | --- | --- | --- |
+| All clean | +1 review | | | | | |
+| Forgiven (+1 review) | up to 1 stumble per 6 verses, no blanks | none | 1 | 1–2 | 1–3 | 1–6 |
+| Held (stays where it was) | more stumbles than that, or any blank | 1+ | 2+ | 3+ | 4+ | 7+ |
+
+- Older history entries can still say back or down; nothing new writes them.
 - No "same verse blanks twice" rule.
 
 ## 5. After a slip
@@ -159,11 +190,10 @@ Every counting format reports per verse: **clean, stumble or blank**.
   `src/lib/guided.ts`) on each slipped verse, running in from the end of the verse
   before. ~1 minute. It must be **skippable**. Not a counting format. Finishing it
   clears the weak-spot dot early.
-- **Firm up (win it back):** after a stumble-hold or a back-one, the slipped verses
+- **Firm up (win it back):** after a hold from stumbles or blanks, the slipped verses
   appear on Today the next day as a short item with a running start. Reciting them
-  clean gives the lost review back (a held review counts; a back-one is undone).
-  Step drops from a blank can't be won back. Incentive is the point: more reason to
-  come back = more practice.
+  clean gives the held review back (it counts). Incentive is the point: more reason
+  to come back = more practice.
 
 ## 6. Idea saved for later (not decided for the build)
 

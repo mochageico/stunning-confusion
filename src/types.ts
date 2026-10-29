@@ -161,6 +161,7 @@ export interface ReviewLog {
   // Review ladder (REVIEW_LADDER_PLAN.md decision 6). `stage` above keeps the
   // mapped legacy value; these say what really happened.
   step?: number;               // the ladder step the review happened at
+  toStep?: number;             // late: a long absence moved the passage down to this step
   grade?: ReviewGrade;         // this verse's grade in the passage's review
   outcome?: 'up' | 'held' | 'forgiven' | 'back' | 'down' | 'late' | 'joined' | 'wonBack'; // what the review did to the passage
 }
@@ -280,7 +281,19 @@ export interface QueueItem {
   // passage is fully covered and the outcome is applied. `selfCheck`: the
   // grade came from a self-check (every-other rule). `noUp`: its round
   // can't move the passage up (a missed spot check).
-  dayResult?: { day: string; grade: ReviewGrade; via?: ReviewLog['via']; selfCheck?: true; noUp?: true };
+  dayResult?: DayResult;
+  // Today's applied review, kept for the rest of its day so a better run can
+  // redo it (the best run of the day counts). `result` is this verse's best
+  // result so far; `before` is the passage's schedule before the review and
+  // `outcome` / `after` what the review did, all identical on every member.
+  // Dropped the next day.
+  dayReview?: {
+    day: string;
+    result: Omit<DayResult, 'day'>;
+    outcome: 'up' | 'held' | 'forgiven' | 'back' | 'down';
+    after: { step: number; reviews: number };
+    before: { step: number; reviews: number; catchUp?: true; due: string | null; lastSelfChecked?: true; scheduledDue?: string };
+  };
   lastSelfChecked?: true;      // the passage's last move up came from a self-check (every-other rule)
   // A review that can be won back after a hold or a back-one: reciting the
   // slipped verses (`verses`, verse numbers) clean on `day` restores `restore`.
@@ -290,6 +303,15 @@ export interface QueueItem {
 
 /** One verse's result in a counting review round. */
 export type ReviewGrade = 'clean' | 'stumble' | 'blank';
+
+/** One verse's result for its passage's review: the grade, and the round's limits on moving up. */
+export interface DayResult {
+  day: string;
+  grade: ReviewGrade;
+  via?: ReviewLog['via'];
+  selfCheck?: true;
+  noUp?: true;
+}
 
 export interface VerseTimestamp {
   verse: number;

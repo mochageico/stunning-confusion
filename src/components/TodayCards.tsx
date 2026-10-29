@@ -36,6 +36,11 @@ export function WelcomeBackCard({ data, onDismiss }: { data: WelcomeBack; onDism
         <AppText variant="label" className="font-sans text-ink-2">
           {`Some reviews piled up while you were away. We've spread ${plural(data.verses, 'verse')} over ${spreadOver === 1 ? 'today' : `the next ${spreadOver} days`} so no day is too much. The ones you review most often come first.`}
         </AppText>
+        {data.dropped > 0 && (
+          <AppText variant="label" className="font-sans text-ink-2">
+            {`${data.dropped === 1 ? '1 passage was' : `${data.dropped} passages were`} away long enough to move down a step. One clean review moves ${data.dropped === 1 ? 'it' : 'each'} back up.`}
+          </AppText>
+        )}
       </View>
       <View style={{ gap: space(6) }}>
         {data.days.map((d) => (

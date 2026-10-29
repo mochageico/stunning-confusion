@@ -428,32 +428,29 @@ console.log('Credit');
   check('A verse with no result gets no credit', roundCredits(round, { [a]: { mode: 'speak', accuracy: 1, perfect: true } }, none).length === 1);
   const cleanBefore = new Map<string, ReviewGrade>([[a, 'clean']]);
   check('A verse already clean this session is not credited again by a clean', roundCredits(round, { [a]: { mode: 'speak', accuracy: 1 } }, cleanBefore).length === 0);
+  check('...nor by a worse one', roundCredits(round, { [a]: { mode: 'speak', accuracy: 0.6 } }, cleanBefore).length === 0);
   check(
-    '...but is credited again when it went worse',
-    roundCredits(round, { [a]: { mode: 'speak', accuracy: 0.6 } }, cleanBefore)[0]?.grade === 'stumble'
-  );
-  check(
-    'A stumble is not undone by a later clean',
-    roundCredits(round, { [a]: { mode: 'speak', accuracy: 1 } }, new Map<string, ReviewGrade>([[a, 'stumble']])).length === 0
+    'A stumble is replaced by a later clean',
+    roundCredits(round, { [a]: { mode: 'speak', accuracy: 1 } }, new Map<string, ReviewGrade>([[a, 'stumble']]))[0]?.grade === 'clean'
   );
 
-  // Overlapping stretches share a verse: covered twice, it takes the worse grade.
+  // Overlapping stretches share a verse: covered twice, it takes the better grade.
   const pPlan = buildMixPlan({ due: psalm, pool: psalm, sectionsFor: () => null, enabled: ['recite'] }, seeded(1));
   const shared = pPlan.units[0].verseIds.filter((id) => pPlan.units[1].verseIds.includes(id));
   const done = runAll(pPlan);
   check('Stretches overlap by a verse', shared.length === 1, pPlan.units.map((u) => u.verseIds));
   check('...and the shared verse, clean twice, is credited once', done.credits.filter((c) => c.verseId === shared[0]).length === 1);
   check('A full run credits every due verse once', done.credits.length === psalm.length && mixSummary(done).notCovered.length === 0);
-  // Clean in the first stretch, stumbled in the second.
-  let worse = mixReducer(startMix(pPlan), { type: 'start' });
+  // Stumbled in the first stretch, clean in the second.
+  let better = mixReducer(startMix(pPlan), { type: 'start' });
   let n = 0;
-  while (worse.status === 'running') {
-    const acc = n === 1 ? (id: string) => (id === shared[0] ? 0.7 : 1) : 1;
-    worse = mixReducer(worse, { type: 'result', perVerse: resultFor(pPlan, worse, acc) });
+  while (better.status === 'running') {
+    const acc = n === 0 ? (id: string) => (id === shared[0] ? 0.7 : 1) : 1;
+    better = mixReducer(better, { type: 'result', perVerse: resultFor(pPlan, better, acc) });
     n++;
   }
-  check('Covered twice: clean then a stumble is sent again', worse.credits.filter((c) => c.verseId === shared[0]).map((c) => c.grade).join() === 'clean,stumble');
-  check('...and the recap takes the worse', mixSummary(worse).grades.get(shared[0]) === 'stumble' && mixSummary(worse).stumbled.join() === shared[0]);
+  check('Covered twice: a stumble then clean is sent again', better.credits.filter((c) => c.verseId === shared[0]).map((c) => c.grade).join() === 'stumble,clean');
+  check('...and the recap takes the better', mixSummary(better).grades.get(shared[0]) === 'clean' && mixSummary(better).stumbled.length === 0);
 
   // A whole session, all formats, everything passed.
   const full = runAll(buildMixPlan(fullInput(), seeded(9)));

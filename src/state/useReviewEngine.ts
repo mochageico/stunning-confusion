@@ -555,6 +555,7 @@ export function useReviewEngine({
       delete base.ladderReviews;
       delete base.catchUp;
       delete base.dayResult;
+      delete base.dayReview;
       delete base.lastSelfChecked;
       delete base.firmUp;
       delete base.slipped;

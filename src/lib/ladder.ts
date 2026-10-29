@@ -117,18 +117,23 @@ export const nextDue = (step: number, anchorDay: string | undefined, clock: Revi
   return nthOccurrenceOfWeekday(tomorrow, anchorDay, intervalDays / 7, clock.sabbathEnabled, clock.sabbathDay).toISOString();
 };
 
-export type PassageOutcome = 'up' | 'held' | 'forgiven' | 'back' | 'down';
+/**
+ * What one review does. A review never moves a passage back: at worst it
+ * holds (2026-10-29). Only lateness moves a passage back. Older history
+ * entries can still say 'back' or 'down' (ReviewLog.outcome).
+ */
+export type PassageOutcome = 'up' | 'held' | 'forgiven';
 
-/** A passage this many verses or longer forgives 1–2 stumbles instead of holding. */
-export const FORGIVING_PASSAGE_VERSES = 12;
+/** Stumbles scale with the passage: up to 1 in 6 verses is forgiven (none under 6 verses, 2 at 12). */
+export const forgivableStumbles = (size: number): number => Math.floor(size / 6);
 
 /**
- * One review's outcome from its verses' grades (Part 1 §4 table). A blank
- * beats stumbles: one penalty per review. `size` is the passage's verse
- * count when it differs from the grades given (a partly covered passage).
- * `canMoveUp: false` keeps the penalties but turns a move up into a hold:
- * a partly covered passage at day's end, or a self-check right after a
- * self-check.
+ * One review's outcome from its verses' grades (Part 1 §4 table). All clean
+ * moves up; a few stumbles for the passage's size are forgiven and count;
+ * anything more, or any blank, holds. `size` is the passage's verse count
+ * when it differs from the grades given (a partly covered passage).
+ * `canMoveUp: false` turns a move up into a hold: a partly covered passage
+ * at day's end, or a self-check right after a self-check.
  */
 export const passageOutcome = (
   grades: readonly ReviewGrade[],
@@ -136,21 +141,17 @@ export const passageOutcome = (
 ): PassageOutcome => {
   const size = opts.size ?? grades.length;
   const canMoveUp = opts.canMoveUp ?? true;
-  if (grades.length === 0) return 'held';
-  if (grades.includes('blank')) return 'down';
+  if (grades.length === 0 || !canMoveUp || grades.includes('blank')) return 'held';
   const stumbles = grades.filter((g) => g === 'stumble').length;
-  if (stumbles >= 3) return 'back';
-  if (!canMoveUp) return 'held';
   if (stumbles === 0) return 'up';
-  return size >= FORGIVING_PASSAGE_VERSES ? 'forgiven' : 'held';
+  return stumbles <= forgivableStumbles(size) ? 'forgiven' : 'held';
 };
 
 /**
  * Moves a passage by one review's outcome. Up and forgiven count a review
  * and move up a step once the step's count is reached (the top step just
- * keeps counting). Back one never goes below the start of the step. Down a
- * step lands at the start of the step below; Every day is the floor. A
- * catch-up ends when the passage lands at Every week.
+ * keeps counting). Held leaves it where it was. A catch-up ends when the
+ * passage lands at Every week.
  */
 export const applyOutcome = (
   state: LadderState,
@@ -160,36 +161,36 @@ export const applyOutcome = (
   const step = clampStep(state.step);
   const reviews = Math.max(0, state.reviews);
   const catchUp = !!state.catchUp;
-  switch (outcome) {
-    case 'up':
-    case 'forgiven': {
-      const need = reviewsToMoveUp({ step, reviews, catchUp: catchUp || undefined }, thoroughness);
-      if (need === null || reviews + 1 < need) return make(step, reviews + 1, catchUp);
-      return make(step + 1, 0, catchUp);
-    }
-    case 'held':
-      return make(step, reviews, catchUp);
-    case 'back':
-      return make(step, Math.max(0, reviews - 1), catchUp);
-    case 'down':
-      return make(Math.max(0, step - 1), 0, catchUp);
-  }
+  if (outcome === 'held') return make(step, reviews, catchUp);
+  const need = reviewsToMoveUp({ step, reviews, catchUp: catchUp || undefined }, thoroughness);
+  if (need === null || reviews + 1 < need) return make(step, reviews + 1, catchUp);
+  return make(step + 1, 0, catchUp);
 };
+
+/** A passage this many of its intervals late, and at least DROP_MIN_DAYS late, moves down a step. */
+export const DROP_AFTER_INTERVALS = 2;
+export const DROP_MIN_DAYS = 14;
 
 /**
  * How late a passage is and where that leaves it ("Late reviews move you
  * back"). Each full interval overdue is one missed review, counted in
  * scheduled days (Sabbath and paused days don't count); less than one
  * interval late is free. Each missed review moves the passage back one,
- * never below the start of its step. Today's review is then graded on top.
+ * never below the start of its step. A long absence (at least 2 of its
+ * intervals and 2 weeks late) moves it down one step instead, landing one
+ * review short of moving back up: one clean review returns it. Never more
+ * than one step, and Every 6 months is for good. Today's review is then
+ * graded on top.
  */
 export const lateness = (
   state: LadderState,
   dueISO: string | null | undefined,
   clock: ReviewClock,
-  now: Date = new Date()
-): { missed: number; state: LadderState } => {
-  if (!dueISO) return { missed: 0, state };
+  now: Date = new Date(),
+  thoroughness: Thoroughness = DEFAULT_THOROUGHNESS
+): { missed: number; state: LadderState; dropped: boolean } => {
+  const step = clampStep(state.step);
+  if (!dueISO || step === TOP_STEP) return { missed: 0, state, dropped: false };
   // Whole calendar days: a review due at 9pm yesterday is one day late at
   // 8am today, not zero.
   const due = new Date(dueISO);
@@ -197,7 +198,13 @@ export const lateness = (
   const today = new Date(getLogicalDate(clock.dayStartHour, now));
   today.setHours(0, 0, 0, 0);
   const days = scheduledDaysBetween(due, today, clock.sabbathEnabled, clock.sabbathDay, clock.pausedAt, clock.pausedUntil);
-  const missed = Math.floor(days / stepInfo(state.step).intervalDays);
-  if (missed === 0) return { missed, state };
-  return { missed, state: make(clampStep(state.step), Math.max(0, state.reviews - missed), !!state.catchUp) };
+  const missed = Math.floor(days / stepInfo(step).intervalDays);
+  if (missed === 0) return { missed, state, dropped: false };
+  const catchUp = !!state.catchUp;
+  if (step > 0 && missed >= DROP_AFTER_INTERVALS && days >= DROP_MIN_DAYS) {
+    const below = step - 1;
+    const need = reviewsToMoveUp({ step: below, reviews: 0, catchUp: catchUp || undefined }, thoroughness)!;
+    return { missed, state: make(below, need - 1, catchUp), dropped: true };
+  }
+  return { missed, state: make(step, Math.max(0, state.reviews - missed), catchUp), dropped: false };
 };

@@ -102,29 +102,29 @@ check('outside a catch-up the step count applies', reviewsToMoveUp({ step: 0, re
   check('…and the catch-up is over (key deleted, not undefined)', !('catchUp' in s));
 }
 check(
-  'a blank during a catch-up drops a step and keeps the catch-up',
-  same(applyOutcome({ step: 1, reviews: 1, catchUp: true }, 'down'), { step: 0, reviews: 0, catchUp: true })
+  'a hold during a catch-up keeps the catch-up',
+  same(applyOutcome({ step: 1, reviews: 1, catchUp: true }, 'held'), { step: 1, reviews: 1, catchUp: true })
 );
 check(
   'a stray catch-up flag at Every week is dropped',
   same(applyOutcome({ step: 3, reviews: 0, catchUp: true }, 'held'), { step: 3, reviews: 0 })
 );
 
-console.log('passage outcome (§4 table)');
-for (const [size, name] of [
-  [5, 'under 12'],
-  [11, 'under 12 (11)'],
-  [12, '12+ (12)'],
-  [20, '12+'],
+console.log('passage outcome (§4 table, stumbles scaled by size, never back)');
+// [size, stumbles forgiven up to]
+for (const [size, forgive] of [
+  [5, 0],
+  [6, 1],
+  [11, 1],
+  [12, 2],
+  [20, 3],
+  [40, 6],
 ] as const) {
-  const big = size >= 12;
+  const name = `${size} verses`;
   check(`${name}: all clean = up`, passageOutcome(verses(size)) === 'up');
-  check(`${name}: 1 stumble = ${big ? 'forgiven' : 'held'}`, passageOutcome(verses(size, 1)) === (big ? 'forgiven' : 'held'));
-  check(`${name}: 2 stumbles = ${big ? 'forgiven' : 'held'}`, passageOutcome(verses(size, 2)) === (big ? 'forgiven' : 'held'));
-  check(`${name}: 3 stumbles = back`, passageOutcome(verses(size, 3)) === 'back');
-  check(`${name}: 5 stumbles = back`, passageOutcome(verses(size, 5)) === 'back');
-  check(`${name}: a blank = down`, passageOutcome(verses(size, 0, 1)) === 'down');
-  check(`${name}: a blank beats stumbles`, passageOutcome(verses(size, 3, 1)) === 'down');
+  for (let n = 1; n <= size; n++) check(`${name}: ${n} stumbles = ${n <= forgive ? 'forgiven' : 'held'}`, passageOutcome(verses(size, n)) === (n <= forgive ? 'forgiven' : 'held'));
+  check(`${name}: a blank holds`, passageOutcome(verses(size, 0, 1)) === 'held');
+  check(`${name}: every verse blank still only holds`, passageOutcome(verses(size, 0, size)) === 'held');
 }
 check('a single clean verse moves up', passageOutcome(g('c')) === 'up');
 check('a single stumble holds', passageOutcome(g('s')) === 'held');
@@ -132,8 +132,7 @@ check('size counts the whole passage, not just the grades given', passageOutcome
 check('no grades holds', passageOutcome([]) === 'held');
 check("can't move up: clean holds", passageOutcome(verses(5), { canMoveUp: false }) === 'held');
 check("can't move up: forgiven holds", passageOutcome(verses(20, 2), { canMoveUp: false }) === 'held');
-check("can't move up: 3 stumbles still back", passageOutcome(verses(5, 3), { canMoveUp: false }) === 'back');
-check("can't move up: a blank still drops", passageOutcome(verses(5, 0, 1), { canMoveUp: false }) === 'down');
+check("can't move up: a blank holds too", passageOutcome(verses(5, 0, 1), { canMoveUp: false }) === 'held');
 
 console.log('applying an outcome');
 check('up counts a review', same(applyOutcome({ step: 3, reviews: 2 }, 'up'), { step: 3, reviews: 3 }));
@@ -144,12 +143,6 @@ check('Light moves up from Every day after 4', same(applyOutcome({ step: 0, revi
 check('Every 8 weeks moves up to the top', same(applyOutcome({ step: 6, reviews: 5 }, 'up'), { step: 7, reviews: 0 }));
 check('the top keeps counting and stays', same(applyOutcome({ step: 7, reviews: 40 }, 'up'), { step: 7, reviews: 41 }));
 check('held changes nothing', same(applyOutcome({ step: 4, reviews: 3 }, 'held'), { step: 4, reviews: 3 }));
-check('back one review', same(applyOutcome({ step: 4, reviews: 3 }, 'back'), { step: 4, reviews: 2 }));
-check('back never below the start of the step', same(applyOutcome({ step: 4, reviews: 0 }, 'back'), { step: 4, reviews: 0 }));
-check('down lands at the start of the step below', same(applyOutcome({ step: 4, reviews: 5 }, 'down'), { step: 3, reviews: 0 }));
-check('down from Every week goes back to Settling', LADDER[applyOutcome({ step: 3, reviews: 7 }, 'down').step].group === 'settling');
-check('down from the top', same(applyOutcome({ step: 7, reviews: 3 }, 'down'), { step: 6, reviews: 0 }));
-check('Every day is the floor', same(applyOutcome({ step: 0, reviews: 4 }, 'down'), { step: 0, reviews: 0 }));
 
 console.log('next due');
 check('Every day: tomorrow', dayOf(nextDue(0, 'M', CLOCK, at(12))) === '2026-10-13');
@@ -181,8 +174,8 @@ check('Every 2 days, one day late is free', lateness({ step: 1, reviews: 2 }, at
 check('Every 2 days, two days late: one missed', lateness({ step: 1, reviews: 2 }, at(12).toISOString(), CLOCK, at(14)).missed === 1);
 check('Every 2 days, three days late: still one', lateness({ step: 1, reviews: 2 }, at(12).toISOString(), CLOCK, at(15)).missed === 1);
 {
-  const r = lateness({ step: 3, reviews: 1 }, at(12).toISOString(), CLOCK, at(12, 12, 10));
-  check('never below the start of the step', r.missed === 4 && same(r.state, { step: 3, reviews: 0 }), r);
+  const r = lateness({ step: 1, reviews: 1 }, at(12).toISOString(), CLOCK, at(25));
+  check('never below the start of the step (short of a drop)', r.missed === 6 && !r.dropped && same(r.state, { step: 1, reviews: 0 }), r);
 }
 check(
   'late moves back but keeps the step and catch-up',
@@ -203,6 +196,27 @@ check(
   'day start hour: 1am the next day is still the due day',
   lateness(daily, at(12).toISOString(), { ...CLOCK, dayStartHour: 2 }, at(13, 1)).missed === 0
 );
+
+console.log('late reviews: a long absence drops one step');
+{
+  const late = (s: LadderState, days: number, clock = CLOCK, t: Thoroughness = 1) => lateness(s, at(12).toISOString(), clock, at(12 + days), t);
+  const e2 = late({ step: 1, reviews: 3 }, 13);
+  check('Every 2 days, 13 days late: under 2 weeks, back within the step', !e2.dropped && same(e2.state, { step: 1, reviews: 0 }));
+  const e2d = late({ step: 1, reviews: 3 }, 14);
+  check('…14 days late: down to Every day, one review short of moving up (6 of 7)', e2d.dropped && same(e2d.state, { step: 0, reviews: 6 }));
+  check('Every week, 13 days late: one missed, no drop', !late({ step: 3, reviews: 5 }, 13).dropped && same(late({ step: 3, reviews: 5 }, 13).state, { step: 3, reviews: 4 }));
+  check('Every week, 2 weeks late: down to Every 4 days, 3 of 4', late({ step: 3, reviews: 5 }, 14).dropped && same(late({ step: 3, reviews: 5 }, 14).state, { step: 2, reviews: 3 }));
+  check('Every 2 weeks, 27 days late: no drop', !late({ step: 4, reviews: 2 }, 27).dropped);
+  check('…4 weeks late: down to Every week, 7 of 8', same(late({ step: 4, reviews: 2 }, 28).state, { step: 3, reviews: 7 }));
+  check('Every 8 weeks, 16 weeks late: down to Every 4 weeks, 11 of 12', same(late({ step: 6, reviews: 0 }, 112).state, { step: 5, reviews: 11 }) && !late({ step: 6, reviews: 0 }, 111).dropped);
+  check('a year late still only drops one step', same(late({ step: 6, reviews: 4 }, 365).state, { step: 5, reviews: 11 }));
+  const top = late({ step: 7, reviews: 3 }, 1000);
+  check('Every 6 months is for good: never late', top.missed === 0 && !top.dropped && same(top.state, { step: 7, reviews: 3 }));
+  check('Every day has nowhere to drop: back within the step', !late({ step: 0, reviews: 5 }, 30).dropped && same(late({ step: 0, reviews: 5 }, 30).state, { step: 0, reviews: 0 }));
+  check('a catch-up lands one short of its own count', same(late({ step: 2, reviews: 1, catchUp: true }, 14).state, { step: 1, reviews: 1, catchUp: true }));
+  check('thoroughness sets where it lands', same(late({ step: 3, reviews: 0 }, 14, CLOCK, 2).state, { step: 2, reviews: 7 }));
+  check('Sabbath days don\'t count toward the 2 weeks', !late({ step: 3, reviews: 5 }, 14, SABBATH).dropped);
+}
 
 if (failures > 0) {
   console.log(`\n${failures} check(s) failed.`);

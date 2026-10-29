@@ -24,6 +24,7 @@ import {
   passages,
   passageState,
   easeToday,
+  withLadderState,
   recordGrade,
   type ReviewApplied,
   settleStaleDays,
@@ -109,18 +110,25 @@ export const joinMessage = (j: Join): string => {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+/** "1 blank and 2 stumbles", "3 stumbles", or '' when every verse was clean. */
+const slips = (grades: ReviewApplied['grades']): string => {
+  const blanks = grades.filter((g) => g.grade === 'blank').length;
+  const stumbles = grades.filter((g) => g.grade === 'stumble').length;
+  return [blanks > 0 && plural(blanks, 'blank'), stumbles > 0 && plural(stumbles, 'stumble')].filter(Boolean).join(' and ');
+};
+
 /** Why a review that was all clean didn't count: a missed spot check, or two self-checks in a row. */
 export type HeldReason = 'spotCheck' | 'selfCheck' | null;
 
 /** The toast for one passage's review. */
 export const outcomeMessage = (a: ReviewApplied, thoroughness: Thoroughness, heldReason: HeldReason = null): string => {
-  const title = passageLabel(a.passage);
+  const title = `${a.replaced ? 'Better run! ' : ''}${passageLabel(a.passage)}`;
   const stumbles = a.grades.filter((g) => g.grade === 'stumble').length;
   const firmUp = a.firmUp ? ' Firm it up tomorrow to win it back.' : '';
   switch (a.outcome) {
     case 'up':
     case 'forgiven': {
-      const forgiven = a.outcome === 'forgiven' ? ` ${plural(stumbles, 'stumble')} forgiven in a long passage.` : '';
+      const forgiven = a.outcome === 'forgiven' ? ` ${plural(stumbles, 'stumble')} in ${a.passage.items.length} verses forgiven.` : '';
       if (a.to.step === TOP_STEP && a.from.step < TOP_STEP) return `${title} reached Every 6 months, for good. 🌟${forgiven}`;
       if (a.to.step > a.from.step) return `${title} moved up to ${stepInfo(a.to.step).label}!${forgiven}`;
       const need = reviewsToMoveUp(a.to, thoroughness);
@@ -128,14 +136,10 @@ export const outcomeMessage = (a: ReviewApplied, thoroughness: Thoroughness, hel
       return `${title}: review counted (${where}).${forgiven}`;
     }
     case 'held':
-      if (stumbles > 0) return `${title}: ${plural(stumbles, 'stumble')}, so this review didn't count.${firmUp}`;
+      if (slips(a.grades)) return `${title}: ${slips(a.grades)}, so this review didn't count. It stays where it was.${firmUp}`;
       if (heldReason === 'spotCheck') return `${title}: the spot check slipped, so this review didn't count.`;
       if (heldReason === 'selfCheck') return `${title}: two self-checks in a row can't both count. Recite it next time.`;
       return `${title}: this review didn't count.`;
-    case 'back':
-      return `${title}: ${plural(stumbles, 'stumble')}, back one review.${firmUp}`;
-    case 'down':
-      return `${title}: a blank moved it down to ${stepInfo(a.to.step).label}.`;
   }
 };
 
@@ -143,7 +147,7 @@ export const outcomeMessage = (a: ReviewApplied, thoroughness: Thoroughness, hel
 // The recap's per-passage line
 // ---------------------------------------------------------------------------
 
-export type ReviewTag = 'Clean' | 'Held' | 'Forgiven' | 'Back 1' | 'Down a step' | 'Won back';
+export type ReviewTag = 'Clean' | 'Held' | 'Forgiven' | 'Won back';
 
 /** What one passage's review did, for the Mixed review recap (stage 7). */
 export interface ReviewNote {
@@ -165,14 +169,11 @@ const TAG_OF: Record<ReviewApplied['outcome'], ReviewTag> = {
   up: 'Clean',
   forgiven: 'Forgiven',
   held: 'Held',
-  back: 'Back 1',
-  down: 'Down a step',
 };
 
 /** The recap line for an applied review. Same facts as `outcomeMessage`, shorter. */
 export const reviewNote = (a: ReviewApplied, thoroughness: Thoroughness, heldReason: HeldReason = null, at: number = Date.now()): ReviewNote => {
   const stumbles = a.grades.filter((g) => g.grade === 'stumble').length;
-  const blanks = a.grades.filter((g) => g.grade === 'blank').length;
   let reason: string;
   switch (a.outcome) {
     case 'up': {
@@ -185,19 +186,13 @@ export const reviewNote = (a: ReviewApplied, thoroughness: Thoroughness, heldRea
       break;
     }
     case 'forgiven':
-      reason = `${plural(stumbles, 'stumble')} forgiven in a long passage, so the review counted.`;
+      reason = `${plural(stumbles, 'stumble')} in ${a.passage.items.length} verses forgiven, so the review counted.`;
       break;
     case 'held':
-      if (stumbles > 0) reason = `${plural(stumbles, 'stumble')}, so this review didn't count.`;
+      if (slips(a.grades)) reason = `${slips(a.grades)}, so this review didn't count.`;
       else if (heldReason === 'spotCheck') reason = "The spot check slipped, so this review didn't count.";
       else if (heldReason === 'selfCheck') reason = "Two self-checks in a row can't both count. Recite it next time.";
       else reason = "This review didn't count.";
-      break;
-    case 'back':
-      reason = `${plural(stumbles, 'stumble')}, so it goes back one review.`;
-      break;
-    case 'down':
-      reason = `${blanks > 1 ? `${blanks} blanks` : 'A blank'} moved it down to ${stepInfo(a.to.step).label}.`;
       break;
   }
   return {
@@ -225,6 +220,20 @@ export const wonBackNote = (p: Passage, at: number = Date.now()): ReviewNote => 
 /** The history entry's `result` for older readers: a counted review is a pass, otherwise the verse's own grade decides. */
 const legacyResult = (outcome: ReviewApplied['outcome'], grade: ReviewGrade): ReviewLog['result'] =>
   outcome === 'up' || outcome === 'forgiven' || grade === 'clean' ? 'pass' : 'miss';
+
+/**
+ * A better run redid today's review: takes each member's entry for the
+ * review it replaced back out of the history (logApplied then adds the new
+ * one), so a day has one entry per review.
+ */
+const unlogReplaced = (work: Map<string, QueueItem>, a: ReviewApplied) => {
+  for (const g of a.grades) {
+    const cur = work.get(g.verseId);
+    const last = cur?.reviewLogs?.[cur.reviewLogs.length - 1];
+    if (!cur || !last || last.outcome !== a.replaced || last.step !== a.from.step) continue;
+    work.set(g.verseId, { ...cur, reviewLogs: cur.reviewLogs!.slice(0, -1) });
+  }
+};
 
 /**
  * Adds a history entry to every member graded in `a`, logged against the
@@ -257,8 +266,11 @@ const logApplied = (
 export interface LateNote {
   passage: Passage;
   missed: number;
+  /** Reviews at the step before and after. */
   from: number;
   to: number;
+  /** A long absence moved it down a step: the steps before and after. */
+  dropped?: { fromStep: number; toStep: number };
 }
 
 export interface LoadResult {
@@ -279,9 +291,10 @@ export interface LoadResult {
  *    step are mapped, so this also catches verses an old app build wrote
  *    back without their ladder fields);
  * 2. passages left partly covered on an earlier day get their
- *    penalty-only outcome;
+ *    outcome, which can only hold;
  * 3. "Late reviews move you back" (when on), one review per full interval
- *    overdue, never below the start of the step, noted in the history;
+ *    overdue, never below the start of the step, or down one step after a
+ *    long absence, noted in the history;
  * 4. overdue passages are spread over the next few days under the review
  *    time cap (welcome back), which also gives each a new due date so the
  *    same lateness isn't charged on the next open.
@@ -319,12 +332,12 @@ export const prepareLadderQueue = (
       for (const p of passages(queue)) {
         if (p.items.some((q) => q.ladderStep === undefined)) continue;
         const state = passageState(p);
-        const { missed, state: after } = lateness(state, p.items[0].nextReviewDueDate, clock, now);
+        const { missed, state: after, dropped } = lateness(state, p.items[0].nextReviewDueDate, clock, now, prefs.thoroughness);
         if (missed === 0) continue;
-        late.push({ passage: p, missed, from: state.reviews, to: after.reviews });
+        late.push({ passage: p, missed, from: state.reviews, to: after.reviews, ...(dropped ? { dropped: { fromStep: state.step, toStep: after.step } } : {}) });
         for (const q of p.items) {
-          const next = { ...q, ladderReviews: after.reviews };
-          appendReviewLog(next, q, 'skipped', { cycles: missed, step: state.step, outcome: 'late' });
+          const next = withLadderState(q, after);
+          appendReviewLog(next, q, 'skipped', { cycles: missed, step: state.step, outcome: 'late', ...(dropped ? { toStep: after.step } : {}) });
           changed.push(next);
         }
       }
@@ -448,14 +461,27 @@ export const gradeVerse = (
   const map = new Map(r.changed.map((q) => [q.verseId, q]));
   if (r.settled) logApplied(map, r.settled, before);
   if (r.applied) {
-    logApplied(map, r.applied, before, { via: opts.via, drillType: opts.drillType, forVerse: verseId });
+    if (r.applied.replaced) {
+      // Every member's entry is replaced, changed by the redo or not.
+      for (const q of r.applied.passage.items) if (!map.has(q.verseId)) map.set(q.verseId, before.get(q.verseId)!);
+      unlogReplaced(map, r.applied);
+    }
+    // A redo is logged against the step the passage was at before the review it replaced.
+    const stageOf = r.applied.replaced
+      ? new Map([...before].map(([id, q]) => [id, { ...q, ladderStep: r.applied!.from.step }]))
+      : before;
+    logApplied(map, r.applied, stageOf, { via: opts.via, drillType: opts.drillType, forVerse: verseId });
     let heldReason: HeldReason = null;
     if (r.applied.outcome === 'held' && r.applied.grades.every((g) => g.grade === 'clean')) {
-      const noUp = opts.canMoveUp === false || (pBefore?.items ?? []).some((q) => q.dayResult?.day === day && q.dayResult.noUp);
+      const noUp =
+        opts.canMoveUp === false ||
+        (pBefore?.items ?? []).some((q) => (q.dayResult?.day === day && q.dayResult.noUp) || (q.dayReview?.day === day && q.dayReview.result.noUp));
       heldReason = noUp ? 'spotCheck' : 'selfCheck';
     }
     messages.push(outcomeMessage(r.applied, thoroughness, heldReason));
     notes.push(reviewNote(r.applied, thoroughness, heldReason, now.getTime()));
+  } else if (r.improved && r.passage) {
+    messages.push(`${passageLabel(r.passage)}: better run noted, but today's review comes out the same.`);
   }
   take([...map.values()]);
 
