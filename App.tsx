@@ -68,6 +68,7 @@ import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/d
 import BlocksGallery from './src/dev/BlocksGallery';
 import RecapGallery from './src/dev/RecapGallery';
 import { useToastMessage } from './src/lib/toastStore';
+import { usePlaybackProgress } from './src/lib/playbackProgress';
 import { useMapFullscreen } from './src/lib/mapFullscreen';
 import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent, useColorSchemeInUse } from './src/components/theme';
 import { loadAppPrefs, setAppPref, useAppPrefs } from './src/lib/appPrefs';
@@ -273,6 +274,12 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
   );
 }
 
+// The bar's fill on its own, so a playback tick redraws only this.
+function NowPlayingProgress() {
+  const progress = usePlaybackProgress();
+  return <View className="bg-accent h-full" style={{ width: `${progress}%` }} />;
+}
+
 // Persistent mini-player, shown above the tab bar whenever a recording is
 // playing, so playback keeps going (and stays controllable) while navigating
 // to a different tab — previously play/pause controls only existed on the
@@ -280,7 +287,7 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
 function NowPlayingBar({ state }: { state: AppState }) {
   const palette = useThemeColors();
   const space = useScaledSpace();
-  const { playingRecordingId, nowPlayingRecording, playingRecProgress, setPlayingRecordingId, setSelectedRecording, navigateTo } = state;
+  const { playingRecordingId, nowPlayingRecording, setPlayingRecordingId, setSelectedRecording, navigateTo } = state;
 
   if (!playingRecordingId || !nowPlayingRecording) return null;
 
@@ -308,7 +315,7 @@ function NowPlayingBar({ state }: { state: AppState }) {
             {nowPlayingRecording.book} {nowPlayingRecording.chapter}
           </AppText>
           <View className="w-full bg-fill h-1 rounded-full overflow-hidden">
-            <View className="bg-accent h-full" style={{ width: `${playingRecProgress}%` }} />
+            <NowPlayingProgress />
           </View>
         </View>
 

@@ -8,6 +8,7 @@ import { FadeInView } from '../components/ui';
 import { BIBLE_TRANSLATIONS, RECORDING_VISIBILITY_HINT, RECORDING_VISIBILITY_OPTIONS, translationLabel } from '../data';
 import { recordingLabel, recordingMeta } from '../lib/recordingLabel';
 import { cacheableTarget } from '../lib/audioCache';
+import { usePlaybackProgress } from '../lib/playbackProgress';
 import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/studioAudio';
 import { AppButton, AppIconButton, AppTextInput, AppText, MIN_TOUCH, useScaledSpace } from '../components/design';
 import { Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
@@ -107,7 +108,6 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
     triggerToast,
     playingRecordingId,
     setPlayingRecordingId,
-    playingRecProgress,
     setPlayingRecProgress,
     seekRecordingBy,
     seekRecordingToTime,
@@ -200,6 +200,8 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
   const isDownloading = downloadingRecordingIds.has(selectedRecording.id);
 
   const durationSec = selectedRecording.duration;
+  // This screen is the one place that redraws with every playback tick.
+  const playingRecProgress = usePlaybackProgress();
   const currentPlaybackSec = isPlayingThis ? Math.floor((playingRecProgress / 100) * durationSec) : 0;
 
   // Every verse in this chapter, for the tap-to-tag chip row -- falls back to

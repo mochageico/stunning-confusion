@@ -214,7 +214,6 @@ export default function HomeScreen({ state }: { state: AppState }) {
     cognitiveLoadSensitivity,
     maxReviewCap,
     getEstimatedReviewTime,
-    isTodayLearningDay,
     getGreeting,
     navigateTo,
     triggerToast,
@@ -235,6 +234,9 @@ export default function HomeScreen({ state }: { state: AppState }) {
     balanceDays,
     pullMovedToday,
     getNewVerseRoom,
+    sabbathEnabled,
+    sabbathDay,
+    pausedAt,
   } = state;
 
   // While paused (Settings -> Pause Reviews), nothing should read as "due" --
@@ -264,7 +266,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     AsyncStorage.setItem(WELCOME_DISMISSED_KEY, todayKey).catch(() => {});
   };
   const welcome = welcomeDismissedDay === todayKey || isPausedNow ? null : welcomeBack(welcomeBackDays, todayKey, lateNotes);
-  const firmUps = isPausedNow ? [] : firmUpItems(memoryQueue, todayKey);
+  const firmUps = useMemo(() => (isPausedNow ? [] : firmUpItems(memoryQueue, todayKey)), [isPausedNow, memoryQueue, todayKey]);
 
   // Balance my review days: passages set for today that were moved later. The
   // note closes for the rest of the day, like the welcome-back card.
@@ -280,7 +282,10 @@ export default function HomeScreen({ state }: { state: AppState }) {
     setBalanceDismissedDay(todayKey);
     AsyncStorage.setItem(BALANCE_DISMISSED_KEY, todayKey).catch(() => {});
   };
-  const moved = !balanceDays || isPausedNow ? null : movedNote(movedFromDay(memoryQueue, todayKey), todayKey);
+  const moved = useMemo(
+    () => (!balanceDays || isPausedNow ? null : movedNote(movedFromDay(memoryQueue, todayKey), todayKey)),
+    [balanceDays, isPausedNow, memoryQueue, todayKey]
+  );
   const showBalanceNote = !!moved && balanceDismissedDay !== todayKey;
   const anyMoved = !!moved;
   useEffect(() => {
@@ -302,40 +307,87 @@ export default function HomeScreen({ state }: { state: AppState }) {
   // learning and just waiting on their reviews to clear before promotion out
   // of 'learning' status, so bundling them into a fresh "Learn" group with
   // newly-pulled verses would mean re-practicing something already finished.
-  const learningItems = memoryQueue.filter(
-    (item) => item.status === 'learning' && (item.touchLogs?.length || 0) < masteryTouches
-  );
-  const dueReviewItems = isPausedNow
-    ? []
-    : memoryQueue.filter((item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate) && !gradedOnDay(item, todayKey));
-  const queuedLookahead = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead);
+  // Sorting the whole queue into today's groups walks every verse several
+  // times over, so it only reruns when the verses, the settings it reads or
+  // the day change -- not on every unrelated redraw of the app. The engine's
+  // helpers are fresh functions each render, so the settings they close over
+  // (the review clock and the daily limit) are listed instead.
+  const {
+    learningItems,
+    dueReviewItems,
+    queuedLookahead,
+    estMinutes,
+    estWithMoved,
+    shieldActive,
+    groupedLearning,
+    groupedSettlingReviewing,
+    groupedSteadyReviewing,
+    groupedKeptReviewing,
+    groupedSecureReviewing,
+    groupedPriming,
+  } = useMemo(() => {
+    const learningItems = memoryQueue.filter(
+      (item) => item.status === 'learning' && (item.touchLogs?.length || 0) < masteryTouches
+    );
+    const dueReviewItems = isPausedNow
+      ? []
+      : memoryQueue.filter((item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate) && !gradedOnDay(item, todayKey));
+    const queuedLookahead = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead);
 
-  const estMinutes = getEstimatedReviewTime(memoryQueue, cognitiveLoadSensitivity);
-  // What today would come to with the moved passages back on it.
-  const movedIds = new Set(moved?.verseIds ?? []);
-  const estWithMoved = moved
-    ? getEstimatedReviewTime(
-        memoryQueue.map((q) => (movedIds.has(q.verseId) ? { ...q, nextReviewDueDate: new Date().toISOString() } : q)),
-        cognitiveLoadSensitivity
-      )
-    : estMinutes;
-  // shieldActive and isLearningDay are computed in the original for potential future use
-  // (isTodayLearningDay is consumed by triggerDailyPull elsewhere); kept here 1:1 for parity.
-  // The shield is up when not even one more verse fits under the daily limit.
-  const shieldActive = getNewVerseRoom() === 0;
-  const isLearningDay = isTodayLearningDay();
+    const estMinutes = getEstimatedReviewTime(memoryQueue, cognitiveLoadSensitivity);
+    // What today would come to with the moved passages back on it.
+    const movedIds = new Set(moved?.verseIds ?? []);
+    const estWithMoved = moved
+      ? getEstimatedReviewTime(
+          memoryQueue.map((q) => (movedIds.has(q.verseId) ? { ...q, nextReviewDueDate: new Date().toISOString() } : q)),
+          cognitiveLoadSensitivity
+        )
+      : estMinutes;
+    // The shield is up when not even one more verse fits under the daily limit.
+    const shieldActive = getNewVerseRoom() === 0;
 
-  const groupedLearning = groupQueueItems(learningItems);
-  const settlingReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'settling');
-  const steadyReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'steady');
-  const keptReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'kept');
-  const secureReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'secure');
+    const groupedLearning = groupQueueItems(learningItems);
+    const settlingReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'settling');
+    const steadyReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'steady');
+    const keptReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'kept');
+    const secureReviewItems = dueReviewItems.filter((item) => verseStage(item) === 'secure');
 
-  const groupedSettlingReviewing = groupQueueItems(settlingReviewItems);
-  const groupedSteadyReviewing = groupQueueItems(steadyReviewItems);
-  const groupedKeptReviewing = groupQueueItems(keptReviewItems);
-  const groupedSecureReviewing = groupQueueItems(secureReviewItems);
-  const groupedPriming = groupQueueItems(queuedLookahead);
+    const groupedSettlingReviewing = groupQueueItems(settlingReviewItems);
+    const groupedSteadyReviewing = groupQueueItems(steadyReviewItems);
+    const groupedKeptReviewing = groupQueueItems(keptReviewItems);
+    const groupedSecureReviewing = groupQueueItems(secureReviewItems);
+    const groupedPriming = groupQueueItems(queuedLookahead);
+
+    return {
+      learningItems,
+      dueReviewItems,
+      queuedLookahead,
+      estMinutes,
+      estWithMoved,
+      shieldActive,
+      groupedLearning,
+      groupedSettlingReviewing,
+      groupedSteadyReviewing,
+      groupedKeptReviewing,
+      groupedSecureReviewing,
+      groupedPriming,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    memoryQueue,
+    isPausedNow,
+    todayKey,
+    masteryTouches,
+    primingLookahead,
+    cognitiveLoadSensitivity,
+    moved,
+    maxReviewCap,
+    sabbathEnabled,
+    sabbathDay,
+    pausedAt,
+    pausedUntil,
+    dayStartHour,
+  ]);
 
   const mapQueueToVerseStates = (items: QueueItem[]): VerseState[] => {
     return items.map((item) => ({

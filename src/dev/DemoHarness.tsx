@@ -640,6 +640,7 @@ export function useDemoState(real: AppState): AppState {
     if (params.get('big') === '1') real.setMemoryQueue(buildBigQueue() as any);
     else if (params.get('empty') !== '1') real.setMemoryQueue(withDemoFirmUp(params.get('firm') === '1', (s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : s === 'map' ? buildQueue(MAP_SPECS) : buildQueue()) as any) as any);
     real.setUserRecordings(recordings as any);
+    if (params.get('playing') === '1') real.setPlayingRecProgress(40);
     // The Record tab starts with no passage until one is chosen; the demo
     // picks Romans 8 unless `nopassage=1` asks for the empty state.
     if (params.get('nopassage') !== '1') {
@@ -952,7 +953,6 @@ export function useDemoState(real: AppState): AppState {
   if (params.get('playing') === '1') {
     overrides.playingRecordingId = recordings[0].id;
     overrides.nowPlayingRecording = recordings[0] as any;
-    overrides.playingRecProgress = 40;
   }
   return { ...real, ...overrides } as AppState;
 }

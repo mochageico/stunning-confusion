@@ -54,6 +54,7 @@ import {
 } from '../lib/sections';
 
 import { useThemeColors } from '../components/theme';
+import { usePlaybackProgress } from '../lib/playbackProgress';
 import { OneTimeTip } from '../components/OneTimeTip';
 type OverrideStage = 'learning' | LadderGroup;
 const OVERRIDE_STAGE_OPTIONS: { id: OverrideStage; label: string }[] = [
@@ -128,7 +129,6 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
     studioPlaybackEnabled,
     playingRecordingId,
     setPlayingRecordingId,
-    playingRecProgress,
     setPlayingRecProgress,
     formatTime,
     setFeedBookFilter,
@@ -562,21 +562,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               </View>
 
               {/* Real playback progress bar */}
-              {currentAudio && isPlayingThis && (
-                <View style={{ gap: space(4) }}>
-                  <View className="w-full bg-fill h-1 rounded-full overflow-hidden">
-                    <View className="bg-accent h-full" style={{ width: `${playingRecProgress}%` }} />
-                  </View>
-                  <View className="flex-row justify-between">
-                    <AppText variant="caption" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
-                      {formatTime(Math.round((playingRecProgress / 100) * currentAudio.duration))}
-                    </AppText>
-                    <AppText variant="caption" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
-                      {formatTime(currentAudio.duration)}
-                    </AppText>
-                  </View>
-                </View>
-              )}
+              {currentAudio && isPlayingThis && <ChapterPlaybackProgress duration={currentAudio.duration} formatTime={formatTime} />}
             </>
           )}
 
@@ -1197,5 +1183,27 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
         )}
       </Dialog>
     </FadeInView>
+  );
+}
+
+// The playing recording's progress bar and time, on their own so a playback
+// tick redraws only these instead of the whole chapter page.
+function ChapterPlaybackProgress({ duration, formatTime }: { duration: number; formatTime: (sec: number) => string }) {
+  const space = useScaledSpace();
+  const progress = usePlaybackProgress();
+  return (
+    <View style={{ gap: space(4) }}>
+      <View className="w-full bg-fill h-1 rounded-full overflow-hidden">
+        <View className="bg-accent h-full" style={{ width: `${progress}%` }} />
+      </View>
+      <View className="flex-row justify-between">
+        <AppText variant="caption" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
+          {formatTime(Math.round((progress / 100) * duration))}
+        </AppText>
+        <AppText variant="caption" className="font-sans text-ink-3" style={{ fontVariant: ['tabular-nums'] }}>
+          {formatTime(duration)}
+        </AppText>
+      </View>
+    </View>
   );
 }

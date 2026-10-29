@@ -22,11 +22,11 @@ import {
 } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
 import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
+import { setPlaybackProgress } from '../lib/playbackProgress';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   setAudioModeAsync,
   useAudioPlayer,
-  useAudioPlayerStatus,
 } from 'expo-audio';
 
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
@@ -709,7 +709,9 @@ export function useAppState() {
 
   // Active playing of saved rec
   const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
-  const [playingRecProgress, setPlayingRecProgress] = useState(0);
+  // Progress lives in its own store (lib/playbackProgress) so the player's
+  // ticks don't redraw the whole app; read it with usePlaybackProgress().
+  const setPlayingRecProgress = setPlaybackProgress;
   // Set by seekRecordingToTime when asked to jump to a segment of a recording
   // that wasn't already playing — consumed once playback actually starts.
   const pendingSeekSecondsRef = useRef<number | null>(null);
@@ -749,7 +751,12 @@ export function useAppState() {
   // makes the player reload with the other version mid-listen.
   const nowPlayingUrl = resolvePlaybackUrl(nowPlayingRecording, studioPlaybackActive, audioCache.map);
   const recordingPlayer = useAudioPlayer(nowPlayingUrl);
-  const recordingPlayerStatus = useAudioPlayerStatus(recordingPlayer);
+  // Deliberately NOT useAudioPlayerStatus: that hook puts every playback
+  // tick into this hook's state, which redrew the whole open screen several
+  // times a second while a recording played. The listener below writes the
+  // progress to its own store instead.
+  const nowPlayingDurationRef = useRef(0);
+  nowPlayingDurationRef.current = nowPlayingRecording?.duration || 0;
 
   // Memory Queue auto-sync bookkeeping (debounce timer + last-synced verseIds, for deletion diffing)
   const queueSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1586,16 +1593,19 @@ export function useAppState() {
 
   useEffect(() => {
     if (!playingRecordingId || !nowPlayingUrl) return;
-    if (recordingPlayerStatus.didJustFinish) {
-      setPlayingRecordingId(null);
-      setPlayingRecProgress(0);
-      triggerToast('Recording playback completed.');
-      return;
-    }
-    const totalSec = recordingPlayerStatus.duration || nowPlayingRecording?.duration || 1;
-    setPlayingRecProgress(Math.min(100, (recordingPlayerStatus.currentTime / totalSec) * 100));
+    const sub = recordingPlayer.addListener('playbackStatusUpdate', (status) => {
+      if (status.didJustFinish) {
+        setPlayingRecordingId(null);
+        setPlayingRecProgress(0);
+        triggerToast('Recording playback completed.');
+        return;
+      }
+      const totalSec = status.duration || nowPlayingDurationRef.current || 1;
+      setPlayingRecProgress(Math.min(100, (status.currentTime / totalSec) * 100));
+    });
+    return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recordingPlayerStatus, playingRecordingId, nowPlayingUrl]);
+  }, [recordingPlayer, playingRecordingId, nowPlayingUrl]);
 
   // No fake playback: a recording with no real Storage-backed audio (e.g.
   // an illustrative guest-preview entry) can't actually play, so say so
@@ -1616,8 +1626,8 @@ export function useAppState() {
   // (used by RecordingDetailScreen's -5s/+5s buttons).
   const seekRecordingBy = async (deltaSeconds: number) => {
     if (!playingRecordingId || !nowPlayingUrl) return;
-    const totalSec = recordingPlayerStatus.duration || nowPlayingRecording?.duration || 0;
-    const newTime = Math.max(0, Math.min(totalSec, recordingPlayerStatus.currentTime + deltaSeconds));
+    const totalSec = recordingPlayer.duration || nowPlayingRecording?.duration || 0;
+    const newTime = Math.max(0, Math.min(totalSec, recordingPlayer.currentTime + deltaSeconds));
     await recordingPlayer.seekTo(newTime);
   };
 
@@ -1770,93 +1780,124 @@ export function useAppState() {
   // ==========================================
   // COMPUTED METRICS
   // ==========================================
-  const totalVersesCount = memoryQueue.length || verses.length || 1;
-  // Reached the top of the review ladder (Every 6 months). 'retained' only
-  // survives on verses not moved onto the ladder yet.
-  const memorizedCount = memoryQueue.filter((v) => v.ladderStep === TOP_STEP || v.status === 'retained').length;
-  const learningCount = memoryQueue.filter((v) => v.status === 'learning').length;
-  const untouchedCount = memoryQueue.filter((v) => v.status === 'queued').length;
-  const memorizedPercent = Math.round((memorizedCount / totalVersesCount) * 100) || 0;
+  // All of this walks every verse (and every practice and review log on
+  // each), so it only reruns when the verses change, or the day does --
+  // not on every unrelated tap. The day is part of the key so the activity
+  // windows and streak roll over at the day boundary.
+  const statsDayKey = localDayKey(getLogicalDate(dayStartHour));
+  const {
+    totalVersesCount,
+    memorizedCount,
+    learningCount,
+    untouchedCount,
+    memorizedPercent,
+    activityLast15Days,
+    activityLast90Days,
+    memoryStreak,
+    publicMemorizedCount,
+  } = useMemo(() => {
+    const totalVersesCount = memoryQueue.length || verses.length || 1;
+    // Reached the top of the review ladder (Every 6 months). 'retained' only
+    // survives on verses not moved onto the ladder yet.
+    const memorizedCount = memoryQueue.filter((v) => v.ladderStep === TOP_STEP || v.status === 'retained').length;
+    const learningCount = memoryQueue.filter((v) => v.status === 'learning').length;
+    const untouchedCount = memoryQueue.filter((v) => v.status === 'queued').length;
+    const memorizedPercent = Math.round((memorizedCount / totalVersesCount) * 100) || 0;
 
-  // Real per-day practice activity, derived from touchLogs already recorded
-  // on each queue item (the same log the 3-Touch Mastery gate uses) — a
-  // brand-new account with no practice history naturally gets all zeros
-  // here, instead of the previous hardcoded demo grid every account showed.
-  // Days are keyed in LOCAL time, not UTC (toISOString): for anyone west of
-  // Greenwich, an evening practice session's UTC date is already "tomorrow",
-  // which shifted the activity grid and broke streaks at the day boundary.
+    // Real per-day practice activity, derived from touchLogs already recorded
+    // on each queue item (the same log the 3-Touch Mastery gate uses) — a
+    // brand-new account with no practice history naturally gets all zeros
+    // here, instead of the previous hardcoded demo grid every account showed.
+    // Days are keyed in LOCAL time, not UTC (toISOString): for anyone west of
+    // Greenwich, an evening practice session's UTC date is already "tomorrow",
+    // which shifted the activity grid and broke streaks at the day boundary.
 
-  const activityByDay = new Map<string, number>();
-  memoryQueue.forEach((item) => {
-    (item.touchLogs || []).forEach((log) => {
-      const day = localDayKey(getLogicalDate(dayStartHour, new Date(log.timestamp)));
-      activityByDay.set(day, (activityByDay.get(day) || 0) + 1);
+    const activityByDay = new Map<string, number>();
+    memoryQueue.forEach((item) => {
+      (item.touchLogs || []).forEach((log) => {
+        const day = localDayKey(getLogicalDate(dayStartHour, new Date(log.timestamp)));
+        activityByDay.set(day, (activityByDay.get(day) || 0) + 1);
+      });
     });
-  });
 
-  // Spaced reviews per day, for the heatmap and the streak. They come from
-  // reviewLogs (isReviewLog skips Learning entries, which touchLogs already
-  // counts), kept apart from activityByDay so the heatmap can show each.
-  const reviewsByDay = new Map<string, number>();
-  memoryQueue.forEach((item) => {
-    (item.reviewLogs || []).forEach((log) => {
-      if (!isReviewLog(log)) return;
-      const at = new Date(log.at);
-      if (Number.isNaN(at.getTime())) return;
-      const day = localDayKey(getLogicalDate(dayStartHour, at));
-      reviewsByDay.set(day, (reviewsByDay.get(day) || 0) + 1);
+    // Spaced reviews per day, for the heatmap and the streak. They come from
+    // reviewLogs (isReviewLog skips Learning entries, which touchLogs already
+    // counts), kept apart from activityByDay so the heatmap can show each.
+    const reviewsByDay = new Map<string, number>();
+    memoryQueue.forEach((item) => {
+      (item.reviewLogs || []).forEach((log) => {
+        if (!isReviewLog(log)) return;
+        const at = new Date(log.at);
+        if (Number.isNaN(at.getTime())) return;
+        const day = localDayKey(getLogicalDate(dayStartHour, at));
+        reviewsByDay.set(day, (reviewsByDay.get(day) || 0) + 1);
+      });
     });
-  });
 
-  // Shared by the 15-day grid (ProfileScreen) and the Dashboard's bigger
-  // 90-day heatmap -- same window construction, just a different length.
-  // `count` is everything the heatmap shades: Learning practice plus reviews.
-  const buildActivityWindow = (days: number) =>
-    Array.from({ length: days }, (_, i) => {
+    // Shared by the 15-day grid (ProfileScreen) and the Dashboard's bigger
+    // 90-day heatmap -- same window construction, just a different length.
+    // `count` is everything the heatmap shades: Learning practice plus reviews.
+    const buildActivityWindow = (days: number) =>
+      Array.from({ length: days }, (_, i) => {
+        const d = getLogicalDate(dayStartHour);
+        d.setDate(d.getDate() - (days - 1 - i));
+        const key = localDayKey(d);
+        const practice = activityByDay.get(key) || 0;
+        const reviews = reviewsByDay.get(key) || 0;
+        return {
+          day: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
+          weekday: d.getDay(),
+          month: d.getMonth(),
+          practice,
+          reviews,
+          count: practice + reviews,
+        };
+      });
+
+    const activityLast15Days = buildActivityWindow(15);
+    const activityLast90Days = buildActivityWindow(90);
+
+    // Consecutive days of practice or spaced review counting back from today;
+    // 0 for a new/idle account.
+    const memoryStreak = (() => {
+      let streak = 0;
       const d = getLogicalDate(dayStartHour);
-      d.setDate(d.getDate() - (days - 1 - i));
-      const key = localDayKey(d);
-      const practice = activityByDay.get(key) || 0;
-      const reviews = reviewsByDay.get(key) || 0;
-      return {
-        day: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-        weekday: d.getDay(),
-        month: d.getMonth(),
-        practice,
-        reviews,
-        count: practice + reviews,
-      };
-    });
-
-  const activityLast15Days = buildActivityWindow(15);
-  const activityLast90Days = buildActivityWindow(90);
-
-  // Consecutive days of practice or spaced review counting back from today;
-  // 0 for a new/idle account.
-  const memoryStreak = (() => {
-    let streak = 0;
-    const d = getLogicalDate(dayStartHour);
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const key = localDayKey(d);
-      if ((activityByDay.get(key) || 0) + (reviewsByDay.get(key) || 0) > 0) {
-        streak++;
-        d.setDate(d.getDate() - 1);
-      } else {
-        break;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const key = localDayKey(d);
+        if ((activityByDay.get(key) || 0) + (reviewsByDay.get(key) || 0) > 0) {
+          streak++;
+          d.setDate(d.getDate() - 1);
+        } else {
+          break;
+        }
       }
-    }
-    return streak;
-  })();
+      return streak;
+    })();
 
-  // Public "memorized" figure synced below -- graduated out of Learning into
-  // spaced review (Daily/Weekly/Monthly) or fully retained, same definition
-  // ProfileScreen's own card uses for itself (versesLearnedCount). The plain
-  // `memorizedCount` above is deliberately narrower (retained-only, for
-  // Dashboard's per-phase retention breakdown) and would understate this.
-  const publicMemorizedCount = memoryQueue.filter(
-    (item) => item.status === 'reviewing' || item.status === 'retained'
-  ).length;
+    // Public "memorized" figure synced below -- graduated out of Learning into
+    // spaced review (Daily/Weekly/Monthly) or fully retained, same definition
+    // ProfileScreen's own card uses for itself (versesLearnedCount). The plain
+    // `memorizedCount` above is deliberately narrower (retained-only, for
+    // Dashboard's per-phase retention breakdown) and would understate this.
+    const publicMemorizedCount = memoryQueue.filter(
+      (item) => item.status === 'reviewing' || item.status === 'retained'
+    ).length;
+
+    return {
+      totalVersesCount,
+      memorizedCount,
+      learningCount,
+      untouchedCount,
+      memorizedPercent,
+      activityLast15Days,
+      activityLast90Days,
+      memoryStreak,
+      publicMemorizedCount,
+    };
+    // statsDayKey stands in for "today" inside getLogicalDate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memoryQueue, verses.length, dayStartHour, statsDayKey]);
 
   // Patch memorizedCount/learningCount/streakDays into this user's own
   // profiles/{uid} doc (debounced) so other users viewing their real member
@@ -2905,7 +2946,7 @@ export function useAppState() {
     createGroupDesc, setCreateGroupDesc,
     createGroupPrivacy, setCreateGroupPrivacy,
     playingRecordingId, setPlayingRecordingId,
-    playingRecProgress, setPlayingRecProgress,
+    setPlayingRecProgress,
     nowPlayingRecording,
     seekRecordingBy,
     seekRecordingToTime,
