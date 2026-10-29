@@ -272,6 +272,10 @@ export interface QueueItem {
   ladderStep?: number;         // 0-7, index into LADDER (src/lib/ladder.ts)
   ladderReviews?: number;      // reviews counted at the current step, 0 = the step's first review still ahead
   catchUp?: true;              // the short catch-up after a join (3/2/2) is running. Only ever true.
+  // "Balance my review days": the day this passage's step landed its review on
+  // (an ISO date) when it was moved off that day to ease a heavy one. Written
+  // identically on every member; absent when the review sits on its own day.
+  scheduledDue?: string;
   // This verse's result for its passage's current review, kept until the
   // passage is fully covered and the outcome is applied. `selfCheck`: the
   // grade came from a self-check (every-other rule). `noUp`: its round

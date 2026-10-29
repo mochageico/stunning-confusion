@@ -78,7 +78,7 @@ export const isTouchSpaced = (item: QueueItem, now: number = Date.now()): boolea
 export const REVIEW_SECONDS_PER_VERSE = 15;
 export const LEARNING_SECONDS_PER_VERSE = 90;
 
-const sensitivityMultiplier = (sensitivity: LoadSensitivity) =>
+export const sensitivityMultiplier = (sensitivity: LoadSensitivity) =>
   sensitivity === 'low' ? 0.75 : sensitivity === 'high' ? 1.5 : 1.0;
 
 // Shared by estimateReviewMinutes (today only) and forecastMemoryLoad
@@ -112,8 +112,8 @@ export const computeDayReviewLoad = (
   return { seconds, count };
 };
 
-/** Minutes today's learning + due reviews are expected to take. */
-export const estimateReviewMinutes = (
+/** Seconds today's learning + due reviews are expected to take, before rounding to minutes. */
+export const estimateLoadSeconds = (
   queue: QueueItem[],
   sensitivity: LoadSensitivity,
   clock: Pick<ReviewClock, 'dayStartHour' | 'pausedAt' | 'pausedUntil'>,
@@ -127,7 +127,31 @@ export const estimateReviewMinutes = (
     clock.pausedAt,
     clock.pausedUntil
   );
-  return Math.ceil(((learningSeconds + reviewSeconds) * sensitivityMultiplier(sensitivity)) / 60);
+  return (learningSeconds + reviewSeconds) * sensitivityMultiplier(sensitivity);
+};
+
+/** Minutes today's learning + due reviews are expected to take. */
+export const estimateReviewMinutes = (
+  queue: QueueItem[],
+  sensitivity: LoadSensitivity,
+  clock: Pick<ReviewClock, 'dayStartHour' | 'pausedAt' | 'pausedUntil'>,
+  now: Date = new Date()
+) => Math.ceil(estimateLoadSeconds(queue, sensitivity, clock, now) / 60);
+
+/**
+ * How many new verses fit in the time left under the daily review limit: each
+ * costs a Learning verse's 90 seconds (times the load setting). The Review
+ * Shield is up when this is 0.
+ */
+export const newVerseRoom = (
+  queue: QueueItem[],
+  sensitivity: LoadSensitivity,
+  capMinutes: number,
+  clock: Pick<ReviewClock, 'dayStartHour' | 'pausedAt' | 'pausedUntil'>,
+  now: Date = new Date()
+): number => {
+  const left = capMinutes * 60 - estimateLoadSeconds(queue, sensitivity, clock, now);
+  return left <= 0 ? 0 : Math.floor(left / (LEARNING_SECONDS_PER_VERSE * sensitivityMultiplier(sensitivity)));
 };
 
 // Projects daily memorization workload for the next `days` days, sharing

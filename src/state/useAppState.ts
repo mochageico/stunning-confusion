@@ -261,6 +261,7 @@ export function useAppState() {
     cleanPct,
     lateMovesBack,
     swapCanBeClean,
+    balanceDays,
     setLadderVersion,
     updateLadderSettings,
     applyLadderPrefs,
@@ -1334,6 +1335,7 @@ export function useAppState() {
           },
           prefs: resolvedLadderPrefs,
           capMinutes: resolvedRhythm.maxReviewCap,
+          sensitivity: resolvedRhythm.cognitiveLoadSensitivity,
         });
         const migrating = resolvedLadderVersion !== LADDER_VERSION;
         if (migrating && ladder.migration.changed.length > 0) {
@@ -1747,6 +1749,8 @@ export function useAppState() {
     creditGuided,
     reviewNotes,
     clearSlipped,
+    pullMovedToday,
+    getNewVerseRoom,
   } = useReviewEngine({
     plan,
     memoryQueue,
@@ -2850,11 +2854,13 @@ export function useAppState() {
     pausedUntil, setPausedUntil,
     reviewsPaused,
     pauseReviews, resumeReviews,
-    thoroughness, cleanPct, lateMovesBack, swapCanBeClean, updateLadderSettings,
+    thoroughness, cleanPct, lateMovesBack, swapCanBeClean, balanceDays, updateLadderSettings,
     welcomeBackDays,
     lateNotes,
     reviewNotes,
     clearSlipped,
+    pullMovedToday,
+    getNewVerseRoom,
     joinedGroupPlanMemberships,
     joinedGroupPlanDetails,
     viewingGroupPlan, setViewingGroupPlan,

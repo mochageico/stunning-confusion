@@ -30,6 +30,7 @@ export default function MemoryPlanScreen({ state }: { state: AppState }) {
     thoroughness,
     cleanPct,
     lateMovesBack,
+    balanceDays,
     masteryTouches,
     updateLadderSettings,
     updateMasteryTouches,
@@ -77,7 +78,7 @@ export default function MemoryPlanScreen({ state }: { state: AppState }) {
             Tap a setting to change it and see what it does.
           </AppText>
           <ReviewSettings
-            prefs={{ thoroughness, cleanPct, lateMovesBack }}
+            prefs={{ thoroughness, cleanPct, lateMovesBack, balanceDays }}
             masteryTouches={masteryTouches}
             onChange={updateLadderSettings}
             onMasteryChange={updateMasteryTouches}

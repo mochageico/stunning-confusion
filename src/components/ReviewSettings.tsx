@@ -32,7 +32,7 @@ export const spanWords = (days: number): string => {
 const TOUGHNESS_ORDER = THOROUGHNESS_PRESETS.map((p) => p.value);
 const presetLabel = (t: Thoroughness) => THOROUGHNESS_PRESETS.find((p) => p.value === t)?.label ?? 'Standard';
 
-export type ReviewSettingKey = 'level' | 'recalls' | 'accuracy' | 'late';
+export type ReviewSettingKey = 'level' | 'recalls' | 'accuracy' | 'late' | 'balance';
 
 /** The accuracy the example recital reached, in the Accuracy preview. */
 const EXAMPLE_PCT = 88;
@@ -118,6 +118,14 @@ function SettingRow({
   );
 }
 
+/** Balance my review days: how far a review may move, by step (balance.ts BALANCE_WINDOW). */
+const BALANCE_ROWS = [
+  { label: 'Every week, every 2 weeks', span: '1 day' },
+  { label: 'Every 4 weeks', span: '2 days' },
+  { label: 'Every 8 weeks', span: '3 days' },
+  { label: 'Every 6 months', span: 'a week' },
+];
+
 /** The dots of a step's reviews: filled up to `done`. */
 function ReviewDots({ total, done }: { total: number; done: number }) {
   const space = useScaledSpace();
@@ -142,7 +150,7 @@ export function ReviewSettings({
   onMasteryChange,
   initialOpen = 'level',
 }: {
-  prefs: Pick<LadderPrefs, 'thoroughness' | 'cleanPct' | 'lateMovesBack'>;
+  prefs: Pick<LadderPrefs, 'thoroughness' | 'cleanPct' | 'lateMovesBack' | 'balanceDays'>;
   masteryTouches: number;
   onChange: (patch: Partial<LadderPrefs>) => void;
   onMasteryChange: (n: number) => void;
@@ -297,6 +305,40 @@ export function ReviewSettings({
             ? 'On: the 3 missed reviews move it back 3 reviews, but never below review 1 of its step. Today’s review is then graded on top.'
             : 'Off: it stays at review 3 of 4 and waits. Being late never moves it back.'}
         </AppText>
+      </SettingRow>
+
+      <SettingRow
+        title="Balance my review days"
+        value={prefs.balanceDays ? 'On' : 'Off'}
+        open={open === 'balance'}
+        onPress={() => toggle('balance')}
+      >
+        <View className="flex-row items-center" style={{ gap: space(10) }}>
+          <AppText variant="body" className="font-sans text-ink flex-1">
+            Balance my review days
+          </AppText>
+          <Switch value={prefs.balanceDays} onChange={(on) => onChange({ balanceDays: on })} accessibilityLabel="Balance my review days" />
+        </View>
+        <AppText variant="caption" className="font-sans text-ink-2">
+          Keeps any one day from getting too heavy. Weekly and longer reviews can move a day or more either way, never so far that you
+          lose spacing, and your every-day, 2-day and 4-day reviews never move. If a day would go past your daily review limit, some of
+          its reviews are set a day or more away instead. A review counts any day in its window. Off: every review stays on its exact day.
+        </AppText>
+        <View className="bg-surface-2 rounded-btn" style={{ padding: space(10), gap: space(6) }}>
+          <AppText variant="micro" className="font-sans font-semibold text-ink-3">
+            HOW FAR A REVIEW CAN MOVE
+          </AppText>
+          {BALANCE_ROWS.map((r) => (
+            <View key={r.label} className="flex-row justify-between" style={{ gap: space(8) }}>
+              <AppText variant="label" className="font-sans text-ink flex-1">
+                {r.label}
+              </AppText>
+              <AppText variant="label" className="font-sans font-semibold text-ink">
+                {r.span}
+              </AppText>
+            </View>
+          ))}
+        </View>
       </SettingRow>
     </View>
   );

@@ -14,6 +14,7 @@ import {
   type Thoroughness,
   TOP_STEP,
 } from './ladder';
+import type { BalanceSettings } from './balance';
 import { migrateQueue, type MigrationResult } from './ladderMigration';
 import { getLogicalDate, localDayKey } from './logicalDate';
 import {
@@ -22,6 +23,7 @@ import {
   passageOf,
   passages,
   passageState,
+  easeToday,
   recordGrade,
   type ReviewApplied,
   settleStaleDays,
@@ -31,7 +33,7 @@ import {
 } from './passages';
 import { appendReviewLog } from './reviewLog';
 import { isPauseInEffect } from './reviewCalendar';
-import type { ReviewClock } from './retention';
+import { type LoadSensitivity, type ReviewClock, sensitivityMultiplier } from './retention';
 
 /** memoryPlans/{uid}.ladderVersion once an account's queue is on the ladder. */
 export const LADDER_VERSION = 2;
@@ -45,6 +47,8 @@ export interface LadderPrefs {
   lateMovesBack: boolean;
   /** "Find the wrong word can count as a clean review". */
   swapCanBeClean: boolean;
+  /** "Balance my review days": weekly and longer reviews may move a few days to ease a heavy one. */
+  balanceDays: boolean;
 }
 
 export const DEFAULT_LADDER_PREFS: LadderPrefs = {
@@ -52,6 +56,7 @@ export const DEFAULT_LADDER_PREFS: LadderPrefs = {
   cleanPct: 90,
   lateMovesBack: true,
   swapCanBeClean: true,
+  balanceDays: true,
 };
 
 const THOROUGHNESS_VALUES: readonly Thoroughness[] = [0.5, 1, 1.5, 2];
@@ -66,6 +71,7 @@ export const ladderPrefsFrom = (data: Record<string, unknown> | undefined): Ladd
     cleanPct: pct >= 85 && pct <= 100 ? pct : DEFAULT_LADDER_PREFS.cleanPct,
     lateMovesBack: typeof d.lateMovesBack === 'boolean' ? d.lateMovesBack : DEFAULT_LADDER_PREFS.lateMovesBack,
     swapCanBeClean: typeof d.swapCanBeClean === 'boolean' ? d.swapCanBeClean : DEFAULT_LADDER_PREFS.swapCanBeClean,
+    balanceDays: typeof d.balanceDays === 'boolean' ? d.balanceDays : DEFAULT_LADDER_PREFS.balanceDays,
   };
 };
 
@@ -279,15 +285,19 @@ export interface LoadResult {
  * 4. overdue passages are spread over the next few days under the review
  *    time cap (welcome back), which also gives each a new due date so the
  *    same lateness isn't charged on the next open.
- * Steps 3 and 4 are skipped while reviews are paused: nothing is late then.
+ * 5. Balance my review days (when on): a day still past the limit sets some
+ *    of its weekly-and-longer reviews a day later (easeToday).
+ * Steps 3 to 5 are skipped while reviews are paused: nothing is late then.
  */
 export const prepareLadderQueue = (
   loaded: readonly QueueItem[],
-  opts: { clock: ReviewClock; prefs: LadderPrefs; capMinutes: number; now?: Date }
+  opts: { clock: ReviewClock; prefs: LadderPrefs; capMinutes: number; sensitivity?: LoadSensitivity; now?: Date }
 ): LoadResult => {
   const now = opts.now ?? new Date();
   const { clock, prefs } = opts;
-  const settings = { clock, thoroughness: prefs.thoroughness, now };
+  const sensitivity = opts.sensitivity ?? 'medium';
+  const balance = prefs.balanceDays ? { capMinutes: opts.capMinutes, loadFactor: sensitivityMultiplier(sensitivity) } : undefined;
+  const settings = { clock, thoroughness: prefs.thoroughness, now, balance };
 
   const migration = migrateQueue(loaded, settings);
   let queue = mergeChanged(loaded, migration.changed);
@@ -323,6 +333,8 @@ export const prepareLadderQueue = (
     const s = spreadOverdue(queue, opts.capMinutes, clock, now);
     queue = mergeChanged(queue, s.changed);
     spread = s.days;
+    // Balance my review days: a day still past the limit sets some of its weekly-and-longer reviews a day later.
+    if (balance) queue = mergeChanged(queue, easeToday(queue, { clock, balance, sensitivity, now }).changed);
   }
 
   const original = new Map(loaded.map((q) => [q.verseId, JSON.stringify(q)]));
@@ -344,6 +356,8 @@ export interface GradeVerseOptions {
   selfCheck?: boolean;
   /** false: this round can't move the passage up (a missed spot check). */
   canMoveUp?: boolean;
+  /** Balance my review days, when on. */
+  balance?: BalanceSettings;
   /**
    * Grades given today to verses of passages with a firm-up today, by
    * verseId. The caller keeps it across calls (verses are graded one at a
@@ -429,6 +443,7 @@ export const gradeVerse = (
     via: opts.via,
     selfCheck: opts.selfCheck,
     canMoveUp: opts.canMoveUp,
+    balance: opts.balance,
   });
   const map = new Map(r.changed.map((q) => [q.verseId, q]));
   if (r.settled) logApplied(map, r.settled, before);

@@ -12,6 +12,8 @@ import { AppButton, AppIconButton, AppText, Switch, useScaledSpace } from '../co
 import { EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import ThreadRound, { ThreadAnswerMode, ThreadRoundResult, ThreadVerse } from '../components/ThreadRound';
 import { GradeInput, wordAccuracy } from '../lib/grading';
+import { creditsEarly } from '../lib/balance';
+import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import {
   buildThreadPassages,
   MIN_THREAD_VERSES,
@@ -130,7 +132,10 @@ const listRefs = (verses: { book: string; chapter: number; verse: number }[]) =>
 
 export default function ThreadDrillScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
-  const { memoryQueue, navigateTo, threadDrillPreset, setThreadDrillPreset, handleUpdateVerseStatus, validateTouch, reviewsPaused } = state;
+  const { memoryQueue, navigateTo, threadDrillPreset, setThreadDrillPreset, handleUpdateVerseStatus, validateTouch, reviewsPaused, balanceDays, dayStartHour } = state;
+  // Due today, or inside the balance window ahead of its scheduled day: either counts as a review.
+  const countsNow = (item: QueueItem) =>
+    isReviewDue(item.nextReviewDueDate) || (balanceDays && creditsEarly(item, localDayKey(getLogicalDate(dayStartHour))));
 
   // Every started verse. 'queued' ones were never taught, so a cue can't point at them.
   const pool = useMemo<PoolVerse[]>(
@@ -333,7 +338,7 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
     }
     if (item.status === 'reviewing') {
       if (reviewsPaused) return { kind: null, label: 'Reviews are paused, so practice only' };
-      if (!isReviewDue(item.nextReviewDueDate)) return { kind: null, label: 'Not due yet, so practice only' };
+      if (!countsNow(item)) return { kind: null, label: 'Not due yet, so practice only' };
       return { kind: 'review', label: mode === 'self' ? 'Counts as a review, checked by you' : 'Counts as a review' };
     }
     return { kind: null, label: 'Complete, so practice only' };
@@ -679,7 +684,7 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
             onFinish={finishRound}
             onDifferentCue={differentCue}
             // A spot check only where a review could count.
-            spotCheck={!reviewsPaused && stretch.some((v) => v.item.status === 'reviewing' && isReviewDue(v.item.nextReviewDueDate))}
+            spotCheck={!reviewsPaused && stretch.some((v) => v.item.status === 'reviewing' && countsNow(v.item))}
           />
         ) : (
           <EmptyState Icon={Route} title="No cue to give" message="These verses don't have two words in a row that appear only once." />

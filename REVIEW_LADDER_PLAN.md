@@ -778,3 +778,41 @@ Mixed: pure projections **Cloud OK · Sonnet**; anything that writes Firestore
 | 7 Settings, recap, welcome back | Cloud for screens, local pass | Sonnet |
 | 8 Other stage readers | Cloud for projections, local for writes | Sonnet / Opus |
 | 9 Real phone + release | Local | Opus |
+
+## Balance my review days (stage 1 built 2026-10-29)
+
+Weekly and longer passages may sit a few days off the day their step lands them on,
+so no one day runs past the daily review limit. Setting `balanceDays` (default on),
+Settings > Reviews. Code: `src/lib/balance.ts` + `balance.check.ts` (`npm run check:balance`).
+
+- **Window by step** (days either side): Every week 1, 2 weeks 1, 4 weeks 2, 8 weeks 3,
+  6 months 7. Every day / 2 days / 4 days never move.
+- **Leveling at scheduling time** (`applyReview`): the due date comes from the step as
+  before; only if that day would pass the limit (15 s a verse, `maxReviewCap`) does it move
+  to a lighter day in the window (tie: nearest, then later). Never today, a Sabbath or a
+  paused day. Nothing already on the calendar is touched.
+- **`scheduledDue`** on every member: the day the step landed on, kept only when shifted.
+  A review done ahead of it counts its next due date from that day, so an early review
+  can't pull the weekly weekday forward.
+- **A review inside the window counts** (`recordGrade`: `creditsEarly`), from the scheduled
+  day less the window. The Today list still shows only what is due.
+- Welcome-back spread drops `scheduledDue` (its date replaces the shift).
+
+**Stage 2 built 2026-10-29 (the day itself):**
+- **Relief valve** (`easeToday`, run on load after the welcome-back spread): if today passes
+  the limit, today's Every week (or longer) passages that are ungraded and never moved
+  wait until the next usable day inside their window, largest first, until today fits.
+  Skips a day that would itself go over, Settling steps, and anything while paused.
+  The passage keeps `scheduledDue` (= the day it was due), so it moves at most once.
+- **Today's note** (`movedFromDay` + `movedNote`, `BalanceNote`, `MovedSheet`): "Moved N
+  passages to tomorrow", See which (a sheet with Do today per passage and Do both today),
+  Do them today (a confirm card showing the minutes). Derived from the queue, so it
+  survives a restart; the × closes it for the day (AsyncStorage `home:balanceNoteDismissedDay`).
+  Doing them today sets the due date to now (`pullMovedToday`); `scheduledDue` stays, so
+  the valve doesn't move them again.
+- **New verses fit the time left** (`newVerseRoom`, `getNewVerseRoom`): the pull is capped to
+  however many 90 s Learning verses fit under the limit (times the load setting). The
+  shield is up when none fit; the "start anyway" card still bypasses it.
+- Load setting multiplier is now part of `BalanceSettings.loadFactor`, so leveling,
+  the valve and the shield judge the limit the same way.
+- Not done: the valve runs on app load only (not when the app stays open past midnight).

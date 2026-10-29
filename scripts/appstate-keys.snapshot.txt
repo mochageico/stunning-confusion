@@ -34,6 +34,7 @@ advanceReviewSession: () => void
 audioCache: AudioCacheSnapshot
 audioSearchQuery: string
 backHistory: { screen: ScreenName; book: string | null; chapter: number | null; tab?: TabName | undefined; }[]
+balanceDays: boolean
 blockUser: (uid: string, displayName: string) => Promise<void>
 blockedUids: Set<string>
 blockedUsers: BlockedUser[]
@@ -106,6 +107,7 @@ friends: Friend[]
 getEstimatedReviewTime: (queue: QueueItem[], sensitivity: "low" | "medium" | "high") => number
 getGreeting: () => "Good night" | "Good morning" | "Good afternoon" | "Good evening"
 getMemoryLoadForecast: (queue: QueueItem[], sensitivity: "low" | "medium" | "high", learningDaysList: string[], pace: number, days: number) => { date: Date; isLearnDay: boolean; loadMins: number; versesCount: number; }[]
+getNewVerseRoom: () => number
 getNextPullPreview: () => DailyPullResult
 getTodayAbbreviation: () => string
 getTodayDateString: () => string
@@ -242,6 +244,7 @@ previewCircle: Circle | null
 primingLookahead: number
 promoteToLearning: (verseIds: string[]) => void
 publicCircles: Circle[]
+pullMovedToday: (verseIds: string[]) => Promise<void>
 pullVerseIntoLearning: (verseId: string) => boolean
 queueReady: boolean
 reactionsByMessageId: { [x: string]: MessageReaction[]; }

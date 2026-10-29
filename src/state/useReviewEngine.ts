@@ -22,7 +22,9 @@ import {
   forecastMemoryLoad,
   isReviewDue,
   isTouchSpaced,
+  newVerseRoom,
   nextDueDateISO as nextDueDateISOFor,
+  sensitivityMultiplier,
 } from '../lib/retention';
 import type { ReviewCompletedOpts } from './useAppState';
 import type { PlanSettings } from './usePlanSettings';
@@ -87,6 +89,7 @@ export function useReviewEngine({
     thoroughness,
     cleanPct,
     swapCanBeClean,
+    balanceDays,
   } = plan;
 
   // What each passage's review did this session, newest last: the Mixed
@@ -148,7 +151,11 @@ export function useReviewEngine({
     }
 
     const estTime = getEstimatedReviewTime(memoryQueue, cognitiveLoadSensitivity);
-    const shieldActive = estTime >= maxReviewCap && !opts?.bypassShield;
+    // New verses only start while one more fits under the daily review limit;
+    // the pace is capped to however many fit (0 = the shield is up).
+    const room = getNewVerseRoom();
+    const shieldActive = room === 0 && !opts?.bypassShield;
+    const trimmed = !opts?.bypassShield && room > 0 && room < newVersesPace;
 
     // An 'additive' plan is defined as deliberately going over your daily
     // limits -- BOTH the new-verse pace and the review-time cap. So the
@@ -160,7 +167,7 @@ export function useReviewEngine({
     // weekly share comes through.
     const additiveMemberships = joinedGroupPlanMemberships.filter((m) => m.priority === 'additive');
     if (shieldActive && additiveMemberships.length === 0) {
-      triggerToast(`Review Shield is Active! Review time (${estTime}m) >= limit (${maxReviewCap}m). No new verses pulled today.`);
+      triggerToast(`Review Shield is Active! Today's ${estTime}m leaves no room for another verse under your ${maxReviewCap}m limit. No new verses pulled today.`);
       return;
     }
 
@@ -175,7 +182,7 @@ export function useReviewEngine({
     // plans first and uncapped, then group-priority > individual >
     // individual-priority within the personal daily budget).
     const personal: PersonalPacingSettings = {
-      newVersesPace: shieldActive ? 0 : newVersesPace,
+      newVersesPace: shieldActive ? 0 : trimmed ? room : newVersesPace,
       learningDays,
     };
     const { verseIds: pulledVerseIds, fromIndividual, fromPlans } = computeDailyPull(
@@ -188,7 +195,7 @@ export function useReviewEngine({
 
     if (shieldActive && pulledVerseIds.length > 0) {
       triggerToast(
-        `Review Shield held back your own queue (${estTime}m >= ${maxReviewCap}m), but your additive plan still pulled. 🛡️`
+        `Review Shield held back your own queue (${estTime}m of ${maxReviewCap}m used), but your additive plan still pulled. 🛡️`
       );
     }
 
@@ -251,9 +258,26 @@ export function useReviewEngine({
           ? ` (${planBreakdown})`
           : '';
 
+    const fits = trimmed && fromIndividual.length > 0 ? ` That fills today's ${maxReviewCap} minutes.` : '';
     triggerToast(
-      `Successfully pulled ${pulledVerseIds.length} new ${pulledVerseIds.length === 1 ? 'verse' : 'verses'} into your learning queue!${breakdown} 🚀`
+      `Successfully pulled ${pulledVerseIds.length} new ${pulledVerseIds.length === 1 ? 'verse' : 'verses'} into your learning queue!${breakdown}${fits} 🚀`
     );
+  };
+
+  /** How many new verses fit in the time left under the daily review limit (0: the Review Shield is up). */
+  const getNewVerseRoom = () => newVerseRoom(memoryQueue, cognitiveLoadSensitivity, maxReviewCap, reviewClock);
+
+  /**
+   * "Do them today" (Balance my review days): passages set for another day
+   * come due now. Each keeps scheduledDue, so it isn't moved again.
+   */
+  const pullMovedToday = async (verseIds: string[]): Promise<void> => {
+    const ids = new Set(verseIds);
+    if (ids.size === 0) return;
+    const nowISO = new Date().toISOString();
+    const queue = memoryQueueRef.current.map((q) => (ids.has(q.verseId) ? { ...q, nextReviewDueDate: nowISO } : q));
+    updateMemoryQueue(() => queue);
+    await persistItems(queue, ids);
   };
 
   // The ONLY supported way to remove verses from the queue. Records the
@@ -770,6 +794,7 @@ export function useReviewEngine({
       drillType,
       selfCheck: opts?.selfCheck || (input ? isSelfCheckInput(input) : false),
       canMoveUp: opts?.canMoveUp,
+      balance: balanceDays ? { capMinutes: maxReviewCap, loadFactor: sensitivityMultiplier(cognitiveLoadSensitivity) } : undefined,
       firmUpGrades: firmUpGradesRef.current.grades,
     });
     let queue = mergeChanged(memoryQueueRef.current, g.changed);
@@ -1106,6 +1131,8 @@ export function useReviewEngine({
     handleReviewCompleted,
     reviewNotes,
     clearSlipped,
+    pullMovedToday,
+    getNewVerseRoom,
     triggerMockDueReviews,
     handleUpdateVerseStatus,
     setGuidedSetAside,
