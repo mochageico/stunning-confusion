@@ -224,7 +224,8 @@ const limits = (r: Omit<DayResult, 'day'>) => (r.selfCheck ? 1 : 0) + (r.noUp ? 
 const betterThan = (a: Omit<DayResult, 'day'>, b: Omit<DayResult, 'day'>) =>
   GRADE_RANK[a.grade] !== GRADE_RANK[b.grade] ? GRADE_RANK[a.grade] < GRADE_RANK[b.grade] : limits(a) < limits(b);
 
-const OUTCOME_RANK: Record<PassageOutcome, number> = { down: 0, back: 1, held: 2, forgiven: 3, up: 3 };
+// 'back' and 'down' only in a dayReview saved by an older build that day.
+const OUTCOME_RANK: Record<NonNullable<QueueItem['dayReview']>['outcome'], number> = { down: 0, back: 1, held: 2, forgiven: 3, up: 3 };
 
 /** Local noon of a day key, as a Date: safe to hand to nextDue / getLogicalDate for that day. */
 const dayDate = (day: string) => {
@@ -254,12 +255,12 @@ export interface ReviewApplied {
   to: LadderState;
   /** The grades the outcome was decided from, verse order. */
   grades: { verseId: string; verseNumber: number; grade: ReviewGrade }[];
-  /** Partly covered and settled after its day: penalties apply, it can't move up. */
+  /** Partly covered and settled after its day: it can't move up, so it holds. */
   penaltyOnly: boolean;
   /** A firm-up was offered for the next day. */
   firmUp: boolean;
   /** A better run redid today's review: the outcome it replaced. */
-  replaced?: PassageOutcome;
+  replaced?: NonNullable<QueueItem['dayReview']>['outcome'];
 }
 
 /**
@@ -303,14 +304,14 @@ const applyReview = (
   if (outcome === 'up' || outcome === 'forgiven') nextSelfChecked = selfChecked ? true : undefined;
   else if (!penaltyOnly && !selfChecked) nextSelfChecked = undefined;
 
-  const stumbles = grades.filter((g) => g.grade === 'stumble').length;
+  // A review held by stumbles or blanks can be won back the next day by
+  // reciting the slipped verses clean.
   const slipped = grades.filter((g) => g.grade !== 'clean').map((g) => g.verseNumber);
   let firmUp: QueueItem['firmUp'];
-  if (!penaltyOnly && canMoveUp && stumbles > 0) {
-    if (outcome === 'held') firmUp = { day: nextScheduledDay(forDay, settings.clock), restore: applyOutcome(from, 'up', thoroughness), verses: slipped };
-    else if (outcome === 'back' && from.reviews > 0) firmUp = { day: nextScheduledDay(forDay, settings.clock), restore: { step: from.step, reviews: from.reviews }, verses: slipped };
+  if (!penaltyOnly && canMoveUp && outcome === 'held' && slipped.length > 0) {
+    const restore = applyOutcome(from, 'up', thoroughness);
     // restore is written to Firestore: no catchUp key riding along.
-    if (firmUp) firmUp.restore = { step: firmUp.restore.step, reviews: firmUp.restore.reviews };
+    firmUp = { day: nextScheduledDay(forDay, settings.clock), restore: { step: restore.step, reviews: restore.reviews }, verses: slipped };
   }
 
   // Landing at Every week or longer needs the chapter's weekday; the first
@@ -526,8 +527,8 @@ export const recordGrade = (queue: readonly QueueItem[], verseId: string, grade:
 
 /**
  * Settles every passage left partly covered on an earlier day: a
- * penalty-only outcome (stumbles and blanks apply, it can't move up), next
- * due counted from the day it was reviewed. Also drops firm-ups whose day
+ * penalty-only outcome (it can't move up, so it holds), next due counted
+ * from the day it was reviewed. Also drops firm-ups whose day
  * has passed. Run on load, before lateness.
  */
 export const settleStaleDays = (

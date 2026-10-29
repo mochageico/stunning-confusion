@@ -140,25 +140,25 @@ Every counting format reports per verse: **clean, stumble or blank**.
   better run later the same day redoes it from where the passage stood before
   (`dayReview` on each member, dropped the next day). Each verse keeps its best
   result of the day; the redo only replaces the outcome when it comes out better
-  (down < back < held < forgiven/up), and its history entry replaces the first one.
+  (held < forgiven or up), and its history entry replaces the first one.
   A worse run is practice. Anything that moves the passage in between (a join, a
   win-back) ends the chance to redo.
 
 ### Passage outcome
 
-Stumbles scale with the passage's size (changed 2026-10-29; it used to be 1–2
-held under 12 verses / forgiven at 12+, and 3+ back for any size):
+**A review never moves a passage back (user, 2026-10-29):** at worst it holds
+where it was. Only lateness ("Late reviews move you back", §3) moves a passage
+back. Before this, 3+ stumbles moved it back a review and a blank dropped it a
+step. Stumbles also scale with the passage's size (changed the same day; it used to
+be 1–2 held under 12 verses, forgiven at 12+):
 
 | | Rule | 5 verses | 6–11 | 12 | 20 | 40 |
 | --- | --- | --- | --- | --- | --- | --- |
 | All clean | +1 review | | | | | |
-| Forgiven (+1 review) | up to 1 stumble per 6 verses | none | 1 | 1–2 | 1–3 | 1–6 |
-| Held (doesn't count) | between the two | 1–2 | 2 | — | 4 | 7–9 |
-| Back one review, never below the start of the step | at least 1 in 4 verses, never fewer than 3 | 3+ | 3+ | 3+ | 5+ | 10+ |
-| A blank | Down one step (blank beats stumbles; one penalty per review) | | | | | |
+| Forgiven (+1 review) | up to 1 stumble per 6 verses, no blanks | none | 1 | 1–2 | 1–3 | 1–6 |
+| Held (stays where it was) | more stumbles than that, or any blank | 1+ | 2+ | 3+ | 4+ | 7+ |
 
-- Down a step can move a passage between groups (Every week → Every 4 days = back to
-  Settling).
+- Older history entries can still say back or down; nothing new writes them.
 - No "same verse blanks twice" rule.
 
 ## 5. After a slip
@@ -171,11 +171,10 @@ held under 12 verses / forgiven at 12+, and 3+ back for any size):
   `src/lib/guided.ts`) on each slipped verse, running in from the end of the verse
   before. ~1 minute. It must be **skippable**. Not a counting format. Finishing it
   clears the weak-spot dot early.
-- **Firm up (win it back):** after a stumble-hold or a back-one, the slipped verses
+- **Firm up (win it back):** after a hold from stumbles or blanks, the slipped verses
   appear on Today the next day as a short item with a running start. Reciting them
-  clean gives the lost review back (a held review counts; a back-one is undone).
-  Step drops from a blank can't be won back. Incentive is the point: more reason to
-  come back = more practice.
+  clean gives the held review back (it counts). Incentive is the point: more reason
+  to come back = more practice.
 
 ## 6. Idea saved for later (not decided for the build)
 

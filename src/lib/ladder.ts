@@ -117,24 +117,23 @@ export const nextDue = (step: number, anchorDay: string | undefined, clock: Revi
   return nthOccurrenceOfWeekday(tomorrow, anchorDay, intervalDays / 7, clock.sabbathEnabled, clock.sabbathDay).toISOString();
 };
 
-export type PassageOutcome = 'up' | 'held' | 'forgiven' | 'back' | 'down';
-
 /**
- * Stumbles scale with the passage: up to 1 in 6 verses is forgiven (none
- * under 6 verses, 2 at 12), and it takes about 1 in 4 to move back (never
- * fewer than 3). In between holds.
+ * What one review does. A review never moves a passage back: at worst it
+ * holds (2026-10-29). Only lateness moves a passage back. Older history
+ * entries can still say 'back' or 'down' (ReviewLog.outcome).
  */
+export type PassageOutcome = 'up' | 'held' | 'forgiven';
+
+/** Stumbles scale with the passage: up to 1 in 6 verses is forgiven (none under 6 verses, 2 at 12). */
 export const forgivableStumbles = (size: number): number => Math.floor(size / 6);
-export const stumblesToMoveBack = (size: number): number => Math.max(3, Math.ceil(size / 4));
 
 /**
- * One review's outcome from its verses' grades (Part 1 §4 table, with the
- * stumble limits scaled by size). A blank beats stumbles: one penalty per
- * review. `size` is the passage's verse
- * count when it differs from the grades given (a partly covered passage).
- * `canMoveUp: false` keeps the penalties but turns a move up into a hold:
- * a partly covered passage at day's end, or a self-check right after a
- * self-check.
+ * One review's outcome from its verses' grades (Part 1 §4 table). All clean
+ * moves up; a few stumbles for the passage's size are forgiven and count;
+ * anything more, or any blank, holds. `size` is the passage's verse count
+ * when it differs from the grades given (a partly covered passage).
+ * `canMoveUp: false` turns a move up into a hold: a partly covered passage
+ * at day's end, or a self-check right after a self-check.
  */
 export const passageOutcome = (
   grades: readonly ReviewGrade[],
@@ -142,11 +141,8 @@ export const passageOutcome = (
 ): PassageOutcome => {
   const size = opts.size ?? grades.length;
   const canMoveUp = opts.canMoveUp ?? true;
-  if (grades.length === 0) return 'held';
-  if (grades.includes('blank')) return 'down';
+  if (grades.length === 0 || !canMoveUp || grades.includes('blank')) return 'held';
   const stumbles = grades.filter((g) => g === 'stumble').length;
-  if (stumbles >= stumblesToMoveBack(size)) return 'back';
-  if (!canMoveUp) return 'held';
   if (stumbles === 0) return 'up';
   return stumbles <= forgivableStumbles(size) ? 'forgiven' : 'held';
 };
@@ -154,9 +150,8 @@ export const passageOutcome = (
 /**
  * Moves a passage by one review's outcome. Up and forgiven count a review
  * and move up a step once the step's count is reached (the top step just
- * keeps counting). Back one never goes below the start of the step. Down a
- * step lands at the start of the step below; Every day is the floor. A
- * catch-up ends when the passage lands at Every week.
+ * keeps counting). Held leaves it where it was. A catch-up ends when the
+ * passage lands at Every week.
  */
 export const applyOutcome = (
   state: LadderState,
@@ -166,20 +161,10 @@ export const applyOutcome = (
   const step = clampStep(state.step);
   const reviews = Math.max(0, state.reviews);
   const catchUp = !!state.catchUp;
-  switch (outcome) {
-    case 'up':
-    case 'forgiven': {
-      const need = reviewsToMoveUp({ step, reviews, catchUp: catchUp || undefined }, thoroughness);
-      if (need === null || reviews + 1 < need) return make(step, reviews + 1, catchUp);
-      return make(step + 1, 0, catchUp);
-    }
-    case 'held':
-      return make(step, reviews, catchUp);
-    case 'back':
-      return make(step, Math.max(0, reviews - 1), catchUp);
-    case 'down':
-      return make(Math.max(0, step - 1), 0, catchUp);
-  }
+  if (outcome === 'held') return make(step, reviews, catchUp);
+  const need = reviewsToMoveUp({ step, reviews, catchUp: catchUp || undefined }, thoroughness);
+  if (need === null || reviews + 1 < need) return make(step, reviews + 1, catchUp);
+  return make(step + 1, 0, catchUp);
 };
 
 /**

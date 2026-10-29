@@ -102,30 +102,29 @@ check('outside a catch-up the step count applies', reviewsToMoveUp({ step: 0, re
   check('…and the catch-up is over (key deleted, not undefined)', !('catchUp' in s));
 }
 check(
-  'a blank during a catch-up drops a step and keeps the catch-up',
-  same(applyOutcome({ step: 1, reviews: 1, catchUp: true }, 'down'), { step: 0, reviews: 0, catchUp: true })
+  'a hold during a catch-up keeps the catch-up',
+  same(applyOutcome({ step: 1, reviews: 1, catchUp: true }, 'held'), { step: 1, reviews: 1, catchUp: true })
 );
 check(
   'a stray catch-up flag at Every week is dropped',
   same(applyOutcome({ step: 3, reviews: 0, catchUp: true }, 'held'), { step: 3, reviews: 0 })
 );
 
-console.log('passage outcome (§4 table, stumbles scaled by size)');
-// [size, stumbles forgiven up to, stumbles that move it back]
-for (const [size, forgive, back] of [
-  [5, 0, 3],
-  [6, 1, 3],
-  [11, 1, 3],
-  [12, 2, 3],
-  [20, 3, 5],
-  [40, 6, 10],
+console.log('passage outcome (§4 table, stumbles scaled by size, never back)');
+// [size, stumbles forgiven up to]
+for (const [size, forgive] of [
+  [5, 0],
+  [6, 1],
+  [11, 1],
+  [12, 2],
+  [20, 3],
+  [40, 6],
 ] as const) {
   const name = `${size} verses`;
-  const expect = (n: number) => (n >= back ? 'back' : n <= forgive ? 'forgiven' : 'held');
   check(`${name}: all clean = up`, passageOutcome(verses(size)) === 'up');
-  for (let n = 1; n <= back; n++) check(`${name}: ${n} stumbles = ${expect(n)}`, passageOutcome(verses(size, n)) === expect(n));
-  check(`${name}: a blank = down`, passageOutcome(verses(size, 0, 1)) === 'down');
-  check(`${name}: a blank beats stumbles`, passageOutcome(verses(size, back, 1)) === 'down');
+  for (let n = 1; n <= size; n++) check(`${name}: ${n} stumbles = ${n <= forgive ? 'forgiven' : 'held'}`, passageOutcome(verses(size, n)) === (n <= forgive ? 'forgiven' : 'held'));
+  check(`${name}: a blank holds`, passageOutcome(verses(size, 0, 1)) === 'held');
+  check(`${name}: every verse blank still only holds`, passageOutcome(verses(size, 0, size)) === 'held');
 }
 check('a single clean verse moves up', passageOutcome(g('c')) === 'up');
 check('a single stumble holds', passageOutcome(g('s')) === 'held');
@@ -133,8 +132,7 @@ check('size counts the whole passage, not just the grades given', passageOutcome
 check('no grades holds', passageOutcome([]) === 'held');
 check("can't move up: clean holds", passageOutcome(verses(5), { canMoveUp: false }) === 'held');
 check("can't move up: forgiven holds", passageOutcome(verses(20, 2), { canMoveUp: false }) === 'held');
-check("can't move up: 3 stumbles still back", passageOutcome(verses(5, 3), { canMoveUp: false }) === 'back');
-check("can't move up: a blank still drops", passageOutcome(verses(5, 0, 1), { canMoveUp: false }) === 'down');
+check("can't move up: a blank holds too", passageOutcome(verses(5, 0, 1), { canMoveUp: false }) === 'held');
 
 console.log('applying an outcome');
 check('up counts a review', same(applyOutcome({ step: 3, reviews: 2 }, 'up'), { step: 3, reviews: 3 }));
@@ -145,12 +143,6 @@ check('Light moves up from Every day after 4', same(applyOutcome({ step: 0, revi
 check('Every 8 weeks moves up to the top', same(applyOutcome({ step: 6, reviews: 5 }, 'up'), { step: 7, reviews: 0 }));
 check('the top keeps counting and stays', same(applyOutcome({ step: 7, reviews: 40 }, 'up'), { step: 7, reviews: 41 }));
 check('held changes nothing', same(applyOutcome({ step: 4, reviews: 3 }, 'held'), { step: 4, reviews: 3 }));
-check('back one review', same(applyOutcome({ step: 4, reviews: 3 }, 'back'), { step: 4, reviews: 2 }));
-check('back never below the start of the step', same(applyOutcome({ step: 4, reviews: 0 }, 'back'), { step: 4, reviews: 0 }));
-check('down lands at the start of the step below', same(applyOutcome({ step: 4, reviews: 5 }, 'down'), { step: 3, reviews: 0 }));
-check('down from Every week goes back to Settling', LADDER[applyOutcome({ step: 3, reviews: 7 }, 'down').step].group === 'settling');
-check('down from the top', same(applyOutcome({ step: 7, reviews: 3 }, 'down'), { step: 6, reviews: 0 }));
-check('Every day is the floor', same(applyOutcome({ step: 0, reviews: 4 }, 'down'), { step: 0, reviews: 0 }));
 
 console.log('next due');
 check('Every day: tomorrow', dayOf(nextDue(0, 'M', CLOCK, at(12))) === '2026-10-13');

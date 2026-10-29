@@ -22,8 +22,6 @@ const TAG_TONE: Record<ReviewTag, BadgeTone> = {
   'Won back': 'success',
   Forgiven: 'accent',
   Held: 'warning',
-  'Back 1': 'warning',
-  'Down a step': 'danger',
 };
 
 /** One row per passage the session moved: its tag and the reason. */

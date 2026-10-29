@@ -67,8 +67,8 @@ check(
   passageOutcome(['clean', 'clean'], { canMoveUp: canSelfCheckMoveUp(true) }) === 'held'
 );
 check(
-  'every other: it can still drop the passage',
-  passageOutcome(['clean', 'blank'], { canMoveUp: canSelfCheckMoveUp(true) }) === 'down'
+  'every other: a blank holds too',
+  passageOutcome(['clean', 'blank'], { canMoveUp: canSelfCheckMoveUp(true) }) === 'held'
 );
 
 console.log('spot check');
@@ -93,8 +93,8 @@ check(
   passageOutcome(Array(15).fill('clean'), { canMoveUp: spotCheckCanMoveUp(false) }) === 'held'
 );
 check(
-  'missed spot check: a blank still drops',
-  passageOutcome(['clean', 'blank'], { canMoveUp: spotCheckCanMoveUp(false) }) === 'down'
+  'missed spot check: a blank holds too',
+  passageOutcome(['clean', 'blank'], { canMoveUp: spotCheckCanMoveUp(false) }) === 'held'
 );
 check('passed spot check can move up', passageOutcome(['clean', 'clean'], { canMoveUp: spotCheckCanMoveUp(true) }) === 'up');
 

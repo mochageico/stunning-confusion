@@ -109,6 +109,13 @@ export const joinMessage = (j: Join): string => {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+/** "1 blank and 2 stumbles", "3 stumbles", or '' when every verse was clean. */
+const slips = (grades: ReviewApplied['grades']): string => {
+  const blanks = grades.filter((g) => g.grade === 'blank').length;
+  const stumbles = grades.filter((g) => g.grade === 'stumble').length;
+  return [blanks > 0 && plural(blanks, 'blank'), stumbles > 0 && plural(stumbles, 'stumble')].filter(Boolean).join(' and ');
+};
+
 /** Why a review that was all clean didn't count: a missed spot check, or two self-checks in a row. */
 export type HeldReason = 'spotCheck' | 'selfCheck' | null;
 
@@ -128,14 +135,10 @@ export const outcomeMessage = (a: ReviewApplied, thoroughness: Thoroughness, hel
       return `${title}: review counted (${where}).${forgiven}`;
     }
     case 'held':
-      if (stumbles > 0) return `${title}: ${plural(stumbles, 'stumble')}, so this review didn't count.${firmUp}`;
+      if (slips(a.grades)) return `${title}: ${slips(a.grades)}, so this review didn't count. It stays where it was.${firmUp}`;
       if (heldReason === 'spotCheck') return `${title}: the spot check slipped, so this review didn't count.`;
       if (heldReason === 'selfCheck') return `${title}: two self-checks in a row can't both count. Recite it next time.`;
       return `${title}: this review didn't count.`;
-    case 'back':
-      return `${title}: ${plural(stumbles, 'stumble')}, back one review.${firmUp}`;
-    case 'down':
-      return `${title}: a blank moved it down to ${stepInfo(a.to.step).label}.`;
   }
 };
 
@@ -143,7 +146,7 @@ export const outcomeMessage = (a: ReviewApplied, thoroughness: Thoroughness, hel
 // The recap's per-passage line
 // ---------------------------------------------------------------------------
 
-export type ReviewTag = 'Clean' | 'Held' | 'Forgiven' | 'Back 1' | 'Down a step' | 'Won back';
+export type ReviewTag = 'Clean' | 'Held' | 'Forgiven' | 'Won back';
 
 /** What one passage's review did, for the Mixed review recap (stage 7). */
 export interface ReviewNote {
@@ -165,14 +168,11 @@ const TAG_OF: Record<ReviewApplied['outcome'], ReviewTag> = {
   up: 'Clean',
   forgiven: 'Forgiven',
   held: 'Held',
-  back: 'Back 1',
-  down: 'Down a step',
 };
 
 /** The recap line for an applied review. Same facts as `outcomeMessage`, shorter. */
 export const reviewNote = (a: ReviewApplied, thoroughness: Thoroughness, heldReason: HeldReason = null, at: number = Date.now()): ReviewNote => {
   const stumbles = a.grades.filter((g) => g.grade === 'stumble').length;
-  const blanks = a.grades.filter((g) => g.grade === 'blank').length;
   let reason: string;
   switch (a.outcome) {
     case 'up': {
@@ -188,16 +188,10 @@ export const reviewNote = (a: ReviewApplied, thoroughness: Thoroughness, heldRea
       reason = `${plural(stumbles, 'stumble')} in ${a.passage.items.length} verses forgiven, so the review counted.`;
       break;
     case 'held':
-      if (stumbles > 0) reason = `${plural(stumbles, 'stumble')}, so this review didn't count.`;
+      if (slips(a.grades)) reason = `${slips(a.grades)}, so this review didn't count.`;
       else if (heldReason === 'spotCheck') reason = "The spot check slipped, so this review didn't count.";
       else if (heldReason === 'selfCheck') reason = "Two self-checks in a row can't both count. Recite it next time.";
       else reason = "This review didn't count.";
-      break;
-    case 'back':
-      reason = `${plural(stumbles, 'stumble')}, so it goes back one review.`;
-      break;
-    case 'down':
-      reason = `${blanks > 1 ? `${blanks} blanks` : 'A blank'} moved it down to ${stepInfo(a.to.step).label}.`;
       break;
   }
   return {
@@ -293,7 +287,7 @@ export interface LoadResult {
  *    step are mapped, so this also catches verses an old app build wrote
  *    back without their ladder fields);
  * 2. passages left partly covered on an earlier day get their
- *    penalty-only outcome;
+ *    outcome, which can only hold;
  * 3. "Late reviews move you back" (when on), one review per full interval
  *    overdue, never below the start of the step, noted in the history;
  * 4. overdue passages are spread over the next few days under the review

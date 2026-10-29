@@ -139,15 +139,19 @@ check('toast says it counted', up.last.messages[0] === 'Romans 8:1–3: review c
 const again = gradeVerse(up.queue, id(1), 'clean', { clock: CLOCK, now: at(12, 18) });
 check('reviewed again the same day: practice', again.practice && !again.applied);
 
-console.log('grading: a stumble holds, a blank drops a step');
+console.log('grading: a stumble holds, and so does a blank');
 const held = gradeAll(fresh, [[1, 'clean'], [2, 'stumble'], [3, 'clean']], at(12, 10));
 check('1 stumble under 12 verses: held', held.last.applied?.outcome === 'held' && passageState(passageOf(held.queue, id(1))!).reviews === 2);
 check('held offers a firm-up and says so', !!held.queue[0].firmUp && held.last.messages[0].includes('Firm it up tomorrow'));
 check('the stumbled verse logs a miss, the clean ones a pass', held.queue[1].reviewLogs![0].result === 'miss' && held.queue[0].reviewLogs![0].result === 'pass');
 const higher = range(1, 3, { step: 3, reviews: 2, due: at(12, 8).toISOString() });
 const down = gradeAll(higher, [[1, 'clean'], [2, 'blank'], [3, 'stumble']], at(12, 10));
-check('a blank: down to Every 4 days', down.last.applied?.outcome === 'down' && passageState(passageOf(down.queue, id(1))!).step === 2);
-check('down toast', down.last.messages[0] === 'Romans 8:1–3: a blank moved it down to Every 4 days.', down.last.messages);
+check('a blank: held at Every week', down.last.applied?.outcome === 'held' && passageState(passageOf(down.queue, id(1))!).step === 3 && passageState(passageOf(down.queue, id(1))!).reviews === 2);
+check(
+  'held toast names the slips',
+  down.last.messages[0] === "Romans 8:1–3: 1 blank and 1 stumble, so this review didn't count. It stays where it was. Firm it up tomorrow to win it back.",
+  down.last.messages
+);
 
 console.log('grading: a better run the same day redoes the review');
 const redo = gradeAll(down.queue, [[2, 'clean'], [3, 'clean']], at(12, 18));
@@ -156,7 +160,11 @@ check('…one history entry per verse for the day, the redo', redo.queue.every((
 check('…counted once as a success', redo.queue.every((q) => q.totalSuccessfulReviews === 1));
 check('…the toast says so', redo.last.messages[0]?.startsWith('Better run! Romans 8:1–3'), redo.last.messages);
 const partway = gradeVerse(down.queue, id(2), 'clean', { clock: CLOCK, now: at(12, 18) });
-check('one verse better (blank to clean, stumble left): held beats down, applied', partway.applied?.outcome === 'held' && partway.applied.replaced === 'down');
+check(
+  'one verse better (blank to clean, stumble left): still held, noted',
+  !partway.applied && !partway.practice && partway.messages[0] === "Romans 8:1–3: better run noted, but today's review comes out the same.",
+  partway.messages
+);
 
 console.log('grading: firm-up the next day wins the review back');
 const tomorrow = at(13, 10);
@@ -193,19 +201,18 @@ check('held: tag, count, firm-up', (() => {
   const n = notesOf(held.last)[0];
   return n.tag === 'Held' && n.reason === "1 stumble, so this review didn't count." && n.firmUp && n.slipped.length === 1 && n.slipped[0].verseNumber === 2;
 })(), notesOf(held.last));
-check('down a step: tag and reason', (() => {
+check('held by a blank: tag and reason', (() => {
   const n = notesOf(down.last)[0];
-  return n.tag === 'Down a step' && n.reason === 'A blank moved it down to Every 4 days.' && n.slipped.some((x) => x.verseNumber === 2);
+  return n.tag === 'Held' && n.reason === "1 blank and 1 stumble, so this review didn't count." && n.slipped.some((x) => x.verseNumber === 2);
 })(), notesOf(down.last));
 check('a firm-up won back is its own line', notesOf(w).some((n) => n.tag === 'Won back' && n.title === 'Romans 8:1–3'), notesOf(w));
 check('a practice (not due) grade gives no line', gradeVerse(fresh, id(1), 'clean', { clock: CLOCK, now: at(11, 10) }).notes.length === 0);
-check('forgiven and back one', (() => {
+check('forgiven and the spot check', (() => {
   const base = { passage: passageOf(range(1, 3, { step: 3 }), id(1))!, from: { step: 3, reviews: 2 }, to: { step: 3, reviews: 3 }, penaltyOnly: false, firmUp: false };
   const g = (grade: ReviewGrade, v: number) => ({ verseId: id(v), verseNumber: v, grade });
   const f = reviewNote({ ...base, outcome: 'forgiven', grades: [g('stumble', 1), g('stumble', 2)] }, 1);
-  const b = reviewNote({ ...base, outcome: 'back', to: { step: 3, reviews: 1 }, grades: [g('stumble', 1), g('stumble', 2), g('stumble', 3)] }, 1);
   const sc = reviewNote({ ...base, outcome: 'held', grades: [g('clean', 1)] }, 1, 'spotCheck');
-  return f.tag === 'Forgiven' && f.reason.startsWith('2 stumbles in 3 verses forgiven') && b.tag === 'Back 1' && b.reason === '3 stumbles, so it goes back one review.' && sc.reason === "The spot check slipped, so this review didn't count.";
+  return f.tag === 'Forgiven' && f.reason.startsWith('2 stumbles in 3 verses forgiven') && sc.reason === "The spot check slipped, so this review didn't count.";
 })());
 
 console.log("today's ladder cards");
