@@ -20,6 +20,7 @@ import {
 import { auth, db, storage } from '../firebase';
 import { clearLocalCopy } from '../lib/localCopyStore';
 import { clearCommunityCopy } from '../lib/communityCopyStore';
+import { clearUploads } from '../lib/recordingUploadStore';
 import { Circle, QueueItem, RecordingVisibility } from '../types';
 
 // ============================================================================
@@ -295,6 +296,7 @@ export function useAccount({
       // And the copy of the verses kept for opening offline (lib/localCopy).
       await clearLocalCopy(uid).catch((err) => console.error('Failed to remove the offline copy of the verses:', err));
       await clearCommunityCopy(uid).catch((err) => console.error('Failed to remove the offline copy of community:', err));
+      await clearUploads(uid).catch((err) => console.error('Failed to remove recordings waiting to upload:', err));
 
       await deleteUser(auth.currentUser);
       return { ok: true };
