@@ -161,6 +161,7 @@ export interface ReviewLog {
   // Review ladder (REVIEW_LADDER_PLAN.md decision 6). `stage` above keeps the
   // mapped legacy value; these say what really happened.
   step?: number;               // the ladder step the review happened at
+  toStep?: number;             // late: a long absence moved the passage down to this step
   grade?: ReviewGrade;         // this verse's grade in the passage's review
   outcome?: 'up' | 'held' | 'forgiven' | 'back' | 'down' | 'late' | 'joined' | 'wonBack'; // what the review did to the passage
 }

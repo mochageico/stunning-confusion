@@ -140,6 +140,14 @@ const withSchedule = (item: QueueItem, s: Schedule): QueueItem => {
   return next;
 };
 
+/** A member moved to `state` in place: due date, firm-up and the rest stay. A balanced landing day no longer applies after a step change. */
+export const withLadderState = (item: QueueItem, state: LadderState): QueueItem => {
+  const next: QueueItem = { ...item, retentionPhase: legacyPhase(state.step), ladderStep: state.step, ladderReviews: state.reviews };
+  setOpt(next, 'catchUp', state.catchUp);
+  if (state.step !== item.ladderStep) delete next.scheduledDue;
+  return next;
+};
+
 const differs = (a: QueueItem, b: QueueItem) => JSON.stringify(a) !== JSON.stringify(b);
 
 const earliest = (dues: (string | null | undefined)[]): string | null => {

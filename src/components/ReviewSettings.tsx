@@ -305,6 +305,13 @@ export function ReviewSettings({
             ? 'On: the 3 missed reviews move it back 3 reviews, but never below review 1 of its step. Today’s review is then graded on top.'
             : 'Off: it stays at review 3 of 4 and waits. Being late never moves it back.'}
         </AppText>
+        {prefs.lateMovesBack && (
+          <AppText variant="caption" className="font-sans text-ink-2">
+            Away a long time (at least two of its gaps, and at least 2 weeks): it moves down one step instead, one review
+            short of moving back up, so one clean review returns it. Never more than one step, and Every 6 months is for
+            good.
+          </AppText>
+        )}
       </SettingRow>
 
       <SettingRow

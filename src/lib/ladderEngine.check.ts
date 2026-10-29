@@ -127,6 +127,25 @@ check('setting off: it waits where it was', lateOff.queue.every((q) => q.ladderR
 const paused = prepareLadderQueue(lateQ, { clock: { ...CLOCK, pausedAt: at(1).toISOString() }, prefs: PREFS, capMinutes: 30, now: at(12, 9) });
 check('paused: nothing late, nothing spread', paused.changed.length === 0);
 
+console.log('on load: a long absence drops one step, and one clean review returns it');
+const awayQ = range(1, 3, { step: 4, reviews: 2, due: at(1, 8).toISOString() });
+const away = prepareLadderQueue(awayQ, { clock: CLOCK, prefs: PREFS, capMinutes: 30, now: at(29, 9) });
+check(
+  '4 weeks late at Every 2 weeks: Every week, 7 of 8',
+  away.queue.every((q) => q.ladderStep === 3 && q.ladderReviews === 7 && q.retentionPhase === 'weekly'),
+  away.queue.map((q) => [q.ladderStep, q.ladderReviews])
+);
+check('…noted as a drop', away.late.length === 1 && away.late[0].dropped?.fromStep === 4 && away.late[0].dropped.toStep === 3);
+check('…in the history too', away.queue[0].reviewLogs?.some((l) => l.outcome === 'late' && l.step === 4 && l.toStep === 3) === true);
+check('…due today (spread)', dayOf(away.queue[0].nextReviewDueDate) === localDayKey(at(29)));
+check('…opening again the same day charges nothing', prepareLadderQueue(away.queue, { clock: CLOCK, prefs: PREFS, capMinutes: 30, now: at(29, 15) }).changed.length === 0);
+const back = gradeAll(away.queue, [[1, 'clean'], [2, 'clean'], [3, 'clean']], at(29, 10));
+check('one clean review moves it back up to Every 2 weeks', back.last.applied?.outcome === 'up' && passageState(passageOf(back.queue, id(1))!).step === 4);
+const topAway = prepareLadderQueue(range(1, 3, { step: 7, reviews: 1, due: at(1, 8).toISOString() }), { clock: CLOCK, prefs: PREFS, capMinutes: 30, now: at(29, 9) });
+check('Every 6 months is for good: never moved back', topAway.late.length === 0 && topAway.queue.every((q) => q.ladderStep === 7 && q.ladderReviews === 1));
+const awayOff = prepareLadderQueue(awayQ, { clock: CLOCK, prefs: { ...PREFS, lateMovesBack: false }, capMinutes: 30, now: at(29, 9) });
+check('setting off: no drop either', awayOff.queue.every((q) => q.ladderStep === 4 && q.ladderReviews === 2));
+
 console.log('grading: a passage reviewed end to end moves up');
 const fresh = range(1, 3, { step: 0, reviews: 2, due: at(12, 8).toISOString() });
 const half = gradeVerse(fresh, id(1), 'clean', { clock: CLOCK, now: at(12, 10) });
@@ -228,6 +247,12 @@ check('welcomeBack: lines and totals', (() => {
   return !!wb && wb.verses === 9 && wb.days.length === 2 && wb.days[1].label === 'Tomorrow' && wb.days[1].passages === 2 && wb.days[1].verses === 6;
 })());
 check('welcomeBack: nothing spread', welcomeBack([], '2026-10-12') === null);
+check('welcomeBack: counts the passages that dropped', welcomeBack(away.spread, localDayKey(at(29)), away.late)?.dropped === 1 && welcomeBack(away.spread, localDayKey(at(29)))?.dropped === 0);
+check(
+  'late note for a dropped passage',
+  lateNoteFor(away.queue.slice(0, 1), away.late) === 'Away a while: now Every week. One clean review moves it back up.',
+  lateNoteFor(away.queue.slice(0, 1), away.late)
+);
 check('firm-up item: only the slipped verses, only on its day', (() => {
   const items = firmUpItems(held.queue, '2026-10-13');
   return items.length === 1 && items[0].title === 'Romans 8:1–3' && items[0].verses.length === 1 && items[0].verses[0].verseNumber === 2 && items[0].line.startsWith('Verse 2 slipped last time.') && firmUpItems(held.queue, '2026-10-12').length === 0;

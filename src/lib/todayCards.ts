@@ -31,11 +31,13 @@ export interface WelcomeBackLine {
 export interface WelcomeBack {
   /** Verses spread in all. */
   verses: number;
+  /** Passages a long absence moved down a step. */
+  dropped: number;
   days: WelcomeBackLine[];
 }
 
 /** The welcome-back card's lines. null when nothing was spread. */
-export const welcomeBack = (spread: readonly SpreadDay[], todayKey: string): WelcomeBack | null => {
+export const welcomeBack = (spread: readonly SpreadDay[], todayKey: string, late: readonly LateNote[] = []): WelcomeBack | null => {
   const days = spread
     .filter((d) => d.passages.length > 0)
     .map((d) => ({
@@ -45,7 +47,7 @@ export const welcomeBack = (spread: readonly SpreadDay[], todayKey: string): Wel
       verses: d.passages.reduce((n, p) => n + p.items.length, 0),
     }));
   if (days.length === 0) return null;
-  return { verses: days.reduce((n, d) => n + d.verses, 0), days };
+  return { verses: days.reduce((n, d) => n + d.verses, 0), dropped: late.filter((n) => n.dropped).length, days };
 };
 
 export interface FirmUpItem {
@@ -76,6 +78,7 @@ export const lateNoteFor = (items: readonly QueueItem[], late: readonly LateNote
   let moved = 0;
   for (const n of late) {
     if (!n.passage.items.some((q) => ids.has(q.verseId))) continue;
+    if (n.dropped) return `Away a while: now ${stepInfo(n.dropped.toStep).label}. One clean review moves it back up.`;
     moved = Math.max(moved, n.from - n.to);
   }
   return moved > 0 ? `Late: moved back ${moved} ${moved === 1 ? 'review' : 'reviews'}` : null;

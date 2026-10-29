@@ -263,7 +263,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     setWelcomeDismissedDay(todayKey);
     AsyncStorage.setItem(WELCOME_DISMISSED_KEY, todayKey).catch(() => {});
   };
-  const welcome = welcomeDismissedDay === todayKey || isPausedNow ? null : welcomeBack(welcomeBackDays, todayKey);
+  const welcome = welcomeDismissedDay === todayKey || isPausedNow ? null : welcomeBack(welcomeBackDays, todayKey, lateNotes);
   const firmUps = isPausedNow ? [] : firmUpItems(memoryQueue, todayKey);
 
   // Balance my review days: passages set for today that were moved later. The

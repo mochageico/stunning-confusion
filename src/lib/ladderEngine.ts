@@ -24,6 +24,7 @@ import {
   passages,
   passageState,
   easeToday,
+  withLadderState,
   recordGrade,
   type ReviewApplied,
   settleStaleDays,
@@ -265,8 +266,11 @@ const logApplied = (
 export interface LateNote {
   passage: Passage;
   missed: number;
+  /** Reviews at the step before and after. */
   from: number;
   to: number;
+  /** A long absence moved it down a step: the steps before and after. */
+  dropped?: { fromStep: number; toStep: number };
 }
 
 export interface LoadResult {
@@ -289,7 +293,8 @@ export interface LoadResult {
  * 2. passages left partly covered on an earlier day get their
  *    outcome, which can only hold;
  * 3. "Late reviews move you back" (when on), one review per full interval
- *    overdue, never below the start of the step, noted in the history;
+ *    overdue, never below the start of the step, or down one step after a
+ *    long absence, noted in the history;
  * 4. overdue passages are spread over the next few days under the review
  *    time cap (welcome back), which also gives each a new due date so the
  *    same lateness isn't charged on the next open.
@@ -327,12 +332,12 @@ export const prepareLadderQueue = (
       for (const p of passages(queue)) {
         if (p.items.some((q) => q.ladderStep === undefined)) continue;
         const state = passageState(p);
-        const { missed, state: after } = lateness(state, p.items[0].nextReviewDueDate, clock, now);
+        const { missed, state: after, dropped } = lateness(state, p.items[0].nextReviewDueDate, clock, now, prefs.thoroughness);
         if (missed === 0) continue;
-        late.push({ passage: p, missed, from: state.reviews, to: after.reviews });
+        late.push({ passage: p, missed, from: state.reviews, to: after.reviews, ...(dropped ? { dropped: { fromStep: state.step, toStep: after.step } } : {}) });
         for (const q of p.items) {
-          const next = { ...q, ladderReviews: after.reviews };
-          appendReviewLog(next, q, 'skipped', { cycles: missed, step: state.step, outcome: 'late' });
+          const next = withLadderState(q, after);
+          appendReviewLog(next, q, 'skipped', { cycles: missed, step: state.step, outcome: 'late', ...(dropped ? { toStep: after.step } : {}) });
           changed.push(next);
         }
       }

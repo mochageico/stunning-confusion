@@ -174,8 +174,8 @@ check('Every 2 days, one day late is free', lateness({ step: 1, reviews: 2 }, at
 check('Every 2 days, two days late: one missed', lateness({ step: 1, reviews: 2 }, at(12).toISOString(), CLOCK, at(14)).missed === 1);
 check('Every 2 days, three days late: still one', lateness({ step: 1, reviews: 2 }, at(12).toISOString(), CLOCK, at(15)).missed === 1);
 {
-  const r = lateness({ step: 3, reviews: 1 }, at(12).toISOString(), CLOCK, at(12, 12, 10));
-  check('never below the start of the step', r.missed === 4 && same(r.state, { step: 3, reviews: 0 }), r);
+  const r = lateness({ step: 1, reviews: 1 }, at(12).toISOString(), CLOCK, at(25));
+  check('never below the start of the step (short of a drop)', r.missed === 6 && !r.dropped && same(r.state, { step: 1, reviews: 0 }), r);
 }
 check(
   'late moves back but keeps the step and catch-up',
@@ -196,6 +196,27 @@ check(
   'day start hour: 1am the next day is still the due day',
   lateness(daily, at(12).toISOString(), { ...CLOCK, dayStartHour: 2 }, at(13, 1)).missed === 0
 );
+
+console.log('late reviews: a long absence drops one step');
+{
+  const late = (s: LadderState, days: number, clock = CLOCK, t: Thoroughness = 1) => lateness(s, at(12).toISOString(), clock, at(12 + days), t);
+  const e2 = late({ step: 1, reviews: 3 }, 13);
+  check('Every 2 days, 13 days late: under 2 weeks, back within the step', !e2.dropped && same(e2.state, { step: 1, reviews: 0 }));
+  const e2d = late({ step: 1, reviews: 3 }, 14);
+  check('…14 days late: down to Every day, one review short of moving up (6 of 7)', e2d.dropped && same(e2d.state, { step: 0, reviews: 6 }));
+  check('Every week, 13 days late: one missed, no drop', !late({ step: 3, reviews: 5 }, 13).dropped && same(late({ step: 3, reviews: 5 }, 13).state, { step: 3, reviews: 4 }));
+  check('Every week, 2 weeks late: down to Every 4 days, 3 of 4', late({ step: 3, reviews: 5 }, 14).dropped && same(late({ step: 3, reviews: 5 }, 14).state, { step: 2, reviews: 3 }));
+  check('Every 2 weeks, 27 days late: no drop', !late({ step: 4, reviews: 2 }, 27).dropped);
+  check('…4 weeks late: down to Every week, 7 of 8', same(late({ step: 4, reviews: 2 }, 28).state, { step: 3, reviews: 7 }));
+  check('Every 8 weeks, 16 weeks late: down to Every 4 weeks, 11 of 12', same(late({ step: 6, reviews: 0 }, 112).state, { step: 5, reviews: 11 }) && !late({ step: 6, reviews: 0 }, 111).dropped);
+  check('a year late still only drops one step', same(late({ step: 6, reviews: 4 }, 365).state, { step: 5, reviews: 11 }));
+  const top = late({ step: 7, reviews: 3 }, 1000);
+  check('Every 6 months is for good: never late', top.missed === 0 && !top.dropped && same(top.state, { step: 7, reviews: 3 }));
+  check('Every day has nowhere to drop: back within the step', !late({ step: 0, reviews: 5 }, 30).dropped && same(late({ step: 0, reviews: 5 }, 30).state, { step: 0, reviews: 0 }));
+  check('a catch-up lands one short of its own count', same(late({ step: 2, reviews: 1, catchUp: true }, 14).state, { step: 1, reviews: 1, catchUp: true }));
+  check('thoroughness sets where it lands', same(late({ step: 3, reviews: 0 }, 14, CLOCK, 2).state, { step: 2, reviews: 7 }));
+  check('Sabbath days don\'t count toward the 2 weeks', !late({ step: 3, reviews: 5 }, 14, SABBATH).dropped);
+}
 
 if (failures > 0) {
   console.log(`\n${failures} check(s) failed.`);

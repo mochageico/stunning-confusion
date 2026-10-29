@@ -167,20 +167,30 @@ export const applyOutcome = (
   return make(step + 1, 0, catchUp);
 };
 
+/** A passage this many of its intervals late, and at least DROP_MIN_DAYS late, moves down a step. */
+export const DROP_AFTER_INTERVALS = 2;
+export const DROP_MIN_DAYS = 14;
+
 /**
  * How late a passage is and where that leaves it ("Late reviews move you
  * back"). Each full interval overdue is one missed review, counted in
  * scheduled days (Sabbath and paused days don't count); less than one
  * interval late is free. Each missed review moves the passage back one,
- * never below the start of its step. Today's review is then graded on top.
+ * never below the start of its step. A long absence (at least 2 of its
+ * intervals and 2 weeks late) moves it down one step instead, landing one
+ * review short of moving back up: one clean review returns it. Never more
+ * than one step, and Every 6 months is for good. Today's review is then
+ * graded on top.
  */
 export const lateness = (
   state: LadderState,
   dueISO: string | null | undefined,
   clock: ReviewClock,
-  now: Date = new Date()
-): { missed: number; state: LadderState } => {
-  if (!dueISO) return { missed: 0, state };
+  now: Date = new Date(),
+  thoroughness: Thoroughness = DEFAULT_THOROUGHNESS
+): { missed: number; state: LadderState; dropped: boolean } => {
+  const step = clampStep(state.step);
+  if (!dueISO || step === TOP_STEP) return { missed: 0, state, dropped: false };
   // Whole calendar days: a review due at 9pm yesterday is one day late at
   // 8am today, not zero.
   const due = new Date(dueISO);
@@ -188,7 +198,13 @@ export const lateness = (
   const today = new Date(getLogicalDate(clock.dayStartHour, now));
   today.setHours(0, 0, 0, 0);
   const days = scheduledDaysBetween(due, today, clock.sabbathEnabled, clock.sabbathDay, clock.pausedAt, clock.pausedUntil);
-  const missed = Math.floor(days / stepInfo(state.step).intervalDays);
-  if (missed === 0) return { missed, state };
-  return { missed, state: make(clampStep(state.step), Math.max(0, state.reviews - missed), !!state.catchUp) };
+  const missed = Math.floor(days / stepInfo(step).intervalDays);
+  if (missed === 0) return { missed, state, dropped: false };
+  const catchUp = !!state.catchUp;
+  if (step > 0 && missed >= DROP_AFTER_INTERVALS && days >= DROP_MIN_DAYS) {
+    const below = step - 1;
+    const need = reviewsToMoveUp({ step: below, reviews: 0, catchUp: catchUp || undefined }, thoroughness)!;
+    return { missed, state: make(below, need - 1, catchUp), dropped: true };
+  }
+  return { missed, state: make(step, Math.max(0, state.reviews - missed), catchUp), dropped: false };
 };

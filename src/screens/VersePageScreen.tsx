@@ -26,7 +26,7 @@ import {
   stageProgress,
   versesWord,
 } from '../lib/stageProgress';
-import { LADDER, stepReviewCount } from '../lib/ladder';
+import { LADDER, stepInfo, stepReviewCount } from '../lib/ladder';
 
 // ============================================================================
 // One verse's page (or a run of neighbours that sit at the same point on the
@@ -188,7 +188,12 @@ export default function VersePageScreen({ state }: { state: AppState }) {
     if (l.result === 'grace') story.push({ at, text: 'Missed a review. Grace covered it, so nothing was lost.' });
     else if (l.result === 'miss') story.push({ at, text: l.refresher ? 'Missed a refresher review.' : 'Missed a review.' });
     else if (l.result === 'skipped')
-      story.push({ at, text: `${l.cycles && l.cycles > 1 ? `${l.cycles} review dates` : 'A review date'} passed without a review${l.forgiven ? ', and was forgiven' : ''}.` });
+      story.push({
+        at,
+        text: `${l.cycles && l.cycles > 1 ? `${l.cycles} review dates` : 'A review date'} passed without a review${l.forgiven ? ', and was forgiven' : ''}${
+          l.toStep !== undefined ? `, so it moved to ${stepInfo(l.toStep).label}` : ''
+        }.`,
+      });
     else if (l.result === 'placed') story.push({ at, text: `Placed in ${STAGE_LABEL[LOG_STAGE[l.stage]]} by hand.` });
   }
   story.sort((a, b) => b.at.getTime() - a.at.getTime());

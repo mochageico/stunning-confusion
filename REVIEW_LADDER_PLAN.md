@@ -103,7 +103,26 @@ dailyPhaseWeeks / weeklyPhaseMonths / monthlyPhaseYears.
   floor(days overdue / interval). Each moves the passage back one review, never below
   review 1 of its current step. Less than one interval late is free. Then today's
   review is graded normally on top.
-- Off: a late passage waits where it was.
+- **Dropping a step (user, 2026-10-29):** a passage at least 2 of its intervals and
+  at least 2 weeks late (scheduled days) moves down one step instead, landing one
+  review short of moving back up, so one clean review returns it. Never more than one
+  step per absence. Every 6 months is for good: it is never late. Every day has
+  nowhere to drop and loses reviews as above. A catch-up lands one short of its own
+  count. Since a review never moves a passage back (§4), this is the only way a
+  neglected passage comes back to being reviewed more often.
+
+  | Step | Drops after |
+  | --- | --- |
+  | Every 2 days, 4 days, week | 2 weeks late |
+  | Every 2 weeks | 4 weeks |
+  | Every 4 weeks | 8 weeks |
+  | Every 8 weeks | 16 weeks |
+  | Every 6 months | never |
+
+  Shown on the passage's Today row ("Away a while: now Every week. One clean review
+  moves it back up."), on the Welcome back card, in the verse's history, and in
+  Settings > Reviews.
+- Off: a late passage waits where it was (no drops either).
 - **Long absence:** overdue passages are spread over the next few days automatically
   (Settling first, then most overdue). Today shows a "Welcome back" card.
 - This replaces the missed-cycle catch-up in `handleReviewCompleted`, the
