@@ -56,8 +56,9 @@ export function usePlanSettings({ triggerToast }: UsePlanSettingsDeps) {
   const [cleanPct, setCleanPct] = useState<number>(DEFAULT_LADDER_PREFS.cleanPct);
   const [lateMovesBack, setLateMovesBack] = useState<boolean>(DEFAULT_LADDER_PREFS.lateMovesBack);
   const [swapCanBeClean, setSwapCanBeClean] = useState<boolean>(DEFAULT_LADDER_PREFS.swapCanBeClean);
+  const [balanceDays, setBalanceDays] = useState<boolean>(DEFAULT_LADDER_PREFS.balanceDays);
   const [ladderVersion, setLadderVersion] = useState<number | null>(null);
-  const ladderPrefs: LadderPrefs = { thoroughness, cleanPct, lateMovesBack, swapCanBeClean };
+  const ladderPrefs: LadderPrefs = { thoroughness, cleanPct, lateMovesBack, swapCanBeClean, balanceDays };
 
   // The live Rhythm, flattened for the memoryPlans/{uid} doc root. These
   // field names are unchanged from before the split -- pre-split docs already
@@ -118,6 +119,7 @@ export function usePlanSettings({ triggerToast }: UsePlanSettingsDeps) {
     if (patch.cleanPct !== undefined) setCleanPct(patch.cleanPct);
     if (patch.lateMovesBack !== undefined) setLateMovesBack(patch.lateMovesBack);
     if (patch.swapCanBeClean !== undefined) setSwapCanBeClean(patch.swapCanBeClean);
+    if (patch.balanceDays !== undefined) setBalanceDays(patch.balanceDays);
     if (!auth.currentUser) return;
     try {
       await setDoc(
@@ -136,6 +138,7 @@ export function usePlanSettings({ triggerToast }: UsePlanSettingsDeps) {
     setCleanPct(prefs.cleanPct);
     setLateMovesBack(prefs.lateMovesBack);
     setSwapCanBeClean(prefs.swapCanBeClean);
+    setBalanceDays(prefs.balanceDays);
   };
 
   // Perfect recalls before a verse counts as learned: user-level like the
@@ -218,6 +221,7 @@ export function usePlanSettings({ triggerToast }: UsePlanSettingsDeps) {
     cleanPct,
     lateMovesBack,
     swapCanBeClean,
+    balanceDays,
     ladderPrefs,
     ladderVersion,
     setLadderVersion,

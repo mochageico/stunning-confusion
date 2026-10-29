@@ -7,6 +7,7 @@
 // one. Nothing here reads React state or Firestore; every function returns
 // only the items it changed, so writes stay small.
 import type { QueueItem, ReviewGrade, ReviewLog } from '../types';
+import { type BalanceSettings, creditsEarly, dayLoads, levelDue, scheduledDayOf } from './balance';
 import { canSelfCheckMoveUp } from './grading';
 import {
   applyOutcome,
@@ -104,6 +105,8 @@ interface Schedule {
   due: string | null;
   lastSelfChecked?: true;
   firmUp?: QueueItem['firmUp'];
+  /** Balance my review days: the day the step landed this review on, when it was moved off it. */
+  scheduledDue?: string;
 }
 
 // Firestore rejects undefined: optional keys are deleted, never set to undefined.
@@ -124,6 +127,7 @@ const withSchedule = (item: QueueItem, s: Schedule): QueueItem => {
   setOpt(next, 'catchUp', s.state.catchUp);
   setOpt(next, 'lastSelfChecked', s.lastSelfChecked);
   setOpt(next, 'firmUp', s.firmUp);
+  setOpt(next, 'scheduledDue', s.scheduledDue);
   return next;
 };
 
@@ -184,7 +188,8 @@ export const reconcile = (
     const firmUp = established.find((q) => q.firmUp)?.firmUp;
     let schedule: Schedule;
     if (arrivals.length === 0) {
-      schedule = { state: lowest!, due: establishedDue, lastSelfChecked, firmUp };
+      // A balanced passage keeps the day its step landed it on.
+      schedule = { state: lowest!, due: establishedDue, lastSelfChecked, firmUp, scheduledDue: established.find((q) => q.scheduledDue)?.scheduledDue };
     } else {
       const running = !!lowest && !!lowest.catchUp && lowest.step < FIRST_WEEKLY_STEP;
       if (running) {
@@ -224,6 +229,8 @@ export interface LadderSettings {
   clock: ReviewClock;
   thoroughness?: Thoroughness;
   now?: Date;
+  /** Balance my review days, when on. */
+  balance?: BalanceSettings;
 }
 
 export interface ReviewApplied {
@@ -295,12 +302,34 @@ const applyReview = (
   if (to.step >= FIRST_WEEKLY_STEP && !anchor) {
     anchor = setAnchor = DAY_ABBREVS[getLogicalDate(settings.clock.dayStartHour, base).getDay()];
   }
-  const due = nextDue(to.step, anchor, settings.clock, base);
+  // A review done ahead of its scheduled day (balance's window) counts from
+  // that day, so doing it early can't pull the weekly weekday forward.
+  const balanced = !!settings.balance && to.step >= FIRST_WEEKLY_STEP;
+  let dueBase = base;
+  if (balanced) {
+    const sched = scheduledDayOf(members[0]);
+    if (sched && sched > localDayKey(getLogicalDate(settings.clock.dayStartHour, base))) dueBase = dayDate(sched);
+  }
+  let due = nextDue(to.step, anchor, settings.clock, dueBase);
+  let scheduledDue: string | undefined;
+  if (balanced) {
+    const level = levelDue({
+      anchor: due,
+      step: to.step,
+      verses: members.length,
+      loads: dayLoads(queue, new Set(p.items.map((q) => q.verseId))),
+      capMinutes: settings.balance!.capMinutes,
+      clock: settings.clock,
+      now: settings.now ?? new Date(),
+    });
+    due = level.due;
+    scheduledDue = level.scheduledDue;
+  }
 
   const gradedIds = new Set(graded.map((q) => q.verseId));
   const gradeOf = new Map(grades.map((g) => [g.verseId, g.grade]));
   for (const q of members) {
-    const next = withSchedule(q, { state: to, due, lastSelfChecked: nextSelfChecked, firmUp });
+    const next = withSchedule(q, { state: to, due, lastSelfChecked: nextSelfChecked, firmUp, scheduledDue });
     if (gradedIds.has(q.verseId)) {
       delete next.dayResult;
       setOpt(next, 'slipped', gradeOf.get(q.verseId) === 'clean' ? undefined : true);
@@ -386,8 +415,10 @@ export const recordGrade = (queue: readonly QueueItem[], verseId: string, grade:
 
   const current = () => p.items.map((q) => work.get(q.verseId)!);
   const due = current()[0].nextReviewDueDate;
+  // Due, or inside the balance window ahead of its scheduled day: it counts.
   const isDue =
-    !isPauseInEffect(opts.clock.pausedAt, opts.clock.pausedUntil, now) && isReviewDue(due, getLogicalDate(opts.clock.dayStartHour, now));
+    !isPauseInEffect(opts.clock.pausedAt, opts.clock.pausedUntil, now) &&
+    (isReviewDue(due, getLogicalDate(opts.clock.dayStartHour, now)) || (!!opts.balance && creditsEarly(current()[0], opts.day)));
 
   const item = work.get(verseId)!;
   const next: QueueItem = { ...item, lastReviewDate: now.toISOString() };
@@ -477,7 +508,7 @@ export const winBack = (
       to.step === from.step ? p.items[0].nextReviewDueDate : nextDue(to.step, anchorFor(p, queue), opts.clock, opts.now ?? new Date());
     for (const q of p.items) {
       const cur = work.get(q.verseId)!;
-      work.set(q.verseId, withSchedule(cur, { state: to, due, lastSelfChecked: cur.lastSelfChecked }));
+      work.set(q.verseId, withSchedule(cur, { state: to, due, lastSelfChecked: cur.lastSelfChecked, scheduledDue: to.step === from.step ? cur.scheduledDue : undefined }));
     }
   }
   return { changed: collectChanged(p, work), won, passage: p };
@@ -558,7 +589,12 @@ export const spreadOverdue = (
         load.set(k, used + cost(p));
         placedToday.push(p);
         const due = new Date(cursor).toISOString();
-        for (const q of p.items) if (q.nextReviewDueDate !== due) changed.push({ ...q, nextReviewDueDate: due });
+        for (const q of p.items) {
+          if (q.nextReviewDueDate === due) continue;
+          const moved = { ...q, nextReviewDueDate: due };
+          delete moved.scheduledDue; // the welcome-back date replaces any balance shift
+          changed.push(moved);
+        }
         break;
       }
       close();

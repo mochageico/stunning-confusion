@@ -87,6 +87,7 @@ export function useReviewEngine({
     thoroughness,
     cleanPct,
     swapCanBeClean,
+    balanceDays,
   } = plan;
 
   // What each passage's review did this session, newest last: the Mixed
@@ -770,6 +771,7 @@ export function useReviewEngine({
       drillType,
       selfCheck: opts?.selfCheck || (input ? isSelfCheckInput(input) : false),
       canMoveUp: opts?.canMoveUp,
+      balance: balanceDays ? { capMinutes: maxReviewCap } : undefined,
       firmUpGrades: firmUpGradesRef.current.grades,
     });
     let queue = mergeChanged(memoryQueueRef.current, g.changed);

@@ -778,3 +778,24 @@ Mixed: pure projections **Cloud OK · Sonnet**; anything that writes Firestore
 | 7 Settings, recap, welcome back | Cloud for screens, local pass | Sonnet |
 | 8 Other stage readers | Cloud for projections, local for writes | Sonnet / Opus |
 | 9 Real phone + release | Local | Opus |
+
+## Balance my review days (stage 1 built 2026-10-29)
+
+Weekly and longer passages may sit a few days off the day their step lands them on,
+so no one day runs past the daily review limit. Setting `balanceDays` (default on),
+Settings > Reviews. Code: `src/lib/balance.ts` + `balance.check.ts` (`npm run check:balance`).
+
+- **Window by step** (days either side): Every week 1, 2 weeks 1, 4 weeks 2, 8 weeks 3,
+  6 months 7. Every day / 2 days / 4 days never move.
+- **Leveling at scheduling time** (`applyReview`): the due date comes from the step as
+  before; only if that day would pass the limit (15 s a verse, `maxReviewCap`) does it move
+  to a lighter day in the window (tie: nearest, then later). Never today, a Sabbath or a
+  paused day. Nothing already on the calendar is touched.
+- **`scheduledDue`** on every member: the day the step landed on, kept only when shifted.
+  A review done ahead of it counts its next due date from that day, so an early review
+  can't pull the weekly weekday forward.
+- **A review inside the window counts** (`recordGrade`: `creditsEarly`), from the scheduled
+  day less the window. The Today list still shows only what is due.
+- Welcome-back spread drops `scheduledDue` (its date replaces the shift).
+- **Not built yet (stage 2):** the relief valve on the day itself ("Moved 2 passages to
+  tomorrow" note, See which, Do them today) and capping the new-verse pull to the time left.

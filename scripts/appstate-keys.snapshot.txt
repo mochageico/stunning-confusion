@@ -34,6 +34,7 @@ advanceReviewSession: () => void
 audioCache: AudioCacheSnapshot
 audioSearchQuery: string
 backHistory: { screen: ScreenName; book: string | null; chapter: number | null; tab?: TabName | undefined; }[]
+balanceDays: boolean
 blockUser: (uid: string, displayName: string) => Promise<void>
 blockedUids: Set<string>
 blockedUsers: BlockedUser[]

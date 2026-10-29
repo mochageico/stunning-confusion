@@ -305,7 +305,7 @@ function CollapseSpecimen({ scale }: { scale: number }) {
 
 /** The Review Settings accordion, driven by local state. */
 function LiveReviewSettings() {
-  const [prefs, setPrefs] = useState({ thoroughness: 1 as 0.5 | 1 | 1.5 | 2, cleanPct: 90, lateMovesBack: true });
+  const [prefs, setPrefs] = useState({ thoroughness: 1 as 0.5 | 1 | 1.5 | 2, cleanPct: 90, lateMovesBack: true, balanceDays: true });
   const [masteryTouches, setMasteryTouches] = useState(3);
   return (
     <ReviewSettings
