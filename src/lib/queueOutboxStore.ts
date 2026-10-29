@@ -1,56 +1,22 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { File, Paths } from 'expo-file-system';
-import { Platform } from 'react-native';
-
 import type { QueueItem } from '../types';
-import { EMPTY_OUTBOX, Outbox, confirmIds, confirmSent, recordPending } from './queueOutbox';
+import { DeviceDoc, readDeviceDoc, writeDeviceDoc } from './deviceFile';
+import { EMPTY_OUTBOX, Outbox, confirmSent, recordPending } from './queueOutbox';
 
-// Where the "to send" list (queueOutbox.ts) is kept: one per account. On the
-// phone it's a file in the documents folder (never the cache folder, which
-// the OS may clear) -- a bulk change can put hundreds of verses on the list,
-// more than Android lets one AsyncStorage entry hold. The web has no such
-// folder, so it uses AsyncStorage (localStorage) instead.
+// Where the "to send" list (queueOutbox.ts) is kept: one per account, in a
+// file on the phone (deviceFile.ts) -- a bulk change can put hundreds of
+// verses on the list, more than Android lets one AsyncStorage entry hold.
 //
 // Every change goes through one queue, in order, and is saved before the
 // promise it returns resolves: the auto-sync waits for that before writing to
 // Firestore, so a write is always on the list before it can be lost.
 
-const KEY_PREFIX = 'queueOutbox.v1:';
-
 // Account ids are Firebase uids (letters and digits), safe in a file name.
-const fileFor = (uid: string) => new File(Paths.document, `queue-outbox-${uid}.json`);
-const partFileFor = (uid: string) => new File(Paths.document, `queue-outbox-${uid}.json.part`);
+const docFor = (uid: string): DeviceDoc => ({ fileName: `queue-outbox-${uid}.json`, webKey: `queueOutbox.v1:${uid}` });
 
-/** Saved copies, newest first: a leftover .part is a save that stopped just before being swapped in. */
-async function readCandidates(uid: string): Promise<string[]> {
-  if (Platform.OS === 'web') {
-    const raw = await AsyncStorage.getItem(KEY_PREFIX + uid);
-    return raw ? [raw] : [];
-  }
-  const out: string[] = [];
-  for (const f of [partFileFor(uid), fileFor(uid)]) if (f.exists) out.push(await f.text());
-  return out;
-}
+const readCandidates = (uid: string) => readDeviceDoc(docFor(uid));
 
-async function writeRaw(uid: string, outbox: Outbox): Promise<void> {
-  const empty = Object.keys(outbox).length === 0;
-  if (Platform.OS === 'web') {
-    if (empty) await AsyncStorage.removeItem(KEY_PREFIX + uid);
-    else await AsyncStorage.setItem(KEY_PREFIX + uid, JSON.stringify(outbox));
-    return;
-  }
-  const file = fileFor(uid);
-  if (empty) {
-    if (file.exists) file.delete();
-    return;
-  }
-  // New copy first, then swapped in, so a crash mid-save leaves the old
-  // list (or the complete new one), never half a file.
-  const part = partFileFor(uid);
-  part.create({ overwrite: true });
-  part.write(JSON.stringify(outbox));
-  await part.move(file, { overwrite: true });
-}
+const writeRaw = (uid: string, outbox: Outbox) =>
+  writeDeviceDoc(docFor(uid), Object.keys(outbox).length === 0 ? null : JSON.stringify(outbox));
 
 const loaded = new Map<string, Outbox>();
 let chain: Promise<unknown> = Promise.resolve();
@@ -110,10 +76,4 @@ export function outboxRecord(
 /** Takes writes Firestore confirmed off the list (only the version that was sent). */
 export function outboxConfirm(uid: string, writes: { verseId: string; json: string }[], deletes: string[]): Promise<void> {
   return update(uid, (o) => confirmSent(o, writes, deletes));
-}
-
-/** Takes verses off the list whose full current version was just written. */
-export function outboxSettle(uid: string, ids: Iterable<string>): Promise<void> {
-  const list = [...ids];
-  return update(uid, (o) => confirmIds(o, list));
 }

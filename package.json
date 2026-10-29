@@ -66,6 +66,7 @@
     "check:calendar": "node scripts/run-calendar-check.cjs",
     "check:queue": "node scripts/run-queue-check.cjs",
     "check:outbox": "node scripts/run-outbox-check.cjs",
+    "check:localcopy": "node scripts/run-localcopy-check.cjs",
     "check:dragselect": "node scripts/run-dragselect-check.cjs",
     "check:reviewlog": "node scripts/run-reviewlog-check.cjs",
     "check:stages": "node scripts/run-stages-check.cjs",

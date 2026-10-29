@@ -24,7 +24,9 @@ import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable }
 import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
 import { setPlaybackProgress } from '../lib/playbackProgress';
 import { applyOutbox } from '../lib/queueOutbox';
-import { loadOutbox, outboxConfirm, outboxRecord, outboxSettle } from '../lib/queueOutboxStore';
+import { loadOutbox, outboxConfirm, outboxRecord } from '../lib/queueOutboxStore';
+import { queueFromBaseline, type LocalSettings } from '../lib/localCopy';
+import { saveLocalCopy } from '../lib/localCopyStore';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   setAudioModeAsync,
@@ -181,6 +183,9 @@ export interface VersePageRef {
   verses: number[];
   translationId: string;
 }
+
+// Nothing of the copy on the phone may be refreshed yet (see localCopyReadyRef).
+const NO_LOCAL_COPY = { uid: null as string | null, queue: false, verses: false, settings: false };
 
 export type TabName = 'home' | 'verses' | 'community' | 'record' | 'profile';
 
@@ -779,6 +784,9 @@ export function useAppState() {
   // clears memoryQueue synchronously) could commit an empty/stale queue —
   // including deletions — into the NEW account before loadUserData finishes.
   const queueHydratedRef = useRef(false);
+  // Which parts of the copy on the phone (lib/localCopy) this account's load
+  // really read from the server, so later saves only ever refresh those.
+  const localCopyReadyRef = useRef(NO_LOCAL_COPY);
 
   // Verse ids the user has ACTUALLY asked to remove. The auto-sync will only
   // delete documents named here.
@@ -1158,6 +1166,11 @@ export function useAppState() {
       // ladder yet, for the same reason.
       let resolvedLadderPrefs = ladderPrefsFrom(undefined);
       let resolvedLadderVersion: number | null = null;
+      let resolvedMasteryTouches = 3;
+      // Whether the settings above came from the server (read or just
+      // created), so they can go in the copy on the phone -- never defaults
+      // standing in for a read that failed.
+      let settingsFromServer = false;
       let groupPlansLoad: Promise<void> = Promise.resolve();
 
       // 2. Memory Plan
@@ -1204,7 +1217,9 @@ export function useAppState() {
         // ---- PERFECT RECALLS ----
         // User-level like the rest of the plan; the doc root has always
         // mirrored the active plan's value, so older accounts read it from there.
-        setMasteryTouches(planData.masteryTouches ?? rootActive.masteryTouches ?? 3);
+        resolvedMasteryTouches = planData.masteryTouches ?? rootActive.masteryTouches ?? 3;
+        setMasteryTouches(resolvedMasteryTouches);
+        settingsFromServer = true;
 
         // Joined Group Plans: resolve membership records into the real
         // GroupPlan docs they point to. This also fixes a pre-existing bug
@@ -1229,6 +1244,7 @@ export function useAppState() {
             updatedAt: new Date(),
           });
           resolvedLadderVersion = LADDER_VERSION;
+          settingsFromServer = true;
           console.log('Memory plan created successfully.');
         } catch (e) {
           handleFirestoreError(e, OperationType.WRITE, `memoryPlans/${currentUser.uid}`);
@@ -1240,8 +1256,10 @@ export function useAppState() {
 
       // A brand-new account starts with a genuinely empty verse list — no
       // pre-seeded demo progress.
+      let loadedVersesForCopy: VerseState[] | null = null;
       if (vSnap && vSnap.empty) {
         setVerses([]);
+        loadedVersesForCopy = [];
       } else if (vSnap) {
         const loadedVerses: VerseState[] = [];
         vSnap.forEach((docSnap) => {
@@ -1261,7 +1279,23 @@ export function useAppState() {
           return a.verse - b.verse;
         });
         setVerses(loadedVerses);
+        loadedVersesForCopy = loadedVerses;
       }
+
+      // "To send" entries found already done or just written, taken off the
+      // list only once the copy on the phone (below) holds them -- so the
+      // copy plus the list always cover everything Firestore confirmed. By
+      // the version found at launch: one the auto-sync has replaced since
+      // then is still owed.
+      const outboxDone: string[] = [];
+      const outboxDoneConfirm = () => {
+        const entries = [...new Set(outboxDone)].filter((id) => id in outbox).map((id) => ({ id, entry: outbox[id] }));
+        return outboxConfirm(
+          currentUser.uid,
+          entries.flatMap(({ id, entry }) => (entry.item && entry.json !== null ? [{ verseId: id, json: entry.json }] : [])),
+          entries.filter(({ entry }) => entry.item === null).map(({ id }) => id)
+        );
+      };
 
       // Same for the memory queue — a brand-new account starts with nothing
       // queued, rather than the demo Genesis/Psalms/John/Romans set already
@@ -1350,7 +1384,7 @@ export function useAppState() {
         const owedIds = owed ? outboxIds.filter((id) => !owed.settled.includes(id) && !owed.deleteIds.includes(id)) : [];
         if (owed) {
           owed.deleteIds.forEach((id) => pendingQueueDeletionsRef.current.add(id));
-          if (owed.settled.length > 0) outboxSettle(currentUser.uid, owed.settled).catch(() => undefined);
+          outboxDone.push(...owed.settled);
           console.log(
             `[outbox] ${outboxIds.length} waiting from last time: ${owedIds.length} to write, ` +
               `${owed.deleteIds.length} to delete, ${owed.settled.length} already done`
@@ -1404,7 +1438,7 @@ export function useAppState() {
                 syncedQueueJsonRef.current.set(item.verseId, JSON.stringify(item));
                 syncedQueueItemRef.current.set(item.verseId, item);
               });
-              outboxSettle(currentUser.uid, chunk.map((q) => q.verseId)).catch(() => undefined);
+              outboxDone.push(...chunk.map((q) => q.verseId));
             }
             if (toDelete.length > 0) {
               const batch = writeBatch(db);
@@ -1416,7 +1450,7 @@ export function useAppState() {
                 syncedQueueItemRef.current.delete(id);
                 pendingQueueDeletionsRef.current.delete(id);
               });
-              outboxSettle(currentUser.uid, toDelete).catch(() => undefined);
+              outboxDone.push(...toDelete);
             }
           } catch (e) {
             ladderWritten = false;
@@ -1437,6 +1471,24 @@ export function useAppState() {
         }
       }
       setLadderVersion(resolvedLadderVersion);
+
+      // The copy of all this on the phone (lib/localCopy, OFFLINE_MODE_PLAN.md
+      // stage 2), for opening with no signal: only the parts that really
+      // came from the server this time; a failed read leaves the last copy.
+      // The queue is the auto-sync's baseline -- what Firestore now holds.
+      const settingsForCopy: LocalSettings | null = settingsFromServer
+        ? { rhythm: resolvedRhythm, ladderPrefs: resolvedLadderPrefs, ladderVersion: resolvedLadderVersion, masteryTouches: resolvedMasteryTouches }
+        : null;
+      localCopyReadyRef.current = { uid: currentUser.uid, queue: !!qSnap, verses: !!vSnap, settings: settingsFromServer };
+      // Not waited on: opening the app online shouldn't wait on the file.
+      saveLocalCopy(currentUser.uid, {
+        ...(qSnap ? { queue: queueFromBaseline(syncedQueueItemRef.current.values()) } : {}),
+        ...(loadedVersesForCopy ? { verses: loadedVersesForCopy } : {}),
+        ...(settingsForCopy ? { settings: settingsForCopy } : {}),
+      })
+        .then(() => (outboxDone.length > 0 ? outboxDoneConfirm() : undefined))
+        .catch((err) => console.error('[local-copy] could not save the copy on this device:', err));
+
       // An empty queue has nothing to move: mark it done so a later load
       // doesn't think a migration is pending.
       if (qSnap && qSnap.empty && resolvedLadderVersion !== LADDER_VERSION) {
@@ -1533,6 +1585,7 @@ export function useAppState() {
       // reset the deletion-diff baseline, which still described the previous
       // account.
       queueHydratedRef.current = false;
+      localCopyReadyRef.current = NO_LOCAL_COPY;
       prevSyncedQueueIdsRef.current = new Set();
       syncedQueueJsonRef.current = new Map();
       syncedQueueItemRef.current = new Map();
@@ -1780,11 +1833,25 @@ export function useAppState() {
           syncedQueueItemRef.current.delete(id);
         });
         removedIds.forEach((id) => pendingQueueDeletionsRef.current.delete(id));
-        outboxConfirm(
-          uid,
-          changed.map(({ item, json }) => ({ verseId: item.verseId, json })),
-          removedIds
-        ).catch((err) => console.error('[outbox] could not update the to-send list:', err));
+        // The copy on the phone takes what Firestore now holds first, and
+        // only then do these come off the "to send" list, so the two together
+        // never miss a confirmed change. The copy is saved only once this
+        // account's queue really loaded: before that the baseline is partial.
+        const copySaved =
+          localCopyReadyRef.current.uid === uid && localCopyReadyRef.current.queue
+            ? saveLocalCopy(uid, { queue: queueFromBaseline(syncedQueueItemRef.current.values()) }).catch((err) =>
+                console.error('[local-copy] could not save the copy on this device:', err)
+              )
+            : Promise.resolve();
+        copySaved
+          .then(() =>
+            outboxConfirm(
+              uid,
+              changed.map(({ item, json }) => ({ verseId: item.verseId, json })),
+              removedIds
+            )
+          )
+          .catch((err) => console.error('[outbox] could not update the to-send list:', err));
         // Keep unexplained ids in the baseline: they still exist in Firestore,
         // so dropping them here would let a later shrink delete them silently.
         prevSyncedQueueIdsRef.current = new Set([...currentIds, ...unexplained]);
@@ -1798,6 +1865,61 @@ export function useAppState() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memoryQueue, user]);
+
+  // The verse list and plan settings in the copy on the phone (lib/localCopy)
+  // follow what's on screen once this account has loaded. Unlike the queue
+  // they have no confirmed-by-Firestore baseline: their writes are the
+  // settings' own live commits. Only the parts the load really read are
+  // refreshed, so a failed read never overwrites the copy with defaults.
+  const { ladderVersion } = plan;
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) return;
+    const timer = setTimeout(() => {
+      const ready = localCopyReadyRef.current;
+      if (ready.uid !== uid || (!ready.verses && !ready.settings)) return;
+      const settings: LocalSettings = {
+        rhythm: {
+          learningDays,
+          newVersesPace,
+          maxReviewCap,
+          sabbathEnabled,
+          sabbathDay,
+          dayStartHour,
+          cognitiveLoadSensitivity,
+          pausedAt,
+          pausedUntil,
+        },
+        ladderPrefs: { thoroughness, cleanPct, lateMovesBack, swapCanBeClean, balanceDays },
+        ladderVersion,
+        masteryTouches,
+      };
+      saveLocalCopy(uid, {
+        ...(ready.verses ? { verses } : {}),
+        ...(ready.settings ? { settings } : {}),
+      }).catch((err) => console.error('[local-copy] could not save the copy on this device:', err));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [
+    user?.uid,
+    verses,
+    learningDays,
+    newVersesPace,
+    maxReviewCap,
+    sabbathEnabled,
+    sabbathDay,
+    dayStartHour,
+    cognitiveLoadSensitivity,
+    pausedAt,
+    pausedUntil,
+    thoroughness,
+    cleanPct,
+    lateMovesBack,
+    swapCanBeClean,
+    balanceDays,
+    ladderVersion,
+    masteryTouches,
+  ]);
 
   // Format record duration
   const formatTime = (totalSec: number) => formatDuration(totalSec, 'clock');
