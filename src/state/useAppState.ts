@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  arrayUnion,
   collection,
   deleteDoc,
   deleteField,
@@ -43,6 +44,8 @@ import {
   GroupChallengeMembership,
   QueueItem,
   Recording,
+  RecordingVisibility,
+  normalizeRecordingVisibility,
   Rhythm,
   GroupPlanMembership,
   ReviewGrade,
@@ -455,9 +458,7 @@ export function useAppState() {
   const [pendingRecordingSource, setPendingRecordingSource] = useState<'live' | 'import'>('live');
 
   const [saveRecordingDialog, setSaveRecordingDialog] = useState(false);
-  const [pickedRecordingVisibility, setPickedRecordingVisibility] = useState<'private' | 'circle' | 'public'>(
-    'private'
-  );
+  const [pickedRecordingVisibility, setPickedRecordingVisibility] = useState<RecordingVisibility>('private');
   const [typedRecordingName, setTypedRecordingName] = useState('');
   // Opens the Save dialog for a finished take, pre-picking your usual visibility.
   const openSaveRecordingDialog = (source: 'live' | 'import') => {
@@ -921,9 +922,10 @@ export function useAppState() {
   // one redraws only the toast, not the whole open screen.
   const triggerToast = (msg: string) => showToast(msg);
 
-  // Real Community audio feed: every 'public' sharedRecordings doc, plus
-  // every 'circle' one whose snapshot sharedWithUids includes the signed-in
-  // user (see firestore.rules for why that's a snapshot, not a live check).
+  // Real Community audio feed: every shared recording whose snapshot
+  // sharedWithUids includes the signed-in user (see firestore.rules for why
+  // that's a snapshot, not a live check). There is no public tier any more --
+  // recordings are only ever shared with friends and circles.
   // Signed-out/guest keeps the illustrative SUGGESTED_FEED_RECORDINGS.
   const loadSharedRecordings = async () => {
     if (!auth.currentUser) {
@@ -933,25 +935,21 @@ export function useAppState() {
     setLoadingFeedRecordings(true);
     try {
       const uid = auth.currentUser.uid;
-      const [publicSnap, circleSnap] = await Promise.all([
-        getDocs(query(collection(db, 'sharedRecordings'), where('visibility', '==', 'public'), orderBy('createdAt', 'desc'), limit(30))),
-        getDocs(
-          query(
-            collection(db, 'sharedRecordings'),
-            where('sharedWithUids', 'array-contains', uid),
-            orderBy('createdAt', 'desc'),
-            limit(30)
-          )
-        ),
-      ]);
-      const byId = new Map<string, Recording>();
-      [...publicSnap.docs, ...circleSnap.docs].forEach((d) => {
-        // 'direct' copies exist only so a recording sent in a chat can play
-        // there (see shareRecordingInto) -- they're not posts for the feed.
-        if (d.data().visibility === 'direct') return;
-        byId.set(d.id, { id: d.id, ...d.data() } as Recording);
-      });
-      setFeedRecordings(Array.from(byId.values()));
+      const snap = await getDocs(
+        query(
+          collection(db, 'sharedRecordings'),
+          where('sharedWithUids', 'array-contains', uid),
+          orderBy('createdAt', 'desc'),
+          limit(30)
+        )
+      );
+      setFeedRecordings(
+        snap.docs
+          // 'direct' copies exist only so a recording sent in a chat can play
+          // there (see shareRecordingInto) -- they're not posts for the feed.
+          .filter((d) => d.data().visibility !== 'direct')
+          .map((d) => ({ id: d.id, ...d.data() }) as Recording)
+      );
     } catch (err) {
       console.error('Failed to load shared recordings feed:', err);
     } finally {
@@ -1059,7 +1057,8 @@ export function useAppState() {
       // 1. Profile
 
       if (profileSnap && profileSnap.exists()) {
-        setDefaultRecordingVisibility(profileSnap.data().defaultRecordingVisibility || null);
+        const savedDefault = profileSnap.data().defaultRecordingVisibility;
+        setDefaultRecordingVisibility(savedDefault ? normalizeRecordingVisibility(savedDefault) : null);
         setMemoryQueueVisibility(profileSnap.data().memoryQueueVisibility === 'friends' ? 'friends' : 'private');
         setTotalStudySeconds(profileSnap.data().totalStudySeconds || 0);
         applyAccountabilityDailyCap(profileSnap.data().accountabilityDailyCap);
@@ -1392,7 +1391,9 @@ export function useAppState() {
           const recordingsSnap = await getDocs(
             query(collection(db, 'users', currentUser.uid, 'recordings'), orderBy('createdAt', 'desc'))
           );
-          setUserRecordings(recordingsSnap.docs.map((docSnap) => docSnap.data() as Recording));
+          const loaded = recordingsSnap.docs.map((docSnap) => docSnap.data() as Recording);
+          setUserRecordings(loaded);
+          void hydrateSavedRecordings(currentUser.uid, loaded);
         } catch (e) {
           handleFirestoreError(e, OperationType.GET, `users/${currentUser.uid}/recordings`);
         }
@@ -2233,26 +2234,8 @@ export function useAppState() {
       const savedRec: Recording = { ...newRec, audioUrl };
 
       if (pickedRecordingVisibility !== 'private') {
-        // Snapshot ACL (see firestore.rules comment on sharedRecordings for
-        // why this can't just be a live circle-membership check) — everyone
-        // this recording is visible to right now, computed once at share
-        // time: every real co-member across the owner's circles, plus real
-        // friends (so friends can see circle-shared recordings too, even
-        // outside a shared circle, per the explicit design decision).
-        const sharedWithUids = Array.from(
-          new Set([...circleFriends.map((f) => f.uid), ...friends.map((f) => f.uid)])
-        );
         try {
-          await setDoc(
-            doc(db, 'sharedRecordings', id),
-            stripUndefined({
-              ...savedRec,
-              ownerId: uid,
-              visibility: pickedRecordingVisibility,
-              sharedWithUids,
-              createdAt: serverTimestamp(),
-            })
-          );
+          await publishSharedRecording(uid, savedRec);
         } catch (err) {
           console.error('Failed to publish shared recording copy:', err);
         }
@@ -2375,6 +2358,110 @@ export function useAppState() {
       // already released — nothing to pause
     }
     openSaveRecordingDialog('import');
+  };
+
+  // Writes (or refreshes) the sharedRecordings copy that friends, circles and
+  // chats read. Snapshot ACL (see firestore.rules comment on sharedRecordings
+  // for why this can't just be a live circle-membership check) -- everyone
+  // this recording is visible to right now: every real co-member across the
+  // owner's circles, plus real friends. Recomputed on every visibility
+  // change, so re-sharing also picks up people who joined a circle since.
+  // Keeps anyone it was already sent to in a chat (arrayUnion).
+  const publishSharedRecording = async (uid: string, rec: Recording) => {
+    const sharedWithUids = Array.from(new Set([...circleFriends.map((f) => f.uid), ...friends.map((f) => f.uid)]));
+    const { sharedVisibility: _ignored, ...fields } = rec;
+    await setDoc(
+      doc(db, 'sharedRecordings', rec.id),
+      stripUndefined({
+        ...fields,
+        sharedVisibility: 'circle',
+        ownerId: uid,
+        visibility: 'circle',
+        sharedWithUids: arrayUnion(...sharedWithUids),
+        createdAt: serverTimestamp(),
+      }),
+      { merge: true }
+    );
+  };
+
+  // Changes who can hear one of my own recordings after it was saved.
+  // Private deletes the shared copy outright -- feeds, chat cards and other
+  // people's saved bookmarks all read that copy, so they all lose it at once
+  // (the onSharedRecordingDeleted function then deletes those bookmarks).
+  const updateRecordingVisibility = async (recording: Recording, vis: RecordingVisibility) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || recording.savedFromRecordingId) return;
+    if (normalizeRecordingVisibility(recording.sharedVisibility) === vis) return;
+    try {
+      if (vis === 'private') {
+        await deleteDoc(doc(db, 'sharedRecordings', recording.id)).catch((err) => {
+          // A recording that was never shared has no copy -- nothing to revoke.
+          if (err?.code !== 'permission-denied' && err?.code !== 'not-found') throw err;
+        });
+      } else {
+        if (!recording.audioUrl) {
+          triggerToast('That recording is still uploading.');
+          return;
+        }
+        await publishSharedRecording(uid, recording);
+      }
+      await updateDoc(doc(db, 'users', uid, 'recordings', recording.id), { sharedVisibility: vis });
+      const updated = { ...recording, sharedVisibility: vis };
+      if (selectedRecording?.id === recording.id) setSelectedRecording(updated);
+      setUserRecordings((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      triggerToast(vis === 'private' ? 'Only you can hear it now.' : 'Shared with your friends and circles.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `sharedRecordings/${recording.id}`);
+      triggerToast("Couldn't change who can hear it -- please try again.");
+    }
+  };
+
+  // Saved recordings are bookmarks of someone else's shared copy, not
+  // copies: the owner decides whether they exist. On load, each one is
+  // refreshed from sharedRecordings/{savedFromRecordingId}; if that copy is
+  // gone (deleted, or made private) or no longer readable by me, the
+  // bookmark and any downloaded audio are removed. Any other error (offline)
+  // keeps the stored fields so a downloaded recording still plays.
+  const hydrateSavedRecordings = async (uid: string, recordings: Recording[]) => {
+    const bookmarks = recordings.filter((r) => r.savedFromRecordingId);
+    if (!bookmarks.length) return;
+    const results = await Promise.all(
+      bookmarks.map(async (b) => {
+        try {
+          const snap = await getDoc(doc(db, 'sharedRecordings', b.savedFromRecordingId!));
+          return { b, shared: snap.exists() ? (snap.data() as Recording) : null };
+        } catch (err: any) {
+          return { b, shared: err?.code === 'permission-denied' ? null : undefined };
+        }
+      })
+    );
+    const gone = new Set<string>();
+    const fresh = new Map<string, Recording>();
+    for (const { b, shared } of results) {
+      if (shared === null) {
+        gone.add(b.id);
+        deleteDoc(doc(db, 'users', uid, 'recordings', b.id)).catch((err) =>
+          console.error('Failed to remove unshared bookmark:', err)
+        );
+        void dropCachedAudio(b, 'all');
+      } else if (shared) {
+        const { ownerId: _o, visibility: _v, sharedWithUids: _s, createdAt: _c, ...fields } = shared as any;
+        fresh.set(b.id, {
+          ...fields,
+          id: b.id,
+          userId: uid,
+          savedFromUid: b.savedFromUid,
+          savedFromRecordingId: b.savedFromRecordingId,
+          sharedVisibility: 'private',
+          priority: b.priority,
+        });
+      }
+    }
+    if (!gone.size && !fresh.size) return;
+    setUserRecordings((prev) => prev.filter((r) => !gone.has(r.id)).map((r) => fresh.get(r.id) ?? r));
+    if (gone.size) {
+      triggerToast(gone.size === 1 ? 'A saved recording is no longer shared, so it was removed.' : `${gone.size} saved recordings are no longer shared, so they were removed.`);
+    }
   };
 
   const deleteRecording = async (recording: Recording) => {
@@ -2932,6 +3019,7 @@ export function useAppState() {
     deleteRecording,
     saveVerseSyncOffsets,
     updateRecordingSpeaker,
+    updateRecordingVisibility,
     reorderChapterRecordings,
     addChapterPhoto,
     deleteChapterPhoto,

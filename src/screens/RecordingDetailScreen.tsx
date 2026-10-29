@@ -3,9 +3,9 @@ import { PanResponder, Pressable, ScrollView, View } from 'react-native';
 import { Check, Download, Pause, Play, Trash2 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { VerseTimestamp } from '../types';
+import { VerseTimestamp, normalizeRecordingVisibility } from '../types';
 import { FadeInView } from '../components/ui';
-import { BIBLE_TRANSLATIONS, translationLabel } from '../data';
+import { BIBLE_TRANSLATIONS, RECORDING_VISIBILITY_HINT, RECORDING_VISIBILITY_OPTIONS, translationLabel } from '../data';
 import { recordingLabel, recordingMeta } from '../lib/recordingLabel';
 import { cacheableTarget } from '../lib/audioCache';
 import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/studioAudio';
@@ -115,6 +115,8 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
     setIsEditingSync,
     saveVerseSyncOffsets,
     updateRecordingSpeaker,
+    updateRecordingVisibility,
+    user,
     buildVerseTimestamps,
     selectedRecordingChapterTextData,
     studioPlaybackEnabled,
@@ -297,6 +299,8 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
   };
 
   const recLabel = recordingLabel(selectedRecording);
+  const isMine = !!user?.uid && selectedRecording.userId === user.uid && !selectedRecording.savedFromRecordingId;
+  const visibility = normalizeRecordingVisibility(selectedRecording.sharedVisibility);
   const prevScreen = backHistory[backHistory.length - 1]?.screen;
   const tabular = { fontVariant: ['tabular-nums' as const] };
 
@@ -407,6 +411,24 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
             }}
           />
         </GroupedList>
+
+        {/* WHO CAN HEAR IT -- only on my own recordings, never on one I
+            saved from someone else (that's theirs to decide). */}
+        {isMine && (
+          <View style={{ gap: space(6) }}>
+            <SectionHeader title="Who can hear it" />
+            <SegmentedControl
+              value={visibility}
+              onChange={(id) => updateRecordingVisibility(selectedRecording, id)}
+              accessibilityLabel="Who can hear it"
+              options={RECORDING_VISIBILITY_OPTIONS}
+            />
+            <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
+              {RECORDING_VISIBILITY_HINT[visibility]}
+              {visibility === 'circle' ? ' Making it private removes it for everyone, including anyone who saved it.' : ''}
+            </AppText>
+          </View>
+        )}
 
         {/* VERSE TIMING -- scrub the real playback position and drop or drag
             a marker per verse, instead of typing raw offsets. */}

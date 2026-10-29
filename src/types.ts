@@ -341,14 +341,29 @@ export interface Recording {
   priority?: number; // ascending sort key among recordings sharing the same book+chapter;
   // undefined == legacy recording, sorts after any assigned priority (see resolveChapterAudio)
   verseTimestamps?: VerseTimestamp[]; // populated once auto-alignment (phase 2) runs; empty until then
-  sharedVisibility?: 'private' | 'circle' | 'public'; // absent/undefined == 'private' (recordings predating this field)
-  savedFromUid?: string; // set only on a reference copy saved via "Save to Library" — the original owner's uid
-  savedFromRecordingId?: string; // the original sharedRecordings/recording id — used to detect "already saved"
+  // absent/undefined == 'private' (recordings predating this field). 'circle'
+  // is shown as "Friends & Circles". There is no public option: a recitation
+  // of a copyrighted translation can't be broadcast to everyone, so sharing
+  // stops at people the reader knows. Older docs may still say 'public' --
+  // read those through normalizeRecordingVisibility.
+  sharedVisibility?: RecordingVisibility | 'public';
+  // Set only on a bookmark saved via "Save to Library": the original owner's
+  // uid and recording id. A bookmark is not a copy -- it plays whatever
+  // sharedRecordings/{savedFromRecordingId} holds, and disappears when the
+  // owner deletes it or makes it private (see hydrateSavedRecordings).
+  savedFromUid?: string;
+  savedFromRecordingId?: string;
   // 'imported' == tagged from a pre-existing audio file (see the Import
   // Audio flow in RecordScreen) rather than captured live with the mic.
   // Absent/undefined == 'recorded' (every recording before this field existed).
   sourceType?: 'recorded' | 'imported';
 }
+
+export type RecordingVisibility = 'private' | 'circle';
+
+/** Legacy 'public' recordings are treated as shared with friends & circles. */
+export const normalizeRecordingVisibility = (v: string | null | undefined): RecordingVisibility =>
+  v === 'circle' || v === 'public' ? 'circle' : 'private';
 
 export interface GroupedQueueItem {
   id: string;

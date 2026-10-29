@@ -881,7 +881,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
           value={defaultRecordingVisibility || 'private'}
           onChange={updateDefaultRecordingVisibility}
           options={RECORDING_VISIBILITY_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
-          caption="The starting choice when you save a recording. You can change it each time."
+          caption="The starting choice when you save a recording. You can change it each time, or later from the recording itself."
         />
       </>
     ),

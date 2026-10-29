@@ -2,6 +2,7 @@ import { Dispatch, SetStateAction, useRef, useState } from 'react';
 import { arrayUnion, collection, doc, getDoc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+import { normalizeRecordingVisibility } from '../types';
 import type { ChatMessage, Recording } from '../types';
 import {
   attachmentFallbackText,
@@ -84,13 +85,13 @@ export function useChatCards({
     const uid = auth.currentUser.uid;
     try {
       const audience = await chatAudienceUids(scope, containerId);
-      const published = rec.sharedVisibility === 'circle' || rec.sharedVisibility === 'public';
+      const published = normalizeRecordingVisibility(rec.sharedVisibility) === 'circle';
       await setDoc(
         doc(db, 'sharedRecordings', rec.id),
         stripUndefined({
           ...rec,
           ownerId: uid,
-          visibility: published ? rec.sharedVisibility : 'direct',
+          visibility: published ? 'circle' : 'direct',
           sharedWithUids: arrayUnion(...audience),
           ...(published ? {} : { createdAt: serverTimestamp() }),
         }),
@@ -107,6 +108,12 @@ export function useChatCards({
   const sendRecordingToChat = async (rec: Recording, scope: 'dm' | 'circle', containerId: string) => {
     if (!rec.audioUrl) {
       triggerToast('That recording is still uploading.');
+      return false;
+    }
+    // A saved recording is someone else's, shared with me -- passing it on
+    // would hand it to people its reader never agreed to share with.
+    if (rec.savedFromRecordingId) {
+      triggerToast('You can only send your own recordings.');
       return false;
     }
     if (!(await shareRecordingInto(rec, scope, containerId))) return false;

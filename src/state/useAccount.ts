@@ -18,7 +18,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { auth, db, storage } from '../firebase';
-import { Circle, QueueItem } from '../types';
+import { Circle, QueueItem, RecordingVisibility } from '../types';
 
 // ============================================================================
 // ACCOUNT AND PROFILE SETTINGS
@@ -60,7 +60,7 @@ export function useAccount({
   // in which case the dialog defaults its picker to 'private' but does not
   // treat that as an already-set preference.
   const [defaultRecordingVisibility, setDefaultRecordingVisibility] = useState<
-    'private' | 'circle' | 'public' | null
+    RecordingVisibility | null
   >(null);
 
   // Profile-sharing visibility: whether this user's verse list is shown to
@@ -128,7 +128,7 @@ export function useAccount({
   // Unlike the implicit first-save default (set once, silently, the first
   // time someone saves a recording), this is a real, always-available
   // editor for the same profiles/{uid}.defaultRecordingVisibility field.
-  const updateDefaultRecordingVisibility = async (vis: 'private' | 'circle' | 'public') => {
+  const updateDefaultRecordingVisibility = async (vis: RecordingVisibility) => {
     setDefaultRecordingVisibility(vis);
     if (!auth.currentUser) return;
     try {

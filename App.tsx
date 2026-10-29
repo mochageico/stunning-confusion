@@ -11,7 +11,7 @@ import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
 import { FadeInView, NumericKeyboardAccessory, useKeyboardHeight } from './src/components/ui';
 import { BottomBars, FloatingTabBar, PageFade } from './src/components/TabBar';
-import { RECORDING_VISIBILITY_OPTIONS } from './src/data';
+import { RECORDING_VISIBILITY_HINT, RECORDING_VISIBILITY_OPTIONS } from './src/data';
 
 import RecordingDetailScreen from './src/screens/RecordingDetailScreen';
 import MyRecordingsScreen from './src/screens/MyRecordingsScreen';
@@ -200,13 +200,6 @@ function Screens({ state }: { state: AppState }) {
   return <ProfileScreen state={state} />;
 }
 
-// What each visibility choice means, said once under the switch.
-const VISIBILITY_HINT: Record<'private' | 'circle' | 'public', string> = {
-  private: 'Only you can hear it.',
-  circle: 'People in your circles can hear it.',
-  public: 'Anyone can find it in recordings.',
-};
-
 // A Dialog that needs an answer: tapping outside mustn't quietly throw a
 // recording away, so the only ways out are Discard and Save.
 function SaveRecordingDialog({ state }: { state: AppState }) {
@@ -272,8 +265,8 @@ function SaveRecordingDialog({ state }: { state: AppState }) {
           options={RECORDING_VISIBILITY_OPTIONS}
         />
         <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-          {VISIBILITY_HINT[pickedRecordingVisibility]}
-          {defaultRecordingVisibility === null ? ' It will be your default next time.' : ''}
+          {RECORDING_VISIBILITY_HINT[pickedRecordingVisibility]}
+          {defaultRecordingVisibility === null ? ' It will be your default next time.' : ' You can change this later.'}
         </AppText>
       </View>
     </Dialog>
