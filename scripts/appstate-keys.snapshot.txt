@@ -77,7 +77,7 @@ currentTab: "home" | "verses" | "community" | "record" | "profile"
 dayStartHour: number
 declineChallenge: (challenge: Challenge) => Promise<void>
 declineFriendRequest: (request: FriendRequest) => Promise<void>
-defaultRecordingVisibility: "circle" | "private" | "public" | null
+defaultRecordingVisibility: RecordingVisibility | null
 deleteAccount: (reauthPassword?: string | undefined) => Promise<{ ok: true; } | { ok: false; requiresReauth: boolean; message: string; }>
 deleteChallenge: (challenge: Challenge) => Promise<void>
 deleteChapterPhoto: (photo: ChapterPhoto) => Promise<void>
@@ -233,7 +233,7 @@ pendingRecordingSource: "live" | "import"
 photoCache: ReadonlyMap<string, string>
 photosForChapter: (book: string, chapter: number) => ChapterPhoto[]
 pickImportAudio: () => Promise<void>
-pickedRecordingVisibility: "circle" | "private" | "public"
+pickedRecordingVisibility: "circle" | "private"
 playChatRecording: (sharedRecordingId: string) => Promise<void>
 playingRecProgress: number
 playingRecordingId: string | null
@@ -358,7 +358,7 @@ setNewPlanName: (value: SetStateAction<string>) => void
 setNewVersesPace: (value: SetStateAction<number>) => void
 setPausedAt: (value: SetStateAction<string | null>) => void
 setPausedUntil: (value: SetStateAction<string | null>) => void
-setPickedRecordingVisibility: (value: SetStateAction<"circle" | "private" | "public">) => void
+setPickedRecordingVisibility: (value: SetStateAction<RecordingVisibility>) => void
 setPlayingRecProgress: (value: SetStateAction<number>) => void
 setPlayingRecordingId: (value: SetStateAction<string | null>) => void
 setPrimingLookahead: (value: SetStateAction<number>) => void
@@ -429,7 +429,7 @@ unregisterPushToken: () => Promise<void>
 untouchedCount: number
 updateAccountabilityDailyCap: (cap: number) => Promise<void>
 updateCircleSettings: (circleId: string, fields: Partial<Pick<Circle, "name" | "description" | "isPublic">>) => Promise<void>
-updateDefaultRecordingVisibility: (vis: "circle" | "private" | "public") => Promise<void>
+updateDefaultRecordingVisibility: (vis: RecordingVisibility) => Promise<void>
 updateDisplayName: (name: string) => Promise<void>
 updateGroupPlan: (circleId: string, planId: string, fields: Partial<Pick<GroupPlan, "name" | "description" | "versesPerWeek">>) => Promise<void>
 updateLadderSettings: (patch: Partial<LadderPrefs>) => Promise<void>
@@ -438,6 +438,7 @@ updateMemoryQueue: (updater: (prev: QueueItem[]) => QueueItem[]) => void
 updateMemoryQueueVisibility: (vis: "private" | "friends") => Promise<void>
 updateNotificationPrefs: (patch: Partial<NotificationPrefs>) => Promise<void>
 updateRecordingSpeaker: (recording: Recording, newSpeaker: string) => Promise<void>
+updateRecordingVisibility: (recording: Recording, vis: RecordingVisibility) => Promise<void>
 updateRhythm: (patch: Partial<Rhythm>) => void
 user: any
 userRecordings: Recording[]

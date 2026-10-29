@@ -46,7 +46,8 @@ check('past Psalms: everything passed, nothing next', p.passed?.book === 'Psalms
 check('passedLandmarks matches', passedLandmarks(2462).length === 66 && passedLandmarks(0).length === 0 && passedLandmarks(14).map((l) => l.book).join() === '2 John');
 check('lines read plainly', /^You hold more verses than /.test(heldLine(ladderPosition(90))!) && /^Next: .+, \d+ to go$/.test(nextLine(ladderPosition(90))!));
 check('a circle can use it', heldLine(ladderPosition(90), 'Together you')!.startsWith('Together you hold'));
-check('text joins both', landmarkText(ladderPosition(90)).includes('Next:') && landmarkText(ladderPosition(90)).includes('hold more'));
+check('text is the held line alone', landmarkText(ladderPosition(90)) === heldLine(ladderPosition(90)) && !landmarkText(ladderPosition(90)).includes('Next:'));
+check('text is empty before the first landmark', landmarkText(ladderPosition(0)) === '');
 check('bad counts are safe', ladderPosition(-5).held === 0 && ladderPosition(3.9).held === 3);
 
 // ---- Verses held ----

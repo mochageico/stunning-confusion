@@ -28,9 +28,11 @@ function SlidingBar() {
   }, [x]);
   const translateX = x.interpolate({ inputRange: [0, 1], outputRange: [-48, 120] });
   return (
+    // layout-ok: the loading bar holds no text.
     <View className="bg-fill rounded-full overflow-hidden" style={{ width: 120, height: 3 }}>
       {/* Plain style, not className: NativeWind doesn't reach Animated.View. */}
       <Animated.View
+        // layout-ok: the bar's moving segment holds no text.
         style={{ width: 48, height: 3, borderRadius: 2, backgroundColor: palette.accent, transform: [{ translateX }] }}
       />
     </View>
