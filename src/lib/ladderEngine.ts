@@ -114,13 +114,13 @@ export type HeldReason = 'spotCheck' | 'selfCheck' | null;
 
 /** The toast for one passage's review. */
 export const outcomeMessage = (a: ReviewApplied, thoroughness: Thoroughness, heldReason: HeldReason = null): string => {
-  const title = passageLabel(a.passage);
+  const title = `${a.replaced ? 'Better run! ' : ''}${passageLabel(a.passage)}`;
   const stumbles = a.grades.filter((g) => g.grade === 'stumble').length;
   const firmUp = a.firmUp ? ' Firm it up tomorrow to win it back.' : '';
   switch (a.outcome) {
     case 'up':
     case 'forgiven': {
-      const forgiven = a.outcome === 'forgiven' ? ` ${plural(stumbles, 'stumble')} forgiven in a long passage.` : '';
+      const forgiven = a.outcome === 'forgiven' ? ` ${plural(stumbles, 'stumble')} in ${a.passage.items.length} verses forgiven.` : '';
       if (a.to.step === TOP_STEP && a.from.step < TOP_STEP) return `${title} reached Every 6 months, for good. 🌟${forgiven}`;
       if (a.to.step > a.from.step) return `${title} moved up to ${stepInfo(a.to.step).label}!${forgiven}`;
       const need = reviewsToMoveUp(a.to, thoroughness);
@@ -185,7 +185,7 @@ export const reviewNote = (a: ReviewApplied, thoroughness: Thoroughness, heldRea
       break;
     }
     case 'forgiven':
-      reason = `${plural(stumbles, 'stumble')} forgiven in a long passage, so the review counted.`;
+      reason = `${plural(stumbles, 'stumble')} in ${a.passage.items.length} verses forgiven, so the review counted.`;
       break;
     case 'held':
       if (stumbles > 0) reason = `${plural(stumbles, 'stumble')}, so this review didn't count.`;
@@ -225,6 +225,20 @@ export const wonBackNote = (p: Passage, at: number = Date.now()): ReviewNote => 
 /** The history entry's `result` for older readers: a counted review is a pass, otherwise the verse's own grade decides. */
 const legacyResult = (outcome: ReviewApplied['outcome'], grade: ReviewGrade): ReviewLog['result'] =>
   outcome === 'up' || outcome === 'forgiven' || grade === 'clean' ? 'pass' : 'miss';
+
+/**
+ * A better run redid today's review: takes each member's entry for the
+ * review it replaced back out of the history (logApplied then adds the new
+ * one), so a day has one entry per review.
+ */
+const unlogReplaced = (work: Map<string, QueueItem>, a: ReviewApplied) => {
+  for (const g of a.grades) {
+    const cur = work.get(g.verseId);
+    const last = cur?.reviewLogs?.[cur.reviewLogs.length - 1];
+    if (!cur || !last || last.outcome !== a.replaced || last.step !== a.from.step) continue;
+    work.set(g.verseId, { ...cur, reviewLogs: cur.reviewLogs!.slice(0, -1) });
+  }
+};
 
 /**
  * Adds a history entry to every member graded in `a`, logged against the
@@ -448,14 +462,27 @@ export const gradeVerse = (
   const map = new Map(r.changed.map((q) => [q.verseId, q]));
   if (r.settled) logApplied(map, r.settled, before);
   if (r.applied) {
-    logApplied(map, r.applied, before, { via: opts.via, drillType: opts.drillType, forVerse: verseId });
+    if (r.applied.replaced) {
+      // Every member's entry is replaced, changed by the redo or not.
+      for (const q of r.applied.passage.items) if (!map.has(q.verseId)) map.set(q.verseId, before.get(q.verseId)!);
+      unlogReplaced(map, r.applied);
+    }
+    // A redo is logged against the step the passage was at before the review it replaced.
+    const stageOf = r.applied.replaced
+      ? new Map([...before].map(([id, q]) => [id, { ...q, ladderStep: r.applied!.from.step }]))
+      : before;
+    logApplied(map, r.applied, stageOf, { via: opts.via, drillType: opts.drillType, forVerse: verseId });
     let heldReason: HeldReason = null;
     if (r.applied.outcome === 'held' && r.applied.grades.every((g) => g.grade === 'clean')) {
-      const noUp = opts.canMoveUp === false || (pBefore?.items ?? []).some((q) => q.dayResult?.day === day && q.dayResult.noUp);
+      const noUp =
+        opts.canMoveUp === false ||
+        (pBefore?.items ?? []).some((q) => (q.dayResult?.day === day && q.dayResult.noUp) || (q.dayReview?.day === day && q.dayReview.result.noUp));
       heldReason = noUp ? 'spotCheck' : 'selfCheck';
     }
     messages.push(outcomeMessage(r.applied, thoroughness, heldReason));
     notes.push(reviewNote(r.applied, thoroughness, heldReason, now.getTime()));
+  } else if (r.improved && r.passage) {
+    messages.push(`${passageLabel(r.passage)}: better run noted, but today's review comes out the same.`);
   }
   take([...map.values()]);
 

@@ -64,7 +64,7 @@ const NOTES: ReviewNote[] = [
       { verseId: 'BSB_ROM_8_3', verseNumber: 3 },
     ],
   }),
-  note({ title: 'Philippians 4:4–9', tag: 'Forgiven', reason: '2 stumbles forgiven in a long passage, so the review counted.' }),
+  note({ title: 'Philippians 4:4–9', tag: 'Forgiven', reason: '1 stumble in 6 verses forgiven, so the review counted.' }),
   note({ title: 'John 15:1–8', tag: 'Back 1', reason: '3 stumbles, so it goes back one review.', firmUp: true }),
   note({ title: 'Isaiah 40:28–31', tag: 'Down a step', reason: 'A blank moved it down to Every 4 days.' }),
   note({ title: 'Romans 12:1–2', tag: 'Won back', reason: 'You recited the slipped verses clean, so the review is back.' }),

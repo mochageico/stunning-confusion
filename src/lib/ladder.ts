@@ -119,12 +119,18 @@ export const nextDue = (step: number, anchorDay: string | undefined, clock: Revi
 
 export type PassageOutcome = 'up' | 'held' | 'forgiven' | 'back' | 'down';
 
-/** A passage this many verses or longer forgives 1–2 stumbles instead of holding. */
-export const FORGIVING_PASSAGE_VERSES = 12;
+/**
+ * Stumbles scale with the passage: up to 1 in 6 verses is forgiven (none
+ * under 6 verses, 2 at 12), and it takes about 1 in 4 to move back (never
+ * fewer than 3). In between holds.
+ */
+export const forgivableStumbles = (size: number): number => Math.floor(size / 6);
+export const stumblesToMoveBack = (size: number): number => Math.max(3, Math.ceil(size / 4));
 
 /**
- * One review's outcome from its verses' grades (Part 1 §4 table). A blank
- * beats stumbles: one penalty per review. `size` is the passage's verse
+ * One review's outcome from its verses' grades (Part 1 §4 table, with the
+ * stumble limits scaled by size). A blank beats stumbles: one penalty per
+ * review. `size` is the passage's verse
  * count when it differs from the grades given (a partly covered passage).
  * `canMoveUp: false` keeps the penalties but turns a move up into a hold:
  * a partly covered passage at day's end, or a self-check right after a
@@ -139,10 +145,10 @@ export const passageOutcome = (
   if (grades.length === 0) return 'held';
   if (grades.includes('blank')) return 'down';
   const stumbles = grades.filter((g) => g === 'stumble').length;
-  if (stumbles >= 3) return 'back';
+  if (stumbles >= stumblesToMoveBack(size)) return 'back';
   if (!canMoveUp) return 'held';
   if (stumbles === 0) return 'up';
-  return size >= FORGIVING_PASSAGE_VERSES ? 'forgiven' : 'held';
+  return stumbles <= forgivableStumbles(size) ? 'forgiven' : 'held';
 };
 
 /**

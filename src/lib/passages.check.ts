@@ -223,15 +223,17 @@ console.log('coverage');
   check('…dayResult kept on the covered verses only', q.filter((i) => i.dayResult?.day === key(12)).length === 2);
   r = review(q, { 2: 'stumble' }, 12);
   q = r.queue;
-  check('covered twice keeps the worse grade', q[1].dayResult?.grade === 'stumble');
-  r = review(q, { 2: 'clean' }, 12);
+  check('covered twice keeps the better grade', q[1].dayResult?.grade === 'clean');
+  r = review(q, { 3: 'stumble' }, 12);
   q = r.queue;
-  check('…a later clean doesn\'t erase a stumble', q[1].dayResult?.grade === 'stumble');
-  r = review(q, { 3: 'clean', 4: 'clean', 5: 'clean' }, 12);
+  r = review(q, { 3: 'clean' }, 12);
   q = r.queue;
-  check('fully covered: one outcome, from the worst grades (1 stumble in 5 = held)', r.last.applied?.outcome === 'held' && sameState(stateAt(q, 1), { step: 3, reviews: 2 }));
+  check('…a later clean replaces a stumble', q[2].dayResult?.grade === 'clean');
+  r = review(q, { 4: 'clean', 5: 'stumble' }, 12);
+  q = r.queue;
+  check('fully covered: one outcome, from the best grades (1 stumble in 5 = held)', r.last.applied?.outcome === 'held' && sameState(stateAt(q, 1), { step: 3, reviews: 2 }));
   check('…every member cleared and agreeing', q.every((i) => !i.dayResult && sameState(ladderStateOf(i), { step: 3, reviews: 2 })));
-  check('…the stumbled verse gets the weak-spot dot', q[1].slipped === true && q.filter((i) => i.slipped).length === 1);
+  check('…the stumbled verse gets the weak-spot dot', q[4].slipped === true && q.filter((i) => i.slipped).length === 1);
   check('…no undefined values (Firestore)', noUndefined(q));
 
   // The same passage reviewed half in one screen and half in another moves up once.
@@ -250,6 +252,66 @@ console.log('coverage');
   const blank = review(range(1, 5, { step: 3, reviews: 4, due: at(12).toISOString() }), { ...allClean(1, 5), 3: 'blank' }, 12);
   check('a blank drops a step: Every week to Every 4 days, back to Settling', blank.last.applied?.outcome === 'down' && sameState(stateAt(blank.queue, 1), { step: 2, reviews: 0 }) && blank.queue[0].retentionPhase === 'daily');
   check('…due in 4 days', dayOf(blank.queue[0].nextReviewDueDate) === key(16));
+}
+
+console.log('best run of the day');
+{
+  // 5 verses at Every week, review 3: verse 3 blanks = down a step.
+  const start = range(1, 5, { step: 3, reviews: 3, due: at(12).toISOString() });
+  let q = review(start, { ...allClean(1, 5), 3: 'blank' }, 12).queue;
+  check('a blank drops a step', sameState(stateAt(q, 1), { step: 2, reviews: 0 }));
+  check('…today\'s review is kept on every member for a redo', q.every((i) => i.dayReview?.day === key(12) && i.dayReview.outcome === 'down'));
+  check('…no undefined values (Firestore)', noUndefined(q));
+
+  const worse = recordGrade(q, idOf(1), 'stumble', { day: key(12), clock: CLOCK, now: at(12, 18) });
+  check('a worse run later that day is practice', worse.practice && !worse.applied && !worse.improved);
+
+  let r = recordGrade(q, idOf(3), 'stumble', { day: key(12), clock: CLOCK, now: at(12, 18) });
+  q = merge(q, r.changed);
+  check('a better run redoes the review: blank to stumble = held, not down', r.applied?.outcome === 'held' && r.applied.replaced === 'down' && !r.practice);
+  check('…from where the passage stood before it', sameState(stateAt(q, 1), { step: 3, reviews: 3 }) && q[0].retentionPhase === 'weekly');
+  check('…the held review can be won back tomorrow', q[0].firmUp?.day === key(13) && q[0].firmUp.verses.join() === '3');
+  check('…every member agrees and keeps the redo', q.every((i) => sameState(ladderStateOf(i), { step: 3, reviews: 3 }) && i.dayReview?.outcome === 'held'));
+
+  r = recordGrade(q, idOf(3), 'clean', { day: key(12), clock: CLOCK, now: at(12, 20) });
+  q = merge(q, r.changed);
+  check('…and again: all clean now moves up', r.applied?.outcome === 'up' && r.applied.replaced === 'held' && sameState(stateAt(q, 1), { step: 3, reviews: 4 }));
+  check('…the firm-up and the dot are gone', q.every((i) => !i.firmUp && !i.slipped));
+  const again = recordGrade(q, idOf(3), 'clean', { day: key(12), clock: CLOCK, now: at(12, 21) });
+  check('…a review that already moved up has nothing better: practice', again.practice && !again.applied);
+  check('…no undefined values (Firestore)', noUndefined(q));
+
+  // Stumbles scale with size: 3 in 12 moves back, 2 in 12 is forgiven.
+  let big = range(1, 12, { step: 3, reviews: 1, due: at(12).toISOString() });
+  big = review(big, { ...allClean(1, 12), 1: 'stumble', 2: 'stumble', 3: 'stumble' }, 12).queue;
+  check('12 verses, 3 stumbles: back one', sameState(stateAt(big, 1), { step: 3, reviews: 0 }));
+  const noted = recordGrade(big, idOf(1), 'clean', { day: key(12), clock: CLOCK, now: at(12, 18) });
+  big = merge(big, noted.changed);
+  check('a better verse that brings it to 2 stumbles in 12 = forgiven: redone', noted.applied?.outcome === 'forgiven' && sameState(stateAt(big, 1), { step: 3, reviews: 2 }));
+
+  let held = range(1, 5, { step: 3, reviews: 1, due: at(12).toISOString() });
+  held = review(held, { ...allClean(1, 5), 1: 'stumble', 2: 'stumble' }, 12).queue;
+  const same1 = recordGrade(held, idOf(1), 'clean', { day: key(12), clock: CLOCK, now: at(12, 18) });
+  held = merge(held, same1.changed);
+  check('a better verse that leaves the outcome the same is noted, not applied', same1.improved && !same1.applied && !same1.practice && held[0].dayReview?.result.grade === 'clean' && sameState(stateAt(held, 1), { step: 3, reviews: 1 }));
+  const same2 = recordGrade(held, idOf(2), 'clean', { day: key(12), clock: CLOCK, now: at(12, 19) });
+  check('…and counts once the rest catches up', same2.applied?.outcome === 'up' && same2.applied.replaced === 'held');
+
+  // The next day the redo is gone.
+  const next = settleStaleDays(q, key(13), { clock: CLOCK, now: at(13) });
+  const nq = merge(q, next.changed);
+  check('the chance to redo is dropped the next day', nq.every((i) => !i.dayReview) && next.settled.length === 0);
+  const late = recordGrade(q, idOf(1), 'clean', { day: key(13), clock: CLOCK, now: at(13) });
+  check('…and grading then is practice', late.practice && !late.applied);
+
+  // A redo can't undo a self-check limit: two self-checks in a row still hold.
+  let sc: QueueItem[] = range(1, 3, { step: 3, reviews: 1, due: at(12).toISOString() }).map((i) => ({ ...i, lastSelfChecked: true as const }));
+  sc = review(sc, { 1: 'clean', 2: 'clean', 3: 'blank' }, 12, { selfCheck: true }).queue;
+  const scRedo = recordGrade(sc, idOf(3), 'clean', { day: key(12), clock: CLOCK, now: at(12, 18), selfCheck: true });
+  check('a self-check redo after a self-check holds (every other review)', scRedo.applied?.outcome === 'held' && scRedo.applied.replaced === 'down');
+  sc = merge(sc, scRedo.changed);
+  const recall = [1, 2, 3].reduce((acc, v) => merge(acc, recordGrade(acc, idOf(v), 'clean', { day: key(12), clock: CLOCK, now: at(12, 19) }).changed), sc);
+  check('…a recall of every verse moves it up', sameState(stateAt(recall, 1), { step: 3, reviews: 2 }));
 }
 
 console.log('firm up and win back');

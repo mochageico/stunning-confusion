@@ -110,21 +110,22 @@ check(
   same(applyOutcome({ step: 3, reviews: 0, catchUp: true }, 'held'), { step: 3, reviews: 0 })
 );
 
-console.log('passage outcome (§4 table)');
-for (const [size, name] of [
-  [5, 'under 12'],
-  [11, 'under 12 (11)'],
-  [12, '12+ (12)'],
-  [20, '12+'],
+console.log('passage outcome (§4 table, stumbles scaled by size)');
+// [size, stumbles forgiven up to, stumbles that move it back]
+for (const [size, forgive, back] of [
+  [5, 0, 3],
+  [6, 1, 3],
+  [11, 1, 3],
+  [12, 2, 3],
+  [20, 3, 5],
+  [40, 6, 10],
 ] as const) {
-  const big = size >= 12;
+  const name = `${size} verses`;
+  const expect = (n: number) => (n >= back ? 'back' : n <= forgive ? 'forgiven' : 'held');
   check(`${name}: all clean = up`, passageOutcome(verses(size)) === 'up');
-  check(`${name}: 1 stumble = ${big ? 'forgiven' : 'held'}`, passageOutcome(verses(size, 1)) === (big ? 'forgiven' : 'held'));
-  check(`${name}: 2 stumbles = ${big ? 'forgiven' : 'held'}`, passageOutcome(verses(size, 2)) === (big ? 'forgiven' : 'held'));
-  check(`${name}: 3 stumbles = back`, passageOutcome(verses(size, 3)) === 'back');
-  check(`${name}: 5 stumbles = back`, passageOutcome(verses(size, 5)) === 'back');
+  for (let n = 1; n <= back; n++) check(`${name}: ${n} stumbles = ${expect(n)}`, passageOutcome(verses(size, n)) === expect(n));
   check(`${name}: a blank = down`, passageOutcome(verses(size, 0, 1)) === 'down');
-  check(`${name}: a blank beats stumbles`, passageOutcome(verses(size, 3, 1)) === 'down');
+  check(`${name}: a blank beats stumbles`, passageOutcome(verses(size, back, 1)) === 'down');
 }
 check('a single clean verse moves up', passageOutcome(g('c')) === 'up');
 check('a single stumble holds', passageOutcome(g('s')) === 'held');

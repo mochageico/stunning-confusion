@@ -4,9 +4,10 @@
 // schedule is written identically on every member verse, and reconcile makes
 // the members agree. Grades accumulate per verse through the day
 // (`dayResult`) and the passage's outcome is applied once every member has
-// one. Nothing here reads React state or Firestore; every function returns
+// one. A better run later that day redoes it (`dayReview`): the best run of
+// the day counts. Nothing here reads React state or Firestore; every function returns
 // only the items it changed, so writes stay small.
-import type { QueueItem, ReviewGrade, ReviewLog } from '../types';
+import type { DayResult, QueueItem, ReviewGrade, ReviewLog } from '../types';
 import { type BalanceSettings, balanceWindow, creditsEarly, dayLoads, levelDue, scheduledDayOf } from './balance';
 import { canSelfCheckMoveUp } from './grading';
 import {
@@ -218,7 +219,12 @@ export const reconcile = (
 };
 
 const GRADE_RANK: Record<ReviewGrade, number> = { clean: 0, stumble: 1, blank: 2 };
-const worse = (a: ReviewGrade, b: ReviewGrade) => (GRADE_RANK[a] >= GRADE_RANK[b] ? a : b);
+const limits = (r: Omit<DayResult, 'day'>) => (r.selfCheck ? 1 : 0) + (r.noUp ? 1 : 0);
+/** A better grade, or the same grade with fewer limits on moving up (a recall over a self-check). */
+const betterThan = (a: Omit<DayResult, 'day'>, b: Omit<DayResult, 'day'>) =>
+  GRADE_RANK[a.grade] !== GRADE_RANK[b.grade] ? GRADE_RANK[a.grade] < GRADE_RANK[b.grade] : limits(a) < limits(b);
+
+const OUTCOME_RANK: Record<PassageOutcome, number> = { down: 0, back: 1, held: 2, forgiven: 3, up: 3 };
 
 /** Local noon of a day key, as a Date: safe to hand to nextDue / getLogicalDate for that day. */
 const dayDate = (day: string) => {
@@ -252,6 +258,8 @@ export interface ReviewApplied {
   penaltyOnly: boolean;
   /** A firm-up was offered for the next day. */
   firmUp: boolean;
+  /** A better run redid today's review: the outcome it replaced. */
+  replaced?: PassageOutcome;
 }
 
 /**
@@ -273,6 +281,10 @@ const applyReview = (
   // settleStale has set today's results aside, so a penalty-only review takes every result left.
   const graded = members.filter((q) => q.dayResult && (penaltyOnly ? q.dayResult.day <= forDay : q.dayResult.day === forDay));
   const from = ladderStateOf(members[0]) ?? { step: 0, reviews: 0 };
+  const before: NonNullable<QueueItem['dayReview']>['before'] = { step: from.step, reviews: from.reviews, due: members[0].nextReviewDueDate ?? null };
+  if (from.catchUp) before.catchUp = true;
+  if (members[0].lastSelfChecked) before.lastSelfChecked = true;
+  if (members[0].scheduledDue) before.scheduledDue = members[0].scheduledDue;
   const grades = graded.map((q) => ({ verseId: q.verseId, verseNumber: q.verseNumber, grade: q.dayResult!.grade }));
   const selfChecked = graded.some((q) => q.dayResult!.selfCheck);
   const noUp = graded.some((q) => q.dayResult!.noUp);
@@ -340,8 +352,12 @@ const applyReview = (
   for (const q of members) {
     const next = withSchedule(q, { state: to, due, lastSelfChecked: nextSelfChecked, firmUp, scheduledDue });
     if (gradedIds.has(q.verseId)) {
+      const { day: _day, ...result } = q.dayResult!;
       delete next.dayResult;
       setOpt(next, 'slipped', gradeOf.get(q.verseId) === 'clean' ? undefined : true);
+      // Kept for the rest of the day so a better run can redo it. A
+      // penalty-only review's day is already over.
+      setOpt(next, 'dayReview', penaltyOnly ? undefined : { day: forDay, result, outcome, after: { step: to.step, reviews: to.reviews }, before });
     }
     if (setAnchor && !next.chapterReviewAnchorDay) next.chapterReviewAnchorDay = setAnchor;
     work.set(q.verseId, next);
@@ -372,12 +388,15 @@ const settleStale = (p: Passage, work: Map<string, QueueItem>, today: string, qu
     settled = applyReview(p, work, forDay, queue, settings, true);
     for (const [id, r] of keepToday) work.set(id, { ...work.get(id)!, dayResult: r });
   }
-  // A firm-up only lasts its day.
+  // A firm-up only lasts its day, and so does the chance to redo a review.
   for (const q of p.items) {
     const cur = work.get(q.verseId)!;
-    if (cur.firmUp && cur.firmUp.day < today) {
+    const staleFirmUp = !!cur.firmUp && cur.firmUp.day < today;
+    const staleReview = !!cur.dayReview && cur.dayReview.day < today;
+    if (staleFirmUp || staleReview) {
       const next = { ...cur };
-      delete next.firmUp;
+      if (staleFirmUp) delete next.firmUp;
+      if (staleReview) delete next.dayReview;
       work.set(q.verseId, next);
     }
   }
@@ -405,17 +424,69 @@ export interface GradeResult {
   settled: ReviewApplied | null;
   /** The passage wasn't due: the grade is practice (only a clean one clears the weak-spot dot). */
   practice: boolean;
+  /** A better run of a review already done today, noted without changing its outcome. */
+  improved: boolean;
 }
 
 /**
+ * Redoes today's review of `p` with `verseId`'s better result, from the
+ * schedule the passage had before it (in `work`). Returns the review when
+ * the redo comes out better than the outcome it replaces, else null and
+ * `work` holds only the better result noted on that verse.
+ */
+const redoReview = (
+  p: Passage,
+  work: Map<string, QueueItem>,
+  verseId: string,
+  result: DayResult,
+  queue: readonly QueueItem[],
+  settings: LadderSettings
+): ReviewApplied | null => {
+  const members = p.items.map((q) => work.get(q.verseId)!);
+  const review = members[0].dayReview!;
+  const trial = new Map(work);
+  for (const q of members) {
+    const b = q.dayReview!.before;
+    const state: LadderState = { step: b.step, reviews: b.reviews };
+    if (b.catchUp) state.catchUp = true;
+    const restored = withSchedule(q, { state, due: b.due, lastSelfChecked: b.lastSelfChecked, firmUp: q.firmUp, scheduledDue: b.scheduledDue });
+    restored.dayResult = q.verseId === verseId ? result : { day: result.day, ...q.dayReview!.result };
+    trial.set(q.verseId, restored);
+  }
+  const redone = applyReview(p, trial, result.day, queue, settings, false);
+  if (OUTCOME_RANK[redone.outcome] > OUTCOME_RANK[review.outcome]) {
+    for (const [id, q] of trial) work.set(id, q);
+    return { ...redone, replaced: review.outcome };
+  }
+  const { day: _day, ...best } = result;
+  const item = work.get(verseId)!;
+  work.set(verseId, { ...item, dayReview: { ...item.dayReview!, result: best } });
+  return null;
+};
+
+/** Today's review of `p` was applied and nothing has moved the passage since: a better run can redo it. */
+const canRedo = (p: Passage, work: Map<string, QueueItem>, day: string) => {
+  const members = p.items.map((q) => work.get(q.verseId)!);
+  const state = ladderStateOf(members[0]);
+  return (
+    !!state &&
+    members.every(
+      (q) => q.dayReview?.day === day && !q.dayResult && q.dayReview.after.step === state.step && q.dayReview.after.reviews === state.reviews
+    )
+  );
+};
+
+/**
  * Records one verse's grade for its passage's current review (decision 4).
- * Covered twice in a day keeps the worse grade. Once every member has a
- * grade, the outcome is applied once and the results are cleared. A passage
- * that isn't due (or reviews are paused) takes it as practice. Expects a
- * reconciled queue.
+ * Covered twice in a day keeps the better result. Once every member has a
+ * grade, the outcome is applied once and the results are cleared. A better
+ * run later the same day redoes that review from where the passage stood
+ * before it, when it comes out better (the best run of the day counts); a
+ * worse one is practice. A passage that isn't due (or reviews are paused)
+ * otherwise takes it as practice. Expects a reconciled queue.
  */
 export const recordGrade = (queue: readonly QueueItem[], verseId: string, grade: ReviewGrade, opts: GradeOptions): GradeResult => {
-  const none: GradeResult = { changed: [], passage: null, covered: 0, applied: null, settled: null, practice: true };
+  const none: GradeResult = { changed: [], passage: null, covered: 0, applied: null, settled: null, practice: true, improved: false };
   const p = passageOf(queue, verseId);
   if (!p || p.items.some((q) => q.ladderStep === undefined)) return none;
   const now = opts.now ?? new Date();
@@ -424,29 +495,33 @@ export const recordGrade = (queue: readonly QueueItem[], verseId: string, grade:
 
   const current = () => p.items.map((q) => work.get(q.verseId)!);
   const due = current()[0].nextReviewDueDate;
+  const paused = isPauseInEffect(opts.clock.pausedAt, opts.clock.pausedUntil, now);
   // Due, or inside the balance window ahead of its scheduled day: it counts.
   const isDue =
-    !isPauseInEffect(opts.clock.pausedAt, opts.clock.pausedUntil, now) &&
-    (isReviewDue(due, getLogicalDate(opts.clock.dayStartHour, now)) || (!!opts.balance && creditsEarly(current()[0], opts.day)));
+    !paused && (isReviewDue(due, getLogicalDate(opts.clock.dayStartHour, now)) || (!!opts.balance && creditsEarly(current()[0], opts.day)));
 
   const item = work.get(verseId)!;
   const next: QueueItem = { ...item, lastReviewDate: now.toISOString() };
   if (grade === 'clean') delete next.slipped;
+  const result: DayResult = { day: opts.day, grade };
+  if (opts.via) result.via = opts.via;
+  if (opts.selfCheck) result.selfCheck = true;
+  if (opts.canMoveUp === false) result.noUp = true;
+  const redo = !isDue && !paused && canRedo(p, work, opts.day) && betterThan(result, item.dayReview!.result);
   if (isDue) {
     const prev = item.dayResult && item.dayResult.day === opts.day ? item.dayResult : undefined;
-    const result: NonNullable<QueueItem['dayResult']> = { day: opts.day, grade: prev ? worse(prev.grade, grade) : grade };
-    const via = opts.via ?? prev?.via;
-    if (via) result.via = via;
-    if (opts.selfCheck || prev?.selfCheck) result.selfCheck = true;
-    if (opts.canMoveUp === false || prev?.noUp) result.noUp = true;
-    next.dayResult = result;
+    next.dayResult = prev && !betterThan(result, prev) ? prev : result;
   }
   work.set(verseId, next);
 
   let applied: ReviewApplied | null = null;
+  if (redo) {
+    applied = redoReview(p, work, verseId, result, queue, opts);
+    return { changed: collectChanged(p, work), passage: p, covered: p.items.length, applied, settled, practice: false, improved: !applied };
+  }
   const covered = current().filter((q) => q.dayResult?.day === opts.day).length;
   if (isDue && covered === p.items.length) applied = applyReview(p, work, opts.day, queue, opts, false);
-  return { changed: collectChanged(p, work), passage: p, covered: applied ? p.items.length : covered, applied, settled, practice: !isDue };
+  return { changed: collectChanged(p, work), passage: p, covered: applied ? p.items.length : covered, applied, settled, practice: !isDue, improved: false };
 };
 
 /**

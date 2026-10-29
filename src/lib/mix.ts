@@ -199,8 +199,7 @@ export const todayOrder = (due: QueueItem[]): QueueItem[] => {
  * Due items not yet graded on `day` (a localDayKey). A passage stays due until
  * every member has a grade for the day (passages.ts), so a session stopped
  * after 4 of 6 sections leaves the whole chapter due. Leaving out what already
- * has today's grade lets the next session pick up where the last one stopped;
- * saying it again could only lower that grade (the engine keeps the worse).
+ * has today's grade lets the next session pick up where the last one stopped.
  */
 export const notGradedOn = (due: QueueItem[], day: string): QueueItem[] => due.filter((i) => i.dayResult?.day !== day);
 
@@ -448,14 +447,14 @@ export const verseGrade = (r: MixVerseResult, settings: GradeSettings = DEFAULT_
 };
 
 const GRADE_RANK: Record<ReviewGrade, number> = { clean: 0, stumble: 1, blank: 2 };
-const isWorse = (a: ReviewGrade, than: ReviewGrade) => GRADE_RANK[a] > GRADE_RANK[than];
+const isBetter = (a: ReviewGrade, than: ReviewGrade) => GRADE_RANK[a] < GRADE_RANK[than];
 
 /**
  * The credits one round earns. Nothing from a Practice round. Nothing for a
  * verse the round isn't about (Keep going's context verse, a stray id). A
- * verse covered twice (neighboring stretches share one) takes its worse
- * grade: it is credited again only when this round went worse, and the
- * engine keeps the worse of a day's grades.
+ * verse covered twice (neighboring stretches share one) takes its better
+ * grade: it is credited again only when this round went better, and the
+ * engine keeps the best of a day's grades.
  */
 export const roundCredits = (
   round: MixRound,
@@ -470,7 +469,7 @@ export const roundCredits = (
     if (!r) return;
     const grade = verseGrade(r, settings);
     const before = earlier.get(id);
-    if (before && !isWorse(grade, before)) return;
+    if (before && !isBetter(grade, before)) return;
     out.push({
       verseId: id,
       grade,
@@ -486,12 +485,12 @@ export const roundCredits = (
   return out;
 };
 
-/** Each credited verse's grade so far: the worst, since only a worse grade is credited again. */
+/** Each credited verse's grade so far: the best, since only a better grade is credited again. */
 export const gradesSoFar = (credits: readonly MixCredit[]): Map<string, ReviewGrade> => {
   const out = new Map<string, ReviewGrade>();
   credits.forEach((c) => {
     const before = out.get(c.verseId);
-    if (!before || isWorse(c.grade, before)) out.set(c.verseId, c.grade);
+    if (!before || isBetter(c.grade, before)) out.set(c.verseId, c.grade);
   });
   return out;
 };
@@ -583,7 +582,7 @@ export const mixReducer = (s: MixState, event: MixEvent): MixState => {
 export interface MixSummary {
   /** Due verses in the session. */
   verses: number;
-  /** Each covered verse's grade for the day (the worst, when covered twice). */
+  /** Each covered verse's grade for the day (the best, when covered twice). */
   grades: Map<string, ReviewGrade>;
   clean: string[];
   stumbled: string[];

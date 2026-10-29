@@ -149,6 +149,15 @@ const down = gradeAll(higher, [[1, 'clean'], [2, 'blank'], [3, 'stumble']], at(1
 check('a blank: down to Every 4 days', down.last.applied?.outcome === 'down' && passageState(passageOf(down.queue, id(1))!).step === 2);
 check('down toast', down.last.messages[0] === 'Romans 8:1–3: a blank moved it down to Every 4 days.', down.last.messages);
 
+console.log('grading: a better run the same day redoes the review');
+const redo = gradeAll(down.queue, [[2, 'clean'], [3, 'clean']], at(12, 18));
+check('the blank and the stumble recited clean: the review moves up instead', redo.last.applied?.outcome === 'up' && passageState(passageOf(redo.queue, id(1))!).step === 3 && passageState(passageOf(redo.queue, id(1))!).reviews === 3);
+check('…one history entry per verse for the day, the redo', redo.queue.every((q) => q.reviewLogs?.length === 1 && q.reviewLogs[0].outcome === 'up' && q.reviewLogs[0].step === 3 && q.reviewLogs[0].stage === 'weekly'), redo.queue.map((q) => q.reviewLogs));
+check('…counted once as a success', redo.queue.every((q) => q.totalSuccessfulReviews === 1));
+check('…the toast says so', redo.last.messages[0]?.startsWith('Better run! Romans 8:1–3'), redo.last.messages);
+const partway = gradeVerse(down.queue, id(2), 'clean', { clock: CLOCK, now: at(12, 18) });
+check('one verse better (blank to clean, stumble left): held beats down, applied', partway.applied?.outcome === 'held' && partway.applied.replaced === 'down');
+
 console.log('grading: firm-up the next day wins the review back');
 const tomorrow = at(13, 10);
 let fq = held.queue;
@@ -196,7 +205,7 @@ check('forgiven and back one', (() => {
   const f = reviewNote({ ...base, outcome: 'forgiven', grades: [g('stumble', 1), g('stumble', 2)] }, 1);
   const b = reviewNote({ ...base, outcome: 'back', to: { step: 3, reviews: 1 }, grades: [g('stumble', 1), g('stumble', 2), g('stumble', 3)] }, 1);
   const sc = reviewNote({ ...base, outcome: 'held', grades: [g('clean', 1)] }, 1, 'spotCheck');
-  return f.tag === 'Forgiven' && f.reason.startsWith('2 stumbles forgiven') && b.tag === 'Back 1' && b.reason === '3 stumbles, so it goes back one review.' && sc.reason === "The spot check slipped, so this review didn't count.";
+  return f.tag === 'Forgiven' && f.reason.startsWith('2 stumbles in 3 verses forgiven') && b.tag === 'Back 1' && b.reason === '3 stumbles, so it goes back one review.' && sc.reason === "The spot check slipped, so this review didn't count.";
 })());
 
 console.log("today's ladder cards");

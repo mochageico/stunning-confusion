@@ -131,19 +131,31 @@ Every counting format reports per verse: **clean, stumble or blank**.
     up; stumbles and blanks still apply).
 - **Practice (never credits):** Scramble, Put in order, Which section, Teach-It.
 - **Combining a session:** each verse takes the result of the counting round that
-  covered it (worst if covered twice). A passage review only counts toward moving up
+  covered it (best if covered twice; changed from worst 2026-10-29). A passage review only counts toward moving up
   if every verse was covered by a counting round. Stopping halfway keeps the covered
   verses' results (stumbles and blanks still apply) but the passage stays on its
   review count.
 
+- **Best run of the day (2026-10-29):** once a passage's review is applied, a
+  better run later the same day redoes it from where the passage stood before
+  (`dayReview` on each member, dropped the next day). Each verse keeps its best
+  result of the day; the redo only replaces the outcome when it comes out better
+  (down < back < held < forgiven/up), and its history entry replaces the first one.
+  A worse run is practice. Anything that moves the passage in between (a join, a
+  win-back) ends the chance to redo.
+
 ### Passage outcome
 
-| | Under 12 verses | 12+ verses |
-| --- | --- | --- |
-| All clean | +1 review | +1 review |
-| 1–2 stumbles | Held (doesn't count) | Forgiven (+1 review) |
-| 3+ stumbles | Back one review, never below the start of the step | Same |
-| A blank | Down one step (blank beats stumbles; one penalty per review) | Same |
+Stumbles scale with the passage's size (changed 2026-10-29; it used to be 1–2
+held under 12 verses / forgiven at 12+, and 3+ back for any size):
+
+| | Rule | 5 verses | 6–11 | 12 | 20 | 40 |
+| --- | --- | --- | --- | --- | --- | --- |
+| All clean | +1 review | | | | | |
+| Forgiven (+1 review) | up to 1 stumble per 6 verses | none | 1 | 1–2 | 1–3 | 1–6 |
+| Held (doesn't count) | between the two | 1–2 | 2 | — | 4 | 7–9 |
+| Back one review, never below the start of the step | at least 1 in 4 verses, never fewer than 3 | 3+ | 3+ | 3+ | 5+ | 10+ |
+| A blank | Down one step (blank beats stumbles; one penalty per review) | | | | | |
 
 - Down a step can move a passage between groups (Every week → Every 4 days = back to
   Settling).
