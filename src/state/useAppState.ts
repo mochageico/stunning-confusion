@@ -766,6 +766,12 @@ export function useAppState() {
   // rewrite every verse on every change, so one review on a 700-verse list
   // uploaded all 700. Reset alongside prevSyncedQueueIdsRef.
   const syncedQueueJsonRef = useRef<Map<string, string>>(new Map());
+  // The verse object each JSON above was made from. Queue updates always
+  // copy a verse they change, never edit it in place, so a verse that is
+  // still this exact object hasn't changed and needn't be turned into JSON
+  // again -- on a 700-verse list one review used to stringify all 700.
+  // Always set and cleared together with syncedQueueJsonRef.
+  const syncedQueueItemRef = useRef<Map<string, QueueItem>>(new Map());
   // Guards the auto-sync until this user's real queue has been loaded from
   // Firestore. Without it, the sign-in/account-switch transition (which
   // clears memoryQueue synchronously) could commit an empty/stale queue —
@@ -1259,6 +1265,7 @@ export function useAppState() {
         updateMemoryQueue(() => []);
         prevSyncedQueueIdsRef.current = new Set();
         syncedQueueJsonRef.current = new Map();
+        syncedQueueItemRef.current = new Map();
       } else if (qSnap) {
         const loadedQueue: QueueItem[] = [];
         qSnap.forEach((docSnap) => {
@@ -1325,6 +1332,7 @@ export function useAppState() {
         // auto-sync.
         prevSyncedQueueIdsRef.current = new Set(loadedQueue.map((i) => i.verseId));
         syncedQueueJsonRef.current = new Map(loadedQueue.map((i) => [i.verseId, JSON.stringify(i)]));
+        syncedQueueItemRef.current = new Map(loadedQueue.map((i) => [i.verseId, i]));
 
         // The review ladder (REVIEW_LADDER_PLAN.md stage 4a), with the
         // settings just read rather than React state that hasn't flushed:
@@ -1362,7 +1370,10 @@ export function useAppState() {
               const chunk = ladder.changed.slice(start, start + 450);
               chunk.forEach((item) => batch.set(doc(db, 'users', currentUser.uid, 'memoryQueue', item.verseId), item));
               await batch.commit();
-              chunk.forEach((item) => syncedQueueJsonRef.current.set(item.verseId, JSON.stringify(item)));
+              chunk.forEach((item) => {
+                syncedQueueJsonRef.current.set(item.verseId, JSON.stringify(item));
+                syncedQueueItemRef.current.set(item.verseId, item);
+              });
             }
           } catch (e) {
             ladderWritten = false;
@@ -1481,6 +1492,7 @@ export function useAppState() {
       queueHydratedRef.current = false;
       prevSyncedQueueIdsRef.current = new Set();
       syncedQueueJsonRef.current = new Map();
+      syncedQueueItemRef.current = new Map();
       setVerses([]);
       updateMemoryQueue(() => []);
       // Same reasoning applies to saved recordings — clear synchronously so a
@@ -1682,9 +1694,16 @@ export function useAppState() {
       // Only the verses that changed since they were last written or read.
       // A verse whose write fails keeps its old JSON here, so the next sync
       // tries it again.
-      const changed = memoryQueue
-        .map((item) => ({ item, json: JSON.stringify(item) }))
-        .filter(({ item, json }) => syncedQueueJsonRef.current.get(item.verseId) !== json);
+      // A verse that is still the very object last synced is skipped without
+      // the JSON; one that was copied but came out the same is remembered as
+      // synced so the next pass skips it too.
+      const changed: { item: QueueItem; json: string }[] = [];
+      for (const item of memoryQueue) {
+        if (syncedQueueItemRef.current.get(item.verseId) === item) continue;
+        const json = JSON.stringify(item);
+        if (syncedQueueJsonRef.current.get(item.verseId) === json) syncedQueueItemRef.current.set(item.verseId, item);
+        else changed.push({ item, json });
+      }
 
       try {
         // Batches of 400 writes, well inside Firestore's per-request limits
@@ -1700,8 +1719,14 @@ export function useAppState() {
           ops.slice(start, start + 400).forEach((op) => op(batch));
           await batch.commit();
         }
-        changed.forEach(({ item, json }) => syncedQueueJsonRef.current.set(item.verseId, json));
-        removedIds.forEach((id) => syncedQueueJsonRef.current.delete(id));
+        changed.forEach(({ item, json }) => {
+          syncedQueueJsonRef.current.set(item.verseId, json);
+          syncedQueueItemRef.current.set(item.verseId, item);
+        });
+        removedIds.forEach((id) => {
+          syncedQueueJsonRef.current.delete(id);
+          syncedQueueItemRef.current.delete(id);
+        });
         removedIds.forEach((id) => pendingQueueDeletionsRef.current.delete(id));
         // Keep unexplained ids in the baseline: they still exist in Firestore,
         // so dropping them here would let a later shrink delete them silently.
