@@ -379,6 +379,15 @@ export interface Recording {
   // Audio flow in RecordScreen) rather than captured live with the mic.
   // Absent/undefined == 'recorded' (every recording before this field existed).
   sourceType?: 'recorded' | 'imported';
+  // Recorded with no signal and uploaded later (OFFLINE_MODE_PLAN.md stage
+  // 7): when the upload happened (ms). The studio render's wait is dated from
+  // this rather than from the id, which says when it was recorded.
+  uploadedAt?: number;
+  // ON THE PHONE ONLY, never written to Firestore: set on a recording still
+  // waiting to upload (see lib/recordingUploads.ts), which plays from the
+  // file kept on the phone until then.
+  uploadPending?: boolean;
+  localAudioUri?: string;
 }
 
 export type RecordingVisibility = 'private' | 'circle';

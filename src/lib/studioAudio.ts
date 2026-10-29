@@ -23,11 +23,14 @@ import type { Recording } from '../types';
 const STUDIO_PENDING_GIVE_UP_MS = 15 * 60 * 1000;
 
 /** True while a studio render is genuinely still expected to arrive. */
-export function isStudioPending(recording: Pick<Recording, 'id' | 'studioStatus'> | null | undefined): boolean {
+export function isStudioPending(
+  recording: Pick<Recording, 'id' | 'studioStatus' | 'uploadedAt'> | null | undefined
+): boolean {
   if (recording?.studioStatus !== 'pending') return false;
   // Ids are `rec_${Date.now()}` (see persistRecording); anything else has no
-  // readable age, so it is not worth waiting on.
-  const startedAt = Number(recording.id.match(/^rec_(\d+)$/)?.[1]);
+  // readable age, so it is not worth waiting on. One recorded offline counts
+  // from when it was uploaded instead.
+  const startedAt = recording.uploadedAt ?? Number(recording.id.match(/^rec_(\d+)$/)?.[1]);
   return Number.isFinite(startedAt) && Date.now() - startedAt < STUDIO_PENDING_GIVE_UP_MS;
 }
 
@@ -52,13 +55,15 @@ export function hasStudioAudio(recording: Pick<Recording, 'studioAudioUrl' | 'st
  */
 export function resolvePlaybackUrl(
   recording:
-    | Pick<Recording, 'audioUrl' | 'audioPath' | 'studioAudioUrl' | 'studioAudioPath' | 'studioStatus'>
+    | Pick<Recording, 'audioUrl' | 'audioPath' | 'studioAudioUrl' | 'studioAudioPath' | 'studioStatus' | 'localAudioUri'>
     | null
     | undefined,
   studioEnabled: boolean,
   cache?: ReadonlyMap<string, string>
 ): string | undefined {
   if (!recording) return undefined;
+  // Still waiting to upload: the take kept on the phone is all there is.
+  if (!recording.audioUrl && recording.localAudioUri) return recording.localAudioUri;
   const useStudio = studioEnabled && hasStudioAudio(recording);
   const storagePath = useStudio ? recording.studioAudioPath : recording.audioPath;
   if (storagePath) {
@@ -75,13 +80,16 @@ export function resolvePlaybackUrl(
  * playable even while its studio render is still pending.
  */
 export function hasPlayableAudio(
-  recording: Pick<Recording, 'audioUrl' | 'studioAudioUrl' | 'studioStatus'> | null | undefined
+  recording: Pick<Recording, 'audioUrl' | 'studioAudioUrl' | 'studioStatus' | 'localAudioUri'> | null | undefined
 ): boolean {
-  return !!recording?.audioUrl || hasStudioAudio(recording);
+  return !!recording?.audioUrl || !!recording?.localAudioUri || hasStudioAudio(recording);
 }
 
 /** Copy for the studio badge/toggle, so the states read consistently. */
-export function studioStatusLabel(recording: Pick<Recording, 'id' | 'studioStatus'> | null | undefined): string | null {
+export function studioStatusLabel(
+  recording: Pick<Recording, 'id' | 'studioStatus' | 'uploadedAt' | 'uploadPending'> | null | undefined
+): string | null {
+  if (recording?.uploadPending) return 'Waiting to upload — it will upload once there’s signal';
   if (isStudioPending(recording)) return 'Polishing audio…';
   switch (recording?.studioStatus) {
     case 'ready':

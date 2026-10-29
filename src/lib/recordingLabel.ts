@@ -13,13 +13,15 @@ export function recordingLabel(rec: Pick<Recording, 'book' | 'chapter' | 'startV
   return `${rec.book} ${rec.chapter}:${range}`;
 }
 
-// "Sep 23 · BSB · 5:12", plus "· Imported" for uploaded audio -- the one
+// "Sep 23 · BSB · 5:12", plus "· Imported" for uploaded audio and "· Waiting
+// to upload" for one recorded with no signal -- the one
 // summary line every list of recordings uses, instead of each screen writing
 // its own ("2026-09-23 • BSB • 312 seconds" beside "05:12" for the same file).
 export function recordingMeta(
-  rec: Pick<Recording, 'date' | 'translation' | 'duration' | 'sourceType'>
+  rec: Pick<Recording, 'date' | 'translation' | 'duration' | 'sourceType' | 'uploadPending'>
 ): string {
   const parts = [formatDate(rec.date), rec.translation, formatDuration(rec.duration)].filter(Boolean);
   if (rec.sourceType === 'imported') parts.push('Imported');
+  if (rec.uploadPending) parts.push('Waiting to upload');
   return parts.join(' · ');
 }
