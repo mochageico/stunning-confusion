@@ -536,21 +536,6 @@ export function SpinView({ children, style }: { children: React.ReactNode; style
   return <Animated.View style={[{ transform: [{ rotate: spin }] }, style]}>{children}</Animated.View>;
 }
 
-export function BounceView({ children, style }: { children: React.ReactNode; style?: any }) {
-  const translateY = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(translateY, { toValue: -6, duration: 400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: 0, duration: 400, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [translateY]);
-  return <Animated.View style={[{ transform: [{ translateY }] }, style]}>{children}</Animated.View>;
-}
-
 /**
  * Bars used by the Listen-mode "sound wave" indicator — animates height
  * randomly while `active`. `onFill` for bars sitting on an accent fill.

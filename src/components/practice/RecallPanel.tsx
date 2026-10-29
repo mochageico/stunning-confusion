@@ -1,10 +1,10 @@
 import { ScrollView, View } from 'react-native';
-import { Check, Eye, Mic, MicOff, RefreshCw, Shuffle, Sparkles } from 'lucide-react-native';
+import { Check, Eye, Mic, MicOff, RefreshCw, Shuffle } from 'lucide-react-native';
 import { normalizeToken, summarizeOutcomes, reviewPassAccuracy } from '../../lib/recitation';
 import { blankExceptFirstLetter, blankLetters, splitWords, wordGap } from '../../lib/textScript';
 import { MIN_JIGSAW_VERSES } from '../../lib/drills';
 import { MIX_NAMES } from '../../lib/formatNames';
-import { BounceView, DiscreteSlider, FadeInView, SpinView, WaveBars } from '../ui';
+import { DiscreteSlider, FadeInView, SpinView, WaveBars } from '../ui';
 import MemoryGrid from '../MemoryGrid';
 import { AppButton, AppIconButton, AppTextInput, AppText, RangeCaption } from '../design';
 import { Badge, SegmentedControl } from '../blocks';
@@ -151,11 +151,11 @@ export default function RecallPanel({
     <View className="flex-1 justify-between relative">
       {/* Local custom toast alert */}
       {localToast && (
-        <BounceView style={{ position: 'absolute', top: 56, left: '50%', marginLeft: -100, zIndex: 30 }}>
+        <View style={{ position: 'absolute', top: 56, left: '50%', marginLeft: -100, zIndex: 30 }}>
           <View className="bg-accent px-3.5 py-1.5 rounded-full">
             <AppText variant="caption" className="text-on-accent font-sans font-bold">{localToast}</AppText>
           </View>
-        </BounceView>
+        </View>
       )}
 
       {/* Mode picker. Recall is the only graded mode; the rest are
@@ -504,12 +504,7 @@ export default function RecallPanel({
             const summary = summarizeOutcomes(finalOutcomes || []);
             const pct = Math.round(summary.accuracy * 100);
             return (
-              <ScrollView className="flex-1" contentContainerClassName="items-center justify-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
-                <BounceView>
-                  <View className="w-12 h-12 bg-accent-soft rounded-full items-center justify-center">
-                    <Shuffle size={24} color={palette.accent} />
-                  </View>
-                </BounceView>
+              <ScrollView className="flex-1" contentContainerClassName="items-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
                 <View className="items-center gap-1">
                   <AppText variant="title" className="font-sans font-bold text-ink leading-tight">Nice practice run</AppText>
                   <AppText variant="label" className="text-ink-2 font-sans text-center px-4">
@@ -518,7 +513,7 @@ export default function RecallPanel({
                   </AppText>
                 </View>
 
-                <View className="w-full gap-2">
+                <View className="w-full gap-2 mt-auto">
                   <AppButton
                     variant="primary"
                     Icon={Shuffle}
@@ -553,12 +548,7 @@ export default function RecallPanel({
             const assisted = hintMode === 'firstLetter' || recallDisplayMode === 'memoryGrid';
             const isMasteryEligible = summary.isPerfect && !assisted;
             return (
-              <ScrollView className="flex-1" contentContainerClassName="items-center justify-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
-                <BounceView>
-                  <View className={`w-12 h-12 rounded-full items-center justify-center ${summary.passesReview ? 'bg-success-soft' : 'bg-accent-soft'}`}>
-                    <Sparkles size={24} color={summary.passesReview ? palette.success : palette.accent} />
-                  </View>
-                </BounceView>
+              <ScrollView className="flex-1" contentContainerClassName="items-center p-4 gap-4" contentContainerStyle={{ flexGrow: 1 }}>
                 <View className="items-center gap-1">
                   {assisted && <Badge tone="accent" label="First letters shown" />}
                   <AppText variant="title" className="font-sans font-bold text-ink leading-tight text-center">
@@ -582,7 +572,7 @@ export default function RecallPanel({
                   </ScrollView>
                 </View>
 
-                <View className="w-full gap-2">
+                <View className="w-full gap-2 mt-auto">
                   {allNotDue ? (
                     <>
                       <AppButton size="lg" variant="primary" Icon={Check} label="Done" onPress={handleGroupComplete} />
