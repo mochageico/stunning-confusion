@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState as NativeAppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   arrayUnion,
@@ -8,6 +8,7 @@ import {
   deleteField,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   limit,
   onSnapshot,
@@ -24,9 +25,9 @@ import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable }
 import { hasPlayableAudio, resolvePlaybackUrl } from '../lib/studioAudio';
 import { setPlaybackProgress } from '../lib/playbackProgress';
 import { applyOutbox } from '../lib/queueOutbox';
-import { loadOutbox, outboxConfirm, outboxRecord } from '../lib/queueOutboxStore';
+import { loadOutbox, outboxConfirm, outboxRecord, subscribeOutboxCount } from '../lib/queueOutboxStore';
 import { queueFromBaseline, type LocalSettings } from '../lib/localCopy';
-import { saveLocalCopy } from '../lib/localCopyStore';
+import { loadLocalCopy, saveLocalCopy } from '../lib/localCopyStore';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   setAudioModeAsync,
@@ -787,6 +788,17 @@ export function useAppState() {
   // Which parts of the copy on the phone (lib/localCopy) this account's load
   // really read from the server, so later saves only ever refresh those.
   const localCopyReadyRef = useRef(NO_LOCAL_COPY);
+  // Opened without the server's copy of the queue (OFFLINE_MODE_PLAN.md
+  // stage 3). While set, the auto-sync only adds to the "to send" list and
+  // never writes to Firestore: once signal is back a full load merges the
+  // list into the server's copy (stage 4), so a change made on another
+  // device meanwhile is merged rather than written over.
+  const offlineRef = useRef(false);
+  // Shown as the offline pill; `copySavedAt` is when the phone's copy on
+  // screen was saved (null when there was none).
+  const [offline, setOffline] = useState<{ copySavedAt: string | null } | null>(null);
+  // Verses on the "to send" list (lib/queueOutbox), for the pill.
+  const [pendingSends, setPendingSends] = useState(0);
 
   // Verse ids the user has ACTUALLY asked to remove. The auto-sync will only
   // delete documents named here.
@@ -1055,6 +1067,9 @@ export function useAppState() {
 
   const loadUserData = async (currentUser: any) => {
     console.log('loadUserData started for UID:', currentUser.uid);
+    // Set while the auto-sync waits for this load to replace the queue (see
+    // wasOffline below); always lifted again at the end.
+    let syncPaused = false;
     try {
       // The four reads opening the app waits on go out together: each one
       // waiting for the last made a slow network four round trips slower.
@@ -1069,16 +1084,48 @@ export function useAppState() {
           handleFirestoreError(e, OperationType.GET, path);
           return undefined;
         });
-      const [profileSnap, planSnap, vSnap, qSnap, outbox] = await Promise.all([
+      // With no signal getDocs doesn't fail: it answers from the SDK's cache,
+      // which on the phone is empty memory -- an "empty" verse list that
+      // isn't one. Only an answer from the server counts as read.
+      const fromServer = <T extends { metadata: { fromCache: boolean } }>(snap: T | undefined, path: string) => {
+        if (!snap?.metadata.fromCache) return snap;
+        console.warn(`[offline] ${path}: no answer from the server`);
+        return undefined;
+      };
+      const [profileSnap, planSnap, vSnapAny, qSnapAny] = await Promise.all([
         settle(getDoc(profileRef), `profiles/${currentUser.uid}`),
         settle(getDoc(planRef), `memoryPlans/${currentUser.uid}`),
         settle(getDocs(versesCol), `users/${currentUser.uid}/verses`),
         settle(getDocs(queueCol), `users/${currentUser.uid}/memoryQueue`),
-        // Verse changes from an earlier run that never reached Firestore
-        // (lib/queueOutbox): put back on top of the queue below.
-        loadOutbox(currentUser.uid),
       ]);
+      const vSnap = fromServer(vSnapAny, `users/${currentUser.uid}/verses`);
+      const qSnap = fromServer(qSnapAny, `users/${currentUser.uid}/memoryQueue`);
+
+      // Back from an offline stretch (stage 4): whatever the auto-sync
+      // hasn't put on the "to send" list yet goes on it now, and the auto-sync
+      // waits until the queue below replaces the one on screen -- the baseline
+      // is about to describe the server, not the phone's copy. Still offline:
+      // what's on screen stays as it is.
+      const wasOffline = offlineRef.current;
+      offlineRef.current = !qSnap;
+      if (wasOffline && qSnap) {
+        queueHydratedRef.current = false;
+        syncPaused = true;
+        if (queueSyncTimerRef.current) clearTimeout(queueSyncTimerRef.current);
+        const { changed, removedIds } = queueChanges(memoryQueueRef.current);
+        await outboxRecord(currentUser.uid, changed, removedIds, (id) => syncedQueueJsonRef.current.get(id) ?? null).catch(
+          (err) => console.error('[outbox] could not save the to-send list:', err)
+        );
+      }
+      // Verse changes that never reached Firestore (lib/queueOutbox): put
+      // back on top of the queue below. Read after the step above, so it
+      // holds everything done on this device.
+      const outbox = await loadOutbox(currentUser.uid);
       const outboxIds = Object.keys(outbox);
+      // The copy on the phone (lib/localCopy) stands in for any part the
+      // server didn't answer -- only at launch: later, what's on screen is newer.
+      const copy = !wasOffline && (!qSnap || !vSnap || !planSnap) ? await loadLocalCopy(currentUser.uid) : null;
+      if (copy) console.log('[offline] opening from the copy on this device, saved', copy.savedAt.queue);
       console.log('User data fetched. Verses:', vSnap?.size, 'Queue:', qSnap?.size);
 
       // 1. Profile
@@ -1172,6 +1219,17 @@ export function useAppState() {
       // standing in for a read that failed.
       let settingsFromServer = false;
       let groupPlansLoad: Promise<void> = Promise.resolve();
+      const applyRhythm = (r: Rhythm) => {
+        setLearningDays(r.learningDays);
+        setNewVersesPace(r.newVersesPace);
+        setMaxReviewCap(r.maxReviewCap);
+        setSabbathEnabled(r.sabbathEnabled);
+        setSabbathDay(r.sabbathDay);
+        setDayStartHour(r.dayStartHour);
+        setCognitiveLoadSensitivity(r.cognitiveLoadSensitivity);
+        setPausedAt(r.pausedAt);
+        setPausedUntil(r.pausedUntil);
+      };
 
       // 2. Memory Plan
       if (planSnap && planSnap.exists()) {
@@ -1200,15 +1258,7 @@ export function useAppState() {
           pausedAt: planData.pausedAt ?? rootActive.pausedAt ?? null,
           pausedUntil: planData.pausedUntil ?? rootActive.pausedUntil ?? null,
         };
-        setLearningDays(loadedRhythm.learningDays);
-        setNewVersesPace(loadedRhythm.newVersesPace);
-        setMaxReviewCap(loadedRhythm.maxReviewCap);
-        setSabbathEnabled(loadedRhythm.sabbathEnabled);
-        setSabbathDay(loadedRhythm.sabbathDay);
-        setDayStartHour(loadedRhythm.dayStartHour);
-        setCognitiveLoadSensitivity(loadedRhythm.cognitiveLoadSensitivity);
-        setPausedAt(loadedRhythm.pausedAt);
-        setPausedUntil(loadedRhythm.pausedUntil);
+        applyRhythm(loadedRhythm);
         resolvedRhythm = loadedRhythm;
         resolvedLadderPrefs = ladderPrefsFrom(planData);
         applyLadderPrefs(resolvedLadderPrefs);
@@ -1232,7 +1282,9 @@ export function useAppState() {
         groupPlansLoad = loadJoinedGroupPlans(memberships);
 
         applyJoinedGroupChallenges((planData.joinedGroupChallenges as GroupChallengeMembership[]) || []);
-      } else {
+      } else if (planSnap) {
+        // Only when the server said there's no plan: a read that failed
+        // (offline) must never write defaults over the real one.
         console.log('Creating new memory plan...');
         try {
           await setDoc(planRef, {
@@ -1249,10 +1301,20 @@ export function useAppState() {
         } catch (e) {
           handleFirestoreError(e, OperationType.WRITE, `memoryPlans/${currentUser.uid}`);
         }
+      } else if (copy?.settings) {
+        // Offline: the settings as last saved on this phone.
+        const saved = copy.settings;
+        applyRhythm(saved.rhythm);
+        resolvedRhythm = saved.rhythm;
+        resolvedLadderPrefs = saved.ladderPrefs;
+        applyLadderPrefs(saved.ladderPrefs);
+        resolvedLadderVersion = saved.ladderVersion;
+        resolvedMasteryTouches = saved.masteryTouches;
+        setMasteryTouches(saved.masteryTouches);
       }
 
       // 3. User Verses & Deterministic Memory Queue
-      if (qSnap) setQueueLoadedUid(currentUser.uid);
+      if (qSnap || copy?.queue) setQueueLoadedUid(currentUser.uid);
 
       // A brand-new account starts with a genuinely empty verse list — no
       // pre-seeded demo progress.
@@ -1280,6 +1342,8 @@ export function useAppState() {
         });
         setVerses(loadedVerses);
         loadedVersesForCopy = loadedVerses;
+      } else if (copy?.verses) {
+        setVerses(copy.verses);
       }
 
       // "To send" entries found already done or just written, taken off the
@@ -1469,8 +1533,28 @@ export function useAppState() {
             handleFirestoreError(e, OperationType.WRITE, `memoryPlans/${currentUser.uid}`);
           }
         }
+      } else if (copy?.queue) {
+        // Offline launch (OFFLINE_MODE_PLAN.md stage 3). The copy on the phone
+        // is what Firestore last confirmed, so it is the baseline, and the
+        // "to send" list goes back on top just as on a server load. Nothing
+        // is written, and the ladder catch-up (migration, late reviews, the
+        // welcome-back spread) waits for the first load from the server, so
+        // it decides from the server's copy. Due reviews still show: they
+        // come from dates.
+        const baseline = copy.queue;
+        prevSyncedQueueIdsRef.current = new Set(baseline.map((i) => i.verseId));
+        syncedQueueJsonRef.current = new Map(baseline.map((i) => [i.verseId, JSON.stringify(i)]));
+        syncedQueueItemRef.current = new Map(baseline.map((i) => [i.verseId, i]));
+        const owed = outboxIds.length > 0 ? applyOutbox(baseline, outbox) : null;
+        owed?.deleteIds.forEach((id) => pendingQueueDeletionsRef.current.add(id));
+        const queue = owed ? owed.queue : baseline;
+        updateMemoryQueue(() => queue);
+        cacheLoadingVerses(queue);
+        setWelcomeBackDays([]);
+        setLateNotes([]);
       }
       setLadderVersion(resolvedLadderVersion);
+      setOffline((prev) => (qSnap ? null : prev ?? { copySavedAt: copy?.savedAt.queue ?? null }));
 
       // The copy of all this on the phone (lib/localCopy, OFFLINE_MODE_PLAN.md
       // stage 2), for opening with no signal: only the parts that really
@@ -1496,6 +1580,10 @@ export function useAppState() {
           .then(() => setLadderVersion(LADDER_VERSION))
           .catch((e) => handleFirestoreError(e, OperationType.WRITE, `memoryPlans/${currentUser.uid}`));
       }
+
+      // Offline, the rest would only come back empty from the SDK's cache.
+      // It loads with everything else once signal is back.
+      if (!qSnap) return;
 
       // 4-7. Saved recordings, Bible page photos, chapter sections and
       // takeaways (all private to this user), fetched together. Each catches
@@ -1526,6 +1614,8 @@ export function useAppState() {
     } catch (err) {
       console.error('Error in loadUserData master catch block:', err);
       triggerToast('Could not sync with Cloud storage.');
+    } finally {
+      if (syncPaused) queueHydratedRef.current = true;
     }
   };
 
@@ -1586,6 +1676,8 @@ export function useAppState() {
       // account.
       queueHydratedRef.current = false;
       localCopyReadyRef.current = NO_LOCAL_COPY;
+      offlineRef.current = false;
+      setOffline(null);
       prevSyncedQueueIdsRef.current = new Set();
       syncedQueueJsonRef.current = new Map();
       syncedQueueItemRef.current = new Map();
@@ -1753,6 +1845,84 @@ export function useAppState() {
     setPlayingRecProgress(0);
   };
 
+  // What in `queue` differs from what Firestore is known to hold (the
+  // baseline), for the auto-sync and the step back from offline.
+  const queueChanges = (queue: QueueItem[]) => {
+    const currentIds = new Set(queue.map((item) => item.verseId));
+    const vanishedIds = [...prevSyncedQueueIdsRef.current].filter((id) => !currentIds.has(id));
+
+    // Only delete what the user actually asked to remove. Anything that
+    // vanished from state without a matching intent is a BUG, not an
+    // instruction -- leave those documents alone and say so loudly. The
+    // stale ids stay in the baseline so a later legitimate delete still
+    // works, and the verses come back on the next reload.
+    const removedIds = vanishedIds.filter((id) => pendingQueueDeletionsRef.current.has(id));
+    const unexplained = vanishedIds.filter((id) => !pendingQueueDeletionsRef.current.has(id));
+
+    // Only the verses that changed since they were last written or read.
+    // A verse whose write fails keeps its old JSON here, so the next sync
+    // tries it again.
+    // A verse that is still the very object last synced is skipped without
+    // the JSON; one that was copied but came out the same is remembered as
+    // synced so the next pass skips it too.
+    const changed: { item: QueueItem; json: string }[] = [];
+    for (const item of queue) {
+      if (syncedQueueItemRef.current.get(item.verseId) === item) continue;
+      const json = JSON.stringify(item);
+      if (syncedQueueJsonRef.current.get(item.verseId) === json) syncedQueueItemRef.current.set(item.verseId, item);
+      else changed.push({ item, json });
+    }
+    return { currentIds, changed, removedIds, unexplained };
+  };
+
+  // Back online after opening offline (OFFLINE_MODE_PLAN.md stage 4): tried
+  // every 30 seconds and whenever the app comes back to the front. Once the
+  // server answers, a full load runs as at launch -- the "to send" list is
+  // merged into the server's copy verse by verse (both devices' logs kept,
+  // the step from the latest review) and sent, and the ladder catch-up that
+  // waited runs.
+  const isOffline = offline !== null;
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!isOffline || !uid) return;
+    let busy = false;
+    const tryReconnect = async () => {
+      const current = auth.currentUser;
+      if (busy || !current || current.uid !== uid) return;
+      busy = true;
+      try {
+        await getDocFromServer(doc(db, 'memoryPlans', uid));
+      } catch {
+        busy = false;
+        return;
+      }
+      try {
+        console.log('[offline] the server answers again; loading');
+        await loadUserData(current);
+        await loadMyCircles();
+      } finally {
+        busy = false;
+      }
+    };
+    const timer = setInterval(tryReconnect, 30_000);
+    const sub = NativeAppState.addEventListener('change', (next) => {
+      if (next === 'active') void tryReconnect();
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOffline, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setPendingSends(0);
+      return;
+    }
+    return subscribeOutboxCount(user.uid, setPendingSends);
+  }, [user?.uid]);
+
   // Memory Queue Auto-Sync: several actions (reordering, adding verses, deleting)
   // only mutate memoryQueue locally without their own explicit Firestore write.
   // Rather than remembering to add a batch write to every future mutation site,
@@ -1769,36 +1939,13 @@ export function useAppState() {
       const uid = auth.currentUser?.uid;
       if (!uid || !queueHydratedRef.current) return;
 
-      const currentIds = new Set(memoryQueue.map((item) => item.verseId));
-      const vanishedIds = [...prevSyncedQueueIdsRef.current].filter((id) => !currentIds.has(id));
-
-      // Only delete what the user actually asked to remove. Anything that
-      // vanished from state without a matching intent is a BUG, not an
-      // instruction -- leave those documents alone and say so loudly. The
-      // stale ids stay in the baseline so a later legitimate delete still
-      // works, and the verses come back on the next reload.
-      const removedIds = vanishedIds.filter((id) => pendingQueueDeletionsRef.current.has(id));
-      const unexplained = vanishedIds.filter((id) => !pendingQueueDeletionsRef.current.has(id));
+      const { currentIds, changed, removedIds, unexplained } = queueChanges(memoryQueue);
       if (unexplained.length > 0) {
         console.error(
           `[queue-sync] ${unexplained.length} verse(s) disappeared from memoryQueue with no delete intent. ` +
             'Refusing to delete them from Firestore. This is a bug -- please report it.',
           unexplained.slice(0, 20)
         );
-      }
-
-      // Only the verses that changed since they were last written or read.
-      // A verse whose write fails keeps its old JSON here, so the next sync
-      // tries it again.
-      // A verse that is still the very object last synced is skipped without
-      // the JSON; one that was copied but came out the same is remembered as
-      // synced so the next pass skips it too.
-      const changed: { item: QueueItem; json: string }[] = [];
-      for (const item of memoryQueue) {
-        if (syncedQueueItemRef.current.get(item.verseId) === item) continue;
-        const json = JSON.stringify(item);
-        if (syncedQueueJsonRef.current.get(item.verseId) === json) syncedQueueItemRef.current.set(item.verseId, item);
-        else changed.push({ item, json });
       }
 
       if (changed.length === 0 && removedIds.length === 0) return;
@@ -1809,6 +1956,9 @@ export function useAppState() {
       await outboxRecord(uid, changed, removedIds, (id) => syncedQueueJsonRef.current.get(id) ?? null).catch((err) =>
         console.error('[outbox] could not save the to-send list:', err)
       );
+      // Opened offline: the list is all that's written. It reaches Firestore
+      // through the full load that runs once signal is back.
+      if (offlineRef.current) return;
 
       try {
         // Batches of 400 writes, well inside Firestore's per-request limits
@@ -3010,6 +3160,7 @@ export function useAppState() {
     user, setUser,
     loadingAuth,
     queueReady,
+    offline, pendingSends,
     currentTab, setCurrentTab,
     currentScreen, setCurrentScreen,
     selectedBook, setSelectedBook,
