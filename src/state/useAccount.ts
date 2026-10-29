@@ -18,6 +18,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { auth, db, storage } from '../firebase';
+import { clearLocalCopy } from '../lib/localCopyStore';
 import { Circle, QueueItem, RecordingVisibility } from '../types';
 
 // ============================================================================
@@ -290,6 +291,8 @@ export function useAccount({
       // on disk for whoever signs in next.
       await wipeAudioCache();
       await wipeLocalPhotos();
+      // And the copy of the verses kept for opening offline (lib/localCopy).
+      await clearLocalCopy(uid).catch((err) => console.error('Failed to remove the offline copy of the verses:', err));
 
       await deleteUser(auth.currentUser);
       return { ok: true };
