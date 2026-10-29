@@ -17,6 +17,7 @@ import {
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import type { ChatMessage, Circle, DMThread, Friend, MessageReaction } from '../types';
 import { ChatAttachment, cleanAttachment } from '../lib/chatAttachments';
+import { loadChat, loadDmThreads, saveChat, saveDmThreads } from '../lib/communityCopyStore';
 import type { ScreenName } from './useAppState';
 
 // Split out of useAppState (see .claude/file-split-plan.md).
@@ -30,6 +31,29 @@ interface MessagingDeps {
   myCircles: Circle[];
   navigateTo: (screen: ScreenName) => void;
   triggerToast: (message: string) => void;
+}
+
+// With no signal a listener answers from the SDK's cache, which on the phone
+// is empty memory. Until the server answers, the last-seen copy on the device
+// (lib/communityCopyStore) is shown instead, if there is one.
+function lastSeenUntilServer<T>(load: () => Promise<T[] | null>, show: (items: T[]) => void) {
+  let fromServer = false;
+  let asked = false;
+  return (snapFromCache: boolean, items: T[]): boolean => {
+    if (!snapFromCache) {
+      fromServer = true;
+      return true;
+    }
+    if (fromServer) return true;
+    if (!asked) {
+      asked = true;
+      void load().then((saved) => {
+        if (!fromServer && saved && saved.length > 0) show(saved);
+      });
+    }
+    // Something cached in the SDK (reopening a chat) still beats nothing.
+    return items.length > 0;
+  };
 }
 
 export function useMessaging({ user, friends, myCircles, navigateTo, triggerToast }: MessagingDeps) {
@@ -281,11 +305,12 @@ export function useMessaging({ user, friends, myCircles, navigateTo, triggerToas
       orderBy('lastMessageAt', 'desc'),
       limit(50)
     );
+    const uid = user.uid;
+    const useSnap = lastSeenUntilServer(() => loadDmThreads(uid), setDmThreads);
     const unsub = onSnapshot(
       q,
       (snap) => {
-        setDmThreads(
-          snap.docs.map((d) => {
+        const threads = snap.docs.map((d) => {
             const data = d.data();
             const otherUid = ((data.participantUids as string[]) || []).find((uid) => uid !== user.uid) || '';
             return {
@@ -299,8 +324,9 @@ export function useMessaging({ user, friends, myCircles, navigateTo, triggerToas
               lastMessageFromUid: data.lastMessageFromUid,
               createdAt: data.createdAt,
             } as DMThread;
-          })
-        );
+          });
+        if (useSnap(snap.metadata.fromCache, threads)) setDmThreads(threads);
+        if (!snap.metadata.fromCache) saveDmThreads(uid, threads);
         setLoadingDmThreads(false);
       },
       (err) => {
@@ -320,10 +346,15 @@ export function useMessaging({ user, friends, myCircles, navigateTo, triggerToas
     }
     setLoadingActiveDMMessages(true);
     const q = query(collection(db, 'dmThreads', activeDMThread.id, 'messages'), orderBy('createdAt', 'asc'), limit(200));
+    const uid = auth.currentUser?.uid;
+    const chatKey = `dm:${activeDMThread.id}`;
+    const useSnap = lastSeenUntilServer(() => (uid ? loadChat(uid, chatKey) : Promise.resolve(null)), setActiveDMMessages);
     const unsub = onSnapshot(
       q,
       (snap) => {
-        setActiveDMMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ChatMessage));
+        const messages = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ChatMessage);
+        if (useSnap(snap.metadata.fromCache, messages)) setActiveDMMessages(messages);
+        if (!snap.metadata.fromCache && uid) saveChat(uid, chatKey, messages);
         setLoadingActiveDMMessages(false);
       },
       (err) => {
@@ -369,10 +400,15 @@ export function useMessaging({ user, friends, myCircles, navigateTo, triggerToas
     }
     setLoadingActiveCircleMessages(true);
     const q = query(collection(db, 'circles', activeCircleChatId, 'messages'), orderBy('createdAt', 'asc'), limit(200));
+    const uid = auth.currentUser?.uid;
+    const chatKey = `circle:${activeCircleChatId}`;
+    const useSnap = lastSeenUntilServer(() => (uid ? loadChat(uid, chatKey) : Promise.resolve(null)), setActiveCircleMessages);
     const unsub = onSnapshot(
       q,
       (snap) => {
-        setActiveCircleMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ChatMessage));
+        const messages = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ChatMessage);
+        if (useSnap(snap.metadata.fromCache, messages)) setActiveCircleMessages(messages);
+        if (!snap.metadata.fromCache && uid) saveChat(uid, chatKey, messages);
         setLoadingActiveCircleMessages(false);
       },
       (err) => {

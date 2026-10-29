@@ -32,6 +32,14 @@ export const reviewPassAccuracy = (): number => passAccuracy;
 export const setReviewPassAccuracy = (v: number) => {
   passAccuracy = v;
 };
+// No signal (OFFLINE_MODE_PLAN.md stage 8): ask the phone to recognise on the
+// device, where it can. Apple's server recogniser can't be reached; if the
+// device can't do it either the engine reports an error and the caller falls
+// back to checking yourself or typing, as for any other speech failure.
+let speechOffline = false;
+export const setSpeechOffline = (on: boolean) => {
+  speechOffline = on;
+};
 export const setForgiveNearbyKeys = (on: boolean) => {
   forgiveNearbyKeys = on;
 };
@@ -905,6 +913,7 @@ class NativeSpeechRecognizer implements SpeechRecognizer {
           interimResults: true,
           continuous: true,
           contextualStrings,
+          ...(speechOffline && this.module.supportsOnDeviceRecognition() ? { requiresOnDeviceRecognition: true } : {}),
         });
       })
       .catch((err) => callbacks.onError(String(err?.message || err)));

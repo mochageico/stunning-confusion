@@ -89,6 +89,7 @@ import { usePlanSettings } from './usePlanSettings';
 import { countRangeProgress } from '../lib/verseRange';
 import { buildVerseTimestamps } from '../lib/verseTimestamps';
 import { cacheLoadingVerses } from '../lib/loadingVerses';
+import { setSpeechOffline } from '../lib/recitation';
 import { showToast } from '../lib/toastStore';
 import { PushTarget, ReminderDay, usePushNotifications } from './usePushNotifications';
 import * as Linking from 'expo-linking';
@@ -799,6 +800,10 @@ export function useAppState() {
   const [offline, setOffline] = useState<{ copySavedAt: string | null } | null>(null);
   // Verses on the "to send" list (lib/queueOutbox), for the pill.
   const [pendingSends, setPendingSends] = useState(0);
+  // Signal lost after opening online (stage 5): a listener on the plan doc
+  // reports its answers as "from cache" once the SDK can't reach the server.
+  // Writes then wait in the SDK and on the "to send" list, as before.
+  const [signalLost, setSignalLost] = useState(false);
 
   // Verse ids the user has ACTUALLY asked to remove. The auto-sync will only
   // delete documents named here.
@@ -1905,11 +1910,16 @@ export function useAppState() {
       }
     };
     const timer = setInterval(tryReconnect, 30_000);
+    // The plan listener hearing from the server again is the quickest sign.
+    const unsubSignal = onSnapshot(doc(db, 'memoryPlans', uid), { includeMetadataChanges: true }, (snap) => {
+      if (!snap.metadata.fromCache) void tryReconnect();
+    }, () => undefined);
     const sub = NativeAppState.addEventListener('change', (next) => {
       if (next === 'active') void tryReconnect();
     });
     return () => {
       clearInterval(timer);
+      unsubSignal();
       sub.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1922,6 +1932,31 @@ export function useAppState() {
     }
     return subscribeOutboxCount(user.uid, setPendingSends);
   }, [user?.uid]);
+
+  useEffect(() => {
+    setSignalLost(false);
+    if (!user?.uid) return;
+    // A short wait before saying so, so a blip doesn't flash the pill.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsub = onSnapshot(
+      doc(db, 'memoryPlans', user.uid),
+      { includeMetadataChanges: true },
+      (snap) => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        if (snap.metadata.fromCache) timer = setTimeout(() => setSignalLost(true), 5000);
+        else setSignalLost(false);
+      },
+      () => setSignalLost(false)
+    );
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsub();
+    };
+  }, [user?.uid]);
+  // Anything that needs the server (sending a chat message) says so instead.
+  const noSignal = offline !== null || signalLost;
+  useEffect(() => setSpeechOffline(noSignal), [noSignal]);
 
   // Memory Queue Auto-Sync: several actions (reordering, adding verses, deleting)
   // only mutate memoryQueue locally without their own explicit Firestore write.
@@ -3160,7 +3195,7 @@ export function useAppState() {
     user, setUser,
     loadingAuth,
     queueReady,
-    offline, pendingSends,
+    offline, pendingSends, noSignal,
     currentTab, setCurrentTab,
     currentScreen, setCurrentScreen,
     selectedBook, setSelectedBook,
