@@ -169,7 +169,6 @@ export function useAudioDownloads({
   /** Removes a download, freeing the disk immediately. */
   const removeRecordingDownload = async (recording: Recording) => {
     await dropCachedAudio(recording, 'all');
-    triggerToast('Download removed.');
   };
 
   /**

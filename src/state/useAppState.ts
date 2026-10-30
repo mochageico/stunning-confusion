@@ -114,7 +114,7 @@ import { countRangeProgress } from '../lib/verseRange';
 import { buildVerseTimestamps } from '../lib/verseTimestamps';
 import { cacheLoadingVerses } from '../lib/loadingVerses';
 import { setSpeechOffline } from '../lib/recitation';
-import { showToast } from '../lib/toastStore';
+import { showToast, ToastOptions } from '../lib/toastStore';
 import { PushTarget, ReminderDay, usePushNotifications } from './usePushNotifications';
 import * as Linking from 'expo-linking';
 import { parseInviteCode } from '../lib/invites';
@@ -984,7 +984,7 @@ export function useAppState() {
   // ==========================================
   // The message lives in its own small store (lib/toastStore), so showing
   // one redraws only the toast, not the whole open screen.
-  const triggerToast = (msg: string) => showToast(msg);
+  const triggerToast = (msg: string, opts?: ToastOptions) => showToast(msg, opts);
 
   // Real Community audio feed: every shared recording whose snapshot
   // sharedWithUids includes the signed-in user (see firestore.rules for why
@@ -1645,10 +1645,10 @@ export function useAppState() {
         loadMapLayout(currentUser.uid),
       ]);
 
-      triggerToast('Cloud profile and scripture data synchronized!');
+      triggerToast('Synced!');
     } catch (err) {
       console.error('Error in loadUserData master catch block:', err);
-      triggerToast('Could not sync with Cloud storage.');
+      triggerToast("Couldn't sync. Try again.");
     } finally {
       if (syncPaused) queueHydratedRef.current = true;
     }
@@ -1832,7 +1832,6 @@ export function useAppState() {
       if (status.didJustFinish) {
         setPlayingRecordingId(null);
         setPlayingRecProgress(0);
-        triggerToast('Recording playback completed.');
         return;
       }
       const totalSec = status.duration || nowPlayingDurationRef.current || 1;
@@ -2633,7 +2632,7 @@ export function useAppState() {
     // uploads below). The web can't keep a file, so there it needs signal.
     if (noSignal) {
       if (!OFFLINE_RECORDINGS_SUPPORTED) {
-        triggerToast('Saving a recording needs signal -- try again once you’re back online.');
+        triggerToast('Saving a recording needs signal. Try again once you’re back online.');
         return;
       }
       await keepRecordingForLater(uid, params.uri, newRec, ext, contentType, titleSuffix);
@@ -2642,7 +2641,6 @@ export function useAppState() {
 
     const recordingDocRef = doc(db, 'users', uid, 'recordings', id);
 
-    triggerToast('Uploading recitation...');
     try {
       // WRITE ORDER IS LOAD-BEARING: the Firestore doc goes in BEFORE the
       // audio upload, because uploading is what fires the processStudioAudio
@@ -2770,11 +2768,11 @@ export function useAppState() {
       await keepForUpload(uid, uri, entry);
     } catch (err) {
       console.error('Failed to keep the recording on the phone:', err);
-      triggerToast('Couldn’t save the recording on this phone -- please try again.');
+      triggerToast('Couldn’t save the recording on this phone. Try again.');
       return;
     }
     setUserRecordings((prev) => [asListed(entry, waitingAudioUri(entry)), ...prev.filter((r) => r.id !== rec.id)]);
-    triggerToast(`${titleSuffix} saved on this phone -- it will upload once there’s signal.`);
+    triggerToast(`${titleSuffix} saved on this phone. It uploads once there’s signal.`);
   };
 
   // An edit made while it waits goes onto the list, and up with it.
@@ -2975,7 +2973,7 @@ export function useAppState() {
   const saveLiveRecordedAudio = async () => {
     const uri = audioRecorder.uri;
     if (!uri) {
-      triggerToast('No recording captured — please try again.');
+      triggerToast('No recording captured. Try again.');
       return;
     }
     await persistRecording({
@@ -2992,7 +2990,7 @@ export function useAppState() {
 
   const saveImportedRecording = async () => {
     if (!importedAudioUri) {
-      triggerToast('No imported audio to save — please choose a file first.');
+      triggerToast('Choose an audio file first.');
       return;
     }
     const durationSec = Math.round(importPlayerStatus.duration || 0) || 1;
@@ -3023,7 +3021,7 @@ export function useAppState() {
   const handleFinishImportTagging = () => {
     if (!importedAudioUri) return;
     if (Object.keys(importTapTimestamps).length === 0) {
-      triggerToast('Tap at least one verse while listening back before finishing.');
+      triggerToast('Tap at least one verse as you listen back, then finish.');
       return;
     }
     try {
@@ -3093,7 +3091,7 @@ export function useAppState() {
       triggerToast(vis === 'private' ? 'Only you can hear it now.' : 'Shared with your friends and circles.');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `sharedRecordings/${recording.id}`);
-      triggerToast("Couldn't change who can hear it -- please try again.");
+      triggerToast("Couldn't change who can hear it. Try again.");
     }
   };
 
@@ -3196,7 +3194,6 @@ export function useAppState() {
     if (!uid || !selectedRecording) return;
     if (selectedRecording.uploadPending) {
       await editWaitingRecording(selectedRecording, { verseTimestamps });
-      triggerToast('Verse sync offsets updated!');
       return;
     }
 
@@ -3205,7 +3202,6 @@ export function useAppState() {
       const updated = { ...selectedRecording, verseTimestamps };
       setSelectedRecording(updated);
       setUserRecordings((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-      triggerToast('Verse sync offsets updated!');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/recordings/${selectedRecording.id}`);
     }
@@ -3221,7 +3217,6 @@ export function useAppState() {
     const trimmed = newSpeaker.trim() || 'Me';
     if (recording.uploadPending) {
       await editWaitingRecording(recording, { user: trimmed });
-      triggerToast('Speaker updated!');
       return;
     }
     try {
@@ -3229,7 +3224,6 @@ export function useAppState() {
       const updated = { ...recording, user: trimmed };
       if (selectedRecording?.id === recording.id) setSelectedRecording(updated);
       setUserRecordings((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-      triggerToast('Speaker updated!');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/recordings/${recording.id}`);
     }

@@ -52,10 +52,10 @@ export function useImportAudio({ triggerToast }: ImportAudioDeps) {
       setImportedAudioUri(asset.uri);
       setImportedAudioName(asset.name || 'Imported audio');
       setImportTapTimestamps({});
-      triggerToast('Audio loaded — press play and tap each verse as you hear it start.');
+      triggerToast('Audio loaded. Press play and tap each verse as it starts.');
     } catch (err) {
       console.error('Failed to pick import audio:', err);
-      triggerToast('Could not open that file — please try another.');
+      triggerToast("Couldn't open that file. Try another.");
     }
   };
 
@@ -100,7 +100,6 @@ export function useImportAudio({ triggerToast }: ImportAudioDeps) {
 
   const resetImportTaps = () => {
     setImportTapTimestamps({});
-    triggerToast('Verse tags cleared — tap through again from the top.');
   };
 
   return {

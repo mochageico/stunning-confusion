@@ -253,10 +253,10 @@ export function useGroupPlans({ user, getQueue, updateMemoryQueue, removeQueueIt
       setJoinedGroupPlanDetails((prev) => [...prev.filter((p) => p.planId !== plan.planId), plan]);
       await persistJoinedGroupPlans(updatedMemberships);
 
-      triggerToast(`Joined "${plan.name}". Its verses are in your queue.`);
+      triggerToast(`Joined "${plan.name}". Its verses are on your list.`);
     } catch (err) {
       console.error('Error joining group plan:', err);
-      triggerToast("Couldn't join this plan. Please try again.");
+      triggerToast("Couldn't join this plan. Try again.");
     }
   };
 

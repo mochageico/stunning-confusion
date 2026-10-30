@@ -263,7 +263,7 @@ recordingTranslation: string
 relabelVerseLink: (id: string, label: string) => Promise<void>
 removeCircleMember: (circleId: string, memberUid: string) => Promise<void>
 removeFriend: (friend: Friend) => Promise<void>
-removeQueueItems: (verseIds: string[]) => void
+removeQueueItems: (verseIds: string[]) => (() => void) | undefined
 removeRecordingDownload: (recording: Recording) => Promise<void>
 reorderChapterPhotos: (orderedIds: string[]) => Promise<void>
 reorderChapterRecordings: (orderedIds: string[]) => Promise<void>
@@ -422,7 +422,7 @@ totalStudySeconds: number
 totalVersesCount: number
 triggerDailyPull: (opts?: { bypassShield?: boolean | undefined; } | undefined) => Promise<void>
 triggerMockDueReviews: () => Promise<void>
-triggerToast: (msg: string) => void
+triggerToast: (msg: string, opts?: ToastOptions | undefined) => void
 typedRecordingName: string
 unblockUser: (uid: string) => Promise<void>
 unreadCircleCount: number

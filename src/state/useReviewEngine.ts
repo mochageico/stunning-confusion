@@ -142,7 +142,7 @@ export function useReviewEngine({
   // anyway"), not a hard constraint.
   const triggerDailyPull = async (opts?: { bypassShield?: boolean }) => {
     if (reviewsPaused) {
-      triggerToast('Reviews are paused -- resume from Settings to pull new verses.');
+      triggerToast('Reviews are paused. Resume them in Settings to start new verses.');
       return;
     }
     if (!isTodayLearningDay()) {
@@ -172,7 +172,7 @@ export function useReviewEngine({
     }
 
     if (!memoryQueue.some((item) => item.status === 'queued')) {
-      triggerToast('No more queued verses to pull!');
+      triggerToast('No more verses waiting to start!');
       return;
     }
 
@@ -200,7 +200,7 @@ export function useReviewEngine({
     }
 
     if (pulledVerseIds.length === 0) {
-      triggerToast('No more queued verses to pull!');
+      triggerToast('No more verses waiting to start!');
       return;
     }
 
@@ -284,11 +284,26 @@ export function useReviewEngine({
   // intent first, so the auto-sync is allowed to delete these specific
   // documents; anything that leaves `memoryQueue` by any other route is
   // treated as a bug and left alone in Firestore.
-  const removeQueueItems = (verseIds: string[]) => {
-    if (verseIds.length === 0) return;
+  // Returns a function that puts them back where they were (the toast's Undo).
+  const removeQueueItems = (verseIds: string[]): (() => void) | undefined => {
+    if (verseIds.length === 0) return undefined;
     verseIds.forEach((id) => pendingQueueDeletionsRef.current.add(id));
     const doomed = new Set(verseIds);
+    const removed = memoryQueue
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => doomed.has(item.verseId));
     updateMemoryQueue((prev) => prev.filter((item) => !doomed.has(item.verseId)));
+    return () => {
+      removed.forEach(({ item }) => pendingQueueDeletionsRef.current.delete(item.verseId));
+      updateMemoryQueue((prev) => {
+        const have = new Set(prev.map((item) => item.verseId));
+        const next = [...prev];
+        removed.forEach(({ item, index }) => {
+          if (!have.has(item.verseId)) next.splice(Math.min(index, next.length), 0, item);
+        });
+        return next;
+      });
+    };
   };
 
   // Read-only preview of what the next learning day's pull would promote,
@@ -871,7 +886,7 @@ export function useReviewEngine({
 
   const triggerMockDueReviews = async () => {
     if (memoryQueue.length === 0) {
-      triggerToast('Your memory queue is empty! Please add some verses first.');
+      triggerToast('Your list is empty. Add some verses first!');
       return;
     }
 
@@ -922,7 +937,7 @@ export function useReviewEngine({
         console.error('Failed to sync mock queue items:', err);
       }
     }
-    triggerToast(` ${reviewedToday.length} verse${reviewedToday.length === 1 ? '' : 's'} reviewed today reset back to due.`);
+    triggerToast(`${reviewedToday.length} verse${reviewedToday.length === 1 ? '' : 's'} reviewed today reset back to due.`);
   };
 
   const handleUpdateVerseStatus = async (
@@ -1064,7 +1079,7 @@ export function useReviewEngine({
   // triggerDailyPull. Returns whether the verse moved.
   const pullVerseIntoLearning = (verseId: string): boolean => {
     if (reviewsPaused) {
-      triggerToast('Reviews are paused -- resume from Settings to add new verses.');
+      triggerToast('Reviews are paused. Resume them in Settings to add new verses.');
       return false;
     }
     const item = memoryQueueRef.current.find((q) => q.verseId === verseId);

@@ -404,7 +404,6 @@ export default function VersePageScreen({ state }: { state: AppState }) {
                   label="Start learning"
                   onPress={() => {
                     promoteToLearning(ids);
-                    triggerToast('Started.');
                   }}
                 />
               </View>
@@ -498,8 +497,8 @@ export default function VersePageScreen({ state }: { state: AppState }) {
               label="Remove"
               onPress={() => {
                 setConfirmingRemove(false);
-                removeQueueItems(ids);
-                triggerToast(`Removed ${reference}.`);
+                const undo = removeQueueItems(ids);
+                triggerToast(`Removed ${reference}.`, undo && { action: { label: 'Undo', onPress: undo } });
                 handleBack();
               }}
             />

@@ -121,10 +121,9 @@ export function useAccount({
         { merge: true }
       );
       setUser({ ...auth.currentUser } as any);
-      triggerToast('Display name updated!');
     } catch (err) {
       console.error('Failed to update display name:', err);
-      triggerToast('Failed to update display name.');
+      triggerToast("Couldn't change your name. Try again.");
     }
   };
 
@@ -136,10 +135,9 @@ export function useAccount({
     if (!auth.currentUser) return;
     try {
       await setDoc(doc(db, 'profiles', auth.currentUser.uid), { defaultRecordingVisibility: vis }, { merge: true });
-      triggerToast('Default recording visibility updated!');
     } catch (err) {
       console.error('Failed to update default recording visibility:', err);
-      triggerToast('Failed to update default recording visibility.');
+      triggerToast("Couldn't change that. Try again.");
     }
   };
 
@@ -184,7 +182,7 @@ export function useAccount({
       triggerToast(vis === 'friends' ? 'Your verses are now visible to friends.' : 'Your verses are now private.');
     } catch (err) {
       console.error('Failed to update memory queue visibility:', err);
-      triggerToast('Failed to update memory queue visibility.');
+      triggerToast("Couldn't change that. Try again.");
     }
   };
 

@@ -10,7 +10,7 @@ import { BookOpen, Check, CloudOff, Home as HomeIcon, Mic, Pause, User, Users } 
 import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
 import { FadeInView, NumericKeyboardAccessory, useKeyboardHeight } from './src/components/ui';
-import { BottomBars, FloatingTabBar, PageFade } from './src/components/TabBar';
+import { BottomBars, FloatingTabBar, PageFade, useAboveTabBar } from './src/components/TabBar';
 import { RECORDING_VISIBILITY_HINT, RECORDING_VISIBILITY_OPTIONS } from './src/data';
 
 import RecordingDetailScreen from './src/screens/RecordingDetailScreen';
@@ -67,7 +67,7 @@ import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from '.
 import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
 import BlocksGallery from './src/dev/BlocksGallery';
 import RecapGallery from './src/dev/RecapGallery';
-import { useToastMessage } from './src/lib/toastStore';
+import { dismissToast, pauseToast, resumeToast, useToast } from './src/lib/toastStore';
 import { usePlaybackProgress } from './src/lib/playbackProgress';
 import { useMapFullscreen } from './src/lib/mapFullscreen';
 import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent, useColorSchemeInUse } from './src/components/theme';
@@ -521,17 +521,49 @@ function AppShell() {
 // full-screen modal/overlay (practice session, save-recording dialog,
 // progress modal, onboarding, the auth gate), which all share zIndex 50 and
 // previously painted over toasts fired while they were open.
+//
+// A card above the tab bar, so it never covers what you're looking at. The
+// first sentence leads in bold when there's more after it; the rail on the left
+// says whether it's a note or a failure. Hold a finger on it to keep it up,
+// tap to put it away.
 function ToastLayer({ state }: { state: AppState }) {
-  const palette = useThemeColors();
-  const toastMessage = useToastMessage();
-  if (!toastMessage) return null;
+  const toast = useToast();
+  const bottom = useAboveTabBar();
+  if (!toast) return null;
+  const split = toast.message.length > 40 ? toast.message.search(/[.!?]\s/) : -1;
+  const head = split > 0 ? toast.message.slice(0, split + 1) : toast.message;
+  const rest = split > 0 ? toast.message.slice(split + 2) : '';
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', top: 56, left: 0, right: 0, alignItems: 'center', zIndex: 100 }}>
-      <FadeInView>
-        <View className="flex-row items-center gap-2 bg-ink border border-ink py-2.5 px-4 rounded-full">
-          <Check size={12} color={palette.success} />
-          <AppText variant="label" className="text-on-accent font-bold font-sans">{toastMessage}</AppText>
-        </View>
+    <View pointerEvents="box-none" style={{ position: 'absolute', left: 12, right: 12, bottom, zIndex: 100 }}>
+      <FadeInView key={toast.id}>
+        <Pressable
+          accessibilityRole="alert"
+          accessibilityLabel={toast.message}
+          accessibilityHint="Tap to dismiss"
+          onPress={dismissToast}
+          onPressIn={pauseToast}
+          onPressOut={resumeToast}
+          className="flex-row bg-surface border border-line rounded-card overflow-hidden"
+        >
+          <View className={toast.kind === 'error' ? 'bg-danger' : 'bg-accent'} style={{ width: 4 }} />
+          <View className="flex-1" style={{ paddingVertical: 12, paddingHorizontal: 14, gap: 2 }}>
+            <AppText variant="label" className="text-ink font-sans font-semibold">{head}</AppText>
+            {rest ? <AppText variant="label" className="text-ink-2 font-sans">{rest}</AppText> : null}
+          </View>
+          {toast.action && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                toast.action?.onPress();
+                dismissToast();
+              }}
+              className="justify-center active:bg-fill"
+              style={{ paddingHorizontal: 16 }}
+            >
+              <AppText variant="label" className="text-accent font-sans font-bold">{toast.action.label}</AppText>
+            </Pressable>
+          )}
+        </Pressable>
       </FadeInView>
     </View>
   );

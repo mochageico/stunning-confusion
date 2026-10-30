@@ -126,7 +126,7 @@ export function useSocial(deps: SocialDeps) {
       triggerToast(`${displayName || 'They'} won't be able to contact you.`);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `profiles/${me}/blocked/${uid}`);
-      triggerToast("Couldn't block. Please try again.");
+      triggerToast("Couldn't block. Try again.");
     }
   };
 
@@ -134,7 +134,6 @@ export function useSocial(deps: SocialDeps) {
     if (!auth.currentUser) return;
     try {
       await deleteDoc(doc(db, 'profiles', auth.currentUser.uid, 'blocked', uid));
-      triggerToast('Unblocked.');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `profiles/${auth.currentUser.uid}/blocked/${uid}`);
     }
@@ -168,7 +167,7 @@ export function useSocial(deps: SocialDeps) {
       return true;
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'reports');
-      triggerToast("Couldn't send the report. Please try again.");
+      triggerToast("Couldn't send the report. Try again.");
       return false;
     }
   };
@@ -379,7 +378,7 @@ export function useSocial(deps: SocialDeps) {
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `${col}/${id}/responses`);
-      triggerToast("Couldn't save that. Please try again.");
+      triggerToast("Couldn't save that. Try again.");
     }
   };
 

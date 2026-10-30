@@ -162,7 +162,7 @@ export function useCircleTakeaways({ user, triggerToast }: CircleTakeawaysDeps) 
       return true;
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `circles/${circleId}/takeaways/${docId}/replies`);
-      triggerToast("Couldn't send that reply. Please try again.");
+      triggerToast("Couldn't send that reply. Try again.");
       return false;
     }
   };

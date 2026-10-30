@@ -154,7 +154,7 @@ export function useFriends({ triggerToast }: FriendsDeps) {
       setUserSearchResults(results);
     } catch (err) {
       console.error('Failed to search users:', err);
-      triggerToast('Search failed — please try again.');
+      triggerToast("Couldn't search. Try again.");
     } finally {
       setSearchingUsers(false);
     }
@@ -236,7 +236,6 @@ export function useFriends({ triggerToast }: FriendsDeps) {
     try {
       await updateDoc(doc(db, 'friendRequests', request.id), { status: 'declined', respondedAt: serverTimestamp() });
       setIncomingFriendRequests((prev) => prev.filter((r) => r.id !== request.id));
-      triggerToast('Request declined.');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `friendRequests/${request.id}`);
     }

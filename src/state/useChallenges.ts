@@ -150,7 +150,7 @@ export function useChallenges({
       triggerToast(`Challenge sent to ${toName}.`);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'challenges');
-      triggerToast("Couldn't send that challenge -- please try again.");
+      triggerToast("Couldn't send that challenge. Try again.");
     }
   };
 
@@ -191,10 +191,10 @@ export function useChallenges({
     try {
       await deleteDoc(doc(db, 'challenges', challenge.id));
       delete challengeProgressSyncRef.current[`c_${challenge.id}`];
-      triggerToast('Challenge deleted. Your verses stay in your queue.');
+      triggerToast('Challenge deleted. Your verses stay on your list.');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `challenges/${challenge.id}`);
-      triggerToast("Couldn't delete that challenge -- please try again.");
+      triggerToast("Couldn't delete that challenge. Try again.");
     }
   };
 
@@ -281,7 +281,7 @@ export function useChallenges({
       const updated = [...joinedGroupChallenges.filter((m) => m.challengeId !== challenge.id), membership];
       setJoinedGroupChallenges(updated);
       await persistJoinedGroupChallenges(updated);
-      triggerToast(`Joined "${challenge.title}". Its verses are in your queue.`);
+      triggerToast(`Joined "${challenge.title}". Its verses are on your list.`);
     } catch (err) {
       handleFirestoreError(
         err,
@@ -376,10 +376,10 @@ export function useChallenges({
         setJoinedGroupChallenges(remaining);
         await persistJoinedGroupChallenges(remaining);
       }
-      triggerToast('Challenge deleted. Everyone keeps the verses in their queue.');
+      triggerToast('Challenge deleted. Everyone keeps the verses.');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, challengePath);
-      triggerToast("Couldn't delete that challenge -- please try again.");
+      triggerToast("Couldn't delete that challenge. Try again.");
     }
   };
 
@@ -396,7 +396,7 @@ export function useChallenges({
       const remaining = joinedGroupChallenges.filter((m) => m.challengeId !== challenge.id);
       setJoinedGroupChallenges(remaining);
       await persistJoinedGroupChallenges(remaining);
-      triggerToast('Left the challenge. Your verses stay in your queue.');
+      triggerToast('Left the challenge. Your verses stay on your list.');
     } catch (err) {
       handleFirestoreError(
         err,

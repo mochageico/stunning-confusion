@@ -167,7 +167,7 @@ export function useMessaging({ user, friends, myCircles, navigateTo, triggerToas
       navigateTo('dmThread');
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `dmThreads/${threadId}`);
-      triggerToast("Couldn't open that conversation -- please try again.");
+      triggerToast("Couldn't open that conversation. Try again.");
     }
   };
 
@@ -222,7 +222,7 @@ export function useMessaging({ user, friends, myCircles, navigateTo, triggerToas
       triggerToast(
         scope === 'dm'
           ? "This can't be sent -- you're no longer connected. Send a friend request to keep the conversation going."
-          : "Couldn't send that message -- please try again."
+          : "Couldn't send that message. Try again."
       );
       return false;
     }

@@ -122,7 +122,7 @@ export function useRecorder({ triggerToast, getFirstVerse, onStopped }: Recorder
     try {
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
-        triggerToast('Microphone permission is required to record.');
+        triggerToast('Allow the microphone in Settings to record.');
         return;
       }
       // Required on iOS — expo-audio refuses to record until the audio
@@ -139,10 +139,10 @@ export function useRecorder({ triggerToast, getFirstVerse, onStopped }: Recorder
       // next verse in the range onward.
       const firstVerse = getFirstVerse();
       setVerseTapTimestamps(firstVerse !== undefined ? { [firstVerse]: 0 } : {});
-      triggerToast('Recording started — tap each verse number as you reach it.');
+      triggerToast('Recording. Tap each verse number as you reach it.');
     } catch (err) {
       console.error('Failed to start recording:', err);
-      triggerToast('Could not start recording — check microphone permissions.');
+      triggerToast("Couldn't start recording. Check microphone permissions.");
     }
   };
 
@@ -174,14 +174,12 @@ export function useRecorder({ triggerToast, getFirstVerse, onStopped }: Recorder
     if (!isRecording || isRecordingPaused) return;
     audioRecorder.pause();
     setIsRecordingPaused(true);
-    triggerToast('Recording paused.');
   };
 
   const handleResumeRecording = () => {
     if (!isRecording || !isRecordingPaused) return;
     audioRecorder.record();
     setIsRecordingPaused(false);
-    triggerToast('Recording resumed.');
   };
 
   // Discards the in-progress recording entirely (no save dialog) and
@@ -200,7 +198,7 @@ export function useRecorder({ triggerToast, getFirstVerse, onStopped }: Recorder
     setIsRecording(false);
     setIsRecordingPaused(false);
     setVerseTapTimestamps({});
-    triggerToast('Recording discarded — tap to start again.');
+    triggerToast('Recording discarded.');
   };
 
   // Tap-to-mark: called when the user taps a verse in the teleprompter while

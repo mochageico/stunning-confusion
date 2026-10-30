@@ -399,8 +399,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         // removeQueueItems, not a raw filter: deleting from
         // Firestore now requires recorded intent, so this is
         // the only route that actually removes documents.
-        removeQueueItems(group.items.map((item) => item.verseId));
-        triggerToast('Removed those verses from your list.');
+        const undo = removeQueueItems(group.items.map((item) => item.verseId));
+        triggerToast('Removed from your list.', undo && { action: { label: 'Undo', onPress: undo } });
       }}
     />
   );
@@ -461,7 +461,6 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
                 onDragEnd={({ from, to }) => {
                   if (from === to) return;
                   updateMemoryQueue((prev) => reorderQueueGroups(prev, section.groups, from, to));
-                  triggerToast('Reordered.');
                 }}
                 renderItem={({ item: group, drag, isActive }: RenderItemParams<GroupedQueueItem>) => waitingRow(group, drag, isActive)}
               />
@@ -660,8 +659,6 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             addVerseLink={addVerseLink}
             relabelVerseLink={relabelVerseLink}
             deleteVerseLink={deleteVerseLink}
-            onJoined={() => triggerToast('Joined.')}
-            onAdded={() => triggerToast('Star added.')}
             walk={{ handleUpdateVerseStatus, validateTouch, isReviewDue, reviewsPaused }}
           />
         </View>

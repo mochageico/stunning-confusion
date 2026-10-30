@@ -111,11 +111,11 @@ export function useAccountabilityNudges({ friends, dayStartHour, triggerToast }:
     if (!auth.currentUser) return;
     const myUid = auth.currentUser.uid;
     if (!friends.some((f) => f.uid === friend.uid)) {
-      triggerToast('You can only send accountability nudges to friends.');
+      triggerToast('You can only nudge friends.');
       return;
     }
     if (!canSendAccountabilityNudge(friend.uid)) {
-      triggerToast(`Accountability notification already sent for today -- you can send another tomorrow!`);
+      triggerToast('Already nudged today. You can send another tomorrow.');
       return;
     }
     const trimmedMessage = message.trim();
@@ -134,7 +134,7 @@ export function useAccountabilityNudges({ friends, dayStartHour, triggerToast }:
       const [counterSnap, friendProfileSnap] = await Promise.all([getDoc(counterRef), getDoc(doc(db, 'profiles', friend.uid))]);
 
       if (friendProfileSnap.data()?.isPaused) {
-        triggerToast(`${friend.displayName} is on a break right now -- accountability nudges are paused until they're back.`);
+        triggerToast(`${friend.displayName} is on a break. Nudges are paused until they're back.`);
         return;
       }
 
@@ -144,7 +144,7 @@ export function useAccountabilityNudges({ friends, dayStartHour, triggerToast }:
       const countSoFar = isSameDay ? counterData?.count || 0 : 0;
 
       if (isSameDay && countSoFar >= cap) {
-        triggerToast(`${friend.displayName} has reached their daily accountability-notification limit -- try again tomorrow.`);
+        triggerToast(`${friend.displayName} has hit their nudge limit for today. Try again tomorrow.`);
         return;
       }
 
@@ -170,7 +170,7 @@ export function useAccountabilityNudges({ friends, dayStartHour, triggerToast }:
       triggerToast(`Nudge sent to ${friend.displayName}.`);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'accountabilityNudges');
-      triggerToast('Could not send that nudge -- please try again.');
+      triggerToast("Couldn't send that nudge. Try again.");
     }
   };
 

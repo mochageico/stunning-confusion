@@ -100,7 +100,7 @@ export function useChatCards({
       return true;
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `sharedRecordings/${rec.id}`);
-      triggerToast("Couldn't share that recording -- please try again.");
+      triggerToast("Couldn't share that recording. Try again.");
       return false;
     }
   };

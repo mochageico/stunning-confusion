@@ -429,7 +429,7 @@ export function useCircles({
       setInviteCodeInput('');
     } catch (err) {
       console.error('Failed to join by code:', err);
-      triggerToast("Couldn't join with that code. Please try again.");
+      triggerToast("Couldn't join with that code. Try again.");
     }
   };
 
@@ -535,7 +535,6 @@ export function useCircles({
       });
       await batch.commit();
       setActiveCircleMembers((prev) => prev.filter((m) => m.uid !== memberUid));
-      triggerToast('Member removed.');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `circles/${circleId}/members/${memberUid}`);
     }
