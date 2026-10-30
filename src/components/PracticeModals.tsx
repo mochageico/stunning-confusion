@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, useWindowDimensions, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronUp, ClipboardCheck, Headphones, Pause, Play, X } from 'lucide-react-native';
@@ -276,6 +276,18 @@ function PracticeModalsInner({
     reviewsPaused,
     chapterSectionsDoc: verses[0] ? sectionsForChapter?.(verses[0].book, verses[0].chapter) ?? null : null,
   });
+
+  // Closing mid-Recall (the X, the Home button) saves the verses already
+  // said, as a Mixed review round does. The ref holds this render's closure so
+  // the unmount cleanup sees the latest run, not the first render's.
+  const savePartialRef = useRef<() => void>(() => {});
+  savePartialRef.current = () => {
+    if (type !== 'learn') return;
+    const credit = recall.partialCredit();
+    if (!credit) return;
+    onUpdateStatus(credit.verses, 'memorized', credit.usedSpeech ? 'speak' : 'type', { perfect: false, gradeFor: credit.gradeFor });
+  };
+  useEffect(() => () => savePartialRef.current(), []);
 
   // ==========================================
   // MANUAL LOG — the honest replacement for the old Reveal tab's

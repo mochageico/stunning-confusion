@@ -12,6 +12,7 @@ import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePre
 import { formatDate } from '../../lib/format';
 import { formatLabel } from '../../lib/formatNames';
 import { drillSections, hasEnoughSections } from '../../lib/sectionDrills';
+import { GradeInput, wordAccuracy } from '../../lib/grading';
 import { buildReciteOrder, positionsToWords, verseStartPosition } from '../../lib/reciteOrder';
 
 // ============================================================================
@@ -726,7 +727,29 @@ export function useRecall({
 
   const onBuildUpTryBlind = useCallback(() => handoffToRecallRef.current(), []);
 
+  // A Recall left part-way (the X, the Home button) still earns the verses it
+  // got all the way through, like a Mixed review round does as it ends. Only
+  // due reviews count; the verse the run stopped inside, and any after it,
+  // are left for another go. Null when there is nothing to credit.
+  const partialCredit = () => {
+    if (learnTab !== 'recite' || isFinishedRecite || recitePointer === 0) return null;
+    const lastPos: number[] = verses.map(() => -1);
+    reciteWordObjects.forEach((w, wi) => {
+      lastPos[w.verseIdx] = Math.max(lastPos[w.verseIdx], reciteOrder.posOf[wi]);
+    });
+    const done = verses.filter((v, i) => lastPos[i] >= 0 && lastPos[i] < recitePointer && isDueForReview(v));
+    if (done.length === 0) return null;
+    const gradeFor = (v: VerseState): GradeInput | undefined => {
+      const i = verses.findIndex((x) => x.book === v.book && x.chapter === v.chapter && x.verse === v.verse);
+      if (i < 0) return undefined;
+      const own = reciteWordObjects.flatMap((w, wi) => (w.verseIdx === i ? [reciteOutcomes[wi] || ('missed' as WordOutcome)] : []));
+      return { kind: 'recall', accuracy: wordAccuracy(own), hinted: hintedVerses.has(i) };
+    };
+    return { verses: done, gradeFor, usedSpeech: usedSpeechRef.current };
+  };
+
   return {
+    partialCredit,
     learnTab,
     reciteWordObjects,
     recitePointer,
