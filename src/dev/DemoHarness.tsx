@@ -825,10 +825,6 @@ export function useDemoState(real: AppState): AppState {
     loadingActiveCircle: false,
     joinedGroupPlanMemberships: [{ planId: 'gp1', circleId: 'c1', priority: 'group', joinedAt: iso(-20) }],
     joinedGroupPlanDetails: [groupPlan],
-    activeCircleChallenges: [
-      { id: 'gc1', circleId: 'c1', createdByUid: 'u2', createdByName: 'Sarah Miller', title: 'Psalm 23 sprint', book: 'Psalms', startChapter: 23, endChapter: 23, totalVerses: 6, status: 'active', createdAt: iso(-6) },
-    ],
-    loadingActiveCircleChallenges: false,
     activeChallenges: [
       {
         id: 'ch1', fromUid: 'u2', fromName: 'Sarah Miller', fromAvatarUrl: '', toUid: 'demo', toName: 'Micah', toAvatarUrl: '',

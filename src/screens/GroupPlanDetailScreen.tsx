@@ -3,13 +3,14 @@ import { ScrollView, View } from 'react-native';
 import { LogOut, Trash2 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
-import { FadeInView, NumericInput, StepperRow } from '../components/ui';
+import { FadeInView, NumericInput, ProgressBar, StepperRow } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
 import { useChapterText } from '../state/useScripture';
 import { GroupPlanMembership } from '../types';
 import { AppButton, AppText, AppTextInput, ChoiceCard, useScaledSpace } from '../components/design';
-import { Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
+import { CollapsibleSection, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
+import { groupPlanProgress } from '../lib/groupPlanProgress';
 
 // Plain language, and ordered by how most people actually want it: joining a
 // group thing usually means you want the group's verses to lead. The old
@@ -56,6 +57,7 @@ function groupVerseIds(verseIds: string[]): VerseIdGroup[] {
   return groups;
 }
 
+
 export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
   const {
@@ -69,24 +71,25 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
     joinGroupPlan,
     leaveGroupPlan,
     setGroupPlanPriority,
+    memoryQueue,
     triggerToast,
   } = state;
 
   const [isEditing, setIsEditing] = useState(false);
+  // Edit mode works on a copy and applies it on Save, so a half-typed name or
+  // a stepper tap is never written to the plan for everyone.
+  const [draftName, setDraftName] = useState('');
+  const [draftDesc, setDraftDesc] = useState('');
+  const [draftPace, setDraftPace] = useState(5);
   const [showAddVerses, setShowAddVerses] = useState(false);
   const [addBook, setAddBook] = useState('Romans');
   const [addChapter, setAddChapter] = useState('1');
   const [addStartVerse, setAddStartVerse] = useState('1');
   const [addEndVerse, setAddEndVerse] = useState('1');
   const [joinPriority, setJoinPriority] = useState<GroupPlanMembership['priority']>(DEFAULT_JOIN_PRIORITY);
+  const [choosingPriority, setChoosingPriority] = useState(false);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-
-  if (!viewingGroupPlan) return null;
-  const plan = viewingGroupPlan;
-
-  const isManager = !!user && plan.managerId === user.uid;
-  const membership = joinedGroupPlanMemberships.find((m) => m.planId === plan.planId);
 
   // Real verse count for the "of N" hint next to To verse.
   const addChapterId = getBookByName(addBook)?.id || null;
@@ -96,6 +99,41 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
     addChapterId,
     Number.isNaN(addChapterNum) ? null : addChapterNum
   );
+
+  if (!viewingGroupPlan) return null;
+  const plan = viewingGroupPlan;
+
+  const isManager = !!user && plan.managerId === user.uid;
+  const membership = joinedGroupPlanMemberships.find((m) => m.planId === plan.planId);
+  const progress = groupPlanProgress(memoryQueue, plan);
+  const weeksLeft = Math.max(1, Math.ceil(plan.verseIds.length / Math.max(1, plan.versesPerWeek)));
+  const priorityLabel = PRIORITY_OPTIONS.find((o) => o.id === (membership?.priority ?? joinPriority))?.label ?? '';
+
+  const startEditing = () => {
+    setDraftName(plan.name);
+    setDraftDesc(plan.description || '');
+    setDraftPace(plan.versesPerWeek);
+    setShowAddVerses(false);
+    setIsEditing(true);
+  };
+
+  const saveEdits = () => {
+    const name = draftName.trim();
+    if (!name) {
+      triggerToast('A plan needs a name.');
+      return;
+    }
+    const fields: { name?: string; description?: string; versesPerWeek?: number } = {};
+    if (name !== plan.name) fields.name = name;
+    if (draftDesc.trim() !== (plan.description || '')) fields.description = draftDesc.trim();
+    if (draftPace !== plan.versesPerWeek) fields.versesPerWeek = draftPace;
+    if (Object.keys(fields).length > 0) {
+      updateGroupPlan(plan.circleId, plan.planId, fields);
+      triggerToast('Plan updated.');
+    }
+    setShowAddVerses(false);
+    setIsEditing(false);
+  };
 
   const handleAddVerses = async () => {
     const chapter = parseInt(addChapter, 10);
@@ -142,185 +180,242 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
     </View>
   );
 
+  const verseList = (
+    <>
+      {plan.verseIds.length === 0 ? (
+        <View className="bg-surface border border-line rounded-card">
+          <EmptyState
+            title="No verses yet"
+            message={isManager ? 'Add a small range to start, a few verses at a time rather than a whole book.' : "The leader hasn't added any yet."}
+          />
+        </View>
+      ) : (
+        <GroupedList>
+          {groupVerseIds(plan.verseIds).map((g) => (
+            <ListRow
+              key={g.key}
+              title={`${g.book} ${g.chapter}:${g.verses.length > 1 ? `${g.verses[0]}-${g.verses[g.verses.length - 1]}` : g.verses[0]}`}
+              value={g.verses.length > 1 ? `${g.verses.length} verses` : undefined}
+            />
+          ))}
+        </GroupedList>
+      )}
+    </>
+  );
+
+  // One square per verse of this week's pace: learned, started, or still to come.
+  const weekSquares = Array.from({ length: Math.min(plan.versesPerWeek, 20) }, (_, i) =>
+    i < progress.learnedThisWeek ? 'learned' : i < progress.pulledThisWeek ? 'started' : 'todo'
+  );
+  const squareSize = space(18);
+
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
         <ScreenHeader
-          title={plan.name}
+          title={isEditing ? 'Edit plan' : plan.name}
           eyebrow="Group plan"
-          subtitle={isEditing ? undefined : plan.description || undefined}
+          subtitle={
+            isEditing
+              ? undefined
+              : `${plan.versesPerWeek} verses a week · led by ${plan.managerName || 'the leader'}${plan.description ? `\n${plan.description}` : ''}`
+          }
           onBack={handleBack}
           backLabel="Circle"
           actions={
-            isManager ? (
-              <AppButton size="sm" variant={isEditing ? 'primary' : 'secondary'} label={isEditing ? 'Done' : 'Edit'} onPress={() => setIsEditing(!isEditing)} />
-            ) : undefined
+            isManager && !isEditing ? <AppButton size="sm" variant="secondary" label="Edit" onPress={startEditing} /> : undefined
           }
         />
 
         {isEditing ? (
-          <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
-            <View style={{ gap: space(4) }}>
-              {fieldLabel('Plan name')}
-              <AppTextInput
-                defaultValue={plan.name}
-                onEndEditing={(e) => {
-                  const val = e.nativeEvent.text.trim();
-                  if (val && val !== plan.name) updateGroupPlan(plan.circleId, plan.planId, { name: val });
-                }}
-                accessibilityLabel="Plan name"
-                variant="body"
-                className={inputBox}
-                style={inputStyle}
-              />
-            </View>
-            <View style={{ gap: space(4) }}>
-              {fieldLabel('Description')}
-              <AppTextInput
-                defaultValue={plan.description}
-                onEndEditing={(e) => {
-                  const val = e.nativeEvent.text.trim();
-                  if (val !== plan.description) updateGroupPlan(plan.circleId, plan.planId, { description: val });
-                }}
-                accessibilityLabel="Plan description"
-                multiline
-                numberOfLines={2}
-                textAlignVertical="top"
-                variant="body"
-                className={inputBox}
-                style={{ ...inputStyle, minHeight: space(72) }}
-              />
-            </View>
-          </View>
-        ) : null}
-
-        <GroupedList>
-          <ListRow title="Managed by" value={plan.managerName || 'Leader'} />
-          {!isManager && <ListRow title="Pace" value={`${plan.versesPerWeek} verses a week`} />}
-        </GroupedList>
-
-        {isManager && (
-          <View style={{ gap: space(6) }}>
-            <SectionHeader title="Pace" />
-            <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(8) }}>
-              <StepperRow
-                value={plan.versesPerWeek}
-                min={1}
-                max={20}
-                onChange={(n) => updateGroupPlan(plan.circleId, plan.planId, { versesPerWeek: n })}
-              />
-              <AppText variant="body" className="font-sans font-semibold text-ink">
-                {plan.versesPerWeek} verses a week
-              </AppText>
-              <AppText variant="caption" className="font-sans text-ink-3">
-                New verses this plan adds each week. Each member's daily limit and priority decide how they blend with their own queue.
-              </AppText>
-            </View>
-          </View>
-        )}
-
-        {/* VERSES */}
-        <View style={{ gap: space(6) }}>
-          <SectionHeader
-            title={`Verses · ${plan.verseIds.length}`}
-            actionLabel={isManager ? (showAddVerses ? 'Cancel' : 'Add verses') : undefined}
-            onAction={() => setShowAddVerses(!showAddVerses)}
-          />
-
-          {showAddVerses && isManager && (
-            <FadeInView>
-              <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
-                <View style={{ gap: space(4) }}>
-                  {fieldLabel('Book')}
-                  <BookPicker value={addBook} onChange={setAddBook} />
-                </View>
-                <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
-                  <View style={numberBasis}>
-                    {fieldLabel('Chapter')}
-                    <NumericInput
-                      value={addChapter}
-                      onChangeText={setAddChapter}
-                      accessibilityLabel="Chapter"
-                      className={numberInput}
-                      style={numberStyle}
-                    />
-                  </View>
-                  <View style={numberBasis}>
-                    {fieldLabel('From verse')}
-                    <NumericInput
-                      value={addStartVerse}
-                      onChangeText={setAddStartVerse}
-                      accessibilityLabel="From verse"
-                      className={numberInput}
-                      style={numberStyle}
-                    />
-                  </View>
-                  <View style={numberBasis}>
-                    {fieldLabel('To verse', addChapterData ? `of ${addChapterData.verseCount}` : undefined)}
-                    <NumericInput
-                      value={addEndVerse}
-                      onChangeText={setAddEndVerse}
-                      accessibilityLabel="To verse"
-                      className={numberInput}
-                      style={numberStyle}
-                    />
-                  </View>
-                </View>
-                <AppButton variant="primary" label="Add verses" onPress={handleAddVerses} />
-              </View>
-            </FadeInView>
-          )}
-
-          {plan.verseIds.length === 0 ? (
-            <View className="bg-surface border border-line rounded-card">
-              <EmptyState
-                title="No verses yet"
-                message={isManager ? 'Add a small range to start, a few verses at a time rather than a whole book.' : "The leader hasn't added any yet."}
-              />
-            </View>
-          ) : (
-            <GroupedList>
-              {groupVerseIds(plan.verseIds).map((g) => (
-                <ListRow
-                  key={g.key}
-                  title={`${g.book} ${g.chapter}:${g.verses.length > 1 ? `${g.verses[0]}-${g.verses[g.verses.length - 1]}` : g.verses[0]}`}
-                  value={g.verses.length > 1 ? `${g.verses.length} verses` : undefined}
+          <>
+            <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+              <View style={{ gap: space(4) }}>
+                {fieldLabel('Plan name')}
+                <AppTextInput
+                  value={draftName}
+                  onChangeText={setDraftName}
+                  accessibilityLabel="Plan name"
+                  variant="body"
+                  className={inputBox}
+                  style={inputStyle}
                 />
-              ))}
-            </GroupedList>
-          )}
-        </View>
+              </View>
+              <View style={{ gap: space(4) }}>
+                {fieldLabel('Description')}
+                <AppTextInput
+                  value={draftDesc}
+                  onChangeText={setDraftDesc}
+                  accessibilityLabel="Plan description"
+                  multiline
+                  numberOfLines={2}
+                  textAlignVertical="top"
+                  variant="body"
+                  className={inputBox}
+                  style={{ ...inputStyle, minHeight: space(72) }}
+                />
+              </View>
+            </View>
 
-        {/* JOIN / MEMBERSHIP -- the priority choice is made here, at join,
-            rather than hardcoded and only changeable afterwards on a screen
-            most members never come back to. */}
-        <View style={{ gap: space(6) }}>
-          <SectionHeader title={membership ? 'Which verses come first' : 'How should these verses fit in?'} />
-          {membership ? (
-            priorityCards(membership.priority, (id) => setGroupPlanPriority(plan.planId, id))
-          ) : (
-            <>
-              {priorityCards(joinPriority, setJoinPriority)}
-              <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-                You can change this any time. It decides which verses win when there isn't room for everything.
-              </AppText>
-            </>
-          )}
-        </View>
+            <View style={{ gap: space(6) }}>
+              <SectionHeader title="Pace" />
+              <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(8) }}>
+                <StepperRow value={draftPace} min={1} max={20} onChange={setDraftPace} />
+                <AppText variant="body" className="font-sans font-semibold text-ink">
+                  {draftPace} verses a week
+                </AppText>
+                <AppText variant="caption" className="font-sans text-ink-3">
+                  New verses this plan adds each week. Each member's daily limit and priority decide how they blend with their own queue.
+                </AppText>
+              </View>
+            </View>
 
-        {!membership && <AppButton size="lg" variant="primary" label="Join plan" onPress={() => joinGroupPlan(plan, joinPriority)} />}
+            <View style={{ gap: space(6) }}>
+              <SectionHeader
+                title={`Verses · ${plan.verseIds.length}`}
+                actionLabel={showAddVerses ? 'Cancel' : 'Add verses'}
+                onAction={() => setShowAddVerses(!showAddVerses)}
+              />
+              {showAddVerses && (
+                <FadeInView>
+                  <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+                    <View style={{ gap: space(4) }}>
+                      {fieldLabel('Book')}
+                      <BookPicker value={addBook} onChange={setAddBook} />
+                    </View>
+                    <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+                      <View style={numberBasis}>
+                        {fieldLabel('Chapter')}
+                        <NumericInput
+                          value={addChapter}
+                          onChangeText={setAddChapter}
+                          accessibilityLabel="Chapter"
+                          className={numberInput}
+                          style={numberStyle}
+                        />
+                      </View>
+                      <View style={numberBasis}>
+                        {fieldLabel('From verse')}
+                        <NumericInput
+                          value={addStartVerse}
+                          onChangeText={setAddStartVerse}
+                          accessibilityLabel="From verse"
+                          className={numberInput}
+                          style={numberStyle}
+                        />
+                      </View>
+                      <View style={numberBasis}>
+                        {fieldLabel('To verse', addChapterData ? `of ${addChapterData.verseCount}` : undefined)}
+                        <NumericInput
+                          value={addEndVerse}
+                          onChangeText={setAddEndVerse}
+                          accessibilityLabel="To verse"
+                          className={numberInput}
+                          style={numberStyle}
+                        />
+                      </View>
+                    </View>
+                    <AppButton variant="primary" label="Add verses" onPress={handleAddVerses} />
+                  </View>
+                </FadeInView>
+              )}
+              {verseList}
+            </View>
 
-        {(membership || isManager) && (
-          <GroupedList>
-            {membership && (
-              <ListRow Icon={LogOut} title="Leave plan" destructive accessory="none" onPress={() => setConfirmingLeave(true)} />
-            )}
-            {isManager && (
+            <View style={{ gap: space(10) }}>
+              <AppButton size="lg" variant="primary" label="Save" onPress={saveEdits} />
+              <AppButton variant="quiet" label="Cancel" onPress={() => setIsEditing(false)} />
+            </View>
+
+            <GroupedList>
               <ListRow Icon={Trash2} title="Delete plan" destructive accessory="none" onPress={() => setConfirmingDelete(true)} />
+            </GroupedList>
+          </>
+        ) : membership ? (
+          <>
+            {/* Where you are: the answer a member opens this page for. */}
+            <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(10) }}>
+              <View className="flex-row items-baseline justify-between" style={{ gap: space(8) }}>
+                <AppText variant="body" className="font-sans font-semibold text-ink">Your progress</AppText>
+                <AppText variant="caption" className="font-sans text-ink-3">
+                  {progress.learned} of {progress.total} verses learned
+                </AppText>
+              </View>
+              <ProgressBar percent={(progress.learned / Math.max(1, progress.total)) * 100} />
+            </View>
+
+            <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(10) }}>
+              <View className="flex-row items-baseline justify-between" style={{ gap: space(8) }}>
+                <AppText variant="body" className="font-sans font-semibold text-ink">This week</AppText>
+                <AppText variant="caption" className="font-sans text-ink-3">
+                  {progress.leftThisWeek === 0 ? 'All started' : `${progress.leftThisWeek} still to start`}
+                </AppText>
+              </View>
+              <View className="flex-row flex-wrap" style={{ gap: space(4) }} accessible accessibilityLabel={`${progress.learnedThisWeek} learned, ${progress.pulledThisWeek} started, of ${plan.versesPerWeek} this week`}>
+                {weekSquares.map((kind, i) => (
+                  <View
+                    key={i}
+                    className={kind === 'learned' ? 'bg-accent' : kind === 'started' ? 'bg-accent-soft' : 'bg-fill'}
+                    style={{ width: squareSize, height: squareSize, borderRadius: 4 }}
+                  />
+                ))}
+              </View>
+              <AppText variant="caption" className="font-sans text-ink-3">
+                {progress.pulledThisWeek} of {plan.versesPerWeek} started · {progress.learnedThisWeek} learned
+              </AppText>
+            </View>
+
+            <CollapsibleSection storageKey="plan.verses" title={`All verses · ${plan.verseIds.length}`} defaultCollapsed>
+              {verseList}
+            </CollapsibleSection>
+
+            <GroupedList>
+              <ListRow title="Which verses come first" value={priorityLabel} onPress={() => setChoosingPriority(true)} />
+              <ListRow Icon={LogOut} title="Leave plan" destructive accessory="none" onPress={() => setConfirmingLeave(true)} />
+            </GroupedList>
+          </>
+        ) : (
+          <>
+            <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(6) }}>
+              <AppText variant="body" className="font-sans font-semibold text-ink">What you'll do</AppText>
+              <AppText variant="label" className="font-sans text-ink-2">
+                {plan.verseIds.length === 0
+                  ? "The leader hasn't added any verses yet."
+                  : `Learn ${plan.verseIds.length} ${plan.verseIds.length === 1 ? 'verse' : 'verses'}, ${plan.versesPerWeek} new each week. About ${weeksLeft} ${weeksLeft === 1 ? 'week' : 'weeks'}.`}
+              </AppText>
+            </View>
+
+            <AppButton size="lg" variant="primary" label="Join plan" onPress={() => joinGroupPlan(plan, joinPriority)} />
+
+            <GroupedList footer="It decides which verses win when there isn't room for everything. You can change it any time.">
+              <ListRow title="Which verses come first" value={priorityLabel} onPress={() => setChoosingPriority(true)} />
+            </GroupedList>
+
+            <CollapsibleSection storageKey="plan.verses" title={`All verses · ${plan.verseIds.length}`} defaultCollapsed>
+              {verseList}
+            </CollapsibleSection>
+
+            {isManager && (
+              <GroupedList>
+                <ListRow Icon={Trash2} title="Delete plan" destructive accessory="none" onPress={() => setConfirmingDelete(true)} />
+              </GroupedList>
             )}
-          </GroupedList>
+          </>
         )}
       </ScrollView>
+
+      <Dialog
+        visible={choosingPriority}
+        onClose={() => setChoosingPriority(false)}
+        placement="sheet"
+        title={membership ? 'Which verses come first' : 'How should these verses fit in?'}
+      >
+        {priorityCards(membership?.priority ?? joinPriority, (id) => {
+          if (membership) setGroupPlanPriority(plan.planId, id);
+          else setJoinPriority(id);
+          setChoosingPriority(false);
+        })}
+      </Dialog>
 
       <Dialog
         visible={confirmingLeave}

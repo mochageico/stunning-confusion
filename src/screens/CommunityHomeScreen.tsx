@@ -101,7 +101,7 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
               <EmptyState
                 Icon={Users}
                 title="You're not in a circle yet"
-                message="A circle is a small group that shares plans, challenges and a chat."
+                message="A circle is a small group that shares plans and a chat."
                 actionLabel="Find circles"
                 onAction={() => setCommunitySubView('find')}
               />

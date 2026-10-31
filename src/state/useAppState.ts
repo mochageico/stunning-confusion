@@ -70,7 +70,6 @@ import {
 } from '../data';
 import { useChapterText } from './useScripture';
 import {
-  GroupChallengeMembership,
   QueueItem,
   Recording,
   RecordingVisibility,
@@ -619,8 +618,6 @@ export function useAppState() {
     user,
     friends,
     applyCircleGroupPlans,
-    setActiveCircleChallenges: (value) => setActiveCircleChallenges(value),
-    setLoadingActiveCircleChallenges: (loading) => setLoadingActiveCircleChallenges(loading),
     triggerToast: (message) => triggerToast(message),
   });
 
@@ -683,33 +680,15 @@ export function useAppState() {
     triggerToast: (message) => triggerToast(message),
   });
 
-  // 1:1 and group challenges (see useChallenges).
+  // 1:1 challenges in chats (see useChallenges).
   const {
     activeChallenges,
     loadingActiveChallenges,
     myChallengeBadges,
-    activeCircleChallenges,
-    setActiveCircleChallenges,
-    loadingActiveCircleChallenges,
-    setLoadingActiveCircleChallenges,
-    openChallengeLeaderboardId,
-    openChallengeLeaderboard,
-    loadingChallengeLeaderboard,
-    joinedGroupChallenges,
-    applyJoinedGroupChallenges,
-    resetGroupChallenges,
     sendChallenge,
     acceptChallenge,
     declineChallenge,
     deleteChallenge,
-    joinGroupChallenge,
-    createGroupChallenge,
-    endGroupChallenge,
-    deleteGroupChallenge,
-    leaveGroupChallenge,
-    openChallengeLeaderboardModal,
-    closeChallengeLeaderboard,
-    clearGroupChallengeMembershipsForCircle,
     syncChallengeProgress,
   } = useChallenges({
     user,
@@ -1359,7 +1338,6 @@ export function useAppState() {
         const memberships: GroupPlanMembership[] = planData[JOINED_GROUP_PLANS_FIELD] || [];
         groupPlansLoad = loadJoinedGroupPlans(memberships);
 
-        applyJoinedGroupChallenges((planData.joinedGroupChallenges as GroupChallengeMembership[]) || []);
       } else if (planSnap) {
         // Only when the server said there's no plan: a read that failed
         // (offline) must never write defaults over the real one.
@@ -1738,7 +1716,6 @@ export function useAppState() {
       // membership). Reset on every auth transition, not just sign-out.
       resetActiveCircle();
       resetGroupPlans();
-      resetGroupChallenges();
 
       // Same reasoning -- a new sign-in shouldn't show the previous
       // account's (or guest session's) cumulative practice time.
@@ -3657,11 +3634,6 @@ export function useAppState() {
     reactionsByMessageId, toggleReaction,
     activeChallenges, loadingActiveChallenges, myChallengeBadges,
     sendChallenge, acceptChallenge, declineChallenge, deleteChallenge,
-    activeCircleChallenges, loadingActiveCircleChallenges, joinedGroupChallenges,
-    createGroupChallenge, joinGroupChallenge, endGroupChallenge,
-    deleteGroupChallenge, leaveGroupChallenge,
-    openChallengeLeaderboardId, openChallengeLeaderboard, loadingChallengeLeaderboard,
-    openChallengeLeaderboardModal, closeChallengeLeaderboard, clearGroupChallengeMembershipsForCircle,
     selectedRecording, setSelectedRecording,
     communitySubView, setCommunitySubView,
     activeGroupId,

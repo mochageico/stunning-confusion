@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
-import type { ActivityEvent, Circle, CircleMember, Friend, GroupChallenge, GroupPlan } from '../types';
+import type { ActivityEvent, Circle, CircleMember, Friend, GroupPlan } from '../types';
 import { normalizeGroupPlan } from '../lib/appData';
 import { loadCircles, saveCircles } from '../lib/communityCopyStore';
 import { removeSharesBy } from './useCircleTakeaways';
@@ -34,8 +34,6 @@ interface CirclesDeps {
   friends: Friend[];
   /** The open circle's group plans (owned by the group-plan code). */
   applyCircleGroupPlans: (plans: GroupPlan[]) => void;
-  setActiveCircleChallenges: Dispatch<SetStateAction<GroupChallenge[]>>;
-  setLoadingActiveCircleChallenges: (loading: boolean) => void;
   triggerToast: (message: string) => void;
 }
 
@@ -43,8 +41,6 @@ export function useCircles({
   user,
   friends,
   applyCircleGroupPlans,
-  setActiveCircleChallenges,
-  setLoadingActiveCircleChallenges,
   triggerToast,
 }: CirclesDeps) {
   const [viewingGroupDetail, setViewingGroupDetail] = useState<boolean>(false);
@@ -247,14 +243,12 @@ export function useCircles({
   const loadActiveCircleData = async (circleId: string, opts?: { silent?: boolean }) => {
     if (!opts?.silent) {
       setLoadingActiveCircle(true);
-      setLoadingActiveCircleChallenges(true);
     }
     try {
-      const [circleSnap, membersSnap, plansSnap, challengesSnap] = await Promise.all([
+      const [circleSnap, membersSnap, plansSnap] = await Promise.all([
         getDoc(doc(db, 'circles', circleId)),
         getDocs(collection(db, 'circles', circleId, 'members')),
         getDocs(collection(db, 'circles', circleId, 'groupPlans')),
-        getDocs(collection(db, 'circles', circleId, 'challenges')),
       ]);
       const circle = circleSnap.exists() ? ({ id: circleSnap.id, ...circleSnap.data() } as Circle) : null;
       setActiveCircle(circle);
@@ -271,12 +265,10 @@ export function useCircles({
           .catch((err) => console.error('Failed to backfill circle invite code:', err));
       }
       applyCircleGroupPlans(plansSnap.docs.map((d) => normalizeGroupPlan(d.id, d.data())));
-      setActiveCircleChallenges(challengesSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as GroupChallenge));
     } catch (err) {
       console.error('Failed to load circle detail:', err);
     } finally {
       setLoadingActiveCircle(false);
-      setLoadingActiveCircleChallenges(false);
     }
   };
 

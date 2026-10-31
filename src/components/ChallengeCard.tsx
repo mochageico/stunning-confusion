@@ -188,24 +188,6 @@ export function ChallengeCreateSheet({
   );
 }
 
-/** Inline presentation: the expanding panel used on the circle page,
- *  deliberately the same shape as the New Group Plan form above it. Not a
- *  Modal, so it uses App.tsx's shared numeric accessory bar rather than
- *  registering one of its own. */
-export function ChallengeCreateInline({
-  onSubmit,
-  onCancel,
-}: {
-  onSubmit: (range: ChallengeRange) => void;
-  onCancel: () => void;
-}) {
-  const space = useScaledSpace();
-  return (
-    <View className="bg-surface border border-line rounded-card" style={{ padding: space(14) }}>
-      <ChallengeRangeForm inline submitLabel="Start challenge" onSubmit={onSubmit} onCancel={onCancel} />
-    </View>
-  );
-}
 
 // 1:1 challenge card -- pending (accept/decline for the recipient, waiting
 // note for the sender), active (dual progress bars), or completed/declined.

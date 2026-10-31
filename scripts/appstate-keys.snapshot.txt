@@ -9,7 +9,6 @@ activeChapterTextError: string | null
 activeChapterTextLoading: boolean
 activeChapterVerses: VerseState[]
 activeCircle: Circle | null
-activeCircleChallenges: GroupChallenge[]
 activeCircleChatId: string | null
 activeCircleGroupPlans: GroupPlan[]
 activeCircleMembers: CircleMember[]
@@ -52,11 +51,9 @@ circleStats: { [x: string]: CircleStatsState; }
 circleTakeaways: { [x: string]: CircleTakeawayList; }
 cleanPct: number
 clearAudioDownloads: () => Promise<void>
-clearGroupChallengeMembershipsForCircle: (circleId: string) => void
 clearGroupPlanMembershipsForCircle: (circleId: string) => void
 clearImportedAudio: () => void
 clearSlipped: (verseIds: string[]) => Promise<void>
-closeChallengeLeaderboard: () => void
 closeCircleChat: () => void
 closeCirclePreview: () => void
 closeCommunityGuidelines: () => void
@@ -66,7 +63,6 @@ cognitiveLoadSensitivity: "low" | "medium" | "high"
 communitySubView: "home" | "find" | "create" | "preview"
 countRangeProgress: (queue: QueueItem[], range: VerseRange) => number
 createCircle: (name: string, description: string, isPublic: boolean) => Promise<void>
-createGroupChallenge: (circleId: string, title: string, range: { book: string; startChapter: number; endChapter: number; startVerse?: number | undefined; endVerse?: number | undefined; }) => Promise<void>
 createGroupDesc: string
 createGroupName: string
 createGroupPlan: (circleId: string, input: { name: string; description: string; }) => Promise<void>
@@ -82,7 +78,6 @@ deleteAccount: (reauthPassword?: string | undefined) => Promise<{ ok: true; } | 
 deleteChallenge: (challenge: Challenge) => Promise<void>
 deleteChapterPhoto: (photo: ChapterPhoto) => Promise<void>
 deleteChatMessage: (scope: ChatScope, containerId: string, message: ChatMessage) => Promise<void>
-deleteGroupChallenge: (challenge: GroupChallenge) => Promise<void>
 deleteGroupPlan: (circleId: string, planId: string) => Promise<void>
 deleteListenPlaylist: (id: string) => void
 deleteRecording: (recording: Recording) => Promise<void>
@@ -95,7 +90,6 @@ dismissNotificationAsk: () => void
 dismissOnboarding: () => Promise<void>
 dmThreads: DMThread[]
 downloadingRecordingIds: Set<string>
-endGroupChallenge: (challenge: GroupChallenge, status?: "completed" | "cancelled") => Promise<void>
 feedBookFilter: string
 feedChapterFilter: string
 feedRecordings: Recording[]
@@ -145,9 +139,7 @@ isTodayLearningDay: () => boolean
 isVerseSelected: (vNum: number) => boolean
 joinCircle: (circleId: string, circleName?: string | undefined, inviteCode?: string | undefined) => Promise<void>
 joinCircleByCode: (codeInput: string) => Promise<void>
-joinGroupChallenge: (challenge: GroupChallenge) => Promise<void>
 joinGroupPlan: (plan: GroupPlan, priority?: "group" | "individual" | "additive") => Promise<void>
-joinedGroupChallenges: GroupChallengeMembership[]
 joinedGroupPlanDetails: GroupPlan[]
 joinedGroupPlanMemberships: GroupPlanMembership[]
 lastRecordingDuration: number
@@ -157,7 +149,6 @@ lateNotes: LateNote[]
 learningCount: number
 learningDays: string[]
 leaveCircle: (circleId: string) => Promise<void>
-leaveGroupChallenge: (challenge: GroupChallenge) => Promise<void>
 leaveGroupPlan: (planId: string) => Promise<void>
 listenPlaylists: ListenPlaylist[]
 listenSource: "all" | "selection" | "memorization" | "reviewing" | "priming" | `playlist:${string}`
@@ -177,12 +168,10 @@ loadUserData: (currentUser: any) => Promise<void>
 loadingAccountabilityNudges: boolean
 loadingActiveChallenges: boolean
 loadingActiveCircle: boolean
-loadingActiveCircleChallenges: boolean
 loadingActiveCircleMessages: boolean
 loadingActiveDMMessages: boolean
 loadingActivityEvents: boolean
 loadingAuth: boolean
-loadingChallengeLeaderboard: boolean
 loadingDmThreads: boolean
 loadingFeedRecordings: boolean
 loadingFriends: boolean
@@ -214,9 +203,6 @@ notificationPermission: "granted" | "denied" | "undetermined" | "unsupported"
 notificationPrefs: NotificationPrefs
 nowPlayingRecording: Recording | null
 offline: { copySavedAt: string | null; } | null
-openChallengeLeaderboard: GroupChallengeParticipant[]
-openChallengeLeaderboardId: string | null
-openChallengeLeaderboardModal: (challenge: GroupChallenge) => Promise<void>
 openCircle: (circleId: string) => void
 openCircleChat: (circleId: string) => void
 openCirclePreview: (circle: Circle) => void
