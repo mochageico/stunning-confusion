@@ -216,7 +216,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
             </View>
             <View style={{ gap: space(8) }}>
               <AppButton variant="primary" Icon={UserPlus} label="Invite a friend" onPress={() => navigateTo('findFriends')} />
-              <AppButton variant="secondary" Icon={Users} label="Find a circle" onPress={() => selectTab('community')} />
+              <AppButton variant="secondary" Icon={Users} label="Find circles" onPress={() => selectTab('community')} />
             </View>
             <AppText variant="caption" className="font-sans text-ink-3">
               Meanwhile, record a chapter yourself on the Record tab. Your own readings always play for you.

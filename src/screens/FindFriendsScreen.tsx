@@ -44,7 +44,7 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-        <ScreenHeader title="Find friends" onBack={handleBack} backLabel="Community" />
+        <ScreenHeader title="Add friends" onBack={handleBack} backLabel="Community" />
 
         {/* Incoming requests. Names tap through to the sender's profile so you
             can see who they are before deciding. */}

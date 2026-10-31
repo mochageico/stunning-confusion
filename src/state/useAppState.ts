@@ -994,13 +994,13 @@ export function useAppState() {
   // that's a snapshot, not a live check). There is no public tier any more --
   // recordings are only ever shared with friends and circles.
   // Signed-out/guest keeps the illustrative SUGGESTED_FEED_RECORDINGS.
-  const loadSharedRecordings = async () => {
+  const loadSharedRecordings = async (opts?: { silent?: boolean }) => {
     if (!auth.currentUser) {
       setFeedRecordings(SUGGESTED_FEED_RECORDINGS);
       setReceivedRecordings([]);
       return;
     }
-    setLoadingFeedRecordings(true);
+    if (!opts?.silent) setLoadingFeedRecordings(true);
     try {
       const uid = auth.currentUser.uid;
       const snap = await getDocs(
@@ -1077,15 +1077,62 @@ export function useAppState() {
   // loadMyCircles(), since loadCircleFriends() inside it isn't awaited and
   // can finish later.
   useEffect(() => {
-    loadActivityFeed();
+    // Silent once there's something on screen: the periodic Community refresh
+    // replaces these lists, and that shouldn't flash "Loading…" each time.
+    loadActivityFeed({ silent: activityEvents.length > 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, circleFriends, friends]);
 
   // Same reasoning, for the real shared-recordings feed.
   useEffect(() => {
-    loadSharedRecordings();
+    loadSharedRecordings({ silent: feedRecordings.length > 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, circleFriends, friends]);
+
+  // Keep Community current while it's open. Everything above loads once per
+  // sign-in, so a new friend request, a joined member or a fresh milestone
+  // only showed after reopening the app. Now: on entering the tab, on
+  // returning to the app, and every 30s while looking at it. Silent, so the
+  // lists update in place instead of flashing "Loading…". Chats are live
+  // listeners already (useMessaging) and aren't part of this.
+  const refreshCommunityRef = useRef<() => Promise<unknown>>(async () => undefined);
+  refreshCommunityRef.current = () =>
+    Promise.all([
+      loadFriends(),
+      loadFriendRequests(),
+      loadMyCircles(),
+      loadReceivedAccountabilityNudges(),
+      loadSharedRecordings({ silent: true }),
+      viewingGroupDetail && activeGroupId ? loadActiveCircleData(activeGroupId, { silent: true }) : undefined,
+    ]);
+  const communityOpen = !!user && currentTab === 'community';
+  useEffect(() => {
+    if (!communityOpen) return;
+    let last = 0;
+    const refresh = () => {
+      // Entering a sub-screen re-runs this effect's trigger below, so a floor
+      // keeps quick taps around the tab from re-reading everything each time.
+      if (Date.now() - last < 10_000) return;
+      last = Date.now();
+      void refreshCommunityRef.current();
+    };
+    refresh();
+    const timer = setInterval(refresh, 30_000);
+    const sub = NativeAppState.addEventListener('change', (next) => {
+      if (next === 'active') refresh();
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+  }, [communityOpen, user?.uid]);
+
+  // Opening a circle always shows fresh data (openCircle loads it); coming
+  // back to the list after leaving one picks up changes made inside it.
+  useEffect(() => {
+    if (communityOpen && !viewingGroupDetail) void refreshCommunityRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingGroupDetail]);
 
   // Load real friends + pending requests on sign-in/out.
   useEffect(() => {
@@ -3593,6 +3640,8 @@ export function useAppState() {
     activeCircle, activeCircleMembers, activeCircleGroupPlans, loadingActiveCircle,
     circleFriends, loadCircleFriends,
     activityEvents: visibleActivityEvents, loadingActivityEvents, loadActivityFeed,
+    /** Pull-to-refresh on the Community screens. */
+    refreshCommunity: () => refreshCommunityRef.current(),
     friends, loadingFriends, loadFriends,
     incomingFriendRequests: visibleIncomingFriendRequests, outgoingFriendRequests, loadFriendRequests,
     userSearchQuery, setUserSearchQuery, userSearchResults: visibleUserSearchResults, searchingUsers, searchUsers,

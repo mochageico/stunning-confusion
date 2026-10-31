@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Share, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Share, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import * as Clipboard from 'expo-clipboard';
 import { BookOpen, ChevronRight, Link as LinkIcon, LogOut, MessageCircle, Share2, Sliders, Trash2, Trophy } from 'lucide-react-native';
@@ -9,7 +9,7 @@ import { Circle, CircleMember, GroupChallenge, GroupPlan } from '../types';
 import { FadeInView, ProgressBar } from '../components/ui';
 import { ChallengeCreateInline } from '../components/ChallengeCard';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
-import { Avatar, Badge, CollapsibleSection, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SegmentedControl } from '../components/blocks';
+import { Avatar, Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SegmentedControl } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { buildInviteUrl } from '../lib/invites';
 import { combineCircle, weekBounds } from '../lib/circleTotals';
@@ -20,16 +20,37 @@ const PRIVACY_OPTIONS = [
   { id: 'private' as const, label: 'Private' },
 ];
 
+// The line above a tab's list: how many there are, and the one action for it.
+function PanelHeader({ title, actionLabel, onAction }: { title: string; actionLabel?: string; onAction?: () => void }) {
+  const space = useScaledSpace();
+  return (
+    <View className="flex-row items-center justify-between" style={{ paddingHorizontal: space(4), gap: space(8) }}>
+      <AppText variant="section" className="font-sans font-semibold text-ink-3 shrink">
+        {title}
+      </AppText>
+      {actionLabel && onAction ? (
+        <Pressable onPress={onAction} hitSlop={10} accessibilityRole="button" className="active:opacity-60 shrink-0">
+          <AppText variant="section" className="font-sans font-semibold text-accent">
+            {actionLabel}
+          </AppText>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
   const space = useScaledSpace();
   const scale = useFontScale();
+  const [refreshing, setRefreshing] = useState(false);
   const {
     user,
     activeCircle,
     activeCircleMembers,
     activeCircleGroupPlans,
     loadingActiveCircle,
+    refreshCommunity,
     updateCircleSettings,
     createGroupPlan,
     removeCircleMember,
@@ -86,6 +107,17 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
   const [draftPublic, setDraftPublic] = useState(true);
 
   const isLeaderOrAdmin = !!activeCircle && !!user && activeCircle.ownerId === user.uid;
+
+  const [tab, setTab] = useState<'week' | 'chat' | 'plans' | 'challenges'>('week');
+  useEffect(() => {
+    setTab('week');
+  }, [activeCircle?.id]);
+  const chatUnread = !!activeCircle && state.isCircleChatUnread(activeCircle.id);
+  // What this person is in the middle of, for "Up next" on This week.
+  const myPlans = activeCircleGroupPlans.filter((p) => joinedGroupPlanMemberships.some((m) => m.planId === p.planId));
+  const myChallenges = activeCircleChallenges.filter(
+    (c) => c.status === 'active' && joinedGroupChallenges.some((m) => m.challengeId === c.id)
+  );
 
   // This week together: everyone's stats docs, added up over the current
   // member list only (someone who left drops out; no doc yet = zero).
@@ -188,7 +220,21 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+      <ScrollView
+        className="flex-1 bg-canvas"
+        contentContainerClassName="p-5 pb-12"
+        contentContainerStyle={{ gap: space(20) }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            tintColor={palette.ink3}
+            onRefresh={() => {
+              setRefreshing(true);
+              refreshCommunity().finally(() => setRefreshing(false));
+            }}
+          />
+        }
+      >
         <ScreenHeader
           title={activeCircle.name}
           eyebrow={activeCircle.isPublic ? 'Public circle' : 'Private circle'}
@@ -219,8 +265,8 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           onPress={() => setShowMembers(true)}
           accessibilityRole="button"
           accessibilityLabel={`Members, ${activeCircleMembers.length}`}
-          className="flex-row items-center bg-surface border border-line rounded-card active:bg-surface-2"
-          style={{ padding: space(14), gap: space(12) }}
+          className="flex-row items-center active:opacity-60"
+          style={{ gap: space(12) }}
         >
           <View className="flex-row items-center shrink-0">
             {activeCircleMembers.slice(0, 4).map((member, idx) => (
@@ -235,27 +281,93 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           <ChevronRight size={18} color={palette.ink3} strokeWidth={2.4} />
         </Pressable>
 
-        {totals && <CircleTotalsCard circleName={activeCircle.name} totals={totals} myUid={user?.uid} />}
-
-        <AppButton
-          size="lg"
-          variant="secondary"
-          Icon={MessageCircle}
-          label={state.isCircleChatUnread(activeCircle.id) ? 'Open group chat · new messages' : 'Open group chat'}
-          onPress={() => openCircleChat(activeCircle.id)}
+        {/* One topic at a time, so the page is a short header and a tab
+            instead of a long scroll. */}
+        <SegmentedControl
+          accessibilityLabel="Circle sections"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { id: 'week', label: 'This week' },
+            { id: 'chat', label: chatUnread ? 'Chat •' : 'Chat' },
+            { id: 'plans', label: 'Plans' },
+            { id: 'challenges', label: 'Challenges' },
+          ]}
+          wrap
         />
 
+        {tab === 'week' && (
+          <View style={{ gap: space(20) }}>
+            {totals ? (
+              <CircleTotalsCard circleName={activeCircle.name} totals={totals} myUid={user?.uid} />
+            ) : (
+              <AppText variant="label" className="font-sans text-ink-3 text-center" style={{ paddingVertical: space(24) }}>
+                Loading this week…
+              </AppText>
+            )}
+
+            {(myPlans.length > 0 || myChallenges.length > 0) && (
+              <GroupedList header="Up next">
+                {myPlans.map((plan) => (
+                  <ListRow
+                    key={plan.planId}
+                    Icon={BookOpen}
+                    title={plan.name}
+                    subtitle={`${plan.versesPerWeek} verses a week`}
+                    onPress={() => openGroupPlan(plan)}
+                  />
+                ))}
+                {myChallenges.map((challenge) => (
+                  <ListRow
+                    key={challenge.id}
+                    Icon={Trophy}
+                    title={challenge.title}
+                    subtitle="Challenge you've joined"
+                    onPress={() => setTab('challenges')}
+                  />
+                ))}
+              </GroupedList>
+            )}
+
+            <GroupedList>
+              <ListRow
+                Icon={isLeaderOrAdmin ? Trash2 : LogOut}
+                title={isLeaderOrAdmin ? 'Disband circle' : 'Leave circle'}
+                destructive
+                accessory="none"
+                onPress={() => setShowLeaveDisbandConfirm(true)}
+              />
+            </GroupedList>
+          </View>
+        )}
+
+        {tab === 'chat' && (
+          <View className="bg-surface border border-line rounded-card" style={{ padding: space(16), gap: space(12) }}>
+            <View className="flex-row items-center" style={{ gap: space(10) }}>
+              <MessageCircle size={22} color={palette.accent} strokeWidth={2.2} />
+              <View className="flex-1">
+                <AppText variant="body" className="font-sans font-semibold text-ink">Group chat</AppText>
+                <AppText variant="caption" className="font-sans text-ink-3">
+                  {chatUnread ? 'You have new messages.' : "You're all caught up."}
+                </AppText>
+              </View>
+            </View>
+            <AppButton size="lg" variant="primary" label="Open chat" onPress={() => openCircleChat(activeCircle.id)} />
+          </View>
+        )}
+
         {/* GROUP PLANS */}
-        <CollapsibleSection
-          storageKey="circle.plans"
-          title={`Group plans · ${activeCircleGroupPlans.length}`}
+        {tab === 'plans' && (
+        <View style={{ gap: space(10) }}>
+        <PanelHeader
+          title={`${activeCircleGroupPlans.length} ${activeCircleGroupPlans.length === 1 ? 'plan' : 'plans'}`}
           actionLabel={isLeaderOrAdmin ? (showCreatePlanForm ? 'Cancel' : 'New plan') : undefined}
           onAction={() => {
             setShowCreatePlanForm(!showCreatePlanForm);
             setNewPlanName('');
             setNewPlanDesc('');
           }}
-        >
+        />
 
           {/* Title and description only. The verses and weekly pace are set
               up afterward, on the plan's own page. */}
@@ -329,18 +441,20 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
               })}
             </GroupedList>
           )}
-        </CollapsibleSection>
+        </View>
+        )}
 
         {/* CHALLENGES -- open to any member, not leader-gated (peer
             competition, not curated content). The whole range front-loads
             into a joiner's queue at once, unlike a group plan, which
             trickles verses in weekly. */}
-        <CollapsibleSection
-          storageKey="circle.challenges"
-          title={`Challenges · ${activeCircleChallenges.length}`}
+        {tab === 'challenges' && (
+        <View style={{ gap: space(10) }}>
+        <PanelHeader
+          title={`${activeCircleChallenges.length} ${activeCircleChallenges.length === 1 ? 'challenge' : 'challenges'}`}
           actionLabel={showCreateChallengeForm ? 'Cancel' : 'New challenge'}
           onAction={() => setShowCreateChallengeForm(!showCreateChallengeForm)}
-        >
+        />
 
           {showCreateChallengeForm && (
             <FadeInView>
@@ -377,23 +491,28 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                 const canEnd = isCreator && challenge.status === 'active';
 
                 return (
-                  <Pressable
+                  // A View, not a Pressable: the buttons inside can't nest in a
+                  // button on web. Only the title block opens the leaderboard.
+                  <View
                     key={challenge.id}
-                    onPress={() => openChallengeLeaderboardModal(challenge)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${challenge.title} leaderboard`}
-                    className="bg-surface border border-line rounded-card active:bg-surface-2"
+                    className="bg-surface border border-line rounded-card"
                     style={{ padding: space(14), gap: space(10) }}
                   >
-                    <View className="flex-row items-start justify-between" style={{ gap: space(8) }}>
+                    <Pressable
+                      onPress={() => openChallengeLeaderboardModal(challenge)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${challenge.title} leaderboard`}
+                      className="flex-row items-start justify-between active:opacity-60"
+                      style={{ gap: space(8) }}
+                    >
                       <View className="flex-1" style={{ gap: space(1) }}>
                         <AppText variant="body" className="font-sans font-semibold text-ink">{challenge.title}</AppText>
                         <AppText variant="caption" className="font-sans text-ink-3">
                           {reference} · started by {challenge.createdByName}
                         </AppText>
                       </View>
-                      {challenge.status === 'completed' && <Badge label="Ended" />}
-                    </View>
+                      {challenge.status === 'completed' ? <Badge label="Ended" /> : <ChevronRight size={18} color={palette.ink3} strokeWidth={2.4} />}
+                    </Pressable>
 
                     {membership ? (
                       <View style={{ gap: space(4) }}>
@@ -461,22 +580,13 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                         )}
                       </View>
                     )}
-                  </Pressable>
+                  </View>
                 );
               })}
             </View>
           )}
-        </CollapsibleSection>
-
-        <GroupedList>
-          <ListRow
-            Icon={isLeaderOrAdmin ? Trash2 : LogOut}
-            title={isLeaderOrAdmin ? 'Disband circle' : 'Leave circle'}
-            destructive
-            accessory="none"
-            onPress={() => setShowLeaveDisbandConfirm(true)}
-          />
-        </GroupedList>
+        </View>
+        )}
       </ScrollView>
 
       {/* Members */}
@@ -521,7 +631,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         visible={confirmingRemove}
         onClose={() => setConfirmingRemove(false)}
         title={`Remove ${removeTarget?.displayName ?? 'this member'}?`}
-        message="They'll lose access to the circle. They can rejoin with the invite code, or from Find a circle if it's public."
+        message="They'll lose access to the circle. They can rejoin with the invite code, or from Find circles if it's public."
         actions={
           <>
             <AppButton variant="quiet" label="Cancel" onPress={() => setConfirmingRemove(false)} />
@@ -564,7 +674,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                 Share.share({
                   message: `Join "${activeCircle.name}" on Scripture Memory, so we can memorize together: ${shareUrl}
 
-Or enter code ${activeCircle.inviteCode} under Community > Find a circle.`,
+Or enter code ${activeCircle.inviteCode} under Community > Find circles.`,
                 }).catch(() => undefined)
               }
             />
@@ -634,7 +744,7 @@ Or enter code ${activeCircle.inviteCode} under Community > Find a circle.`,
             options={PRIVACY_OPTIONS}
           />
           <AppText variant="caption" className="font-sans text-ink-3">
-            {draftPublic ? 'Listed in Find a circle. Anyone can join.' : 'Hidden from search. People join with the invite code.'}
+            {draftPublic ? 'Listed in Find circles. Anyone can join.' : 'Hidden from search. People join with the invite code.'}
           </AppText>
         </View>
       </Dialog>

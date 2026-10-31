@@ -161,8 +161,8 @@ leaveGroupChallenge: (challenge: GroupChallenge) => Promise<void>
 leaveGroupPlan: (planId: string) => Promise<void>
 listenPlaylists: ListenPlaylist[]
 listenSource: "all" | "selection" | "memorization" | "reviewing" | "priming" | `playlist:${string}`
-loadActiveCircleData: (circleId: string) => Promise<void>
-loadActivityFeed: () => Promise<void>
+loadActiveCircleData: (circleId: string, opts?: { silent?: boolean | undefined; } | undefined) => Promise<void>
+loadActivityFeed: (opts?: { silent?: boolean | undefined; } | undefined) => Promise<void>
 loadCircleFriends: (circles: Circle[]) => Promise<void>
 loadCircleStats: (circleId: string) => Promise<void>
 loadCircleTakeaways: (circleId: string) => Promise<void>
@@ -172,7 +172,7 @@ loadFriends: () => Promise<void>
 loadMyCircles: () => Promise<void>
 loadPublicCircles: () => Promise<void>
 loadReceivedAccountabilityNudges: () => Promise<void>
-loadSharedRecordings: () => Promise<void>
+loadSharedRecordings: (opts?: { silent?: boolean | undefined; } | undefined) => Promise<void>
 loadUserData: (currentUser: any) => Promise<void>
 loadingAccountabilityNudges: boolean
 loadingActiveChallenges: boolean
@@ -261,6 +261,7 @@ recordingRangeStart: number | null
 recordingSeconds: number
 recordingSelectedVerses: { verse: number; text: string; }[]
 recordingTranslation: string
+refreshCommunity: () => Promise<unknown>
 relabelVerseLink: (id: string, label: string) => Promise<void>
 removeCircleMember: (circleId: string, memberUid: string) => Promise<void>
 removeFriend: (friend: Friend) => Promise<void>

@@ -13,7 +13,7 @@ import { Avatar, Badge, Dialog, GroupedList, ListRow, ScreenHeader, SectionHeade
 // a chat; the back link names whichever it was.
 const BACK_LABELS: Partial<Record<string, string>> = {
   community: 'Community',
-  findFriends: 'Find friends',
+  findFriends: 'Add friends',
   messages: 'Messages',
   dmThread: 'Messages',
   profile: 'Profile',
@@ -155,7 +155,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
         )}
 
         {/* Friend state for a non-friend: send / cancel / accept, mirroring the
-            same four states Find friends already shows. */}
+            same four states Add friends already shows. */}
         {!isSelf && !isFriend && (
           <View>
             {incomingFromThem ? (

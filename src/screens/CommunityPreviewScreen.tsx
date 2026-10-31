@@ -24,7 +24,7 @@ export default function CommunityPreviewScreen({ state }: { state: AppState }) {
           eyebrow={previewCircle.isPublic ? 'Public circle' : 'Private circle'}
           subtitle={previewCircle.description || 'No description yet.'}
           onBack={closeCirclePreview}
-          backLabel="Find a circle"
+          backLabel="Find circles"
         />
 
         <GroupedList>

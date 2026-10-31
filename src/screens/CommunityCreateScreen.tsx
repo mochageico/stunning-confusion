@@ -6,7 +6,7 @@ import { AppButton, AppText, AppTextInput, OptionCards, useScaledSpace } from '.
 import { ScreenHeader } from '../components/blocks';
 
 const PRIVACY_OPTIONS = [
-  { id: 'public' as const, title: 'Public', desc: 'Listed in Find a circle. Anyone can join right away.' },
+  { id: 'public' as const, title: 'Public', desc: 'Listed in Find circles. Anyone can join right away.' },
   { id: 'private' as const, title: 'Private', desc: 'Hidden from search. People join with the invite code you share.' },
 ];
 

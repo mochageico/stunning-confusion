@@ -45,7 +45,7 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
         <ScreenHeader
-          title="Find a circle"
+          title="Find circles"
           subtitle="Search the public circles, or join a private one with its code."
           onBack={() => setCommunitySubView('home')}
           backLabel="Community"

@@ -1,11 +1,11 @@
-import { useEffect } from 'react';
-import { ScrollView, View } from 'react-native';
-import { Award, Check, ChevronRight, MessageCircle, Plus, Search, UserPlus, Users } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Award, Check, ChevronRight, MessageCircle, Plus, UserPlus, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppIconButton, AppText, useScaledSpace } from '../components/design';
-import { Avatar, Badge, CollapsibleSection, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
+import { Avatar, Badge, CollapsibleSection, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { formatTimeAgo } from '../lib/format';
 
@@ -28,7 +28,9 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
     isCircleChatUnread,
     guidelinesAcceptedAt,
     requireCommunityGuidelines,
+    refreshCommunity,
   } = state;
+  const [refreshing, setRefreshing] = useState(false);
 
   // First visit: ask once for the community guidelines (App Store 1.2).
   // undefined means still loading -- don't flash the sheet.
@@ -39,7 +41,21 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+      <ScrollView
+        className="flex-1 bg-canvas"
+        contentContainerClassName="p-5 pb-12"
+        contentContainerStyle={{ gap: space(20) }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            tintColor={palette.ink3}
+            onRefresh={() => {
+              setRefreshing(true);
+              refreshCommunity().finally(() => setRefreshing(false));
+            }}
+          />
+        }
+      >
         {/* The one tab that had no title. Messages sits up here because DMs
             are with the people below, and Community is where you look for
             people. */}
@@ -70,94 +86,128 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
           }
         />
 
-        <View style={{ gap: space(12) }}>
+
+        {/* Circles as a swipe row of cards: a circle is a place you go, so each
+            one gets a card instead of a list row, and "new circle" is the last
+            card in the row. */}
+        <CollapsibleSection
+          storageKey="community.circles"
+          title={`Your circles · ${myCircles.length}`}
+          actionLabel="Find circles"
+          onAction={() => setCommunitySubView('find')}
+        >
           {myCircles.length === 0 ? (
-            <View style={{ gap: space(6) }}>
-              <SectionHeader title="Your circles" />
-              <View className="bg-surface border border-line rounded-card">
-                <EmptyState
-                  Icon={Users}
-                  title="You're not in a circle yet"
-                  message="A circle is a small group that shares plans, challenges and a chat."
-                  actionLabel="Find a circle"
-                  onAction={() => setCommunitySubView('find')}
-                />
-              </View>
+            <View className="bg-surface border border-line rounded-card">
+              <EmptyState
+                Icon={Users}
+                title="You're not in a circle yet"
+                message="A circle is a small group that shares plans, challenges and a chat."
+                actionLabel="Find circles"
+                onAction={() => setCommunitySubView('find')}
+              />
             </View>
           ) : (
-            // The role sits under the name; it's the one fact about a circle
-            // you can't tell from its title.
-            <GroupedList
-              header={`Your circles · ${myCircles.length}`}
-              footer="Open a circle for its members, group plans, challenges and chat."
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginHorizontal: -20 }}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: space(10) }}
             >
-              {myCircles.map((c) => (
-                <ListRow
-                  key={c.id}
-                  Icon={Users}
-                  title={c.name}
-                  subtitle={`${c.ownerId === user?.uid ? 'Leader' : 'Member'} · ${c.isPublic ? 'Public' : 'Private'}`}
-                  onPress={() => openCircle(c.id)}
-                  accessory={
-                    isCircleChatUnread(c.id) ? (
-                      <View className="flex-row items-center" style={{ gap: space(6) }}>
-                        <Badge label="New messages" tone="accent" />
-                        <ChevronRight size={18} color={palette.ink3} strokeWidth={2.4} />
-                      </View>
-                    ) : undefined
-                  }
-                />
-              ))}
-            </GroupedList>
+              {myCircles.map((c) => {
+                const unread = isCircleChatUnread(c.id);
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => openCircle(c.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${c.name}${unread ? ', new messages' : ''}`}
+                    className="bg-surface border border-line rounded-card active:bg-surface-2 justify-between"
+                    style={{ width: space(168), minHeight: space(112), padding: space(14), gap: space(10) }}
+                  >
+                    <View style={{ gap: space(2) }}>
+                      <AppText variant="body" numberOfLines={2} className="font-sans font-semibold text-ink">
+                        {c.name}
+                      </AppText>
+                      <AppText variant="caption" className="font-sans text-ink-3">
+                        {c.ownerId === user?.uid ? 'Leader' : 'Member'} · {c.isPublic ? 'Public' : 'Private'}
+                      </AppText>
+                    </View>
+                    {unread ? <Badge label="New messages" tone="accent" /> : null}
+                  </Pressable>
+                );
+              })}
+              <Pressable
+                onPress={() => setCommunitySubView('create')}
+                accessibilityRole="button"
+                accessibilityLabel="Create a circle"
+                className="border border-dashed border-line rounded-card items-center justify-center active:bg-surface-2"
+                style={{ width: space(120), minHeight: space(112), padding: space(14), gap: space(6) }}
+              >
+                <Plus size={22} color={palette.accent} strokeWidth={2.4} />
+                <AppText variant="caption" className="font-sans font-semibold text-accent text-center">
+                  New circle
+                </AppText>
+              </Pressable>
+            </ScrollView>
           )}
-
-          <GroupedList>
-            <ListRow Icon={Search} title="Find a circle" onPress={() => setCommunitySubView('find')} />
-            <ListRow Icon={Plus} title="Create a circle" onPress={() => setCommunitySubView('create')} />
-          </GroupedList>
-        </View>
+        </CollapsibleSection>
 
         <CollapsibleSection
           storageKey="community.friends"
           title={`Friends · ${friends.length}`}
-          actionLabel="Find friends"
+          actionLabel="Add friends"
           onAction={() => navigateTo('findFriends')}
         >
-          {friends.length === 0 && incomingFriendRequests.length === 0 ? (
-            <View className="bg-surface border border-line rounded-card">
-              <EmptyState
-                Icon={UserPlus}
-                title="No friends yet"
-                message="Friends can see how you're doing and send you nudges."
-                actionLabel="Find friends"
-                onAction={() => navigateTo('findFriends')}
-              />
-            </View>
-          ) : (
+          {incomingFriendRequests.length > 0 && (
             <GroupedList>
-              {incomingFriendRequests.length > 0 && (
-                <ListRow
-                  key="requests"
-                  Icon={UserPlus}
-                  title="Friend requests"
-                  onPress={() => navigateTo('findFriends')}
-                  accessory={
-                    <View className="flex-row items-center" style={{ gap: space(6) }}>
-                      <Badge label={`${incomingFriendRequests.length} new`} tone="accent" />
-                      <ChevronRight size={18} color={palette.ink3} strokeWidth={2.4} />
-                    </View>
-                  }
-                />
-              )}
-              {friends.map((f) => (
-                <ListRow
-                  key={f.uid}
-                  leading={<Avatar name={f.displayName} photoUri={f.avatarUrl} size={36} />}
-                  title={f.displayName}
-                  onPress={() => viewMemberProfileById(f.uid)}
-                />
-              ))}
+              <ListRow
+                Icon={UserPlus}
+                title={incomingFriendRequests.length === 1 ? '1 friend request' : `${incomingFriendRequests.length} friend requests`}
+                onPress={() => navigateTo('findFriends')}
+                accessory={
+                  <View className="flex-row items-center" style={{ gap: space(6) }}>
+                    <Badge label="New" tone="accent" />
+                    <ChevronRight size={18} color={palette.ink3} strokeWidth={2.4} />
+                  </View>
+                }
+              />
             </GroupedList>
+          )}
+          {friends.length === 0 ? (
+            incomingFriendRequests.length === 0 ? (
+              <View className="bg-surface border border-line rounded-card">
+                <EmptyState
+                  Icon={UserPlus}
+                  title="No friends yet"
+                  message="Friends can see how you're doing and send you nudges."
+                  actionLabel="Add friends"
+                  onAction={() => navigateTo('findFriends')}
+                />
+              </View>
+            ) : null
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginHorizontal: -20 }}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: space(14) }}
+            >
+              {friends.map((f) => (
+                <Pressable
+                  key={f.uid}
+                  onPress={() => viewMemberProfileById(f.uid)}
+                  accessibilityRole="button"
+                  accessibilityLabel={f.displayName}
+                  className="items-center active:opacity-60"
+                  style={{ width: space(64), gap: space(6) }}
+                >
+                  <Avatar name={f.displayName} photoUri={f.avatarUrl} size={52} />
+                  <AppText variant="caption" numberOfLines={1} className="font-sans text-ink-2 text-center">
+                    {f.displayName.split(' ')[0]}
+                  </AppText>
+                </Pressable>
+              ))}
+            </ScrollView>
           )}
         </CollapsibleSection>
 

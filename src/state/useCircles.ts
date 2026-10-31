@@ -194,7 +194,7 @@ export function useCircles({
   // circleFriends. Re-run this (not just rely on the reactive effect in useAppState)
   // after actions that might change circleFriends but wouldn't otherwise
   // trigger it quickly enough, e.g. a manual refresh button.
-  const loadActivityFeed = async () => {
+  const loadActivityFeed = async (opts?: { silent?: boolean }) => {
     if (!auth.currentUser) {
       setActivityEvents([]);
       return;
@@ -202,7 +202,7 @@ export function useCircles({
     const uids = Array.from(
       new Set([auth.currentUser.uid, ...circleFriends.map((f) => f.uid), ...friends.map((f) => f.uid)])
     ).slice(0, 30);
-    setLoadingActivityEvents(true);
+    if (!opts?.silent) setLoadingActivityEvents(true);
     try {
       const snap = await getDocs(
         query(collection(db, 'activityEvents'), where('uid', 'in', uids), orderBy('createdAt', 'desc'), limit(20))
@@ -242,9 +242,13 @@ export function useCircles({
     }
   };
 
-  const loadActiveCircleData = async (circleId: string) => {
-    setLoadingActiveCircle(true);
-    setLoadingActiveCircleChallenges(true);
+  // silent: a background refresh of the circle already on screen -- no
+  // "Loading circle…" flash, the page just updates in place.
+  const loadActiveCircleData = async (circleId: string, opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoadingActiveCircle(true);
+      setLoadingActiveCircleChallenges(true);
+    }
     try {
       const [circleSnap, membersSnap, plansSnap, challengesSnap] = await Promise.all([
         getDoc(doc(db, 'circles', circleId)),

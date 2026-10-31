@@ -185,7 +185,7 @@ export function CollapsibleSection({
   /** Unique per section; the folded state is saved under it. */
   storageKey: string;
   title: string;
-  /** A small accent link on the right, e.g. "Find friends". */
+  /** A small accent link on the right, e.g. "Add friends". */
   actionLabel?: string;
   onAction?: () => void;
   defaultCollapsed?: boolean;
