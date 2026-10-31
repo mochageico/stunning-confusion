@@ -1,0 +1,24 @@
+﻿# Duplicate worktrees (stops 6x grep multiplication)
+.claude/worktrees/
+.claude/*-plan.md
+
+# Massive generated & auxiliary folders
+studio-samples.html
+bakeoff/
+.shots/
+legacy-web/
+
+# Root planning docs (300KB+ bloat; code is already in src/lib/)
+*PLAN.md
+CONVERSION_GUIDE.md
+SOCIAL_FEATURES.md
+
+# Standard build/dependency noise
+node_modules/
+.expo/
+ios/
+android/
+dist/
+functions/lib/
+*.lock
+package-lock.json

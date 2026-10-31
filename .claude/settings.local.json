@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|Glob|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/token-guard.cjs\""
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Read(**/studio-samples.html)",
+      "Read(**/bakeoff*)",
+      "Read(**/.shots/**)",
+      "Read(**/legacy-web/**)",
+      "Read(**/.claude/worktrees/**)",
+      "Grep(**/studio-samples.html)",
+      "Grep(**/.shots/**)",
+      "Grep(**/legacy-web/**)",
+      "Grep(**/.claude/worktrees/**)",
+      "Glob(**/.shots/**)",
+      "Glob(**/legacy-web/**)",
+      "Glob(**/.claude/worktrees/**)",
+      "NotebookEdit"
+    ]
+  }
+}
