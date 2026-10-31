@@ -1,4 +1,4 @@
-import { ScrollView, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { Check, Eye, Mic, MicOff, RefreshCw, Shuffle, Sparkles } from 'lucide-react-native';
 import { normalizeToken, summarizeOutcomes, reviewPassAccuracy } from '../../lib/recitation';
 import { blankExceptFirstLetter, blankLetters, splitWords, wordGap } from '../../lib/textScript';
@@ -83,6 +83,7 @@ export default function RecallPanel({
     finalOutcomes,
     hintedVerses,
     isListeningSpeak,
+    isDoubleChecking,
     localToast,
     speechAvailable,
     usedSpeechRef,
@@ -562,7 +563,7 @@ export default function RecallPanel({
                 <View className="items-center gap-1">
                   {assisted && <Badge tone="accent" label="First letters shown" />}
                   <AppText variant="title" className="font-sans font-bold text-ink leading-tight text-center">
-                    {isMasteryEligible ? 'Perfect recall' : summary.passesReview ? (assisted && summary.isPerfect ? 'Nicely recalled' : 'Close enough') : 'Keep practicing'}
+                    {isDoubleChecking ? 'Double-checking…' : isMasteryEligible ? 'Perfect recall' : summary.passesReview ? (assisted && summary.isPerfect ? 'Nicely recalled' : 'Close enough') : 'Keep practicing'}
                   </AppText>
                   <AppText variant="label" className="text-ink-2 font-sans text-center">
                     {pct}% word accuracy: {summary.perfectWords} exact
@@ -582,6 +583,14 @@ export default function RecallPanel({
                   </ScrollView>
                 </View>
 
+                {isDoubleChecking ? (
+                  /* The second pass (useRecall): Whisper re-hears the run for a
+                     few seconds. Logging waits so it saves the final grade. */
+                  <View className="w-full flex-row items-center justify-center gap-2 py-3">
+                    <ActivityIndicator color={palette.accent} />
+                    <AppText variant="label" className="text-ink-2 font-sans">Listening to your recording again</AppText>
+                  </View>
+                ) : (
                 <View className="w-full gap-2">
                   {allNotDue ? (
                     <>
@@ -648,6 +657,7 @@ export default function RecallPanel({
                   )}
                   <AppButton variant="quiet" label="Practice again" onPress={resetReciteGame} />
                 </View>
+                )}
               </ScrollView>
             );
           })()

@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 
 import { threadSpan, ThreadSpanVerse } from '../lib/drills';
-import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, SpeechRecognizer, tokenizeWords, WordOutcome } from '../lib/recitation';
+import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, SpeechRecognizer, tokenizeWords, willSaveSpeechAudio, WordOutcome } from '../lib/recitation';
 import { blankExceptFirstLetter, blankLetters, joinWords, normalizeToken, scriptOfVerse, typedLetters, wordGap } from '../lib/textScript';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
 import { WaveBars } from './ui';
 import { recordSpeechSlip } from '../lib/speechSlips';
+import { deleteSpeechRecording } from '../lib/speechRecording';
+import { runSecondPass, warmSecondPass } from '../lib/speechSecondPass';
+import { useThemeColors } from './theme';
 
 // ============================================================================
 // ONE GRADED RECITATION
@@ -242,6 +245,7 @@ export default function GradedRecitation({
 }) {
   const space = useScaledSpace();
   const fontScale = useFontScale();
+  const palette = useThemeColors();
   const script = scriptOfVerse(verses[endVerse]);
   const span = useMemo(
     () => threadSpan(verses, { startVerse, startWord, endVerse, cueWords: [] }),
@@ -272,6 +276,22 @@ export default function GradedRecitation({
   const transcriptRef = useRef('');
   const finishedRef = useRef(false);
 
+  // Second pass (SPEECH_SECOND_PASS_PLAN.md): on iPhone the attempt's audio
+  // is saved, and once graded Whisper re-hears it; a word Apple missed but
+  // Whisper heard turns green. Continue waits for it (a few seconds at most).
+  const [audioUri, setAudioUri] = useState<string | null>(null);
+  const audioUriRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const [doubleChecking, setDoubleChecking] = useState(false);
+  const expectAudio = mode === 'speak' && script === 'latin' && willSaveSpeechAudio();
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+      deleteSpeechRecording(audioUriRef.current);
+    },
+    []
+  );
+
   const finishSpeaking = () => {
     if (finishedRef.current) return;
     finishedRef.current = true;
@@ -294,6 +314,8 @@ export default function GradedRecitation({
     // Callbacks from an engine this attempt no longer owns are ignored.
     const live = () => engineRef.current === engine;
     engine.prime?.(expectedText);
+    // Wakes the second-pass function while you speak, so it's ready when you finish.
+    if (expectAudio) warmSecondPass();
     const expectedTokens = tokenizeWords(expectedText);
     const tail = expectedTokens.slice(-2).join(' ');
     engine.start({
@@ -318,6 +340,12 @@ export default function GradedRecitation({
         finishedRef.current = true;
         onCancel();
       },
+      // Arrives just after the engine stops, possibly after this closed.
+      onAudio: (uri) => {
+        if (!mountedRef.current) return deleteSpeechRecording(uri);
+        audioUriRef.current = uri;
+        setAudioUri(uri);
+      },
     });
     return () => {
       finishedRef.current = true;
@@ -332,6 +360,30 @@ export default function GradedRecitation({
     engineRef.current?.stop();
     onCancel();
   };
+
+  const checkedRef = useRef(false);
+  useEffect(() => {
+    if (stage !== 'graded' || !expectAudio || checkedRef.current) return;
+    if (!outcomes.some((o) => o === 'missed')) return;
+    setDoubleChecking(true);
+    if (!audioUri) {
+      // If the audio never lands, keep Apple's grade.
+      const t = setTimeout(() => {
+        if (mountedRef.current && !audioUriRef.current) setDoubleChecking(false);
+      }, 2000);
+      return () => clearTimeout(t);
+    }
+    checkedRef.current = true;
+    runSecondPass(audioUri, tokenizeWords(expectedText), outcomes, new Set()).then((result) => {
+      if (!mountedRef.current) return;
+      setDoubleChecking(false);
+      if (!result || result.rescued.length === 0) return;
+      const fixes = new Map(result.rescued.map((p, k) => [p, result.grades[k]]));
+      // A word tapped right meanwhile stays as tapped.
+      setOutcomes((prev) => prev.map((o, i) => (o === 'missed' && fixes.has(i) ? fixes.get(i)! : o)));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, audioUri]);
 
   // --- Typing -----------------------------------------------------------------
   const [pointer, setPointer] = useState(0);
@@ -496,12 +548,23 @@ export default function GradedRecitation({
   const right = outcomes.filter((o) => o === 'perfect' || o === 'close').length;
   const missed = total - right;
   return (
-    <RoundFrame footer={<AppButton size="lg" variant="primary" label={continueLabel} onPress={() => onResult(perVerseOutcomes, mode)} />}>
+    <RoundFrame
+      footer={
+        doubleChecking ? (
+          <View className="flex-row items-center justify-center gap-2 py-3">
+            <ActivityIndicator color={palette.accent} />
+            <AppText variant="label" className="text-ink-2 font-sans">Listening to your recording again</AppText>
+          </View>
+        ) : (
+          <AppButton size="lg" variant="primary" label={continueLabel} onPress={() => onResult(perVerseOutcomes, mode)} />
+        )
+      }
+    >
       <View style={{ gap: space(2) }}>
         <AppText variant="title" className="font-sans font-bold text-ink">
-          {missed === 0 ? 'Every word right' : `${missed} ${missed === 1 ? 'word' : 'words'} missed`}
+          {doubleChecking ? 'Double-checking…' : missed === 0 ? 'Every word right' : `${missed} ${missed === 1 ? 'word' : 'words'} missed`}
         </AppText>
-        {mode === 'speak' && missed > 0 ? (
+        {doubleChecking ? null : mode === 'speak' && missed > 0 ? (
           <AppText variant="label" className="font-sans font-medium text-ink-2">
             Did it mishear you? Tap any word you said right.
           </AppText>

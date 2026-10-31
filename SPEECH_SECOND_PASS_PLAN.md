@@ -1,7 +1,101 @@
 # Speech second pass (Groq Whisper after Stop): plan
 
-Status: **planned, not built.** Research done 2026-10-24 in the speech bake-off
-(scripts and data in `bakeoff/`, local only; gitignored).
+Status: **stages 1–5 coded 2026-10-31, function deployed; phone test pending (needs an OTA).** Research done 2026-10-24
+in the speech bake-off (scripts and data in `bakeoff/`, local only; gitignored).
+
+Stage 1 as built: Recall passes `onAudio` to the recognizer, which on iPhone (not
+offline) saves a 16 kHz 16-bit mono WAV (`recordingOptions` with `outputSampleRate:
+16000, outputEncoding: 'pcmFormatInt16'`). The file arrives via `audioend` just
+after Stop; Recall keeps the last one in `speechAudioUriRef` and deletes it on the
+next run or on close (`src/lib/speechRecording.ts`). Owner and tester accounts see
+a toast like "Saved audio: WAV 16000 Hz, 16-bit, mono, 12.4 s, 397 KB" to confirm
+it on the phone. No native change, so an OTA update is enough to test.
+
+Stage 2 **deployed 2026-10-31** (us-east1). `GROQ_API_KEY` version 3 is the good
+key; versions 1 and 2 hold it pasted twice and should be disabled. The limit values
+are `TRANSCRIBE_DAILY_CAP` and `TRANSCRIBE_USER_DAILY_CAP` in `functions/.env`, which
+is gitignored, so a fresh clone needs them added back. Checked: an unsigned call gets 401, and a 16 kHz
+WAV sent to Groq with the function's exact settings came back word-perfect in 1.35 s.
+Not yet called signed-in from the app (that comes with stage 5). Key versions 1
+and 2 disabled.
+
+Stage 3 coded 2026-10-31. `src/lib/speechPieces.ts` (pure; checked by
+`npm run check:speechpieces [folder of WAVs]`) cuts the saved WAV, and
+`speechRecordingPieces(uri)` in `speechRecording.ts` returns base64 pieces:
+- Loudness per 20 ms frame. "Quiet" means 30% of the way from the noise floor up to
+  speech, at least 12 dB under speech, and always anything below -50 dBFS.
+- Each piece runs to the middle of the last 300 ms+ pause before 24 s. With no pause
+  in reach, it cuts at the quietest frame in the last 4 s. Pieces start where the
+  sound starts, trim silence to 0.2 s at the ends, and silent pieces are dropped.
+- Bake-off clips: 1–7 pieces each, none over 24 s, no speech left out.
+- **Whisper collapse, found here:** a piece opening with a spoken number made Whisper
+  write only numbers for the whole piece ("11. 12." for 80 words). Temperature 0.2
+  and a neutral prompt didn't help; halves recovered every word. So
+  `transcribePieces` now retries a piece in halves when it gets under 0.5 words/s
+  on 6 s or more (`functions/src/transcribeAudio.ts`). The extra requests are added
+  to the daily count. **This retry is coded but not deployed yet.**
+- Scored with `bakeoff/score.ts`: `groq-appsplit-plain` (no retry) 102 wrong misses;
+  `groq-appsplit-retry` **8 wrong misses**, 22 of 23 caught (Silero pieces: 16).
+  Waits from a home PC: 0.4–2.3 s, or about 3.4 s when a retry happens.
+
+Stage 4 coded 2026-10-31. `combineSecondPass(live, whisper, protectedIdx)` in
+`recitation.ts` returns `{ outcomes, rescued }`: a speech-graded miss (or a word
+Apple never reached) takes Whisper's 'perfect' or 'close'; anything Apple passed and
+every protected position stays as it was, so the second pass never adds a red.
+Checks: scenarios 22–24 in `recitation.alignment.check.ts`. `bakeoff/score.ts` now
+also scores `apple-voicememos+<engine>` with this function:
+
+| Combined with Apple | Correct words marked wrong | Mistakes caught |
+|---|---|---|
+| Silero pieces (`groq-chunked-plain`) | 7 | 22 of 23 |
+| App pieces, no retry | 4 | 22 of 23 |
+| **App pieces + retry (what ships)** | **4** | **22 of 23** |
+
+The 4 left: A "lamb", I "us" twice, H "who". The one let through is still F4
+("prominent" for "preeminent"), forgiven by the grader. Whisper is graded with
+Apple's learned slips for now; stage 6 separates them.
+
+The collapse retry was **deployed 2026-10-31**.
+
+Stage 5 coded 2026-10-31 (phone test pending: it needs the OTA). `runSecondPass(uri,
+expected, live, protectedPos)` in `speechSecondPass.ts` cuts, sends, grades and
+combines in one call.
+- **Recall** (`useRecall.ts`): the function is warmed when Recall opens. The second pass
+  runs once the run is finished and covers the last listening run, from the position
+  where listening started to the end. Typed, hinted and tapped words are protected.
+  It is skipped when a strike reset happened during that listening run, since the
+  audio then holds a verse twice. It is also skipped when Apple left nothing red. The
+  results screen says "Double-checking…" and holds the save buttons until it's done.
+  If the audio hasn't arrived 2 s after finishing, or the call fails or passes 5 s,
+  Apple's grade stays.
+- **Guided check** (`GradedRecitation.tsx`): it warms when listening starts, then works
+  the same way on the graded screen, with Continue held while checking.
+- Only words still red change. A word tapped green during the check stays as tapped.
+- Testers see a toast like "Double-check: 3 words fixed (2 pieces, 1.4 s)" or
+  "Double-check unavailable". This replaces the stage 1 "Saved audio" toast.
+- Only the last listening run is checked: Stop then start again, and the first
+  part keeps Apple's grade. A run stopped part-way and left (partial credit) keeps
+  Apple's grade.
+- English only (`passageScript === 'latin'`), iPhone only, online only.
+- Not live: Whisper corrects words only after you finish. The recording file is
+  only written when listening stops, so mid-recitation corrections would need the
+  "uploading pieces during the recitation" item under Later.
+
+Stage 2 notes: `functions/src/transcribe.ts` exports `transcribePieces`; the app calls it
+through `src/lib/speechSecondPass.ts` (`warmSecondPass()`, `transcribePieces()`,
+5 s timeout, null on any failure). Choices made:
+- **Warm-up is `{ warm: true }` on the same function,** not a separate one: a
+  separate function would wake a different instance.
+- **App Check is not enforced yet:** the app has no App Check (it needs App Attest in
+  a new native build). Sign-in plus limits guard the key until then.
+- **Limits** (in `transcribeUsage/{day}` and `.../users/{uid}`, admin-only): 1,800
+  pieces/day overall (Groq free tier is 2,000), 300 pieces/day and 4 requests/minute
+  per user, at most 16 pieces of 1.2 MB each, 9 MB per request. The limit check runs
+  alongside the Groq calls so it adds no wait; a "no" cancels them.
+- **Every limit or Groq failure answers `{ busy: true }`,** never an error, so the app
+  quietly keeps Apple's grade. A 429 is retried once if retry-after is 1.5 s or less.
+- Groq settings: `language=en`, `temperature=0`, no prompt. Not yet compared with
+  `bakeoff/groq_chunked.py`.
 
 ## Goal
 

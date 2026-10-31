@@ -3,8 +3,12 @@ import { Layers, ListChecks, ListOrdered, ListTree, MessageCircle, Mic, Puzzle, 
 import { ChapterSections, VerseState, QueueItem, TextScript } from '../../types';
 import { isReviewDue } from '../../state/useAppState';
 import { feedbackDone, feedbackMiss } from '../../lib/feedback';
-import { classifyFirstLetterAttempt, getSpeechRecognizer, gradeTranscriptDetailed, normalizeToken, reconcileSpeechWindow, tokenizeWords, SpeechRecognizer, WordOutcome } from '../../lib/recitation';
+import { classifyFirstLetterAttempt, getSpeechRecognizer, gradeTranscriptDetailed, normalizeToken, reconcileSpeechWindow, tokenizeWords, SpeechRecognizer, willSaveSpeechAudio, WordOutcome } from '../../lib/recitation';
 import { recordSpeechSlip } from '../../lib/speechSlips';
+import { deleteSpeechRecording } from '../../lib/speechRecording';
+import { runSecondPass, warmSecondPass } from '../../lib/speechSecondPass';
+import { auth } from '../../firebase';
+import { UNRELEASED_TRANSLATION_TESTERS } from '../../data';
 import { splitWords, typedLetters } from '../../lib/textScript';
 import { MIN_JIGSAW_VERSES, MIN_THREAD_VERSES, threadRunEndingAt } from '../../lib/drills';
 import { verseAnnotationKey } from '../MemoryGrid';
@@ -193,9 +197,33 @@ export function useRecall({
   // wrong once that in-flight interim segment finalizes differently.
   const finalizedTokenCountRef = useRef(0);
 
+  // The last listening run's saved audio (iPhone), for the second pass in
+  // SPEECH_SECOND_PASS_PLAN.md. Only one is kept: a new run deletes it.
+  const speechAudioUriRef = useRef<string | null>(null);
+  const [speechAudioUri, setSpeechAudioUri] = useState<string | null>(null);
+
+  // Second pass: once the run is finished, Whisper re-hears the last
+  // listening run and any word Apple missed but Whisper heard turns green.
+  // The run is the recite position listening started at; a strike reset
+  // during it makes the audio hold a verse twice, so that run is skipped.
+  const [isDoubleChecking, setIsDoubleChecking] = useState(false);
+  const listenStartPosRef = useRef(0);
+  const listenHadResetRef = useRef(false);
+  const expectAudioRef = useRef(false);
+  // Bumped by a reset or close, so a late answer can't touch a newer run.
+  const secondPassGenRef = useRef(0);
+  const checkedAudioRef = useRef<string | null>(null);
+
   // Make sure the engine never keeps listening past the modal's lifetime.
   useEffect(() => {
-    return () => speechEngineRef.current?.stop();
+    // Wake the second-pass function now so it's ready by Stop.
+    if (speechAvailable && passageScript === 'latin' && willSaveSpeechAudio()) warmSecondPass();
+    return () => {
+      speechEngineRef.current?.stop();
+      secondPassGenRef.current++;
+      deleteSpeechRecording(speechAudioUriRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const triggerLocalToast = (msg: string) => {
@@ -283,6 +311,7 @@ export function useRecall({
         // invalidate a floor based on the current full-transcript length.
         alignAnchorRef.current = verseStartPointer;
         spokenTokenFloorRef.current = finalizedTokenCountRef.current;
+        listenHadResetRef.current = true;
         setTimeout(() => setShowStrikeResetAlert(false), 1500);
       }
 
@@ -334,6 +363,9 @@ export function useRecall({
     setFinalOutcomes(null);
     speechEngineRef.current?.stop();
     setIsListeningSpeak(false);
+    secondPassGenRef.current++;
+    setIsDoubleChecking(false);
+    expectAudioRef.current = false;
     setSpeakTranscript('');
     usedSpeechRef.current = false;
     alignAnchorRef.current = 0;
@@ -625,6 +657,12 @@ export function useRecall({
     // Engines that support contextual vocabulary hints get the exact passage
     // text before listening starts (no-op on the web engine).
     engine.prime?.(fullPassageText);
+    deleteSpeechRecording(speechAudioUriRef.current);
+    speechAudioUriRef.current = null;
+    setSpeechAudioUri(null);
+    listenStartPosRef.current = recitePointer;
+    listenHadResetRef.current = false;
+    expectAudioRef.current = passageScript === 'latin' && willSaveSpeechAudio();
     engine.start({
       onTranscript: (fullTranscript, finalizedTokenCount) => {
         setSpeakTranscript(fullTranscript);
@@ -634,6 +672,10 @@ export function useRecall({
       onError: (message) => {
         setIsListeningSpeak(false);
         triggerLocalToast(`Speech engine error: ${message}`);
+      },
+      onAudio: (uri) => {
+        speechAudioUriRef.current = uri;
+        setSpeechAudioUri(uri);
       },
     });
     triggerLocalToast('Microphone active! Recite the passage...');
@@ -703,6 +745,55 @@ export function useRecall({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recitePointer, learnTab, reciteWordObjects.length]);
 
+  // The second pass (SPEECH_SECOND_PASS_PLAN.md stage 5). Runs once the run is
+  // finished and the last listening run's audio has arrived (just after
+  // Stop). Only runs Apple left a red word in are sent: the combined grade can
+  // only turn red words green. Any failure keeps Apple's grade silently.
+  useEffect(() => {
+    if (!isFinishedRecite || !expectAudioRef.current || listenHadResetRef.current) return;
+    const start = listenStartPosRef.current;
+    const order = reciteOrder.order.slice(start);
+    const live = order.map((wi) => reciteOutcomes[wi] ?? null);
+    const protectedPos = new Set(order.flatMap((wi, p) => (reciteSource[wi] === 'protected' ? [p] : [])));
+    if (!live.some((o, p) => (o ?? 'missed') === 'missed' && !protectedPos.has(p))) return;
+
+    const uri = speechAudioUri;
+    if (uri && checkedAudioRef.current === uri) return;
+    const gen = secondPassGenRef.current;
+    setIsDoubleChecking(true);
+    if (!uri) {
+      // The audio lands just after Stop; if it never does, keep Apple's grade.
+      const t = setTimeout(() => {
+        if (secondPassGenRef.current === gen && !speechAudioUriRef.current) setIsDoubleChecking(false);
+      }, 2000);
+      return () => clearTimeout(t);
+    }
+    checkedAudioRef.current = uri;
+
+    const isTester = UNRELEASED_TRANSLATION_TESTERS.includes(auth.currentUser?.uid ?? '');
+    runSecondPass(uri, speakExpectedTokens.slice(start), live, protectedPos).then((result) => {
+      if (secondPassGenRef.current !== gen) return;
+      setIsDoubleChecking(false);
+      if (!result) {
+        if (isTester) triggerLocalToast('Double-check unavailable; kept the live grade');
+        return;
+      }
+      if (isTester) {
+        triggerLocalToast(`Double-check: ${result.rescued.length} word${result.rescued.length === 1 ? '' : 's'} fixed (${result.pieces} piece${result.pieces === 1 ? '' : 's'}, ${(result.ms / 1000).toFixed(1)} s)`);
+      }
+      if (result.rescued.length === 0) return;
+      const fixes = new Map(result.rescued.map((p, k) => [order[p], result.grades[k]]));
+      // Only words still red change: a word tapped green meanwhile stays as tapped.
+      setReciteOutcomes((prev) => {
+        const next = { ...prev };
+        for (const [wi, g] of fixes) if ((next[wi] ?? 'missed') === 'missed') next[wi] = g;
+        return next;
+      });
+      setFinalOutcomes((prev) => (prev ? prev.map((o, wi) => (o === 'missed' && fixes.has(wi) ? fixes.get(wi)! : o)) : prev));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFinishedRecite, speechAudioUri]);
+
   // ==========================================
   // SUPPLEMENTARY DRILLS (build up / order / scramble / spot-the-swap)
   // Ungraded -- none of them ever call onUpdateStatus. Each lives in its own
@@ -766,6 +857,7 @@ export function useRecall({
     finalOutcomes,
     hintedVerses,
     isListeningSpeak,
+    isDoubleChecking,
     localToast,
     speechAvailable,
     usedSpeechRef,

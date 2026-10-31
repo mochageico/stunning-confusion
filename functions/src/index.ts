@@ -18,6 +18,10 @@ import { logger } from 'firebase-functions';
 // would bury it in 700 lines of ffmpeg argument construction.
 export { fetchApiBibleChapter, purgeApiBibleCache } from './apiBible';
 
+// Speech second pass: Groq Whisper re-checks spoken Recall after Stop
+// (SPEECH_SECOND_PASS_PLAN.md).
+export { transcribePieces } from './transcribe';
+
 // Social push notifications (messages, friend activity, reports) -- also
 // their own module; they share only the Firebase app with this file.
 export {

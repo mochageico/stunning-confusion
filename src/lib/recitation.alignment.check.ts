@@ -19,6 +19,7 @@
 
 import {
   alignRecitationWindow,
+  combineSecondPass,
   gradeTranscript,
   isCommonlyDroppedWord,
   isLearnableSlip,
@@ -642,6 +643,41 @@ scenario('21. A learned slip is accepted; nothing else changes', () => {
   check('a meaning flip is never learnable ("visible" for "invisible")', !isLearnableSlip('invisible', 'visible'));
   check('a spoken verse number is never learnable', !isLearnableSlip('tree', 'three'));
   check('a pair already accepted on its own is not stored', !isLearnableSlip('condemned', 'condemns'));
+});
+
+scenario('22. Second pass: a word stays missed only if Apple and Whisper both missed it', () => {
+  const text = 'there is therefore now no condemnation for those who are in christ jesus';
+  // Apple misheard "condemnation" and "christ"; Whisper misheard "therefore".
+  const apple = gradeTranscript(text, 'there is therefore now no celebration for those who are in crisis jesus');
+  const whisper = gradeTranscript(text, 'there is there for now no condemnation for those who are in christ jesus');
+  check('setup: Apple missed "condemnation"', apple[5] === 'missed', apple.join(','));
+  check('setup: Whisper missed "therefore"', whisper[2] === 'missed', whisper.join(','));
+
+  const { outcomes, rescued } = combineSecondPass(apple, whisper);
+  check('Whisper rescues the words Apple misheard', outcomes[5] !== 'missed' && outcomes[11] !== 'missed', outcomes.join(','));
+  check('a word Apple passed stays passed even when Whisper missed it', outcomes[2] === apple[2] && outcomes[2] !== 'missed', outcomes.join(','));
+  check('only Apple\'s misses are reported as rescued', rescued.every((i) => apple[i] === 'missed') && rescued.includes(5), rescued.join(','));
+  check('nothing else changes', outcomes.every((o, i) => o === apple[i] || rescued.includes(i)));
+});
+
+scenario('23. Second pass: real mistakes stay red', () => {
+  const text = 'and they made his grave with the wicked';
+  const said = 'and he made his grave with the wicked'; // a real slip both engines hear
+  const { outcomes, rescued } = combineSecondPass(gradeTranscript(text, said), gradeTranscript(text, said));
+  check('"he" for "they" stays missed', outcomes[1] === 'missed', outcomes.join(','));
+  check('nothing rescued', rescued.length === 0, rescued.join(','));
+});
+
+scenario('24. Second pass: hand-graded words and words never reached', () => {
+  const whisper: WordOutcome[] = ['perfect', 'perfect', 'close', 'perfect'];
+  const live: (WordOutcome | null)[] = ['missed', 'missed', null, null];
+  const { outcomes, rescued } = combineSecondPass(live, whisper, new Set([0]));
+  check('a hand-graded miss (revealed hint) never changes', outcomes[0] === 'missed');
+  check('a speech miss takes Whisper\'s grade', outcomes[1] === 'perfect');
+  check('a word Apple never reached counts as missed, so Whisper can rescue it (keeping "close")', outcomes[2] === 'close' && outcomes[3] === 'perfect', outcomes.join(','));
+  check('rescued lists 1, 2 and 3', rescued.join(',') === '1,2,3', rescued.join(','));
+  const short = combineSecondPass(['missed', 'missed'], ['perfect']);
+  check('a shorter Whisper grade leaves the extra words missed', short.outcomes.join(',') === 'perfect,missed', short.outcomes.join(','));
 });
 
 // ============================================================================

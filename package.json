@@ -91,6 +91,7 @@
     "check:ladder": "node scripts/run-ladder-check.cjs",
     "check:grading": "node scripts/run-grading-check.cjs",
     "check:passages": "node scripts/run-passages-check.cjs",
+    "check:speechpieces": "node scripts/run-speechpieces-check.cjs",
     "check:balance": "node scripts/run-balance-check.cjs",
     "check:migration": "node scripts/run-migration-check.cjs",
     "check:ladderengine": "node scripts/run-ladderengine-check.cjs",

@@ -40,6 +40,8 @@ let speechOffline = false;
 export const setSpeechOffline = (on: boolean) => {
   speechOffline = on;
 };
+/** Whether a native run passed `onAudio` will save its recording (iPhone, online). */
+export const willSaveSpeechAudio = (): boolean => Platform.OS === 'ios' && !speechOffline;
 export const setForgiveNearbyKeys = (on: boolean) => {
   forgiveNearbyKeys = on;
 };
@@ -602,6 +604,41 @@ export const gradeTranscriptDetailed = (expectedText: string, transcript: string
   return { outcomes: outcomes.map((o) => o ?? 'missed'), heard };
 };
 
+/**
+ * Speech second pass (SPEECH_SECOND_PASS_PLAN.md): after Stop, Whisper's
+ * transcript of the same recording is graded with gradeTranscript, and a word
+ * stays missed only if Apple's live grade AND Whisper's grade both missed it.
+ * Apple and Whisper mishear different words, so either one hearing a word
+ * right is good evidence it was said.
+ *
+ * - `live`: Apple's grade per position; null (never reached) counts as missed.
+ * - `whisper`: gradeTranscript of Whisper's text against the same positions.
+ * - `protectedIdx`: positions graded by hand (typed letters, revealed hints,
+ *   tap-to-fix). These never change.
+ *
+ * Only missed words change, to Whisper's 'perfect' or 'close'. A word Apple
+ * passed stays as Apple graded it, so the second pass can never add a red.
+ * Returns the combined grades and the positions that changed.
+ */
+export const combineSecondPass = (
+  live: readonly (WordOutcome | null | undefined)[],
+  whisper: readonly WordOutcome[],
+  protectedIdx: ReadonlySet<number> = new Set()
+): { outcomes: WordOutcome[]; rescued: number[] } => {
+  const rescued: number[] = [];
+  const outcomes = live.map((o, i): WordOutcome => {
+    const apple = o ?? 'missed';
+    if (apple !== 'missed' || protectedIdx.has(i)) return apple;
+    const second = whisper[i];
+    if (second === 'perfect' || second === 'close') {
+      rescued.push(i);
+      return second;
+    }
+    return 'missed';
+  });
+  return { outcomes, rescued };
+};
+
 export interface LiveAlignResult {
   /** One outcome per expected word in the window; null = not yet reached. */
   outcomes: (WordOutcome | null)[];
@@ -770,6 +807,13 @@ export interface SpeechRecognizer {
     onTranscript: (fullTranscript: string, finalizedTokenCount: number) => void;
     onEnd: () => void;
     onError: (message: string) => void;
+    /**
+     * Optional: ask the engine to also save what it heard to a file, for the
+     * second pass (SPEECH_SECOND_PASS_PLAN.md). Fires once after the engine
+     * finishes writing, which can be just AFTER stop(). iPhone only for now,
+     * and never in offline mode; elsewhere it simply never fires.
+     */
+    onAudio?: (uri: string) => void;
   }): void;
   stop(): void;
   /**
@@ -850,8 +894,17 @@ const loadSpeechRecognitionModule = (): SpeechRecognitionModule | null => {
 // against a stop() landing while that permission prompt is still pending: if
 // the user taps the mic off before the promise resolves, the stale response
 // must not go on to attach listeners and start the native recognizer anyway.
+//
+// The saved recording (onAudio) is reported by 'audioend', which iOS sends
+// only after stop() has torn the other listeners down, so that one listener
+// lives apart and removes itself once it fires (or when a new run starts).
+// 16 kHz 16-bit mono WAV: what Whisper resamples to anyway, at a third of
+// the default 48 kHz float file's size.
+const SAVE_AUDIO_OPTIONS = { persist: true, outputSampleRate: 16000, outputEncoding: 'pcmFormatInt16' } as const;
+
 class NativeSpeechRecognizer implements SpeechRecognizer {
   private subscriptions: { remove(): void }[] = [];
+  private audioSubscription: { remove(): void } | null = null;
   private finalizedText = '';
   private expectedText = '';
   private generation = 0;
@@ -862,8 +915,9 @@ class NativeSpeechRecognizer implements SpeechRecognizer {
     this.expectedText = expectedText;
   }
 
-  start(callbacks: { onTranscript: (t: string, finalizedTokenCount: number) => void; onEnd: () => void; onError: (m: string) => void }) {
+  start(callbacks: Parameters<SpeechRecognizer['start']>[0]) {
     this.teardown();
+    this.removeAudioListener();
     this.finalizedText = '';
     const myGeneration = ++this.generation;
 
@@ -894,6 +948,16 @@ class NativeSpeechRecognizer implements SpeechRecognizer {
           this.module.addListener('end', () => callbacks.onEnd()),
         ];
 
+        const { onAudio } = callbacks;
+        const saveAudio = !!onAudio && willSaveSpeechAudio();
+        if (saveAudio) {
+          const sub = this.module.addListener('audioend', (event) => {
+            if (this.audioSubscription === sub) this.removeAudioListener();
+            if (event.uri) onAudio(event.uri);
+          });
+          this.audioSubscription = sub;
+        }
+
         // Contextual vocabulary hint: the exact words this passage contains,
         // deduplicated -- a real accuracy boost for scripture words a general
         // language model would otherwise never guess.
@@ -914,6 +978,7 @@ class NativeSpeechRecognizer implements SpeechRecognizer {
           continuous: true,
           contextualStrings,
           ...(speechOffline && this.module.supportsOnDeviceRecognition() ? { requiresOnDeviceRecognition: true } : {}),
+          ...(saveAudio ? { recordingOptions: SAVE_AUDIO_OPTIONS } : {}),
         });
       })
       .catch((err) => callbacks.onError(String(err?.message || err)));
@@ -932,6 +997,11 @@ class NativeSpeechRecognizer implements SpeechRecognizer {
   private teardown() {
     this.subscriptions.forEach((s) => s.remove());
     this.subscriptions = [];
+  }
+
+  private removeAudioListener() {
+    this.audioSubscription?.remove();
+    this.audioSubscription = null;
   }
 }
 
