@@ -11,6 +11,7 @@ import {
   frameLoudness,
   MAX_PIECE_SECONDS,
   parseWav,
+  pickPieces,
   quietFrames,
   splitRecording,
   toBase64,
@@ -202,6 +203,45 @@ console.log('\n[7. Formats and encoding]');
 // ---------------------------------------------------------------------------
 // Real recordings, when a folder is given.
 const folder = process.argv[2];
+console.log('\n[9. Sending only the pieces with red words]');
+{
+  // Four 20 s pieces with 1 s gaps; 200 words at 0.415 s each. Apple grades
+  // each word 1.5 s after it starts (lag plus the mic starting late).
+  const pieces = [0, 1, 2, 3].map((k) => ({ startSeconds: k * 21, endSeconds: k * 21 + 20 }));
+  const words = 200;
+  const heardAt = Array.from({ length: words }, (_, i) => i * 0.415 + 1.5);
+  const redAt = (...idx: number[]) => Array.from({ length: words }, (_, i) => idx.includes(i));
+
+  const one = pickPieces(pieces, heardAt, redAt(60));
+  check('one red word in piece 2 sends only piece 2', one.length === 1 && one[0].pieces.join() === '1', one);
+  check('...graded against the words around it', one[0].from <= 60 && one[0].to > 60 && one[0].from > 30 && one[0].to < 120, one);
+
+  const two = pickPieces(pieces, heardAt, redAt(5, 190));
+  check('reds in the first and last pieces send two separate groups', two.length === 2 && two[0].pieces.join() === '0' && two[1].pieces.join() === '3', two);
+  check('...each holding its own red word', two[0].from <= 5 && two[0].to > 5 && two[1].from <= 190 && two[1].to > 190, two);
+
+  const edge = pickPieces(pieces, heardAt, redAt(100));
+  check('a red word near a cut sends both pieces around it, together', edge.length === 1 && edge[0].pieces.join() === '1,2', edge);
+
+  const every = pickPieces(pieces, heardAt, redAt(10, 60, 110, 170));
+  check('reds in every piece send the whole recording', every.length === 1 && every[0].pieces.length === 4 && every[0].from === 0 && every[0].to === words, every);
+
+  const untimed = pickPieces(pieces, heardAt.map(() => null), redAt(60));
+  check('with no timing, everything is sent', untimed.length === 1 && untimed[0].pieces.length === 4, untimed);
+
+  // Apple stopped hearing at word 170: the last 30 words have no time and are red.
+  const tailTimes = heardAt.map((t, i) => (i < 170 ? t : null));
+  const tail = pickPieces(pieces, tailTimes, redAt(...Array.from({ length: 30 }, (_, k) => 170 + k)));
+  check('words Apple never reached send the last piece', tail.length === 1 && tail[0].pieces.join() === '3' && tail[0].to === words, tail);
+
+  // A typed word mid-passage has no time; it falls between its neighbours.
+  const typed = heardAt.map((t, i) => (i === 60 ? null : t));
+  const typedPick = pickPieces(pieces, typed, redAt(60));
+  check('an untimed word between timed ones lands in the right piece', typedPick.length === 1 && typedPick[0].pieces.join() === '1', typedPick);
+
+  check('no pieces, nothing sent', pickPieces([], heardAt, redAt(60)).length === 0);
+}
+
 if (folder) {
   const fs = require('fs');
   const path = require('path');

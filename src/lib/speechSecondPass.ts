@@ -10,7 +10,8 @@
 import { getApp } from 'firebase/app';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { combineSecondPass, gradeTranscript, WordOutcome } from './recitation';
-import { speechRecordingPieces } from './speechRecording';
+import { pickPieces } from './speechPieces';
+import { SentPiece, speechRecordingPieces } from './speechRecording';
 
 // Must match the region the callable is deployed to (functions/src/transcribe.ts).
 const FUNCTIONS_REGION = 'us-east1';
@@ -53,34 +54,53 @@ export interface SecondPassResult {
   rescued: number[];
   /** Their new grades, same order as `rescued`. */
   grades: WordOutcome[];
+  /** Pieces sent, of `piecesTotal` in the recording. */
   pieces: number;
+  piecesTotal: number;
   ms: number;
 }
 
 /**
  * The whole second pass for one recording: cut it into pieces, send them to
  * Whisper, grade Whisper's text against `expected`, and combine with Apple's
- * `live` grade (combineSecondPass). `expected`, `live` and `protectedPos` all
- * use the same positions: the words this recording could have covered, in
- * the order they were recited. Null whenever the second pass can't run, so
- * the caller keeps Apple's grade.
+ * `live` grade (combineSecondPass). `expected`, `live`, `protectedPos` and
+ * `heardAt` all use the same positions: the words this recording could have
+ * covered, in the order they were recited. Null whenever the second pass
+ * can't run, so the caller keeps Apple's grade.
+ *
+ * With `heardAt` (seconds since listening started when Apple first graded
+ * each word), only the pieces holding a red word are sent (pickPieces), each
+ * neighbouring run graded against its own stretch of words. Without it, the
+ * whole recording is sent.
  */
 export async function runSecondPass(
   uri: string,
   expected: readonly string[],
   live: readonly (WordOutcome | null | undefined)[],
-  protectedPos: ReadonlySet<number>
+  protectedPos: ReadonlySet<number>,
+  heardAt?: readonly (number | null)[]
 ): Promise<SecondPassResult | null> {
   const started = Date.now();
-  let pieces: string[];
+  let pieces: SentPiece[];
   try {
     pieces = await speechRecordingPieces(uri);
   } catch {
     return null;
   }
-  const texts = await transcribePieces(pieces);
+  const red = live.map((o, i) => (o ?? 'missed') === 'missed' && !protectedPos.has(i));
+  const groups = pickPieces(pieces, heardAt ?? live.map(() => null), red);
+  const sent = groups.flatMap((g) => g.pieces);
+  const texts = await transcribePieces(sent.map((k) => pieces[k].audio));
   if (!texts) return null;
-  const whisper = gradeTranscript(expected.join(' '), texts.join(' '));
-  const { outcomes, rescued } = combineSecondPass(live, whisper, protectedPos);
-  return { rescued, grades: rescued.map((p) => outcomes[p]), pieces: pieces.length, ms: Date.now() - started };
+  const textOf = new Map(sent.map((k, n) => [k, texts[n]]));
+
+  const fixed = new Map<number, WordOutcome>();
+  for (const g of groups) {
+    const whisper = gradeTranscript(expected.slice(g.from, g.to).join(' '), g.pieces.map((k) => textOf.get(k)).join(' '));
+    const shifted = new Set([...protectedPos].filter((p) => p >= g.from && p < g.to).map((p) => p - g.from));
+    const { outcomes, rescued } = combineSecondPass(live.slice(g.from, g.to), whisper, shifted);
+    for (const p of rescued) if (!fixed.has(p + g.from)) fixed.set(p + g.from, outcomes[p]);
+  }
+  const rescued = [...fixed.keys()].sort((a, b) => a - b);
+  return { rescued, grades: rescued.map((p) => fixed.get(p)!), pieces: sent.length, piecesTotal: pieces.length, ms: Date.now() - started };
 }

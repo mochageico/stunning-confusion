@@ -261,3 +261,90 @@ export function toBase64(b: Uint8Array): string {
   out.push(chunk);
   return out.join('');
 }
+
+// ----------------------------------------------------------------------------
+// Sending only the pieces that matter
+// ----------------------------------------------------------------------------
+// The second pass can only turn red words green, so a piece with no red word
+// in it has nothing to fix. Which piece holds which word comes from Apple's
+// live grade: Recall notes when each word was first graded. Apple trails the
+// voice a little, so those times are shifted to line the first word up with
+// the first sound in the recording, and every match allows PICK_MARGIN_SECONDS
+// either way. A wrong guess fails safe: that word keeps Apple's grade.
+
+/** Slack around each piece when matching words to it, in seconds. */
+export const PICK_MARGIN_SECONDS = 2;
+
+/** Pieces sent together, and the stretch of words (positions [from, to)) they're graded against. */
+export interface PieceGroup {
+  pieces: number[];
+  from: number;
+  to: number;
+}
+
+type PieceSpan = Pick<SpeechPiece, 'startSeconds' | 'endSeconds'>;
+
+/**
+ * Estimated time in the recording for every word position. `heardAt` is
+ * seconds since listening started when Apple first graded each word (null
+ * when it never did: typed, or never reached). Those in between are spread
+ * evenly between their neighbours, those before the first fall at the first
+ * sound, and those after the last are spread up to the recording's end.
+ */
+export function estimateWordTimes(pieces: PieceSpan[], heardAt: readonly (number | null)[]): number[] | null {
+  const timed = heardAt.flatMap((t, i) => (t == null ? [] : [i]));
+  if (timed.length === 0 || pieces.length === 0) return null;
+  const first = pieces[0].startSeconds;
+  const end = pieces[pieces.length - 1].endSeconds;
+  const shift = heardAt[timed[0]]! - first;
+  const est = heardAt.map((t) => (t == null ? NaN : t - shift));
+  for (let i = 0; i < timed[0]; i++) est[i] = first;
+  for (let k = 0; k + 1 < timed.length; k++) {
+    const [a, b] = [timed[k], timed[k + 1]];
+    for (let i = a + 1; i < b; i++) est[i] = est[a] + ((est[b] - est[a]) * (i - a)) / (b - a);
+  }
+  const last = timed[timed.length - 1];
+  const tail = heardAt.length - 1 - last;
+  for (let i = last + 1; i < heardAt.length; i++) est[i] = est[last] + ((Math.max(end, est[last]) - est[last]) * (i - last)) / tail;
+  return est;
+}
+
+/**
+ * Which pieces to send, as groups of neighbouring pieces with the word
+ * positions each is graded against. `red[i]` marks a word the second pass
+ * could change. With no timing, every piece goes as one group over every
+ * word, which is the safe fallback.
+ */
+export function pickPieces(pieces: PieceSpan[], heardAt: readonly (number | null)[], red: readonly boolean[]): PieceGroup[] {
+  const all = (): PieceGroup[] => (pieces.length ? [{ pieces: pieces.map((_, p) => p), from: 0, to: red.length }] : []);
+  const est = estimateWordTimes(pieces, heardAt);
+  if (!est) return all();
+
+  const distance = (t: number, p: PieceSpan) => (t < p.startSeconds ? p.startSeconds - t : t > p.endSeconds ? t - p.endSeconds : 0);
+  const chosen = new Set<number>();
+  red.forEach((isRed, i) => {
+    if (!isRed) return;
+    let nearest = 0;
+    pieces.forEach((p, k) => {
+      if (distance(est[i], p) <= PICK_MARGIN_SECONDS) chosen.add(k);
+      if (distance(est[i], p) < distance(est[i], pieces[nearest])) nearest = k;
+    });
+    chosen.add(nearest);
+  });
+
+  const groups: PieceGroup[] = [];
+  for (const k of [...chosen].sort((a, b) => a - b)) {
+    const g = groups[groups.length - 1];
+    if (g && g.pieces[g.pieces.length - 1] === k - 1) g.pieces.push(k);
+    else groups.push({ pieces: [k], from: 0, to: 0 });
+  }
+  for (const g of groups) {
+    const start = pieces[g.pieces[0]].startSeconds - PICK_MARGIN_SECONDS;
+    const stop = pieces[g.pieces[g.pieces.length - 1]].endSeconds + PICK_MARGIN_SECONDS;
+    const inside = est.flatMap((t, i) => (t >= start && t <= stop ? [i] : []));
+    g.from = inside.length ? inside[0] : 0;
+    g.to = inside.length ? inside[inside.length - 1] + 1 : 0;
+  }
+  // Every piece picked: same as sending the whole recording, which grades best.
+  return chosen.size === pieces.length ? all() : groups.filter((g) => g.to > g.from);
+}

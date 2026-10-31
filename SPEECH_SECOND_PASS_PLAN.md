@@ -81,6 +81,23 @@ combines in one call.
   only written when listening stops, so mid-recitation corrections would need the
   "uploading pieces during the recitation" item under Later.
 
+**Only pieces with red words are sent** (Recall, added 2026-10-31). Recall notes
+when Apple first graded each word, in seconds since listening started. `pickPieces`
+in `speechPieces.ts` uses those times, shifted so the first word lands on the
+recording's first sound. Words with no time are spread between their neighbours,
+and words Apple never reached are spread to the end. It then picks each red word's
+piece, plus any piece within 2 s of it. Neighbouring picked pieces go as one group,
+graded against the words within 2 s of it. When every piece is picked, the whole
+recording goes as before. A wrong guess only means a word keeps Apple's grade. The
+guided check sends everything, since its rounds are short. Check section 9 in
+`speechPieces.check.ts`.
+
+Bake-off simulation, with Apple's timing faked as evenly spaced words, 1 s late:
+27 of 35 pieces sent, and every word graded the same as sending everything. The two
+clips with no red word send nothing. These clips have planted mistakes all through
+them, so real runs with a slip or two should save more. The tester toast says e.g.
+"2 of 7 pieces sent".
+
 Stage 2 notes: `functions/src/transcribe.ts` exports `transcribePieces`; the app calls it
 through `src/lib/speechSecondPass.ts` (`warmSecondPass()`, `transcribePieces()`,
 5 s timeout, null on any failure). Choices made:

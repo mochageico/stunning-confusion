@@ -56,16 +56,23 @@ export function describeSpeechRecording(uri: string): string {
   return `Saved audio: WAV ${info.sampleRate} Hz, ${info.bitsPerSample}-bit, ${channels}, ${info.seconds.toFixed(1)} s, ${Math.round(info.bytes / 1024)} KB`;
 }
 
+/** A piece as sent: base64 WAV, and where it sits in the recording. */
+export interface SentPiece {
+  audio: string;
+  startSeconds: number;
+  endSeconds: number;
+}
+
 /**
  * The recording cut at pauses into pieces of 24 s or less, as base64 WAVs
  * ready for transcribePieces (speechSecondPass.ts). Empty when the file is
  * missing, unreadable, or has no speech.
  */
-export async function speechRecordingPieces(uri: string): Promise<string[]> {
+export async function speechRecordingPieces(uri: string): Promise<SentPiece[]> {
   try {
     const file = new File(uri);
     if (!file.exists) return [];
-    return splitRecording(await file.bytes()).map((p) => toBase64(p.wav));
+    return splitRecording(await file.bytes()).map((p) => ({ audio: toBase64(p.wav), startSeconds: p.startSeconds, endSeconds: p.endSeconds }));
   } catch {
     return [];
   }

@@ -209,6 +209,10 @@ export function useRecall({
   const [isDoubleChecking, setIsDoubleChecking] = useState(false);
   const listenStartPosRef = useRef(0);
   const listenHadResetRef = useRef(false);
+  // When Apple first graded each recite position, in seconds since listening
+  // started: lets the second pass send only the pieces holding a red word.
+  const listenStartMsRef = useRef(0);
+  const heardAtRef = useRef(new Map<number, number>());
   const expectAudioRef = useRef(false);
   // Bumped by a reset or close, so a late answer can't touch a newer run.
   const secondPassGenRef = useRef(0);
@@ -662,6 +666,8 @@ export function useRecall({
     setSpeechAudioUri(null);
     listenStartPosRef.current = recitePointer;
     listenHadResetRef.current = false;
+    listenStartMsRef.current = Date.now();
+    heardAtRef.current = new Map();
     expectAudioRef.current = passageScript === 'latin' && willSaveSpeechAudio();
     engine.start({
       onTranscript: (fullTranscript, finalizedTokenCount) => {
@@ -714,6 +720,11 @@ export function useRecall({
     );
     alignAnchorRef.current = patch.nextAlignAnchor;
     if (Object.keys(patch.outcomes).length === 0 && patch.pointer === recitePointer) return;
+
+    const seconds = (Date.now() - listenStartMsRef.current) / 1000;
+    for (const key of Object.keys(patch.outcomes)) {
+      if (!heardAtRef.current.has(Number(key))) heardAtRef.current.set(Number(key), seconds);
+    }
 
     const wordOutcomes = positionsToWords(reciteOrder, patch.outcomes);
     setReciteOutcomes((prev) => ({ ...prev, ...wordOutcomes }));
@@ -771,7 +782,8 @@ export function useRecall({
     checkedAudioRef.current = uri;
 
     const isTester = UNRELEASED_TRANSLATION_TESTERS.includes(auth.currentUser?.uid ?? '');
-    runSecondPass(uri, speakExpectedTokens.slice(start), live, protectedPos).then((result) => {
+    const heardAt = order.map((_, p) => heardAtRef.current.get(start + p) ?? null);
+    runSecondPass(uri, speakExpectedTokens.slice(start), live, protectedPos, heardAt).then((result) => {
       if (secondPassGenRef.current !== gen) return;
       setIsDoubleChecking(false);
       if (!result) {
@@ -779,7 +791,7 @@ export function useRecall({
         return;
       }
       if (isTester) {
-        triggerLocalToast(`Double-check: ${result.rescued.length} word${result.rescued.length === 1 ? '' : 's'} fixed (${result.pieces} piece${result.pieces === 1 ? '' : 's'}, ${(result.ms / 1000).toFixed(1)} s)`);
+        triggerLocalToast(`Double-check: ${result.rescued.length} word${result.rescued.length === 1 ? '' : 's'} fixed (${result.pieces} of ${result.piecesTotal} piece${result.piecesTotal === 1 ? '' : 's'} sent, ${(result.ms / 1000).toFixed(1)} s)`);
       }
       if (result.rescued.length === 0) return;
       const fixes = new Map(result.rescued.map((p, k) => [order[p], result.grades[k]]));
