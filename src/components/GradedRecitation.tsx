@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { threadSpan, ThreadSpanVerse } from '../lib/drills';
@@ -71,6 +71,10 @@ type WordLook = { text: string; className: string; onPress?: () => void };
  * The stretch, word by word. `show` decides each graded word's look; words
  * before the start are greyed, and the first `highlightWords` are tinted as
  * the cue.
+ *
+ * Long passages re-render on every typed letter, every partial transcript and
+ * every tapped word, so each verse is its own memoized line that only
+ * re-renders when one of its words' looks changes.
  */
 export function SpanText({
   verses,
@@ -85,47 +89,107 @@ export function SpanText({
 }) {
   const space = useScaledSpace();
   const script = scriptOfVerse(verses[span[0]?.index ?? 0]);
-  let flat = 0;
+  // Per verse, the flat index of each word (-1 for ungraded punctuation).
+  const flatIdx = useMemo(() => {
+    let flat = 0;
+    return span.map((sv) => sv.words.map((w) => (normalizeToken(w, script).length === 0 ? -1 : flat++)));
+  }, [span, script]);
+  const looks = span.map((sv, k) => sv.words.map((w, i) => (flatIdx[k][i] < 0 ? null : show(flatIdx[k][i], w))));
+  // Lines get one stable press handler that reads the latest looks, so a new
+  // closure each render doesn't count as a change.
+  const looksRef = useRef(looks);
+  looksRef.current = looks;
+  const press = useCallback((k: number, i: number) => looksRef.current[k]?.[i]?.onPress?.(), []);
   return (
     <View style={{ gap: space(10) }}>
       {span.map((sv, k) => (
-        <AppText key={sv.index} variant="body" script={script} className="font-serif leading-relaxed text-ink">
-          <AppText variant="caption" className="font-sans font-bold text-ink-3">
-            {verses[sv.index].verse}{' '}
-          </AppText>
-          {sv.before.map((w, i) => (
-            <AppText variant="inherit" key={`b${i}`} className="font-serif text-ink-3">
-              {w}{wordGap(w)}
-            </AppText>
-          ))}
-          {sv.words.map((w, i) => {
-            const isCue = k === 0 && i < highlightWords;
-            if (normalizeToken(w, script).length === 0) {
-              return (
-                <AppText variant="inherit" key={i} className="font-serif text-ink">
-                  {w}{wordGap(w)}
-                </AppText>
-              );
-            }
-            const look = show(flat++, w);
-            // The space after a word sits outside its styling, so an
-            // underline stops at the word -- except between the cue words,
-            // whose highlight reads as one block.
-            const gapInside = isCue && i < highlightWords - 1;
-            return (
-              <AppText variant="inherit" key={i}>
-                <AppText variant="inherit" onPress={look.onPress} className={`${look.className} ${isCue ? 'bg-accent-soft rounded' : ''}`}>
-                  {look.text}{gapInside ? wordGap(w) : ''}
-                </AppText>
-                {gapInside ? '' : wordGap(w)}
-              </AppText>
-            );
-          })}
-        </AppText>
+        <VerseLine
+          key={sv.index}
+          k={k}
+          verse={verses[sv.index].verse}
+          before={sv.before}
+          words={sv.words}
+          looks={looks[k]}
+          cueWords={k === 0 ? highlightWords : 0}
+          script={script}
+          press={press}
+        />
       ))}
     </View>
   );
 }
+
+type VerseLineProps = {
+  k: number;
+  verse: number;
+  before: string[];
+  words: string[];
+  looks: (WordLook | null)[];
+  cueWords: number;
+  script: ReturnType<typeof scriptOfVerse>;
+  press: (k: number, i: number) => void;
+};
+
+const sameLooks = (a: (WordLook | null)[], b: (WordLook | null)[]) =>
+  a.length === b.length &&
+  a.every((x, i) => {
+    const y = b[i];
+    if (!x || !y) return x === y;
+    return x.text === y.text && x.className === y.className && !x.onPress === !y.onPress;
+  });
+
+const VerseLine = React.memo(
+  function VerseLine({ k, verse, before, words, looks, cueWords, script, press }: VerseLineProps) {
+    return (
+      <AppText variant="body" script={script} className="font-serif leading-relaxed text-ink">
+        <AppText variant="caption" className="font-sans font-bold text-ink-3">
+          {verse}{' '}
+        </AppText>
+        {before.map((w, i) => (
+          <AppText variant="inherit" key={`b${i}`} className="font-serif text-ink-3">
+            {w}{wordGap(w)}
+          </AppText>
+        ))}
+        {words.map((w, i) => {
+          const look = looks[i];
+          if (!look) {
+            return (
+              <AppText variant="inherit" key={i} className="font-serif text-ink">
+                {w}{wordGap(w)}
+              </AppText>
+            );
+          }
+          const isCue = i < cueWords;
+          // The space after a word sits outside its styling, so an
+          // underline stops at the word -- except between the cue words,
+          // whose highlight reads as one block.
+          const gapInside = isCue && i < cueWords - 1;
+          return (
+            <AppText variant="inherit" key={i}>
+              <AppText
+                variant="inherit"
+                onPress={look.onPress ? () => press(k, i) : undefined}
+                className={`${look.className} ${isCue ? 'bg-accent-soft rounded' : ''}`}
+              >
+                {look.text}{gapInside ? wordGap(w) : ''}
+              </AppText>
+              {gapInside ? '' : wordGap(w)}
+            </AppText>
+          );
+        })}
+      </AppText>
+    );
+  },
+  (a, b) =>
+    a.k === b.k &&
+    a.verse === b.verse &&
+    a.before === b.before &&
+    a.words === b.words &&
+    a.cueWords === b.cueWords &&
+    a.script === b.script &&
+    a.press === b.press &&
+    sameLooks(a.looks, b.looks)
+);
 
 export default function GradedRecitation({
   verses,
