@@ -375,6 +375,13 @@ export interface Recording {
   // owner deletes it or makes it private (see hydrateSavedRecordings).
   savedFromUid?: string;
   savedFromRecordingId?: string;
+  // On a bookmark only: the saver re-did the verse timing, so its
+  // verseTimestamps are theirs and aren't refreshed from the owner's copy
+  // (a few hundred bytes; the audio itself is never copied).
+  customTimings?: boolean;
+  // ON THE PHONE ONLY, never written: the owner's timing while customTimings
+  // is set, so "Use their timing" can switch back.
+  ownerVerseTimestamps?: VerseTimestamp[];
   // 'imported' == tagged from a pre-existing audio file (see the Import
   // Audio flow in RecordScreen) rather than captured live with the mic.
   // Absent/undefined == 'recorded' (every recording before this field existed).

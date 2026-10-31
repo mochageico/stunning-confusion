@@ -42,7 +42,7 @@ interface ChatCardsDeps {
     translationId?: string
   ) => void;
   /** Copies someone else's shared recording into my own recordings. */
-  saveSharedRecordingToLibrary: (rec: Recording) => Promise<void>;
+  saveSharedRecordingToLibrary: (rec: Recording) => Promise<unknown>;
   triggerToast: (message: string) => void;
 }
 

@@ -1,6 +1,6 @@
 import type { Recording } from '../types';
 import { getBookByName } from '../data';
-import { resolveChapterAudio } from './appData';
+import { recordingFitsTranslation, resolveChapterAudio } from './appData';
 import { hasPlayableAudio } from './studioAudio';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -91,9 +91,11 @@ export interface VerseAudio {
 }
 
 /**
- * What plays for one verse: the user's own recording in the same language
- * when it has this verse tagged, otherwise the built-in reading when there
- * is one, otherwise nothing.
+ * What plays for one verse, layered like texture packs: the recording picked
+ * for this chapter first, then the chapter's recordings top to bottom (the
+ * drag order on the chapter page), and the first that has this verse tagged
+ * wins. So a verses 1-5 take above a whole-chapter take plays 1-5 from the
+ * first and the rest from the second. Then the built-in reading, then nothing.
  */
 export function resolveVerseAudio(
   userRecordings: Recording[],
@@ -104,9 +106,23 @@ export function resolveVerseAudio(
   translationId: string,
   libraryTimings: LibraryChapterTimings | null | undefined
 ): VerseAudio | null {
-  const own = resolveChapterAudio(userRecordings, selectedChapterAudios, book, chapter, translationId);
-  const ownTiming = hasPlayableAudio(own) ? own!.verseTimestamps?.find((t) => t.verse === verse) : undefined;
-  if (ownTiming) return { recording: own!, startSec: ownTiming.startSec, endSec: ownTiming.endSec };
+  const picked = resolveChapterAudio(userRecordings, selectedChapterAudios, book, chapter, translationId);
+  const layers = [
+    ...(picked ? [picked] : []),
+    ...userRecordings
+      .filter(
+        (r) =>
+          r.id !== picked?.id &&
+          r.book.toLowerCase() === book.toLowerCase() &&
+          r.chapter === chapter &&
+          recordingFitsTranslation(r, translationId)
+      )
+      .sort((a, b) => (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER)),
+  ];
+  for (const rec of layers) {
+    const timing = hasPlayableAudio(rec) ? rec.verseTimestamps?.find((t) => t.verse === verse) : undefined;
+    if (timing) return { recording: rec, startSec: timing.startSec, endSec: timing.endSec };
+  }
 
   const t = hasLibraryAudio(translationId, book) ? libraryTimings?.verses[String(verse)] : undefined;
   if (!libraryTimings || !t) return null;

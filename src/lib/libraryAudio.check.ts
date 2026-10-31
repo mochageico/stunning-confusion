@@ -83,6 +83,15 @@ check(
   isLibraryRecording(resolveVerseAudio([rec('eng', 'BSB', 'Joel', 2, [28])], {}, 'Joel', 2, 28, 'HEBGRK', joel2)?.recording)
 );
 
+// Layered like texture packs: a verses 1-5 take on top of a whole-chapter take.
+const part = { ...rec('part', 'BSB', 'Romans', 8, [1, 2, 3, 4, 5]), priority: 0 };
+const whole = { ...rec('whole', 'BSB', 'Romans', 8, [1, 2, 3, 4, 5, 6, 7]), priority: 1 };
+const layerFor = (v: number, picks = {}) => resolveVerseAudio([whole, part], picks, 'Romans', 8, v, 'BSB', null)?.recording.id;
+check('top recording plays the verses it has', layerFor(3) === 'part', layerFor(3));
+check('the next one down fills in the rest', layerFor(6) === 'whole', layerFor(6));
+check('a picked recording goes on top', layerFor(3, { Romans_8: whole }) === 'whole');
+check('nothing past every layer', layerFor(9) === undefined);
+
 if (failures) {
   console.log(`\n${failures} failure(s)`);
   process.exit(1);

@@ -126,6 +126,9 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
     downloadingRecordingIds,
     saveRecordingOffline,
     removeRecordingDownload,
+    userRecordings,
+    saveSharedRecordingToLibrary,
+    setSelectedRecording,
   } = state;
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -302,6 +305,21 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
 
   const recLabel = recordingLabel(selectedRecording);
   const isMine = !!user?.uid && selectedRecording.userId === user.uid && !selectedRecording.savedFromRecordingId;
+  // Someone else's recording opened from Find recordings or a chat, not yet
+  // saved: there's no doc of mine to hold timing, so Edit saves it first.
+  const savedCopy = userRecordings.find((r) => r.savedFromRecordingId === selectedRecording.id);
+  const isUnsavedOther = !isMine && !selectedRecording.savedFromRecordingId;
+  const readerName = (selectedRecording.user || 'the reader').split(' ')[0];
+  const startEditing = async () => {
+    if (!isUnsavedOther) {
+      setIsEditingSync(true);
+      return;
+    }
+    const saved = savedCopy ?? (await saveSharedRecordingToLibrary(selectedRecording));
+    if (!saved) return;
+    setSelectedRecording(saved);
+    setIsEditingSync(true);
+  };
   const visibility = normalizeRecordingVisibility(selectedRecording.sharedVisibility);
   const prevScreen = backHistory[backHistory.length - 1]?.screen;
   const tabular = { fontVariant: ['tabular-nums' as const] };
@@ -437,9 +455,24 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
         <View style={{ gap: space(6) }}>
           <SectionHeader
             title="Verse timing"
-            actionLabel={isEditingSync ? undefined : 'Edit'}
-            onAction={isEditingSync ? undefined : () => setIsEditingSync(true)}
+            actionLabel={isEditingSync ? undefined : isUnsavedOther && !savedCopy ? 'Save & edit' : 'Edit'}
+            onAction={isEditingSync ? undefined : () => void startEditing()}
           />
+          {!isMine && !isEditingSync && (
+            <AppText variant="caption" className="font-sans text-ink-3">
+              {selectedRecording.customTimings
+                ? `This is your own timing. Only you hear it; ${readerName}'s recording isn't changed.`
+                : `Timing by ${readerName}. If a verse starts in the wrong spot, edit it to make your own timing. Only you hear it.`}
+            </AppText>
+          )}
+          {selectedRecording.customTimings && !isEditingSync && selectedRecording.ownerVerseTimestamps && (
+            <AppButton
+              size="sm"
+              variant="quiet"
+              label={`Use ${readerName}'s timing`}
+              onPress={() => void saveVerseSyncOffsets(selectedRecording.ownerVerseTimestamps!, { ownTiming: false })}
+            />
+          )}
 
           <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(10) }}>
             <Pressable onPress={(e) => handleTapSeek(e.nativeEvent.locationX)} disabled={!isEditingSync && !hasRealAudio}>

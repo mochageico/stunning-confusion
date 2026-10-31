@@ -252,6 +252,7 @@ queueReady: boolean
 reactionsByMessageId: { [x: string]: MessageReaction[]; }
 readMarkerFor: (scope: ChatScope, containerId: string) => string | undefined
 receivedAccountabilityNudges: AccountabilityNudge[]
+receivedRecordings: Recording[]
 recordingBook: string
 recordingChapter: number
 recordingChapterVerses: { verse: number; text: string; }[]
@@ -289,11 +290,11 @@ saveOutlineExtra: (book: string, chapter: number, extra: OutlineExtra) => Promis
 saveRecordedAudio: () => Promise<void>
 saveRecordingDialog: boolean
 saveRecordingOffline: (recording: Recording) => Promise<boolean>
-saveSharedRecordingToLibrary: (rec: Recording) => Promise<void>
+saveSharedRecordingToLibrary: (rec: Recording) => Promise<Recording | undefined>
 saveTakeaway: (spot: TakeawaySpot, fields: { text: string; note?: string | undefined; status: "saved" | "later" | "draft"; sharedTo?: string[] | undefined; }) => Promise<void>
 saveTakeawayDraft: (d: TakeawayDraft) => boolean
 saveVerseDoodle: (key: string, strokes: string[]) => void
-saveVerseSyncOffsets: (verseTimestamps: VerseTimestamp[]) => Promise<void>
+saveVerseSyncOffsets: (verseTimestamps: VerseTimestamp[], opts?: { ownTiming?: boolean | undefined; } | undefined) => Promise<void>
 searchUsers: (rawQuery: string) => Promise<void>
 searchingUsers: boolean
 sectionsForChapter: (book: string, chapter: number) => ChapterSections | null

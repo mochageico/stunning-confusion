@@ -510,6 +510,9 @@ export function useAppState() {
   // (other people's recordings, e.g. "Sarah Miller") until the real feed loads.
   const [feedRecordings, setFeedRecordings] = useState<Recording[]>(SUGGESTED_FEED_RECORDINGS);
   const [loadingFeedRecordings, setLoadingFeedRecordings] = useState(false);
+  // Recordings sent to me in a chat ('direct' shared copies): not feed posts,
+  // but Your recordings lists the unsaved ones under "Sent to you".
+  const [receivedRecordings, setReceivedRecordings] = useState<Recording[]>([]);
   const [audioSearchQuery, setAudioSearchQuery] = useState('');
   const [activeFeedFilter, setActiveFeedFilter] = useState<'global' | 'group' | 'friends'>('global');
   const [feedBookFilter, setFeedBookFilter] = useState<string>('');
@@ -994,6 +997,7 @@ export function useAppState() {
   const loadSharedRecordings = async () => {
     if (!auth.currentUser) {
       setFeedRecordings(SUGGESTED_FEED_RECORDINGS);
+      setReceivedRecordings([]);
       return;
     }
     setLoadingFeedRecordings(true);
@@ -1007,13 +1011,11 @@ export function useAppState() {
           limit(30)
         )
       );
-      setFeedRecordings(
-        snap.docs
-          // 'direct' copies exist only so a recording sent in a chat can play
-          // there (see shareRecordingInto) -- they're not posts for the feed.
-          .filter((d) => d.data().visibility !== 'direct')
-          .map((d) => ({ id: d.id, ...d.data() }) as Recording)
-      );
+      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Recording & { visibility?: string; ownerId?: string });
+      // 'direct' copies exist only so a recording sent in a chat can play
+      // there (see shareRecordingInto) -- they're not posts for the feed.
+      setFeedRecordings(all.filter((r) => r.visibility !== 'direct'));
+      setReceivedRecordings(all.filter((r) => r.visibility === 'direct' && (r.userId || r.ownerId) !== uid));
     } catch (err) {
       console.error('Failed to load shared recordings feed:', err);
     } finally {
@@ -3133,6 +3135,11 @@ export function useAppState() {
           savedFromRecordingId: b.savedFromRecordingId,
           sharedVisibility: 'private',
           priority: b.priority,
+          // The saver's own timing wins over the owner's; the owner's is kept
+          // alongside (in memory only) so it can be switched back to.
+          ...(b.customTimings
+            ? { verseTimestamps: b.verseTimestamps, customTimings: true, ownerVerseTimestamps: fields.verseTimestamps }
+            : {}),
         });
       }
     }
@@ -3189,17 +3196,35 @@ export function useAppState() {
   // positions via buildVerseTimestamps) rather than reading from any
   // useAppState-owned draft state -- the editing session itself is local to
   // RecordingDetailScreen.
-  const saveVerseSyncOffsets = async (verseTimestamps: VerseTimestamp[]) => {
+  // On a saved bookmark of someone else's recording, new timing is the
+  // saver's own (customTimings), which hydrateSavedRecordings then keeps
+  // instead of refreshing from the owner's copy; the audio stays shared.
+  // Pass ownTiming: false to go back to following the owner's timing.
+  const saveVerseSyncOffsets = async (verseTimestamps: VerseTimestamp[], opts?: { ownTiming?: boolean }) => {
     const uid = auth.currentUser?.uid;
     if (!uid || !selectedRecording) return;
     if (selectedRecording.uploadPending) {
       await editWaitingRecording(selectedRecording, { verseTimestamps });
       return;
     }
+    const bookmark = !!selectedRecording.savedFromRecordingId;
+    const customTimings = bookmark && (opts?.ownTiming ?? true);
 
     try {
-      await updateDoc(doc(db, 'users', uid, 'recordings', selectedRecording.id), { verseTimestamps });
-      const updated = { ...selectedRecording, verseTimestamps };
+      await updateDoc(
+        doc(db, 'users', uid, 'recordings', selectedRecording.id),
+        bookmark ? { verseTimestamps, customTimings } : { verseTimestamps }
+      );
+      const updated: Recording = bookmark
+        ? {
+            ...selectedRecording,
+            verseTimestamps,
+            customTimings,
+            ownerVerseTimestamps: selectedRecording.customTimings
+              ? selectedRecording.ownerVerseTimestamps
+              : selectedRecording.verseTimestamps,
+          }
+        : { ...selectedRecording, verseTimestamps };
       setSelectedRecording(updated);
       setUserRecordings((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
     } catch (err) {
@@ -3291,6 +3316,7 @@ export function useAppState() {
       await setDoc(doc(db, 'users', uid, 'recordings', id), stripUndefined({ ...savedRec, createdAt: serverTimestamp() }));
       setUserRecordings((prev) => [savedRec, ...prev]);
       triggerToast(`Saved to My Library! Added to your ${rec.book} ${rec.chapter} options.`);
+      return savedRec;
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `users/${uid}/recordings/${id}`);
     }
@@ -3533,7 +3559,9 @@ export function useAppState() {
     handleMarkImportTap,
     resetImportTaps,
     handleFinishImportTagging,
-    feedRecordings: visibleFeedRecordings, setFeedRecordings, loadingFeedRecordings, loadSharedRecordings, saveSharedRecordingToLibrary,
+    feedRecordings: visibleFeedRecordings,
+    receivedRecordings: receivedRecordings.filter((r) => !blockedUids.has(r.userId || (r as Recording & { ownerId?: string }).ownerId || "")),
+    setFeedRecordings, loadingFeedRecordings, loadSharedRecordings, saveSharedRecordingToLibrary,
     audioSearchQuery, setAudioSearchQuery,
     activeFeedFilter, setActiveFeedFilter,
     feedBookFilter, setFeedBookFilter,

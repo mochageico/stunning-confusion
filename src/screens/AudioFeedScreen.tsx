@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Check, MoreHorizontal, Pause, Play, Plus, Search, Volume2, X } from 'lucide-react-native';
+import { Check, MoreHorizontal, Pause, Play, Plus, Search, UserPlus, Users, Volume2, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { Recording } from '../types';
@@ -11,7 +11,7 @@ import { BIBLE_TRANSLATIONS, getBookByName, translationLabel } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
 import { formatDate, formatDuration } from '../lib/format';
 import { AppButton, AppIconButton, AppTextInput, AppText, useFontScale, useScaledSpace } from '../components/design';
-import { Avatar, Badge, EmptyState, ScreenHeader, SegmentedControl, type BadgeTone } from '../components/blocks';
+import { Avatar, Badge, EmptyState, ScreenHeader, type BadgeTone } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { Dialog } from '../components/blocks';
 import { BlockConfirmDialog, ReportSheet } from '../components/chat/ReportSheet';
@@ -21,12 +21,6 @@ const BACK_LABELS: Partial<Record<string, string>> = {
   home: 'Today',
   chapterLanding: 'Chapter',
 };
-
-const FEED_FILTERS = [
-  { id: 'global' as const, label: 'Everyone' },
-  { id: 'group' as const, label: 'Circles' },
-  { id: 'friends' as const, label: 'Friends' },
-];
 
 // The guest-preview mock feed names its people rather than carrying real
 // uids, so these stand in for "is a friend" / "is in a circle" there.
@@ -47,8 +41,6 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     setFeedBookFilter,
     feedChapterFilter,
     setFeedChapterFilter,
-    activeFeedFilter,
-    setActiveFeedFilter,
     feedTranslationFilter,
     setFeedTranslationFilter,
     setPlayingRecordingId,
@@ -59,9 +51,17 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     userRecordings,
     friends,
     circleFriends,
+    myCircles,
     saveSharedRecordingToLibrary,
+    setSelectedRecording,
+    navigateTo,
+    selectTab,
     triggerToast,
   } = state;
+
+  // Whose recordings to show: '' is everyone you know, else one sharer's key
+  // (their uid; the guest-preview mock feed has names only).
+  const [personFilter, setPersonFilter] = useState('');
 
   // Report / block a recording's owner (App Store 1.2: anything people post
   // must be reportable, and its author blockable).
@@ -102,22 +102,31 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
       ]
     : [];
 
-  // 1. Filter by category — real recordings are matched by userId against
-  // real friends/circleFriends; r.category is only ever set on the
-  // illustrative guest-preview mock feed (SUGGESTED_FEED_RECORDINGS), kept
-  // here so that still filters sensibly when signed out.
+  // 1. Filter by person. The feed only ever holds recordings from friends
+  // and circle co-members (sharedRecordings is queried by sharedWithUids),
+  // so there's no "everyone" tier to pick -- just one person or all of them.
   const friendUids = new Set(friends.map((f) => f.uid));
   const circleUids = new Set(circleFriends.map((f) => f.uid));
-  let filtered = feedRecordings;
-  if (activeFeedFilter === 'group') {
-    filtered = feedRecordings.filter(
-      (r) => (r.userId && (circleUids.has(r.userId) || r.userId === user?.uid)) || r.category === 'group'
-    );
-  } else if (activeFeedFilter === 'friends') {
-    filtered = feedRecordings.filter(
-      (r) => (r.userId && (friendUids.has(r.userId) || r.userId === user?.uid)) || r.category === 'friends'
-    );
-  }
+  const personKey = (r: Recording) => r.userId || r.user || '';
+  const sharers = Array.from(
+    new Map(
+      feedRecordings
+        .filter((r) => personKey(r) && personKey(r) !== user?.uid)
+        .map((r) => [personKey(r), r.user || 'Someone'] as const)
+    )
+  ).map(([key, name]) => ({ key, name }));
+  let filtered = personFilter ? feedRecordings.filter((r) => personKey(r) === personFilter) : feedRecordings;
+
+  // Signed in with nobody to hear from: the feed can only ever be empty, so
+  // the screen explains why instead of showing search and filters.
+  const knowsNobody = !!user && friends.length === 0 && myCircles.length === 0;
+  const sourceLine = (() => {
+    const parts = [
+      friends.length > 0 ? `${friends.length} ${friends.length === 1 ? 'friend' : 'friends'}` : '',
+      myCircles.length > 0 ? `${myCircles.length} ${myCircles.length === 1 ? 'circle' : 'circles'}` : '',
+    ].filter(Boolean);
+    return parts.length ? `Readings shared by your ${parts.join(' and ')}.` : 'Readings shared by your friends and circles.';
+  })();
 
   // 2. Filter by Book selection
   if (feedBookFilter) {
@@ -172,10 +181,93 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
             Recordings" here and "Find Recordings" on the way in. */}
         <ScreenHeader
           title="Find recordings"
-          subtitle="Recitations other people have shared. Save one to play it from your own list."
+          subtitle={knowsNobody ? undefined : sourceLine}
           onBack={handleBack}
           backLabel={(prevScreen && BACK_LABELS[prevScreen]) || 'Back'}
         />
+
+        {knowsNobody ? (
+          <View className="bg-surface border border-line rounded-card" style={{ padding: space(20), gap: space(14) }}>
+            <View className="bg-fill rounded-full items-center justify-center" style={{ width: space(56), height: space(56) }}>
+              <Users size={Math.round(26 * scale)} color={palette.accent} />
+            </View>
+            <AppText variant="title" className="font-sans font-semibold text-ink">
+              Recordings come from people you know
+            </AppText>
+            <AppText variant="body" className="font-sans text-ink-2">
+              You'll hear chapters read aloud by your friends and the people in your scripture circles. Nobody else can see them, and nobody else
+              sees yours.
+            </AppText>
+            <View style={{ gap: space(8) }}>
+              {[
+                'Add a friend or join a circle',
+                'Their shared readings show up here',
+                'Save one, and it plays for that chapter in Coming up next',
+              ].map((step, i) => (
+                <View key={step} className="flex-row" style={{ gap: space(10) }}>
+                  <AppText variant="body" className="font-sans font-bold text-accent">
+                    {i + 1}
+                  </AppText>
+                  <AppText variant="body" className="font-sans text-ink flex-1">
+                    {step}
+                  </AppText>
+                </View>
+              ))}
+            </View>
+            <View style={{ gap: space(8) }}>
+              <AppButton variant="primary" Icon={UserPlus} label="Invite a friend" onPress={() => navigateTo('findFriends')} />
+              <AppButton variant="secondary" Icon={Users} label="Find a circle" onPress={() => selectTab('community')} />
+            </View>
+            <AppText variant="caption" className="font-sans text-ink-3">
+              Meanwhile, record a chapter yourself on the Record tab. Your own readings always play for you.
+            </AppText>
+          </View>
+        ) : (
+        <>
+        {sharers.length > 0 && (
+          <View className="bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(10) }}>
+            <View className="flex-row items-center justify-between">
+              <AppText variant="caption" className="font-sans font-medium text-ink-2">
+                Shared with you by
+              </AppText>
+              <Pressable onPress={() => navigateTo('findFriends')} hitSlop={10} accessibilityRole="button">
+                <AppText variant="caption" className="font-sans font-semibold text-accent">
+                  Add people
+                </AppText>
+              </Pressable>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space(12) }}>
+              {[{ key: '', name: 'Everyone' }, ...sharers].map((p) => {
+                const on = personFilter === p.key;
+                return (
+                  <Pressable
+                    key={p.key || 'all'}
+                    onPress={() => {
+                      setPersonFilter(p.key);
+                      setPlayingRecordingId(null);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={p.key ? `Only ${p.name}` : 'Everyone you know'}
+                    className="items-center"
+                    style={{ gap: space(4), opacity: on ? 1 : 0.6 }}
+                  >
+                    {p.key ? (
+                      <Avatar name={p.name} size={Math.round(44 * scale)} ring={on} />
+                    ) : (
+                      <View className="bg-accent rounded-full items-center justify-center" style={{ width: Math.round(44 * scale), height: Math.round(44 * scale) }}>
+                        <Users size={Math.round(20 * scale)} color={palette.onAccent} />
+                      </View>
+                    )}
+                    <AppText variant="caption" className={`font-sans ${on ? 'font-semibold text-ink' : 'text-ink-2'}`} numberOfLines={1}>
+                      {p.key ? p.name.split(' ')[0] : 'Everyone'}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
         <View style={{ gap: space(12) }}>
           <View className="flex-row items-center bg-surface border border-line rounded-btn" style={{ paddingHorizontal: space(12), gap: space(8) }}>
@@ -195,16 +287,6 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
               </Pressable>
             )}
           </View>
-
-          <SegmentedControl
-            value={activeFeedFilter}
-            onChange={(id) => {
-              setActiveFeedFilter(id);
-              setPlayingRecordingId(null);
-            }}
-            accessibilityLabel="Whose recordings"
-            options={FEED_FILTERS}
-          />
 
           {/* Book, then Chapter once a book is picked, then Translation once
               the feed holds more than one. Each takes an equal share of the
@@ -263,7 +345,11 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
             <EmptyState
               Icon={Volume2}
               title="No recordings match"
-              message="Try a wider search, or share your own: record on the Record tab and choose Friends & Circles."
+              message={
+                feedRecordings.length === 0
+                  ? "Your friends and circles haven't shared a reading yet. Share your own: record on the Record tab and choose Friends & Circles."
+                  : 'Try a wider search, or share your own: record on the Record tab and choose Friends & Circles.'
+              }
             />
           </View>
         ) : (
@@ -298,14 +384,24 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
                       text a column too narrow for "Friend" and Save to share. */}
                   {scale < 1.3 && <Avatar name={rec.user} size={Math.round(36 * scale)} />}
                   <View className="flex-1" style={{ gap: space(6), minWidth: 0 }}>
-                    <View style={{ gap: space(1) }}>
+                    {/* Tap the reference for the recording's page: its verse
+                        timing, who read it, and (once saved) your own timing. */}
+                    <Pressable
+                      style={{ gap: space(1) }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${recordingLabel(rec)}`}
+                      onPress={() => {
+                        setSelectedRecording(rec);
+                        navigateTo('recordingDetail');
+                      }}
+                    >
                       <AppText variant="body" className="font-sans font-semibold text-ink">
                         {recordingLabel(rec)}
                       </AppText>
                       <AppText variant="caption" className="font-sans text-ink-3">
                         {meta}
                       </AppText>
-                    </View>
+                    </Pressable>
                     <View className="flex-row flex-wrap items-center" style={{ gap: space(8) }}>
                       {relation && <Badge label={relation.label} tone={relation.tone} />}
                       {!isOwn && (
@@ -355,6 +451,11 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
               );
             })}
           </View>
+        )}
+        <AppText variant="caption" className="font-sans text-ink-3 text-center">
+          Only your friends and circles hear what you share, and you only hear theirs.
+        </AppText>
+        </>
         )}
       </ScrollView>
 

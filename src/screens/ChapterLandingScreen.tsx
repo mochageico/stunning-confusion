@@ -600,7 +600,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               )}
               {optionsList.length > 1 && (
                 <AppText variant="caption" className="font-sans text-ink-3">
-                  Press and hold the handle to reorder. The top one plays by default.
+                  Press and hold the handle to reorder. Each verse plays from the highest recording that has it.
                 </AppText>
               )}
               <DraggableFlatList
