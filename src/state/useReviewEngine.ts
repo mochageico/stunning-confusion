@@ -5,7 +5,7 @@ import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { getBookByName } from '../data';
 import { fetchChapterText } from './useScripture';
 import { GroupPlan, GroupPlanMembership, QueueItem, ReviewGrade, TouchLog, VerseState } from '../types';
-import { computeDailyPull, PersonalPacingSettings } from '../lib/groupPlanScheduler';
+import { computeDailyPull, PersonalPacingSettings, scheduledDue } from '../lib/groupPlanScheduler';
 import { formatDate } from '../lib/format';
 import { VerseRange } from '../lib/verseRange';
 import { buildVerseId } from '../lib/appData';
@@ -145,7 +145,19 @@ export function useReviewEngine({
       triggerToast('Reviews are paused. Resume them in Settings to start new verses.');
       return;
     }
-    if (!isTodayLearningDay()) {
+    // A plan's own schedule can hand out verses on a day that isn't one of
+    // your personal learning days, so a non-learning day only stops the pull
+    // when no scheduled plan has anything due.
+    const pullToday = getLogicalDate(dayStartHour);
+    const sabbathToday = sabbathEnabled && DAY_ABBREVS[pullToday.getDay()] === sabbathDay;
+    const learningToday = isTodayLearningDay();
+    const scheduledDueToday =
+      !sabbathToday &&
+      joinedGroupPlanDetails.some((p) => {
+        const m = joinedGroupPlanMemberships.find((x) => x.planId === p.planId);
+        return (scheduledDue(memoryQueue, p, pullToday, m?.joinedAt)?.due ?? 0) > 0;
+      });
+    if (!learningToday && !scheduledDueToday) {
       triggerToast(`Today (${getTodayAbbreviation()}) is a non-learning day. Focus on reviews!`);
       return;
     }
@@ -182,15 +194,16 @@ export function useReviewEngine({
     // plans first and uncapped, then group-priority > individual >
     // individual-priority within the personal daily budget).
     const personal: PersonalPacingSettings = {
-      newVersesPace: shieldActive ? 0 : trimmed ? room : newVersesPace,
+      newVersesPace: !learningToday || shieldActive ? 0 : trimmed ? room : newVersesPace,
       learningDays,
+      sabbathToday,
     };
     const { verseIds: pulledVerseIds, fromIndividual, fromPlans } = computeDailyPull(
       memoryQueue,
       personal,
       joinedGroupPlanDetails,
       shieldActive ? additiveMemberships : joinedGroupPlanMemberships,
-      new Date()
+      pullToday
     );
 
     if (shieldActive && pulledVerseIds.length > 0) {
@@ -319,6 +332,37 @@ export function useReviewEngine({
       joinedGroupPlanMemberships,
       new Date()
     );
+
+  // What tapping "Start today's verses" would start right now, for Today's
+  // button: the same pure pull the real tap runs, with today's learning-day
+  // and Sabbath rules applied. `carried` counts scheduled verses owed from an
+  // earlier plan day this week.
+  const getTodayPullPreview = () => {
+    const today = getLogicalDate(dayStartHour);
+    const sabbathToday = sabbathEnabled && DAY_ABBREVS[today.getDay()] === sabbathDay;
+    const personalDay = !sabbathToday && learningDays.includes(DAY_ABBREVS[today.getDay()]);
+    // Your own verses already started today use up today's pace, so the
+    // button goes back to the plain "Start next verses" once it's met.
+    const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const ownStartedToday = memoryQueue.filter(
+      (item) => item.origin !== 'group' && item.status !== 'queued' && item.dateStarted !== null && new Date(item.dateStarted).getTime() >= dayStart
+    ).length;
+    const pull = computeDailyPull(
+      memoryQueue,
+      { newVersesPace: personalDay ? Math.max(0, newVersesPace - ownStartedToday) : 0, learningDays, sabbathToday },
+      joinedGroupPlanDetails,
+      joinedGroupPlanMemberships,
+      today
+    );
+    const planCount = Object.values(pull.fromPlans).reduce((n, ids) => n + ids.length, 0);
+    let carried = 0;
+    joinedGroupPlanDetails.forEach((p) => {
+      if (!pull.fromPlans[p.planId] || sabbathToday) return;
+      const m = joinedGroupPlanMemberships.find((x) => x.planId === p.planId);
+      carried += scheduledDue(memoryQueue, p, today, m?.joinedAt)?.carried ?? 0;
+    });
+    return { total: pull.verseIds.length, planCount, personalCount: pull.fromIndividual.length, carried, fromPlans: pull.fromPlans, sabbathToday };
+  };
 
   // Manually moves specific queued verses straight into Learning, bypassing
   // triggerDailyPull's pace/learning-day/review-cap gating -- those exist to
@@ -1147,6 +1191,7 @@ export function useReviewEngine({
     removeQueueItems,
     getNextPullPreview,
     promoteToLearning,
+    getTodayPullPreview,
     fetchRangeVerses,
     addVersesToQueue,
     addVerseRangeToQueue,

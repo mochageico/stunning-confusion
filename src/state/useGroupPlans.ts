@@ -57,6 +57,8 @@ export function useGroupPlans({ user, getQueue, updateMemoryQueue, removeQueueIt
       managerId: auth.currentUser.uid,
       managerName: user?.displayName || 'Anonymous Disciple',
       versesPerWeek: 3,
+      days: ['M', 'W', 'F'],
+      versesPerDay: 1,
       verseIds: [],
       createdAt: now,
       updatedAt: now,
@@ -74,7 +76,7 @@ export function useGroupPlans({ user, getQueue, updateMemoryQueue, removeQueueIt
   const updateGroupPlan = async (
     circleId: string,
     planId: string,
-    fields: Partial<Pick<GroupPlan, 'name' | 'description' | 'versesPerWeek'>>
+    fields: Partial<Pick<GroupPlan, 'name' | 'description' | 'versesPerWeek' | 'days' | 'versesPerDay'>>
   ) => {
     try {
       const updatedAt = new Date().toISOString();

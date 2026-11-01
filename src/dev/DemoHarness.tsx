@@ -548,10 +548,13 @@ const groupPlan = {
   planId: 'gp1',
   circleId: 'c1',
   name: 'Romans 8 in 8 weeks',
-  description: 'Five verses a week, all of chapter 8 by Thanksgiving.',
+  description: 'A verse a day, all of chapter 8 by Thanksgiving.',
   managerId: 'demo',
   managerName: 'Micah',
-  versesPerWeek: 5,
+  versesPerWeek: 6,
+  // A plan day every day of the week, so the demo always has verses due today.
+  days: ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'],
+  versesPerDay: 1,
   verseIds: Array.from({ length: 39 }, (_, i) => `ROM_8_${i + 1}`),
   createdAt: iso(-30),
   updatedAt: iso(-3),
@@ -669,6 +672,15 @@ export function useDemoState(real: AppState): AppState {
       const lastWeek = weekBounds(new Date(week.start.getTime() - DAY), 0).key;
       const thisWeek = params.get('quiet') === '1' ? lastWeek : week.key;
       const justNow = new Date(Date.now() - 60000).toISOString();
+      // Who started today's verses (opt-in): demo and Sarah share, David doesn't, Timothy hasn't opted in.
+      const todayKey = localDayKey(new Date());
+      real.seedCircleDaily('c1', params.get('noshare') === '1'
+        ? [{ uid: 'u2', shares: true, day: todayKey, done: true }]
+        : [
+            { uid: 'demo', shares: true, day: todayKey, done: false },
+            { uid: 'u2', shares: true, day: todayKey, done: true },
+            { uid: 'u3', shares: true, day: todayKey, done: false },
+          ]);
       real.seedCircleStats(
         'c1',
         [

@@ -8,8 +8,9 @@ import { AppState } from '../state/useAppState';
 import { Circle, CircleMember, GroupPlan } from '../types';
 import { FadeInView, ProgressBar } from '../components/ui';
 import { groupPlanProgress } from '../lib/groupPlanProgress';
+import { DAY_ABBREVS, getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
-import { Avatar, Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SegmentedControl } from '../components/blocks';
+import { Avatar, Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { buildInviteUrl } from '../lib/invites';
 import { combineCircle, weekBounds } from '../lib/circleTotals';
@@ -73,6 +74,10 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     triggerToast,
     openCircleChat,
     memoryQueue,
+    circleDaily,
+    myProgressSharing,
+    loadCircleDaily,
+    setProgressSharing,
     circleStats,
     loadCircleStats,
     dayStartHour,
@@ -106,6 +111,20 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     if (circleId) loadCircleStats(circleId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [circleId]);
+  useEffect(() => {
+    if (circleId) loadCircleDaily(circleId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [circleId]);
+
+  // Today's verses: shown only on a day one of this circle's plans hands some
+  // out. Sharing is opt-in; people who haven't opted in are counted, never named.
+  const dayNow = getLogicalDate(dayStartHour);
+  const todayKey = localDayKey(dayNow);
+  const todaysPlans = activeCircleGroupPlans.filter((p) => p.days && p.days.includes(DAY_ABBREVS[dayNow.getDay()]));
+  const dailyEntries = (circleId ? circleDaily[circleId]?.entries : undefined) ?? [];
+  const sharedToday = dailyEntries.filter((e) => e.shares && e.day === todayKey);
+  const startedToday = sharedToday.filter((e) => e.done);
+  const iShare = circleId ? !!myProgressSharing[circleId] : false;
   const loadedStats = circleId ? circleStats[circleId] : undefined;
   const totals = useMemo(
     () =>
@@ -273,6 +292,52 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
 
         {tab === 'week' && (
           <View style={{ gap: space(20) }}>
+            {todaysPlans.length > 0 && (
+              <View style={{ gap: space(6) }}>
+                <SectionHeader title={iShare ? `Today's verses · ${startedToday.length} of ${activeCircleMembers.length} started` : "Today's verses"} />
+                <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(10) }}>
+                  <AppText variant="label" className="font-sans text-ink-2">
+                    {todaysPlans.map((p) => `${p.name}: ${p.versesPerDay ?? 1} new ${(p.versesPerDay ?? 1) === 1 ? 'verse' : 'verses'}`).join(' · ')}
+                  </AppText>
+                  {iShare ? (
+                    <>
+                      <GroupedList>
+                        {activeCircleMembers.map((member) => {
+                          const entry = sharedToday.find((e) => e.uid === member.uid);
+                          const isSelf = member.uid === user?.uid;
+                          return (
+                            <ListRow
+                              key={member.uid}
+                              leading={<Avatar name={member.displayName} photoUri={member.avatarUrl} size={32} />}
+                              title={isSelf ? `${member.displayName} (you)` : member.displayName}
+                              accessory={
+                                entry ? (
+                                  <Badge label={entry.done ? 'Started' : 'Not yet'} tone={entry.done ? 'success' : 'neutral'} />
+                                ) : (
+                                  <AppText variant="caption" className="font-sans text-ink-3">Not sharing</AppText>
+                                )
+                              }
+                            />
+                          );
+                        })}
+                      </GroupedList>
+                      <AppButton size="sm" variant="quiet" label="Stop sharing my progress" onPress={() => setProgressSharing(activeCircle.id, false)} />
+                    </>
+                  ) : (
+                    <>
+                      <AppText variant="caption" className="font-sans text-ink-3">
+                        {startedToday.length === 0
+                          ? 'Nobody who shares has started yet.'
+                          : `${startedToday.length} ${startedToday.length === 1 ? 'person has' : 'people have'} started today.`}{' '}
+                        Share yours to see who they are. Members who also share can see whether you started today's verses, and nothing else.
+                      </AppText>
+                      <AppButton variant="secondary" label="Share my progress" onPress={() => setProgressSharing(activeCircle.id, true)} />
+                    </>
+                  )}
+                </View>
+              </View>
+            )}
+
             {totals ? (
               <CircleTotalsCard circleName={activeCircle.name} totals={totals} myUid={user?.uid} />
             ) : (

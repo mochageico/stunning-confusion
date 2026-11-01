@@ -30,6 +30,7 @@ export const normalizeGroupPlan = (planId: string, data: any): GroupPlan => ({
   managerId: data.managerId,
   managerName: data.managerName,
   versesPerWeek: data.versesPerWeek ?? data.pacingPerWeek ?? 3,
+  ...(Array.isArray(data.days) && data.days.length > 0 ? { days: data.days, versesPerDay: data.versesPerDay ?? 1 } : {}),
   verseIds: data.verseIds || data.scriptureRange || [],
   createdAt: data.createdAt || data.startDate || new Date().toISOString(),
   updatedAt: data.updatedAt || data.startDate || new Date().toISOString(),

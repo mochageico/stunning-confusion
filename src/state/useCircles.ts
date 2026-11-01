@@ -466,6 +466,9 @@ export function useCircles({
           getDocs(collection(db, 'circles', circleId, 'takeaways')),
           getDocs(collection(db, 'circles', circleId, 'memberStats')),
         ]);
+      // Read apart from the rest: a rules deploy that hasn't reached this
+      // collection yet must never stop a circle from being disbanded.
+      const dailySnap = await getDocs(collection(db, 'circles', circleId, 'dailyProgress')).catch(() => null);
       const participantSnaps = await Promise.all(
         challengesSnap.docs.map((c) => getDocs(collection(c.ref, 'participants')))
       );
@@ -484,6 +487,7 @@ export function useCircles({
         ...replySnaps.flatMap((s) => s.docs.map((d) => d.ref)),
         ...takeawaysSnap.docs.map((d) => d.ref),
         ...statsSnap.docs.map((d) => d.ref),
+        ...(dailySnap ? dailySnap.docs.map((d) => d.ref) : []),
         ...reactionsSnap.docs.map((d) => d.ref),
         ...responsesSnap.docs.map((d) => d.ref),
         ...messagesSnap.docs.map((d) => d.ref),

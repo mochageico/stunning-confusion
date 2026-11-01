@@ -20,6 +20,8 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 export interface PersonalPacingSettings {
   newVersesPace: number; // personal daily cap for new verses, on a learning day
   learningDays: string[]; // DAY_ABBREVS values, e.g. ['M', 'W', 'F'] -- only its LENGTH matters here
+  /** Today is this member's own Sabbath: scheduled plan verses wait for the next plan day. */
+  sabbathToday?: boolean;
 }
 
 export interface DailyPullResult {
@@ -52,6 +54,8 @@ function dailyShareForPlan(plan: GroupPlan, queue: QueueItem[], learningDaysPerW
   const evenShare = Math.ceil(plan.versesPerWeek / Math.max(1, learningDaysPerWeek));
   return Math.min(evenShare, remainingWeeklyBudget);
 }
+
+const isScheduled = (plan: GroupPlan): boolean => !!plan.days && plan.days.length > 0;
 
 function queuedVerseIdsForPlan(queue: QueueItem[], planId: string): string[] {
   return queue
@@ -105,7 +109,7 @@ export function computeDailyPull(
 
   // 1. Additive plans -- uncapped by personal budget.
   membershipsWithPlan
-    .filter((x) => x.membership.priority === 'additive')
+    .filter((x) => x.membership.priority === 'additive' && !isScheduled(x.plan))
     .forEach(({ plan }) => {
       const pulled = pullFromPlan(plan, Infinity);
       if (pulled.length > 0) {
@@ -117,8 +121,25 @@ export function computeDailyPull(
   // 2. Personal daily budget, consumed in priority order.
   let remainingBudget = personal.newVersesPace;
 
+  // Scheduled plans (the leader set days and a count per day) hand out their
+  // own verses on their own days, whatever the member's personal learning
+  // days are. 'Counts toward my pace' takes them out of today's personal
+  // budget; 'on top' leaves the budget alone.
   membershipsWithPlan
-    .filter((x) => x.membership.priority === 'group')
+    .filter((x) => isScheduled(x.plan))
+    .forEach(({ plan, membership }) => {
+      if (personal.sabbathToday) return;
+      const due = scheduledDue(queue, plan, today, membership.joinedAt);
+      if (!due || due.due === 0) return;
+      const pulled = queuedVerseIdsForPlan(queue, plan.planId).slice(0, due.due);
+      if (pulled.length === 0) return;
+      fromPlans[plan.planId] = [...(fromPlans[plan.planId] || []), ...pulled];
+      verseIds.push(...pulled);
+      if (membership.priority !== 'additive') remainingBudget = Math.max(0, remainingBudget - pulled.length);
+    });
+
+  membershipsWithPlan
+    .filter((x) => x.membership.priority === 'group' && !isScheduled(x.plan))
     .forEach(({ plan }) => {
       if (remainingBudget <= 0) return;
       const pulled = pullFromPlan(plan, remainingBudget);
@@ -139,7 +160,7 @@ export function computeDailyPull(
   }
 
   membershipsWithPlan
-    .filter((x) => x.membership.priority === 'individual')
+    .filter((x) => x.membership.priority === 'individual' && !isScheduled(x.plan))
     .forEach(({ plan }) => {
       if (remainingBudget <= 0) return;
       const pulled = pullFromPlan(plan, remainingBudget);
@@ -151,4 +172,65 @@ export function computeDailyPull(
     });
 
   return { verseIds, fromIndividual, fromPlans };
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled plans (a leader-set schedule: days + verses per day)
+// ---------------------------------------------------------------------------
+
+/** Local midnight of the Monday that starts `d`'s week. */
+export function weekStartMonday(d: Date): Date {
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  return start;
+}
+
+export interface ScheduledDue {
+  /** Plan verses to start today, carried-over ones included. */
+  due: number;
+  /** Of those, how many were due on an earlier plan day this week. */
+  carried: number;
+}
+
+const DAY_ABBREVS = ['Su', 'M', 'T', 'W', 'Th', 'F', 'S']; // index matches Date.getDay()
+
+/**
+ * How many of a scheduled plan's verses are due to start today. Counts every
+ * plan day this week up to today (a member's own Sabbath included: that day's
+ * verses simply come due on the next plan day), minus what was already
+ * started this week. Missed days carry over but never past the week's total,
+ * so nothing piles up from week to week. Days before `joinedAt` don't count.
+ * Returns null for a plan with no schedule (older plans).
+ */
+export function scheduledDue(queue: QueueItem[], plan: GroupPlan, today: Date, joinedAt?: string): ScheduledDue | null {
+  if (!plan.days || plan.days.length === 0) return null;
+  const perDay = Math.max(1, plan.versesPerDay ?? 1);
+  const ws = weekStartMonday(today);
+  const joined = joinedAt ? new Date(joinedAt) : null;
+  const from = joined && !Number.isNaN(joined.getTime()) ? new Date(joined.getFullYear(), joined.getMonth(), joined.getDate()) : ws;
+  const counted = from.getTime() > ws.getTime() ? from : ws;
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  let soFar = 0;
+  let weekTotal = 0;
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(ws);
+    date.setDate(ws.getDate() + i);
+    if (date.getTime() < counted.getTime()) continue;
+    if (!plan.days.includes(DAY_ABBREVS[date.getDay()])) continue;
+    weekTotal += perDay;
+    if (date.getTime() <= todayStart.getTime()) soFar += perDay;
+  }
+  const startedThisWeek = queue.filter(
+    (item) =>
+      item.originPlanId === plan.planId &&
+      item.status !== 'queued' &&
+      item.dateStarted !== null &&
+      new Date(item.dateStarted).getTime() >= ws.getTime()
+  ).length;
+  const available = queue.filter((item) => item.status === 'queued' && item.originPlanId === plan.planId).length;
+  const owed = Math.min(soFar, weekTotal) - startedThisWeek;
+  const due = Math.max(0, Math.min(owed, available));
+  const dayShare = plan.days.includes(DAY_ABBREVS[today.getDay()]) && todayStart.getTime() >= counted.getTime() ? perDay : 0;
+  return { due, carried: Math.max(0, due - dayShare) };
 }

@@ -46,6 +46,7 @@ cancelRecordingRequest: () => void
 chapterPhotos: ChapterPhoto[]
 chapterSections: { [x: string]: ChapterSections; }
 chapterViewMode: "list" | "grid" | "memoryGrid"
+circleDaily: { [x: string]: DailyState; }
 circleFriends: CircleMember[]
 circleStats: { [x: string]: CircleStatsState; }
 circleTakeaways: { [x: string]: CircleTakeawayList; }
@@ -105,6 +106,7 @@ getNewVerseRoom: () => number
 getNextPullPreview: () => DailyPullResult
 getTodayAbbreviation: () => string
 getTodayDateString: () => string
+getTodayPullPreview: () => { total: number; planCount: number; personalCount: number; carried: number; fromPlans: Record<string, string[]>; sabbathToday: boolean; }
 guidedPassageKey: string | null
 guidelinesAcceptedAt: string | null | undefined
 guidelinesPromptOpen: boolean
@@ -154,6 +156,7 @@ listenPlaylists: ListenPlaylist[]
 listenSource: "all" | "selection" | "memorization" | "reviewing" | "priming" | `playlist:${string}`
 loadActiveCircleData: (circleId: string, opts?: { silent?: boolean | undefined; } | undefined) => Promise<void>
 loadActivityFeed: (opts?: { silent?: boolean | undefined; } | undefined) => Promise<void>
+loadCircleDaily: (circleId: string) => Promise<void>
 loadCircleFriends: (circles: Circle[]) => Promise<void>
 loadCircleStats: (circleId: string) => Promise<void>
 loadCircleTakeaways: (circleId: string) => Promise<void>
@@ -192,6 +195,7 @@ memoryStreak: number
 modalVerses: VerseState[]
 myChallengeBadges: Challenge[]
 myCircles: Circle[]
+myProgressSharing: { [x: string]: boolean; }
 navigateTo: (screen: ScreenName, book?: string | null, chapter?: number | null, options?: { keepBack?: boolean | undefined; }) => void
 newPlanDesc: string
 newPlanName: string
@@ -285,6 +289,7 @@ saveVerseSyncOffsets: (verseTimestamps: VerseTimestamp[], opts?: { ownTiming?: b
 searchUsers: (rawQuery: string) => Promise<void>
 searchingUsers: boolean
 sectionsForChapter: (book: string, chapter: number) => ChapterSections | null
+seedCircleDaily: (circleId: string, entries: CircleDailyEntry[]) => void
 seedCircleStats: (circleId: string, stats: CircleMemberStats[], sharedThisWeek: { authorUid: string; createdAt: string; }[]) => void
 seedCircleTakeaways: (circleId: string, items: SharedTakeaway[], memberUids: string[], replies: Record<string, TakeawayReply[]>) => void
 seekImportAudioBy: (deltaSeconds: number) => void
@@ -352,6 +357,7 @@ setPickedRecordingVisibility: (value: SetStateAction<RecordingVisibility>) => vo
 setPlayingRecProgress: (next: number | ((prev: number) => number)) => void
 setPlayingRecordingId: (value: SetStateAction<string | null>) => void
 setPrimingLookahead: (value: SetStateAction<number>) => void
+setProgressSharing: (circleId: string, on: boolean) => Promise<void>
 setRecordingBook: (value: SetStateAction<string>) => void
 setRecordingChapter: (value: SetStateAction<number>) => void
 setRecordingRangeEnd: (value: SetStateAction<number | null>) => void
@@ -421,7 +427,7 @@ updateAccountabilityDailyCap: (cap: number) => Promise<void>
 updateCircleSettings: (circleId: string, fields: Partial<Pick<Circle, "name" | "description" | "isPublic">>) => Promise<void>
 updateDefaultRecordingVisibility: (vis: RecordingVisibility) => Promise<void>
 updateDisplayName: (name: string) => Promise<void>
-updateGroupPlan: (circleId: string, planId: string, fields: Partial<Pick<GroupPlan, "name" | "description" | "versesPerWeek">>) => Promise<void>
+updateGroupPlan: (circleId: string, planId: string, fields: Partial<Pick<GroupPlan, "name" | "description" | "versesPerWeek" | "days" | "versesPerDay">>) => Promise<void>
 updateLadderSettings: (patch: Partial<LadderPrefs>) => Promise<void>
 updateMasteryTouches: (n: number) => Promise<void>
 updateMemoryQueue: (updater: (prev: QueueItem[]) => QueueItem[]) => void

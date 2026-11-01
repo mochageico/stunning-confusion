@@ -103,6 +103,7 @@ import { useChatCards } from './useChatCards';
 import { useFriends } from './useFriends';
 import { useMessaging } from './useMessaging';
 import { useChallenges } from './useChallenges';
+import { useCircleDaily } from './useCircleDaily';
 import { useCircles } from './useCircles';
 import { useGroupPlans } from './useGroupPlans';
 import { useAccount } from './useAccount';
@@ -635,6 +636,19 @@ export function useAppState() {
     dayStartHour,
   });
 
+  // Who started today's plan verses, for members who opted in (see
+  // useCircleDaily).
+  const { circleDaily, mySharing: myProgressSharing, loadCircleDaily, setProgressSharing, seedCircleDaily } = useCircleDaily({
+    user,
+    myCircleIds: myCircles.map((c) => c.id),
+    joinedPlans: joinedGroupPlanDetails,
+    memberships: joinedGroupPlanMemberships,
+    memoryQueue,
+    dayStartHour,
+    sabbathEnabled,
+    sabbathDay,
+  });
+
   // Accountability nudges between friends (see useAccountabilityNudges).
   const {
     accountabilityDailyCap,
@@ -1083,6 +1097,7 @@ export function useAppState() {
       loadReceivedAccountabilityNudges(),
       loadSharedRecordings({ silent: true }),
       viewingGroupDetail && activeGroupId ? loadActiveCircleData(activeGroupId, { silent: true }) : undefined,
+      viewingGroupDetail && activeGroupId ? loadCircleDaily(activeGroupId) : undefined,
     ]);
   const communityOpen = !!user && currentTab === 'community';
   useEffect(() => {
@@ -2191,6 +2206,7 @@ export function useAppState() {
     removeQueueItems,
     getNextPullPreview,
     promoteToLearning,
+    getTodayPullPreview,
     fetchRangeVerses,
     addVersesToQueue,
     addVerseRangeToQueue,
@@ -3721,6 +3737,7 @@ export function useAppState() {
     isReviewDue,
     triggerDailyPull,
     promoteToLearning,
+    getTodayPullPreview,
     addVersesToQueue,
     addVerseRangeToQueue,
     overrideVerseMemoryStatus,
@@ -3789,6 +3806,11 @@ export function useAppState() {
     deleteTakeawayReply,
     seedCircleTakeaways,
     circleStats,
+    circleDaily,
+    myProgressSharing,
+    loadCircleDaily,
+    setProgressSharing,
+    seedCircleDaily,
     loadCircleStats,
     seedCircleStats,
     buildVerseTimestamps,

@@ -179,6 +179,10 @@ export interface GroupPlan {
   managerId: string;           // User ID of the plan manager
   managerName?: string;
   versesPerWeek: number;       // target pace -- reconciled against each member's own capacity by the scheduler
+  /** Days the leader hands out new verses (DAY_ABBREVS values, e.g. ["M","W","F"]). Unset on older plans, which follow each member's own learning days. */
+  days?: string[];
+  /** New verses on each plan day. With days set, versesPerWeek = days.length * versesPerDay. */
+  versesPerDay?: number;
   verseIds: string[];          // manager-curated queue, built incrementally over time (e.g. ["ROM_10_1", "ROM_10_2", ...])
   createdAt: string;
   updatedAt: string;
@@ -896,4 +900,19 @@ export interface Echo {
   nt: StarRef;
   ot: StarRef;
   kind: 'quote' | 'allusion';
+}
+
+/**
+ * circles/{circleId}/dailyProgress/{uid}: whether a member who opted in has
+ * started today's plan verses. Written only by that member. See
+ * src/state/useCircleDaily.ts.
+ */
+export interface CircleDailyEntry {
+  uid: string;
+  /** They turned sharing on for this circle. A doc with shares: false means they turned it back off. */
+  shares: boolean;
+  /** Local day key (the writer's logical day) this entry describes. */
+  day: string;
+  /** Every plan verse due that day has been started. */
+  done: boolean;
 }

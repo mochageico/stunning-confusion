@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { LogOut, Trash2 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
@@ -10,17 +10,51 @@ import { useChapterText } from '../state/useScripture';
 import { GroupPlanMembership } from '../types';
 import { AppButton, AppText, AppTextInput, ChoiceCard, useScaledSpace } from '../components/design';
 import { CollapsibleSection, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
-import { groupPlanProgress } from '../lib/groupPlanProgress';
+import { groupPlanProgress, upcomingPlanDays } from '../lib/groupPlanProgress';
+import { DAY_FULL_NAMES, getLogicalDate } from '../lib/logicalDate';
 
 // Plain language, and ordered by how most people actually want it: joining a
 // group thing usually means you want the group's verses to lead. The old
 // labels ("Individual First"/"Plan First"/"Additive") described the
 // scheduler's internals rather than the choice being made.
 const PRIORITY_OPTIONS: { id: GroupPlanMembership['priority']; label: string; description: string }[] = [
-  { id: 'group', label: 'Group verses first', description: 'This plan leads. Your own verses fill whatever room is left in your daily pace.' },
-  { id: 'individual', label: 'My verses first', description: 'Your own verses lead. This plan fills whatever room is left in your daily pace.' },
-  { id: 'additive', label: 'Both, side by side', description: 'This plan adds its full pace on top of your own, even past your daily limits.' },
+  { id: 'group', label: 'Counts toward my daily pace', description: "This plan's verses come out of your daily new-verse pace. Your own verses fill whatever is left." },
+  { id: 'additive', label: 'On top of my daily pace', description: "This plan's verses are added to your daily pace, even past your limits." },
 ];
+// Older memberships may still hold the retired 'individual' choice, which
+// behaved like 'group' once a plan's own weekly pace was met.
+const asChoice = (p: GroupPlanMembership['priority']): GroupPlanMembership['priority'] => (p === 'individual' ? 'group' : p);
+
+const WEEK_ORDER = ['M', 'T', 'W', 'Th', 'F', 'S', 'Su'];
+const DAY_LETTER: Record<string, string> = { M: 'M', T: 'T', W: 'W', Th: 'T', F: 'F', S: 'S', Su: 'S' };
+
+// Seven day chips, Monday first. With onToggle they edit; without they just show.
+function DayChips({ days, onToggle }: { days: string[]; onToggle?: (day: string) => void }) {
+  const space = useScaledSpace();
+  return (
+    <View className="flex-row" style={{ gap: space(6) }}>
+      {WEEK_ORDER.map((d) => {
+        const on = days.includes(d);
+        return (
+          <Pressable
+            key={d}
+            disabled={!onToggle}
+            onPress={() => onToggle?.(d)}
+            accessibilityRole={onToggle ? 'checkbox' : 'text'}
+            accessibilityState={{ checked: on }}
+            accessibilityLabel={(DAY_FULL_NAMES[d] ?? d).replace(/s$/, '')}
+            className={`flex-1 items-center justify-center rounded-btn border ${on ? 'bg-accent-soft border-accent' : 'bg-surface border-line'}`}
+            style={{ minHeight: space(40) }}
+          >
+            <AppText variant="label" className={`font-sans font-semibold ${on ? 'text-accent' : 'text-ink-3'}`}>
+              {DAY_LETTER[d]}
+            </AppText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 // What a brand-new member gets. Previously the Join button hardcoded
 // 'individual', which meant the plan only ever got leftover capacity -- so
@@ -80,7 +114,8 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
   // a stepper tap is never written to the plan for everyone.
   const [draftName, setDraftName] = useState('');
   const [draftDesc, setDraftDesc] = useState('');
-  const [draftPace, setDraftPace] = useState(5);
+  const [draftDays, setDraftDays] = useState<string[]>(['M', 'W', 'F']);
+  const [draftPerDay, setDraftPerDay] = useState(1);
   const [showAddVerses, setShowAddVerses] = useState(false);
   const [addBook, setAddBook] = useState('Romans');
   const [addChapter, setAddChapter] = useState('1');
@@ -107,12 +142,19 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
   const membership = joinedGroupPlanMemberships.find((m) => m.planId === plan.planId);
   const progress = groupPlanProgress(memoryQueue, plan);
   const weeksLeft = Math.max(1, Math.ceil(plan.verseIds.length / Math.max(1, plan.versesPerWeek)));
-  const priorityLabel = PRIORITY_OPTIONS.find((o) => o.id === (membership?.priority ?? joinPriority))?.label ?? '';
+  const priorityLabel = PRIORITY_OPTIONS.find((o) => o.id === asChoice(membership?.priority ?? joinPriority))?.label ?? '';
+  const scheduled = !!plan.days && plan.days.length > 0;
+  const upcoming = scheduled && membership ? upcomingPlanDays(memoryQueue, plan, getLogicalDate(state.dayStartHour), membership.joinedAt) : [];
+  const draftWeekly = draftDays.length * draftPerDay;
+  const draftWeeks = Math.max(1, Math.ceil(plan.verseIds.length / Math.max(1, draftWeekly)));
+  const draftDayNames = WEEK_ORDER.filter((d) => draftDays.includes(d)).map((d) => (DAY_FULL_NAMES[d] ?? d).replace(/s$/, '').slice(0, 3)).join(', ');
 
   const startEditing = () => {
     setDraftName(plan.name);
     setDraftDesc(plan.description || '');
-    setDraftPace(plan.versesPerWeek);
+    // An older plan has no schedule yet; start it from its weekly pace on Mon, Wed, Fri.
+    setDraftDays(plan.days && plan.days.length > 0 ? plan.days : ['M', 'W', 'F']);
+    setDraftPerDay(plan.versesPerDay ?? Math.max(1, Math.ceil(plan.versesPerWeek / 3)));
     setShowAddVerses(false);
     setIsEditing(true);
   };
@@ -123,10 +165,20 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
       triggerToast('A plan needs a name.');
       return;
     }
-    const fields: { name?: string; description?: string; versesPerWeek?: number } = {};
+    if (draftDays.length === 0) {
+      triggerToast('Pick at least one day to start the plan.');
+      return;
+    }
+    const fields: { name?: string; description?: string; versesPerWeek?: number; days?: string[]; versesPerDay?: number } = {};
     if (name !== plan.name) fields.name = name;
     if (draftDesc.trim() !== (plan.description || '')) fields.description = draftDesc.trim();
-    if (draftPace !== plan.versesPerWeek) fields.versesPerWeek = draftPace;
+    const orderedDays = WEEK_ORDER.filter((d) => draftDays.includes(d));
+    const sameDays = plan.days && plan.days.length === orderedDays.length && orderedDays.every((d) => plan.days!.includes(d));
+    if (!sameDays || draftPerDay !== plan.versesPerDay) {
+      fields.days = orderedDays;
+      fields.versesPerDay = draftPerDay;
+      fields.versesPerWeek = orderedDays.length * draftPerDay;
+    }
     if (Object.keys(fields).length > 0) {
       updateGroupPlan(plan.circleId, plan.planId, fields);
       triggerToast('Plan updated.');
@@ -258,14 +310,40 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
             </View>
 
             <View style={{ gap: space(6) }}>
-              <SectionHeader title="Pace" />
-              <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(8) }}>
-                <StepperRow value={draftPace} min={1} max={20} onChange={setDraftPace} />
-                <AppText variant="body" className="font-sans font-semibold text-ink">
-                  {draftPace} verses a week
-                </AppText>
+              <SectionHeader title="Schedule" />
+              <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+                <View style={{ gap: space(6) }}>
+                  {fieldLabel('Days')}
+                  <DayChips
+                    days={draftDays}
+                    onToggle={(d) => setDraftDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]))}
+                  />
+                </View>
+                <View style={{ gap: space(6) }}>
+                  {fieldLabel('New verses each day', String(draftPerDay))}
+                  <StepperRow value={draftPerDay} min={1} max={5} onChange={setDraftPerDay} />
+                </View>
+                <View className="border-t border-hairline" style={{ paddingTop: space(10), gap: space(2) }}>
+                  {draftDays.length === 0 ? (
+                    <>
+                      <AppText variant="body" className="font-sans font-semibold text-ink">No days picked</AppText>
+                      <AppText variant="caption" className="font-sans text-ink-3">Pick at least one day to start the plan.</AppText>
+                    </>
+                  ) : (
+                    <>
+                      <AppText variant="body" className="font-sans font-semibold text-ink">{draftWeekly} verses a week</AppText>
+                      <AppText variant="caption" className="font-sans text-ink-3">
+                        {draftDayNames}
+                        {plan.verseIds.length > 0 ? ` · about ${draftWeeks} ${draftWeeks === 1 ? 'week' : 'weeks'} for ${plan.verseIds.length} verses` : ''}
+                      </AppText>
+                      {draftWeekly > 14 && (
+                        <AppText variant="caption" className="font-sans text-ink-3">That's a lot for most people.</AppText>
+                      )}
+                    </>
+                  )}
+                </View>
                 <AppText variant="caption" className="font-sans text-ink-3">
-                  New verses this plan adds each week. Each member's daily limit and priority decide how they blend with their own queue.
+                  Members keep their own Sabbath: if it falls on a plan day, that day's verses wait for the next plan day.
                 </AppText>
               </View>
             </View>
@@ -344,6 +422,32 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
               <ProgressBar percent={(progress.learned / Math.max(1, progress.total)) * 100} />
             </View>
 
+            {scheduled && (
+              <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(10) }}>
+                <AppText variant="body" className="font-sans font-semibold text-ink">Schedule</AppText>
+                <DayChips days={plan.days!} />
+                <AppText variant="caption" className="font-sans text-ink-3">
+                  {plan.versesPerDay ?? 1} new {(plan.versesPerDay ?? 1) === 1 ? 'verse' : 'verses'} each plan day
+                </AppText>
+              </View>
+            )}
+            {scheduled && (
+              <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(8) }}>
+                <AppText variant="body" className="font-sans font-semibold text-ink">Next verses</AppText>
+                {upcoming.length === 0 ? (
+                  <AppText variant="caption" className="font-sans text-ink-3">Nothing is due right now.</AppText>
+                ) : (
+                  upcoming.map((u) => (
+                    <View key={u.day} className="flex-row items-baseline" style={{ gap: space(10) }}>
+                      <AppText variant="caption" className="font-sans font-semibold text-accent" style={{ width: space(72) }}>{u.day}</AppText>
+                      <AppText variant="label" className="font-sans text-ink flex-1">{u.refs}</AppText>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+
+            {!scheduled && (
             <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(10) }}>
               <View className="flex-row items-baseline justify-between" style={{ gap: space(8) }}>
                 <AppText variant="body" className="font-sans font-semibold text-ink">This week</AppText>
@@ -364,13 +468,14 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
                 {progress.pulledThisWeek} of {plan.versesPerWeek} started · {progress.learnedThisWeek} learned
               </AppText>
             </View>
+            )}
 
             <CollapsibleSection storageKey="plan.verses" title={`All verses · ${plan.verseIds.length}`} defaultCollapsed>
               {verseList}
             </CollapsibleSection>
 
             <GroupedList>
-              <ListRow title="Which verses come first" value={priorityLabel} onPress={() => setChoosingPriority(true)} />
+              <ListRow title="How it fits your pace" value={priorityLabel} onPress={() => setChoosingPriority(true)} />
               <ListRow Icon={LogOut} title="Leave plan" destructive accessory="none" onPress={() => setConfirmingLeave(true)} />
             </GroupedList>
           </>
@@ -387,19 +492,13 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
 
             <AppButton size="lg" variant="primary" label="Join plan" onPress={() => joinGroupPlan(plan, joinPriority)} />
 
-            <GroupedList footer="It decides which verses win when there isn't room for everything. You can change it any time.">
-              <ListRow title="Which verses come first" value={priorityLabel} onPress={() => setChoosingPriority(true)} />
+            <GroupedList footer="Whether this plan's verses use up your daily pace or come on top of it. You can change it any time.">
+              <ListRow title="How it fits your pace" value={priorityLabel} onPress={() => setChoosingPriority(true)} />
             </GroupedList>
 
             <CollapsibleSection storageKey="plan.verses" title={`All verses · ${plan.verseIds.length}`} defaultCollapsed>
               {verseList}
             </CollapsibleSection>
-
-            {isManager && (
-              <GroupedList>
-                <ListRow Icon={Trash2} title="Delete plan" destructive accessory="none" onPress={() => setConfirmingDelete(true)} />
-              </GroupedList>
-            )}
           </>
         )}
       </ScrollView>
@@ -408,9 +507,9 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
         visible={choosingPriority}
         onClose={() => setChoosingPriority(false)}
         placement="sheet"
-        title={membership ? 'Which verses come first' : 'How should these verses fit in?'}
+        title="How should this fit your pace?"
       >
-        {priorityCards(membership?.priority ?? joinPriority, (id) => {
+        {priorityCards(asChoice(membership?.priority ?? joinPriority), (id) => {
           if (membership) setGroupPlanPriority(plan.planId, id);
           else setJoinPriority(id);
           setChoosingPriority(false);

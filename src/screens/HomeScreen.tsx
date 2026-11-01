@@ -430,6 +430,18 @@ export default function HomeScreen({ state }: { state: AppState }) {
   // Rather than a silent block, surface an explicit "are you sure?" so the
   // user can still choose to pull anyway -- triggerDailyPull itself no
   // longer shows its own blocking toast when bypassShield is set.
+  // What tapping Start would begin right now: today's scheduled plan verses
+  // (carried ones included) plus your own on a learning day. With nothing
+  // scheduled it stays the plain "Start next verses".
+  const pullPreview = state.getTodayPullPreview();
+  const todaysSet = new Set(Object.values(pullPreview.fromPlans).flat());
+  const pullSources = [
+    ...Object.entries(pullPreview.fromPlans).map(
+      ([planId, ids]) => `${ids.length} from ${state.joinedGroupPlanDetails.find((p) => p.planId === planId)?.name ?? 'a group plan'}`
+    ),
+    ...(pullPreview.personalCount > 0 ? [`${pullPreview.personalCount} of your own`] : []),
+  ].join(' · ');
+
   const handlePullNewVerses = () => {
     if (shieldActive) {
       setShowPullShieldConfirm(true);
@@ -545,7 +557,17 @@ export default function HomeScreen({ state }: { state: AppState }) {
               )}
 
               {hasQueued && (
-                <AppButton variant="secondary" label="Start next verses" onPress={handlePullNewVerses} />
+                <AppButton
+                  variant="secondary"
+                  label={pullPreview.total > 0 ? `Start today's verses · ${pullPreview.total}` : 'Start next verses'}
+                  onPress={handlePullNewVerses}
+                />
+              )}
+              {hasQueued && pullPreview.total > 0 && (
+                <AppText variant="caption" className="font-sans text-ink-3 text-center">
+                  {pullSources}
+                  {pullPreview.carried > 0 ? ` · ${pullPreview.carried} from earlier this week` : ''}
+                </AppText>
               )}
             </CollapsibleCard>
 
@@ -683,6 +705,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
                       label={group.label}
                       first={i === 0}
                       onOpenChapter={() => navigateTo('chapterLanding', group.book, group.chapter)}
+                      note={group.items.some((it) => todaysSet.has(it.verseId)) ? 'Starts today' : null}
                       actions={
                         <AppButton size="sm" variant="quiet" label="Listen" onPress={() => handleGroupPractice('listen', group.items)} />
                       }
