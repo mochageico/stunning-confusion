@@ -35,17 +35,21 @@ export function warmSecondPass(): void {
 }
 
 /**
- * Whisper's text for each piece (base64 WAV, in order), or null when the
- * second pass isn't available right now.
+ * Whisper's text for each piece (base64 WAV, in order), or a short reason
+ * (for the tester toast) when the second pass isn't available right now.
  */
-export async function transcribePieces(pieces: string[]): Promise<string[] | null> {
-  if (pieces.length === 0) return null;
+export async function transcribePieces(pieces: string[]): Promise<string[] | string> {
+  if (pieces.length === 0) return 'nothing to send';
   try {
     const { data } = await callable()({ pieces });
     if ('texts' in data && data.texts.length === pieces.length) return data.texts;
-    return null;
-  } catch {
-    return null;
+    if ('busy' in data) return 'server busy or Groq failed (see function logs)';
+    return 'unexpected reply';
+  } catch (err) {
+    const code = (err as { code?: string })?.code ?? '';
+    if (code === 'functions/deadline-exceeded') return `timed out after ${SECOND_PASS_TIMEOUT_MS / 1000} s`;
+    const message = (err as { message?: string })?.message ?? String(err);
+    return `${code || 'error'}: ${message}`.slice(0, 120);
   }
 }
 
@@ -65,8 +69,8 @@ export interface SecondPassResult {
  * Whisper, grade Whisper's text against `expected`, and combine with Apple's
  * `live` grade (combineSecondPass). `expected`, `live`, `protectedPos` and
  * `heardAt` all use the same positions: the words this recording could have
- * covered, in the order they were recited. Null whenever the second pass
- * can't run, so the caller keeps Apple's grade.
+ * covered, in the order they were recited. `{ failed }` whenever the second
+ * pass can't run, so the caller keeps Apple's grade.
  *
  * With `heardAt` (seconds since listening started when Apple first graded
  * each word), only the pieces holding a red word are sent (pickPieces), each
@@ -79,19 +83,22 @@ export async function runSecondPass(
   live: readonly (WordOutcome | null | undefined)[],
   protectedPos: ReadonlySet<number>,
   heardAt?: readonly (number | null)[]
-): Promise<SecondPassResult | null> {
+): Promise<SecondPassResult | { failed: string }> {
   const started = Date.now();
   let pieces: SentPiece[];
   try {
     pieces = await speechRecordingPieces(uri);
   } catch {
-    return null;
+    return { failed: "couldn't read the recording" };
   }
+  if (pieces.length === 0) return { failed: 'no speech found in the recording' };
   const red = live.map((o, i) => (o ?? 'missed') === 'missed' && !protectedPos.has(i));
   const groups = pickPieces(pieces, heardAt ?? live.map(() => null), red);
   const sent = groups.flatMap((g) => g.pieces);
+  // No piece near a red word: nothing Whisper could fix, which isn't a failure.
+  if (sent.length === 0) return { rescued: [], grades: [], pieces: 0, piecesTotal: pieces.length, ms: Date.now() - started };
   const texts = await transcribePieces(sent.map((k) => pieces[k].audio));
-  if (!texts) return null;
+  if (typeof texts === 'string') return { failed: texts };
   const textOf = new Map(sent.map((k, n) => [k, texts[n]]));
 
   const fixed = new Map<number, WordOutcome>();
