@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Check, Compass, RefreshCw, X } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
@@ -9,12 +9,13 @@ import { Dropdown } from '../components/Dropdown';
 import { AppButton, AppIconButton, AppText, useScaledSpace } from '../components/design';
 import { EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import GradedRecitation, { ButtonPair, canSpeakVerses, RecitationMode, RoundFrame } from '../components/GradedRecitation';
-import BuildUpDrill from '../components/drills/BuildUpDrill';
+import PeekDrill from '../components/drills/PeekDrill';
+import PickPhraseDrill from '../components/drills/PickPhraseDrill';
 import ScrambleDrill from '../components/drills/ScrambleDrill';
 import SpotSwapDrill from '../components/drills/SpotSwapDrill';
 import JigsawDrill from '../components/drills/JigsawDrill';
 import VersePlayButton from '../components/VersePlayButton';
-import { threadSlips, ThreadSlip, threadSpan, threadStartVerseCounts, ThreadCue } from '../lib/drills';
+import { chunkIntoPhrases, threadSlips, ThreadSlip, threadSpan, threadStartVerseCounts, ThreadCue } from '../lib/drills';
 import { reviewPassAccuracy, WordOutcome } from '../lib/recitation';
 import { blankExceptFirstLetter, joinWords, normalizeToken, scriptOfVerse, splitWords } from '../lib/textScript';
 import { loadPracticePrefs, savePracticePrefs } from '../lib/practicePrefs';
@@ -29,7 +30,10 @@ import {
   GuidedDrillVerse,
   GuidedOutcome,
   guidedCredit,
+  GUIDED_MAX_ANCHORS,
   GUIDED_PARTLY_HIDDEN,
+  GUIDED_RELEARN_BELOW,
+  pickShownWords,
   joinChanges,
   Ladder,
   newVersesFinishedToday,
@@ -57,10 +61,11 @@ import {
 // ============================================================================
 
 const DRILL_LABEL: Record<GuidedDrillId, string> = {
-  buildUp: 'Build it up',
+  peek: 'Peek',
   scramble: 'Put the phrases in order',
   swap: 'Spot the swap',
-  firstLetters: 'First letters',
+  listen: 'Listen and fill the gap',
+  backwards: 'Work backwards',
 };
 
 const refOf = (v: { book: string; chapter: number; verse: number }) => `${v.book} ${v.chapter}:${v.verse}`;
@@ -114,9 +119,13 @@ function GradedStage({
   eyebrow,
   caption,
   hiddenShare,
+  anchors,
+  phrasal,
   creditLines,
   easierLabel,
   onEasier,
+  moreLabel,
+  onMore,
   onDone,
 }: {
   verses: GuidedDrillVerse[];
@@ -128,33 +137,47 @@ function GradedStage({
   caption: string;
   /** Share of words hidden; the rest stay visible (partly hidden). Omit for fully hidden. */
   hiddenShare?: number;
+  /** Words (indexes into the verse) hidden first, and highlighted after the result. */
+  anchors?: ReadonlySet<number>;
+  /** Hide whole phrases, not scattered words. */
+  phrasal?: boolean;
   /** One line per verse in the stretch, shown under the graded text. */
   creditLines?: (results: StageResult) => { index: number; text: string }[];
   /** A step down offered before reciting (no miss counted). */
   easierLabel?: string;
   onEasier?: () => void;
+  /** A second, stronger step back offered before reciting (a cold check: teach me again). */
+  moreLabel?: string;
+  onMore?: () => void;
   onDone: (result: StageResult) => void;
 }) {
   const space = useScaledSpace();
   const script = scriptOfVerse(verses[endVerse]);
-  const [stage, setStage] = useState<'ready' | RecitationMode>('ready');
+  // One screen: typing with a mic beside the input, like a normal review.
+  const [stage, setStage] = useState<RecitationMode>('type');
   const [attempt, setAttempt] = useState(0);
-  const [canSpeak] = useState(() => canSpeakVerses([verses[endVerse]]));
   const span = useMemo(() => threadSpan(verses, { startVerse, startWord, endVerse, cueWords: [] }), [verses, startVerse, startWord, endVerse]);
 
   // Which graded words stay visible, chosen once per stage so it doesn't shuffle on re-render.
-  const shown = useMemo(() => {
-    if (hiddenShare === undefined) return undefined;
-    const idx: number[] = [];
+  // The anchors as graded-word positions (a punctuation-only token isn't graded).
+  const { anchoredGraded, gradedTotal } = useMemo(() => {
     let n = 0;
+    const anchored = new Set<number>();
     span.forEach((sv) =>
-      sv.words.forEach((w) => {
-        if (normalizeToken(w, script).length > 0) idx.push(n++);
+      sv.words.forEach((w, wi) => {
+        if (normalizeToken(w, script).length === 0) return;
+        if (span.length === 1 && anchors?.has(wi)) anchored.add(n);
+        n++;
       })
     );
-    const order = [...idx].sort(() => Math.random() - 0.5);
-    const hide = new Set(order.slice(0, Math.round(idx.length * hiddenShare)));
-    return new Set(idx.filter((i) => !hide.has(i)));
+    return { anchoredGraded: anchored, gradedTotal: n };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const shown = useMemo(() => {
+    if (hiddenShare === undefined) return undefined;
+    const phraseSizes = phrasal ? chunkIntoPhrases(verses[endVerse].text, script).map((p) => splitWords(p, script).length) : undefined;
+    return pickShownWords(gradedTotal, hiddenShare, { anchors: anchoredGraded, phraseSizes }, Math.random);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -165,26 +188,6 @@ function GradedStage({
       slips: threadSlips(span, perVerseOutcomes.map((o) => (o || []).map((x) => x === 'missed'))),
     });
   };
-
-  if (stage === 'ready') {
-    return (
-      <RoundFrame>
-        <View className="flex-1 justify-center" style={{ minHeight: space(160) }}>
-          <CueCard eyebrow={eyebrow} words={cueWords} caption={caption} script={script} />
-        </View>
-        <View style={{ gap: space(8) }}>
-          {canSpeak && <AppButton size="lg" variant="primary" label="Recite" onPress={() => setStage('speak')} />}
-          <AppButton
-            variant={canSpeak ? 'secondary' : 'primary'}
-            size={canSpeak ? 'md' : 'lg'}
-            label="Type first letters"
-            onPress={() => setStage('type')}
-          />
-          {onEasier && easierLabel && <AppButton variant="quiet" label={easierLabel} onPress={onEasier} />}
-        </View>
-      </RoundFrame>
-    );
-  }
 
   return (
     <GradedRecitation
@@ -198,7 +201,20 @@ function GradedStage({
       showHeard
       highlightWords={cueWords?.length ?? 0}
       header={<CueCard eyebrow={eyebrow} words={cueWords} caption={caption} script={script} />}
-      onCancel={() => setStage('ready')}
+      anchorWords={anchoredGraded.size > 0 ? anchoredGraded : undefined}
+      footerExtra={
+        (onEasier && easierLabel) || (onMore && moreLabel) ? (
+          <View style={{ gap: space(4) }}>
+            {onEasier && easierLabel && <AppButton variant="quiet" label={easierLabel} onPress={onEasier} />}
+            {onMore && moreLabel && <AppButton variant="quiet" label={moreLabel} onPress={onMore} />}
+          </View>
+        ) : undefined
+      }
+      onCancel={() => {
+        // Listening heard nothing or was cancelled: back to typing.
+        setStage('type');
+        setAttempt((a) => a + 1);
+      }}
       onSwitchMode={(to) => {
         setStage(to);
         setAttempt((a) => a + 1);
@@ -256,6 +272,7 @@ function DrillStage({
   onNext,
   onReroll,
   canReroll,
+  audio,
 }: {
   drill: GuidedDrillId;
   verse: GuidedDrillVerse;
@@ -263,11 +280,11 @@ function DrillStage({
   onNext: () => void;
   onReroll: () => void;
   canReroll: boolean;
+  /** The verse's play button, shown above Listen and fill the gap. */
+  audio?: React.ReactNode;
 }) {
   const space = useScaledSpace();
   const [completed, setCompleted] = useState(false);
-  // First letters is typed by default; it can be said aloud instead. Ungraded either way.
-  const [lettersMode, setLettersMode] = useState<RecitationMode>('type');
   const single = useMemo(() => [verse], [verse]);
   const done = () => setCompleted(true);
 
@@ -281,25 +298,18 @@ function DrillStage({
   return (
     <View className="flex-1" style={{ gap: space(12) }}>
       <View className="flex-1">
-        {drill === 'buildUp' && <BuildUpDrill verses={single} onComplete={done} />}
+        {drill === 'peek' && <PeekDrill verse={verse} onComplete={done} />}
         {drill === 'scramble' && <ScrambleDrill verses={single} onComplete={done} />}
         {drill === 'swap' && <SpotSwapDrill verses={passage} onlyVerse={verse.verse} onComplete={done} />}
-        {drill === 'firstLetters' && (
-          <GradedRecitation
-            key={lettersMode}
-            verses={single}
-            startVerse={0}
-            startWord={0}
-            endVerse={0}
-            mode={lettersMode}
-            continueLabel="Next"
-            onCancel={() => setLettersMode('type')}
-            onSwitchMode={setLettersMode}
-            onResult={onNext}
-          />
+        {drill === 'listen' && (
+          <View className="flex-1" style={{ gap: space(10) }}>
+            {audio}
+            <PickPhraseDrill mode="listen" verse={verse} passage={passage} onComplete={done} />
+          </View>
         )}
+        {drill === 'backwards' && <PickPhraseDrill mode="backwards" verse={verse} passage={passage} onComplete={done} />}
       </View>
-      {drill !== 'firstLetters' ? footer : canReroll && <AppButton variant="quiet" Icon={RefreshCw} label="Different drill" onPress={onReroll} />}
+      {footer}
     </View>
   );
 }
@@ -308,29 +318,103 @@ function DrillStage({
 // A verse's text, whole or reduced to its first letters
 // ----------------------------------------------------------------------------
 
-function VerseCard({ verse, firstLettersOnly }: { verse: GuidedDrillVerse; firstLettersOnly?: boolean }) {
+/**
+ * The verse as text, whole or reduced to its first letters. `anchors` (word
+ * indexes) show bold while reading, and spelled out in full among the first
+ * letters. With `onToggleWord` the words become tappable chips to pick them.
+ * Anchors are for Latin-script verses only.
+ */
+function VerseCard({
+  verse,
+  firstLettersOnly,
+  anchors,
+  onToggleWord,
+}: {
+  verse: GuidedDrillVerse;
+  firstLettersOnly?: boolean;
+  anchors?: readonly number[];
+  onToggleWord?: (wordIndex: number) => void;
+}) {
   const space = useScaledSpace();
   const script = scriptOfVerse(verse);
-  const text = firstLettersOnly ? joinWords(splitWords(verse.text, script).map((w) => blankExceptFirstLetter(w, script))) : verse.text;
+  const anchorSet = new Set(script === 'latin' ? anchors ?? [] : []);
+  const words = splitWords(verse.text, script);
+  const picking = !!onToggleWord && script === 'latin';
+
+  let body: React.ReactNode;
+  if (picking) {
+    body = (
+      <View className="flex-row flex-wrap" style={{ columnGap: space(6), rowGap: space(6) }}>
+        {words.map((w, i) => {
+          const on = anchorSet.has(i);
+          return (
+            <Pressable
+              key={i}
+              accessibilityRole="button"
+              accessibilityLabel={`${w}, ${on ? 'an anchor' : 'not an anchor'}`}
+              accessibilityState={{ selected: on }}
+              onPress={() => onToggleWord(i)}
+              className={`rounded-lg ${on ? 'bg-accent' : 'bg-surface-2'}`}
+              style={{ paddingHorizontal: space(8), paddingVertical: space(4) }}
+            >
+              <AppText variant="body" script={script} className={`font-serif ${on ? 'text-on-accent' : 'text-ink'}`}>
+                {w}
+              </AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  } else if (firstLettersOnly) {
+    // The letters stay dark; the lines after them are quieter, as in Recall.
+    body = (
+      <AppText variant="body" script={script} className="font-serif leading-relaxed text-ink">
+        {words.map((w, i) => {
+          const gap = i < words.length - 1 ? ' ' : '';
+          if (anchorSet.has(i)) {
+            return (
+              <AppText variant="inherit" key={i} className="font-bold text-accent">
+                {w + gap}
+              </AppText>
+            );
+          }
+          const blanked = blankExceptFirstLetter(w, script);
+          const cut = blanked.search(/_/);
+          return cut < 0 ? (
+            <AppText variant="inherit" key={i}>
+              {blanked + gap}
+            </AppText>
+          ) : (
+            <AppText variant="inherit" key={i}>
+              {blanked.slice(0, cut)}
+              <AppText variant="inherit" className="text-ink-3">
+                {blanked.slice(cut) + gap}
+              </AppText>
+            </AppText>
+          );
+        })}
+      </AppText>
+    );
+  } else {
+    body = (
+      <AppText variant="body" script={script} className="font-serif leading-relaxed text-ink">
+        {anchorSet.size === 0
+          ? verse.text
+          : words.map((w, i) => (
+              <AppText variant="inherit" key={i} className={anchorSet.has(i) ? 'font-bold text-accent' : undefined}>
+                {w + (i < words.length - 1 ? ' ' : '')}
+              </AppText>
+            ))}
+      </AppText>
+    );
+  }
+
   return (
     <View className="bg-surface border border-line rounded-card" style={{ padding: space(16), gap: space(6) }}>
       <AppText variant="caption" className="font-sans font-bold text-ink-3">
         {refOf(verse)}
       </AppText>
-      <AppText variant="body" script={script} className="font-serif leading-relaxed text-ink">
-        {/* The letters stay dark; the lines after them are quieter, as in Recall. */}
-        {firstLettersOnly
-          ? text.split(/(_+)/).map((part, i) =>
-              part.startsWith('_') ? (
-                <AppText variant="inherit" key={i} className="text-ink-3">
-                  {part}
-                </AppText>
-              ) : (
-                part
-              )
-            )
-          : text}
-      </AppText>
+      {body}
     </View>
   );
 }
@@ -339,7 +423,7 @@ function VerseCard({ verse, firstLettersOnly }: { verse: GuidedDrillVerse; first
 // Look up and say it -- or type it, with the first letters as hints. Ungraded.
 // ----------------------------------------------------------------------------
 
-function LookUpStage({ verse, onNext }: { verse: GuidedDrillVerse; onNext: () => void }) {
+function LookUpStage({ verse, anchors, onNext }: { verse: GuidedDrillVerse; anchors?: readonly number[]; onNext: () => void }) {
   const space = useScaledSpace();
   const [mode, setMode] = useState<'say' | 'type'>('say');
   const single = useMemo(() => [verse], [verse]);
@@ -376,7 +460,7 @@ function LookUpStage({ verse, onNext }: { verse: GuidedDrillVerse; onNext: () =>
       <AppText variant="label" className="font-sans text-ink-2">
         Look at the first letters and say the verse out loud.
       </AppText>
-      <VerseCard verse={verse} firstLettersOnly />
+      <VerseCard verse={verse} firstLettersOnly anchors={anchors} />
     </RoundFrame>
   );
 }
@@ -402,7 +486,14 @@ function RunDots({ done, needed }: { done: number; needed: number }) {
   );
 }
 
-const RUNG_LABEL: Record<string, string> = { read: 'Read', lookUp: 'Look up', drill: 'Drill', partly: 'Some words', fully: 'From memory' };
+const RUNG_LABEL: Record<string, string> = {
+  read: 'Read',
+  lookUp: 'Look up',
+  drill: 'Pick and place',
+  blanks: 'Fill the blanks',
+  partly: 'Some words',
+  fully: 'From memory',
+};
 
 /** One segment per rung: done, here, still to come. A drop back shows as segments emptying. */
 function RungBar({ ladder }: { ladder: Ladder }) {
@@ -725,6 +816,21 @@ function Sitting({
   // ==========================================================================
   // COLD CHECK
   // ==========================================================================
+  const audioFor = (v: GuidedDrillVerse) => (
+    <VersePlayButton
+      key={`${v.book}${v.chapter}:${v.verse}`}
+      book={v.book}
+      chapter={v.chapter}
+      verse={v.verse}
+      translationId={v.translationId ?? ''}
+      userRecordings={state.userRecordings}
+      selectedChapterAudios={state.selectedChapterAudios}
+      studioPlaybackEnabled={state.studioPlaybackEnabled}
+      audioCacheMap={state.audioCache.map}
+      onStart={() => state.setPlayingRecordingId(null)}
+    />
+  );
+
   if (step.kind === 'cold') {
     const verses = versesOf(step.verseIds);
     const refreshId = step.refreshIds[0];
@@ -747,6 +853,8 @@ function Sitting({
           endVerse={verses.length - 1}
           easierLabel="Not ready? Refresh it first"
           onEasier={() => dispatch({ type: 'easier' })}
+          moreLabel={many ? 'Teach me the first verse again' : 'Teach me again'}
+          onMore={() => dispatch({ type: 'relearn' })}
           eyebrow="Check from memory"
           caption={many ? 'Say these verses with nothing in front of you.' : 'Say the verse with nothing in front of you.'}
           creditLines={({ mode, perVerse }) =>
@@ -765,7 +873,9 @@ function Sitting({
             );
             markJoins(step.verseIds, 0, step.verseIds.length - 1, slips);
             const missed = perVerse.filter((r) => !r.perfect).map((r) => r.index);
-            dispatch({ type: 'result', perfect: missed.length === 0, slips: missed });
+            const bad = perVerse.filter((r) => r.accuracy < GUIDED_RELEARN_BELOW).map((r) => r.index);
+            dispatch({ type: 'result', perfect: missed.length === 0, slips: missed, bad });
+            if (bad.length > 0) setTimeout(() => setNotice('That one slipped a lot. Let’s learn it again.'), 0);
           }}
         />,
         skipBar(many ? 'Skip these checks' : 'Skip this check')
@@ -786,6 +896,7 @@ function Sitting({
             dispatch({ type: 'reroll' });
           }}
           canReroll
+          audio={step.drill === 'listen' ? audioFor(verse) : undefined}
         />,
         skipBar('Skip this check')
       );
@@ -944,8 +1055,17 @@ function Sitting({
     }
     const ladder: Ladder = step.ladder;
     const rung = currentRung(ladder);
-    const eyebrow = `New verse · step ${ladder.pos + 1} of ${ladder.rungs.length}`;
+    const eyebrow = `${step.relearn ? 'Learning again' : 'New verse'} · step ${ladder.pos + 1} of ${ladder.rungs.length}`;
     const title = refOf(verse);
+    // Anchors only help while the verse is being learned, and only in Latin-script text.
+    const liveItem = itemOf(step.verseId);
+    const anchors = liveItem?.status === 'learning' && scriptOfVerse(verse) === 'latin' ? liveItem.guidedAnchors : undefined;
+    const toggleAnchor = (wordIndex: number) => {
+      const cur = liveItem?.guidedAnchors ?? [];
+      const next = cur.includes(wordIndex) ? cur.filter((x) => x !== wordIndex) : cur.length >= GUIDED_MAX_ANCHORS ? cur : [...cur, wordIndex];
+      state.setGuidedAnchors(step.verseId, next);
+    };
+    const canPickAnchors = scriptOfVerse(verse) === 'latin';
     const ladderFrame = (e: string, t: string, body: React.ReactNode) => frame(e, t, body, <RungBar ladder={ladder} />);
 
     if (rung.kind === 'read') {
@@ -961,9 +1081,11 @@ function Sitting({
           }
         >
           <AppText variant="label" className="font-sans text-ink-2">
-            Read it through, slowly, a couple of times.
+            {canPickAnchors
+              ? `Read it through, slowly, a couple of times. Then tap up to ${GUIDED_MAX_ANCHORS} words that carry it: your anchors.`
+              : 'Read it through, slowly, a couple of times.'}
           </AppText>
-          <VerseCard verse={verse} />
+          <VerseCard verse={verse} anchors={anchors} onToggleWord={canPickAnchors ? toggleAnchor : undefined} />
           <VersePlayButton
             key={step.verseId}
             book={verse.book}
@@ -984,7 +1106,7 @@ function Sitting({
       return ladderFrame(
         eyebrow,
         title,
-        <LookUpStage key={`${ladder.pos}:${ladder.misses}`} verse={verse} onNext={() => dispatch({ type: 'next' })} />
+        <LookUpStage key={`${ladder.pos}:${ladder.misses}`} verse={verse} anchors={anchors} onNext={() => dispatch({ type: 'next' })} />
       );
     }
 
@@ -1003,13 +1125,18 @@ function Sitting({
             dispatch({ type: 'reroll' });
           }}
           canReroll={ladder.eligible.length > 1}
+          audio={
+            rung.drill === 'listen' ? audioFor(verse) : undefined
+          }
         />
       );
     }
 
-    // Partly or fully hidden
+    // Fill the blanks, partly hidden, or fully hidden. Anchors stay unhighlighted while reciting.
+    const blanks = rung.kind === 'blanks';
     const partly = rung.kind === 'partly';
-    const activity: GuidedActivity = partly ? 'partly' : ladder.knowIt ? 'knowIt' : 'fully';
+    const stepDown = blanks || partly;
+    const activity: GuidedActivity = blanks ? 'blanks' : partly ? 'partly' : ladder.knowIt ? 'knowIt' : 'fully';
     return ladderFrame(
       eyebrow,
       title,
@@ -1019,19 +1146,27 @@ function Sitting({
         startVerse={0}
         startWord={0}
         endVerse={0}
-        hiddenShare={partly ? GUIDED_PARTLY_HIDDEN : undefined}
-        easierLabel={partly ? 'Easier: one more drill first' : 'Easier: show some words'}
+        hiddenShare={blanks ? rung.share : partly ? GUIDED_PARTLY_HIDDEN : undefined}
+        anchors={anchors ? new Set(anchors) : undefined}
+        phrasal={blanks && (rung.share ?? 0) >= 0.5}
+        easierLabel={stepDown ? 'Easier: one more drill first' : 'Easier: show some words'}
         onEasier={() => dispatch({ type: 'easier' })}
-        eyebrow={partly ? 'Some words showing' : 'From memory'}
-        caption={partly ? 'Say the verse. The shown words won’t count toward a run.' : 'Say the verse with nothing in front of you.'}
+        eyebrow={blanks ? 'Fill in the blanks' : partly ? 'Some words showing' : 'From memory'}
+        caption={
+          blanks
+            ? 'Type the first letter of the hidden words. The shown words won’t count toward a run.'
+            : partly
+              ? 'Say the verse. The shown words won’t count toward a run.'
+              : `Say ${title} with nothing in front of you.`
+        }
         creditLines={({ perVerse }) => [
           { index: 0, text: creditLabel(step.verseId, { activity, passed: perVerse[0].passed, perfect: perVerse[0].perfect, mode: 'speak' }) },
         ]}
         onDone={({ mode, perVerse }) => {
           const r = perVerse[0];
-          if (!partly) bank([{ id: step.verseId, outcome: { activity, passed: r.passed, perfect: r.perfect, accuracy: r.accuracy, mode } }], mode);
+          if (!stepDown) bank([{ id: step.verseId, outcome: { activity, passed: r.passed, perfect: r.perfect, accuracy: r.accuracy, mode } }], mode);
           // dispatch clears the notice, so it is set again just after.
-          const message = !r.perfect ? (partly ? 'Not quite. Back to a drill.' : 'Not quite. Back two steps.') : null;
+          const message = !r.perfect ? 'Not quite. Back to a pick-and-place step.' : null;
           dispatch({ type: 'result', perfect: r.perfect });
           if (message) setTimeout(() => setNotice(message), 0);
         }}

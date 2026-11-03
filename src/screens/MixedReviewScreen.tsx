@@ -11,7 +11,7 @@ import { Badge, EmptyState, GroupedList, ListRow, ScreenHeader } from '../compon
 import { bracketColor, useThemeColors } from '../components/theme';
 import GradedRecitation, { ButtonPair, canSpeakVerses, RecitationMode, RoundFrame, SpanText } from '../components/GradedRecitation';
 import ThreadRound, { ThreadRoundResult } from '../components/ThreadRound';
-import { FixTransitions, PassageOutcomes, transitionTargets } from '../components/practice/ReviewRecap';
+import { computeDayReviewLoad } from '../lib/retention';
 import { SelfCheckFlow, SelfCheckResult } from '../components/practice/SelfCheck';
 import type { GradeSettings } from '../lib/grading';
 import ScrambleDrill from '../components/drills/ScrambleDrill';
@@ -668,7 +668,7 @@ function Session({
 }) {
   const space = useScaledSpace();
   const palette = useThemeColors();
-  const { memoryQueueRef, sectionsForChapter, handleReviewCompleted, startPractice, navigateTo, reviewNotes, clearSlipped } = state;
+  const { memoryQueueRef, sectionsForChapter, handleReviewCompleted, startPractice, navigateTo, pausedAt, pausedUntil, dayStartHour } = state;
 
   const sRef = useRef<MixState>(initial);
   const [s, setS] = useState<MixState>(initial);
@@ -744,42 +744,58 @@ function Session({
     const unitsDone = new Set(s.credits.map((c) => c.unitIndex)).size;
     const minutes = Math.max(1, Math.round(((endedAt ?? Date.now()) - startedAt) / 60000));
     const stopped = s.status === 'stopped';
-    const missedSet = new Set(sum.missed);
-    // What each passage's review did this session, from the engine.
-    const notes = reviewNotes.filter((n) => n.at >= startedAt);
-    const fixTargets = transitionTargets(notes, memoryQueueRef.current);
+    const slippedItems = sum.missed.map((id) => itemById.get(id)).filter((i): i is QueueItem => !!i);
+    // Tomorrow's reviews, priced the same way Today's forecast prices them.
+    const tomorrow = new Date(getLogicalDate(dayStartHour));
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowLoad = computeDayReviewLoad(memoryQueueRef.current, tomorrow, false, pausedAt, pausedUntil);
     return (
       <FadeInView style={{ flex: 1 }}>
         <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-          <View style={{ gap: space(4) }}>
+          <View style={{ gap: space(6) }}>
+            <AppText variant="caption" className="font-sans font-semibold text-ink-3">
+              {reviewed === 0
+                ? `${plural(unitsDone, 'section')} · ${minutes} min`
+                : `${stopped ? 'Stopped' : 'Reviews done'} · ${sum.clean.length} of ${reviewed} clean`}
+            </AppText>
             <AppText variant="display" className="font-sans font-bold text-ink">
-              {reviewed === 0 ? 'Nothing counted this time' : stopped ? 'Stopped for today' : 'Reviews done'}
+              {reviewed === 0
+                ? 'Nothing counted this time'
+                : slippedItems.length > 0
+                  ? `${slippedItems.length === 1 ? 'One verse' : `${plural(slippedItems.length, 'verse')}`} to touch up`
+                  : stopped
+                    ? 'Stopped for today'
+                    : 'All clean'}
             </AppText>
-            <AppText variant="label" className="font-sans text-ink-2">
-              {[plural(reviewed, 'verse'), plural(unitsDone, 'section'), `${minutes} min`].join(' · ')}
-            </AppText>
+            {slippedItems.length > 0 && (
+              <AppText variant="label" className="font-sans text-ink-2">
+                Say each one once more while it's fresh. It doesn't change your schedule.
+              </AppText>
+            )}
           </View>
 
-          <View className="flex-row" style={{ gap: space(10) }}>
-            <View className="flex-1 bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(2) }}>
-              <AppText variant="title" className="font-sans font-bold text-ink">
-                {sum.clean.length}
-              </AppText>
-              <AppText variant="caption" className="font-sans text-ink-2">
-                Clean
-              </AppText>
+          {slippedItems.length > 0 && (
+            <View style={{ gap: space(12) }}>
+              {slippedItems.map((item) => (
+                <View key={item.verseId} className="bg-surface border border-line rounded-card" style={{ padding: space(16), gap: space(12) }}>
+                  <View style={{ gap: space(4) }}>
+                    <AppText variant="caption" className="font-sans font-semibold text-ink-3">
+                      {`${item.book} ${item.chapter}:${item.verseNumber}`}
+                    </AppText>
+                    <AppText variant="body" className="font-sans text-ink" numberOfLines={4}>
+                      {item.text}
+                    </AppText>
+                  </View>
+                  <AppButton
+                    size="md"
+                    variant="secondary"
+                    label="Say it once more"
+                    onPress={() => startPractice('learn', mapQueueItemsToVerseStates([item]))}
+                  />
+                </View>
+              ))}
             </View>
-            <View className="flex-1 bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(2) }}>
-              <AppText variant="title" className="font-sans font-bold text-ink">
-                {sum.missed.length}
-              </AppText>
-              <AppText variant="caption" className="font-sans text-ink-2">
-                Slipped
-              </AppText>
-            </View>
-          </View>
-
-          <PassageOutcomes notes={notes} />
+          )}
 
           {/* A section may have just reached weekly reviews with this session's credits. */}
           <TakeawayAsk state={state} />
@@ -790,51 +806,14 @@ function Session({
             </AppText>
           )}
 
-          {sum.slippedUnits.length > 0 && (
-            <GroupedList header="Where you slipped">
-              {sum.slippedUnits.map((u) => {
-                const unit = plan.units[u];
-                const c = chapterOf(unit.chapterKey);
-                const slippedHere = versesOf(unit.verseIds).filter((v) => missedSet.has(v.id));
-                return (
-                  <ListRow
-                    key={u}
-                    title={`${chapterName(c)}:${rangeText(unit.start, unit.end)}`}
-                    subtitle={`${unit.label ? `${unit.label} · ` : ''}slipped on ${slippedHere.map((v) => `v${v.verse}`).join(', ')}`}
-                    accessory={
-                      <AppButton
-                        size="sm"
-                        variant="secondary"
-                        label="Practice"
-                        onPress={() => {
-                          const items = unit.verseIds.map((id) => itemById.get(id)).filter((i): i is QueueItem => !!i);
-                          startPractice('learn', mapQueueItemsToVerseStates(items));
-                        }}
-                      />
-                    }
-                  />
-                );
-              })}
-            </GroupedList>
-          )}
-
-          <FixTransitions queue={memoryQueueRef.current} targets={fixTargets} onClear={(id) => void clearSlipped([id])} />
-
-          {sum.formatsUsed.length > 0 && (
-            <View style={{ gap: space(8) }}>
-              <AppText variant="label" className="font-sans font-semibold text-ink-2">
-                Formats used today
+          {tomorrowLoad.count > 0 && (
+            <View className="bg-fill rounded-card" style={{ padding: space(14), gap: space(2) }}>
+              <AppText variant="caption" className="font-sans font-semibold text-ink-3">
+                Tomorrow
               </AppText>
-              <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
-                {sum.formatsUsed.map((f) => (
-                  <View key={f} className="flex-row items-center bg-surface border border-line rounded-btn" style={{ gap: space(6), paddingHorizontal: space(10), paddingVertical: space(6) }}>
-                    <AppText variant="label" className="font-sans text-ink">
-                      {formatLabel(f)}
-                    </AppText>
-                    <Badge label={formatTag(f, counts[f])} tone={counts[f] ? 'accent' : 'neutral'} />
-                  </View>
-                ))}
-              </View>
+              <AppText variant="body" className="font-sans font-semibold text-ink">
+                {`${plural(tomorrowLoad.count, 'verse')} · about ${Math.max(1, Math.ceil(tomorrowLoad.seconds / 60))} min`}
+              </AppText>
             </View>
           )}
 

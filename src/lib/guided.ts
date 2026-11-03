@@ -12,11 +12,18 @@ import { scriptOfVerse, splitWords } from './textScript';
 // Every random choice takes `rng: () => number` so the checks are repeatable.
 // ============================================================================
 
-export const GUIDED_LONG_VERSE_WORDS = 25;
+/** Verses under this many words get the short ladder (8 steps); under TINY, the shortest (6). */
+export const GUIDED_SHORT_VERSE_WORDS = 15;
+export const GUIDED_TINY_VERSE_WORDS = 8;
 /** Share of words hidden on the partly hidden recitation. */
 export const GUIDED_PARTLY_HIDDEN = 0.6;
-/** A missed graded recitation drops this many rungs. */
-export const GUIDED_DROP_BACK = 2;
+/** Share of words hidden on the two fill-in-the-blanks steps. */
+export const GUIDED_BLANKS_LIGHT = 0.2;
+export const GUIDED_BLANKS_HEAVY = 0.5;
+/** Most anchor words a learner picks while reading a verse. */
+export const GUIDED_MAX_ANCHORS = 3;
+/** A cold check under this share of words right goes back through the ladder. */
+export const GUIDED_RELEARN_BELOW = 0.5;
 /** Real misses on one verse before it is set aside. */
 export const GUIDED_SET_ASIDE_AFTER = 3;
 /** A stitch window longer than this (in words) shrinks to 2 verses. */
@@ -134,14 +141,28 @@ export const touchAllowed = (item: QueueItem, now: number): boolean => {
 // 2. DRILLS AND THE LADDER
 // ============================================================================
 
-export type GuidedDrillId = 'buildUp' | 'scramble' | 'swap' | 'firstLetters';
-export type RungKind = 'read' | 'lookUp' | 'drill' | 'partly' | 'fully';
+/** Recognition drills: you pick, order or reveal, nothing is graded. */
+export type GuidedDrillId = 'peek' | 'scramble' | 'swap' | 'listen' | 'backwards';
+export type RungKind = 'read' | 'lookUp' | 'drill' | 'blanks' | 'partly' | 'fully';
+/** What a drill rung is for; picks which drills suit it. */
+export type DrillSlot = 'first' | 'order' | 'ear' | 'back';
 
 export interface Rung {
   kind: RungKind;
   /** Only on drill rungs. */
   drill?: GuidedDrillId;
+  slot?: DrillSlot;
+  /** Only on blanks rungs: share of words hidden. */
+  share?: number;
 }
+
+/** Drills each slot prefers, best first. */
+const SLOT_DRILLS: Record<DrillSlot, GuidedDrillId[]> = {
+  first: ['peek'],
+  order: ['scramble', 'swap'],
+  ear: ['listen'],
+  back: ['backwards'],
+};
 
 export interface Ladder {
   rungs: Rung[];
@@ -162,19 +183,19 @@ export interface Ladder {
 
 export type LadderEvent = 'done' | 'pass' | 'miss' | 'reroll' | 'knowIt' | 'easier';
 
-/** Drills that work inside a single verse. Jigsaw and threads are stitch-only. */
+/** Drills that work inside a single verse. Jigsaw and threads are stitch-only. Peek works on any verse. */
 export const eligibleDrills = (verse: GuidedDrillVerse, passageVerses: GuidedDrillVerse[]): GuidedDrillId[] => {
   const script = scriptOfVerse(verse);
-  const out: GuidedDrillId[] = [];
-  if (wordCount(verse) >= 8) out.push('buildUp');
-  if (chunkIntoPhrases(verse.text, script).length >= 3) out.push('scramble');
+  const out: GuidedDrillId[] = ['peek'];
+  const phrases = chunkIntoPhrases(verse.text, script).length;
+  if (phrases >= 3) out.push('scramble', 'backwards');
+  if (phrases >= 2) out.push('listen');
   const pool = passageVerses.some((v) => v.verse === verse.verse && v.chapter === verse.chapter && v.book === verse.book)
     ? passageVerses
     : [...passageVerses, verse];
   const id = `${verse.book}-${verse.chapter}-${verse.verse}`;
   const swap = buildSwapVerses(pool).find((sv) => sv.id === id);
   if (swap && swap.tokens.some((t) => t.isDecoy)) out.push('swap');
-  out.push('firstLetters');
   return out;
 };
 
@@ -202,12 +223,12 @@ export const pickDrill = (
     const pool = eligible.filter(ok);
     if (pool.length > 0) return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
   }
-  return 'firstLetters';
+  return 'peek';
 };
 
 const firstDrillIndex = 2;
 
-/** Picks drills for every drill rung from `fromPos` up, keeping the ones below. */
+/** Picks drills for every drill rung from `fromPos` up, keeping the ones below. A rung takes a drill its slot prefers when one is eligible. */
 const pickDrillRungs = (rungs: Rung[], fromPos: number, eligible: GuidedDrillId[], avoid: GuidedDrillId | undefined, rng: Rng): Rung[] => {
   const next = rungs.map((r) => ({ ...r }));
   const used = new Set<GuidedDrillId>();
@@ -216,32 +237,48 @@ const pickDrillRungs = (rungs: Rung[], fromPos: number, eligible: GuidedDrillId[
   });
   next.forEach((r, i) => {
     if (r.kind !== 'drill' || i < fromPos) return;
-    const picked = pickDrill(eligible, used, avoid, r.drill, rng);
+    const liked = r.slot ? SLOT_DRILLS[r.slot].filter((d) => eligible.includes(d)) : [];
+    const picked = pickDrill(liked.length > 0 ? liked : eligible, used, avoid, r.drill, rng);
     r.drill = picked;
     used.add(picked);
   });
   return next;
 };
 
-/** Read, Look up, 2-3 drills, Partly hidden, Fully hidden. */
+const drillRung = (slot: DrillSlot): Rung => ({ kind: 'drill', slot });
+
+/**
+ * The steps, alternating recognition and typing from the first blanks step on:
+ *   10 steps: Read, Look up, Peek, Order, Blanks 20%, Listen, Blanks 50%, Backwards, Partly, Fully
+ *    8 steps (under 15 words): drops the Order and Backwards drills
+ *    6 steps (under 8 words): Read, Look up, Peek, Blanks 50%, Partly, Fully
+ */
+export const ladderSkeleton = (words: number): Rung[] => {
+  const light: Rung = { kind: 'blanks', share: GUIDED_BLANKS_LIGHT };
+  const heavy: Rung = { kind: 'blanks', share: GUIDED_BLANKS_HEAVY };
+  const head: Rung[] = [{ kind: 'read' }, { kind: 'lookUp' }, drillRung('first')];
+  const tail: Rung[] = [{ kind: 'partly' }, { kind: 'fully' }];
+  if (words < GUIDED_TINY_VERSE_WORDS) return [...head, heavy, ...tail];
+  if (words < GUIDED_SHORT_VERSE_WORDS) return [...head, light, drillRung('ear'), heavy, ...tail];
+  return [...head, drillRung('order'), light, drillRung('ear'), heavy, drillRung('back'), ...tail];
+};
+
+/**
+ * A new ladder. `startAt` skips the early steps for a verse being taught
+ * again (a cold check it couldn't pass): nothing before the first drill is
+ * skipped by a fresh verse.
+ */
 export const createLadder = (
   verse: GuidedDrillVerse,
   passageVerses: GuidedDrillVerse[],
-  ctx: { lastDrill?: GuidedDrillId },
+  ctx: { lastDrill?: GuidedDrillId; startAt?: number },
   rng: Rng
 ): Ladder => {
   const eligible = eligibleDrills(verse, passageVerses);
-  const drillCount = wordCount(verse) >= GUIDED_LONG_VERSE_WORDS ? 3 : 2;
-  const skeleton: Rung[] = [
-    { kind: 'read' },
-    { kind: 'lookUp' },
-    ...Array.from({ length: drillCount }, () => ({ kind: 'drill' as const })),
-    { kind: 'partly' },
-    { kind: 'fully' },
-  ];
+  const skeleton = ladderSkeleton(wordCount(verse));
   return {
     rungs: pickDrillRungs(skeleton, 0, eligible, ctx.lastDrill, rng),
-    pos: 0,
+    pos: Math.max(0, Math.min(skeleton.length - 1, ctx.startAt ?? 0)),
     misses: 0,
     activities: 0,
     status: 'climbing',
@@ -253,7 +290,13 @@ export const createLadder = (
 };
 
 export const currentRung = (ladder: Ladder): Rung => ladder.rungs[ladder.pos];
-export const isGradedRung = (rung: Rung): boolean => rung.kind === 'partly' || rung.kind === 'fully';
+export const isGradedRung = (rung: Rung): boolean => rung.kind === 'blanks' || rung.kind === 'partly' || rung.kind === 'fully';
+
+/** The recognition step a miss sends the learner back to: the nearest drill before `pos`. */
+const drillBefore = (ladder: Ladder, pos: number): number => {
+  for (let i = pos - 1; i >= firstDrillIndex; i--) if (ladder.rungs[i].kind === 'drill') return i;
+  return firstDrillIndex;
+};
 
 /** The drill the verse ended on, so the next verse can avoid it. */
 export const lastDrillOf = (ladder: Ladder): GuidedDrillId | undefined => {
@@ -314,6 +357,7 @@ export const ladderAfter = (ladder: Ladder, event: LadderEvent, rng: Rng): Ladde
 
   if (event === 'pass') {
     const activities = ladder.activities + 1;
+    if (rung.kind === 'blanks') return { ...ladder, pos: ladder.pos + 1, activities };
     if (rung.kind === 'partly') return { ...ladder, pos: ladder.pos + 1, activities, passedPartly: true };
     // Fully hidden. Finishing needs partly then fully with no miss between,
     // or the "I know this one" shortcut.
@@ -329,7 +373,8 @@ export const ladderAfter = (ladder: Ladder, event: LadderEvent, rng: Rng): Ladde
   const misses = ladder.misses + 1;
   const activities = ladder.activities + 1;
   if (misses >= GUIDED_SET_ASIDE_AFTER) return { ...ladder, misses, activities, status: 'setAside', passedPartly: false };
-  const pos = Math.max(firstDrillIndex, ladder.pos - GUIDED_DROP_BACK);
+  // A miss goes back to a recognition step, then climbs through the typing again.
+  const pos = drillBefore(ladder, ladder.pos);
   return {
     ...ladder,
     rungs: pickDrillRungs(ladder.rungs, pos, ladder.eligible, ladder.avoid, rng),
@@ -343,6 +388,44 @@ export const ladderAfter = (ladder: Ladder, event: LadderEvent, rng: Rng): Ladde
 // ============================================================================
 // 3. COLD CHECKS, STITCH AND THREAD
 // ============================================================================
+
+/**
+ * Which graded words stay visible on a fill-in step. `total` is the number of
+ * graded words; `share` of them are hidden. With `phraseSizes` (word counts of
+ * consecutive phrases) whole phrases go missing, so the joins are what is
+ * tested; otherwise the learner's `anchors` are hidden first and the rest of
+ * the hidden words are random.
+ */
+export const pickShownWords = (
+  total: number,
+  share: number,
+  opts: { anchors?: ReadonlySet<number>; phraseSizes?: number[] },
+  rng: Rng
+): Set<number> => {
+  const hideCount = Math.max(1, Math.min(total, Math.round(total * share)));
+  const hidden = new Set<number>();
+  const shuffled = (xs: number[]) => [...xs].sort(() => rng() - 0.5);
+  if (opts.phraseSizes && opts.phraseSizes.length > 1) {
+    let at = 0;
+    const phrases = opts.phraseSizes.map((size) => {
+      const start = at;
+      at += size;
+      return Array.from({ length: size }, (_, k) => start + k).filter((i) => i < total);
+    });
+    for (const p of shuffled(phrases.map((_, k) => k))) {
+      for (const i of phrases[p]) if (hidden.size < hideCount) hidden.add(i);
+      if (hidden.size >= hideCount) break;
+    }
+  } else {
+    const anchors = shuffled([...(opts.anchors ?? [])].filter((i) => i >= 0 && i < total));
+    for (const i of anchors) if (hidden.size < hideCount) hidden.add(i);
+    for (const i of shuffled(Array.from({ length: total }, (_, k) => k))) {
+      if (hidden.size >= hideCount) break;
+      hidden.add(i);
+    }
+  }
+  return new Set(Array.from({ length: total }, (_, k) => k).filter((i) => !hidden.has(i)));
+};
 
 export interface ColdCheckQueue {
   /** Oldest last run first. */
@@ -563,7 +646,7 @@ export const newVersesFinishedToday = (
 // 4. CREDIT
 // ============================================================================
 
-export type GuidedActivity = 'fully' | 'partly' | 'refresh' | 'cold' | 'knowIt' | 'stitch' | 'thread' | 'seam' | 'lastLook';
+export type GuidedActivity = 'fully' | 'partly' | 'blanks' | 'refresh' | 'cold' | 'knowIt' | 'stitch' | 'thread' | 'seam' | 'lastLook';
 export type GuidedAnswerMode = 'speak' | 'type' | 'self';
 
 export interface GuidedOutcome {
@@ -599,7 +682,7 @@ export interface GuidedCredit {
  * (words shown) and refresh recitations (verse just seen) never credit.
  */
 export const guidedCredit = (item: QueueItem, outcome: GuidedOutcome, ctx: GuidedCreditCtx): GuidedCredit => {
-  if (outcome.activity === 'partly') return { kind: null, label: 'Words were shown, so this one doesn’t count' };
+  if (outcome.activity === 'partly' || outcome.activity === 'blanks') return { kind: null, label: 'Words were shown, so this one doesn’t count' };
   if (outcome.activity === 'refresh') return { kind: null, label: 'You just saw it, so this one doesn’t count' };
   if (outcome.activity === 'lastLook') return { kind: null, label: 'A last look back, so this one doesn’t count' };
   if (outcome.startsPastHalf) return { kind: null, label: 'Started past halfway, so not counted' };
@@ -643,7 +726,8 @@ export type GuidedStep =
   | { kind: 'thread'; verseIds: string[]; cues: ThreadCue[]; index: number }
   /** The verses learned this sitting, said once more before stopping. */
   | { kind: 'lastLook'; groups: string[][]; index: number }
-  | { kind: 'ladder'; verseId: string; ladder: Ladder }
+  /** `relearn`: a verse with runs that couldn't pass its cold check, taught again from its first drill. */
+  | { kind: 'ladder'; verseId: string; ladder: Ladder; relearn?: boolean }
   | { kind: 'doneToday' }
   | { kind: 'summary' };
 
@@ -704,8 +788,12 @@ export type SessionEvent =
       firstSlip?: number;
       /** Merged cold check: indices of the verses that were not perfect. */
       slips?: number[];
+      /** Merged cold check: indices of the verses under GUIDED_RELEARN_BELOW right. */
+      bad?: number[];
     }
   | { type: 'reroll' }
+  /** On a cold check, before reciting: "Teach me again" -- the full ladder, runs kept. */
+  | { type: 'relearn' }
   | { type: 'knowIt' }
   /**
    * Before reciting: a cold check goes straight to its refresh (no slip
@@ -755,9 +843,22 @@ const enterCold = (s: SessionState, env: SessionEnv): SessionState => {
   return { ...s, coldQueue: queue, step: { kind: 'cold', verseIds, stage: 'recite', refreshIds: [] } };
 };
 
+/** Teach a verse that already has runs again, from its first drill. Its banked runs are kept and it uses none of the sitting's new-verse budget. */
+const enterRelearn = (s: SessionState, env: SessionEnv, verseId: string): SessionState => {
+  const item = findItem(env, verseId);
+  if (!item) return enterCold({ ...s, coldQueue: s.coldQueue.filter((id) => id !== verseId) }, env);
+  const passage = buildPassages(env.items).find((p) => p.items.some((i) => i.verseId === verseId));
+  const ladder = createLadder(toDrillVerse(item), (passage?.items ?? [item]).map(toDrillVerse), { lastDrill: s.lastDrill, startAt: firstDrillIndex }, env.rng);
+  return {
+    ...s,
+    coldQueue: s.coldQueue.filter((id) => id !== verseId),
+    step: { kind: 'ladder', verseId, ladder, relearn: true },
+  };
+};
+
 const refreshDrillFor = (s: SessionState, env: SessionEnv, verseId: string, current?: GuidedDrillId): GuidedDrillId => {
   const item = findItem(env, verseId);
-  const eligible = item ? eligibleDrills(toDrillVerse(item), drillVersesOf(env, buildPassageIds(env, verseId))) : (['firstLetters'] as GuidedDrillId[]);
+  const eligible = item ? eligibleDrills(toDrillVerse(item), drillVersesOf(env, buildPassageIds(env, verseId))) : (['peek'] as GuidedDrillId[]);
   return pickDrill(eligible, [], s.lastDrill, current, env.rng);
 };
 
@@ -861,12 +962,25 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
         const refreshIds = step.verseIds;
         return { ...s, step: { ...step, stage: 'refreshDrill', refreshIds, drill: refreshDrillFor(s, env, refreshIds[0]) } };
       }
+      if (step.stage === 'recite' && event.type === 'relearn') {
+        // The first verse of the stretch goes back through the ladder; the rest stay queued for their own check.
+        return enterRelearn(s, env, step.verseIds[0]);
+      }
       if (step.stage === 'recite' && event.type === 'result') {
         const slips = new Set(event.slips ?? (event.perfect ? [] : step.verseIds.map((_, k) => k)));
         let logged = s;
         step.verseIds.forEach((id, k) => {
           logged = pushLog(logged, { step: 'cold', verseIds: [id], perfect: !slips.has(k) });
         });
+        // Far off (under half the words): not a quick refresh but the whole ladder.
+        const bad = (event.bad ?? []).filter((k) => slips.has(k));
+        if (bad.length > 0) {
+          const target = step.verseIds[bad[0]];
+          // Verses that passed are done; the other slipped ones wait for their own check.
+          const kept = new Set(step.verseIds.filter((_, k) => slips.has(k)));
+          const trimmed = { ...logged, coldQueue: logged.coldQueue.filter((id) => !step.verseIds.includes(id) || kept.has(id)) };
+          return enterRelearn(trimmed, env, target);
+        }
         const refreshIds = step.verseIds.filter((_, k) => slips.has(k));
         if (refreshIds.length === 0) return enterCold(popCold(logged), env);
         return { ...logged, step: { ...step, stage: 'refreshDrill', refreshIds, drill: refreshDrillFor(s, env, refreshIds[0]) } };
@@ -940,11 +1054,16 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
       if (ladder.status === 'finished') {
         const next: SessionState = {
           ...pushLog(s, { step: 'ladder', verseIds: [step.verseId], perfect: true }),
-          newDone: s.newDone + 1,
+          // A verse taught again isn't a new verse.
+          newDone: step.relearn ? s.newDone : s.newDone + 1,
           finishedThisSitting: [...s.finishedThisSitting, step.verseId],
           lastDrill: lastDrillOf(ladder) ?? s.lastDrill,
         };
-        return enterStitch(next, env);
+        return step.relearn ? enterCold(next, env) : enterStitch(next, env);
+      }
+      if (ladder.status === 'setAside' && step.relearn) {
+        // Too many misses again: leave it for the next sitting's check, no new-verse budget touched.
+        return enterCold(pushLog({ ...s, lastDrill: lastDrillOf(ladder) ?? s.lastDrill }, { step: 'ladder', verseIds: [step.verseId], perfect: false }), env);
       }
       if (ladder.status === 'setAside') {
         const next: SessionState = {

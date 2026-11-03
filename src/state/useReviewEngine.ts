@@ -617,6 +617,7 @@ export function useReviewEngine({
       delete base.refresherTargetUnits;
       delete base.guidedSetAside;
       delete base.guidedShakyJoin;
+      delete base.guidedAnchors;
       delete base.ladderStep;
       delete base.ladderReviews;
       delete base.catchUp;
@@ -1116,6 +1117,21 @@ export function useReviewEngine({
     );
   };
 
+  // The words the learner tapped as anchors for a verse. An empty list clears
+  // them (the key is deleted, never written empty).
+  const setGuidedAnchors = (verseId: string, anchors: number[]) => {
+    updateMemoryQueue((prev) =>
+      prev.map((item) => {
+        if (item.verseId !== verseId) return item;
+        if (anchors.length > 0) return { ...item, guidedAnchors: anchors.slice(0, 6) };
+        if (!item.guidedAnchors) return item;
+        const next = { ...item };
+        delete next.guidedAnchors;
+        return next;
+      })
+    );
+  };
+
   // Guided learning's "Add verse N to Learning": moves exactly one queued
   // verse into Learning, with the same field resets as triggerDailyPull. It
   // ignores the daily pace and the learning-day check (the user asked for
@@ -1205,6 +1221,7 @@ export function useReviewEngine({
     handleUpdateVerseStatus,
     setGuidedSetAside,
     setGuidedShakyJoins,
+    setGuidedAnchors,
     pullVerseIntoLearning,
     creditGuided,
   };

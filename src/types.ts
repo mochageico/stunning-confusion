@@ -271,6 +271,12 @@ export interface QueueItem {
   // only-ever-true rule as guidedSetAside.
   guidedShakyJoin?: true;
 
+  // The words (indexes into the verse's split words) the learner tapped as
+  // anchors while reading it in Guided learning. Highlighted while the verse
+  // is still in Learning and hidden first in the fill-in steps. The key is
+  // deleted to clear it, never written empty.
+  guidedAnchors?: number[];
+
   // Review ladder (REVIEW_LADDER_PLAN.md). All optional and additive: the
   // legacy fields above keep being written, mapped, for older readers. A
   // passage's schedule is written identically on every member verse.

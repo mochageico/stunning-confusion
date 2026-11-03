@@ -4,7 +4,8 @@ import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { threadSpan, ThreadSpanVerse } from '../lib/drills';
 import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, SpeechRecognizer, tokenizeWords, willSaveSpeechAudio, WordOutcome } from '../lib/recitation';
 import { blankExceptFirstLetter, blankLetters, joinWords, normalizeToken, scriptOfVerse, typedLetters, wordGap } from '../lib/textScript';
-import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
+import { Mic } from 'lucide-react-native';
+import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
 import { WaveBars } from './ui';
 import { recordSpeechSlip } from '../lib/speechSlips';
 import { deleteSpeechRecording } from '../lib/speechRecording';
@@ -207,6 +208,8 @@ export default function GradedRecitation({
   continueLabel = 'Next',
   showHeard = false,
   hintFirstLetters = false,
+  footerExtra,
+  anchorWords,
   onSwitchMode,
   onCancel,
   onResult,
@@ -233,6 +236,10 @@ export default function GradedRecitation({
   showHeard?: boolean;
   /** Typing: hidden words show their first letter (an ungraded look-up, not a test). */
   hintFirstLetters?: boolean;
+  /** Typing: an extra control under the input (a step down offered before reciting). */
+  footerExtra?: React.ReactNode;
+  /** Graded-word positions shown bold in the result: the learner's anchors, never while reciting. */
+  anchorWords?: ReadonlySet<number>;
   /**
    * Offers "Type instead" while listening and "Recite instead" while typing.
    * The caller remounts with the other mode; this attempt is dropped unscored.
@@ -393,6 +400,14 @@ export default function GradedRecitation({
   const pointerRef = useRef(0);
   const outcomesRef = useRef<WordOutcome[]>([]);
 
+  // Start the typed attempt over (a mistyped word), without scoring it.
+  const resetTyping = () => {
+    pointerRef.current = 0;
+    outcomesRef.current = [];
+    setOutcomes([]);
+    setPointer(0);
+  };
+
   const commitTyping = () => {
     setOutcomes([...outcomesRef.current]);
     setPointer(pointerRef.current);
@@ -506,19 +521,33 @@ export default function GradedRecitation({
                 {pointer} of {graded.length}
               </AppText>
               <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
-                {canRecite && <AppButton size="sm" variant="quiet" label="Recite instead" onPress={() => switchTo('speak')} />}
+                {pointer > 0 && <AppButton size="sm" variant="quiet" label="Reset" onPress={resetTyping} />}
                 <AppButton size="sm" variant="secondary" label="Show this word" onPress={showWord} />
               </View>
             </View>
-            <AppTextInput
-              value=""
-              onChangeText={handleTyped}
-              autoFocus
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder={fontScale >= 1.3 ? 'First letters' : 'First letter of each word'}
-              className={`border rounded-btn py-2 px-3 text-center font-sans font-semibold text-ink ${flash ? 'bg-danger-soft border-danger' : 'bg-surface-2 border-line'}`}
-            />
+            <View className="flex-row items-center" style={{ gap: space(8) }}>
+              <AppTextInput
+                value=""
+                onChangeText={handleTyped}
+                autoFocus
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder={fontScale >= 1.3 ? 'First letters' : 'First letter of each word'}
+                style={{ minWidth: 0 }}
+                className={`flex-1 border rounded-btn py-2 px-3 text-center font-sans font-semibold text-ink ${flash ? 'bg-danger-soft border-danger' : 'bg-surface-2 border-line'}`}
+              />
+              {canRecite && (
+                <AppIconButton
+                  Icon={Mic}
+                  diameter={40}
+                  iconColor={palette.onAccent}
+                  onPress={() => switchTo('speak')}
+                  accessibilityLabel="Say it out loud"
+                  className="shrink-0 bg-accent"
+                />
+              )}
+            </View>
+            {footerExtra}
           </View>
         }
       >
@@ -582,7 +611,7 @@ export default function GradedRecitation({
           const o = outcomes[i] || 'missed';
           return {
             text: w,
-            className: `font-serif ${o === 'missed' ? 'text-danger underline' : o === 'close' ? 'text-warning' : 'text-ink'}`,
+            className: `font-serif ${anchorWords?.has(i) ? 'font-bold ' : ''}${o === 'missed' ? 'text-danger underline' : o === 'close' ? 'text-warning' : 'text-ink'}`,
             onPress: mode === 'speak' && o === 'missed' ? () => markRight(i) : undefined,
           };
         }}

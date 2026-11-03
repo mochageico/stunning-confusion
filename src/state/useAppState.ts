@@ -1488,6 +1488,9 @@ export function useAppState() {
             ...(data.refresherTargetUnits !== undefined ? { refresherTargetUnits: data.refresherTargetUnits } : {}),
             ...(data.guidedSetAside === true ? { guidedSetAside: true as const } : {}),
             ...(data.guidedShakyJoin === true ? { guidedShakyJoin: true as const } : {}),
+            ...(Array.isArray(data.guidedAnchors) && data.guidedAnchors.length > 0
+              ? { guidedAnchors: data.guidedAnchors.filter((n: unknown) => Number.isInteger(n) && (n as number) >= 0).slice(0, 6) }
+              : {}),
             // Review ladder fields (REVIEW_LADDER_PLAN.md decision 2), same
             // omit-when-absent rule.
             ...(typeof data.ladderStep === 'number' ? { ladderStep: data.ladderStep } : {}),
@@ -2216,6 +2219,7 @@ export function useAppState() {
     handleUpdateVerseStatus,
     setGuidedSetAside,
     setGuidedShakyJoins,
+    setGuidedAnchors,
     pullVerseIntoLearning,
     creditGuided,
     reviewNotes,
@@ -3559,6 +3563,7 @@ export function useAppState() {
     openMixedReview,
     setGuidedSetAside,
     setGuidedShakyJoins,
+    setGuidedAnchors,
     pullVerseIntoLearning,
     creditGuided,
     isRecording, setIsRecording,
