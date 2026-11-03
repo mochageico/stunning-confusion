@@ -786,8 +786,8 @@ export function useRecall({
     runSecondPass(uri, speakExpectedTokens.slice(start), live, protectedPos, heardAt).then((result) => {
       if (secondPassGenRef.current !== gen) return;
       setIsDoubleChecking(false);
-      if (!result) {
-        if (isTester) triggerLocalToast('Double-check unavailable; kept the live grade');
+      if ('failed' in result) {
+        if (isTester) triggerLocalToast(`Double-check unavailable (${result.failed}); kept the live grade`);
         return;
       }
       if (isTester) {

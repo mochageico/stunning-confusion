@@ -377,7 +377,7 @@ export default function GradedRecitation({
     runSecondPass(audioUri, tokenizeWords(expectedText), outcomes, new Set()).then((result) => {
       if (!mountedRef.current) return;
       setDoubleChecking(false);
-      if (!result || result.rescued.length === 0) return;
+      if ('failed' in result || result.rescued.length === 0) return;
       const fixes = new Map(result.rescued.map((p, k) => [p, result.grades[k]]));
       // A word tapped right meanwhile stays as tapped.
       setOutcomes((prev) => prev.map((o, i) => (o === 'missed' && fixes.has(i) ? fixes.get(i)! : o)));
