@@ -14,7 +14,7 @@ is built yet. Run the stages in order; each is one session.
 files by name when committing (never `git add -A`). After each stage, update the
 **Progress** line and add an "As built" note under the stage.
 
-**Progress:** stage 0 done 2026-11-03 (48 kbps chosen). Stage 0
+**Progress:** stages 0–1 done 2026-11-03 (48 kbps chosen). Stage 0
 found that Souer does **not** read section headings or cross-references, so
 stages 1–2 are simpler than written; see stage 0's "As built".
 
@@ -169,6 +169,43 @@ pull from the same USFX file each chapter's `<s>` section headings and `<d>`
 Psalm title, with the verse each comes before. Stage 2 uses them to recognise
 speech that belongs to no verse. Psalm 119's stanza headings ("Aleph", "Beth",
 …) are `<s>` headings too.
+
+### As built (2026-11-03)
+
+Stage 0 showed the headings aren't read, so the export is simpler than written
+above. `node scripts/bsb-audio/export-text.js` writes `work/text.json` (4.6 MB,
+gitignored), keyed `GEN_1`:
+
+```json
+{ "file": "BSB_19_Psa_003.mp3", "titles": ["Psalm 3"],
+  "psalmTitle": "A Psalms of David, when he fled from his son Absalom.",
+  "verses": [{ "v": 1, "text": "O LORD, how my foes have increased! …" }] }
+```
+
+- **verses** come from `localFile.js`'s `fetchChapter` on `engbsb_usfx.xml`, the
+  importer's own path, so they're exactly what the app stores: 1,189 chapters,
+  31,086 verses, none empty. The 16 verses the BSB omits (Matthew 17:21,
+  Mark 9:44 and 9:46, Acts 8:37, …) are simply absent, so a chapter's verse
+  numbers can skip.
+- **titles** lists the spoken chapter title's accepted forms: "Genesis 1" /
+  "Genesis chapter 1"; "Psalm 23" (Psalm 1 also "Psalms Psalm 1", as heard);
+  and the bare book name for the one-chapter books. Stage 2 should treat the
+  title as optional, and not fail a chapter whose title is said some other way.
+- **psalmTitle** is the `<d>` before verse 1: 116 Psalms have one, 34 don't
+  (Psalm 1, 2, 119, …). It's cleaned by the adapter's own
+  `stripFootnotesAndTags`, newly exported as `localFile._internal`. Our text's
+  typo "A Psalms of David" in Psalm 3 is kept, since this is what we match
+  against. Match loosely.
+- **Left out, as not read** (each checked by transcript): `<s>` section
+  headings, cross-references (`r`), Psalm 119's stanza names (`qa`, not `<s>`),
+  and the Psalms book divisions (`ms1` "BOOK I" + `mr` "Psalms 1—41", at
+  Psalms 1, 42, 73, 90 and 107).
+- **Already in the verses:** the 16 `pc` inscriptions ("THE KING OF THE JEWS",
+  "MENE, MENE, TEKEL, PARSIN"), which sit inside their verse. Zechariah 12's
+  `<d>` holds the verse 1 marker, so it's verse text (read once, as verse 1's
+  opening) and not a title.
+- So stage 2's reading order per chapter is: title, then the Psalm title (if
+  any), then the verses in order. Nothing is spoken mid-chapter outside a verse.
 
 ## Stage 2: Verse timings (verses, headings and Psalm titles)
 
