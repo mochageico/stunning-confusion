@@ -14,7 +14,9 @@ is built yet. Run the stages in order; each is one session.
 files by name when committing (never `git add -A`). After each stage, update the
 **Progress** line and add an "As built" note under the stage.
 
-**Progress:** not started.
+**Progress:** stage 0 done 2026-11-03 (48 kbps chosen). Stage 0
+found that Souer does **not** read section headings or cross-references, so
+stages 1–2 are simpler than written; see stage 0's "As built".
 
 ---
 
@@ -49,9 +51,9 @@ labels "Hebrew reading · …" and "Built in · Hebrew".
 | Readers | Bob Souer, Barry Hays, Jordan Gilbert (human). openbible.com also hosts Arabella, David, Sophia and Frederick Surrey readings, which are probably synthetic voices, plus "music" versions with a background track. |
 | Licence | **CC0 1.0 (public domain).** bereanbible.com/audio: "These audio versions of God's Word have been dedicated to the public domain (CC0 1.0)". The text has been public domain since 2023-04-30. No credit is required, but we give one anyway. |
 | Where | `https://openbible.com/audio/souer/` (and `/hays/`, `/gilbert/`). Each chapter is one MP3, `BSB_{NN}_{Book}_{CCC}.mp3`, e.g. `BSB_01_Gen_001.mp3`, `BSB_19_Psa_119.mp3`, `BSB_43_Jhn_001.mp3`. Also `BSB_00_Souer_OT.zip` (4.2 GB) and `BSB_00_Souer_NT.zip` (921 MB). |
-| Size | Souer: about 5.1 GB as published (Genesis 1 is 6.2 MB). Measure the bitrate in stage 0. |
+| Size | Souer: 5.50 GB, 69.2 hours. Already mono, 44.1 kHz CBR: the OT at 192 kbps, the NT at 128 kbps (measured in stage 0). |
 | Numbering | English, the same as our BSB import (`scripts/import-bible/engbsb_usfx.xml`). No Hebrew-style file splits. |
-| Spoken extras | **Souer reads the section headings and the Psalm titles** (user, 2026-11-03). Our BSB text has neither: `parseUsfx` in `import-bible/adapters/localFile.js` keeps only what sits between `<v>` and `<ve />`, so the `<s>` headings, the `<d>` Psalm titles and the `<p style="r">` cross-references are dropped. The aligner must still know their words, or it will try to match them to verses (stage 1). Still to hear in stage 0: whether each file opens with a spoken "Genesis chapter 1", and whether cross-references like "(2 Samuel 15:13–29)" are read. |
+| Spoken extras | **Stage 0 result:** every file opens with a spoken chapter title ("Genesis 1.", "Matthew chapter 1.", just "Philemon" for one-chapter books), and Psalm titles are read straight after it. Section headings, cross-references and Psalm 119's stanza names are **not** read (10 chapters checked). The note below is the original assumption. ~~**Souer reads the section headings and the Psalm titles** (user, 2026-11-03).~~ Our BSB text has neither: `parseUsfx` in `import-bible/adapters/localFile.js` keeps only what sits between `<v>` and `<ve />`, so the `<s>` headings, the `<d>` Psalm titles and the `<p style="r">` cross-references are dropped. The aligner must still know their words, or it will try to match them to verses (stage 1). Still to hear in stage 0: whether each file opens with a spoken "Genesis chapter 1", and whether cross-references like "(2 Samuel 15:13–29)" are read. |
 
 **What CC0 lets us do that Shmuelof's licence didn't:** re-encode the files
 smaller, trim spoken titles, and normalise loudness. We may also cut verse clips,
@@ -67,7 +69,7 @@ speed, and control if the files move.
 | Question | Decision |
 | --- | --- |
 | Which reader | **Bob Souer** (user, 2026-11-03): the best known, a professional narrator, and the reading Bible Hub and YouVersion lead with. Hays and Gilbert can follow as a choice later. |
-| File size | Re-encode to **mono MP3, 48 kbps** (speech stays clear and the files are about a third the size). Settle the bitrate by ear in stage 0. Keep MP3: every player the app uses handles it. |
+| File size | Re-encode to **mono MP3, 48 kbps, 24 kHz**, picked by ear from the stage 0 samples (user, 2026-11-03). That's about 1.5 GB for the whole Bible, a quarter of the original. Keep MP3: every player the app uses handles it. |
 | Can the user turn it off? | **No switch** (user, 2026-11-03). The chapter page's narration list already lets the user pick what plays, and their own recordings already win wherever they cover a verse. |
 | Other translations | Later, one at a time; see **Later**. CSB, NASB and NLT have no free audio we know of. |
 
@@ -102,6 +104,58 @@ Keep `sources/` and `work/` gitignored, like the Hebrew folders.
    chapter title, whether the section headings are read, and how long the pause
    between verses is.
 5. Re-encode three chapters at 32, 48 and 64 kbps mono and pick one by ear.
+
+### As built (2026-11-03)
+
+- `scripts/bsb-audio/files.js` maps file names to book ids. The `NN` prefix is
+  the book's place in `ALL_BIBLE_BOOKS`, so no name table is needed.
+  `download.js` reads the file list from the openbible.com directory page. It
+  checks each file against its Content-Length and walks its MP3 frames, since
+  the site publishes no checksums. It writes to `*.part` and renames, so a
+  re-run skips only whole files. `sources/` and `work/` are in
+  `scripts/bsb-audio/.gitignore`.
+- **All 1,189 files downloaded.** Every chapter in `engbsb_usfx.xml` has exactly
+  one file, with none missing and none extra. 5.50 GB, 69.2 hours. The shortest
+  is Psalm 117 (17 s), the longest Psalm 119 (14 min 31 s). All are mono 44.1 kHz
+  CBR: the 929 OT files at 192 kbps, the 260 NT files at 128 kbps.
+  `sources/manifest.json` holds name, bookId, chapter, bytes, seconds, kbps.
+- **Spot checks** (`inspect.py`, Whisper with the same VAD settings as
+  `align.py`; report in `work/inspect/report.md`). Checked: Genesis 1, Psalms 3,
+  23 and 119, Matthew 1, John 1, Romans 8, Philemon, 1 Chronicles 1 and
+  Isaiah 53.
+  - **Spoken chapter title: yes, in every file**, about 1.5–2.6 s in. It's said
+    as "Genesis 1." / "Isaiah chapter 53." / "Philemon".
+  - **Psalm titles (`<d>`): read**, right after the chapter title ("Psalm 3, a
+    psalm of David, when he fled from his son Absalom."). Our text has a typo
+    here, "A Psalms of David", so match the title loosely.
+  - **Section headings (`<s>`) and cross-references: not read**, in any of the
+    10 chapters. This contradicts the 2026-11-03 assumption. Checked by phrase
+    against the transcript, net of the same words in the verse text. To hear it
+    yourself, listen to Genesis 1 at 0:18, where "The First Day" would fall
+    before verse 3: there's only a 0.7 s pause.
+  - **Psalm 119's stanza names** ("ALEPH", "BETH") are `<p style="qa">` in the
+    USFX, not `<s>` headings, and Souer doesn't read them.
+  - "Selah" is read, and it's part of our verse text.
+  - **Pauses:** 0.5 s or more at only some verse joins (median 0.64 s, 90th
+    percentile 1.1 s, longest 1.9 s). Many joins run on with under 0.5 s, so
+    verse boundaries must come from matched words, not pauses. That's stage 2's
+    plan already.
+  - Without VAD, Whisper skipped John 1:1–5 and invented "2 Chronicles 1" over
+    1 Chronicles 1's opening list. With VAD, both transcribe cleanly. Keep
+    `vad_filter` in stage 2.
+- **What this changes downstream:** stage 1 needs no `<s>` headings, only each
+  chapter's spoken title (book name + number) and the Psalm title. Stage 2
+  lines up [chapter title, Psalm title, v1, v2, …]. Stage 2's boundary rule
+  (end after the verse's own last word) still applies, but it's no longer
+  guarding against headings mid-chapter.
+- **Bitrate samples** (`encode-samples.py`, PyAV's bundled libmp3lame, so no
+  ffmpeg install needed; ffmpeg isn't on this PC). Genesis 1, Psalm 23 and
+  Romans 8 at 32, 48 and 64 kbps, mono 24 kHz, are in `work/samples/` next to
+  the originals. Durations came out within 20 ms of the original. Whole-Bible
+  size would be about 1.0 GB at 32 kbps, 1.5 GB at 48 and 2.0 GB at 64.
+  **The user picked 48 kbps** (2026-11-03). In stage 4, also check that the
+  encoder's start delay (LAME pads ~50 ms) doesn't shift speech against the
+  timings, not just the total duration.
 
 ## Stage 1: Text for alignment
 
@@ -165,7 +219,8 @@ Copy `spot-check.py` and `build-timings.js`:
 `scripts/bsb-audio/upload.js`, a copy of `hebrew-audio/upload.js` with
 `READER = 'souer'`:
 
-1. Re-encode each file with ffmpeg (mono, the bitrate chosen in stage 0, and a
+1. Re-encode each file (mono, 48 kbps, 24 kHz, as chosen in stage 0; PyAV
+   as in `encode-samples.py`, since ffmpeg isn't installed; plus a
    loudness normalisation pass so chapters play at the same volume). Re-encoding
    doesn't move speech, but run a quick check that the duration is unchanged
    within 50 ms, so the timings still fit.
