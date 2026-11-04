@@ -8,7 +8,7 @@ BSB USFX, then the transcript with every pause of 0.5 s or more marked, so a
 reader can see whether the headings, cross-references and a spoken chapter
 title are read, and how long the pauses are. Also a summary of pause lengths.
 
-  bakeoff/.venv/Scripts/python.exe -I scripts/bsb-audio/inspect.py [GEN_1 PSA_3 ...]
+  bakeoff/.venv/Scripts/python.exe -I scripts/bsb-audio/listen-check.py [GEN_1 PSA_3 ...]
 """
 
 import json

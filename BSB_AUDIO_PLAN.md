@@ -14,7 +14,9 @@ is built yet. Run the stages in order; each is one session.
 files by name when committing (never `git add -A`). After each stage, update the
 **Progress** line and add an "As built" note under the stage.
 
-**Progress:** stages 0–1 done 2026-11-03 (48 kbps chosen). Stage 0
+**Progress:** stages 0–1 done 2026-11-03 (48 kbps chosen). Stage 2 in
+chunks: 757/1,189 chapters aligned (Genesis to Jeremiah 7), about 2 more 25-minute
+chunks to go. Stage 0
 found that Souer does **not** read section headings or cross-references, so
 stages 1–2 are simpler than written; see stage 0's "As built".
 
@@ -119,7 +121,8 @@ Keep `sources/` and `work/` gitignored, like the Hebrew folders.
   is Psalm 117 (17 s), the longest Psalm 119 (14 min 31 s). All are mono 44.1 kHz
   CBR: the 929 OT files at 192 kbps, the 260 NT files at 128 kbps.
   `sources/manifest.json` holds name, bookId, chapter, bytes, seconds, kbps.
-- **Spot checks** (`inspect.py`, Whisper with the same VAD settings as
+- **Spot checks** (`listen-check.py`, first named `inspect.py`, which shadowed
+  Python's own `inspect` module; Whisper with the same VAD settings as
   `align.py`; report in `work/inspect/report.md`). Checked: Genesis 1, Psalms 3,
   23 and 119, Matthew 1, John 1, Romans 8, Philemon, 1 Chronicles 1 and
   Isaiah 53.
@@ -236,6 +239,67 @@ English. Run it with `bakeoff/.venv` on the GPU.
    field the Hebrew build writes, even though nothing plays it yet (the BSB
    text the app shows has no Psalm titles).
 6. Write `work/align/{BOOK}_{ch}.json`.
+
+### As built (2026-11-03, in progress)
+
+`scripts/bsb-audio/align.py`, run in chunks. From the repo folder in
+PowerShell:
+
+```
+.\bakeoff\.venv\Scripts\python.exe -I scripts\bsb-audio\align.py --minutes 25
+```
+
+Each run does the next chapters not yet done, in Bible order, and stops before
+the time budget runs out. When it ends it prints how many chapters are done and
+roughly how long is left. Run the same line again for the next chunk. Whisper's
+words are cached in `work/whisper/`, so a stopped run loses at most one chapter.
+`align.py GEN_1 PSA_23` redoes named chapters; `--realign` re-matches every
+transcribed chapter without the GPU (after a matching change).
+
+Changes from the steps above:
+
+- **Boundaries use the Hebrew rule after all** (the middle of the longest pause
+  at each join, window ±0.3 s around Whisper's word edges). Stage 0 found
+  nothing is read between verses, so a join's pause can't hold a heading.
+  The first segment starts in the pause after the spoken chapter title, which
+  the matcher skips as free words.
+- **The Psalm title is a segment of its own** before verse 1. Its span is saved
+  as `psalmTitle` (for `headings["1"]` in stage 4).
+- **No Whisper prompt.** Prompting with the chapter's opening text, as the
+  Hebrew build does, made Whisper *skip* that text: Psalm 1's first pass began
+  8 s in, and words went missing in Romans 8:2–3 and Genesis 1:27. Unprompted,
+  the same chapters matched 100%. VAD and the gap-recovery second pass are kept.
+- **Numbers:** both sides are spelled out ("10,000" → "ten thousand",
+  "1st" → "first"), since the text has digits in 498 verses and Whisper writes
+  digits too. Hyphens and dashes split words, and apostrophes are dropped.
+- `inspect.py` was renamed `listen-check.py`, because it shadowed Python's own
+  `inspect` module whenever that folder was on the import path.
+
+**Test run** (12 chapters: Genesis 1, Psalms 1, 3, 23 and 119, Matthew 1,
+John 1, 1 Chronicles 1, Philemon, Romans 8, Isaiah 53, Zechariah 12): every
+chapter matched 99–100% of its words (1 Chronicles 1 600/606, Isaiah 53
+381/382, the rest all). A quick clip check transcribed 152 verse clips on their
+own. 150 started and ended on the right words. The other 2 are Matthew 1:13
+and 1:15, where only names were misheard. **Pace: about 35–39x real time on the
+RTX 5070 Laptop, so about 2 hours of GPU time for the whole Bible, or 5 chunks
+of 25 minutes.**
+
+**Chunk 1** (2026-11-03): 229 chapters in 24 min 59 s (15.6 h of audio,
+38x real time), stopping before Judges 20. Combined with the test run, that's
+241 chapters with 99.85% of words matched (179,101/179,378). Only 2 verses
+are under 60%: Joshua 19:21 (3/8) and 19:45 (1/5), both town-name lists, which
+stage 3 will judge. The log is in `work/align-chunk1.log`.
+
+**Chunk 2** (2026-11-04): 188 chapters in 24 min 58 s (13.1 h of audio, 31x
+real time; the long Chronicles name lists ran slower), Judges 20 to Nehemiah 6.
+That makes 429 chapters, 99.82% of words matched. Under 60% so far are the two
+Joshua verses and 1 Chronicles 6:68 (1/3, place names). The log is in
+`work/align-chunk2.log`.
+
+**Chunk 3** (2026-11-04): 328 chapters in 24 min 52 s (12.8 h of audio, 31x
+real time), Nehemiah 7 to Jeremiah 7, including all of Psalms. That makes 757
+chapters, 99.84% of words matched, with no new verses under 60%. The log is in
+`work/align-chunk3.log`.
 
 ## Stage 3: Quality check
 
