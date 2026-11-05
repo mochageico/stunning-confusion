@@ -17,7 +17,9 @@ files by name when committing (never `git add -A`). After each stage, update the
 **Progress:** stages 0–1 done 2026-11-03 (48 kbps chosen); stage 2 done
 2026-11-04 (all 1,189 chapters aligned, 99.87% of words matched); stage 3 done
 2026-11-05 (99.93% of clips clean, every verse keeps audio); stage 4 done
-2026-11-05 (1.50 GB uploaded to `audioLibrary/souer/`). Stage 5 next. Stage 0
+2026-11-05 (1.50 GB uploaded to `audioLibrary/souer/`); stage 5 done
+2026-11-05 (BSB verses play the reading in Listen, Coming up next and the
+chapter page; not yet on phones). Stage 6 next. Stage 0
 found that Souer does **not** read section headings or cross-references, so
 stages 1–2 are simpler than written; see stage 0's "As built". The exception
 is Song of Songs speaker labels and the Proverbs 22–24 "Saying" headings (stage 3's "As built").
@@ -493,6 +495,48 @@ Stage 4 is two scripts, because encoding needs PyAV and the upload needs firebas
    so Listen and Coming up next can be checked without signing in.
 
 No native code, so this ships as an OTA update after the stage 4 upload.
+
+### As built (2026-11-05)
+
+Built as planned, with these details:
+
+- **`libraryAudio.ts`:** the registry is `LIBRARY_READERS`, and each reader
+  has two extra fields:
+  - `language` fills the "Built in · …" caption ("BSB" or "Hebrew").
+  - `testament` is set only for Shmuelof.
+
+  `libraryReaderFor(translationId, book)` picks the reader, and
+  `libraryReaderOf(recording)` reads it back from a recording's
+  `library_{readerId}_{file}` id. That is why reader ids must not contain
+  underscores, which a check enforces. `libraryRecording`, `libraryStoragePath`
+  and `chapterRuns` now take the reader.
+- **Timings keys** are `souer/PSA_23` and `shmuelof/PSA_23`.
+  `splitLibraryTimingsKey` turns a key back into the Firestore path. The
+  device cache key is still `library-audio:v1:{readerId}:{chapterId}`, so
+  Hebrew timings already on phones are still used.
+- **Only verses labelled BSB get the reading.** WEB, KJV and ESV verses get
+  nothing. A user's own English recording made under WEB still beats it on a
+  BSB verse, because English recordings fit every English translation.
+- **`LibraryCredit` takes the reader** and renders nothing for the user's own
+  recordings. The chapter page player, its picker row, Listen and the verse
+  Play button all read the reader from the recording or the chapter.
+- **The checks** (`npm run check:libraryaudio`) cover every case on the list
+  above, plus: no reading for ESV, for an unknown book or with no translation;
+  the souer storage path and title; and a WEB recording beating the reading.
+- **Web demo:**
+  - `?s=chapterLanding&bsb=1` opens John 3 in BSB, which has no recording of
+    the user's.
+  - `?s=modalListen` now passes each verse's translation, as the real openers
+    do. Without it, Listen treated the verses as ESV.
+- **Checked in the web demo:**
+  - John 3's chapter page shows "BSB reading · Bob Souer" with its credit
+    and plays `souer/BSB_43_Jhn_003.mp3`.
+  - Listen plays Romans 8:1 and then jumps to 8:28 from the BSB file.
+  - Coming up next plays Romans 8:31–39 from the BSB reading.
+  - Isaiah 64 in Hebrew/Greek still shows Shmuelof.
+- **Not checked:** the verse Play button inside guided learning (the guided
+  steps open on a check with no Play button; it uses the same lookup as the
+  rest), and anything on a phone. Stage 6's phone checks still apply.
 
 ## Stage 6: Make it visible
 

@@ -6,13 +6,14 @@ import { ChevronDown, Pause, Play } from 'lucide-react-native';
 import { AppIconButton, AppText, useFontScale, useScaledSpace } from './design';
 import { useThemeColors } from './theme';
 import { LibraryCredit } from './VersePlayButton';
-import { LIBRARY_READER, LibraryChapterTimings, libraryRecording } from '../lib/libraryAudio';
+import { LibraryChapterTimings, LibraryReader, libraryRecording } from '../lib/libraryAudio';
 
 // ============================================================================
 // CHAPTER LIBRARY PLAYER
 // ----------------------------------------------------------------------------
-// The chapter page's player for the built-in Hebrew reading. It plays exactly
-// this chapter's verses: Hebrew and English chapters don't always line up, so
+// The chapter page's player for a built-in reading (BSB, or Hebrew). It plays
+// exactly this chapter's verses. That matters for Hebrew, where Hebrew and
+// English chapters don't always line up, so
 // about 70 chapters start or end partway through a Hebrew file, or run across
 // two (English Joel 2 is Hebrew Joel 2 plus the start of Hebrew Joel 3). The
 // verses are grouped into runs, one per file, played back to back.
@@ -25,7 +26,12 @@ interface Run {
 }
 
 /** This chapter's verses as back-to-back runs, one per stretch of a file. */
-export function chapterRuns(book: string, timings: LibraryChapterTimings, audioCacheMap?: ReadonlyMap<string, string>): Run[] {
+export function chapterRuns(
+  reader: LibraryReader,
+  book: string,
+  timings: LibraryChapterTimings,
+  audioCacheMap?: ReadonlyMap<string, string>
+): Run[] {
   const runs: (Run & { file: string })[] = [];
   const verses = Object.entries(timings.verses).sort(([a], [b]) => Number(a) - Number(b));
   for (const [, t] of verses) {
@@ -35,7 +41,7 @@ export function chapterRuns(book: string, timings: LibraryChapterTimings, audioC
       last.endSec = Math.max(last.endSec, t.endSec);
       continue;
     }
-    const rec = libraryRecording(book, timings, t.file);
+    const rec = libraryRecording(reader, book, timings, t.file);
     const url = audioCacheMap?.get(rec.audioPath ?? '') ?? rec.audioUrl ?? '';
     runs.push({ file: t.file, url, startSec: t.startSec, endSec: t.endSec });
   }
@@ -48,6 +54,7 @@ const formatTime = (sec: number) => {
 };
 
 export interface ChapterLibraryPlayerProps {
+  reader: LibraryReader;
   book: string;
   timings: LibraryChapterTimings;
   audioCacheMap?: ReadonlyMap<string, string>;
@@ -63,6 +70,7 @@ export interface ChapterLibraryPlayerProps {
 }
 
 export default function ChapterLibraryPlayer({
+  reader,
   book,
   timings,
   audioCacheMap,
@@ -76,7 +84,7 @@ export default function ChapterLibraryPlayer({
   const scale = useFontScale();
   const space = useScaledSpace();
 
-  const runs = useMemo(() => chapterRuns(book, timings, audioCacheMap), [book, timings, audioCacheMap]);
+  const runs = useMemo(() => chapterRuns(reader, book, timings, audioCacheMap), [reader, book, timings, audioCacheMap]);
   const total = runs.reduce((sum, r) => sum + (r.endSec - r.startSec), 0);
 
   const player = useAudioPlayer(runs[0]?.url ?? null);
@@ -187,7 +195,7 @@ export default function ChapterLibraryPlayer({
     }
   };
 
-  const title = `Hebrew reading · ${LIBRARY_READER.name}`;
+  const title = `${reader.label} · ${reader.name}`;
   const name = (
     <>
       <View className="flex-row items-center" style={{ gap: space(4) }}>
@@ -197,7 +205,7 @@ export default function ChapterLibraryPlayer({
         {onPressTitle && <ChevronDown size={Math.round(13 * scale)} color={palette.ink3} strokeWidth={2.4} />}
       </View>
       <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={1}>
-        Built in · Hebrew
+        Built in · {reader.language}
       </AppText>
     </>
   );
@@ -247,8 +255,8 @@ export default function ChapterLibraryPlayer({
         </View>
       )}
 
-      {/* The licence requires the credit wherever the reading plays. */}
-      <LibraryCredit />
+      {/* Shmuelof's licence requires the credit wherever the reading plays; Souer's is credited anyway. */}
+      <LibraryCredit reader={reader} />
     </View>
   );
 }

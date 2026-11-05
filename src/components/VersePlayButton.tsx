@@ -5,7 +5,7 @@ import { Pause, Play } from 'lucide-react-native';
 
 import { Recording } from '../types';
 import { AppButton, AppText, useScaledSpace } from './design';
-import { LIBRARY_READER, isLibraryRecording, libraryTimingsKey, resolveVerseAudio } from '../lib/libraryAudio';
+import { LibraryReader, libraryReaderOf, libraryTimingsKey, resolveVerseAudio } from '../lib/libraryAudio';
 import { resolvePlaybackUrl } from '../lib/studioAudio';
 import { useLibraryTimings } from '../state/useLibraryAudio';
 
@@ -15,8 +15,8 @@ import { useLibraryTimings } from '../state/useLibraryAudio';
 // Plays one verse from the user's own recording of its chapter: seeks to the
 // verse's tagged start and pauses at its end. Renders nothing when there is no
 // recording, or the recording has no timing for this verse -- there is no
-// text-to-speech fallback in the app. Hebrew Old Testament verses fall back
-// to the built-in reading (see lib/libraryAudio.ts).
+// text-to-speech fallback in the app. BSB verses and Hebrew Old Testament
+// verses fall back to the built-in reading (see lib/libraryAudio.ts).
 // ============================================================================
 
 export interface VersePlayButtonProps {
@@ -53,17 +53,18 @@ export default function VersePlayButton(props: VersePlayButtonProps) {
   return (
     <View style={{ gap: space(4) }}>
       <Player url={url} startSec={audio.startSec} endSec={audio.endSec} onStart={props.onStart} />
-      {isLibraryRecording(audio.recording) && <LibraryCredit />}
+      <LibraryCredit reader={libraryReaderOf(audio.recording)} />
     </View>
   );
 }
 
-/** The licence's attribution, wherever the built-in reading plays. */
-export function LibraryCredit() {
+/** The reading's credit and licence, wherever a built-in reading plays. Nothing for the user's own recordings. */
+export function LibraryCredit({ reader }: { reader: LibraryReader | null }) {
+  if (!reader) return null;
   return (
-    <Pressable onPress={() => Linking.openURL(LIBRARY_READER.licenseUrl)} accessibilityRole="link">
+    <Pressable onPress={() => Linking.openURL(reader.licenseUrl)} accessibilityRole="link">
       <AppText variant="caption" className="font-sans text-ink-3">
-        {LIBRARY_READER.credit}
+        {reader.credit}
       </AppText>
     </Pressable>
   );
