@@ -16,7 +16,8 @@ files by name when committing (never `git add -A`). After each stage, update the
 
 **Progress:** stages 0–1 done 2026-11-03 (48 kbps chosen); stage 2 done
 2026-11-04 (all 1,189 chapters aligned, 99.87% of words matched); stage 3 done
-2026-11-05 (99.93% of clips clean, every verse keeps audio). Stage 4 next. Stage 0
+2026-11-05 (99.93% of clips clean, every verse keeps audio); stage 4 done
+2026-11-05 (1.50 GB uploaded to `audioLibrary/souer/`). Stage 5 next. Stage 0
 found that Souer does **not** read section headings or cross-references, so
 stages 1–2 are simpler than written; see stage 0's "As built". The exception
 is Song of Songs speaker labels and the Proverbs 22–24 "Saying" headings (stage 3's "As built").
@@ -411,6 +412,49 @@ Cost: storage is small (roughly 1.5–2 GB after re-encoding). Downloads are the
 cost that grows with users, at about 1–2 MB per chapter, and only on the first
 play: `audioCache.ts` keeps the file after that. Check it against the
 project's Storage pricing before a public launch.
+
+### As built (2026-11-05)
+
+Stage 4 is two scripts, because encoding needs PyAV and the upload needs firebase-admin:
+
+- **`encode.py`** re-encodes everything into `work/encoded/` on 10 processes.
+  The whole Bible took about 10 minutes, after a 1-minute pass that measures
+  every chapter's volume (cached in `work/loudness.json`).
+  - Volume is set by the speech level, gated BS.1770-style (400 ms blocks,
+    with silence and quiet blocks left out). There's no K-weighting, since
+    it's the same voice and microphone throughout. Each chapter is moved to
+    the median, −18.7 dB.
+  - Most chapters were already close: the middle 90% sit between −20.6 and
+    −18.1 dB, and the average change is 0.6 dB. One group was recorded about
+    6 dB quieter, though, and got +3 to +6 dB: 1 and 2 Corinthians,
+    Galatians, 2 Timothy and Titus (37 chapters). Without this they would
+    play noticeably softer.
+  - A gain never pushes a peak past −1 dBFS.
+  - Each new file is decoded again and compared with its source. **All 1,189
+    pass: the worst length change is 2 ms and no file's speech is offset**,
+    so the stage 3 timings fit unchanged. LAME's gapless header carries the
+    encoder delay.
+  - The total is **1.50 GB**, from 5.1 GB.
+- **`upload.js`** works like `hebrew-audio/upload.js`. It refuses to upload if
+  any file failed the encode check, or changed since then (md5 check). It
+  uploads 6 files at a time and skips files already in Storage with the same
+  md5. `--only GEN_1,PSA_23` uploads just those chapters, and `--timings`
+  uploads only the Firestore docs. The reader doc holds the reader, BSB,
+  credit, CC0 licence and source URL.
+  - The existing `audioLibrary` rules already cover any reader id, so no
+    rules deploy was needed.
+  - Credentials come from the service-account key in Downloads, set with
+    `$env:GOOGLE_APPLICATION_CREDENTIALS`.
+  - Checked after a 3-chapter test upload: Psalm 23 downloads from the app's
+    tokenless URL with `Cache-Control: public, max-age=31536000, immutable`.
+  - **Full upload, 2026-11-05: all 1,189 MP3s (1.49 GB, about 2 minutes at
+    roughly 120 Mbit/s), 1,189 timing docs and the reader doc.**
+  - Checked from outside, with no login:
+    - 5 files (Genesis 50, Psalm 119, John 3, 1 Corinthians 5, Revelation 22)
+      download at exactly their local sizes.
+    - The John 3 and Psalm 23 timing docs read back. Psalm 23 has its title
+      heading.
+    - The reader doc reads back.
 
 ## Stage 5: In the app
 
