@@ -333,6 +333,7 @@ setFeedRecordings: (value: SetStateAction<Recording[]>) => void
 setFeedTranslationFilter: (value: SetStateAction<string>) => void
 setFindSearchQuery: (value: SetStateAction<string>) => void
 setGroupPlanPriority: (planId: string, priority: "group" | "individual" | "additive") => Promise<void>
+setGuidedAnchors: (verseId: string, anchors: number[]) => void
 setGuidedPassageKey: (value: SetStateAction<string | null>) => void
 setGuidedSetAside: (verseId: string, on: boolean) => void
 setGuidedShakyJoins: (shaky: string[], steady: string[]) => void

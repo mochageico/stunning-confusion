@@ -145,4 +145,6 @@ module.exports = {
   id: process.env.LOCAL_BIBLE_TRANSLATION_ID || 'WEB',
   name: process.env.LOCAL_BIBLE_TRANSLATION_NAME || 'World English Bible',
   isPublicDomain: true,
+  // For scripts/bsb-audio/export-text.js, which cleans Psalm titles the same way as verses.
+  _internal: { stripFootnotesAndTags },
 };

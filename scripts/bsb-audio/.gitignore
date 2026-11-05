@@ -1,0 +1,6 @@
+# Downloaded MP3s (~5 GB), bitrate samples and the alignment working files --
+# regenerate with download.js / align.py. The finished timing JSON is committed.
+sources/
+work/
+timings/spot-check.json
+__pycache__/

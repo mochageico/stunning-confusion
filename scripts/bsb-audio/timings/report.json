@@ -1,0 +1,139 @@
+{
+ "missingFiles": [],
+ "flags": [
+  {
+   "verse": "JOS 19:21",
+   "problem": "only 3/8 words matched"
+  },
+  {
+   "verse": "JOS 19:36",
+   "problem": "clip holds 67% of its words, 1 extra",
+   "heard": "adama rhema hazor"
+  },
+  {
+   "verse": "JOS 19:42",
+   "problem": "clip holds 67% of its words, 2 extra",
+   "heard": "shea laban ejelon isla"
+  },
+  {
+   "verse": "JOS 19:44",
+   "problem": "clip holds 67% of its words, 1 extra",
+   "heard": "eltica gibithon baelath"
+  },
+  {
+   "verse": "JOS 19:45",
+   "problem": "only 1/5 words matched"
+  },
+  {
+   "verse": "2SA 7:11",
+   "problem": "clip check failed (39% of words) but checked by hand: whole verse there; Whisper drops its first 8 s when it hears the clip in one go",
+   "heard": "the lord declares to you that he himself will establish a house for you"
+  },
+  {
+   "verse": "1CH 6:68",
+   "problem": "only 1/3 words matched"
+  },
+  {
+   "verse": "1CH 6:68",
+   "problem": "clip holds 50% of its words, 1 extra",
+   "heard": "jachmium edhoran"
+  },
+  {
+   "verse": "1CH 8:19",
+   "problem": "clip holds 67% of its words, 1 extra",
+   "heard": "jacob zichri zabdi"
+  },
+  {
+   "verse": "1CH 8:24",
+   "problem": "clip holds 67% of its words, 2 extra",
+   "heard": "hananiah elam and thyjah"
+  },
+  {
+   "verse": "1CH 12:12",
+   "problem": "clip check failed (33% of words) but checked by hand: right verse; Whisper writes \"the eighth ... the ninth\" as \"VIII ... IX\"",
+   "heard": "johanan viii el zabad ix"
+  },
+  {
+   "verse": "1CH 14:5",
+   "problem": "clip holds 67% of its words, 3 extra",
+   "heard": "ibhar el ashuwa el pilet"
+  },
+  {
+   "verse": "EZR 10:35",
+   "problem": "clip check failed (33% of words) but checked by hand: right verse; the three names are heard as \"Banea, Badea, Kiluhai\"",
+   "heard": "banea badea kiluhai"
+  },
+  {
+   "verse": "EZR 10:36",
+   "problem": "clip holds 67% of its words, 1 extra",
+   "heard": "vinaya merimoth eliashib"
+  },
+  {
+   "verse": "NEH 10:4",
+   "problem": "clip holds 67% of its words, 1 extra",
+   "heard": "hattish shebaniah malik"
+  },
+  {
+   "verse": "NEH 10:19",
+   "problem": "clip holds 67% of its words, 1 extra",
+   "heard": "heref anathoth nebai"
+  },
+  {
+   "verse": "NEH 10:22",
+   "problem": "clip holds 67% of its words, 1 extra",
+   "heard": "pelatiya hanan aenea"
+  },
+  {
+   "verse": "NEH 10:24",
+   "problem": "clip holds 67% of its words, 2 extra",
+   "heard": "hello hesh pilha shobek"
+  },
+  {
+   "verse": "NEH 11:33",
+   "problem": "clip holds 67% of its words, 1 extra",
+   "heard": "hezer rhema gitaeum"
+  },
+  {
+   "verse": "NEH 12:2",
+   "problem": "clip holds 67% of its words, 1 extra",
+   "heard": "amariah malik hattish"
+  },
+  {
+   "verse": "NEH 12:6",
+   "problem": "clip holds 67% of its words, 1 extra",
+   "heard": "shimea joirib judea"
+  },
+  {
+   "verse": "NEH 12:10",
+   "problem": "clip holds 94% of its words, 6 extra",
+   "heard": "jeshua was the father of joachim joachim was the father of eliashib eliashib was the father of joachim was the father of joachim"
+  },
+  {
+   "verse": "PSA 103 title",
+   "problem": "1.23 s per word (2.5 s for 2 words)"
+  },
+  {
+   "verse": "PSA 144 title",
+   "problem": "1.39 s per word (2.8 s for 2 words)"
+  },
+  {
+   "verse": "JER 34:8",
+   "problem": "clip holds 100% of its words, 13 extra",
+   "heard": "after king zedekiah had made a covenant with all the people in jerusalem to proclaim liberty the word came to jeremiah from the lord that he would have made a covenant with all the people in jerusalem"
+  },
+  {
+   "verse": "EZK 38:2",
+   "problem": "clip holds 96% of its words, 6 extra",
+   "heard": "son of man set your face against gog of the land of magog the chief prince of meshech and tubal prophesy against gog of the land of magog"
+  },
+  {
+   "verse": "EZK 41:15",
+   "problem": "clip holds 100% of its words, 8 extra",
+   "heard": "next he measured the length of the building facing the temple courtyard at the rear of the temple including its galleries on each side it was a hundred cubits the outer sanctuary the inner sanctuary and the porticos facing the court nationwide is dependent on the right got it"
+  },
+  {
+   "verse": "LUK 15:19",
+   "problem": "only 10/18 words matched"
+  }
+ ]
+}

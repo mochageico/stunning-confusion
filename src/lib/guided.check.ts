@@ -23,6 +23,7 @@ import {
   LadderEvent,
   nextNewVerse,
   pickDrill,
+  pickShownWords,
   SessionEnv,
   sessionReducer,
   SessionEvent,
@@ -96,8 +97,20 @@ console.log('Ladder');
   const rng = seeded(1);
   const twelveWords = createLadder(twelve, passageVerses, {}, rng);
   const thirty = createLadder(long30, passageVerses, {}, rng);
-  check('A 12-word verse gets 6 rungs', twelveWords.rungs.length === 6, twelveWords.rungs.length);
-  check('A 30-word verse gets 7 rungs', thirty.rungs.length === 7, thirty.rungs.length);
+  const tinyVerse = { ...twelve, text: 'Jesus wept, and He sighed.' };
+  check('A 12-word verse gets 8 rungs', twelveWords.rungs.length === 8, twelveWords.rungs.length);
+  check('A 30-word verse gets 10 rungs', thirty.rungs.length === 10, thirty.rungs.length);
+  check('A 6-word verse gets 6 rungs', createLadder(tinyVerse, passageVerses, {}, rng).rungs.length === 6);
+  const kinds = (l: Ladder) => l.rungs.map((r) => r.kind[0] + (r.kind === 'blanks' ? String(r.share) : '')).join(' ');
+  check(
+    'The long ladder alternates picking and typing from the first blanks step: ... drill, blanks, drill, blanks, drill, partly, fully',
+    thirty.rungs.map((r) => r.kind).join() === 'read,lookUp,drill,drill,blanks,drill,blanks,drill,partly,fully',
+    kinds(thirty)
+  );
+  check('The two blanks steps hide 20% then 50%', thirty.rungs.filter((r) => r.kind === 'blanks').map((r) => r.share).join() === '0.2,0.5');
+  check('The first drill is Peek on every length', [twelveWords, thirty].every((l) => l.rungs[2].drill === 'peek'));
+  check('Nothing but the last two steps is plain typing: no First letters or Build up anywhere', thirty.rungs.every((r) => r.drill === undefined || ['peek', 'scramble', 'swap', 'listen', 'backwards'].includes(r.drill)));
+  check('startAt skips the early steps', createLadder(long30, passageVerses, { startAt: 2 }, seeded(2)).pos === 2);
 
   let dupes = 0;
   let avoided = 0;
@@ -115,52 +128,54 @@ console.log('Ladder');
   check('The first drill avoids the previous verse\'s last drill when it can', avoidable > 0 && avoided === avoidable, { avoided, avoidable });
 
   const five = { ...twelve, text: 'The LORD is my shepherd today' };
-  check('A 5-word verse never gets Build up', !eligibleDrills(five, passageVerses).includes('buildUp'));
+  check('Build up is no longer a guided drill', !(eligibleDrills(five, passageVerses) as string[]).includes('buildUp'));
   const short = { ...twelve, text: 'Jesus wept.' };
-  check('A verse that splits into under 3 phrases never gets Scramble', !eligibleDrills(short, passageVerses).includes('scramble'));
-  check('First letters is always eligible', eligibleDrills(short, [short]).includes('firstLetters'));
+  check('A verse that splits into under 3 phrases never gets Scramble or Backwards', !eligibleDrills(short, passageVerses).some((d) => d === 'scramble' || d === 'backwards'));
+  check('Peek is always eligible', eligibleDrills(short, [short]).includes('peek'));
+  check('Listen needs at least 2 phrases', !eligibleDrills(short, [short]).includes('listen') && eligibleDrills(five, [five]).includes('listen'));
 
   const run = (l: Ladder, events: LadderEvent[], r = seeded(7)) => events.reduce((acc, e) => ladderAfter(acc, e, r), l);
-  const base = createLadder(long30, passageVerses, {}, seeded(3)); // 7 rungs
-  const upToFully = run(base, ['done', 'done', 'done', 'done', 'done', 'pass']); // read, look, A, B, C, partly
+  // Climb with the right event for each step until `pos` is reached (graded steps pass).
+  const climbTo = (l: Ladder, pos: number, r = seeded(7)) => {
+    let x = l;
+    while (x.pos < pos && x.status === 'climbing') x = ladderAfter(x, ['blanks', 'partly', 'fully'].includes(x.rungs[x.pos].kind) ? 'pass' : 'done', r);
+    return x;
+  };
+  const base = createLadder(long30, passageVerses, {}, seeded(3)); // 10 rungs: read, look, peek, order, 20%, listen, 50%, back, partly, fully
+  const upToFully = climbTo(base, 9);
   check('Climbing reaches the fully hidden rung', upToFully.rungs[upToFully.pos].kind === 'fully', upToFully.pos);
 
   const missFully = ladderAfter(upToFully, 'miss', seeded(11));
-  check('Miss on Fully (7 rungs) lands on Drill C', missFully.pos === 4 && missFully.rungs[4].kind === 'drill', missFully.pos);
-  check('...and Drill C is a newly picked drill', missFully.rungs[4].drill !== upToFully.rungs[4].drill, {
-    before: upToFully.rungs[4].drill,
-    after: missFully.rungs[4].drill,
-  });
-  check('...and the drills still never repeat', new Set(missFully.rungs.filter((r) => r.kind === 'drill').map((r) => r.drill)).size === 3);
+  check('Miss on Fully lands on the last recognition step (not on Partly)', missFully.pos === 7 && missFully.rungs[7].kind === 'drill', missFully.pos);
+  check('...and a miss is counted', missFully.misses === 1);
 
-  const atPartly = run(base, ['done', 'done', 'done', 'done', 'done']);
+  const atPartly = climbTo(base, 8);
   const missPartly = ladderAfter(atPartly, 'miss', seeded(13));
-  check('Miss on Partly lands on Drill B', missPartly.pos === 3, missPartly.pos);
-  check(
-    '...and both B and C are re-picked',
-    missPartly.rungs[3].drill !== atPartly.rungs[3].drill && missPartly.rungs[4].drill !== atPartly.rungs[4].drill,
-    { before: atPartly.rungs.map((r) => r.drill), after: missPartly.rungs.map((r) => r.drill) }
-  );
-  check('...and the kept drill A is unchanged', missPartly.rungs[2].drill === atPartly.rungs[2].drill);
+  check('Miss on Partly lands on the same recognition step', missPartly.pos === 7, missPartly.pos);
 
-  const six = createLadder(twelve, passageVerses, {}, seeded(5)); // read, look, A, B, partly, fully
-  const sixAtPartly = run(six, ['done', 'done', 'done', 'done']);
-  const dropped = ladderAfter(sixAtPartly, 'miss', seeded(2));
+  const atHeavy = climbTo(base, 6);
+  check('Miss on the 50% blanks goes back to the Listen step', ladderAfter(atHeavy, 'miss', seeded(2)).pos === 5);
+  const atLight = climbTo(base, 4);
+  check('Miss on the 20% blanks goes back to the ordering step', ladderAfter(atLight, 'miss', seeded(2)).pos === 3);
+  check('Passing a blanks step moves on with no "partly passed"', ladderAfter(atLight, 'pass', seeded(2)).pos === 5 && !ladderAfter(atLight, 'pass', seeded(2)).passedPartly);
+
+  const eight = createLadder(twelve, passageVerses, {}, seeded(5)); // read, look, peek, 20%, listen, 50%, partly, fully
+  const eightAtLight = climbTo(eight, 3);
+  const dropped = ladderAfter(eightAtLight, 'miss', seeded(2));
   check('Position never drops below the first drill rung', dropped.pos === 2, dropped.pos);
 
-  let l = run(six, ['done', 'done', 'done', 'done']);
-  const climbToPartly = (x: Ladder) => run(x, ['done', 'done']);
+  let l = climbTo(eight, 3);
   l = ladderAfter(l, 'miss', seeded(1));
-  l = ladderAfter(climbToPartly(l), 'miss', seeded(1));
+  l = ladderAfter(climbTo(l, 3), 'miss', seeded(1));
   check('Two misses keep climbing', l.status === 'climbing' && l.misses === 2);
-  l = ladderAfter(climbToPartly(l), 'miss', seeded(1));
+  l = ladderAfter(climbTo(l, 3), 'miss', seeded(1));
   check('The third miss gives setAside', l.status === 'setAside' && l.misses === 3, l.status);
 
   // Partly passed, then Fully missed, then must pass Partly again before Fully counts.
-  let f = run(six, ['done', 'done', 'done', 'done', 'pass']);
+  let f = climbTo(eight, 7);
   f = ladderAfter(f, 'miss', seeded(1));
   check('A miss on Fully resets "partly passed"', f.passedPartly === false);
-  f = run(f, ['done', 'done']);
+  f = climbTo(f, 6);
   const stillOnPartly = f.rungs[f.pos].kind;
   f = ladderAfter(f, 'pass', seeded(1));
   check('Finishing needs Partly then Fully, back to back', stillOnPartly === 'partly' && f.status === 'climbing' && f.rungs[f.pos].kind === 'fully');
@@ -175,7 +190,7 @@ console.log('Ladder');
     let guard = 0;
     while (lad.status === 'climbing' && guard++ < 60) {
       const kind = lad.rungs[lad.pos].kind;
-      if (kind === 'partly' || kind === 'fully') lad = ladderAfter(lad, r() < 0.3 ? 'miss' : 'pass', r);
+      if (['blanks', 'partly', 'fully'].includes(kind)) lad = ladderAfter(lad, r() < 0.3 ? 'miss' : 'pass', r);
       else lad = ladderAfter(lad, 'done', r);
     }
     if (lad.status === 'finished') worst = Math.min(worst, lad.activities);
@@ -186,7 +201,7 @@ console.log('Ladder');
   const rerolled = ladderAfter(drillAt, 'reroll', seeded(4));
   check('reroll changes the drill', rerolled.rungs[rerolled.pos].drill !== drillAt.rungs[drillAt.pos].drill);
   check('...and does not add an activity', rerolled.activities === drillAt.activities && rerolled.pos === drillAt.pos);
-  check('reroll keeps drills distinct', new Set(rerolled.rungs.filter((r) => r.kind === 'drill').map((r) => r.drill)).size === 3);
+  check('...to a drill that works for this verse', rerolled.eligible.includes(rerolled.rungs[rerolled.pos].drill!));
 
   const k = ladderAfter(base, 'knowIt', seeded(1));
   check('knowIt jumps to the fully hidden rung', k.rungs[k.pos].kind === 'fully' && k.knowIt);
@@ -195,8 +210,29 @@ console.log('Ladder');
   check('knowIt then miss -> rung 0, misses still 0', km.pos === 0 && km.misses === 0 && km.status === 'climbing', km);
   check('knowIt only works on the Read rung', ladderAfter(drillAt, 'knowIt', seeded(1)) === drillAt);
 
-  const drills: GuidedDrillId[] = ['buildUp', 'scramble'];
-  check('pickDrill only repeats the current drill when nothing else exists', pickDrill(['scramble'], [], undefined, 'scramble', seeded(1)) === 'scramble' && pickDrill(drills, [], undefined, 'scramble', seeded(1)) === 'buildUp');
+  const drills: GuidedDrillId[] = ['peek', 'scramble'];
+  check('pickDrill only repeats the current drill when nothing else exists', pickDrill(['scramble'], [], undefined, 'scramble', seeded(1)) === 'scramble' && pickDrill(drills, [], undefined, 'scramble', seeded(1)) === 'peek');
+
+  // Fill-in words: anchors first, whole phrases at 50%.
+  const anchors = new Set([3, 11, 20]);
+  let anchorsAlwaysHidden = true;
+  let phrasesWhole = true;
+  for (let s = 1; s <= 100; s++) {
+    const shown = pickShownWords(30, 0.2, { anchors }, seeded(s));
+    if (shown.size !== 24 || [...anchors].some((a) => shown.has(a))) anchorsAlwaysHidden = false;
+    const phrased = pickShownWords(30, 0.5, { phraseSizes: [5, 5, 5, 5, 5, 5] }, seeded(s));
+    const hiddenCount = 30 - phrased.size;
+    // Every phrase is all hidden or all shown.
+    for (let p = 0; p < 6; p++) {
+      const inPhrase = [0, 1, 2, 3, 4].map((k) => phrased.has(p * 5 + k));
+      if (inPhrase.some((x) => x !== inPhrase[0])) phrasesWhole = false;
+    }
+    if (hiddenCount !== 15) phrasesWhole = false;
+  }
+  check('20% blanks hide the anchors first (and 20% of the words)', anchorsAlwaysHidden);
+  check('50% blanks hide whole phrases, 50% of the words', phrasesWhole);
+  check('With no anchors the hidden words are still 20%', pickShownWords(30, 0.2, {}, seeded(3)).size === 24);
+  check('At least one word is always hidden', pickShownWords(3, 0.2, {}, seeded(3)).size === 2);
 }
 
 // ---------------------------------------------------------------- credit ----
@@ -307,7 +343,7 @@ console.log('Sitting');
       let guard = 0;
       while (st.step.kind === 'ladder' && guard++ < 30) {
         const kind = st.step.ladder.rungs[st.step.ladder.pos].kind;
-        st = send(st, kind === 'partly' || kind === 'fully' ? { type: 'result', perfect: true } : { type: 'next' }, env);
+        st = send(st, ['blanks', 'partly', 'fully'].includes(kind) ? { type: 'result', perfect: true } : { type: 'next' }, env);
         if (st.finishedThisSitting.length > 0) break;
       }
       return st;
@@ -321,7 +357,7 @@ console.log('Sitting');
     let guard = 0;
     while (s.step.kind === 'ladder' && guard++ < 30) {
       const kind = s.step.ladder.rungs[s.step.ladder.pos].kind;
-      s = send(s, kind === 'partly' || kind === 'fully' ? { type: 'result', perfect: true } : { type: 'next' }, env);
+      s = send(s, ['blanks', 'partly', 'fully'].includes(kind) ? { type: 'result', perfect: true } : { type: 'next' }, env);
     }
     check('A single-verse passage never produces a stitch or thread step', s.step.kind === 'doneToday' && !s.log.some((l) => l.step === 'stitch' || l.step === 'thread'), s.step);
   }
@@ -330,7 +366,7 @@ console.log('Sitting');
     let s = send(startSession(env), { type: 'begin' }, env);
     for (let i = 0; i < 40 && s.step.kind === 'ladder' && s.setAside.length === 0; i++) {
       const kind = s.step.ladder.rungs[s.step.ladder.pos].kind;
-      s = send(s, kind === 'partly' || kind === 'fully' ? { type: 'result', perfect: false } : { type: 'next' }, env);
+      s = send(s, ['blanks', 'partly', 'fully'].includes(kind) ? { type: 'result', perfect: false } : { type: 'next' }, env);
     }
     check('Three misses set the verse aside and the sitting moves on', s.setAside.join() === 'BSB_PSA_23_1' && s.step.kind === 'doneToday', { setAside: s.setAside, step: s.step.kind });
   }
@@ -376,7 +412,7 @@ console.log('Sitting');
     let guard = 0;
     while (s.step.kind === 'ladder' && guard++ < 30) {
       const kind = s.step.ladder.rungs[s.step.ladder.pos].kind;
-      s = send(s, kind === 'partly' || kind === 'fully' ? { type: 'result', perfect: true } : { type: 'next' }, env);
+      s = send(s, ['blanks', 'partly', 'fully'].includes(kind) ? { type: 'result', perfect: true } : { type: 'next' }, env);
     }
     // The stitch of 1-2 runs after the new verse; skip it.
     if (s.step.kind === 'stitch') s = send(s, { type: 'skip' }, env);
@@ -389,7 +425,11 @@ console.log('Sitting');
   {
     const run = (l: Ladder, events: LadderEvent[], r = seeded(7)) => events.reduce((acc, e) => ladderAfter(acc, e, r), l);
     const base = createLadder(long30, passageVerses, {}, seeded(3)); // read, look, A, B, C, partly, fully
-    const atFully = run(base, ['done', 'done', 'done', 'done', 'done', 'pass']);
+    const atFully = (() => {
+      let x = base;
+      while (x.pos < x.rungs.length - 1) x = ladderAfter(x, ['blanks', 'partly'].includes(x.rungs[x.pos].kind) ? 'pass' : 'done', seeded(7));
+      return x;
+    })();
     const down = ladderAfter(atFully, 'easier', seeded(9));
     check('Easier on fully hidden steps down to partly hidden', down.rungs[down.pos].kind === 'partly', down.pos);
     check('...with no miss and no activity counted', down.misses === 0 && down.activities === atFully.activities, { m: down.misses, a: down.activities });
@@ -406,6 +446,31 @@ console.log('Sitting');
     let s = send(startSession(env), { type: 'begin' }, env);
     s = send(s, { type: 'easier' }, env);
     check('Easier on a cold check goes to the refresh drill with nothing logged', s.step.kind === 'cold' && s.step.stage === 'refreshDrill' && s.log.length === 0, s.step);
+
+    // Teach me again, and a cold check that goes badly.
+    const fresh = startSession(env);
+    let rl = send(fresh, { type: 'begin' }, env);
+    rl = send(rl, { type: 'relearn' }, env);
+    check(
+      'Teach me again on a cold check opens the ladder at the first drill',
+      rl.step.kind === 'ladder' && rl.step.relearn === true && rl.step.verseId === 'BSB_PSA_23_1' && rl.step.ladder.pos === 2,
+      rl.step
+    );
+    check('...without using the sitting\'s new-verse budget', rl.budget === fresh.budget);
+    check('...and the verse leaves the waiting checks', !rl.coldQueue.includes('BSB_PSA_23_1'));
+    let guard2 = 0;
+    while (rl.step.kind === 'ladder' && rl.step.relearn && guard2++ < 40) {
+      const kind = rl.step.ladder.rungs[rl.step.ladder.pos].kind;
+      rl = send(rl, ['blanks', 'partly', 'fully'].includes(kind) ? { type: 'result', perfect: true } : { type: 'next' }, env);
+    }
+    check('A taught-again verse is not counted as a new verse', rl.newDone === 0 && rl.finishedThisSitting.includes('BSB_PSA_23_1'), { n: rl.newDone, f: rl.finishedThisSitting });
+
+    let badCheck = send(startSession(env), { type: 'begin' }, env);
+    badCheck = send(badCheck, { type: 'result', perfect: false, slips: [0], bad: [0] }, env);
+    check('A cold check under half right goes through the whole ladder, not a quick refresh', badCheck.step.kind === 'ladder' && badCheck.step.relearn === true, badCheck.step);
+    let smallSlip = send(startSession(env), { type: 'begin' }, env);
+    smallSlip = send(smallSlip, { type: 'result', perfect: false, slips: [0], bad: [] }, env);
+    check('A small slip still gets the quick refresh', smallSlip.step.kind === 'cold' && smallSlip.step.stage === 'refreshDrill', smallSlip.step);
 
     // Every second 3-verse stitch gets a jigsaw warm-up unless the setting is off.
     const three = [item(1, { runsAgo: [60 * 24] }), item(2, { runsAgo: [60 * 24] }), item(3, { runsAgo: [60 * 24] })];
@@ -499,7 +564,7 @@ console.log('Jump-ins, joins and the last look');
     while (s.step.kind !== 'doneToday' && guard++ < 60) {
       const st = s.step;
       if (st.kind !== 'ladder') kinds.push(st.kind);
-      const graded = st.kind !== 'ladder' || st.ladder.rungs[st.ladder.pos].kind === 'partly' || st.ladder.rungs[st.ladder.pos].kind === 'fully';
+      const graded = st.kind !== 'ladder' || ['blanks', 'partly', 'fully'].includes(st.ladder.rungs[st.ladder.pos].kind);
       s = send(s, graded ? { type: 'result', perfect: true } : { type: 'next' }, env);
     }
     check('After the new verse: a stitch, one jump-in, then the last look', kinds.join() === 'stitch,thread,lastLook', kinds);
@@ -515,7 +580,7 @@ console.log('Jump-ins, joins and the last look');
     let guard = 0;
     while (s.step.kind === 'ladder' && guard++ < 30) {
       const kind = s.step.ladder.rungs[s.step.ladder.pos].kind;
-      s = send(s, kind === 'partly' || kind === 'fully' ? { type: 'result', perfect: true } : { type: 'next' }, env);
+      s = send(s, ['blanks', 'partly', 'fully'].includes(kind) ? { type: 'result', perfect: true } : { type: 'next' }, env);
     }
     check('No last look right after the verse was just recited', s.step.kind === 'doneToday', s.step);
   }
