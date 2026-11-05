@@ -12,7 +12,7 @@ import { Dropdown } from '../components/Dropdown';
 import ChapterPhotoStrip from '../components/ChapterPhotoStrip';
 import ChapterLibraryPlayer from '../components/ChapterLibraryPlayer';
 import { WeakSpotDot } from '../components/VerseStages';
-import { LIBRARY_READER, libraryTimingsKey } from '../lib/libraryAudio';
+import { libraryReaderFor, libraryTimingsKey } from '../lib/libraryAudio';
 import { useLibraryTimings } from '../state/useLibraryAudio';
 import { usePickerTranslations } from '../state/usePickerTranslations';
 import MemoryGrid, { verseAnnotationKey } from '../components/MemoryGrid';
@@ -186,9 +186,11 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   );
   const isPlayingThis = !!currentAudio && playingRecordingId === currentAudio.id;
 
-  // The built-in Hebrew reading, for an Old Testament chapter shown in
-  // Hebrew/Greek only. The user's own recording in the same language stays
-  // the default when there is one; the reading is then a choice in the list.
+  // The built-in reading: Bob Souer for a chapter shown in BSB, Shmuelof for
+  // an Old Testament chapter shown in Hebrew/Greek. The user's own recording
+  // in the same language stays the default when there is one; the reading is
+  // then a choice in the list.
+  const libraryReader = libraryReaderFor(selectedTranslationId, selectedBook || '');
   const libraryRefs = useMemo(
     () => [{ book: selectedBook || '', chapter: selectedChapter || 0, translationId: selectedTranslationId }],
     [selectedBook, selectedChapter, selectedTranslationId]
@@ -490,8 +492,9 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             one slim card: play and the recording's name on the left (tap the
             name to change which recording plays), pages on the right. */}
         <View className="bg-surface border border-line rounded-card" style={{ padding: space(10), gap: space(10) }}>
-          {libraryActive && libraryTimings ? (
+          {libraryActive && libraryTimings && libraryReader ? (
             <ChapterLibraryPlayer
+              reader={libraryReader}
               book={selectedBook || ''}
               timings={libraryTimings}
               audioCacheMap={audioCache.map}
@@ -573,7 +576,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               are short (a handful of recordings per chapter at most). */}
           {(currentAudio || libraryTimings) && showAudioSelector && (
             <View className="border-t border-hairline" style={{ paddingTop: space(12), gap: space(10) }}>
-              {libraryTimings && (
+              {libraryTimings && libraryReader && (
                 <Pressable
                   onPress={() => {
                     setLibraryPickedFor(activeChapterKey);
@@ -589,10 +592,10 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                 >
                   <View className="flex-1" style={{ minWidth: 0 }}>
                     <AppText variant="label" className="font-sans font-semibold text-ink" numberOfLines={1}>
-                      Hebrew reading · {LIBRARY_READER.name}
+                      {libraryReader.label} · {libraryReader.name}
                     </AppText>
                     <AppText variant="caption" className="font-sans text-ink-3" numberOfLines={1}>
-                      Built in · Hebrew
+                      Built in · {libraryReader.language}
                     </AppText>
                   </View>
                   {libraryActive && <Check size={Math.round(16 * scale)} color={palette.accent} strokeWidth={2.4} />}

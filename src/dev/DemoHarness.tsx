@@ -711,6 +711,11 @@ export function useDemoState(real: AppState): AppState {
       // last verse of Hebrew Isaiah 63, so it switches files a few seconds in.
       real.setSelectedTranslationId('HEBGRK');
       real.navigateTo('chapterLanding', 'Isaiah', 64);
+    } else if (s === 'chapterLanding' && params.get('bsb') === '1') {
+      // John 3 in BSB: no recording of the user's, so the built-in BSB reading
+      // (Bob Souer) is what plays.
+      real.setSelectedTranslationId('BSB');
+      real.navigateTo('chapterLanding', 'John', 3);
     } else if (s === 'chapterLanding') real.navigateTo('chapterLanding', 'Romans', 8);
     else if (s === 'sections') {
       // Saved through the real hook: with no Firebase user it stays local, so
@@ -948,7 +953,16 @@ export function useDemoState(real: AppState): AppState {
     // notdue=1: Psalms 23:1-2, on a weekly schedule and not due for 3 days --
     // Recall shows practice, not "Count as a review".
     const picked = params.get('notdue') === '1' ? q.filter((x) => x.book === 'Psalms' && x.chapter === 23 && x.verseNumber <= 2) : q.slice(0, Math.max(1, Number(params.get('n')) || 2));
-    overrides.modalVerses = picked.map((x) => ({ book: x.book, chapter: x.chapter, verse: x.verseNumber, text: x.text, status: 'learning' })) as any;
+    // translationId as the real openers pass it: BSB verses fall back to the
+    // built-in BSB reading (the demo's own recordings have no audio file).
+    overrides.modalVerses = picked.map((x) => ({
+      book: x.book,
+      chapter: x.chapter,
+      verse: x.verseNumber,
+      text: x.text,
+      translationId: x.translationId,
+      status: 'learning',
+    })) as any;
   }
   if (s === 'modalSave') overrides.saveRecordingDialog = true;
   // `recording=1` shows the Record tab mid-take, without the microphone.

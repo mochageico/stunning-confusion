@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { isLibraryRecording } from '../../lib/libraryAudio';
+import { libraryReaderOf } from '../../lib/libraryAudio';
 import { LibraryCredit } from '../VersePlayButton';
 import { Minus, MoveVertical, Pause, Pencil, Play, Plus, RefreshCw, Repeat, Shuffle, Sliders } from 'lucide-react-native';
 import { scriptOfVerse } from '../../lib/textScript';
@@ -521,7 +521,7 @@ export default function ListenPanel({
             />
 
             {/* The built-in Hebrew reading's licence requires its credit wherever it plays. */}
-            {isLibraryRecording(currentSegment?.recording) && <LibraryCredit />}
+            <LibraryCredit reader={libraryReaderOf(currentSegment?.recording)} />
 
             {/* Transport. Restart drops to an icon circle -- it's the
                 secondary action and its label was buying a third of the

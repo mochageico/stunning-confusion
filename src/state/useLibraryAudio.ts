@@ -3,14 +3,19 @@ import { doc, getDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { db } from '../firebase';
-import { LIBRARY_READER, LibraryChapterTimings, libraryTimingsKey } from '../lib/libraryAudio';
+import { LibraryChapterTimings, libraryTimingsKey, splitLibraryTimingsKey } from '../lib/libraryAudio';
 
-// Verse timings for the built-in reading, one Firestore doc per English
-// chapter. Like firestore-sourced scripture text, they never change once
-// uploaded, so they're cached on the device forever -- and in memory, so a
-// chapter already seen this session resolves on the first render.
+// Verse timings for the built-in readings, one Firestore doc per English
+// chapter per reader. Like firestore-sourced scripture text, they never change
+// once uploaded, so they're cached on the device forever -- and in memory, so
+// a chapter already seen this session resolves on the first render.
 
-const CACHE_PREFIX = `library-audio:v1:${LIBRARY_READER.id}:`;
+// `library-audio:v1:shmuelof:PSA_23` -- the format from before there was a
+// second reader, so Hebrew timings already cached on phones stay valid.
+const cacheKey = (key: string) => {
+  const { readerId, chapterId } = splitLibraryTimingsKey(key);
+  return `library-audio:v1:${readerId}:${chapterId}`;
+};
 const memory = new Map<string, LibraryChapterTimings | null>();
 const inFlight = new Map<string, Promise<LibraryChapterTimings | null>>();
 
@@ -20,16 +25,17 @@ async function loadTimings(key: string): Promise<LibraryChapterTimings | null> {
   if (pending) return pending;
   const p = (async () => {
     try {
-      const cached = await AsyncStorage.getItem(CACHE_PREFIX + key);
+      const cached = await AsyncStorage.getItem(cacheKey(key));
       if (cached) return JSON.parse(cached) as LibraryChapterTimings;
     } catch {
       // corrupt or unreadable cache entry -- fetch instead
     }
     try {
-      const snap = await getDoc(doc(db, 'audioLibrary', LIBRARY_READER.id, 'chapters', key));
+      const { readerId, chapterId } = splitLibraryTimingsKey(key);
+      const snap = await getDoc(doc(db, 'audioLibrary', readerId, 'chapters', chapterId));
       const data = snap.exists() ? (snap.data() as LibraryChapterTimings) : null;
       // Only a real doc is cached: a miss may just mean the upload hasn't run yet.
-      if (data) await AsyncStorage.setItem(CACHE_PREFIX + key, JSON.stringify(data)).catch(() => {});
+      if (data) await AsyncStorage.setItem(cacheKey(key), JSON.stringify(data)).catch(() => {});
       return data;
     } catch {
       return null; // offline: no built-in audio this time, try again next mount
@@ -50,8 +56,8 @@ export interface ChapterRef {
 
 /**
  * Built-in reading timings for every chapter in `refs` that has one, keyed by
- * `libraryTimingsKey`. Chapters without a built-in reading (any English
- * translation, the Greek NT) are never fetched.
+ * `libraryTimingsKey`. Chapters without a built-in reading (WEB, KJV, the
+ * Greek NT ...) are never fetched.
  */
 export function useLibraryTimings(refs: ChapterRef[]): ReadonlyMap<string, LibraryChapterTimings> {
   const keys = useMemo(() => {
