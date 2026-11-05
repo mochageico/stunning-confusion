@@ -3,3 +3,4 @@
 sources/
 work/
 timings/spot-check.json
+__pycache__/

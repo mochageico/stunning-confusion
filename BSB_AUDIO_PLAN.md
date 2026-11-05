@@ -15,9 +15,11 @@ files by name when committing (never `git add -A`). After each stage, update the
 **Progress** line and add an "As built" note under the stage.
 
 **Progress:** stages 0–1 done 2026-11-03 (48 kbps chosen); stage 2 done
-2026-11-04 (all 1,189 chapters aligned, 99.87% of words matched). Stage 3 next. Stage 0
+2026-11-04 (all 1,189 chapters aligned, 99.87% of words matched); stage 3 done
+2026-11-05 (99.93% of clips clean, every verse keeps audio). Stage 4 next. Stage 0
 found that Souer does **not** read section headings or cross-references, so
-stages 1–2 are simpler than written; see stage 0's "As built".
+stages 1–2 are simpler than written; see stage 0's "As built". The exception
+is Song of Songs speaker labels and the Proverbs 22–24 "Saying" headings (stage 3's "As built").
 
 ---
 
@@ -335,6 +337,59 @@ Copy `spot-check.py` and `build-timings.js`:
   Luke 3), as the speech bake-off found with proper nouns. They can go without
   audio.
 - Write `timings/{BOOKID}_{ch}.json`.
+
+### As built (2026-11-05)
+
+`scripts/bsb-audio/spot-check.py all` transcribes all 31,202 clips (31,086
+verses plus 116 Psalm titles) one at a time. It takes about 2½ hours on the
+laptop GPU, saves every 500 clips and picks up where it stopped if interrupted.
+It scores each clip against the verse text written two ways, with hyphens
+splitting words and with them removed, and keeps the better score: Whisper
+writes "Enganim" for "En-gannim" but "seed -bearing" for "seed-bearing".
+Results are in `timings/clip-check.json`. `build-timings.js` turns them into the
+1,189 `timings/` chapter files and `timings/report.json`.
+
+The first full run found three cutting mistakes. All three came from the same
+cause: spoken words that matched no verse text got split at whichever pause was
+longest. `align.py` now hands those words out first and only then looks for the
+pause:
+
+- **The spoken chapter title was inside the first clip** of 49 chapters, because
+  Whisper stretched the first word back over the pause. Examples: Numbers 27:1
+  began "chapter 27", and 43 Psalm titles began "Psalm 21". The title is now
+  cut off up to its number, leaving 0 chapters affected.
+- **Souer reads some headings after all.** The stage 0 note above is wrong on
+  this. He reads the Song of Songs speaker labels ("The Bride", "The Bridegroom",
+  "The Friends") and the numbered headings in Proverbs 22–24 ("Saying 17").
+  These had landed at the *end* of the verse before. They now open the verse
+  they introduce, and Song of Songs 2:1 keeps its "The Bride".
+- **A misheard last word went to the next verse.** In Ezra 10:35, "Cheluhi"
+  (heard as "Kiluhai") had gone to verse 36. The verse before now takes back as
+  many unmatched words as it has unmatched words at its end.
+
+The fix moved 198 clips: 48 in Psalms, 34 in Song of Songs, 26 in Proverbs and
+the rest scattered. Only those clips were re-checked.
+
+**Result: 31,180/31,202 clips (99.93%) hold their verse cleanly** (70%+ of its
+words, at most 3 extra). **Every verse keeps audio.** Three clips scored under
+40%, so I cut each one into 4–10 s pieces and transcribed the pieces, and all
+three hold the right verse:
+
+- 2 Samuel 7:11: Whisper drops the first 8 s when it hears the whole clip in one go.
+- 1 Chronicles 12:12: Whisper writes "the eighth … the ninth" as "VIII … IX".
+- Ezra 10:35: all three names are there, misheard.
+
+These three are listed in `CHECKED_BY_HAND` in `build-timings.js`, which lets
+them keep their audio and still appear in the report. The report's other 25
+flags are expected:
+
+- 15 name lists with one misheard name each (Joshua 19, 1 Chronicles, Ezra 10, Nehemiah 10–12).
+- 4 where Whisper repeats itself, so the extra words aren't in the audio:
+  Jeremiah 34:8, Ezekiel 38:2 and 41:15, Nehemiah 12:10. Re-transcribed
+  without VAD, Ezekiel 41:15 is clean.
+- 2 short Psalm titles ("Of David", Psalms 103 and 144) that run 2.5–2.8 s
+  because of the pause after them.
+- The 4 weak matches from stage 2, all of which pass the clip check.
 
 ## Stage 4: Re-encode and upload
 

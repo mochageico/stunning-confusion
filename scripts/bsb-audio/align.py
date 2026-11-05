@@ -323,15 +323,27 @@ def align_file(key, chapter, audio, hyp_words):
     # A transcript token like "10,000" becomes several words sharing its times.
     hyp = []
     for h in hyp_words:
-        hyp += [(w, h["start"], h["end"]) for w in split_words(h["text"])]
+        hyp += [(w, h["start"], h["end"], h["text"]) for w in split_words(h["text"])]
 
-    matches = align_words([w for _, w in ref], [w for w, _, _ in hyp])
+    matches = align_words([w for _, w in ref], [w for w, *_ in hyp])
     drop_stray_edge_matches(matches, [si for si, _ in ref])
 
     for si, s in enumerate(segs):
         idxs = [k for k, (wsi, _) in enumerate(ref) if wsi == si]
-        timed = [(hyp[matches[k]][1], hyp[matches[k]][2]) for k in idxs if matches[k] is not None]
-        s.update(words=len(idxs), matched=len(timed), first=timed[0][0] if timed else None, last=timed[-1][1] if timed else None)
+        hit = [matches[k] for k in idxs if matches[k] is not None]
+        s.update(
+            words=len(idxs),
+            matched=len(hit),
+            first=hyp[hit[0]][1] if hit else None,
+            last=hyp[hit[-1]][2] if hit else None,
+            # Transcript positions of the first and last matched words, and how
+            # many of the segment's own words at each end went unmatched (a
+            # misheard name), for placing the cuts below.
+            first_h=hit[0] if hit else None,
+            last_h=hit[-1] if hit else None,
+            lead_miss=next((n for n, k in enumerate(idxs) if matches[k] is not None), len(idxs)),
+            trail_miss=next((n for n, k in enumerate(reversed(idxs)) if matches[k] is not None), len(idxs)),
+        )
 
     # Segments with no matched word: share out the gap between their
     # neighbours by word count. (Rare; flagged by stage 3 anyway.)
@@ -361,13 +373,37 @@ def align_file(key, chapter, audio, hyp_words):
     # edges can sit inside the pause or just past it. The first segment
     # starts in the pause after the spoken chapter title; the last ends at
     # the end of the file. "Quiet" is relative to the reader's level.
+    #
+    # Spoken words between two segments that matched nothing (stage 3's clip
+    # check found these) are handed out first, and the pause is looked for
+    # only between the two groups: the earlier segment takes as many as it has
+    # unmatched words at its end (Ezra 10:35's "Cheluhi", heard as "Kiluhai",
+    # had gone to verse 36), and the rest go to the next one -- the Song of
+    # Songs speaker labels Souer reads ("The Bride"), and the spoken "Numbers
+    # chapter 27" / "Psalm 21" before the first segment, which is left out
+    # (up to its number only: Song of Songs 2 goes on "The Bride. I am a rose").
     quiet_level = 0.12 * float(np.percentile(energy, 95))
     for k, s in enumerate(segs):
         if k == 0:
-            s["startSec"] = round(max(0.0, pause_cut(energy, s["first"] - 1.0, s["first"] + 0.3, quiet_level) - 0.05), 2)
+            lo, hi = s["first"] - 1.0, s["first"] + 0.3
+            if s["first_h"] is not None:
+                spoken_title = s["first_h"] - min(s["lead_miss"], s["first_h"])
+                numbered = [i for i in range(min(spoken_title, 10)) if re.search(r"\d", hyp[i][3])]
+                if numbered:
+                    spoken_title = numbered[-1] + 1
+                if spoken_title > 0:
+                    lo = max(lo, hyp[spoken_title - 1][2] - 0.3)
+                    hi = max(lo + 0.1, hyp[spoken_title][1] + 0.3)
+            s["startSec"] = round(max(0.0, pause_cut(energy, lo, hi, quiet_level) - 0.05), 2)
         else:
             prev = segs[k - 1]
-            lo, hi = min(prev["last"], s["first"]), max(prev["last"], s["first"])
+            left, right = prev["last"], s["first"]
+            if prev["last_h"] is not None and s["first_h"] is not None and s["first_h"] - prev["last_h"] > 1:
+                gap = s["first_h"] - prev["last_h"] - 1
+                split = prev["last_h"] + 1 + min(prev["trail_miss"], gap)  # first transcript word of s
+                left = hyp[split - 1][2]
+                right = hyp[split][1]
+            lo, hi = min(left, right), max(left, right)
             cut = round(pause_cut(energy, lo - 0.3, hi + 0.3, quiet_level), 2)
             prev["endSec"] = cut
             s["startSec"] = cut
