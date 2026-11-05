@@ -14,9 +14,8 @@ is built yet. Run the stages in order; each is one session.
 files by name when committing (never `git add -A`). After each stage, update the
 **Progress** line and add an "As built" note under the stage.
 
-**Progress:** stages 0–1 done 2026-11-03 (48 kbps chosen). Stage 2 in
-chunks: 757/1,189 chapters aligned (Genesis to Jeremiah 7), about 2 more 25-minute
-chunks to go. Stage 0
+**Progress:** stages 0–1 done 2026-11-03 (48 kbps chosen); stage 2 done
+2026-11-04 (all 1,189 chapters aligned, 99.87% of words matched). Stage 3 next. Stage 0
 found that Souer does **not** read section headings or cross-references, so
 stages 1–2 are simpler than written; see stage 0's "As built".
 
@@ -240,7 +239,7 @@ English. Run it with `bakeoff/.venv` on the GPU.
    text the app shows has no Psalm titles).
 6. Write `work/align/{BOOK}_{ch}.json`.
 
-### As built (2026-11-03, in progress)
+### As built (2026-11-03 to 11-04)
 
 `scripts/bsb-audio/align.py`, run in chunks. From the repo folder in
 PowerShell:
@@ -300,6 +299,28 @@ Joshua verses and 1 Chronicles 6:68 (1/3, place names). The log is in
 real time), Nehemiah 7 to Jeremiah 7, including all of Psalms. That makes 757
 chapters, 99.84% of words matched, with no new verses under 60%. The log is in
 `work/align-chunk3.log`.
+
+**Chunk 4** (2026-11-04): 247 chapters in 24 min 55 s (16.5 h of audio, 40x
+real time), Jeremiah 8 to John 5. That makes 1,004 chapters, 99.86% of words
+matched. One new verse is under 60%: **Luke 15:19 (10/18)**. Whisper dropped
+2.6 s of speech mid-verse ("to be called your son. Make me like"), just under
+the 3 s the gap-recovery pass looks for. The clip's edges are right
+(139.18–145.00 s, "I am" to "servants"), so stage 3's per-clip transcript
+should pass it. If gaps like this turn up often, lower `GAP_SEC` to about 2 s.
+The log is in `work/align-chunk4.log`.
+
+**Chunk 5** (2026-11-04): the last 185 chapters, John 6 to Revelation, in
+15 min 42 s (10.4 h of audio, 40x real time).
+
+**Stage 2 totals:** all 1,189 chapters, 31,086 verses, **99.87% of words matched**
+(727,424/728,373), in about 2 h of GPU time over 5 chunks. Every verse has at
+least one matched word, so none needed interpolation. All 116 Psalm titles
+were found. Checked across every file: each verse's clip is non-empty, verses
+join with no gap or overlap, and the last verse ends at the end of the file.
+Only 4 verses are under 60% matched: Joshua 19:21 (3/8) and 19:45 (1/5),
+1 Chronicles 6:68 (1/3), all place names, plus Luke 15:19 (10/18, above).
+Stage 3 decides whether they keep audio. Whisper skipped stretches only 4 times
+in the whole run, and the recovery pass refilled them.
 
 ## Stage 3: Quality check
 
