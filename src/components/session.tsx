@@ -354,6 +354,9 @@ export function ActionCard({
   const primary = tone === 'primary';
   const fg = primary ? palette.onAccent : palette.accent;
   const tile = Math.round(42 * scale);
+  // Past 1.3x on a small phone the tile leaves the title too little room
+  // ("Revie / w"), so it steps aside and the words get the whole card.
+  const showTile = scale < 1.3;
 
   return (
     // button-ok: a two-line card button with an icon tile; AppButton is one line of label.
@@ -367,7 +370,7 @@ export function ActionCard({
       style={[{ paddingVertical: space(14), paddingHorizontal: space(16), gap: space(14), minHeight: Math.round(72 * scale) }, disabled ? { opacity: 0.45 } : null]}
     >
       {/* layout-ok: an icon tile. */}
-      <View className={`items-center justify-center rounded-btn overflow-hidden ${primary ? '' : 'bg-surface'}`} style={{ width: tile, height: tile }}>
+      {showTile ? <View className={`items-center justify-center rounded-btn overflow-hidden ${primary ? '' : 'bg-surface'}`} style={{ width: tile, height: tile }}>
         {/* On the accent the tile is the text color at 16%. Drawn as its own
             layer so the opacity doesn't fade the icon; the icon sits in a
             View so it stacks above that layer on web. */}
@@ -379,7 +382,7 @@ export function ActionCard({
         <View>
           <Icon size={Math.round(22 * scale)} color={fg} strokeWidth={2} />
         </View>
-      </View>
+      </View> : null}
       <View className="flex-1" style={{ gap: space(1) }}>
         <AppText variant="title" className={`font-sans font-bold ${primary ? 'text-on-accent' : 'text-accent'}`}>
           {title}

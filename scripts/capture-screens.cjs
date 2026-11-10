@@ -42,7 +42,7 @@ const H = 844;
 
 // Every screen the demo mode knows, with the capture options that suit it.
 const ALL = [
-  'home&noseg=1', 'home&empty=1&noseg=1', 'modalLearn&fixed=1', 'modalListen&fixed=1',
+  'home&noseg=1', 'home&empty=1&noseg=1', 'todayVerses&noseg=1', 'modalLearn&fixed=1', 'modalListen&fixed=1',
   'books&max=1500&noseg=1', 'chapters&fixed=1', 'chapterLanding&max=1900&noseg=1', 'sections&max=2600&noseg=1', 'outline&fixed=1',
   'sectionOrder&fixed=1', 'whichSection&fixed=1', 'teachIt&fixed=1', 'mixedReview&noseg=1', 'takeaways&noseg=1', 'takeaways&circle=1&noseg=1', 'takeaways&circle=open&noseg=1', 'takeawayAsk&write=1&noseg=1',
   'activePlan&noseg=1', 'addVerses&noseg=1', 'memoryPlan&noseg=1', 'verseSources&noseg=1', 'memoryCalendar&noseg=1', 'fullHistory&max=1300&noseg=1',

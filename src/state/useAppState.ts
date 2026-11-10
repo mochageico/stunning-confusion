@@ -139,6 +139,7 @@ export { buildVerseId, isReviewDue, mapQueueItemsToVerseStates, resolveChapterAu
 
 export type ScreenName =
   | 'home'
+  | 'todayVerses'
   | 'books'
   | 'chapters'
   | 'chapterLanding'
@@ -174,6 +175,7 @@ export type ScreenName =
 // silently no-ops, since the router keeps showing the current tab's screen.
 const HOME_TAB_SCREENS: ScreenName[] = [
   'home',
+  'todayVerses',
   'books',
   'chapters',
   'chapterLanding',

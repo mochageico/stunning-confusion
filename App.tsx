@@ -33,6 +33,7 @@ import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import ThreadDrillScreen from './src/screens/ThreadDrillScreen';
 import GuidedLearningScreen from './src/screens/GuidedLearningScreen';
 import MixedReviewScreen from './src/screens/MixedReviewScreen';
+import TodayVersesScreen from './src/screens/TodayVersesScreen';
 import TakeawaysScreen from './src/screens/TakeawaysScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -150,6 +151,8 @@ function Screens({ state }: { state: AppState }) {
     switch (state.currentScreen) {
       case 'home':
         return <HomeScreen state={state} />;
+      case 'todayVerses':
+        return <TodayVersesScreen state={state} />;
       case 'books':
         return <BooksScreen state={state} />;
       case 'chapters':

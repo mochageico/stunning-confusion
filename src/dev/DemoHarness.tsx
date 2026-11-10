@@ -775,6 +775,7 @@ export function useDemoState(real: AppState): AppState {
     }
     else if (s === 'memoryPlan') real.navigateTo('memoryPlan');
     else if (s === 'memoryCalendar') real.navigateTo('memoryCalendar');
+    else if (s === 'todayVerses') real.navigateTo('todayVerses');
     else if (s === 'guided') real.openGuided('BSB|Psalms|23|1');
     else if (s === 'versePage') real.openVersePage({ book: 'Philippians', chapter: 4, verses: [6, 7], translationId: 'BSB' });
     // preset=1 opens Pick up the thread the way a passing Recall does: on a

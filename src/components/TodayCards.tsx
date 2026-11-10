@@ -157,7 +157,7 @@ export function MovedSheet({
     <Dialog
       visible={visible}
       onClose={onClose}
-      placement="sheet"
+      placement="center"
       title={`Moved to ${note.when}`}
       message="Weekly and longer reviews can wait a day without losing anything. Reviewing one today still counts."
       actions={

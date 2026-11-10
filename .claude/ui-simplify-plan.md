@@ -216,6 +216,19 @@ rewrite, screenshot after (`npm run shots -- "s=<screen>&ios=1"`, plus
 `w=375&scale=1.5` and `dark=1`), run the checks in `CLAUDE.md`.
 
 ### Job 1 · Today — `HomeScreen.tsx`, `TodayCards.tsx`
+
+**Built 2026-11-10 as option A** (owner's pick): `HomeScreen.tsx` rewritten,
+new `TodayVersesScreen.tsx` (screen `todayVerses`, demo `?s=todayVerses`),
+Today's sorting moved to `src/state/useToday.ts`. Review opens Mixed review;
+Learn next goes straight into Guided learning when there's one passage and
+nothing waiting, otherwise opens the centered Learn next pop-up (Keep going
+rows, Guided learning, Start new). The ⋯ menu holds Listen, Review one at a
+time, Next 7 days, Reference practice, Pick up the thread, Bible, Find
+recordings, Add verses, and Reset (with confirm). Per-passage Review / Listen /
+"I reviewed it elsewhere" / Open chapter moved to a centered pop-up on
+Today's verses rows. The week strip shows the last seven days (rolling), from
+`activityLast15Days`. Not yet phone-tested. The text below is the earlier
+draft, kept for reference.
 Now: two big cards with two filled buttons each, per-row Listen + Learn/Review,
 Reset, Coming up next, Add verses, Listen to all, Next 7 days, More (4 tools).
 Target (see the Today sketch):
