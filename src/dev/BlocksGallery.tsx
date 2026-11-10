@@ -9,7 +9,25 @@
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, BookOpen, Clock, History, ListOrdered, MoreHorizontal, Palette, Share2, Trash2 } from 'lucide-react-native';
+import {
+  Bell,
+  BookOpen,
+  CalendarDays,
+  Clock,
+  Eye,
+  Headphones,
+  History,
+  Layers,
+  List,
+  ListOrdered,
+  Mic,
+  MoreHorizontal,
+  Palette,
+  RotateCcw,
+  Share2,
+  Sprout,
+  Trash2,
+} from 'lucide-react-native';
 
 import {
   AppButton,
@@ -35,6 +53,7 @@ import {
   SegmentedControl,
 } from '../components/blocks';
 import { ChipRow, DiscreteSlider, HelpTooltip, StepperRow } from '../components/ui';
+import { ActionCard, IconTile, ModeChip, OptionsPopup, OverflowMenu, SessionDone, SessionShell } from '../components/session';
 import { Dropdown } from '../components/Dropdown';
 import { formatDate, formatDuration, formatTimeAgo } from '../lib/format';
 
@@ -62,11 +81,69 @@ export default function BlocksGallery() {
   const [translation, setTranslation] = useState('BSB');
   const [dialog, setDialog] = useState(false);
   const [sheet, setSheet] = useState(false);
+  const [shell, setShell] = useState(false);
+  const [done, setDone] = useState(false);
+  const [options, setOptions] = useState(false);
+  const [order, setOrder] = useState<'first' | 'mixed'>('first');
+  const [log, setLog] = useState('');
   const now = Date.now();
 
   return (
     <SafeAreaView style={{ flex: 1 }} className="bg-canvas">
       <ScrollView contentContainerStyle={{ padding: 16, gap: 28, paddingBottom: 64 }}>
+        <Specimen name="ActionCard (Today's two big buttons)">
+          <ActionCard Icon={Layers} title="Review" subtitle="5 verses due · about 4 min" onPress={() => setLog('Review')} />
+          <ActionCard Icon={Sprout} tone="soft" title="Learn next verses" subtitle="Romans 8:28–29 · 1 of 3 done" onPress={() => setLog('Learn next')} />
+        </Specimen>
+
+        <Specimen name="IconTile in ListRow">
+          <GroupedList>
+            <ListRow leading={<IconTile Icon={List} />} title="Today's verses" subtitle="9 passages" onPress={() => setLog("Today's verses")} />
+            <ListRow
+              leading={<IconTile Icon={Headphones} />}
+              title="Listen to today's scripture"
+              subtitle="Reviews and what's coming up · 9 min"
+              onPress={() => setLog('Listen')}
+            />
+          </GroupedList>
+        </Specimen>
+
+        <Specimen name="ModeChip / OverflowMenu / OptionsPopup">
+          <View className="flex-row items-center" style={{ gap: 12 }}>
+            <ModeChip label="Recall" onPress={() => setLog('Mode chip')} />
+            <OverflowMenu
+              title="More for today"
+              groups={[
+                [
+                  { label: "Listen to today's scripture", Icon: Headphones, onPress: () => setLog('Listen') },
+                  { label: 'Next 7 days', Icon: CalendarDays, value: '5 min a day', onPress: () => setLog('Next 7 days') },
+                  { label: 'Bible', Icon: BookOpen, onPress: () => setLog('Bible') },
+                ],
+                [
+                  {
+                    label: "Reset today's reviews",
+                    Icon: RotateCcw,
+                    destructive: true,
+                    confirm: { title: "Reset today's reviews?", message: "Today's reviews go back to not done.", confirmLabel: 'Reset' },
+                    onPress: () => setLog('Reset confirmed'),
+                  },
+                ],
+              ]}
+            />
+            <AppButton variant="secondary" label="Options" onPress={() => setOptions(true)} />
+          </View>
+          <AppText variant="caption" className="text-ink-3">
+            {log ? `Last tapped: ${log}` : 'Tap something above.'}
+          </AppText>
+        </Specimen>
+
+        <Specimen name="SessionShell / SessionDone">
+          <View className="flex-row" style={{ gap: 10 }}>
+            <AppButton variant="secondary" label="Open session" onPress={() => setShell(true)} style={{ flex: 1 }} />
+            <AppButton variant="secondary" label="Open finish page" onPress={() => setDone(true)} style={{ flex: 1 }} />
+          </View>
+        </Specimen>
+
         <Specimen name="ScreenHeader">
           <ScreenHeader
             title="My Memory Work"
@@ -310,6 +387,68 @@ export default function BlocksGallery() {
           <ChoiceCard key={id} title={title} description={desc} selected={choice === id} onPress={() => setChoice(id)} />
         ))}
       </Dialog>
+
+      <OptionsPopup visible={options} onClose={() => setOptions(false)} title="Recall settings">
+        <SegmentedControl
+          options={[
+            { id: 'first', label: 'First to last' },
+            { id: 'mixed', label: 'Mixed' },
+          ]}
+          value={order}
+          onChange={setOrder}
+        />
+        <ToggleRow label="Hide verse numbers" value={studio} onChange={setStudio} />
+      </OptionsPopup>
+
+      {shell ? (
+        <SessionShell
+          onClose={() => setShell(false)}
+          progress={0.4}
+          progressLabel="2 of 5"
+          onOptions={() => setOptions(true)}
+          bottomBar={
+            <>
+              <View className="flex-row items-center" style={{ gap: 10 }}>
+                <AppTextInput
+                  placeholder="Type the first letter of each word"
+                  className="flex-1 bg-canvas border border-line rounded-btn px-3.5 py-3 text-ink"
+                />
+                <AppIconButton Icon={Mic} variant="filled" diameter={48} accessibilityLabel="Say it" />
+              </View>
+              <View className="flex-row" style={{ gap: 10 }}>
+                <AppButton variant="quiet" Icon={RotateCcw} label="Start over" onPress={() => {}} style={{ flex: 1 }} />
+                <AppButton variant="quiet" Icon={Eye} label="Show next word" onPress={() => {}} style={{ flex: 1 }} />
+              </View>
+            </>
+          }
+        >
+          <View className="flex-row items-center justify-between">
+            <AppText variant="display" className="font-sans font-bold text-ink">
+              Romans 8:28
+            </AppText>
+            <ModeChip label="Recall" onPress={() => {}} />
+          </View>
+          <View className="bg-surface border border-line rounded-card" style={{ padding: 18, minHeight: 220 }}>
+            <AppText variant="body" className="font-serif text-ink">
+              And we know that God ___ ___ ___ ___ ___ ___ ___ ___ ___ ___ ___ ___.
+            </AppText>
+          </View>
+        </SessionShell>
+      ) : null}
+
+      {done ? (
+        <SessionDone
+          title="Reviews done"
+          subtitle="See you tomorrow."
+          stats={[
+            { value: 5, label: 'reviewed' },
+            { value: 41, label: 'day streak' },
+            { value: '4 min', label: 'today' },
+          ]}
+          onDone={() => setDone(false)}
+          secondary={{ label: 'Learn next verses', onPress: () => setDone(false) }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
