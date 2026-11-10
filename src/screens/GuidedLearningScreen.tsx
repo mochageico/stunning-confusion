@@ -34,7 +34,6 @@ import {
   GUIDED_PARTLY_HIDDEN,
   GUIDED_RELEARN_BELOW,
   pickShownWords,
-  joinChanges,
   Ladder,
   newVersesFinishedToday,
   nextNewVerse,
@@ -647,12 +646,6 @@ function Sitting({
     })();
   };
 
-  /** Saves which joins in a graded stretch slipped or held, so the next jump-ins aim at the shaky ones. */
-  const markJoins = (verseIds: string[], startVerse: number, endVerse: number, slips: ThreadSlip[]) => {
-    const { shaky, steady } = joinChanges(verseIds.slice(startVerse, endVerse + 1), slips, startVerse);
-    state.setGuidedShakyJoins(shaky, steady);
-  };
-
   // ---- small helpers over the step ---------------------------------------
   const verseOf = (id: string): GuidedDrillVerse | null => {
     const it = itemOf(id);
@@ -666,7 +659,7 @@ function Sitting({
   const newAvailable = () => nextNewVerse(liveItems(), new Set([...s.setAside, ...s.finishedThisSitting]));
 
   /**
-   * Above a check, stitch or thread: move past it (no credit, no penalty),
+   * Above a check or stitch: move past it (no credit, no penalty),
    * or go straight to the new verse.
    */
   const skipBar = (skipLabel: string) => {
@@ -863,7 +856,7 @@ function Sitting({
               text: creditLabel(step.verseIds[r.index], { activity: 'cold', passed: r.passed, perfect: r.perfect, mode }),
             }))
           }
-          onDone={({ mode, perVerse, slips }) => {
+          onDone={({ mode, perVerse }) => {
             bank(
               perVerse.map((r) => ({
                 id: step.verseIds[r.index],
@@ -871,7 +864,6 @@ function Sitting({
               })),
               mode
             );
-            markJoins(step.verseIds, 0, step.verseIds.length - 1, slips);
             const missed = perVerse.filter((r) => !r.perfect).map((r) => r.index);
             const bad = perVerse.filter((r) => r.accuracy < GUIDED_RELEARN_BELOW).map((r) => r.index);
             dispatch({ type: 'result', perfect: missed.length === 0, slips: missed, bad });
@@ -923,16 +915,16 @@ function Sitting({
   }
 
   // ==========================================================================
-  // STITCH, SEAM, THREAD
+  // STITCH, SEAM
   // ==========================================================================
-  if (step.kind === 'stitch' || step.kind === 'seam' || step.kind === 'thread') {
+  if (step.kind === 'stitch' || step.kind === 'seam') {
     const verses = versesOf(step.verseIds);
     if (verses.length !== step.verseIds.length) {
       dispatchMissing();
       return null;
     }
     const kind = step.kind;
-    const cue: ThreadCue = step.kind === 'thread' ? step.cues[step.index] : step.cue;
+    const cue: ThreadCue = step.cue;
 
     if (kind === 'stitch' && step.stage === 'jigsaw') {
       return frame(
@@ -959,13 +951,7 @@ function Sitting({
     }
 
     const eyebrow =
-      step.kind === 'stitch'
-        ? 'Stitch'
-        : step.kind === 'seam'
-          ? 'The join'
-          : step.cues.length > 1
-            ? `Jump in · ${step.index + 1} of ${step.cues.length}`
-            : 'Jump in';
+step.kind === 'stitch' ? 'Stitch' : 'The join';
     const activity: GuidedActivity = kind;
     const caption =
       kind === 'stitch'
@@ -984,7 +970,7 @@ function Sitting({
       eyebrow,
       rangeOf(verses.slice(cue.startVerse, cue.endVerse + 1)),
       <GradedStage
-        key={`${kind}:${s.log.length}:${step.kind === 'stitch' ? step.fails : step.kind === 'thread' ? step.index : 0}`}
+        key={`${kind}:${s.log.length}:${step.kind === 'stitch' ? step.fails : 0}`}
         verses={verses}
         startVerse={cue.startVerse}
         startWord={cue.startWord}
@@ -995,17 +981,16 @@ function Sitting({
         creditLines={({ mode, perVerse }) =>
           perVerse.map((r) => ({ index: r.index, text: creditLabel(step.verseIds[r.index], outcomeFor(r.index, r.passed, r.perfect, mode)) }))
         }
-        onDone={({ mode, perVerse, slips }) => {
+        onDone={({ mode, perVerse }) => {
           bank(
             perVerse.map((r) => ({ id: step.verseIds[r.index], outcome: outcomeFor(r.index, r.passed, r.perfect, mode, r.accuracy) })),
             mode
           );
-          markJoins(step.verseIds, cue.startVerse, cue.endVerse, slips);
           const slip = perVerse.find((r) => !r.perfect);
           dispatch({ type: 'result', perfect: !slip, firstSlip: slip ? slip.index : undefined });
         }}
       />,
-      skipBar(kind === 'thread' ? 'Skip this one' : 'Skip the stitch')
+      skipBar('Skip the stitch')
     );
   }
 
@@ -1033,8 +1018,7 @@ function Sitting({
         creditLines={({ mode, perVerse }) =>
           perVerse.map((r) => ({ index: r.index, text: creditLabel(verseIds[r.index], { activity: 'lastLook', passed: r.passed, perfect: r.perfect, mode }) }))
         }
-        onDone={({ perVerse, slips }) => {
-          markJoins(verseIds, 0, verseIds.length - 1, slips);
+        onDone={({ perVerse }) => {
           dispatch({ type: 'result', perfect: perVerse.every((r) => r.perfect) });
         }}
       />,

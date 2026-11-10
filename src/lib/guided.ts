@@ -1,12 +1,12 @@
 import { QueueItem } from '../types';
-import { buildSwapVerses, chunkIntoPhrases, pickThreadCue, threadCueKey, ThreadCue, ThreadSlip } from './drills';
+import { buildSwapVerses, chunkIntoPhrases, pickThreadCue, threadCueKey, ThreadCue } from './drills';
 import { scriptOfVerse, splitWords } from './textScript';
 
 // ============================================================================
 // GUIDED LEARNING -- PURE LOGIC
 // ----------------------------------------------------------------------------
 // Everything Guided learning decides lives here: which drill, which rung,
-// what a miss costs, which verses get a cold check, a stitch or a jump-in, and
+// what a miss costs, which verses get a cold check, a stitch, and
 // whether a result banks a run. No React, no Firestore -- same pattern as drills.ts.
 // The screen only renders sessionReducer's state and reports what happened.
 // Every random choice takes `rng: () => number` so the checks are repeatable.
@@ -31,8 +31,6 @@ export const GUIDED_MAX_STITCH_WORDS = 120;
 export const GUIDED_MAX_STITCH_VERSES = 3;
 /** Stitches that fail back to back before the sitting moves on. */
 export const GUIDED_MAX_STITCH_FAILS = 2;
-/** Most jump-ins in one go (the first thread of a sitting; later ones get one). */
-export const GUIDED_MAX_JUMP_INS = 3;
 /** Shortest gap between banked runs (matches validateTouch). */
 export const GUIDED_TOUCH_GAP_MS = 60 * 60 * 1000;
 export const GUIDED_WITHIN_HOUR_LABEL = 'Counted toward learning within the last hour';
@@ -183,7 +181,7 @@ export interface Ladder {
 
 export type LadderEvent = 'done' | 'pass' | 'miss' | 'reroll' | 'knowIt' | 'easier';
 
-/** Drills that work inside a single verse. Jigsaw and threads are stitch-only. Peek works on any verse. */
+/** Drills that work inside a single verse. Jigsaw is stitch-only. Peek works on any verse. */
 export const eligibleDrills = (verse: GuidedDrillVerse, passageVerses: GuidedDrillVerse[]): GuidedDrillId[] => {
   const script = scriptOfVerse(verse);
   const out: GuidedDrillId[] = ['peek'];
@@ -542,83 +540,6 @@ export const chunkStretches = (items: GuidedItem[]): GuidedItem[][] => {
   return out;
 };
 
-/** How many jump-ins the older part of a run (before the stitch window) gets. */
-export const jumpInCount = (older: number): number =>
-  older <= 0 ? 0 : Math.min(GUIDED_MAX_JUMP_INS, older <= 2 ? 1 : older <= 5 ? 2 : 3);
-
-/**
- * Jump-ins: short threads into the verses before the stitch window. Each
- * starts somewhere inside one verse and runs through the end of the next one
- * or two, so it is 2-3 verses long. The older verses are split into `count`
- * bands with one jump-in each, so they spread out instead of bunching up.
- *
- * Within a band, a start just before a shaky join (`shaky` holds run indices
- * whose join INTO them slipped last time) wins; then a start not in `avoid`
- * (already used this sitting). The result is shuffled and never left in
- * verse order, so finding your place is part of the work.
- */
-export const jumpInCues = (
-  run: GuidedDrillVerse[],
-  windowStart: number,
-  opts: { count: number; shaky?: ReadonlySet<number>; avoid?: ReadonlySet<number>; used?: ReadonlySet<string> },
-  rng: Rng
-): ThreadCue[] => {
-  const older = Math.min(windowStart, run.length - 1);
-  const count = Math.min(opts.count, older);
-  if (count <= 0) return [];
-  const shaky = opts.shaky ?? new Set<number>();
-  const avoid = opts.avoid ?? new Set<number>();
-  const used = new Set(opts.used ?? []);
-  const pick = (xs: number[]): number => xs[Math.min(xs.length - 1, Math.floor(rng() * xs.length))];
-  const last = run.length - 1;
-
-  const cues: ThreadCue[] = [];
-  for (let b = 0; b < count; b++) {
-    const lo = Math.floor((b * older) / count);
-    const hi = Math.floor(((b + 1) * older) / count);
-    const band = Array.from({ length: hi - lo }, (_, i) => lo + i);
-    if (band.length === 0) continue;
-    const nextShaky = band.filter((i) => shaky.has(i + 1));
-    const laterShaky = band.filter((i) => i + 2 <= last && shaky.has(i + 2));
-    const fresh = band.filter((i) => !avoid.has(i));
-    const start = pick(nextShaky.length > 0 ? nextShaky : laterShaky.length > 0 ? laterShaky : fresh.length > 0 ? fresh : band);
-
-    let end = shaky.has(start + 2) ? start + 2 : shaky.has(start + 1) ? start + 1 : rng() < 0.5 ? start + 1 : start + 2;
-    end = Math.min(end, last);
-    const words = run.slice(start, end + 1).reduce((n, v) => n + wordCount(v), 0);
-    if (end > start + 1 && words > GUIDED_MAX_STITCH_WORDS) end = start + 1;
-
-    const cue = pickThreadCue(run, end, { fromVerse: start, beforeVerse: start + 1, used, random: rng });
-    if (!cue || cue.startVerse !== start) continue;
-    used.add(threadCueKey(cue));
-    cues.push(cue);
-  }
-
-  for (let i = cues.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [cues[i], cues[j]] = [cues[j], cues[i]];
-  }
-  if (cues.length > 1 && cues.every((c, i) => i === 0 || cues[i - 1].startVerse < c.startVerse)) cues.reverse();
-  return cues;
-};
-
-/**
- * Which joins a graded stretch showed as shaky or steady. `spanIds` are the
- * recited verses in order and `spanStart` the index the slips count from; a
- * join is the step INTO each verse after the first. A join slip
- * (threadSlips) marks it shaky; a clean join clears it.
- */
-export const joinChanges = (spanIds: string[], slips: ThreadSlip[], spanStart: number): { shaky: string[]; steady: string[] } => {
-  const slipped = new Set(slips.filter((x) => x.kind === 'join').map((x) => x.verse - spanStart));
-  const shaky: string[] = [];
-  const steady: string[] = [];
-  spanIds.forEach((id, k) => {
-    if (k === 0) return;
-    (slipped.has(k) ? shaky : steady).push(id);
-  });
-  return { shaky, steady };
-};
-
 /** Set-aside verses first, then the lowest verse number, among 0-run Learning verses. */
 export const nextNewVerse = (items: GuidedItem[], exclude?: ReadonlySet<string>): GuidedItem | null => {
   const open = items.filter((i) => i.status === 'learning' && runsBanked(i) === 0 && !exclude?.has(i.verseId));
@@ -646,7 +567,7 @@ export const newVersesFinishedToday = (
 // 4. CREDIT
 // ============================================================================
 
-export type GuidedActivity = 'fully' | 'partly' | 'blanks' | 'refresh' | 'cold' | 'knowIt' | 'stitch' | 'thread' | 'seam' | 'lastLook';
+export type GuidedActivity = 'fully' | 'partly' | 'blanks' | 'refresh' | 'cold' | 'knowIt' | 'stitch' | 'seam' | 'lastLook';
 export type GuidedAnswerMode = 'speak' | 'type' | 'self';
 
 export interface GuidedOutcome {
@@ -705,8 +626,8 @@ export const guidedCredit = (item: QueueItem, outcome: GuidedOutcome, ctx: Guide
 // ============================================================================
 // 5. THE SITTING
 // ----------------------------------------------------------------------------
-// Cold checks, then an opening stitch, then jump-ins, then new verses -- each
-// followed by its own stitch and a jump-in -- then one last look back at the
+// Cold checks, then an opening stitch, then new verses -- each followed by
+// its own stitch -- then one last look back at the
 // new verses before Done for today. The state holds no verse text, only
 // ids and ladders; `env` carries the live queue items (read fresh from
 // memoryQueueRef by the screen on every dispatch) so a run banked a moment ago
@@ -722,8 +643,6 @@ export type GuidedStep =
   | { kind: 'cold'; verseIds: string[]; stage: 'recite' | 'refreshDrill' | 'refreshRecite'; refreshIds: string[]; drill?: GuidedDrillId }
   | { kind: 'stitch'; verseIds: string[]; stage: 'jigsaw' | 'recite'; fails: number; cue: ThreadCue }
   | { kind: 'seam'; verseIds: string[]; cue: ThreadCue; fails: number }
-  /** Jump-ins over the finished run (`verseIds`), done one at a time. */
-  | { kind: 'thread'; verseIds: string[]; cues: ThreadCue[]; index: number }
   /** The verses learned this sitting, said once more before stopping. */
   | { kind: 'lastLook'; groups: string[][]; index: number }
   /** `relearn`: a verse with runs that couldn't pass its cold check, taught again from its first drill. */
@@ -732,7 +651,7 @@ export type GuidedStep =
   | { kind: 'summary' };
 
 export interface SessionLogEntry {
-  step: 'cold' | 'refresh' | 'stitch' | 'seam' | 'thread' | 'ladder' | 'lastLook';
+  step: 'cold' | 'refresh' | 'stitch' | 'seam' | 'ladder' | 'lastLook';
   verseIds: string[];
   perfect: boolean;
 }
@@ -748,11 +667,6 @@ export interface SessionState {
   /** Stitches completed; every second 3-verse stitch gets a jigsaw warm-up. */
   stitchCount: number;
   lastDrill?: GuidedDrillId;
-  usedCues: string[];
-  /** Jump-in rounds so far; only the first gets the full count. */
-  jumpInRounds: number;
-  /** Verses a jump-in started in this sitting; later rounds go elsewhere. */
-  jumpStarts: string[];
   /** Verses already given their last look this sitting. */
   lookedBack: string[];
   /** Verses that finished their ladder this sitting (credited or not). */
@@ -801,11 +715,11 @@ export type SessionEvent =
    */
   | { type: 'easier' }
   | { type: 'keepGoing' }
-  /** Skip the current check, stitch, seam, jump-in or last look: no credit, no penalty. */
+  /** Skip the current check, stitch, seam or last look: no credit, no penalty. */
   | { type: 'skip' }
   /**
    * Jump straight to a new verse from anywhere before a ladder (opening,
-   * checks, stitch, thread, done for today). `verseId` picks which one;
+   * checks, stitch, done for today). `verseId` picks which one;
    * otherwise nextNewVerse's choice. Counts against the pace, but always
    * allows at least one: the user asked for it.
    */
@@ -820,9 +734,6 @@ export const startSession = (env: SessionEnv): SessionState => ({
   budget: Math.max(0, env.pace - env.newToday),
   newDone: 0,
   stitchCount: 0,
-  usedCues: [],
-  jumpInRounds: 0,
-  jumpStarts: [],
   lookedBack: [],
   finishedThisSitting: [],
   setAside: [],
@@ -864,7 +775,7 @@ const refreshDrillFor = (s: SessionState, env: SessionEnv, verseId: string, curr
 
 const enterStitch = (s: SessionState, env: SessionEnv): SessionState => {
   const window = stitchWindow(env.items, new Set(s.finishedThisSitting));
-  if (window.length < 2) return enterThread(s, env);
+  if (window.length < 2) return enterNew(s, env);
   const verseIds = window.map((i) => i.verseId);
   const jigsaw = env.jigsawWarmUp !== false && window.length === 3 && s.stitchCount % 2 === 1;
   return {
@@ -873,41 +784,11 @@ const enterStitch = (s: SessionState, env: SessionEnv): SessionState => {
   };
 };
 
-const enterThread = (s: SessionState, env: SessionEnv): SessionState => {
-  const extra = new Set(s.finishedThisSitting);
-  const run = finishedRun(env.items, extra);
-  const window = stitchWindow(env.items, extra);
-  if (window.length >= 2 && run.length > window.length) {
-    const older = run.length - window.length;
-    const indicesWhere = (ok: (i: GuidedItem) => boolean) => new Set(run.flatMap((it, k) => (ok(it) ? [k] : [])));
-    const cues = jumpInCues(
-      run.map(toDrillVerse),
-      older,
-      {
-        count: s.jumpInRounds === 0 ? jumpInCount(older) : 1,
-        shaky: indicesWhere((i) => !!i.guidedShakyJoin),
-        avoid: indicesWhere((i) => s.jumpStarts.includes(i.verseId)),
-        used: new Set(s.usedCues),
-      },
-      env.rng
-    );
-    if (cues.length > 0) {
-      return {
-        ...s,
-        jumpInRounds: s.jumpInRounds + 1,
-        usedCues: [...s.usedCues, ...cues.map(threadCueKey)],
-        jumpStarts: [...s.jumpStarts, ...cues.map((c) => run[c.startVerse].verseId)],
-        step: { kind: 'thread', verseIds: run.map((i) => i.verseId), cues, index: 0 },
-      };
-    }
-  }
-  return enterNew(s, env);
-};
-
 /**
  * Before Done for today: the verses learned this sitting, recited once more
  * now that other work has pushed them out of mind. A verse only gets one if
- * at least two other activities followed its ladder. It never counts.
+ * at least two other activities followed its ladder, and not if the final
+ * stitch (passed) covered it. It never counts.
  */
 const enterLastLook = (s: SessionState, env: SessionEnv): SessionState => {
   const busySince = (id: string) => {
@@ -917,7 +798,10 @@ const enterLastLook = (s: SessionState, env: SessionEnv): SessionState => {
     });
     return at >= 0 && s.log.length - 1 - at >= 2;
   };
-  const pending = s.finishedThisSitting.filter((id) => !s.lookedBack.includes(id) && busySince(id));
+  // The final stitch already said these verses together, so they need no look.
+  const lastStitch = [...s.log].reverse().find((l) => l.step === 'stitch');
+  const stitched = new Set(lastStitch?.perfect ? lastStitch.verseIds : []);
+  const pending = s.finishedThisSitting.filter((id) => !s.lookedBack.includes(id) && !stitched.has(id) && busySince(id));
   const items = pending.map((id) => findItem(env, id)).filter((i): i is GuidedItem => !!i);
   if (items.length === 0) return { ...s, step: { kind: 'doneToday' } };
   const groups = chunkStretches(items).map((g) => g.map((i) => i.verseId));
@@ -1001,13 +885,13 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
     }
 
     case 'stitch': {
-      if (event.type === 'skip') return enterThread({ ...s, stitchCount: s.stitchCount + 1 }, env);
+      if (event.type === 'skip') return enterNew({ ...s, stitchCount: s.stitchCount + 1 }, env);
       if (step.stage === 'jigsaw') return event.type === 'next' ? { ...s, step: { ...step, stage: 'recite' } } : s;
       if (event.type !== 'result') return s;
       const logged = pushLog(s, { step: 'stitch', verseIds: step.verseIds, perfect: event.perfect });
       if (event.perfect || step.fails + 1 >= GUIDED_MAX_STITCH_FAILS) {
         // Two failed stitches in a row: move on, nothing is set aside.
-        return enterThread({ ...logged, stitchCount: logged.stitchCount + 1 }, env);
+        return enterNew({ ...logged, stitchCount: logged.stitchCount + 1 }, env);
       }
       const slip = Math.max(0, Math.min(step.verseIds.length - 1, event.firstSlip ?? 0));
       const cue = seamCue(drillVersesOf(env, step.verseIds), slip, env.rng);
@@ -1016,24 +900,13 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
     }
 
     case 'seam': {
-      if (event.type === 'skip') return enterThread({ ...s, stitchCount: s.stitchCount + 1 }, env);
+      if (event.type === 'skip') return enterNew({ ...s, stitchCount: s.stitchCount + 1 }, env);
       if (event.type !== 'result') return s;
       const window = drillVersesOf(env, step.verseIds);
       return {
         ...pushLog(s, { step: 'seam', verseIds: step.verseIds, perfect: event.perfect }),
         step: { kind: 'stitch', verseIds: step.verseIds, stage: 'recite', fails: step.fails, cue: stitchCue(window) },
       };
-    }
-
-    case 'thread': {
-      if (event.type !== 'skip' && event.type !== 'result') return s;
-      const cue = step.cues[step.index];
-      const next =
-        event.type === 'result'
-          ? pushLog(s, { step: 'thread', verseIds: step.verseIds.slice(cue.startVerse, cue.endVerse + 1), perfect: event.perfect })
-          : s;
-      if (step.index + 1 < step.cues.length) return { ...next, step: { ...step, index: step.index + 1 } };
-      return enterNew(next, env);
     }
 
     case 'lastLook': {
@@ -1080,7 +953,7 @@ export const sessionReducer = (s: SessionState, event: SessionEvent, env: Sessio
 
     case 'doneToday':
       if (event.type === 'doChecks') {
-        // Only the checks: whatever follows them (a stitch, a thread) may
+        // Only the checks: whatever follows them (a stitch) may
         // run too, but no new verse unless asked for again.
         return s.coldQueue.length > 0 ? enterCold({ ...s, budget: 0 }, env) : s;
       }

@@ -15,9 +15,6 @@ import {
   GuidedCreditCtx,
   GuidedDrillId,
   isFinishedVerse,
-  joinChanges,
-  jumpInCues,
-  jumpInCount,
   Ladder,
   ladderAfter,
   LadderEvent,
@@ -265,7 +262,6 @@ console.log('Credit');
   check('A reviewing verse due today in a stitch -> review', guidedCredit(dueReview, { activity: 'stitch', ...perfect }, ctx).kind === 'review');
   check('A reviewing verse not due -> null', guidedCredit(futureReview, { activity: 'stitch', ...perfect }, ctx).kind === null);
   check('Reviews paused -> null', guidedCredit(dueReview, { activity: 'stitch', ...perfect }, { ...ctx, reviewsPaused: true }).kind === null);
-  check('Thread start verse past halfway -> null', guidedCredit(fresh, { activity: 'thread', ...perfect, startsPastHalf: true }, ctx).kind === null);
 }
 
 // --------------------------------------------------------------- sitting ----
@@ -359,7 +355,7 @@ console.log('Sitting');
       const kind = s.step.ladder.rungs[s.step.ladder.pos].kind;
       s = send(s, ['blanks', 'partly', 'fully'].includes(kind) ? { type: 'result', perfect: true } : { type: 'next' }, env);
     }
-    check('A single-verse passage never produces a stitch or thread step', s.step.kind === 'doneToday' && !s.log.some((l) => l.step === 'stitch' || l.step === 'thread'), s.step);
+    check('A single-verse passage never produces a stitch step', s.step.kind === 'doneToday' && !s.log.some((l) => l.step === 'stitch'), s.step);
   }
   {
     const env = mk([item(1)], { pace: 1 });
@@ -487,48 +483,9 @@ console.log('Sitting');
   }
 }
 
-// ------------------------------------------- jump-ins, joins, last look ----
-console.log('Jump-ins, joins and the last look');
+// ------------------------------------------- stretches, last look ----
+console.log('Stretches and the last look');
 {
-  // Verses 1-9: 1-6 from TEXTS, 7-9 the 30-word filler.
-  const nine = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => toDrillVerse(item(n)));
-
-  check('Jump-in count: 1 for 1-2 older verses, 2 for 3-5, 3 for 6+', [1, 2, 3, 5, 6, 12].map(jumpInCount).join() === '1,1,2,2,3,3', [1, 2, 3, 5, 6, 12].map(jumpInCount));
-
-  let badLength = 0;
-  let badBand = 0;
-  let inOrder = 0;
-  let tooFew = 0;
-  for (let seed = 1; seed <= 200; seed++) {
-    const cues = jumpInCues(nine, 6, { count: 3 }, seeded(seed));
-    if (cues.length !== 3) tooFew++;
-    cues.forEach((c) => {
-      if (c.endVerse - c.startVerse < 1 || c.endVerse - c.startVerse > 2) badLength++;
-    });
-    const starts = cues.map((c) => c.startVerse);
-    const bands = new Set(starts.map((x) => Math.floor(x / 2)));
-    if (bands.size !== cues.length || starts.some((x) => x >= 6)) badBand++;
-    if (starts.every((x, i) => i === 0 || starts[i - 1] < x)) inOrder++;
-  }
-  check('Six older verses give three jump-ins', tooFew === 0, tooFew);
-  check('Every jump-in runs into the next one or two verses (2-3 verses)', badLength === 0, badLength);
-  check('The three land in different thirds, all before the stitch window', badBand === 0, badBand);
-  check('Jump-ins are never handed out in verse order', inOrder === 0, inOrder);
-
-  let aimed = 0;
-  for (let seed = 1; seed <= 100; seed++) {
-    const cues = jumpInCues(nine, 6, { count: 3, shaky: new Set([3]) }, seeded(seed));
-    if (cues.some((c) => c.startVerse === 2 && c.endVerse >= 3)) aimed++;
-  }
-  check('A shaky join into verse index 3 always gets a jump-in across it', aimed === 100, aimed);
-
-  const slips: ThreadSlip[] = [
-    { verse: 3, kind: 'join' },
-    { verse: 4, kind: 'inside' },
-  ];
-  const jc = joinChanges(['a', 'b', 'c', 'd'], slips, 1); // span is verse indices 1-4
-  check('A join slip marks that join shaky; clean joins are steady; the first verse is no join', jc.shaky.join() === 'c' && jc.steady.join() === 'b,d', jc);
-
   const chunks = chunkStretches([item(5), item(1), item(2), item(3), item(4), item(7)]);
   check('Stretches: consecutive verses, at most 3, split at gaps', chunks.map((g) => ids(g).join('')).join('|') === '123|45|7', chunks.map((g) => ids(g)));
 
@@ -552,11 +509,7 @@ console.log('Jump-ins, joins and the last look');
     s = send(s, { type: 'result', perfect: true }, env);
     check('Then the stitch of 4-6', s.step.kind === 'stitch', s.step);
     s = send(s, { type: 'result', perfect: true }, env);
-    check('Then jump-ins into the older verses 1-3 (two of them)', s.step.kind === 'thread' && s.step.cues.length === 2 && s.step.index === 0, s.step);
-    s = send(s, { type: 'result', perfect: true }, env);
-    check('A result moves to the second jump-in', s.step.kind === 'thread' && s.step.index === 1, s.step);
-    s = send(s, { type: 'skip' }, env);
-    check('Skipping the last one moves on to the new verse', s.step.kind === 'ladder' && s.step.verseId === 'BSB_PSA_23_7', s.step);
+    check('Then straight on to the new verse (no jump-ins)', s.step.kind === 'ladder' && s.step.verseId === 'BSB_PSA_23_7', s.step);
 
     // Climb verse 7, then follow the sitting with perfect answers to the end.
     let guard = 0;
@@ -567,11 +520,7 @@ console.log('Jump-ins, joins and the last look');
       const graded = st.kind !== 'ladder' || ['blanks', 'partly', 'fully'].includes(st.ladder.rungs[st.ladder.pos].kind);
       s = send(s, graded ? { type: 'result', perfect: true } : { type: 'next' }, env);
     }
-    check('After the new verse: a stitch, one jump-in, then the last look', kinds.join() === 'stitch,thread,lastLook', kinds);
-    check('...the later jump-in round has just one', s.log.filter((l) => l.step === 'thread').length === 2, s.log.map((l) => l.step));
-    check('...and the last look is verse 7 alone', s.log.some((l) => l.step === 'lastLook' && l.verseIds.join() === 'BSB_PSA_23_7'), s.log);
-    s = send(s, { type: 'keepGoing' }, env);
-    check('A verse only gets one last look per sitting', s.lookedBack.join() === 'BSB_PSA_23_7');
+    check('After the new verse: a stitch, and no last look since the stitch covered it', kinds.join() === 'stitch', kinds);
   }
   {
     // A lone new verse with nothing after its ladder gets no last look.
@@ -583,14 +532,6 @@ console.log('Jump-ins, joins and the last look');
       s = send(s, ['blanks', 'partly', 'fully'].includes(kind) ? { type: 'result', perfect: true } : { type: 'next' }, env);
     }
     check('No last look right after the verse was just recited', s.step.kind === 'doneToday', s.step);
-  }
-  {
-    const shakyItems = [1, 2, 3, 4, 5, 6].map((n) => item(n, { runsAgo: [60 * 24], ...(n === 3 ? { guidedShakyJoin: true as const } : {}) }));
-    const env = mk(shakyItems);
-    const s = { ...startSession(env), coldQueue: [] };
-    const st = send(s, { type: 'begin' }, env);
-    const after = send(st, { type: 'result', perfect: true }, env); // stitch 4-6
-    check('A saved shaky join (into verse 3) gets a jump-in across it', after.step.kind === 'thread' && after.step.cues.some((c) => c.startVerse === 1 && c.endVerse >= 2), after.step);
   }
   check('A last look never counts', guidedCredit(item(1, { runsAgo: [600] }), { activity: 'lastLook', passed: true, perfect: true, mode: 'type' }, { now: NOW, reviewsPaused: false, isDue: () => true, credited: new Set() }).kind === null);
 }
