@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Check, Eye, Keyboard, Layers, Mic, X } from 'lucide-react-native';
+import { Check, Eye, Layers, X } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
 import { ChapterSections, QueueItem, ReviewGrade } from '../types';
@@ -9,13 +9,16 @@ import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from 
 import { TakeawayAsk } from '../components/TakeawayAsk';
 import { Badge, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { bracketColor, useThemeColors } from '../components/theme';
-import GradedRecitation, { ButtonPair, canSpeakVerses, RecitationMode, RoundFrame, SpanText } from '../components/GradedRecitation';
+import GradedRecitation, { ButtonPair, RecitationMode, RoundFrame, SpanText } from '../components/GradedRecitation';
 import ThreadRound, { ThreadRoundResult } from '../components/ThreadRound';
 import { computeDayReviewLoad } from '../lib/retention';
 import { SelfCheckFlow, SelfCheckResult } from '../components/practice/SelfCheck';
 import type { GradeSettings } from '../lib/grading';
 import ScrambleDrill from '../components/drills/ScrambleDrill';
-import SpotSwapDrill, { SwapVerseScore } from '../components/drills/SpotSwapDrill';
+import OpeningsDrill from '../components/drills/OpeningsDrill';
+import type { OpeningResult } from '../lib/openings';
+import SpotGapDrill from '../components/drills/SpotGapDrill';
+import type { GapScore } from '../lib/spotGap';
 import SectionOrderDrill from '../components/drills/SectionOrderDrill';
 import WhichSectionDrill from '../components/drills/WhichSectionDrill';
 import TeachItDrill from '../components/drills/TeachItDrill';
@@ -75,10 +78,10 @@ import {
 //     unit's passages was a self-check (the every-other rule).
 //   - Keep going: ThreadRound cued inside the started verse just before the
 //     unit, so every unit verse is said whole. The cue verse never counts.
-//   - Find the wrong word: the round's misses (unfound, wrongly flagged, real
-//     word not known) over its verse count grade every verse in it, never
-//     perfect (it's spotting, not saying). Only the first check counts, so
-//     the reshuffle is gone after it.
+//   - Spot the gap (the findWrongWord format): tapped wrong words, typed blank
+//     letters and, with numbers hidden, typed verse numbers. Each verse's own
+//     share right (the section's when it tested nothing there) grades it like
+//     a typed recall. Only the first check counts, so there is no reshuffle.
 //   - Practice rounds report nothing; the reducer would ignore it anyway. One
 //     switched to Counts ends in the same self-check.
 // Each verse's grade goes to the engine as it is; the engine decides when a
@@ -187,6 +190,7 @@ function ReciteRound({
   settings,
   allowSelfCheck,
   previousText,
+  spotSkip,
   onDone,
 }: {
   verses: DueVerse[];
@@ -199,13 +203,15 @@ function ReciteRound({
   allowSelfCheck: boolean;
   /** The verse before verses[i], for the spot check's lead-in. */
   previousText: (i: number) => string | null;
+  /** Verses a graded round already counted this sitting: no spot check on them. */
+  spotSkip: ReadonlySet<string>;
   onDone: (perVerse: Record<string, MixVerseResult>) => void;
 }) {
   const space = useScaledSpace();
   const script = scriptOfVerse(verses[verses.length - 1]);
-  const [stage, setStage] = useState<'ready' | RecitationMode | 'reveal' | 'pickSlip' | 'spot'>('ready');
+  // One screen: typing starts at once, with a mic beside the input (as in Guided learning).
+  const [stage, setStage] = useState<RecitationMode | 'reveal' | 'pickSlip' | 'spot'>('type');
   const [attempt, setAttempt] = useState(0);
-  const [canSpeak] = useState(() => canSpeakVerses([verses[verses.length - 1]]));
   const last = verses.length - 1;
   const span = useMemo(() => threadSpan(verses, { startVerse: 0, startWord: 0, endVerse: last, cueWords: [] }), [verses, last]);
 
@@ -226,27 +232,12 @@ function ReciteRound({
     return out;
   }, [firstWords, span, script]);
 
-  const opening = (v: DueVerse) => v.text.split(/\s+/).slice(0, FIRST_WORDS_SHOWN).join(' ');
-  const ready = (
-    <View className="bg-surface border border-line rounded-card" style={{ padding: space(16), gap: space(6) }}>
-      <AppText variant="caption" className="font-sans font-medium text-ink-3 text-center">
-        {firstWords ? `Say each verse from its first ${FIRST_WORDS_SHOWN} words` : 'Say it with nothing in front of you'}
-      </AppText>
-      {firstWords ? (
-        verses.map((v) => (
-          <AppText key={v.id} variant="body" script={script} className="font-serif text-ink">
-            <AppText variant="caption" className="font-sans font-bold text-ink-3">
-              {v.verse}{' '}
-            </AppText>
-            {opening(v)} …
-          </AppText>
-        ))
-      ) : (
-        <AppText variant="title" className="font-sans font-semibold text-ink text-center">
-          {verses[0].book} {verses[0].chapter}:{rangeText(verses[0].verse, verses[last].verse)}
-        </AppText>
-      )}
-    </View>
+  const caption = (
+    <AppText variant="caption" className="font-sans font-medium text-ink-3 text-center">
+      {firstWords
+        ? `Say each verse from its first ${FIRST_WORDS_SHOWN} words`
+        : `${verses[0].book} ${verses[0].chapter}:${rangeText(verses[0].verse, verses[last].verse)}`}
+    </AppText>
   );
 
   // First words grades only the words it hid: `shown` holds flat graded indices across the span.
@@ -277,12 +268,19 @@ function ReciteRound({
         mode={stage}
         shownWords={shown}
         showHeard
+        header={caption}
         continueLabel="Next"
-        onCancel={() => setStage('ready')}
+        onCancel={() => {
+          setStage('type');
+          setAttempt((a) => a + 1);
+        }}
         onSwitchMode={(to) => {
           setStage(to);
           setAttempt((a) => a + 1);
         }}
+        footerExtra={
+          allowSelfCheck ? <AppButton variant="quiet" Icon={Eye} label="Show text and check myself" onPress={() => setStage('reveal')} /> : undefined
+        }
         onResult={finishGraded}
         gradedDetail={(perVerse) => {
           const results = resultsOf(perVerse, stage);
@@ -315,6 +313,7 @@ function ReciteRound({
         allGotIt={stage === 'spot'}
         // Practice can't move anything up, so there's nothing to spot check.
         spotCheck={counts}
+        spotEligible={(i) => !spotSkip.has(verses[i].id)}
         previousText={previousText}
         note={counts ? undefined : 'Practice only: nothing is recorded.'}
         onBack={() => setStage('reveal')}
@@ -341,24 +340,8 @@ function ReciteRound({
     );
   }
 
-  return (
-    <RoundFrame>
-      <View className="flex-1 justify-center" style={{ minHeight: space(140) }}>
-        {ready}
-      </View>
-      <View style={{ gap: space(8) }}>
-        {canSpeak && <AppButton size="lg" variant="primary" Icon={Mic} label="Recite" onPress={() => setStage('speak')} />}
-        <AppButton
-          variant={canSpeak ? 'secondary' : 'primary'}
-          size={canSpeak ? 'md' : 'lg'}
-          Icon={Keyboard}
-          label="Type first letters"
-          onPress={() => setStage('type')}
-        />
-        {allowSelfCheck && <AppButton variant="quiet" Icon={Eye} label="Show text and check myself" onPress={() => setStage('reveal')} />}
-      </View>
-    </RoundFrame>
-  );
+  // Unreachable: every stage above returns. Keeps the function total.
+  return null;
 }
 
 // ----------------------------------------------------------------------------
@@ -436,10 +419,10 @@ function KeepGoingRound({
 }
 
 // ----------------------------------------------------------------------------
-// Find the wrong word: the first check is what counts
+// Openings: the first letters of every verse's start, then the rest self-checked
 // ----------------------------------------------------------------------------
 
-function FindWrongWordRound({
+function OpeningsRound({
   verses,
   counts,
   onDone,
@@ -449,23 +432,100 @@ function FindWrongWordRound({
   onDone: (perVerse: Record<string, MixVerseResult>) => void;
 }) {
   const space = useScaledSpace();
-  const [scored, setScored] = useState<SwapVerseScore[] | null>(null);
-  // The round's misses over its verses grade every verse in it (gradeSwap's rate).
+  const [openings, setOpenings] = useState<OpeningResult[] | null>(null);
+  const [stage, setStage] = useState<'reveal' | 'pickSlip' | 'spot'>('reveal');
+  const last = verses.length - 1;
+  const span = useMemo(() => threadSpan(verses, { startVerse: 0, startWord: 0, endVerse: last, cueWords: [] }), [verses, last]);
+
+  if (!openings) return <OpeningsDrill verses={verses} onComplete={setOpenings} />;
+
+  // The opening typed grades each verse; the rest, checked against the text, can only lower it.
+  const finish = (r: SelfCheckResult) => {
+    const out: Record<string, MixVerseResult> = {};
+    verses.forEach((v, i) => {
+      const cap = r.answers[i] === 'blanked' ? 0.3 : r.answers[i] === 'stumbled' ? 0.8 : 1;
+      const accuracy = Math.min(openings[i]?.accuracy ?? 0, cap);
+      out[v.id] = { mode: 'type', accuracy, perfect: accuracy === 1 };
+    });
+    onDone(out);
+  };
+
+  if (stage === 'pickSlip' || stage === 'spot') {
+    return (
+      <SelfCheckFlow
+        verses={verses}
+        allGotIt={stage === 'spot'}
+        // The openings were typed, so the rest needs no second recital.
+        spotCheck={false}
+        note={counts ? undefined : 'Practice only: nothing is recorded.'}
+        onBack={() => setStage('reveal')}
+        onDone={finish}
+      />
+    );
+  }
+
+  return (
+    <RoundFrame
+      footer={
+        <ButtonPair
+          left={<AppButton size="lg" variant="secondary" label="Missed some" onPress={() => setStage('pickSlip')} />}
+          right={<AppButton size="lg" variant="primary" label="Got it" onPress={() => setStage('spot')} />}
+        />
+      }
+    >
+      <AppText variant="label" className="font-sans text-ink-2" style={{ marginBottom: space(4) }}>
+        Now say the rest of each verse, then check yourself against the text.
+      </AppText>
+      <SpanText verses={verses} span={span} show={(_i, w) => ({ text: w, className: 'font-serif text-ink' })} />
+    </RoundFrame>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Spot the gap: the first check is what counts
+// ----------------------------------------------------------------------------
+
+/** The two Settings switches that make Spot the gap harder. */
+interface GapPrefs {
+  hideNumbers: boolean;
+  shuffle: boolean;
+}
+
+const readGapPrefs = (saved: Record<string, unknown>): GapPrefs => ({
+  hideNumbers: saved.spotGapShowNumbers === false,
+  shuffle: saved.spotGapInOrder === false,
+});
+
+function SpotGapRound({
+  verses,
+  counts,
+  gap,
+  onDone,
+}: {
+  verses: DueVerse[];
+  counts: boolean;
+  gap: GapPrefs;
+  onDone: (perVerse: Record<string, MixVerseResult>) => void;
+}) {
+  const space = useScaledSpace();
+  const [scored, setScored] = useState<GapScore | null>(null);
+  // Each verse's own accuracy (the section's, when it tested nothing there) grades it like a typed recall.
   const result = () => {
     const out: Record<string, MixVerseResult> = {};
     if (!scored) return out;
-    const swap = { misses: scored.reduce((n, sc) => n + sc.misses, 0), verses: verses.length };
-    verses.forEach((v) => {
-      if (scored.some((x) => x.verse === v.verse)) out[v.id] = { mode: 'type', swap, perfect: false };
+    scored.perVerse.forEach((row) => {
+      const v = verses[row.verseIndex];
+      if (v) out[v.id] = { mode: 'type', accuracy: row.accuracy, perfect: row.perfect };
     });
     return out;
   };
   return (
     <View className="flex-1" style={{ gap: space(12) }}>
       <View className="flex-1">
-        <SpotSwapDrill
+        <SpotGapDrill
           verses={verses}
-          showSwapCount={false}
+          hideNumbers={gap.hideNumbers}
+          shuffle={gap.shuffle}
           resultNote={counts ? 'these count for the review.' : 'this one is practice.'}
           onScored={setScored}
         />
@@ -486,6 +546,7 @@ function PracticeRound({
   script,
   counts,
   previousText,
+  spotSkip,
   onNext,
 }: {
   format: FormatId;
@@ -496,6 +557,8 @@ function PracticeRound({
   counts: boolean;
   /** The verse before verses[i], for the spot check's lead-in. */
   previousText: (i: number) => string | null;
+  /** Verses a graded round already counted this sitting: no spot check on them. */
+  spotSkip: ReadonlySet<string>;
   onNext: (perVerse?: Record<string, MixVerseResult>) => void;
 }) {
   const space = useScaledSpace();
@@ -505,6 +568,9 @@ function PracticeRound({
       <SelfCheckFlow
         verses={verses}
         allGotIt={checking === 'spot'}
+        // Scramble is a hands-on drill: its own "Got it" stands, rather than saying the verse a second time.
+        spotCheck={format !== 'scramble'}
+        spotEligible={(i) => !spotSkip.has(verses[i].id)}
         previousText={previousText}
         onBack={() => setChecking(null)}
         onDone={(r) => onNext(selfResults(verses, r))}
@@ -660,11 +726,13 @@ function Session({
   initial,
   startedAt,
   counts,
+  gapPrefs,
 }: {
   state: AppState;
   initial: MixState;
   startedAt: number;
   counts: MixCounts;
+  gapPrefs: GapPrefs;
 }) {
   const space = useScaledSpace();
   const palette = useThemeColors();
@@ -858,6 +926,10 @@ function Session({
     return before?.text ?? null;
   };
 
+  // Verses a graded round (said or typed, not self-checked) already counted
+  // this sitting: a spot check on them would be a second review.
+  const gradedBefore = new Set(s.credits.filter((c) => c.mode !== 'self').map((c) => c.verseId));
+
   let body: React.ReactNode;
   // Which drill shows goes by the format; whether it credits goes by
   // round.counts (the user's Counts / Practice choice in Settings).
@@ -871,6 +943,7 @@ function Session({
         script={script}
         counts={round.counts}
         previousText={previousText}
+        spotSkip={gradedBefore}
         onNext={result}
       />
     );
@@ -887,8 +960,10 @@ function Session({
         onFallback={() => setAsRecite((prev) => new Set(prev).add(round.index))}
       />
     );
+  } else if (format === 'openings') {
+    body = <OpeningsRound key={round.index} verses={verses} counts={round.counts} onDone={result} />;
   } else if (format === 'findWrongWord') {
-    body = <FindWrongWordRound key={round.index} verses={verses} counts={round.counts} onDone={result} />;
+    body = <SpotGapRound key={round.index} verses={verses} counts={round.counts} gap={gapPrefs} onDone={result} />;
   } else {
     body = (
       <ReciteRound
@@ -899,6 +974,7 @@ function Session({
         settings={s.settings}
         allowSelfCheck={allowSelfCheck}
         previousText={previousText}
+        spotSkip={gradedBefore}
         onDone={result}
       />
     );
@@ -950,8 +1026,10 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
 
   const [enabled, setEnabled] = useState<FormatId[] | null>(null);
   const [counts, setCounts] = useState<MixCounts>(() => readMixCounts(undefined));
+  const [gapPrefs, setGapPrefs] = useState<GapPrefs>({ hideNumbers: false, shuffle: false });
   useEffect(() => {
     loadPracticePrefs().then((saved: any) => {
+      setGapPrefs(readGapPrefs(saved));
       setCounts(readMixCounts(saved[MIX_COUNTS_PREF]));
       setEnabled(readMixFormats(saved[MIX_FORMATS_PREF]));
     });
@@ -969,7 +1047,7 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
   const [session, setSession] = useState<{ state: MixState; startedAt: number } | null>(null);
 
   if (session) {
-    return <Session state={state} initial={session.state} startedAt={session.startedAt} counts={counts} />;
+    return <Session state={state} initial={session.state} startedAt={session.startedAt} counts={counts} gapPrefs={gapPrefs} />;
   }
   if (!enabled) return <View className="flex-1 bg-canvas" />;
 

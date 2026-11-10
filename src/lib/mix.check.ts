@@ -301,10 +301,10 @@ console.log('Format draws');
   );
 
   const short = { due: john, pool: john, sectionsFor: () => null };
-  // Only words of 4+ letters can be swapped, so a verse of short words has none.
-  const tiny = [item('John', 11, 35, { 35: 'I am He, and so it is.' })];
+  // A verse under 4 words has nothing to blank.
+  const tiny = [item('John', 11, 35, { 35: 'Jesus wept.' })];
   check(
-    'Find the wrong word is skipped on a verse with no wrong word to plant',
+    'Spot the gap is skipped on a verse too short to blank',
     buildMixPlan({ due: tiny, pool: tiny, sectionsFor: () => null, enabled: ['findWrongWord'] }, seeded(1)).rounds[0].format === 'recite'
   );
   check(
@@ -312,8 +312,17 @@ console.log('Format draws');
     buildMixPlan({ ...short, enabled: ['scramble'] }, seeded(1)).rounds.map((r) => r.format).join(',') === 'recite'
   );
   check(
-    'Find the wrong word runs on verses that have one',
+    'Spot the gap runs on verses long enough to blank',
     buildMixPlan({ due: [psalm[3]], pool: [psalm[3]], sectionsFor: () => null, enabled: ['findWrongWord'] }, seeded(1)).rounds[0].format === 'findWrongWord'
+  );
+
+  check(
+    'Openings runs on a unit of two verses or more',
+    buildMixPlan({ due: psalm.slice(0, 3), pool: psalm.slice(0, 3), sectionsFor: () => null, enabled: ['openings'] }, seeded(1)).rounds[0].format === 'openings'
+  );
+  check(
+    'Openings is skipped on a single verse: Recite instead',
+    buildMixPlan({ due: [psalm[3]], pool: [psalm[3]], sectionsFor: () => null, enabled: ['openings'] }, seeded(1)).rounds[0].format === 'recite'
   );
 
   const twoSections: ChapterSections = { ...matt7Sections, starts: [1, 6] };

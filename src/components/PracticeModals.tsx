@@ -20,7 +20,8 @@ import { useListenPlayback, type ListenSource } from './practice/useListenPlayba
 import { useRecall, type LearnMode } from './practice/useRecall';
 import ListenPanel from './practice/ListenPanel';
 import RecallPanel from './practice/RecallPanel';
-import ManualLogSheet, { logManualAnswers } from './practice/ManualLogSheet';
+import ManualLogFlow from './practice/ManualLogFlow';
+import { logManualAnswers } from './practice/ManualLogSheet';
 import type { TakeawayDraft } from '../lib/sectionDrills';
 
 export interface PracticeModalsProps {
@@ -303,9 +304,9 @@ function PracticeModalsInner({
   const [showManualLog, setShowManualLog] = useState(false);
 
   // A self-check per verse (practice/ManualLogSheet says what each answer does).
-  const submitManualLog = (answers: SelfCheckAnswer[]) => {
+  const submitManualLog = (answers: SelfCheckAnswer[], canMoveUp: boolean) => {
     setShowManualLog(false);
-    logManualAnswers(verses, answers, onUpdateStatus);
+    logManualAnswers(verses, answers, onUpdateStatus, canMoveUp);
     handleGroupComplete();
   };
   const manualSelfCheckedLast = verses.some((v) =>
@@ -425,10 +426,11 @@ function PracticeModalsInner({
       </View>
 
       {/* Manual log. The same sheet as the one on Today's review rows. */}
-      <ManualLogSheet
+      <ManualLogFlow
         visible={showManualLog}
         title={`Log ${referenceText}`}
         verses={verses}
+        memoryQueue={memoryQueue || []}
         selfCheckedLast={manualSelfCheckedLast}
         onClose={() => setShowManualLog(false)}
         onLog={submitManualLog}

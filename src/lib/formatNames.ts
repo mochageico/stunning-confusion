@@ -21,6 +21,7 @@ export type FormatId =
   | 'recite'
   | 'keepGoing'
   | 'firstWords'
+  | 'openings'
   | 'findWrongWord'
   | 'putInOrder'
   | 'whichSection'
@@ -34,8 +35,10 @@ export const FORMATS: Record<FormatId, { label: string; counts: boolean; canCoun
   keepGoing: { label: 'Keep going', counts: true },
   // Outline mode.
   firstWords: { label: 'First words', counts: true },
-  // Today's "Spot the swap".
-  findWrongWord: { label: 'Find the wrong word', counts: true },
+  // First letters of each verse's opening, then a self-check of the rest.
+  openings: { label: 'Openings', counts: true },
+  // Spot the swap, grown into wrong words plus blanks (src/lib/spotGap.ts). The id stays so saved choices carry over.
+  findWrongWord: { label: 'Spot the gap', counts: true },
   putInOrder: { label: 'Put in order', counts: false, canCount: false },
   whichSection: { label: 'Which section', counts: false, canCount: false },
   teachIt: { label: 'Teach-It', counts: false, canCount: false },

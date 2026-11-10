@@ -20,7 +20,8 @@ import { firmUpItems, lateNoteFor, movedNote, welcomeBack } from '../lib/todayCa
 import { movedFromDay } from '../lib/passages';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { gradedOnDay } from '../lib/retention';
-import ManualLogSheet, { logManualAnswers } from '../components/practice/ManualLogSheet';
+import ManualLogFlow from '../components/practice/ManualLogFlow';
+import { logManualAnswers } from '../components/practice/ManualLogSheet';
 import type { SelfCheckAnswer } from '../lib/grading';
 import { verseStage } from '../lib/stageProgress';
 
@@ -408,11 +409,11 @@ export default function HomeScreen({ state }: { state: AppState }) {
   // Manual log for a review actually done off-app: a self-check per verse,
   // the same sheet as inside PracticeModals (practice/ManualLogSheet).
   const manualLogVerses = useMemo(() => (manualLogGroup ? mapQueueToVerseStates(manualLogGroup.items) : []), [manualLogGroup]);
-  const submitManualLog = (answers: SelfCheckAnswer[]) => {
+  const submitManualLog = (answers: SelfCheckAnswer[], canMoveUp: boolean) => {
     const vStates = manualLogVerses;
     setManualLogGroup(null);
     if (vStates.length === 0) return;
-    logManualAnswers(vStates, answers, handleUpdateVerseStatus);
+    logManualAnswers(vStates, answers, handleUpdateVerseStatus, canMoveUp);
   };
 
   // "Review All Due" -- chains through every due group (Settling, then Steady,
@@ -839,10 +840,11 @@ export default function HomeScreen({ state }: { state: AppState }) {
       />
 
       {/* Manual log for a group reviewed off-app. The same sheet as inside PracticeModals. */}
-      <ManualLogSheet
+      <ManualLogFlow
         visible={!!manualLogGroup}
         title={manualLogGroup ? `Log ${manualLogGroup.label}` : undefined}
         verses={manualLogVerses}
+        memoryQueue={memoryQueue}
         selfCheckedLast={!!manualLogGroup?.items.some((i) => i.lastSelfChecked)}
         onClose={() => setManualLogGroup(null)}
         onLog={submitManualLog}

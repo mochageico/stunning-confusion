@@ -174,6 +174,7 @@ export function SelfCheckFlow({
   verses,
   allGotIt,
   spotCheck = true,
+  spotEligible,
   previousText,
   note,
   onBack,
@@ -184,6 +185,8 @@ export function SelfCheckFlow({
   allGotIt: boolean;
   /** Off when the check can't move anything up anyway (practice, not due). */
   spotCheck?: boolean;
+  /** Verses that may be picked for the spot check; one a better check already covered is left out. Default: all. */
+  spotEligible?: (i: number) => boolean;
   /** The verse before verses[i], for the spot check's lead-in. Defaults to the one before it in the list. */
   previousText?: (i: number) => string | null | undefined;
   note?: string;
@@ -192,8 +195,12 @@ export function SelfCheckFlow({
 }) {
   const [spot, setSpot] = useState<{ answers: SelfCheckAnswer[]; index: number } | null>(null);
 
+  // A verse that isn't eligible is picked around, as if it hadn't been Got it.
+  const pickable = (answers: SelfCheckAnswer[]) =>
+    spotEligible ? answers.map((a, i): SelfCheckAnswer => (spotEligible(i) ? a : 'stumbled')) : answers;
+
   const answered = (answers: SelfCheckAnswer[]) => {
-    const index = spotCheck ? pickSpotCheck(answers) : null;
+    const index = spotCheck ? pickSpotCheck(pickable(answers)) : null;
     if (index === null) onDone({ answers, spotPassed: null });
     else setSpot({ answers, index });
   };
@@ -202,7 +209,7 @@ export function SelfCheckFlow({
   const [initial] = useState(() => {
     if (!allGotIt) return null;
     const answers: SelfCheckAnswer[] = verses.map(() => 'gotIt');
-    const index = spotCheck ? pickSpotCheck(answers) : null;
+    const index = spotCheck ? pickSpotCheck(pickable(answers)) : null;
     return index === null ? null : { answers, index };
   });
   const current = spot ?? initial;

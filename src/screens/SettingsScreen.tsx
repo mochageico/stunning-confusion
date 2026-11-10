@@ -251,16 +251,17 @@ function useMixChoices() {
  * Which section and Teach-It are warm-ups that never count, by the user's rule;
  * Scramble can, because you read every word to solve it.
  */
-function FormatsPage({
-  mix,
-  swapCanBeClean,
-  onSwapChange,
-}: {
-  mix: ReturnType<typeof useMixChoices>;
-  swapCanBeClean: boolean;
-  onSwapChange: (on: boolean) => void;
-}) {
+function FormatsPage({ mix }: { mix: ReturnType<typeof useMixChoices> }) {
   const space = useScaledSpace();
+  // Spot the gap's two difficulty switches. Both default on; off is saved as false.
+  const [showNumbers, setShowNumbers] = useState(true);
+  const [inOrder, setInOrder] = useState(true);
+  useEffect(() => {
+    loadPracticePrefs().then((saved) => {
+      if (saved.spotGapShowNumbers === false) setShowNumbers(false);
+      if (saved.spotGapInOrder === false) setInOrder(false);
+    });
+  }, []);
   return (
     <View style={{ gap: space(8) }}>
       <Caption>
@@ -304,28 +305,30 @@ function FormatsPage({
       </Caption>
 
       <View style={{ gap: space(8), paddingTop: space(12) }}>
-        <SectionHeader title="Find the wrong word" />
-        <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+        <SectionHeader title="Spot the gap" />
+        <ToggleCard>
           <ToggleRow
-            label="Can count as a clean review"
-            hint="Off: Find the wrong word is practice only and never moves a passage."
-            value={swapCanBeClean}
-            onChange={onSwapChange}
+            label="Show verse numbers"
+            hint="Off: type each verse's number yourself."
+            value={showNumbers}
+            onChange={(on) => {
+              setShowNumbers(on);
+              savePracticePrefs({ spotGapShowNumbers: on });
+            }}
           />
-          <View className="bg-surface-2 rounded-btn" style={{ padding: space(12), gap: space(8) }}>
-            <AppText variant="body" className="font-serif text-ink">
-              The Lord is my shepherd, I shall not want
-            </AppText>
-            <AppText variant="caption" className="font-sans text-ink-2">
-              You spot the wrong word. The review ends as:
-            </AppText>
-            <View className={`rounded-btn ${swapCanBeClean ? 'bg-success-soft' : 'bg-fill'}`} style={{ padding: space(10) }}>
-              <AppText variant="label" className={`font-sans font-semibold ${swapCanBeClean ? 'text-success' : 'text-ink-2'}`}>
-                {swapCanBeClean ? 'Clean review' : 'Practice only, no credit'}
-              </AppText>
-            </View>
-          </View>
-        </View>
+          <ToggleRow
+            label="Keep verses in order"
+            hint="Off: verses come shuffled, so you can't lean on the one before."
+            value={inOrder}
+            onChange={(on) => {
+              setInOrder(on);
+              savePracticePrefs({ spotGapInOrder: on });
+            }}
+          />
+        </ToggleCard>
+        <Caption>
+          Tap the words that look wrong and type the first letters of each blank. How many words were swapped is never said until you check.
+        </Caption>
       </View>
     </View>
   );
@@ -638,8 +641,6 @@ export default function SettingsScreen({ state }: { state: AppState }) {
     newVersesPace,
     selectedTranslationId,
     thoroughness,
-    swapCanBeClean,
-    updateLadderSettings,
   } = state;
 
   const prefs = useAppPrefs();
@@ -864,7 +865,7 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         </GroupedList>
       </>
     ),
-    formats: <FormatsPage mix={mix} swapCanBeClean={swapCanBeClean} onSwapChange={(on) => updateLadderSettings({ swapCanBeClean: on })} />,
+    formats: <FormatsPage mix={mix} />,
     recall: <RecallPage />,
     text: <TextPage state={state} />,
     audio: (

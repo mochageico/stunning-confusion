@@ -11,8 +11,9 @@ import type { VerseState } from '../../types';
 // MANUAL LOG -- a review done off-app (in the car, from a card), logged as a
 // self-check: Got it / Stumbled / Blanked per verse (REVIEW_LADDER_PLAN.md
 // §4). The every-other rule applies (the engine holds a passage whose last
-// move up was a self-check). There is no spot check: the review happened
-// somewhere else. One sheet for Today's rows and the practice screen.
+// move up was a self-check). ManualLogFlow wraps this sheet with the spot
+// check, so a Got it is backed up the way Mixed review's is. One sheet for
+// Today's rows and the practice screen.
 // ============================================================================
 
 const ANSWERS: { id: SelfCheckAnswer; label: string }[] = [
@@ -34,7 +35,14 @@ type UpdateStatus = (
  * (banks a touch), Stumbled counts without a touch, Blanked is practice.
  * 'reveal' marks the touch as self-reported rather than machine-graded.
  */
-export const logManualAnswers = async (verses: VerseState[], answers: SelfCheckAnswer[], update: UpdateStatus) => {
+export const logManualAnswers = async (
+  verses: VerseState[],
+  answers: SelfCheckAnswer[],
+  update: UpdateStatus,
+  /** false after a missed spot check: the log is kept but can't move a passage up. */
+  canMoveUp = true
+) => {
+  const hold = canMoveUp ? {} : { canMoveUp: false };
   const answerOf = (v: VerseState) => answers[verses.indexOf(v)] ?? 'gotIt';
   const gradeFor: ReviewCompletedOpts['gradeFor'] = (v) => {
     const i = verses.findIndex((x) => x.book === v.book && x.chapter === v.chapter && x.verse === v.verse);
@@ -44,9 +52,9 @@ export const logManualAnswers = async (verses: VerseState[], answers: SelfCheckA
   const gotIt = pick('gotIt');
   const stumbled = pick('stumbled');
   const blanked = pick('blanked');
-  if (gotIt.length > 0) await update(gotIt, 'memorized', 'reveal', { gradeFor });
-  if (stumbled.length > 0) await update(stumbled, 'memorized', 'reveal', { perfect: false, gradeFor });
-  if (blanked.length > 0) await update(blanked, 'learning', 'reveal', { gradeFor });
+  if (gotIt.length > 0) await update(gotIt, 'memorized', 'reveal', { gradeFor, ...hold });
+  if (stumbled.length > 0) await update(stumbled, 'memorized', 'reveal', { perfect: false, gradeFor, ...hold });
+  if (blanked.length > 0) await update(blanked, 'learning', 'reveal', { gradeFor, ...hold });
 };
 
 export default function ManualLogSheet({

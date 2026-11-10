@@ -1,5 +1,6 @@
 import type { ChapterSections, QueueItem, ReviewGrade } from '../types';
-import { buildScrambleRounds, buildSwapVerses, DrillVerse } from './drills';
+import { buildScrambleRounds, DrillVerse } from './drills';
+import { gapFits } from './spotGap';
 import { FORMATS, FormatId } from './formatNames';
 import { DEFAULT_CLEAN_PCT, GradeSettings, gradeRecall, gradeSelfCheck, gradeSwap, SelfCheckAnswer } from './grading';
 import { translationOf } from './passages';
@@ -43,6 +44,7 @@ export const MIX_FORMAT_ORDER: FormatId[] = [
   'recite',
   'keepGoing',
   'firstWords',
+  'openings',
   'findWrongWord',
   'scramble',
   'putInOrder',
@@ -316,8 +318,8 @@ export const buildUnits = (input: Pick<MixInput, 'due' | 'pool' | 'sectionsFor'>
 /**
  * Whether a format can run on a unit. Recite, First words and Teach-It work
  * on anything. Keep going needs the started verse just before the unit to cue
- * from. Find the wrong word needs a wrong word for every verse (one without
- * would never be tested). Scramble needs a verse that splits into tiles.
+ * from. Spot the gap (the findWrongWord format) needs a verse with enough words
+ * to blank. Scramble needs a verse that splits into tiles.
  * Which section needs a chapter of 3+ sections. Put in order is a whole
  * chapter's round, so it only ever opens one.
  */
@@ -327,10 +329,13 @@ export const formatFits = (format: FormatId, unit: MixUnit, chapter: MixChapter,
     case 'firstWords':
     case 'teachIt':
       return true;
+    case 'openings':
+      // Worth it from two verses up: one verse's opening is just First words.
+      return verses.length >= 2;
     case 'keepGoing':
       return !!unit.contextVerseId;
     case 'findWrongWord':
-      return verses.length > 0 && buildSwapVerses(verses).every((sv) => sv.tokens.some((t) => t.isDecoy));
+      return gapFits(verses);
     case 'scramble':
       return buildScrambleRounds(verses).length > 0;
     case 'whichSection':
@@ -414,7 +419,7 @@ export interface MixVerseResult {
   accuracy?: number;
   /** Self-checked: Got it, Stumbled or Blanked. Ignored when accuracy is given. */
   answer?: SelfCheckAnswer;
-  /** Find the wrong word: the round's misses and verse count. Its rate grades every verse in it. */
+  /** Legacy Find the wrong word: the round's misses and verse count. Spot the gap reports `accuracy` instead. */
   swap?: { misses: number; verses: number };
   /** No missed words (summarizeOutcomes().isPerfect). */
   perfect?: boolean;
