@@ -8,7 +8,7 @@ import type { ReviewCompletedOpts } from '../state/useAppState';
 import type { OutlineExtra } from '../lib/outline';
 import type { SelfCheckAnswer } from '../lib/grading';
 import { isRtl, scriptOfVerse } from '../lib/textScript';
-import { WaveBars } from './ui';
+import { WaveBars, useKeyboardLift } from './ui';
 import { AppIconButton, AppText, FontScaleOverrideProvider, RadioMark, useFontScale, useScaledSpace } from './design';
 import { PRACTICE_TEXT_SCALE, useAppPrefs } from '../lib/appPrefs';
 import { Dialog, GroupedList, ListRow } from './blocks';
@@ -236,6 +236,7 @@ function PracticeModalsInner({
   const [modesOpen, setModesOpen] = useState(false);
   const closeOptions = useCallback(() => setOptionsOpen(false), []);
   const insets = useSafeAreaInsets();
+  const lift = useKeyboardLift();
   const aboveTabBar = useAboveTabBar();
 
   // The passage's writing system. One per session: every way into practice
@@ -360,7 +361,7 @@ function PracticeModalsInner({
   return (
     // Clear of the notch / Dynamic Island: a fixed top padding sat under it
     // on taller-notched phones.
-    <View className="absolute inset-0 bg-surface z-50 pb-4 px-4" style={{ paddingTop: insets.top + 12 }} id="practice_overlay">
+    <View className="absolute inset-0 bg-surface z-50 pb-4 px-4" style={{ paddingTop: insets.top + 12, ...(type === 'learn' && lift > 0 ? { paddingBottom: lift + 8 } : {}) }} id="practice_overlay">
       {/* Header. Practice (UI simplify plan, Job 2): close, the session's
           progress, and the gear on one row; the reference and the "Recall v"
           mode chip under it. Listen keeps its own header until Job 3. */}

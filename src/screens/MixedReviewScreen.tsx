@@ -4,7 +4,7 @@ import { Check, Eye, Layers, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
 import { ChapterSections, QueueItem, ReviewGrade } from '../types';
-import { FadeInView } from '../components/ui';
+import { FadeInView, useKeyboardLift } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { TakeawayAsk } from '../components/TakeawayAsk';
 import { OptionsPopup, SessionDone } from '../components/session';
@@ -625,6 +625,7 @@ function Session({
 }) {
   const space = useScaledSpace();
   const palette = useThemeColors();
+  const lift = useKeyboardLift();
   // The gear: which chapters to include, and a way to the formats setting.
   const [gearOpen, setGearOpen] = useState(false);
   const [draftOff, setDraftOff] = useState<Set<string>>(off);
@@ -885,7 +886,7 @@ function Session({
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <View className="flex-1 bg-canvas p-5" style={{ gap: space(12) }}>
+      <View className="flex-1 bg-canvas p-5" style={{ gap: space(12), ...(lift > 0 ? { paddingBottom: lift + space(8) } : {}) }}>
         <View style={{ gap: space(8) }}>
           {/* Same row as the practice window: close, progress, gear. */}
           <View className="flex-row items-center" style={{ gap: space(12) }}>

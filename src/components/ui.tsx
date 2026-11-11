@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, InputAccessoryView, Keyboard, PanResponder, Platform, Pressable, TextInputProps, View } from 'react-native';
+import { Animated, Easing, InputAccessoryView, Keyboard, PanResponder, Platform, Pressable, ScrollView, TextInputProps, View } from 'react-native';
 
 import { CircleHelp, Minus, Plus } from 'lucide-react-native';
 
@@ -28,6 +28,35 @@ export function useKeyboardHeight(): number {
     };
   }, []);
   return height;
+}
+
+/**
+ * How far to lift a full-screen session's bottom edge: the iPhone keyboard
+ * covers the screen (Android resizes the window itself), so the typing field
+ * and the text above it have to sit above the keyboard, not under it.
+ */
+export function useKeyboardLift(): number {
+  const height = useKeyboardHeight();
+  return Platform.OS === 'ios' ? height : 0;
+}
+
+/**
+ * Scrolls a ScrollView so a focused field sits near its top, clear of the
+ * keyboard. Best effort: a platform that can't measure just doesn't scroll.
+ */
+export function scrollFieldIntoView(scroll: ScrollView | null, field: unknown, offset = 96): void {
+  const inner = scroll && ((scroll as any).getInnerViewRef?.() ?? (scroll as any).getInnerViewNode?.());
+  const f = field as { measureLayout?: (...a: unknown[]) => void } | null;
+  if (!scroll || !inner || !f?.measureLayout) return;
+  try {
+    f.measureLayout(
+      inner,
+      (_x: number, y: number) => scroll.scrollTo({ y: Math.max(0, y - offset), animated: true }),
+      () => {}
+    );
+  } catch {
+    // Not measurable here: leave the scroll where it is.
+  }
 }
 
 // ============================================================

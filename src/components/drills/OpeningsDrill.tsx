@@ -1,11 +1,12 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
 import { Eye } from 'lucide-react-native';
 
 import { DrillVerse } from '../../lib/drills';
 import { OPENING_WORDS, OpeningResult, openingAccuracy, openingOf } from '../../lib/openings';
 import { isRtl, normalizeToken, typedLetters } from '../../lib/textScript';
 import { AppButton, AppText, AppTextInput, useScaledSpace } from '../design';
+import { scrollFieldIntoView } from '../ui';
 
 // ============================================================================
 // OPENINGS -- Mixed review's quick pass over a long stretch. Each verse asks
@@ -29,6 +30,7 @@ export default React.memo(function OpeningsDrill({
   const [typed, setTyped] = useState('');
   const [peeked, setPeeked] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
 
   const index = results.length;
   const done = index >= verses.length;
@@ -83,6 +85,8 @@ export default React.memo(function OpeningsDrill({
                 </AppText>
               ) : active ? (
                 <AppTextInput
+                  ref={inputRef}
+                  onFocus={() => scrollFieldIntoView(scrollRef.current, inputRef.current)}
                   value={typed}
                   onChangeText={onChange}
                   autoFocus

@@ -390,7 +390,7 @@ export function AppTextInput({
   className,
   style,
   ...rest
-}: React.ComponentProps<typeof TextInput> & { variant?: TypeVariant }) {
+}: React.ComponentProps<typeof TextInput> & { variant?: TypeVariant; ref?: React.Ref<TextInput> }) {
   const scale = useFontScale();
   const palette = useThemeColors();
   const { fontSize, lineHeight } = TYPE[variant];

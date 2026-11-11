@@ -43,11 +43,42 @@ export const canSpeakVerses = (verses: RecitationVerse[]): boolean => {
  * doesn't fit (the SE at the largest text size), and the stage's actions
  * pinned under it.
  */
-export function RoundFrame({ children, footer, center = false }: { children: React.ReactNode; footer?: React.ReactNode; center?: boolean }) {
+export function RoundFrame({
+  children,
+  footer,
+  center = false,
+  follow,
+}: {
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  center?: boolean;
+  /** 0 to 1: how far through the text the user is. The scroll follows it, so the word being typed stays on screen. */
+  follow?: number;
+}) {
   const space = useScaledSpace();
+  const scrollRef = useRef<ScrollView>(null);
+  const sizes = useRef({ content: 0, view: 0 });
+  const followTo = (share: number | undefined) => {
+    if (share === undefined) return;
+    const { content, view } = sizes.current;
+    if (content <= view || view === 0) return;
+    // Keep the current spot about 40% of the way down the visible area.
+    scrollRef.current?.scrollTo({ y: Math.max(0, Math.min(content - view, content * share - view * 0.4)), animated: true });
+  };
+  useEffect(() => followTo(follow), [follow]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <View className="flex-1" style={{ gap: space(12) }}>
       <ScrollView
+        ref={scrollRef}
+        onLayout={(e) => {
+          sizes.current.view = e.nativeEvent.layout.height;
+          followTo(follow);
+        }}
+        onContentSizeChange={(_w, h) => {
+          sizes.current.content = h;
+          followTo(follow);
+        }}
+        keyboardShouldPersistTaps="handled"
         className="flex-1"
         contentContainerStyle={{ flexGrow: 1, gap: space(12), paddingBottom: space(4), justifyContent: center ? 'center' : 'flex-start' }}
       >
@@ -514,6 +545,7 @@ export default function GradedRecitation({
   if (stage === 'type') {
     return (
       <RoundFrame
+        follow={graded.length > 0 ? pointer / graded.length : 0}
         footer={
           <View style={{ gap: space(8) }}>
             <View className="flex-row flex-wrap items-center justify-between" style={{ gap: space(8) }}>

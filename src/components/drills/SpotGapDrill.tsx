@@ -7,6 +7,7 @@ import { blankCorrect, buildGapRound, GapAnswers, GapBlank, GapScore, GapVerse, 
 import { isRtl } from '../../lib/textScript';
 import { AppButton, AppText, AppTextInput, useScaledSpace } from '../design';
 import { useThemeColors } from '../theme';
+import { scrollFieldIntoView } from '../ui';
 
 // ============================================================================
 // SPOT THE GAP -- Mixed review's graded drill (see src/lib/spotGap.ts).
@@ -37,6 +38,8 @@ export default React.memo(function SpotGapDrill({ verses, hideNumbers, shuffle, 
   const [numbers, setNumbers] = useState<Record<number, string>>({});
   const [score, setScore] = useState<GapScore | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  // Each typing box, so focusing one scrolls it clear of the keyboard.
+  const fields = useRef<Record<string, unknown>>({});
 
   if (!round) {
     return (
@@ -77,6 +80,10 @@ export default React.memo(function SpotGapDrill({ verses, hideNumbers, shuffle, 
       return (
         <AppTextInput
           key={`blank-${id}`}
+          ref={(r) => {
+            fields.current[`b${id}`] = r;
+          }}
+          onFocus={() => scrollFieldIntoView(scrollRef.current, fields.current[`b${id}`])}
           value={value}
           onChangeText={(t) => setTyped((prev) => ({ ...prev, [id]: t }))}
           autoCapitalize="none"
@@ -137,6 +144,10 @@ export default React.memo(function SpotGapDrill({ verses, hideNumbers, shuffle, 
     if (!submitted) {
       return (
         <AppTextInput
+          ref={(r) => {
+            fields.current[`n${gv.verseIndex}`] = r;
+          }}
+          onFocus={() => scrollFieldIntoView(scrollRef.current, fields.current[`n${gv.verseIndex}`])}
           value={numbers[gv.verseIndex] ?? ''}
           onChangeText={(t) => setNumbers((prev) => ({ ...prev, [gv.verseIndex]: t.replace(/[^0-9]/g, '') }))}
           keyboardType="number-pad"

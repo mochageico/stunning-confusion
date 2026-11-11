@@ -4,7 +4,7 @@ import { Check, Compass, Layers, RefreshCw, SlidersHorizontal, X } from 'lucide-
 
 import { AppState, isReviewDue } from '../state/useAppState';
 import { QueueItem } from '../types';
-import { FadeInView } from '../components/ui';
+import { FadeInView, useKeyboardLift } from '../components/ui';
 import { AppButton, AppIconButton, AppText, RadioMark, useScaledSpace } from '../components/design';
 import { OptionsPopup, SessionDone } from '../components/session';
 import { EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
@@ -537,6 +537,7 @@ function Sitting({
   jigsawWarmUp: boolean;
 }) {
   const space = useScaledSpace();
+  const lift = useKeyboardLift();
   const { navigateTo, masteryTouches, newVersesPace, learningDays, dayStartHour, reviewsPaused, memoryQueueRef } = state;
 
   // The passage's verse ids, fixed for this sitting. Items themselves are read
@@ -752,7 +753,7 @@ function Sitting({
   const step = s.step;
   const frame = (eyebrow: string, title: string, body: React.ReactNode, top?: React.ReactNode, showEnd = true) => (
     <FadeInView style={{ flex: 1 }}>
-      <View className="flex-1 bg-canvas p-5">
+      <View className="flex-1 bg-canvas p-5" style={lift > 0 ? { paddingBottom: lift + space(8) } : undefined}>
         {/* Same row as the practice window: close, the step, gear. */}
         <View className="flex-row items-center" style={{ marginBottom: space(12), gap: space(12) }}>
           {showEnd ? <AppIconButton Icon={X} variant="outline" diameter={40} onPress={onLeave} accessibilityLabel="End session" /> : null}
