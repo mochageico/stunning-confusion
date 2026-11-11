@@ -475,7 +475,10 @@ export function FilterChips<T extends string>({
       showsHorizontalScrollIndicator={false}
       accessibilityRole="radiogroup"
       accessibilityLabel={accessibilityLabel}
-      contentContainerStyle={{ gap: space(8), paddingRight: space(4) }}
+      // flexGrow 0: inside a full-height column (the Map view) a horizontal
+      // ScrollView otherwise grows tall and stretches every chip with it.
+      style={{ flexGrow: 0, flexShrink: 0 }}
+      contentContainerStyle={{ gap: space(8), paddingRight: space(4), alignItems: 'center' }}
     >
       {options.map((opt) => {
         const on = opt.id === value;
