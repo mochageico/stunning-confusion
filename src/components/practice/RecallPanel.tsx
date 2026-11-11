@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { Check, ClipboardCheck, Eye, Mic, MicOff, RefreshCw, Shuffle, Sparkles } from 'lucide-react-native';
 import { normalizeToken, summarizeOutcomes, reviewPassAccuracy } from '../../lib/recitation';
@@ -54,6 +54,48 @@ interface RecallPanelProps {
   /** Opens the by-hand log, which PracticeModals owns. */
   onManualLog: () => void;
 }
+
+type RecallWord = { w: string; g: number };
+type RecallWordLook = { text: string; className: string; tappable: boolean };
+
+/**
+ * One verse of the Recall passage. A long passage redraws on every typed
+ * letter, every bit of speech heard and every tapped word; memoized, only the
+ * verses whose words changed look redraw (a whole chapter used to redraw
+ * every word each time).
+ */
+const RecallVerseLine = memo(
+  function RecallVerseLine({ verse, words, looks, script, press }: {
+    verse: number;
+    words: RecallWord[];
+    looks: RecallWordLook[];
+    script: TextScript;
+    press: (g: number) => void;
+  }) {
+    return (
+      <AppText variant="body" script={script} className="font-serif leading-relaxed text-ink">
+        <AppText variant="caption" className="font-sans font-bold text-ink-3">{verse} </AppText>
+        {words.map(({ w, g }, idx) => (
+          <AppText
+            variant="inherit"
+            key={idx}
+            className={looks[idx].className}
+            onPress={looks[idx].tappable ? () => press(g) : undefined}
+          >
+            {looks[idx].text}{wordGap(w)}
+          </AppText>
+        ))}
+      </AppText>
+    );
+  },
+  (a, b) =>
+    a.verse === b.verse &&
+    a.words === b.words &&
+    a.script === b.script &&
+    a.press === b.press &&
+    a.looks.length === b.looks.length &&
+    a.looks.every((x, i) => x.text === b.looks[i].text && x.className === b.looks[i].className && x.tappable === b.looks[i].tappable)
+);
 
 export default function RecallPanel({
   recall,
@@ -124,6 +166,19 @@ export default function RecallPanel({
     stopListening,
     onBuildUpTryBlind,
   } = recall;
+
+  // Each verse's words with their passage-order index g (-1 for a
+  // punctuation-only token). Split once, not on every letter typed.
+  const verseWords = useMemo(() => {
+    let flat = 0;
+    return verses.map((v) =>
+      splitWords(v.text, passageScript).map((w): RecallWord => ({ w, g: normalizeToken(w, passageScript).length > 0 ? flat++ : -1 }))
+    );
+  }, [verses, passageScript]);
+  // One stable tap handler for every verse line, reading the latest override.
+  const overrideRef = useRef(overrideWordAsCorrect);
+  overrideRef.current = overrideWordAsCorrect;
+  const pressWord = useCallback((g: number) => overrideRef.current(g), []);
 
   // The gear pop-up. Build up, Spot and First words show their own settings
   // in it (each drill renders the pop-up, through `gear`); every other mode
@@ -244,109 +299,55 @@ export default function RecallPanel({
               ) : (
               <ScrollView className="flex-1 mb-2">
                 <View className="gap-3">
-                  {(() => {
-                    // Verses show in recite order (last verse on top for
-                    // Last to first), but each word keeps its passage-order
-                    // index g; isPast/isCurrent compare its recite position.
-                    const firstWord: number[] = [];
-                    let count = 0;
-                    verses.forEach((v) => {
-                      firstWord.push(count);
-                      count += splitWords(v.text, passageScript).filter((w) => normalizeToken(w, passageScript).length > 0).length;
+                  {/* Verses show in recite order (last verse on top for Last
+                      to first), but each word keeps its passage-order index
+                      g; isPast/isCurrent compare its recite position. */}
+                  {reciteOrder.verseOrder.map((vi) => {
+                    const v = verses[vi];
+                    const looks = verseWords[vi].map(({ w, g }): RecallWordLook => {
+                      // Punctuation-only token (e.g. a standalone dash) --
+                      // not part of the recite pointer, shown plainly.
+                      if (g < 0) return { text: w, className: 'font-serif text-ink', tappable: false };
+                      const isCurrent = reciteOrder.posOf[g] === recitePointer;
+                      if (reciteOrder.posOf[g] < recitePointer) {
+                        const outcome = reciteOutcomes[g];
+                        const gradeClass =
+                          outcome === 'missed'
+                            ? 'text-danger underline decoration-dotted decoration-danger/50'
+                            : outcome === 'close'
+                              ? 'text-warning'
+                              : 'text-ink';
+                        // Missed words are tappable -- the speech engine
+                        // mis-hears plenty of words the user actually said
+                        // right, and there's no reliable automatic fix, so
+                        // this is the manual escape valve.
+                        return { text: w, className: `font-serif ${gradeClass}`, tappable: outcome === 'missed' };
+                      }
+                      if (!hiddenWordIndices.has(g)) {
+                        // This word wasn't drawn into the hidden sample, so
+                        // it's shown as a given hint -- still has to be
+                        // typed/spoken to advance, but isn't a blind guess.
+                        return { text: w, className: `font-serif rounded px-1 ${isCurrent ? 'bg-warning-soft text-ink-2' : 'text-ink-3'}`, tappable: false };
+                      }
+                      // First letters shown is an assisted hint -- this run
+                      // can only ever count as a review, never mastery.
+                      return {
+                        text: hintMode === 'firstLetter' ? blankExceptFirstLetter(w, passageScript) : blankLetters(w, passageScript),
+                        className: isCurrent ? 'font-serif font-bold text-accent' : 'font-serif text-ink-3',
+                        tappable: false,
+                      };
                     });
-                    return reciteOrder.verseOrder.map((vi) => {
-                      const v = verses[vi];
-                      let flatIdx = firstWord[vi];
-                      const words = splitWords(v.text, passageScript);
-                      return (
-                        <AppText variant="body" script={passageScript} key={`${v.book}-${v.chapter}-${v.verse}`} className="font-serif leading-relaxed text-ink">
-                          <AppText variant="caption" className="font-sans font-bold text-ink-3">{v.verse} </AppText>
-                          {words.map((w, idx) => {
-                            const isCountedWord = normalizeToken(w, passageScript).length > 0;
-                            const g = isCountedWord ? flatIdx++ : -1;
-                            const isPast = g >= 0 && reciteOrder.posOf[g] < recitePointer;
-                            const isCurrent = g >= 0 && reciteOrder.posOf[g] === recitePointer;
-                            const isGivenHint = g >= 0 && !hiddenWordIndices.has(g);
-
-                            if (isPast) {
-                              const outcome = reciteOutcomes[g];
-                              const gradeClass =
-                                outcome === 'missed'
-                                  ? 'text-danger underline decoration-dotted decoration-danger/50'
-                                  : outcome === 'close'
-                                    ? 'text-warning'
-                                    : 'text-ink';
-                              // Missed words are tappable -- the speech
-                              // engine mis-hears plenty of words the
-                              // user actually said right, and there's
-                              // no reliable automatic fix, so this is
-                              // the manual escape valve.
-                              return (
-                                <AppText variant="inherit"
-                                  key={idx}
-                                  className={`font-serif ${gradeClass}`}
-                                  onPress={outcome === 'missed' ? () => overrideWordAsCorrect(g) : undefined}
-                                >
-                                  {w}{wordGap(w)}
-                                </AppText>
-                              );
-                            }
-
-                            if (!isCountedWord) {
-                              // Punctuation-only token (e.g. a standalone
-                              // dash) -- not part of the recite pointer,
-                              // just render it plainly.
-                              return (
-                                <AppText variant="inherit" key={idx} className="font-serif text-ink">
-                                  {w}{wordGap(w)}
-                                </AppText>
-                              );
-                            }
-
-                            if (isGivenHint) {
-                              // This word wasn't drawn into the hidden
-                              // sample, so it's shown as a given hint --
-                              // still has to be typed/spoken to advance,
-                              // but isn't a blind guess.
-                              return (
-                                <AppText variant="inherit"
-                                  key={idx}
-                                  className={`font-serif rounded px-1 ${isCurrent ? 'bg-warning-soft text-ink-2' : 'text-ink-3'}`}
-                                >
-                                  {w}{wordGap(w)}
-                                </AppText>
-                              );
-                            }
-
-                            if (hintMode === 'firstLetter') {
-                              // Assisted hint -- kept visually distinct
-                              // (sky, not amber/neutral) from both a
-                              // given-hint word and a true blind mask,
-                              // since this run can only ever count as
-                              // a review, never mastery.
-                              return (
-                                <AppText variant="inherit"
-                                  key={idx}
-                                  className={isCurrent ? 'font-serif font-bold text-accent' : 'font-serif text-ink-3'}
-                                >
-                                  {blankExceptFirstLetter(w, passageScript)}{wordGap(w)}
-                                </AppText>
-                              );
-                            }
-
-                            return (
-                              <AppText variant="inherit"
-                                key={idx}
-                                className={isCurrent ? 'font-serif font-bold text-accent' : 'font-serif text-ink-3'}
-                              >
-                                {blankLetters(w, passageScript)}{wordGap(w)}
-                              </AppText>
-                            );
-                          })}
-                        </AppText>
-                      );
-                    });
-                  })()}
+                    return (
+                      <RecallVerseLine
+                        key={`${v.book}-${v.chapter}-${v.verse}`}
+                        verse={v.verse}
+                        words={verseWords[vi]}
+                        looks={looks}
+                        script={passageScript}
+                        press={pressWord}
+                      />
+                    );
+                  })}
                 </View>
               </ScrollView>
               )}

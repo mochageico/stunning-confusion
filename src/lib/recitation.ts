@@ -472,6 +472,38 @@ interface AlignmentTables {
 const buildAlignmentTable = (expected: string[], spoken: string[]): AlignmentTables => {
   const m = expected.length;
   const n = spoken.length;
+  // A whole chapter is hundreds of thousands of cells, so the per-cell work
+  // has to stay cheap. Two shortcuts, neither changes a result:
+  //  - pairCost (fuzzy matching) is worked out once per distinct pair of
+  //    words, not once per cell -- a chapter only has a few hundred.
+  //  - lettersMatch (joined words) is only tried when the two runs have the
+  //    same number of letters, which rules out nearly every cell.
+  const wordIds = new Map<string, number>();
+  const idOf = (w: string): number => {
+    let id = wordIds.get(w);
+    if (id === undefined) {
+      id = wordIds.size;
+      wordIds.set(w, id);
+    }
+    return id;
+  };
+  const eId = expected.map(idOf);
+  const sId = spoken.map(idOf);
+  const idCount = wordIds.size;
+  const costCache = new Float64Array(idCount * idCount).fill(-1);
+  const cachedPairCost = (i: number, j: number): number => {
+    const key = eId[i] * idCount + sId[j];
+    let c = costCache[key];
+    if (c < 0) {
+      c = pairCost(expected[i], spoken[j]);
+      costCache[key] = c;
+    }
+    return c;
+  };
+  const eLetters = new Array<number>(m + 1).fill(0);
+  for (let i = 0; i < m; i++) eLetters[i + 1] = eLetters[i] + expected[i].length;
+  const sLetters = new Array<number>(n + 1).fill(0);
+  for (let j = 0; j < n; j++) sLetters[j + 1] = sLetters[j] + spelledOut(spoken[j]).length;
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
   const gap: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(Infinity));
   for (let i = 1; i <= m; i++) {
@@ -486,12 +518,13 @@ const buildAlignmentTable = (expected: string[], spoken: string[]): AlignmentTab
         gap[i - 1][j] + continueSkipCost(expected[i - 1])
       );
       let best = Math.min(
-        dp[i - 1][j - 1] + pairCost(expected[i - 1], spoken[j - 1]),
+        dp[i - 1][j - 1] + cachedPairCost(i - 1, j - 1),
         gap[i][j],
         dp[i][j - 1] + INSERT_SPOKEN_COST
       );
-      for (let eSpan = 1; eSpan <= MAX_JOINED_WORDS; eSpan++) {
-        for (let sSpan = 1; sSpan <= MAX_JOINED_WORDS; sSpan++) {
+      for (let eSpan = 1; eSpan <= MAX_JOINED_WORDS && eSpan <= i; eSpan++) {
+        for (let sSpan = 1; sSpan <= MAX_JOINED_WORDS && sSpan <= j; sSpan++) {
+          if (eLetters[i] - eLetters[i - eSpan] !== sLetters[j] - sLetters[j - sSpan]) continue;
           if (lettersMatch(expected, i, eSpan, spoken, j, sSpan)) best = Math.min(best, dp[i - eSpan][j - sSpan] + MATCH_COST);
         }
       }
@@ -518,18 +551,20 @@ const backtraceOutcomes = (
   heard?: (string | null)[]
 ): (WordOutcome | null)[] => {
   const outcomes: (WordOutcome | null)[] = new Array(expected.length).fill(null);
-  // A skipped COMMONLY_DROPPED_WORDS word is forgiven outright -- the cheap
-  // cost only decides which alignment PATH wins; without this the word would
-  // still grade 'missed' despite never having a real chance to be heard (see
-  // COMMONLY_DROPPED_WORDS above).
-  const skippedOutcome = (word: string): WordOutcome => (isCommonlyDroppedWord(word) ? 'perfect' : 'missed');
+  // Skipped words are only flagged during the walk and graded afterwards by
+  // forgiveDroppedRuns, which needs to see each whole run of them.
+  const skipped: boolean[] = new Array(expected.length).fill(false);
+  const skippedOutcome = (_word: string, index: number): null => {
+    skipped[index] = true;
+    return null;
+  };
   let i = startI;
   let j = startJ;
   // True while walking back through a run of skipped expected words.
   let inGap = false;
   while (i > 0 && j > 0) {
     if (inGap) {
-      outcomes[i - 1] = skippedOutcome(expected[i - 1]);
+      outcomes[i - 1] = skippedOutcome(expected[i - 1], i - 1);
       inGap = i > 1 && gap[i][j] === gap[i - 1][j] + continueSkipCost(expected[i - 1]);
       i -= 1;
       continue;
@@ -567,10 +602,43 @@ const backtraceOutcomes = (
     }
   }
   while (i > 0) {
-    outcomes[i - 1] = skippedOutcome(expected[i - 1]);
+    outcomes[i - 1] = skippedOutcome(expected[i - 1], i - 1);
     i -= 1;
   }
+  forgiveDroppedRuns(expected, skipped, outcomes);
   return outcomes;
+};
+
+/** The most small words in a row that can go unheard and still count as said. */
+export const MAX_FORGIVEN_DROPPED_RUN = 2;
+
+// Grades the words the alignment skipped (never heard at all). A skipped
+// COMMONLY_DROPPED_WORDS word is forgiven -- the engine swallows those, so
+// it never had a real chance to be heard -- but only when it went missing on
+// its own: one or two small words between words that WERE heard ("in the"
+// lost from "sin in the flesh"). Engines don't swallow three in a row, and
+// they don't swallow the small words around a real word that is also
+// missing. Before this rule a skipped phrase was forgiven word by word:
+// leave out Genesis 1's "And it was so" and all four words counted as said;
+// leave out "and there was evening" and only "there" and "evening" showed
+// red. Now a longer run, or any run with a real word in it, is missed whole.
+const forgiveDroppedRuns = (expected: string[], skipped: boolean[], outcomes: (WordOutcome | null)[]) => {
+  let i = 0;
+  while (i < expected.length) {
+    if (!skipped[i]) {
+      i += 1;
+      continue;
+    }
+    let end = i;
+    let allDroppable = true;
+    while (end < expected.length && skipped[end]) {
+      if (!isCommonlyDroppedWord(expected[end])) allDroppable = false;
+      end += 1;
+    }
+    const forgiven = allDroppable && end - i <= MAX_FORGIVEN_DROPPED_RUN;
+    for (let k = i; k < end; k++) outcomes[k] = forgiven ? 'perfect' : 'missed';
+    i = end;
+  }
 };
 
 /**

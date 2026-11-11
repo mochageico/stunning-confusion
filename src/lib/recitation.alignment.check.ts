@@ -681,6 +681,49 @@ scenario('24. Second pass: hand-graded words and words never reached', () => {
 });
 
 // ============================================================================
+// 25-27. Small words are only forgiven when they went missing on their own.
+// ============================================================================
+const GEN_1_6_8 =
+  'and god said let there be an expanse in the midst of the waters and let it separate the waters from the waters ' +
+  'and god made the expanse and separated the waters that were under the expanse from the waters that were above the expanse and it was so ' +
+  'and god called the expanse heaven and there was evening and there was morning the second day';
+
+scenario('25. A skipped phrase of small words is missed, not forgiven', () => {
+  const expected = tokenizeWords(GEN_1_6_8);
+  const said = GEN_1_6_8.replace(' and it was so', '');
+  const outcomes = gradeTranscript(GEN_1_6_8, said);
+  const at = expected.join(' ').indexOf('and it was so');
+  const first = expected.join(' ').slice(0, at).split(' ').filter(Boolean).length;
+  const phrase = outcomes.slice(first, first + 4);
+  check('all four words of "and it was so" grade missed', phrase.every((o) => o === 'missed'), phrase.join(','));
+  check('nothing else is missed', outcomes.filter((o) => o === 'missed').length === 4, outcomes.join(','));
+});
+
+scenario('26. Small words beside a skipped real word are missed with it', () => {
+  const said = GEN_1_6_8.replace('and there was evening and there was morning', 'and there was morning');
+  const outcomes = gradeTranscript(GEN_1_6_8, said);
+  const missed = outcomes.filter((o) => o === 'missed').length;
+  check('the whole skipped half ("and there was evening") is missed: 4 words', missed === 4, `${missed} missed: ${outcomes.join(',')}`);
+});
+
+scenario('27. One or two swallowed small words are still forgiven', () => {
+  const said = GEN_1_6_8.replace('in the midst', 'midst').replace('and it was so', 'and was so');
+  const outcomes = gradeTranscript(GEN_1_6_8, said);
+  check('"in the" and a lone "it" cost nothing', outcomes.every((o) => o === 'perfect'), outcomes.join(','));
+});
+
+scenario('28. A whole chapter grades quickly', () => {
+  // About the size of Genesis 1 (roughly 800 words), said with a few slips.
+  const chapter = Array.from({ length: 13 }, () => GEN_1_6_8).join(' ');
+  const said = chapter.replace(/expanse from/g, 'expense from').replace(/ and it was so/g, '');
+  const started = Date.now();
+  const outcomes = gradeTranscript(chapter, said);
+  const ms = Date.now() - started;
+  check(`${outcomes.length} words graded in under 1.5 s on this machine`, ms < 1500, `${ms} ms`);
+  console.log(`        (${outcomes.length} words in ${ms} ms)`);
+});
+
+// ============================================================================
 console.log(`\n${total - failures}/${total} checks passed.`);
 if (failures > 0) {
   console.error(`${failures} FAILED.`);

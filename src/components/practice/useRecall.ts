@@ -335,15 +335,29 @@ export function useRecall({
   // is counted, and a slip fixed often enough is accepted from then on (see
   // lib/speechSlips). Recomputed from the full transcript here rather than
   // tracked through every live reconciliation pass.
+  //
+  // That full-passage grade is slow on a whole chapter, and it used to run
+  // before the word changed colour -- a tap took seconds to show. So the word
+  // turns first, the learning happens just after, and the grade is kept for
+  // the next tap on the same transcript.
+  const heardCacheRef = useRef<{ tokens: string[]; transcript: string; heard: (string | null)[] } | null>(null);
   const overrideWordAsCorrect = (idx: number) => {
-    if (reciteSource[idx] === 'speech' && passageScript === 'latin' && speakTranscript) {
-      const pos = reciteOrder.posOf[idx];
-      const { heard } = gradeTranscriptDetailed(speakExpectedTokens.join(' '), speakTranscript);
-      recordSpeechSlip(speakExpectedTokens[pos] ?? '', heard[pos]);
-    }
     setReciteOutcomes((prev) => ({ ...prev, [idx]: 'perfect' }));
     setReciteSource((prev) => ({ ...prev, [idx]: 'protected' }));
     setFinalOutcomes((prev) => (prev ? prev.map((o, i) => (i === idx ? 'perfect' : o)) : prev));
+    if (reciteSource[idx] === 'speech' && passageScript === 'latin' && speakTranscript) {
+      const pos = reciteOrder.posOf[idx];
+      const tokens = speakExpectedTokens;
+      const transcript = speakTranscript;
+      setTimeout(() => {
+        let cache = heardCacheRef.current;
+        if (!cache || cache.tokens !== tokens || cache.transcript !== transcript) {
+          cache = { tokens, transcript, heard: gradeTranscriptDetailed(tokens.join(' '), transcript).heard };
+          heardCacheRef.current = cache;
+        }
+        recordSpeechSlip(tokens[pos] ?? '', cache.heard[pos]);
+      }, 0);
+    }
   };
 
   // Revealing a word is a miss for grading purposes -- the user didn't
