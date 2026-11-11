@@ -149,7 +149,12 @@ export function ReviewSettings({
   onChange,
   onMasteryChange,
   initialOpen = 'level',
+  compact = false,
 }: {
+  /** The Plan tab's look (UI simplify Job 9): the four Retention Level choices
+   *  and one summary line in view; the step table and the four other
+   *  settings behind "Fine-tune". */
+  compact?: boolean;
   prefs: Pick<LadderPrefs, 'thoroughness' | 'cleanPct' | 'lateMovesBack' | 'balanceDays'>;
   masteryTouches: number;
   onChange: (patch: Partial<LadderPrefs>) => void;
@@ -161,10 +166,62 @@ export function ReviewSettings({
   const [open, setOpen] = useState<ReviewSettingKey | ''>(initialOpen);
   const toggle = (key: ReviewSettingKey) => setOpen((cur) => (cur === key ? '' : key));
   const clean = EXAMPLE_PCT >= prefs.cleanPct;
+  const [fineTune, setFineTune] = useState(false);
+  const palette = useThemeColors();
+  const scale = useFontScale();
 
+  if (compact) {
+    return (
+      <View style={{ gap: space(10) }}>
+        <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+          <AppText variant="body" className="font-sans font-semibold text-ink">
+            Retention Level
+          </AppText>
+          <SegmentedControl
+            value={prefs.thoroughness}
+            onChange={(v) => onChange({ thoroughness: v })}
+            options={TOUGHNESS_ORDER.map((v) => ({ id: v, label: presetLabel(v) }))}
+            accessibilityLabel="Retention Level"
+            wrap
+          />
+          <AppText variant="caption" className="font-sans text-ink-2">
+            About {spanWords(daysToTop(prefs.thoroughness))} to Secure · {masteryTouches} perfect {masteryTouches === 1 ? 'recall' : 'recalls'} to learn
+          </AppText>
+        </View>
+        <Pressable
+          onPress={() => setFineTune(!fineTune)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: fineTune }}
+          aria-expanded={fineTune}
+          hitSlop={8}
+          className="flex-row items-center self-start active:opacity-60"
+          style={{ minHeight: 44, gap: space(4), paddingHorizontal: space(4) }}
+        >
+          <AppText variant="label" className="font-sans font-semibold text-accent">
+            Fine-tune
+          </AppText>
+          <View style={{ transform: [{ rotate: fineTune ? '180deg' : '0deg' }] }}>
+            <ChevronDown size={Math.round(16 * scale)} color={palette.accent} strokeWidth={2.4} />
+          </View>
+        </Pressable>
+        {fineTune && (
+          <View style={{ gap: space(10) }}>
+            <View className="bg-surface border border-line rounded-card" style={{ padding: space(14) }}>
+              <StepTable thoroughness={prefs.thoroughness} />
+            </View>
+            {settingRows(true)}
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  return settingRows(false);
+
+  function settingRows(skipLevel: boolean) {
   return (
     <View className="bg-surface border border-line rounded-card overflow-hidden">
-      <SettingRow
+      {!skipLevel && <SettingRow
         first
         title="Retention Level"
         value={`${presetLabel(prefs.thoroughness)} · about ${spanWords(daysToTop(prefs.thoroughness))} to Secure`}
@@ -183,9 +240,10 @@ export function ReviewSettings({
           A passage that is never late reaches Secure after about {spanWords(daysToTop(prefs.thoroughness))}. More reviews at each step
           means a surer hold and a slower climb. Every step needs at least 2.
         </AppText>
-      </SettingRow>
+      </SettingRow>}
 
       <SettingRow
+        first={skipLevel}
         title="Perfect recalls to learn a verse"
         value={`${masteryTouches} in a row`}
         open={open === 'recalls'}
@@ -349,4 +407,5 @@ export function ReviewSettings({
       </SettingRow>
     </View>
   );
+  }
 }

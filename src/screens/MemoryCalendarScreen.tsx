@@ -5,8 +5,9 @@ import { AppState } from '../state/useAppState';
 import type { CalendarDayProjection } from '../lib/ladderCalendar';
 import { useCalendarDays } from '../state/useCalendarDays';
 import { LADDER, LADDER_GROUPS, type LadderGroup } from '../lib/ladder';
-import { FadeInView } from '../components/ui';
-import { AppText, useScaledSpace } from '../components/design';
+import { FadeInView, HelpTooltip } from '../components/ui';
+const FIRST_WEEK = 7;
+import { AppButton, AppText, useScaledSpace } from '../components/design';
 import { Dialog, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { VersesTabs } from '../components/VersesTabs';
 import { heaviestDay } from '../components/TodayCards';
@@ -41,8 +42,12 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
   const { navigateTo, switchVersesTab, joinedGroupPlanDetails } = state;
 
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  // The first week shows in full; later days with nothing on them wait behind "Show 2 weeks".
+  const [showAllDays, setShowAllDays] = useState(false);
 
   const days = useCalendarDays(state, DAYS_AHEAD);
+  const hasWork = (d: CalendarDayProjection) => d.dueReviews.length > 0 || d.minutes > 0;
+  const hiddenDays = days.filter((d, i) => i >= FIRST_WEEK && !hasWork(d)).length;
 
   const totals = useMemo(() => {
     const reviews = days.reduce((n, d) => n + d.dueReviews.length, 0);
@@ -90,10 +95,13 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
         <ScreenHeader title="Verses" />
         <VersesTabs value="memoryCalendar" onChange={switchVersesTab} />
 
-        <AppText variant="label" className="font-sans text-ink-2">
-          The next two weeks. Bar length is how long that day takes. Tap a day to see its passages. If every review goes well; a late
-          one moves a passage back, so treat this as a preview, not a promise.
-        </AppText>
+        {/* The disclaimer that used to sit here is behind the (?) (UI simplify Job 9). */}
+        <View className="flex-row items-center" style={{ paddingHorizontal: space(4) }}>
+          <AppText variant="label" className="font-sans font-semibold text-ink-2">
+            Next 2 weeks
+          </AppText>
+          <HelpTooltip text="Bar length is how long that day takes. Tap a day to see its passages. This assumes every review goes well; a late one moves a passage back, so treat it as a preview, not a promise." />
+        </View>
 
         <View className="flex-row" style={{ gap: space(8) }}>
           <View className="flex-1 bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(2) }}>
@@ -116,6 +124,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
 
         <View className="bg-surface border border-line rounded-card overflow-hidden">
           {days.map((d, i) => {
+            if (!showAllDays && i >= FIRST_WEEK && !hasWork(d)) return null;
             const heavy = totals.heavy === d;
             const reviewMinutes = GROUP_ORDER.reduce((n, g) => n + d.groupSeconds[g], 0) / 60;
             const learningMinutes = Math.max(0, d.minutes - reviewMinutes);
@@ -164,6 +173,11 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
             );
           })}
         </View>
+        {!showAllDays && hiddenDays > 0 && (
+          <View className="items-start">
+            <AppButton size="sm" variant="quiet" label="Show 2 weeks" onPress={() => setShowAllDays(true)} />
+          </View>
+        )}
 
         <View className="flex-row flex-wrap" style={{ columnGap: space(14), rowGap: space(4), paddingHorizontal: space(4) }}>
           {([...GROUP_ORDER.filter((g) => g !== 'secure'), 'secure', 'learning'] as (LadderGroup | 'learning')[]).map((g) => (
@@ -178,11 +192,9 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
         </View>
 
         {totals.light.length > 0 && (
-          <View className="bg-success-soft rounded-card" style={{ padding: space(12) }}>
-            <AppText variant="label" className="font-sans text-success">
-              Lightest days: {totals.light.map((d) => shortDay(d.date, days.indexOf(d))).join(' and ')}. Good days to start a new chapter.
-            </AppText>
-          </View>
+          <AppText variant="caption" className="font-sans text-ink-2" style={{ paddingHorizontal: space(4) }}>
+            Lightest: {totals.light.map((d) => shortDay(d.date, days.indexOf(d))).join(' and ')}
+          </AppText>
         )}
       </ScrollView>
 
@@ -190,7 +202,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
       <Dialog
         visible={selected != null}
         onClose={() => setSelectedIdx(null)}
-        placement="sheet"
+        placement="center"
         title={selected ? longDay(selected.date) : ''}
         message={selected?.isSabbath ? 'Sabbath. Nothing is scheduled.' : selected?.isPaused ? 'Reviews are paused.' : undefined}
       >

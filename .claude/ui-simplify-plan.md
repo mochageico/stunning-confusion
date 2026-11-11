@@ -405,6 +405,16 @@ and "Its story" become collapsed sections (R8). Stats become one line.
 Connect on the Map, Open chapter, Remove → ⋯.
 
 ### Job 9 · Plan and Calendar — `MemoryPlanScreen.tsx`, `RhythmEditor.tsx`, `ReviewSettings.tsx`, `MemoryCalendarScreen.tsx`
+
+**Built 2026-11-10.** Plan: the "Memory Plan Designer" title, its paragraph
+and the "Tap a setting…" line are gone. My Schedule unchanged. Review
+Settings uses a new `compact` mode: the four Retention Level choices and one
+line ("About 28 months to Secure · 3 perfect recalls to learn"); "Fine-tune"
+opens the step table and the four other setting rows (each still opens its
+own preview). Calendar: the disclaimer is behind a (?) beside "Next 2 weeks";
+the totals and bars stay; after the first week, days with nothing due wait
+behind "Show 2 weeks"; the green Lightest days box is one grey line; the day
+pop-up is centered. Not phone-tested.
 Plan: keep My Schedule fully visible (it is good). Review Settings shows only
 the four Retention Level choices and one summary line; the step-by-step table
 and the four fine-tuning rows go behind "Fine-tune". Remove the page title and

@@ -56,15 +56,6 @@ export default function MemoryPlanScreen({ state }: { state: AppState }) {
         <ScreenHeader title="Verses" />
         <VersesTabs value="memoryPlan" onChange={switchVersesTab} />
 
-        <View style={{ gap: space(4) }}>
-          <AppText variant="title" className="font-sans font-bold text-ink" accessibilityRole="header">
-            Memory Plan Designer
-          </AppText>
-          <AppText variant="label" className="font-sans text-ink-2">
-            When you learn new verses, and how they come back after that. One plan for all your verses.
-          </AppText>
-        </View>
-
         <View style={{ gap: space(8) }}>
           <SectionHeader title="My Schedule" />
           <Card>
@@ -74,10 +65,8 @@ export default function MemoryPlanScreen({ state }: { state: AppState }) {
 
         <View style={{ gap: space(8) }}>
           <SectionHeader title="Review Settings" />
-          <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-            Tap a setting to change it and see what it does.
-          </AppText>
           <ReviewSettings
+            compact
             prefs={{ thoroughness, cleanPct, lateMovesBack, balanceDays }}
             masteryTouches={masteryTouches}
             onChange={updateLadderSettings}
