@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { Check, ClipboardCheck, Eye, Mic, MicOff, RefreshCw, Shuffle, Sparkles } from 'lucide-react-native';
 import { normalizeToken, summarizeOutcomes, reviewPassAccuracy } from '../../lib/recitation';
@@ -123,6 +124,37 @@ export default function RecallPanel({
     stopListening,
     onBuildUpTryBlind,
   } = recall;
+
+  // The gear pop-up. Build up, Spot and First words show their own settings
+  // in it (each drill renders the pop-up, through `gear`); every other mode
+  // uses the one at the end of this component. All of them end with the
+  // by-hand log.
+  const modeLabel = learnModes.find((m) => m.id === learnTab)?.label ?? 'Practice';
+  const drillOwnsGear = learnTab === 'buildUp' || learnTab === 'spotSwap' || learnTab === 'outline';
+  // Memoized: the drills are React.memo, and a fresh object on every
+  // keystroke would redraw the hidden ones while Recall is being typed.
+  const logByHand = useMemo(() => (
+    <GroupedList>
+      <ListRow
+        Icon={ClipboardCheck}
+        title="Log a review by hand"
+        subtitle="For one you did away from the app"
+        onPress={() => {
+          onCloseOptions();
+          onManualLog();
+        }}
+      />
+    </GroupedList>
+  ), [onCloseOptions, onManualLog]);
+  const gears = useMemo(() => {
+    const gearFor = (mode: typeof learnTab) => ({
+      open: optionsOpen && learnTab === mode,
+      onClose: onCloseOptions,
+      title: `${modeLabel} settings`,
+      footer: logByHand,
+    });
+    return { buildUp: gearFor('buildUp'), spotSwap: gearFor('spotSwap'), outline: gearFor('outline') };
+  }, [optionsOpen, learnTab, onCloseOptions, modeLabel, logByHand]);
 
   // First words counts as a review: a verse said from its first words that
   // clears the same 90% a review needs, and is due, is logged quietly (the
@@ -552,17 +584,18 @@ export default function RecallPanel({
         </View>
       )}
       <View className="flex-1" style={{ display: learnTab === 'buildUp' ? 'flex' : 'none' }}>
-        <BuildUpDrill verses={verses} onTryBlind={onBuildUpTryBlind} />
+        <BuildUpDrill verses={verses} onTryBlind={onBuildUpTryBlind} gear={gears.buildUp} />
       </View>
       <View className="flex-1" style={{ display: learnTab === 'scramble' ? 'flex' : 'none' }}>
         <ScrambleDrill verses={verses} />
       </View>
       <View className="flex-1" style={{ display: learnTab === 'spotSwap' ? 'flex' : 'none' }}>
-        <SpotSwapDrill verses={verses} />
+        <SpotSwapDrill verses={verses} gear={gears.spotSwap} />
       </View>
       <View className="flex-1" style={{ display: learnTab === 'outline' ? 'flex' : 'none' }}>
         <OutlineDrill
           verses={verses}
+          gear={gears.outline}
           sections={verses[0] ? sectionsForChapter?.(verses[0].book, verses[0].chapter) ?? null : null}
           onSaveExtra={onSaveOutlineExtra}
           onVerseGraded={creditOutlineVerse}
@@ -589,9 +622,9 @@ export default function RecallPanel({
           Recall's own settings, then the by-hand log every mode has. Each
           change starts the run over, as it always did inline. */}
       <OptionsPopup
-        visible={optionsOpen}
+        visible={optionsOpen && !drillOwnsGear}
         onClose={onCloseOptions}
-        title={`${learnModes.find((m) => m.id === learnTab)?.label ?? 'Practice'} settings`}
+        title={`${modeLabel} settings`}
       >
         {learnTab === 'recite' ? (
           <>
@@ -673,17 +706,7 @@ export default function RecallPanel({
           </>
         ) : null}
 
-        <GroupedList>
-          <ListRow
-            Icon={ClipboardCheck}
-            title="Log a review by hand"
-            subtitle="For one you did away from the app"
-            onPress={() => {
-              onCloseOptions();
-              onManualLog();
-            }}
-          />
-        </GroupedList>
+        {logByHand}
       </OptionsPopup>
     </View>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronUp, Headphones, Pause, Play, SlidersHorizontal, X } from 'lucide-react-native';
@@ -234,6 +234,7 @@ function PracticeModalsInner({
   // The settings pop-up and the mode picker are centered pop-ups.
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [modesOpen, setModesOpen] = useState(false);
+  const closeOptions = useCallback(() => setOptionsOpen(false), []);
   const insets = useSafeAreaInsets();
   const aboveTabBar = useAboveTabBar();
 
@@ -285,6 +286,7 @@ function PracticeModalsInner({
   // keeping it avoids a schema change to every historical touch log.
   // ==========================================
   const [showManualLog, setShowManualLog] = useState(false);
+  const openManualLog = useCallback(() => setShowManualLog(true), []);
 
   // A self-check per verse (practice/ManualLogSheet says what each answer does).
   const submitManualLog = (answers: SelfCheckAnswer[], canMoveUp: boolean) => {
@@ -521,8 +523,8 @@ function PracticeModalsInner({
             onSaveOutlineExtra={onSaveOutlineExtra}
             onSaveTakeawayDraft={onSaveTakeawayDraft}
             optionsOpen={optionsOpen}
-            onCloseOptions={() => setOptionsOpen(false)}
-            onManualLog={() => setShowManualLog(true)}
+            onCloseOptions={closeOptions}
+            onManualLog={openManualLog}
           />
         )}
       </View>

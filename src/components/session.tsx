@@ -218,6 +218,19 @@ export function SessionDone({
 // ============================================================
 // OptionsPopup — a session's settings behind the gear. Centered, with Done.
 // ============================================================
+/**
+ * Handed to a drill by the practice screen so the drill's own settings show
+ * in the header gear's pop-up instead of on screen. Without it a drill keeps
+ * its settings where they were (Guided learning, Mixed review).
+ */
+export interface DrillGear {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  /** Rows every mode shares, under the drill's own (Log a review by hand). */
+  footer?: React.ReactNode;
+}
+
 export function OptionsPopup({
   visible,
   onClose,

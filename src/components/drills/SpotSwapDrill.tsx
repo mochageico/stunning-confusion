@@ -8,6 +8,7 @@ import { isRtl, scriptOfVerse, wordGap } from '../../lib/textScript';
 import { AppButton, AppText } from '../design';
 import { ChipRow } from '../ui';
 import { SegmentedControl } from '../blocks';
+import { OptionsPopup, type DrillGear } from '../session';
 import { useThemeColors } from '../theme';
 
 // ============================================================================
@@ -43,6 +44,7 @@ export default React.memo(function SpotSwapDrill({
   onScored,
   resultNote = 'practice only, nothing logged.',
   showSwapCount = true,
+  gear,
 }: {
   verses: DrillVerse[];
   /** Show swaps in this one verse (a verse number); the rest of `verses` only supplies decoy words. */
@@ -55,6 +57,8 @@ export default React.memo(function SpotSwapDrill({
   resultNote?: string;
   /** The "Swaps per verse" picker. A host that grades the drill keeps it fixed. */
   showSwapCount?: boolean;
+  /** Settings in the practice header's gear pop-up instead of on screen. */
+  gear?: DrillGear;
 }) {
   const palette = useThemeColors();
   const script = useMemo(() => (verses.length > 0 ? scriptOfVerse(verses[0]) : 'latin'), [verses]);
@@ -217,7 +221,7 @@ export default React.memo(function SpotSwapDrill({
               {onScored && unknownWords.size > 0 ? ` · ${unknownWords.size} real word${unknownWords.size === 1 ? '' : 's'} not known` : ''} — {resultNote}
             </AppText>
           </View>
-        ) : !showSwapCount ? null : (
+        ) : !showSwapCount || gear ? null : (
           // Label ABOVE the chips -- ChipRow's default chips are flex-1, so
           // next to a label in a justify-between row they size against the
           // leftovers and squash to slivers (same fix as the Build-up settings).
@@ -245,6 +249,29 @@ export default React.memo(function SpotSwapDrill({
           </View>
         )}
       </View>
+
+      {gear ? (
+        <OptionsPopup visible={gear.open} onClose={gear.onClose} title={gear.title}>
+          {showSwapCount ? (
+            <View className="gap-1">
+              <AppText variant="caption" className="font-sans font-bold text-ink-2">Swaps per verse</AppText>
+              <ChipRow
+                options={[
+                  { id: 1, label: '1' },
+                  { id: 2, label: '2' },
+                  { id: 3, label: '3' },
+                ]}
+                value={swapsPerVerse}
+                onChange={(n) => {
+                  setSwapsPerVerse(n);
+                  resetSwap(n);
+                }}
+              />
+            </View>
+          ) : null}
+          {gear.footer}
+        </OptionsPopup>
+      ) : null}
     </View>
   );
 });

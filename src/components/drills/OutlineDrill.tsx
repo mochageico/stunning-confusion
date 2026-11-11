@@ -35,6 +35,7 @@ import { useThemeColors } from '../theme';
 import GradedRecitation, { canSpeakVerses, RecitationMode } from '../GradedRecitation';
 import { BracketGutter, SectionHeaderRow, useGutterWidth } from '../ChapterSections';
 import { DrillSetting, DrillSettings } from '../practice/shared';
+import { OptionsPopup, type DrillGear } from '../session';
 
 // ============================================================================
 // FIRST WORDS (OUTLINE) -- MIXED_REVIEW_PLAN.md, stage 2
@@ -63,8 +64,11 @@ export default React.memo(function OutlineDrill({
   sections,
   onSaveExtra,
   onVerseGraded,
+  gear,
 }: {
   verses: OutlineVerse[];
+  /** Settings in the practice header's gear pop-up instead of on screen. */
+  gear?: DrillGear;
   /** The chapter's saved sections doc, if any. Only used when every verse is from one chapter. */
   sections?: ChapterSections | null;
   /** Saves the per-verse taps for the chapter. */
@@ -264,6 +268,50 @@ export default React.memo(function OutlineDrill({
     );
   };
 
+  // Words shown, order, answer by, the two toggles: on screen, or in the
+  // practice header's gear pop-up when the host passes `gear`.
+  const outlineSettings = (
+    <DrillSettings>
+      <DrillSetting storageKey="outline.words" first label="Words shown" value={String(words)}>
+        <View style={{ gap: 2 }}>
+          <DiscreteSlider value={words} onChange={setWords} options={WORD_STOPS} accessibilityLabel="Words shown" />
+        </View>
+        <AppText variant="caption" className="text-ink-3 font-sans">
+          The same for every verse. Tapping a verse adds a word to that verse alone.
+        </AppText>
+      </DrillSetting>
+      <DrillSetting storageKey="outline.order" label="Order" value={direction === 'forward' ? MIX_NAMES.firstToLast : MIX_NAMES.lastToFirst}>
+        <SegmentedControl
+          value={direction}
+          onChange={setDirection}
+          accessibilityLabel="Order of the verses"
+          options={[
+            { id: 'forward' as const, label: MIX_NAMES.firstToLast },
+            { id: 'reverse' as const, label: MIX_NAMES.lastToFirst },
+          ]}
+        />
+        <AppText variant="caption" className="text-ink-3 font-sans">
+          The list and Run it both follow it. Each verse is still said forward.
+        </AppText>
+      </DrillSetting>
+      {speakable && (
+        <DrillSetting storageKey="outline.answer" label="Answer by" value={mode === 'speak' ? 'Saying it' : 'Typing first letters'}>
+          <SegmentedControl
+            value={mode}
+            onChange={setMode}
+            accessibilityLabel="How to answer"
+            options={[
+              { id: 'speak' as const, label: 'Say it' },
+              { id: 'type' as const, label: 'Type it' },
+            ]}
+          />
+        </DrillSetting>
+      )}
+      {hasSections && <SwitchRow label="Section labels" value={showLabels} onChange={setShowLabels} />}
+      {hasPhrase && <SwitchRow label="Memory phrase" value={showPhrase} onChange={setShowPhrase} />}
+    </DrillSettings>
+  );
+
   return (
     <View className="flex-1 justify-between">
       <ScrollView className="flex-1" contentContainerStyle={{ gap: space(10), paddingBottom: space(8) }}>
@@ -274,45 +322,7 @@ export default React.memo(function OutlineDrill({
           </AppText>
         </View>
 
-        <DrillSettings>
-          <DrillSetting storageKey="outline.words" first label="Words shown" value={String(words)}>
-            <View style={{ gap: 2 }}>
-              <DiscreteSlider value={words} onChange={setWords} options={WORD_STOPS} accessibilityLabel="Words shown" />
-            </View>
-            <AppText variant="caption" className="text-ink-3 font-sans">
-              The same for every verse. Tapping a verse adds a word to that verse alone.
-            </AppText>
-          </DrillSetting>
-          <DrillSetting storageKey="outline.order" label="Order" value={direction === 'forward' ? MIX_NAMES.firstToLast : MIX_NAMES.lastToFirst}>
-            <SegmentedControl
-              value={direction}
-              onChange={setDirection}
-              accessibilityLabel="Order of the verses"
-              options={[
-                { id: 'forward' as const, label: MIX_NAMES.firstToLast },
-                { id: 'reverse' as const, label: MIX_NAMES.lastToFirst },
-              ]}
-            />
-            <AppText variant="caption" className="text-ink-3 font-sans">
-              The list and Run it both follow it. Each verse is still said forward.
-            </AppText>
-          </DrillSetting>
-          {speakable && (
-            <DrillSetting storageKey="outline.answer" label="Answer by" value={mode === 'speak' ? 'Saying it' : 'Typing first letters'}>
-              <SegmentedControl
-                value={mode}
-                onChange={setMode}
-                accessibilityLabel="How to answer"
-                options={[
-                  { id: 'speak' as const, label: 'Say it' },
-                  { id: 'type' as const, label: 'Type it' },
-                ]}
-              />
-            </DrillSetting>
-          )}
-          {hasSections && <SwitchRow label="Section labels" value={showLabels} onChange={setShowLabels} />}
-          {hasPhrase && <SwitchRow label="Memory phrase" value={showPhrase} onChange={setShowPhrase} />}
-        </DrillSettings>
+        {gear ? null : outlineSettings}
 
         {finishedRun && resultCount > 0 && (
           <View className="bg-surface-2 border border-line rounded-card" style={{ padding: space(12), gap: space(2) }}>
@@ -369,6 +379,12 @@ export default React.memo(function OutlineDrill({
           <AppButton variant="primary" Icon={Mic} label="Run it" onPress={() => beginRun(rows, true)} accessibilityLabel={`${FORMATS.firstWords.label}: run it, ${direction === 'forward' ? 'first to last' : 'last to first'}`} />
         </View>
       </View>
+      {gear ? (
+        <OptionsPopup visible={gear.open} onClose={gear.onClose} title={gear.title}>
+          {outlineSettings}
+          {gear.footer}
+        </OptionsPopup>
+      ) : null}
     </View>
   );
 });

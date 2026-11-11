@@ -7,6 +7,7 @@ import { blankExceptFirstLetter, blankLetters, joinWords, scriptOfVerse, splitWo
 import { loadPracticePrefs, savePracticePrefs } from '../../lib/practicePrefs';
 import { AppButton, AppText } from '../design';
 import { ChipRow } from '../ui';
+import { OptionsPopup, type DrillGear } from '../session';
 import { useThemeColors } from '../theme';
 
 // ============================================================================
@@ -19,8 +20,11 @@ export default React.memo(function BuildUpDrill({
   verses,
   onTryBlind,
   onComplete,
+  gear,
 }: {
   verses: DrillVerse[];
+  /** Settings in the practice header's gear pop-up instead of on screen. */
+  gear?: DrillGear;
   /** The end screen's main button: prove it cold in a graded recitation. */
   onTryBlind?: () => void;
   /** Fires when the last stage's last rep is done. */
@@ -191,6 +195,43 @@ export default React.memo(function BuildUpDrill({
           ? 'Add the next verse'
           : 'Add the next phrase';
 
+  // Bite size and direction: on screen behind the small "Forward" toggle, or
+  // in the practice header's gear pop-up when the host passes `gear`.
+  const buildSettingsBody = (
+    <>
+        {/* Label ABOVE the chips, not beside them. ChipRow's default chips
+            are flex-1, so they need the full row width to divide -- sitting
+            them next to a label in a justify-between row leaves them sizing
+            against whatever's left over, and the labels spill out. */}
+        <View className="gap-1">
+          <AppText variant="caption" className="font-sans font-bold text-ink-2">Bite size</AppText>
+          <ChipRow
+            options={[
+              { id: 'short' as BiteSize, label: 'Short' },
+              { id: 'medium' as BiteSize, label: 'Medium' },
+              { id: 'long' as BiteSize, label: 'Long' },
+            ]}
+            value={buildSize}
+            onChange={changeBuildSize}
+          />
+        </View>
+        <View className="gap-1">
+          <AppText variant="caption" className="font-sans font-bold text-ink-2">Build from</AppText>
+          <ChipRow
+            options={[
+              { id: 'forward' as BuildDirection, label: 'The start' },
+              { id: 'backward' as BuildDirection, label: 'The end' },
+            ]}
+            value={buildDirection}
+            onChange={changeBuildDirection}
+          />
+        </View>
+        <AppText variant="caption" className="text-ink-3 font-sans">
+          Building from the end means every repetition finishes on the words you know best. Changing either setting restarts the verse.
+        </AppText>
+    </>
+  );
+
   return (
     <View className="flex-1 justify-between">
       {/* Progress: how much is stacked, and where we are. */}
@@ -201,12 +242,14 @@ export default React.memo(function BuildUpDrill({
               ? `Putting it together — verse ${stage.step} of ${stage.stepCount}`
               : `${verse ? `${verse.chapter}:${verse.verse} — ` : ''}phrase ${stage.step} of ${stage.stepCount}`}
           </AppText>
-          <Pressable onPress={() => setBuildSettingsOpen((p) => !p)} hitSlop={8} className="flex-row items-center gap-1">
-            <Sliders size={12} color={palette.ink3} />
-            <AppText variant="caption" className="font-sans font-semibold text-ink-2">
-              {buildDirection === 'forward' ? 'Forward' : 'Backward'}
-            </AppText>
-          </Pressable>
+          {gear ? null : (
+            <Pressable onPress={() => setBuildSettingsOpen((p) => !p)} hitSlop={8} className="flex-row items-center gap-1">
+              <Sliders size={12} color={palette.ink3} />
+              <AppText variant="caption" className="font-sans font-semibold text-ink-2">
+                {buildDirection === 'forward' ? 'Forward' : 'Backward'}
+              </AppText>
+            </Pressable>
+          )}
         </View>
 
         <View className="flex-row gap-1">
@@ -225,38 +268,14 @@ export default React.memo(function BuildUpDrill({
       {/* Bite size lives behind the gear rather than on a setup screen --
           it's a once-in-a-while decision, and a card between the user and
           phrase 1 is a tax on every session to serve the rare one. */}
-      {buildSettingsOpen && (
+      {gear ? (
+        <OptionsPopup visible={gear.open} onClose={gear.onClose} title={gear.title}>
+          {buildSettingsBody}
+          {gear.footer}
+        </OptionsPopup>
+      ) : buildSettingsOpen && (
         <View className="shrink-0 bg-surface-2 border border-line rounded-card p-2.5 gap-2 mb-2">
-          {/* Label ABOVE the chips, not beside them. ChipRow's default chips
-              are flex-1, so they need the full row width to divide -- sitting
-              them next to a label in a justify-between row leaves them sizing
-              against whatever's left over, and the labels spill out. */}
-          <View className="gap-1">
-            <AppText variant="caption" className="font-sans font-bold text-ink-2">Bite size</AppText>
-            <ChipRow
-              options={[
-                { id: 'short' as BiteSize, label: 'Short' },
-                { id: 'medium' as BiteSize, label: 'Medium' },
-                { id: 'long' as BiteSize, label: 'Long' },
-              ]}
-              value={buildSize}
-              onChange={changeBuildSize}
-            />
-          </View>
-          <View className="gap-1">
-            <AppText variant="caption" className="font-sans font-bold text-ink-2">Build from</AppText>
-            <ChipRow
-              options={[
-                { id: 'forward' as BuildDirection, label: 'The start' },
-                { id: 'backward' as BuildDirection, label: 'The end' },
-              ]}
-              value={buildDirection}
-              onChange={changeBuildDirection}
-            />
-          </View>
-          <AppText variant="caption" className="text-ink-3 font-sans">
-            Building from the end means every repetition finishes on the words you know best. Changing either setting restarts the verse.
-          </AppText>
+          {buildSettingsBody}
         </View>
       )}
 
