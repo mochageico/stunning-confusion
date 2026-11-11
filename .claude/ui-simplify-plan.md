@@ -310,6 +310,19 @@ Target (R2): the Start on Today goes straight into the first step.
 - Do these as two sessions; they are the two largest screens.
 
 ### Job 5 · Verses tab — `ActivePlanScreen.tsx`, `VersesTabs.tsx`, `VerseStages.tsx`, `VersesByBook.tsx`
+
+**Built 2026-11-10.** Header: search, + (outline icons) and ⋯ (The road,
+Where verses come from when a group plan is joined, Takeaways, History). The
+tip box, the "road every verse travels" card, the stage captions and the
+bottom blocks are gone. One slim card "13 of 22 learned" with the stage bar
+opens The road; "Looking ahead" (1 month / 3 months / 1 year) now lives at the
+top of The road. One chip row (`FilterChips`, new in session.tsx): All · Due ·
+N · Coming up · N · By book · Map. "Waiting to start" is "Coming up". Coming
+up rows are one reference line (translation in grey) and one text line, with a
+quiet ⋯ (Start learning now, Move to top, Remove from My Verses with confirm);
+the Start learning button and swipe-to-delete are gone; holding a row still
+reorders. `OverflowMenu` takes `variant="bare"` for row menus. Segments kept
+as My Verses · Plan · Calendar. Not phone-tested.
 Now: search + Add at top, 3-way switch, a tip box, Due only + By stage
 controls, a progress card with "The road" and "Looking ahead", stage sections
 with Delete and Start learning on each waiting verse, then "Where your verses

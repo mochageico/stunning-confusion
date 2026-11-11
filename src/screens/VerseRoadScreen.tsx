@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Check, ChevronRight } from 'lucide-react-native';
 
@@ -10,6 +10,10 @@ import { useThemeColors } from '../components/theme';
 import { TopChips, fillFor, dayWord, stageCaption } from '../components/VerseStages';
 import { STAGE_LABEL, StageGroup, VerseStage, groupByStage, referenceFor, stageCounts } from '../lib/stageProgress';
 import { LADDER } from '../lib/ladder';
+import { Dropdown } from '../components/Dropdown';
+import { StageStrip } from '../components/VerseStages';
+import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, learnedCount, projectStartDates } from '../lib/forecast';
+import { STAGE_ORDER } from '../lib/stageProgress';
 
 // ============================================================================
 // The road: every passage drawn as a climb from Learning (bottom) to the top
@@ -43,7 +47,10 @@ const TICK: Record<VerseStage, string> = {
 type Segment = VerseStage | 'top';
 
 export default function VerseRoadScreen({ state }: { state: AppState }) {
-  const { memoryQueue, handleBack, openVersePage, navigateTo, masteryTouches } = state;
+  const {
+    memoryQueue, handleBack, openVersePage, navigateTo, masteryTouches, thoroughness, learningDays, newVersesPace,
+    sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil,
+  } = state;
   const space = useScaledSpace();
   const scale = useFontScale();
   const palette = useThemeColors();
@@ -56,6 +63,27 @@ export default function VerseRoadScreen({ state }: { state: AppState }) {
     [memoryQueue, masteryTouches]
   );
   const counts = useMemo(() => stageCounts(memoryQueue), [memoryQueue]);
+
+  // ---- Looking ahead (moved here from My Verses, UI simplify Job 5) ----
+  // Only verses already on your list, and every review going well. Waiting
+  // verses start when the real daily pull would start them (forecast.ts).
+  const [horizon, setHorizon] = useState<Horizon>('m1');
+  const total = memoryQueue.length;
+  const forecastPlan: ForecastPlan = {
+    thoroughness, masteryTouches, learningDays, newVersesPace, sabbathEnabled, sabbathDay,
+    joinedPlans: joinedGroupPlanDetails, memberships: joinedGroupPlanMemberships, pausedAt, pausedUntil,
+  };
+  const ahead = useMemo(() => {
+    const starts = projectStartDates(memoryQueue, forecastPlan, now);
+    const then = horizonDate(horizon, now);
+    const shown = forecastCounts(memoryQueue, forecastPlan, then, starts, now);
+    const deltas = Object.fromEntries(STAGE_ORDER.map((st) => [st, shown[st] - counts[st]])) as Record<VerseStage, number>;
+    const label = then.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(then.getFullYear() === now.getFullYear() ? null : { year: 'numeric' }) });
+    const learned = learnedCount(shown);
+    const line = `By ${label}, ${learned === total ? `all ${total}` : `${learned} of ${total}`} learned${shown.kept > 0 ? `, ${shown.kept} Kept` : ''}`;
+    return { shown, deltas, line };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [horizon, memoryQueue, counts, thoroughness, masteryTouches, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil]);
 
   const open = (g: StageGroup) => openVersePage({ book: g.book, chapter: g.chapter, verses: g.verses, translationId: g.translationId });
   const rail = space(40);
@@ -188,9 +216,29 @@ export default function VerseRoadScreen({ state }: { state: AppState }) {
         <ScreenHeader
           title="The road"
           onBack={handleBack}
-          backLabel="My Verses"
-          subtitle="Every passage climbs from Learning to Secure. The closer one is to its next step, the higher it sits."
+          backLabel="Verses"
         />
+
+        {total > 0 && (
+          <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+            <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
+              <AppText variant="label" className="font-sans font-semibold text-ink-2">
+                Looking ahead
+              </AppText>
+              <Dropdown<Horizon>
+                value={horizon}
+                options={(['m1', 'm3', 'y1'] as Horizon[]).map((h) => ({ id: h, label: HORIZON_LABEL[h] }))}
+                title="When"
+                onChange={setHorizon}
+                compact
+              />
+            </View>
+            <AppText variant="label" className="font-sans text-ink">
+              {ahead.line}
+            </AppText>
+            <StageStrip counts={ahead.shown} deltas={ahead.deltas} />
+          </View>
+        )}
 
         <View>
           {/* Summit: the top step, every 6 months, for good */}
@@ -229,7 +277,7 @@ export default function VerseRoadScreen({ state }: { state: AppState }) {
               style={{ paddingVertical: space(12), paddingHorizontal: space(12), gap: space(8) }}
             >
               <AppText variant="label" className="font-sans font-medium text-ink flex-1">
-                {counts.waiting} {counts.waiting === 1 ? 'verse' : 'verses'} waiting to start
+                {counts.waiting} {counts.waiting === 1 ? 'verse' : 'verses'} coming up
               </AppText>
               <ChevronRight size={Math.round(18 * scale)} color={palette.ink3} />
             </Pressable>

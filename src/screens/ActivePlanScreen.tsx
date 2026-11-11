@@ -1,15 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
-import { ArrowUp, Bookmark, ChevronRight, GripVertical, History, Plus, Search } from 'lucide-react-native';
+import { ArrowUp, Bookmark, ChevronRight, GripVertical, History, Layers, Milestone, Play, Plus, Search, Trash2 } from 'lucide-react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
-import ReanimatedSwipeable, { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import { AppState } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
-import { EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
-import { Dropdown } from '../components/Dropdown';
+import { EmptyState, ScreenHeader, SectionHeader } from '../components/blocks';
+import { FilterChips, OverflowMenu } from '../components/session';
 import { PRIORITY_LABELS } from '../components/QueueSources';
 import { TopChips, StageDot, StageCountBar, StageSectionHeader, StageStrip, VerseStageRow, stageCaption } from '../components/VerseStages';
 import VersesByBook from '../components/VersesByBook';
@@ -27,7 +26,6 @@ import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { gradedOnDay } from '../lib/retention';
 
 import { useThemeColors } from '../components/theme';
-import { OneTimeTip } from '../components/OneTimeTip';
 function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
   if (items.length === 0) return [];
   const groups: GroupedQueueItem[] = [];
@@ -73,18 +71,18 @@ function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
 }
 
 type VersesView = 'stage' | 'book' | 'map';
+type VersesFilter = 'all' | 'due' | 'comingUp' | 'book' | 'map';
 const EMPTY_STARTS = new Map<string, Date>();
 // Remembered for the session, so coming back from a verse page lands on the
-// view you left. Not saved to the device: By stage is the right place to open.
-let lastView: VersesView = 'stage';
+// filter you left. Not saved to the device: All is the right place to open.
+let lastFilter: VersesFilter = 'all';
 // Where the list was scrolled when you left it for one of its own pages (a
 // verse, a chapter, the road...). Coming back puts you there again; opening
 // the tab fresh starts at the top.
-let returnScroll: { view: VersesView; y: number } | null = null;
+let returnScroll: { view: VersesFilter; y: number } | null = null;
 // Which stages were open and whether "Due only" was on, remembered the same
 // way: for the session, so coming back from a verse page finds the list as you
 // left it. Waiting opens first on a fresh start, the stage you act on most.
-let lastDueOnly = false;
 let lastOpenStages: Record<VerseStage, boolean> = { waiting: true, learning: false, settling: false, steady: false, kept: false, secure: false };
 
 export default function ActivePlanScreen({ state }: { state: AppState }) {
@@ -128,20 +126,19 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const scale = useFontScale();
   const insets = useSafeAreaInsets();
   const mapFullscreen = useMapFullscreen();
-  const [view, setViewState] = useState<VersesView>(lastView);
-  const setView = (v: VersesView) => {
-    lastView = v;
-    setViewState(v);
+  // One chip row picks what the list shows (UI simplify Job 5): it replaced
+  // the Due only button and the By stage / By book / Map dropdown.
+  const [filter, setFilterState] = useState<VersesFilter>(lastFilter);
+  const setFilter = (f: VersesFilter) => {
+    lastFilter = f;
+    setFilterState(f);
   };
+  const view: VersesView = filter === 'book' ? 'book' : filter === 'map' ? 'map' : 'stage';
+  const dueOnly = filter === 'due';
+  const comingUpOnly = filter === 'comingUp';
 
   // Which waiting list is being reordered (its section key), if any.
   const [reordering, setReordering] = useState<string | null>(null);
-
-  const [dueOnly, setDueOnlyState] = useState(lastDueOnly);
-  const setDueOnly = (v: boolean) => {
-    lastDueOnly = v;
-    setDueOnlyState(v);
-  };
   const [openStages, setOpenStagesState] = useState(lastOpenStages);
   const toggleStage = (stage: VerseStage) => {
     lastOpenStages = { ...lastOpenStages, [stage]: !lastOpenStages[stage] };
@@ -179,10 +176,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const takeawayCount = useMemo(() => writtenCount(takeaways), [takeaways]);
   const total = memoryQueue.length;
 
-  // ---- Looking ahead ----
-  // Only verses already on your list, and every review going well. Waiting
-  // verses start when the real daily pull would start them (forecast.ts).
-  const [horizon, setHorizon] = useState<Horizon>('now');
+  // By book shows when waiting verses will start (forecast.ts). "Looking
+  // ahead" moved to The road (UI simplify Job 5).
   const forecastPlan: ForecastPlan = {
     ...plan,
     learningDays,
@@ -195,35 +190,14 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     pausedUntil,
   };
   // Simulating the daily pull is the costliest sum on this screen, and only
-  // the look-ahead switch and By book use it -- so skip it until one is open.
-  const needStarts = horizon !== 'now' || view === 'book';
+  // By book uses it -- so skip it until that is open.
+  const needStarts = view === 'book';
   const starts = useMemo(
     () => (needStarts ? projectStartDates(memoryQueue, forecastPlan, now) : EMPTY_STARTS),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [needStarts, memoryQueue, learningDays, newVersesPace, sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil]
   );
-  const ahead = horizon !== 'now';
-  const shownCounts = useMemo(
-    () => (ahead ? forecastCounts(memoryQueue, forecastPlan, horizonDate(horizon, now), starts, now) : counts),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [horizon, counts, starts, thoroughness, masteryTouches]
-  );
-  const deltas = ahead
-    ? (Object.fromEntries(STAGE_ORDER.map((st) => [st, shownCounts[st] - counts[st]])) as Record<VerseStage, number>)
-    : undefined;
-  const horizonDay = horizonDate(horizon, now);
-  const horizonDayLabel = horizonDay.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    ...(horizonDay.getFullYear() === now.getFullYear() ? null : { year: 'numeric' }),
-  });
   const learnedNow = learnedCount(counts);
-  const learnedThen = learnedCount(shownCounts);
-  const forecastLine = ahead
-    ? `By ${horizonDayLabel}, ${learnedThen === total ? `all ${total}` : `${learnedThen} of your ${total}`} verses learned${
-        shownCounts.kept > 0 ? `, ${shownCounts.kept} Kept` : ''
-      }.`
-    : `${learnedNow} of your ${total} verses learned so far${counts.kept > 0 ? `, ${counts.kept} Kept` : ''}.`;
 
 
   // Waiting verses, in learning order. Sorted by orderIndex BEFORE grouping,
@@ -292,8 +266,8 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
 
   const scrollRef = useRef<FlatList<ListItem>>(null);
   const scrollY = useRef(0);
-  const viewRef = useRef(view);
-  viewRef.current = view;
+  const viewRef = useRef(filter);
+  viewRef.current = filter;
   const rememberScroll = () => {
     returnScroll = { view: viewRef.current, y: scrollY.current };
   };
@@ -306,7 +280,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   // Put the list back where it was. The lists mount a frame late (listsReady)
   // and By book's rows can grow as chapter lengths arrive, so this waits for
   // the content to be tall enough rather than scrolling once and hoping.
-  const restoreY = useRef<number | null>(returnScroll && returnScroll.view === lastView ? returnScroll.y : null);
+  const restoreY = useRef<number | null>(returnScroll && returnScroll.view === lastFilter ? returnScroll.y : null);
   useEffect(() => {
     returnScroll = null;
     if (restoreY.current === null) return;
@@ -341,59 +315,42 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     []
   );
 
-  // Nothing has moved past Learning yet: teach the road instead of showing
-  // four empty sections with no explanation.
-  const isNew = counts.settling + counts.steady + counts.kept + counts.secure === 0;
-  const nextUp = byStage.learning.length > 0 ? [...byStage.learning].sort((a, b) => a.progress.remaining - b.progress.remaining)[0] : null;
-
-  // A tappable heading: closed, it is the whole stage (name, count, and a
-  // badge when reviews are due); open, the stage's caption sits under it.
-  const sectionHeader = (stage: VerseStage, title: string) => {
-    const open = openStages[stage];
-    return (
-      <View style={{ gap: space(8) }}>
-        <StageSectionHeader
-          stage={stage}
-          title={title}
-          count={dueOnly ? dueCount(stage) : counts[stage]}
-          due={dueOnly ? 0 : dueCount(stage)}
-          open={open}
-          onToggle={() => toggleStage(stage)}
-        />
-        {open && counts[stage] > 0 && (
-          <AppText variant="caption" className="font-sans text-ink-2" style={{ paddingHorizontal: space(4) }}>
-            {stage === 'waiting' && !waitingSections.some((sec) => sec.groups.length > 1)
-              ? "In the order you'll learn them."
-              : stageCaption(stage, plan)}
-          </AppText>
-        )}
-      </View>
-    );
-  };
+  // A tappable heading: the stage's name, count, and a badge when reviews
+  // are due. The captions that used to sit under an open stage are gone (R5).
+  const sectionHeader = (stage: VerseStage, title: string) => (
+    <StageSectionHeader
+      stage={stage}
+      title={title}
+      count={dueOnly ? dueCount(stage) : counts[stage]}
+      due={dueOnly ? 0 : dueCount(stage)}
+      open={openStages[stage]}
+      onToggle={() => toggleStage(stage)}
+    />
+  );
 
   const emptyStage = (stage: VerseStage) => (
     <View
-      className="flex-row items-center border border-dashed border-line-strong rounded-card"
-      style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(10) }}
+      className="flex-row items-center"
+      style={{ paddingVertical: space(6), paddingHorizontal: space(4), gap: space(10) }}
     >
       <StageDot stage={stage} />
-      <AppText variant="label" className="font-sans font-semibold text-ink">
+      <AppText variant="label" className="font-sans font-semibold text-ink-2 flex-1">
         {STAGE_LABEL[stage]}
       </AppText>
-      <AppText variant="caption" className="font-sans text-ink-2 flex-1">
-        {stage === 'settling' ? 'None yet. Verses come here after Learning.' : 'None yet'}
+      <AppText variant="label" className="font-sans text-ink-3">
+        0
       </AppText>
     </View>
   );
 
-
-  const waitingRow = (group: GroupedQueueItem, drag?: () => void, isActive = false, onHold?: () => void) => (
+  const waitingRow = (group: GroupedQueueItem, drag?: () => void, isActive = false, onHold?: () => void, onMoveToTop?: () => void) => (
     <VerseGroupRow
       key={group.id}
       group={group}
       drag={drag}
       onHold={onHold}
       isActive={isActive}
+      onMoveToTop={onMoveToTop}
       onStart={() => promoteToLearning(group.items.map((item) => item.verseId))}
       onRemove={() => {
         // removeQueueItems, not a raw filter: deleting from
@@ -409,7 +366,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     <View style={{ gap: space(12) }}>
       {waitingGroups.length === 0 ? (
         <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-          Nothing waiting. Tap Add verses to choose what you learn next.
+          Nothing coming up.
         </AppText>
       ) : (
         waitingSections.map((section) => (
@@ -437,8 +394,14 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
               // list was the slowest part of opening this tab, and it grows
               // with every waiting verse. Holding a row starts reordering too.
               <View style={{ gap: space(8) }}>
-                {section.groups.map((g) =>
-                  waitingRow(g, undefined, false, section.groups.length > 1 ? () => setReordering(section.key) : undefined)
+                {section.groups.map((g, i) =>
+                  waitingRow(
+                    g,
+                    undefined,
+                    false,
+                    section.groups.length > 1 ? () => setReordering(section.key) : undefined,
+                    i > 0 ? () => updateMemoryQueue((prev) => reorderQueueGroups(prev, section.groups, i, 0)) : undefined
+                  )
                 )}
               </View>
             ) : (
@@ -478,6 +441,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   const items: ListItem[] = useMemo(() => {
     if (!listsReady || total === 0 || view === 'map') return [];
     if (view === 'book') return [{ kind: 'book', key: 'book' }];
+    if (comingUpOnly) return [{ kind: 'waiting', key: 'waiting', stage: 'waiting' }];
     // Due only leaves out what has nothing due: Waiting (nothing waiting is
     // due) and any stage with no due verse, instead of a row of empty stages.
     const out: ListItem[] = dueOnly ? [] : [{ kind: 'waiting', key: 'waiting', stage: 'waiting' }];
@@ -498,7 +462,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     }
     if (out.length === 0) out.push({ kind: 'note', key: 'nothing-due', text: 'Nothing is due right now.' });
     return out;
-  }, [listsReady, total, view, shownGroups, dueOnly, openStages]);
+  }, [listsReady, total, view, shownGroups, dueOnly, comingUpOnly, openStages]);
 
   // Search: every stage's passages, then the waiting ones, that match every
   // word typed. Replaces the stage lists while the search field is open.
@@ -522,7 +486,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   }
 
   const STAGE_TITLE: Record<VerseStage, string> = {
-    waiting: 'Waiting to start',
+    waiting: 'Coming up',
     learning: 'Learning now',
     settling: 'Settling',
     steady: 'Steady',
@@ -559,7 +523,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         body = (
           <View style={{ gap: space(10) }}>
             {sectionHeader('waiting', STAGE_TITLE.waiting)}
-            {openStages.waiting && waitingBody}
+            {(openStages.waiting || comingUpOnly) && waitingBody}
           </View>
         );
         break;
@@ -594,33 +558,49 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     return <View style={{ paddingTop: top }}>{body}</View>;
   };
 
-  // One row of controls: the Due only filter (By stage only, the one view
-  // that has stages to filter) and the view picker, which used to be a second
-  // tab bar.
+  // One chip row picks what the list shows (UI simplify Job 5).
+  const waitingCount = waitingGroups.reduce((n, g) => n + g.verses.length, 0);
   const viewSwitch = (
-    <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
-      {view === 'stage' ? (
-        <AppButton
-          size="sm"
-          variant={dueOnly ? 'secondary' : 'quiet'}
-          label="Due only"
-          accessibilityState={{ selected: dueOnly }}
-          accessibilityLabel={dueOnly ? 'Due only, on' : 'Due only, off'}
-          onPress={() => setDueOnly(!dueOnly)}
+    <FilterChips<VersesFilter>
+      value={filter}
+      onChange={setFilter}
+      accessibilityLabel="Show verses"
+      options={[
+        { id: 'all', label: 'All' },
+        { id: 'due', label: dueTodayCount > 0 ? `Due · ${dueTodayCount}` : 'Due' },
+        { id: 'comingUp', label: waitingCount > 0 ? `Coming up · ${waitingCount}` : 'Coming up' },
+        { id: 'book', label: 'By book' },
+        { id: 'map', label: 'Map' },
+      ]}
+    />
+  );
+
+  // Header: search, add, and the ⋯ menu that took the blocks that used to
+  // sit at the bottom of the list (sources, takeaways, history, the road).
+  const headerActions = (
+    <View className="flex-row items-center" style={{ gap: space(8) }}>
+      {total > 0 && (
+        <AppIconButton
+          Icon={Search}
+          variant="outline"
+          diameter={40}
+          accessibilityLabel="Search verses"
+          onPress={() => (searching ? closeSearch() : setSearching(true))}
         />
-      ) : (
-        <View />
       )}
-      <Dropdown<VersesView>
-        value={view}
-        options={[
-          { id: 'stage', label: 'By stage' },
-          { id: 'book', label: 'By book' },
-          { id: 'map', label: 'Map' },
+      <AppIconButton Icon={Plus} variant="outline" diameter={40} accessibilityLabel="Add verses" onPress={() => go('addVerses')} />
+      <OverflowMenu
+        title="Verses"
+        groups={[
+          [
+            ...(total > 0 ? [{ label: 'The road', Icon: Milestone, onPress: () => go('verseRoad') }] : []),
+            ...(joinedGroupPlanMemberships.length > 0
+              ? [{ label: 'Where verses come from', Icon: Layers, value: sourcesValue, onPress: () => go('verseSources') }]
+              : []),
+            { label: 'Takeaways', Icon: Bookmark, value: takeawayCount === 0 ? undefined : `${takeawayCount}`, onPress: () => go('takeaways') },
+            { label: 'History', Icon: History, onPress: () => go('fullHistory') },
+          ],
         ]}
-        title="Show verses"
-        onChange={setView}
-        compact
       />
     </View>
   );
@@ -640,11 +620,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         >
           {/* Fullscreen hides these but keeps the map where it is in the tree, so it isn't rebuilt. */}
           {!mapFullscreen && (
-            <ScreenHeader
-              title="Verses"
-              subtitle={summary}
-              actions={<AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => go('addVerses')} />}
-            />
+            <ScreenHeader title="Verses" subtitle={summary} actions={headerActions} />
           )}
           {!mapFullscreen && <VersesTabs value="activePlan" onChange={switchVersesTab} />}
           {!mapFullscreen && viewSwitch}
@@ -691,33 +667,11 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         className="flex-1 bg-canvas"
         contentContainerClassName="p-5 pb-12"
         ListHeaderComponent={
-      <View style={{ gap: space(20), paddingBottom: total === 0 ? 0 : space(20) }}>
+      <View style={{ gap: space(16), paddingBottom: total === 0 ? 0 : space(8) }}>
         {/* The Verses tab's first screen, so no back link. Every verse you
-            have is here, in every stage -- it used to stop at Learning and
-            send you to the Memory Calendar for the rest. */}
-        <ScreenHeader
-          title="Verses"
-          subtitle={summary}
-          actions={
-            <View className="flex-row items-center" style={{ gap: space(8) }}>
-              {total > 0 && (
-                <AppIconButton
-                  Icon={Search}
-                  variant="outline"
-                  accessibilityLabel="Search verses"
-                  onPress={() => (searching ? closeSearch() : setSearching(true))}
-                />
-              )}
-              <AppButton size="sm" variant="primary" Icon={Plus} label="Add verses" onPress={() => go('addVerses')} />
-            </View>
-          }
-        />
+            have is here, in every stage. */}
+        <ScreenHeader title="Verses" subtitle={summary} actions={headerActions} />
         <VersesTabs value="activePlan" onChange={switchVersesTab} />
-
-        <OneTimeTip
-          id="versesTab"
-          text="Everything about your verses lives here: the list itself, the Plan for which days you learn new ones and how often learned verses come back, and the Calendar for what's due next."
-        />
 
         {searching ? (
           <View className="flex-row items-center" style={{ gap: space(8) }}>
@@ -743,139 +697,33 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
             <AppButton size="sm" variant="quiet" label="Cancel" onPress={closeSearch} />
           </View>
         ) : total === 0 ? (
-          <EmptyState title="No verses yet" message="Tap Add verses, or add them from a chapter's page." />
+          <EmptyState title="No verses yet" actionLabel="Add verses" onAction={() => go('addVerses')} />
         ) : (
           <>
-            {viewSwitch}
-
-            {/* How far along you are, in one line. Tapping the bar opens the
-                road. The "when" switch is a small dropdown: for a date ahead
-                the bar becomes the full strip, with the change from today
-                under each count. The counts for today live in the stage
-                headings below. */}
-            <View
-              className={`border rounded-card ${ahead ? 'bg-surface-2 border-line-strong' : 'bg-surface border-line'}`}
-              style={{ padding: space(14), gap: space(12) }}
+            {/* How far along you are, in one slim bar. Tapping it opens The
+                road, which also holds "Looking ahead". */}
+            <Pressable
+              onPress={() => go('verseRoad')}
+              accessibilityRole="button"
+              accessibilityLabel={`${learnedNow} of ${total} verses learned. Open the road.`}
+              className="bg-surface border border-line rounded-card active:bg-surface-2"
+              style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(10) }}
             >
-              <AppText variant="label" className="font-sans text-ink">
-                {forecastLine}
-              </AppText>
-              {ahead ? (
-                <>
-                  <StageStrip counts={shownCounts} deltas={deltas} />
-                  <AppText variant="caption" className="font-sans text-ink-3">
-                    If every review goes well. Only verses already on your list.
-                  </AppText>
-                </>
-              ) : isNew ? (
-                <StageCountBar counts={shownCounts} />
-              ) : (
-                <Pressable
-                  onPress={() => go('verseRoad')}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${learnedNow} of ${total} verses learned. See them on the road.`}
-                  hitSlop={8}
-                  className="active:opacity-60"
-                  style={{ gap: space(8) }}
-                >
-                  <StageCountBar counts={shownCounts} />
-                  <View className="flex-row items-center self-end" style={{ gap: space(2) }}>
-                    <AppText variant="label" className="font-sans font-semibold text-accent">
-                      The road
-                    </AppText>
-                    <ChevronRight size={Math.round(16 * scale)} color={palette.accent} />
-                  </View>
-                </Pressable>
-              )}
-              <View className="flex-row items-center justify-between">
-                <AppText variant="caption" className="font-sans text-ink-3">
-                  Looking ahead
+              <View className="flex-row items-center" style={{ gap: space(6) }}>
+                <AppText variant="label" className="font-sans font-semibold text-ink flex-1">
+                  {learnedNow} of {total} learned
                 </AppText>
-                <Dropdown<Horizon>
-                  value={horizon}
-                  options={(['now', 'm1', 'm3', 'y1'] as Horizon[]).map((h) => ({ id: h, label: HORIZON_LABEL[h] }))}
-                  title="When"
-                  onChange={setHorizon}
-                  compact
-                />
+                <ChevronRight size={Math.round(18 * scale)} color={palette.ink3} />
               </View>
-            </View>
+              <StageCountBar counts={counts} />
+            </Pressable>
 
-            {isNew && (
-              <View className="bg-surface border border-line rounded-card" style={{ padding: space(16), gap: space(12) }}>
-                <AppText variant="title" className="font-sans font-bold text-ink" accessibilityRole="header">
-                  The road every verse travels
-                </AppText>
-                <View style={{ gap: space(8) }}>
-                  {(
-                    [
-                      ['learning', 'a few days'],
-                      ['settling', 'reviewed every 1–4 days'],
-                      ['steady', 'reviewed every 1–2 weeks'],
-                      ['kept', 'reviewed every 4–8 weeks'],
-                      ['secure', 'reviewed every 6 months, for good'],
-                    ] as [VerseStage, string][]
-                  ).map(([stage, length]) => (
-                    <View key={stage} className="flex-row items-center" style={{ gap: space(10) }}>
-                      <StageDot stage={stage} />
-                      <AppText variant="label" className="font-sans font-semibold text-ink" style={{ minWidth: space(80) }}>
-                        {STAGE_LABEL[stage]}
-                      </AppText>
-                      <AppText variant="label" className="font-sans text-ink-2 flex-1">
-                        {length}
-                      </AppText>
-                    </View>
-                  ))}
-                </View>
-                {nextUp && (
-                  <View className="flex-row items-start border-t border-hairline" style={{ paddingTop: space(12), gap: space(10) }}>
-                    <ArrowUp size={Math.round(18 * scale)} color={palette.success} />
-                    <AppText variant="label" className="font-sans text-ink flex-1">
-                      <AppText variant="label" className="font-sans font-semibold text-ink">
-                        {referenceFor(nextUp.book, nextUp.chapter, nextUp.verses)}
-                      </AppText>
-                      {nextUp.progress.remaining > 0
-                        ? ` reaches Settling after ${nextUp.progress.remaining} more perfect ${nextUp.progress.remaining === 1 ? 'recall' : 'recalls'}.`
-                        : ' reaches Settling once today’s reviews are done.'}
-                    </AppText>
-                  </View>
-                )}
-              </View>
-            )}
-
+            {viewSwitch}
           </>
         )}
       </View>
         }
-        ListFooterComponent={
-      searching ? null : (
-      <View style={{ gap: space(20), paddingTop: space(20) }}>
-        {/* How the list above gets worked through. Each opens its own screen.
-            "Where verses come from" only appears once a group plan competes
-            with your own verses. */}
-        {joinedGroupPlanMemberships.length > 0 && (
-          <GroupedList header="Where your verses come from">
-            <ListRow title="Where verses come from" value={sourcesValue} onPress={() => go('verseSources')} />
-          </GroupedList>
-        )}
-
-        <GroupedList header="Your progress">
-          <ListRow
-            Icon={Bookmark}
-            title="Takeaways"
-            value={takeawayCount === 0 ? 'None yet' : `${takeawayCount} written`}
-            onPress={() => go('takeaways')}
-          />
-          <ListRow
-            Icon={History}
-            title="History"
-            value={`${counts.kept} kept`}
-            onPress={() => go('fullHistory')}
-          />
-        </GroupedList>
-      </View>
-      )
-        }
+        ListFooterComponent={null}
       />
     </FadeInView>
   );
@@ -906,6 +754,7 @@ function VerseGroupRow({
   isActive,
   onStart,
   onRemove,
+  onMoveToTop,
 }: {
   group: GroupedQueueItem;
   /** Present only while its list is being reordered. */
@@ -915,84 +764,74 @@ function VerseGroupRow({
   isActive: boolean;
   onStart: () => void;
   onRemove: () => void;
+  /** Leave out for the row already at the top. */
+  onMoveToTop?: () => void;
 }) {
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
   const hasMultiple = group.verses.length > 1;
   const reference = referenceFor(group.book, group.chapter, group.verses);
-  const swipeRef = useRef<SwipeableMethods>(null);
 
-  const row = (
+  // One line of reference, one line of text, and a quiet ⋯ holding Start
+  // learning now, Move to top and Remove (UI simplify Job 5). Holding the
+  // row starts reordering.
+  return (
     <Pressable
       onLongPress={drag ?? onHold}
       delayLongPress={250}
       accessibilityRole="button"
       accessibilityLabel={drag ? `${reference}. Press and hold to move.` : reference}
-      // Swiping isn't something a screen reader can do, so removing is also an action.
-      accessibilityActions={drag ? undefined : [{ name: 'delete', label: `Remove ${reference}` }]}
-      onAccessibilityAction={(e) => {
-        if (e.nativeEvent.actionName === 'delete') onRemove();
-      }}
-      className={`flex-row items-start rounded-card border ${isActive ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
-      style={{ padding: space(12), gap: space(10) }}
+      className={`flex-row items-center rounded-card border ${isActive ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
+      style={{ paddingVertical: space(10), paddingLeft: space(14), paddingRight: space(6), gap: space(10) }}
     >
       {/* Drag affordance. The whole row is the drag target (a small handle
           is a hard thing to hit), but the grip is what makes that
           discoverable. */}
       {drag && (
-        <View className="shrink-0" style={{ paddingTop: space(2) }}>
+        <View className="shrink-0">
           <GripVertical size={Math.round(16 * scale)} color={isActive ? palette.accent : palette.ink3} />
         </View>
       )}
 
-      <View className="flex-1" style={{ gap: space(6), minWidth: 0 }}>
-        <AppText variant="label" className="font-sans font-semibold text-ink">
+      <View className="flex-1" style={{ gap: space(2), minWidth: 0 }}>
+        <AppText variant="label" className="font-sans font-semibold text-ink" numberOfLines={1}>
           {reference}
+          {/* The translation matters once your list can mix them: the same
+              verse in two translations is two separate entries. */}
+          <AppText variant="caption" className="font-sans font-normal text-ink-3">
+            {'  '}
+            {translationLabel(group.items[0].translationId || 'ESV')}
+            {hasMultiple ? ` · ${group.verses.length} verses` : ''}
+          </AppText>
         </AppText>
         <AppText variant="caption" className="font-serif text-ink-2" numberOfLines={1}>
           {group.items[0].text}
         </AppText>
-        <View className="flex-row flex-wrap items-center" style={{ gap: space(8) }}>
-          {/* The translation matters once your list can mix them: the same
-              verse in two translations is two separate entries. */}
-          <AppText variant="caption" className="font-sans text-ink-3">
-            {translationLabel(group.items[0].translationId || 'ESV')}
-            {hasMultiple ? ` · ${group.verses.length} verses` : ''}
-          </AppText>
-          <View className="ml-auto">
-            <AppButton size="sm" variant="secondary" label="Start learning" onPress={onStart} />
-          </View>
-        </View>
       </View>
-    </Pressable>
-  );
-
-  // While its list is being reordered the row is a drag target, so it doesn't
-  // also swipe. Otherwise swiping it right shows Delete (the trash icon that
-  // used to sit on every row is gone).
-  if (drag) return row;
-  return (
-    <ReanimatedSwipeable
-      ref={swipeRef}
-      overshootLeft={false}
-      leftThreshold={40}
-      friction={2}
-      renderLeftActions={() => (
-        <View className="justify-center" style={{ paddingRight: space(8) }}>
-          <AppButton
-            variant="destructive"
-            label="Delete"
-            accessibilityLabel={`Remove ${reference}`}
-            onPress={() => {
-              swipeRef.current?.close();
-              onRemove();
-            }}
-          />
-        </View>
+      {!drag && (
+        <OverflowMenu
+          variant="bare"
+          diameter={36}
+          title={reference}
+          accessibilityLabel={`More for ${reference}`}
+          groups={[
+            [
+              { label: 'Start learning now', Icon: Play, onPress: onStart },
+              ...(onMoveToTop ? [{ label: 'Move to top', Icon: ArrowUp, onPress: onMoveToTop }] : []),
+            ],
+            [
+              {
+                label: 'Remove from My Verses',
+                Icon: Trash2,
+                destructive: true,
+                onPress: onRemove,
+                confirm: { title: `Remove ${reference}?`, message: 'It comes off your list. You can add it again later.', confirmLabel: 'Remove' },
+              },
+            ],
+          ]}
+        />
       )}
-    >
-      {row}
-    </ReanimatedSwipeable>
+    </Pressable>
   );
 }

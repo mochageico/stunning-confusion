@@ -278,13 +278,17 @@ export function OverflowMenu({
   groups,
   accessibilityLabel = 'More',
   diameter = 40,
+  variant = 'outline',
 }: {
   title?: string;
   /** Each inner list is drawn as its own card, so destructive items can sit apart. */
   groups: MenuItem[][];
   accessibilityLabel?: string;
   diameter?: number;
+  /** "bare" for the quiet grey ⋯ on a list row. */
+  variant?: 'outline' | 'bare';
 }) {
+  const palette = useThemeColors();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState<MenuItem | null>(null);
 
@@ -296,7 +300,14 @@ export function OverflowMenu({
 
   return (
     <>
-      <AppIconButton Icon={MoreHorizontal} variant="outline" diameter={diameter} onPress={() => setOpen(true)} accessibilityLabel={accessibilityLabel} />
+      <AppIconButton
+        Icon={MoreHorizontal}
+        variant={variant}
+        diameter={diameter}
+        iconColor={variant === 'bare' ? palette.ink3 : undefined}
+        onPress={() => setOpen(true)}
+        accessibilityLabel={accessibilityLabel}
+      />
       <Dialog visible={open} onClose={() => setOpen(false)} title={title} placement="center">
         {groups
           .filter((g) => g.length)
@@ -425,6 +436,54 @@ export function IconTile({ Icon, size = 36 }: { Icon: IconType; size?: number })
     <View className="bg-canvas items-center justify-center" style={{ width: d, height: d, borderRadius: Math.round(d * 0.28) }}>
       <Icon size={Math.round(size * 0.53 * scale)} color={palette.accent} strokeWidth={2} />
     </View>
+  );
+}
+
+// ============================================================
+// FilterChips — one left-aligned, sideways-scrolling row of filter chips
+// (Verses: All · Due · Coming up · By book). The chosen chip is filled with
+// the accent; the rest are outlined.
+// ============================================================
+export function FilterChips<T extends string>({
+  options,
+  value,
+  onChange,
+  accessibilityLabel,
+}: {
+  options: { id: T; label: string }[];
+  value: T;
+  onChange: (id: T) => void;
+  accessibilityLabel?: string;
+}) {
+  const space = useScaledSpace();
+  const scale = useFontScale();
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      accessibilityRole="radiogroup"
+      accessibilityLabel={accessibilityLabel}
+      contentContainerStyle={{ gap: space(8), paddingRight: space(4) }}
+    >
+      {options.map((opt) => {
+        const on = opt.id === value;
+        return (
+          <Pressable
+            key={opt.id}
+            onPress={() => onChange(opt.id)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: on }}
+            aria-checked={on}
+            className={`rounded-full border items-center justify-center ${on ? 'bg-accent border-accent' : 'bg-surface border-line-strong active:bg-surface-2'}`}
+            style={{ paddingHorizontal: space(14), paddingVertical: space(6), minHeight: Math.round(34 * scale) }}
+          >
+            <AppText variant="label" numberOfLines={1} className={`font-sans ${on ? 'font-semibold text-on-accent' : 'font-medium text-ink-2'}`}>
+              {opt.label}
+            </AppText>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
   );
 }
 
