@@ -1,18 +1,11 @@
 import { useState } from 'react';
 import { Linking, View } from 'react-native';
-import { Ban, Bell } from 'lucide-react-native';
+import { Ban, Bell, Clock } from 'lucide-react-native';
 
 import type { AppState } from '../state/useAppState';
-import { ChipRow } from './ui';
 import { AppButton, Switch, useScaledSpace } from './design';
-import { Dialog, GroupedList, ListRow, SectionHeader } from './blocks';
-
-// Times offered for the daily reminder. A fixed list rather than a clock
-// picker: no new native dependency, and nobody needs 7:43.
-const REMINDER_TIMES = [6, 7, 8, 9, 12, 17, 19, 21].map((h) => ({
-  id: h,
-  label: h === 12 ? 'Noon' : h < 12 ? `${h} AM` : `${h - 12} PM`,
-}));
+import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from './blocks';
+import { TimeWheelDialog, formatClock } from './TimeWheel';
 
 /** Settings > Notifications: the review reminder and which social pushes come through. */
 export function NotificationSettings({ state }: { state: AppState }) {
@@ -68,12 +61,52 @@ export function NotificationSettings({ state }: { state: AppState }) {
           accessory={<Switch value={prefs.friendActivity} onChange={(v) => update({ friendActivity: v })} accessibilityLabel="Friend notifications" />}
         />
       </GroupedList>
-      {prefs.reviewReminder ? (
-        <View style={{ gap: space(6) }}>
-          <SectionHeader title="Remind me at" />
-          <ChipRow wrap options={REMINDER_TIMES} value={prefs.reminderHour} onChange={(h) => update({ reminderHour: h, reminderMinute: 0 })} />
-        </View>
-      ) : null}
+      {prefs.reviewReminder ? <ReminderTime state={state} /> : null}
+    </View>
+  );
+}
+
+/** When the daily reminder comes: one set time, or a random time in a window. */
+function ReminderTime({ state }: { state: AppState }) {
+  const space = useScaledSpace();
+  const { notificationPrefs: prefs, updateNotificationPrefs: update } = state;
+  const [editing, setEditing] = useState<'start' | 'end' | null>(null);
+  const random = prefs.reminderMode === 'random';
+  const endHour = prefs.reminderEndHour ?? 21;
+  const endMinute = prefs.reminderEndMinute ?? 0;
+  const backwards = random && endHour * 60 + endMinute < prefs.reminderHour * 60 + prefs.reminderMinute;
+
+  return (
+    <View style={{ gap: space(6) }}>
+      <SectionHeader title="Remind me" />
+      <SegmentedControl
+        options={[
+          { id: 'fixed', label: 'Set time' },
+          { id: 'random', label: 'Random time' },
+        ]}
+        value={random ? 'random' : 'fixed'}
+        onChange={(mode) => update({ reminderMode: mode as 'fixed' | 'random' })}
+      />
+      <GroupedList footer={backwards ? 'The "To" time is earlier than "From"; reminders will come between the two.' : undefined}>
+        <ListRow
+          Icon={Clock}
+          title={random ? 'From' : 'Time'}
+          value={formatClock(prefs.reminderHour, prefs.reminderMinute)}
+          onPress={() => setEditing('start')}
+        />
+        {random ? <ListRow Icon={Clock} title="To" value={formatClock(endHour, endMinute)} onPress={() => setEditing('end')} /> : null}
+      </GroupedList>
+      <TimeWheelDialog
+        visible={editing !== null}
+        title={editing === 'end' ? 'Latest time' : random ? 'Earliest time' : 'Remind me at'}
+        hour={editing === 'end' ? endHour : prefs.reminderHour}
+        minute={editing === 'end' ? endMinute : prefs.reminderMinute}
+        onClose={() => setEditing(null)}
+        onDone={(hour, minute) => {
+          update(editing === 'end' ? { reminderEndHour: hour, reminderEndMinute: minute } : { reminderHour: hour, reminderMinute: minute });
+          setEditing(null);
+        }}
+      />
     </View>
   );
 }

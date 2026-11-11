@@ -270,6 +270,13 @@ export function GroupedList({
   );
 }
 
+/** A thin line across the top of its parent, for stacked rows. Use this
+ *  instead of a conditional `border-t`: iOS sometimes drew that one-sided
+ *  border down the row's left edge too. The parent must not clip it. */
+export function RowDivider() {
+  return <View pointerEvents="none" className="absolute top-0 left-0 right-0 bg-hairline" style={{ height: 1 }} /* layout-ok: divider, no text */ />;
+}
+
 export function ListRow({
   title,
   subtitle,
@@ -318,9 +325,12 @@ export function ListRow({
         </View>
       ) : null}
       <View
-        className={`flex-1 flex-row items-center ${first ? '' : 'border-t border-hairline'}`}
+        className="flex-1 flex-row items-center"
         style={{ minHeight: Math.round(52 * scale), paddingVertical: space(10), paddingRight: space(14), gap: space(8) }}
       >
+        {/* The divider is its own thin line, not a top border: iOS sometimes drew a
+            one-sided border down the left edge too. */}
+        {first ? null : <RowDivider />}
         <View className="flex-1" style={{ gap: space(1) }}>
           <AppText variant="body" className={`font-sans ${destructive ? 'text-danger' : 'text-ink'}`}>
             {title}

@@ -34,7 +34,27 @@ export interface NotificationPrefs {
   reviewReminder: boolean;
   reminderHour: number;
   reminderMinute: number;
+  /** 'fixed': every day at reminderHour:reminderMinute. 'random': a different
+   *  time each day between reminderHour:reminderMinute and reminderEnd*. */
+  reminderMode?: 'fixed' | 'random';
+  reminderEndHour?: number;
+  reminderEndMinute?: number;
   mutedCircleIds: string[];
+}
+
+/** The reminder time for one day. Random times are picked from the date, so
+ *  rescheduling during the day keeps the same time instead of reshuffling. */
+export function reminderTimeFor(day: Date, prefs: NotificationPrefs): { hour: number; minute: number } {
+  if (prefs.reminderMode !== 'random') return { hour: prefs.reminderHour, minute: prefs.reminderMinute };
+  const a = prefs.reminderHour * 60 + prefs.reminderMinute;
+  const b = (prefs.reminderEndHour ?? 21) * 60 + (prefs.reminderEndMinute ?? 0);
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  const key = day.toDateString();
+  let seed = 2166136261;
+  for (let i = 0; i < key.length; i++) seed = Math.imul(seed ^ key.charCodeAt(i), 16777619);
+  const t = lo + ((seed >>> 0) % (hi - lo + 1));
+  return { hour: Math.floor(t / 60), minute: t % 60 };
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -209,7 +229,8 @@ export function usePushNotifications(deps: PushDeps) {
         const now = Date.now();
         for (const day of deps.reminderDays) {
           const at = new Date(day.date);
-          at.setHours(prefs.reminderHour, prefs.reminderMinute, 0, 0);
+          const { hour, minute } = reminderTimeFor(day.date, prefs);
+          at.setHours(hour, minute, 0, 0);
           if (at.getTime() <= now + 60_000) continue;
           const total = day.reviews + day.learning;
           if (total === 0) continue;
@@ -232,7 +253,7 @@ export function usePushNotifications(deps: PushDeps) {
     }, 1500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, reminderKey, prefs.reviewReminder, prefs.reminderHour, prefs.reminderMinute, permission]);
+  }, [user?.uid, reminderKey, prefs.reviewReminder, prefs.reminderHour, prefs.reminderMinute, prefs.reminderMode, prefs.reminderEndHour, prefs.reminderEndMinute, permission]);
 
   // ---- tapping a notification opens what it's about
   const openTargetRef = useRef(deps.onOpenTarget);

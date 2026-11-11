@@ -44,7 +44,7 @@ import {
   StrikeLimit,
 } from '../lib/practicePrefs';
 import { AppButton, AppText, AppTextInput, ChoiceCard, ToggleRow, useFontScale, useScaledSpace } from '../components/design';
-import { Badge, Dialog, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
+import { Badge, Dialog, GroupedList, ListRow, RowDivider, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { Dropdown } from '../components/Dropdown';
 import { ACCENTS, useAccent, useThemeColors } from '../components/theme';
 import { BlockedPeopleSettings, GuidelinesRow, NotificationSettings } from '../components/SocialSettings';
@@ -275,9 +275,9 @@ function FormatsPage({ mix }: { mix: ReturnType<typeof useMixChoices> }) {
           return (
             <View
               key={id}
-              className={i === 0 ? '' : 'border-t border-hairline'}
               style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(8) }}
             >
+              {i === 0 ? null : <RowDivider />}
               <View className="flex-row items-center" style={{ gap: space(8) }}>
                 <AppText variant="body" className="font-sans font-semibold text-ink flex-1">
                   {formatLabel(id)}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { BookOpen, Camera, Images } from 'lucide-react-native';
 
@@ -37,16 +37,28 @@ export default function ChapterPhotoStrip({
   const [choosingSource, setChoosingSource] = useState(false);
   const [busy, setBusy] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
+  // Which photo the viewer opens on. After adding one it opens on the new
+  // photo, so its verses can be set right away instead of landing back on
+  // the chapter page.
+  const [viewerIndex, setViewerIndex] = useState(0);
 
   const atCapacity = photos.length >= MAX_PHOTOS_PER_CHAPTER;
   const icon = Math.round(16 * scale);
 
+  const cameFromViewer = useRef(false);
   const add = async (source: PhotoSource) => {
     setChoosingSource(false);
     setBusy(true);
     try {
-      await addChapterPhoto(book, chapter, source);
+      const added = await addChapterPhoto(book, chapter, source);
+      if (added) {
+        setViewerIndex(photos.length); // the new one is last
+        setViewerOpen(true);
+      } else if (photos.length > 0 && cameFromViewer.current) {
+        setViewerOpen(true);
+      }
     } finally {
+      cameFromViewer.current = false;
       setBusy(false);
     }
   };
@@ -56,7 +68,11 @@ export default function ChapterPhotoStrip({
   return (
     <>
       <Pressable
-        onPress={() => (hasPhotos ? setViewerOpen(true) : setChoosingSource(true))}
+        onPress={() => {
+          if (!hasPhotos) return setChoosingSource(true);
+          setViewerIndex(0);
+          setViewerOpen(true);
+        }}
         disabled={busy}
         accessibilityRole="button"
         accessibilityLabel={
@@ -86,7 +102,11 @@ export default function ChapterPhotoStrip({
           Bible sitting in front of you, not hunting through a camera roll. */}
       <Dialog
         visible={choosingSource}
-        onClose={() => setChoosingSource(false)}
+        onClose={() => {
+          setChoosingSource(false);
+          if (cameFromViewer.current && hasPhotos) setViewerOpen(true);
+          cameFromViewer.current = false;
+        }}
         placement="sheet"
         title="Add a Bible page"
         message={`${book} ${chapter}. You can crop the photo to just the page on the next step.`}
@@ -100,7 +120,7 @@ export default function ChapterPhotoStrip({
       {viewerOpen && hasPhotos && (
         <ChapterPhotoViewer
           photos={photos}
-          initialIndex={0}
+          initialIndex={Math.min(viewerIndex, photos.length - 1)}
           title={`${book} ${chapter}`}
           verseNumbers={verseNumbers}
           photoCache={photoCache}
@@ -115,6 +135,7 @@ export default function ChapterPhotoStrip({
             atCapacity
               ? undefined
               : () => {
+                  cameFromViewer.current = true;
                   setViewerOpen(false);
                   setChoosingSource(true);
                 }

@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import { VerseState } from '../../types';
 import { AppText, useCollapsed, useScaledSpace } from '../design';
 import { useThemeColors } from '../theme';
+import { RowDivider } from '../blocks';
 
 // Small pieces shared by the practice screen's shell and its Listen and
 // Recall panels. Split out of PracticeModals.tsx (see .claude/file-split-plan.md).
@@ -168,10 +169,8 @@ export function DrillSetting({
   const Chevron = collapsed ? ChevronDown : ChevronUp;
 
   return (
-    <View
-      className={first ? '' : 'border-t border-hairline'}
-      style={{ paddingHorizontal: space(12), paddingVertical: space(10), gap: space(8) }}
-    >
+    <View style={{ paddingHorizontal: space(12), paddingVertical: space(10), gap: space(8) }}>
+      {first ? null : <RowDivider />}
       <Pressable
         onPress={() => setCollapsed(!collapsed)}
         accessibilityRole="button"

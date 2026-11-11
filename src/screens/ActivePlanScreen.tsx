@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
-import { ArrowUp, Bookmark, ChevronRight, GripVertical, History, Layers, Milestone, Play, Plus, Search, Trash2 } from 'lucide-react-native';
+import { ArrowUp, ArrowUpDown, Bookmark, ChevronRight, GripVertical, History, Layers, Milestone, Play, Plus, Search, Trash2 } from 'lucide-react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
 import { AppState } from '../state/useAppState';
@@ -371,17 +371,13 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
       ) : (
         waitingSections.map((section) => (
           <View key={section.key} style={{ gap: space(6) }}>
-            {(waitingSections.length > 1 || section.groups.length > 1) && (
+            {/* Reorder lives in each row's ⋯ menu (and holding a row); the
+                only button up here is Done, while a list is being reordered. */}
+            {(waitingSections.length > 1 || reordering === section.key) && (
               <View className="flex-row items-center" style={{ gap: space(8) }}>
                 <View className="flex-1">{waitingSections.length > 1 && <SectionHeader title={section.title} />}</View>
-                {section.groups.length > 1 && (
-                  <AppButton
-                    size="sm"
-                    variant="quiet"
-                    label={reordering === section.key ? 'Done' : 'Reorder'}
-                    accessibilityLabel={reordering === section.key ? 'Done reordering' : `Reorder ${section.title}`}
-                    onPress={() => setReordering(reordering === section.key ? null : section.key)}
-                  />
+                {reordering === section.key && (
+                  <AppButton size="sm" variant="primary" label="Done" accessibilityLabel="Done reordering" onPress={() => setReordering(null)} />
                 )}
               </View>
             )}
@@ -523,7 +519,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         body = (
           <View style={{ gap: space(10) }}>
             {sectionHeader('waiting', STAGE_TITLE.waiting)}
-            {(openStages.waiting || comingUpOnly) && waitingBody}
+            {(openStages.waiting || comingUpOnly) && <Nested>{waitingBody}</Nested>}
           </View>
         );
         break;
@@ -540,7 +536,11 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         body = (
           <View style={{ gap: space(8) }}>
             {sectionHeader('secure', STAGE_TITLE.secure)}
-            {openStages.secure && <TopChips groups={shownGroups.secure} onPress={openGroup} />}
+            {openStages.secure && (
+              <Nested>
+                <TopChips groups={shownGroups.secure} onPress={openGroup} />
+              </Nested>
+            )}
           </View>
         );
         break;
@@ -555,6 +555,10 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         );
         break;
     }
+    // A stage's verse rows sit indented under its heading, with a thin line
+    // down the left joining them (owner's pick, 2026-11-11). The line runs
+    // through the gap above each row so it reads as one unbroken rail.
+    if (item.kind === 'row') return <Nested style={{ paddingTop: top }}>{body}</Nested>;
     return <View style={{ paddingTop: top }}>{body}</View>;
   };
 
@@ -747,6 +751,19 @@ type ListItem = {
  * One run of consecutive waiting verses. The reference gets the full width of
  * the first line; the translation and the Start button sit underneath.
  */
+/** Indents its children under a section heading, with a thin rail down the
+ *  left. The rail is its own View rather than a one-sided border, which iOS
+ *  sometimes drew wrong. */
+function Nested({ children, style }: { children: React.ReactNode; style?: { paddingTop?: number } }) {
+  const space = useScaledSpace();
+  return (
+    <View style={[{ marginLeft: space(10), paddingLeft: space(12) }, style]}>
+      <View pointerEvents="none" className="absolute top-0 bottom-0 left-0 bg-line-strong" style={{ width: 2 }} /* layout-ok: rail, no text */ />
+      {children}
+    </View>
+  );
+}
+
 function VerseGroupRow({
   group,
   drag,
@@ -819,6 +836,7 @@ function VerseGroupRow({
             [
               { label: 'Start learning now', Icon: Play, onPress: onStart },
               ...(onMoveToTop ? [{ label: 'Move to top', Icon: ArrowUp, onPress: onMoveToTop }] : []),
+              ...(onHold ? [{ label: 'Reorder', Icon: ArrowUpDown, onPress: onHold }] : []),
             ],
             [
               {

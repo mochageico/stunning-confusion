@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { ChevronDown } from 'lucide-react-native';
 
 import { AppText, Switch, useFontScale, useScaledSpace } from './design';
-import { SegmentedControl } from './blocks';
+import { RowDivider, SegmentedControl } from './blocks';
 import { StageDot } from './VerseStages';
 import { StepperRow } from './ui';
 import { useThemeColors } from './theme';
@@ -88,7 +88,8 @@ function SettingRow({
   const scale = useFontScale();
   const palette = useThemeColors();
   return (
-    <View className={first ? '' : 'border-t border-hairline'}>
+    <View>
+      {first ? null : <RowDivider />}
       <Pressable
         onPress={onPress}
         accessibilityRole="button"

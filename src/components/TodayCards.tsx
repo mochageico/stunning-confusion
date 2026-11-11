@@ -6,7 +6,7 @@ import type { FirmUpItem, MovedNote, WelcomeBack } from '../lib/todayCards';
 import type { CalendarDayProjection } from '../lib/ladderCalendar';
 import type { LadderGroup } from '../lib/ladder';
 import { AppButton, AppIconButton, AppText, CollapsibleCard, useScaledSpace } from './design';
-import { Dialog } from './blocks';
+import { Dialog, RowDivider } from './blocks';
 import { useThemeColors } from './theme';
 
 // ============================================================================
@@ -171,9 +171,10 @@ export function MovedSheet({
         {note.items.map((item, i) => (
           <View
             key={item.key}
-            className={`flex-row items-center ${i === 0 ? '' : 'border-t border-hairline'}`}
+            className="flex-row items-center"
             style={{ paddingVertical: space(10), gap: space(12) }}
           >
+            {i === 0 ? null : <RowDivider />}
             <View className="flex-1" style={{ gap: space(2) }}>
               <AppText variant="label" className="font-sans font-semibold text-ink">
                 {item.title}

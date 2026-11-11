@@ -865,7 +865,7 @@ export function useDemoState(real: AppState): AppState {
     blockedUsers: params.get('blocked') === '1' ? [{ uid: 'u9', displayName: 'Chris Stone', blockedAt: iso(-2) }] : [],
     blockedUids: new Set<string>(),
     notificationPermission: params.get('notif') === 'off' ? 'undetermined' : 'granted',
-    notificationPrefs: { messages: true, circleChat: true, friendActivity: true, reviewReminder: true, reminderHour: 8, reminderMinute: 0, mutedCircleIds: [] },
+    notificationPrefs: { messages: true, circleChat: true, friendActivity: true, reviewReminder: true, reminderHour: 8, reminderMinute: 0, reminderMode: params.get('remind') === 'random' ? 'random' : 'fixed', reminderEndHour: 21, reminderEndMinute: 0, mutedCircleIds: [] },
     notificationAskReason: params.get('ask') === '1' ? 'Know when Sarah replies?' : null,
     responsesByMessageId: {
       m3: [{ id: 'm3_demo', messageId: 'm3', uid: 'demo', name: 'Micah', status: 'willDo', updatedAt: iso(0, 9) }],

@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Check, ChevronRight, Flag } from 'lucide-react-native';
 
 import { AppText, useFontScale, useScaledSpace } from './design';
-import { Badge } from './blocks';
+import { Badge, RowDivider } from './blocks';
 import { useThemeColors } from './theme';
 import { STAGE_FILL, TOP_FILL, fillFor } from './VerseStages';
 import { ALL_BIBLE_BOOKS, BOOKS, getBookByName } from '../data';
@@ -276,9 +276,10 @@ function ChapterRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${title}: ${countLabel} verses${badge ? `. ${badge.label}` : ''}`}
-      className={`active:bg-surface-2 ${first ? '' : 'border-t border-hairline'}`}
+      className="active:bg-surface-2"
       style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(8) }}
     >
+      {first ? null : <RowDivider />}
       <View className="flex-row items-center" style={{ gap: space(8) }}>
         <AppText variant="label" className="font-sans font-semibold text-ink flex-1">
           {title}
