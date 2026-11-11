@@ -1,5 +1,5 @@
 import { ActivityIndicator, ScrollView, View } from 'react-native';
-import { Check, Eye, Mic, MicOff, RefreshCw, Shuffle, Sparkles } from 'lucide-react-native';
+import { Check, ClipboardCheck, Eye, Mic, MicOff, RefreshCw, Shuffle, Sparkles } from 'lucide-react-native';
 import { normalizeToken, summarizeOutcomes, reviewPassAccuracy } from '../../lib/recitation';
 import { blankExceptFirstLetter, blankLetters, splitWords, wordGap } from '../../lib/textScript';
 import { MIN_JIGSAW_VERSES } from '../../lib/drills';
@@ -7,7 +7,8 @@ import { MIX_NAMES } from '../../lib/formatNames';
 import { BounceView, DiscreteSlider, FadeInView, SpinView, WaveBars } from '../ui';
 import MemoryGrid from '../MemoryGrid';
 import { AppButton, AppIconButton, AppTextInput, AppText, RangeCaption } from '../design';
-import { Badge, SegmentedControl } from '../blocks';
+import { Badge, GroupedList, ListRow, SectionHeader, SegmentedControl } from '../blocks';
+import { OptionsPopup } from '../session';
 import BuildUpDrill from '../drills/BuildUpDrill';
 import JigsawDrill from '../drills/JigsawDrill';
 import ScrambleDrill from '../drills/ScrambleDrill';
@@ -18,7 +19,7 @@ import WhichSectionDrill from '../drills/WhichSectionDrill';
 import TeachItDrill from '../drills/TeachItDrill';
 import type { OutlineVerseResult } from '../../lib/outline';
 import { GradeInput, wordAccuracy } from '../../lib/grading';
-import { DrillSetting, DrillSettings, HIDE_LEVELS } from './shared';
+import { HIDE_LEVELS } from './shared';
 import type { PracticeModalsProps } from '../PracticeModals';
 import type { TextScript, VerseState } from '../../types';
 import type { useThemeColors } from '../theme';
@@ -46,6 +47,11 @@ interface RecallPanelProps {
   sectionsForChapter: PracticeModalsProps['sectionsForChapter'];
   onSaveOutlineExtra: PracticeModalsProps['onSaveOutlineExtra'];
   onSaveTakeawayDraft: PracticeModalsProps['onSaveTakeawayDraft'];
+  /** The header gear's pop-up (PracticeModals owns the button). */
+  optionsOpen: boolean;
+  onCloseOptions: () => void;
+  /** Opens the by-hand log, which PracticeModals owns. */
+  onManualLog: () => void;
 }
 
 export default function RecallPanel({
@@ -65,6 +71,9 @@ export default function RecallPanel({
   sectionsForChapter,
   onSaveOutlineExtra,
   onSaveTakeawayDraft,
+  optionsOpen,
+  onCloseOptions,
+  onManualLog,
 }: RecallPanelProps) {
   const {
     learnTab,
@@ -104,7 +113,6 @@ export default function RecallPanel({
     hiddenWordIndices,
     regenerateHiddenWords,
     gridWordStates,
-    switchLearnTab,
     learnModes,
     sectionList,
     threadTarget,
@@ -159,22 +167,9 @@ export default function RecallPanel({
         </BounceView>
       )}
 
-      {/* Mode picker. Recall is the only graded mode; the rest are
-          supplementary drills (see the LearnMode comment above). */}
-      {/* The standard segmented control, labels only, over two rows of
-          thinner segments: on one row the nine modes squeezed "Recall"
-          into breaking mid-word. Segments size to their labels, and a
-          label wraps rather than being cut off at large text sizes. */}
-      <View className="mb-3 shrink-0">
-        <SegmentedControl
-          value={learnTab}
-          onChange={switchLearnTab}
-          accessibilityLabel="Practice mode"
-          rows={2}
-          options={learnModes.map(({ id, label }) => ({ id, label }))}
-        />
-      </View>
-
+      {/* The mode picker is the "Recall v" chip in the practice header
+          (PracticeModals); this panel's settings sit behind the gear, in
+          the centered pop-up at the end of this component. */}
       {learnTab === 'recite' ? (
         !isFinishedRecite ? (
           <View className="flex-1 justify-between">
@@ -200,18 +195,6 @@ export default function RecallPanel({
                   </View>
                 </FadeInView>
               )}
-
-              <View className="mb-3 shrink-0">
-                <SegmentedControl
-                  value={recallDisplayMode}
-                  onChange={setRecallDisplayMode}
-                  accessibilityLabel="Show the verses as"
-                  options={[
-                    { id: 'passage' as const, label: 'Passage' },
-                    { id: 'memoryGrid' as const, label: 'Memory grid' },
-                  ]}
-                />
-              </View>
 
               {recallDisplayMode === 'memoryGrid' ? (
                 <ScrollView className="flex-1 mb-2">
@@ -381,110 +364,6 @@ export default function RecallPanel({
               </View>
             </View>
 
-            <DrillSettings>
-            {/* How many words get hidden this attempt -- changing it or
-                resetting always re-rolls a fresh random subset.
-                % Hidden only grades at 100% (Blind); First Letter
-                grades as a review at any level, but never mastery --
-                see the finish panel split below. Passage-mode only --
-                %-hidden has no meaning against the grid, which is
-                always first-letter (or now, always blank). */}
-            {recallDisplayMode === 'passage' && (
-              <DrillSetting
-                storageKey="recall.hiding"
-                first
-                label="Words hidden"
-                valueClassName={hintMode === 'firstLetter' ? 'text-accent' : 'text-ink-2'}
-                value={
-                  hintMode === 'firstLetter'
-                    ? 'First letters · review only'
-                    : activeLevel === 100
-                      ? 'All (blind)'
-                      : `${activeLevel}% · practice only`
-                }
-              >
-                <SegmentedControl
-                  value={hintMode}
-                  onChange={switchHintMode}
-                  accessibilityLabel="How words are hidden"
-                  options={[
-                    { id: 'percent' as const, label: 'Hide words' },
-                    { id: 'firstLetter' as const, label: 'Show first letters' },
-                  ]}
-                />
-                {hintMode === 'percent' && (
-                  // 0-100 in steps of 5. The row above reads the
-                  // current value out, so the slider needs only its
-                  // two ends labeled rather than 21 stops.
-                  <View style={{ gap: 2 }}>
-                    <DiscreteSlider
-                      value={activeLevel}
-                      onChange={(level) => {
-                        setActiveLevel(level);
-                        resetReciteGame();
-                        regenerateHiddenWords(level);
-                      }}
-                      options={HIDE_LEVELS}
-                      showStopLabels={false}
-                      accessibilityLabel="Words hidden"
-                    />
-                    <RangeCaption min="None" max="All" />
-                  </View>
-                )}
-                <AppText variant="caption" className="text-ink-3 font-sans">
-                  {hintMode === 'firstLetter'
-                    ? 'Counts as a review, but never toward learning a verse.'
-                    : 'Only a run with every word hidden counts as a review.'}
-                </AppText>
-              </DrillSetting>
-            )}
-
-            {/* Memory Grid's own hide setting -- no slider, since the
-                grid is either showing first letters or not; there's no
-                in-between percentage to speak of. */}
-            {recallDisplayMode === 'memoryGrid' && (
-              <DrillSetting
-                storageKey="recall.grid"
-                first
-                label="Grid shows"
-                value={gridHideMode === 'blank' ? 'Nothing' : 'First letters'}
-              >
-                <SegmentedControl
-                  value={gridHideMode}
-                  onChange={setGridHideMode}
-                  accessibilityLabel="What the grid shows"
-                  options={[
-                    { id: 'firstLetter' as const, label: 'First letters' },
-                    { id: 'blank' as const, label: 'Nothing' },
-                  ]}
-                />
-              </DrillSetting>
-            )}
-
-            {/* Last to first: the verses in reverse, each one still said
-                forward. Speaking and typing both follow it, and it counts
-                like any other run. Changing it starts the run over. */}
-            {verses.length >= 2 && (
-              <DrillSetting
-                storageKey="recall.order"
-                label="Verse order"
-                value={lastToFirst ? MIX_NAMES.lastToFirst : MIX_NAMES.firstToLast}
-              >
-                <SegmentedControl
-                  value={lastToFirst ? 'lastToFirst' : 'firstToLast'}
-                  onChange={(id) => switchLastToFirst(id === 'lastToFirst')}
-                  accessibilityLabel="Verse order"
-                  options={[
-                    { id: 'firstToLast' as const, label: MIX_NAMES.firstToLast },
-                    { id: 'lastToFirst' as const, label: MIX_NAMES.lastToFirst },
-                  ]}
-                />
-                <AppText variant="caption" className="text-ink-3 font-sans">
-                  Each verse is still said start to finish. Counts as a review the same way.
-                </AppText>
-              </DrillSetting>
-            )}
-            </DrillSettings>
 
             <View className="mt-2.5 flex-row gap-2.5">
               <AppButton
@@ -705,6 +584,107 @@ export default function RecallPanel({
       <View className="flex-1" style={{ display: learnTab === 'teachIt' ? 'flex' : 'none' }}>
         <TeachItDrill verses={verses} sections={sectionList} script={passageScript} active={learnTab === 'teachIt'} onSaveDraft={onSaveTakeawayDraft} />
       </View>
+
+      {/* The gear's settings: centered, never a bottom sheet (owner's rule).
+          Recall's own settings, then the by-hand log every mode has. Each
+          change starts the run over, as it always did inline. */}
+      <OptionsPopup
+        visible={optionsOpen}
+        onClose={onCloseOptions}
+        title={`${learnModes.find((m) => m.id === learnTab)?.label ?? 'Practice'} settings`}
+      >
+        {learnTab === 'recite' ? (
+          <>
+            <View style={{ gap: 6 }}>
+              <SectionHeader title="Show as" />
+              <SegmentedControl
+                value={recallDisplayMode}
+                onChange={setRecallDisplayMode}
+                accessibilityLabel="Show the verses as"
+                options={[
+                  { id: 'passage' as const, label: 'Passage' },
+                  { id: 'memoryGrid' as const, label: 'Memory grid' },
+                ]}
+              />
+            </View>
+
+            {recallDisplayMode === 'passage' ? (
+              <View style={{ gap: 6 }}>
+                <SectionHeader
+                  title={`Words hidden · ${
+                    hintMode === 'firstLetter' ? 'first letters, review only' : activeLevel === 100 ? 'all' : `${activeLevel}%, practice only`
+                  }`}
+                />
+                <SegmentedControl
+                  value={hintMode}
+                  onChange={switchHintMode}
+                  accessibilityLabel="How words are hidden"
+                  options={[
+                    { id: 'percent' as const, label: 'Hide words' },
+                    { id: 'firstLetter' as const, label: 'First letters' },
+                  ]}
+                />
+                {hintMode === 'percent' && (
+                  <View style={{ gap: 2 }}>
+                    <DiscreteSlider
+                      value={activeLevel}
+                      onChange={(level) => {
+                        setActiveLevel(level);
+                        resetReciteGame();
+                        regenerateHiddenWords(level);
+                      }}
+                      options={HIDE_LEVELS}
+                      showStopLabels={false}
+                      accessibilityLabel="Words hidden"
+                    />
+                    <RangeCaption min="None" max="All" />
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={{ gap: 6 }}>
+                <SectionHeader title="Grid shows" />
+                <SegmentedControl
+                  value={gridHideMode}
+                  onChange={setGridHideMode}
+                  accessibilityLabel="What the grid shows"
+                  options={[
+                    { id: 'firstLetter' as const, label: 'First letters' },
+                    { id: 'blank' as const, label: 'Nothing' },
+                  ]}
+                />
+              </View>
+            )}
+
+            {verses.length >= 2 && (
+              <View style={{ gap: 6 }}>
+                <SectionHeader title="Verse order" />
+                <SegmentedControl
+                  value={lastToFirst ? 'lastToFirst' : 'firstToLast'}
+                  onChange={(id) => switchLastToFirst(id === 'lastToFirst')}
+                  accessibilityLabel="Verse order"
+                  options={[
+                    { id: 'firstToLast' as const, label: MIX_NAMES.firstToLast },
+                    { id: 'lastToFirst' as const, label: MIX_NAMES.lastToFirst },
+                  ]}
+                />
+              </View>
+            )}
+          </>
+        ) : null}
+
+        <GroupedList>
+          <ListRow
+            Icon={ClipboardCheck}
+            title="Log a review by hand"
+            subtitle="For one you did away from the app"
+            onPress={() => {
+              onCloseOptions();
+              onManualLog();
+            }}
+          />
+        </GroupedList>
+      </OptionsPopup>
     </View>
   );
 }

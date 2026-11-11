@@ -248,6 +248,8 @@ Target (see the Today sketch):
 - Empty state (`?s=home&empty=1`): one sentence and one "Add verses" button.
 
 ### Job 2 · Practice window — `PracticeModals.tsx`, `practice/RecallPanel.tsx`, `drills/*`
+
+**Built 2026-11-10 (Recall part).** The practice header is now close, session progress, gear; then the reference and a "Recall ▾" mode chip that opens a centered "Way to practice" pop-up. The 2-row mode grid, the Passage / Memory grid switch and the inline Words hidden / Grid shows / Verse order rows moved into the gear's centered pop-up ("Recall settings"), with "Log a review by hand" at its bottom (the clipboard button is gone from the header). The two first-time tip boxes were removed. Start over and Reveal word stay in view under the passage. Not done yet: the other drills still show their own inline settings (move them into the same gear pop-up), and Listen keeps its old header until Job 3. Not phone-tested.
 Now: tip box, 6-mode grid, Passage / Memory grid switch, two dropdowns, two
 buttons, all visible at once.
 Target: move into `SessionShell`.

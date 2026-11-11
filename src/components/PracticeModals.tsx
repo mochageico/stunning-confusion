@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, useWindowDimensions, View, ViewStyle } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronUp, ClipboardCheck, Headphones, Pause, Play, X } from 'lucide-react-native';
+import { ChevronUp, Headphones, Pause, Play, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { VerseState, QueueItem, Recording, ChapterPhoto, ChapterSections, ListenPlaylist } from '../types';
 import type { ReviewCompletedOpts } from '../state/useAppState';
@@ -9,10 +9,10 @@ import type { OutlineExtra } from '../lib/outline';
 import type { SelfCheckAnswer } from '../lib/grading';
 import { isRtl, scriptOfVerse } from '../lib/textScript';
 import { WaveBars } from './ui';
-import { AppButton, AppIconButton, AppText, FontScaleOverrideProvider, useFontScale, useScaledSpace } from './design';
+import { AppIconButton, AppText, FontScaleOverrideProvider, RadioMark, useFontScale, useScaledSpace } from './design';
 import { PRACTICE_TEXT_SCALE, useAppPrefs } from '../lib/appPrefs';
-import { Badge } from './blocks';
-import { OneTimeTip } from './OneTimeTip';
+import { Badge, Dialog, GroupedList, ListRow } from './blocks';
+import { ModeChip } from './session';
 
 import { useThemeColors } from './theme';
 import { useAboveTabBar } from './TabBar';
@@ -229,28 +229,11 @@ function PracticeModalsInner({
   useEffect(() => setReferenceShown(false), [verses]);
   const referenceHidden = hideReference && type === 'learn' && !referenceShown;
 
-  // The first-time tip sits above the panel, which pushes the panel down.
-  // On a short screen or at large text that left the passage box no height
-  // at all, so the verse vanished until Got it. There the tip floats over the
-  // bottom controls instead (they're no use before the tip is read anyway),
-  // and the verse keeps its room. Height in unscaled points: 812 / 1.15 and
-  // an iPhone SE's 667 both float; 844 at normal size stays above.
-  const { height: windowHeight } = useWindowDimensions();
-  const floatTip = windowHeight / fontScale < 760;
-  const firstTimeTip = (style: ViewStyle) =>
-    type !== 'learn' ? null : verses.length > 0 && verses.every((v) => v.status === 'memorized') ? (
-      <OneTimeTip
-        id="reviewCheck"
-        style={style}
-        text="This verse is back for a quick check, so it doesn't fade. Say it from memory. If you stumble, that's fine — it just comes back more often for a while."
-      />
-    ) : (
-      <OneTimeTip
-        id="practice"
-        style={style}
-        text="Say the verse from memory. Get it right a few times, an hour or more apart, and it counts as learned. After that it comes back now and then so it sticks."
-      />
-    );
+  // The first-time tip boxes are gone (UI simplify plan: the owner found
+  // the explanation paragraphs excessive); the tutorial rework covers them.
+  // The settings pop-up and the mode picker are centered pop-ups.
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [modesOpen, setModesOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const aboveTabBar = useAboveTabBar();
 
@@ -376,54 +359,104 @@ function PracticeModalsInner({
     // Clear of the notch / Dynamic Island: a fixed top padding sat under it
     // on taller-notched phones.
     <View className="absolute inset-0 bg-surface z-50 pb-4 px-4" style={{ paddingTop: insets.top + 12 }} id="practice_overlay">
-      {/* Header Bar */}
-      <View className="flex-row items-center justify-between border-b border-hairline pb-2 mb-3" style={{ gap: 8 }}>
-        {/* flex-1 so a long reference wraps instead of pushing the
-            close button off the screen at large text sizes. */}
-        <View className="flex-1">
-          {/* Non-breaking hyphen: at large text a range wraps as "Romans /
-              8:28-29", never "Romans 8:28- / 29". */}
-          {referenceHidden ? (
-            <Pressable
-              onPress={() => setReferenceShown(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Reference hidden. Show it."
-              className="self-start active:opacity-60"
-            >
-              <AppText variant="title" className="font-sans font-bold text-ink-3 leading-tight">
-                Reference hidden
+      {/* Header. Practice (UI simplify plan, Job 2): close, the session's
+          progress, and the gear on one row; the reference and the "Recall v"
+          mode chip under it. Listen keeps its own header until Job 3. */}
+      {type === 'learn' ? (
+        <View className="mb-3" style={{ gap: space(12) }}>
+          <View className="flex-row items-center" style={{ gap: space(12) }}>
+            <AppIconButton variant="outline" Icon={X} diameter={40} onPress={onClose} accessibilityLabel="Close" />
+            <View className="flex-1">
+              {!!sessionTotal && sessionTotal > 1 ? (
+                <View
+                  className="bg-fill rounded-full overflow-hidden"
+                  style={{ height: 8 /* layout-ok: a progress track, no text */ }}
+                  accessibilityRole="progressbar"
+                  accessibilityValue={{ min: 0, max: sessionTotal, now: (sessionPosition ?? 1) - 1 }}
+                >
+                  <View
+                    className="bg-accent rounded-full"
+                    style={{ height: 8 /* layout-ok: track fill */, width: `${(((sessionPosition ?? 1) - 1) / sessionTotal) * 100}%` }}
+                  />
+                </View>
+              ) : null}
+            </View>
+            {!!sessionTotal && sessionTotal > 1 ? (
+              <AppText variant="caption" className="font-sans font-semibold text-ink-3">
+                {`${sessionPosition} of ${sessionTotal}`}
               </AppText>
-              <AppText variant="caption" className="font-sans font-semibold text-accent">
-                Show
-              </AppText>
-            </Pressable>
-          ) : (
+            ) : null}
+            <AppIconButton
+              variant="outline"
+              Icon={SlidersHorizontal}
+              diameter={40}
+              onPress={() => setOptionsOpen(true)}
+              accessibilityLabel="Practice settings"
+            />
+          </View>
+          <View className="flex-row items-center" style={{ gap: space(10) }}>
+            {/* flex-1 so a long reference wraps instead of pushing the chip
+                off the screen. Non-breaking hyphen: a range wraps as
+                "Romans / 8:28-29", never "Romans 8:28- / 29". */}
+            <View className="flex-1">
+              {referenceHidden ? (
+                <Pressable
+                  onPress={() => setReferenceShown(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reference hidden. Show it."
+                  className="self-start active:opacity-60"
+                >
+                  <AppText variant="title" className="font-sans font-bold text-ink-3 leading-tight">
+                    Reference hidden
+                  </AppText>
+                  <AppText variant="caption" className="font-sans font-semibold text-accent">
+                    Show
+                  </AppText>
+                </Pressable>
+              ) : (
+                <AppText variant="display" className="font-sans font-bold text-ink" style={{ letterSpacing: -0.4 }} numberOfLines={2}>
+                  {referenceText.replace(/-/g, '‑')}
+                </AppText>
+              )}
+            </View>
+            <ModeChip
+              label={recall.learnModes.find((m) => m.id === recall.learnTab)?.label ?? 'Recall'}
+              onPress={() => setModesOpen(true)}
+              accessibilityLabel="Way to practice, change"
+            />
+          </View>
+        </View>
+      ) : (
+        <View className="flex-row items-center justify-between border-b border-hairline pb-2 mb-3" style={{ gap: 8 }}>
+          <View className="flex-1">
             <AppText variant="title" className="font-sans font-bold text-ink leading-tight" numberOfLines={2}>
               {referenceText.replace(/-/g, '‑')}
             </AppText>
-          )}
+          </View>
+          <View className="flex-row items-center gap-2 shrink-0">
+            {!!sessionTotal && sessionTotal > 1 && <Badge label={`${sessionPosition} of ${sessionTotal}`} />}
+            <AppIconButton variant="outline" Icon={X} onPress={() => setListenMinimized(true)} accessibilityLabel="Minimize" />
+          </View>
         </View>
-        <View className="flex-row items-center gap-2 shrink-0">
-          {!!sessionTotal && sessionTotal > 1 && <Badge label={`${sessionPosition} of ${sessionTotal}`} />}
-          {/* Manual log -- replaces the old Reveal tab's self-assessment
-              buttons. Available from every learn mode, since "I already did
-              this off-app" isn't tied to any particular drill. */}
-          {type === 'learn' && (
-            <AppIconButton
-              variant="outline"
-              Icon={ClipboardCheck}
-              onPress={() => setShowManualLog(true)}
-              accessibilityLabel="Log a review done somewhere else"
+      )}
+
+      {/* The way-to-practice picker: centered, one tap picks and closes. */}
+      <Dialog visible={modesOpen} onClose={() => setModesOpen(false)} title="Way to practice">
+        <GroupedList>
+          {recall.learnModes.map((mode) => (
+            <ListRow
+              key={mode.id}
+              Icon={mode.Icon}
+              title={mode.label}
+              accessory={<RadioMark selected={mode.id === recall.learnTab} />}
+              onPress={() => {
+                recall.switchLearnTab(mode.id);
+                setModesOpen(false);
+              }}
             />
-          )}
-          <AppIconButton
-            variant="outline"
-            Icon={X}
-            onPress={type === 'listen' ? () => setListenMinimized(true) : onClose}
-            accessibilityLabel={type === 'listen' ? 'Minimize' : 'Close'}
-          />
-        </View>
-      </View>
+          ))}
+        </GroupedList>
+      </Dialog>
 
       {/* Manual log. The same sheet as the one on Today's review rows. */}
       <ManualLogFlow
@@ -435,11 +468,6 @@ function PracticeModalsInner({
         onClose={() => setShowManualLog(false)}
         onLog={submitManualLog}
       />
-
-      {/* First-time tips: one for learning, one for the first verse back
-          for a check. Each shows once (see OneTimeTip). Above the panel when
-          there's room; otherwise floating at the bottom (below). */}
-      {!floatTip && firstTimeTip({ marginBottom: 12 })}
 
       {/* Main Panel */}
       <View className="flex-1 justify-between py-1">
@@ -492,17 +520,13 @@ function PracticeModalsInner({
             sectionsForChapter={sectionsForChapter}
             onSaveOutlineExtra={onSaveOutlineExtra}
             onSaveTakeawayDraft={onSaveTakeawayDraft}
+            optionsOpen={optionsOpen}
+            onCloseOptions={() => setOptionsOpen(false)}
+            onManualLog={() => setShowManualLog(true)}
           />
         )}
       </View>
 
-      {/* The first-time tip on a short screen: over the bottom controls, not
-          above the passage. A border rather than a shadow marks its edge. */}
-      {floatTip && (
-        <View pointerEvents="box-none" style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 16 }}>
-          {firstTimeTip({ borderWidth: 1, borderColor: palette.lineStrong })}
-        </View>
-      )}
     </View>
   );
 }
