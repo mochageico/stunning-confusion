@@ -361,6 +361,17 @@ Each drill starts on tap with remembered options (R2); its current setup form
 becomes the gear pop-up. Sessions use `SessionShell` + `SessionDone`.
 
 ### Job 7 · Chapter page — `ChapterLandingScreen.tsx`, `ChapterSections.tsx`, `ChapterLibraryPlayer.tsx`
+
+**Built 2026-11-10, per Round 2 (change very little).** Header, "3 of 39
+verses memorized", heat strip and the player card with Add page are as they
+were. First words / Sections / Takeaways moved behind one quiet "Study tools"
+button (a centered pop-up), with Select all on the same line. The tip box and
+the "Tap a verse to select it" heading are gone. The selected-verses bar now
+holds Add · Listen (headphones) · Record · I know these, each an icon over a
+label; Record fills the Audio tab's passage with the picked verses and opens
+it; Learn left the bar (Today and Verses start learning). The "Already know
+these?" pop-up is centered (was a bottom sheet) and lost its paragraph. Not
+phone-tested.
 Now: translation picker + list icon, tip box, heat strip, player card with a
 truncated title and "Add page", three chips (First words, Sections,
 Takeaways), "Tap a verse to select it / Select all", then the verses.

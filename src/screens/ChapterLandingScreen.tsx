@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureDetector } from 'react-native-gesture-handler';
-import { Bookmark, Brackets, Check, ChevronDown, Download, Grid2x2, GripVertical, LayoutGrid, List, ListTree, Pause, Play, Printer, Search } from 'lucide-react-native';
+import { Bookmark, Brackets, Check, ChevronDown, Download, Grid2x2, GripVertical, Headphones, LayoutGrid, List, ListTree, Mic, Pause, Play, Plus, Printer, Search } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { recordingFitsTranslation } from '../lib/appData';
@@ -23,7 +23,7 @@ import { BIBLE_TRANSLATIONS, copyrightFor, textScriptFor, translationLabel } fro
 import { isRtl, joinWords, splitWords } from '../lib/textScript';
 import { FIRST_WEEKLY_STEP, LADDER, LADDER_GROUPS, stepReviewCount, type LadderGroup } from '../lib/ladder';
 import { AppButton, AppIconButton, AppText, AppTextInput, RangeCaption, useFontScale, useScaledSpace } from '../components/design';
-import { Dialog, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
+import { Dialog, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { useDragSelect } from '../components/useDragSelect';
 import {
   BracketGutter,
@@ -55,7 +55,6 @@ import {
 
 import { useThemeColors } from '../components/theme';
 import { usePlaybackProgress } from '../lib/playbackProgress';
-import { OneTimeTip } from '../components/OneTimeTip';
 type OverrideStage = 'learning' | LadderGroup;
 const OVERRIDE_STAGE_OPTIONS: { id: OverrideStage; label: string }[] = [
   { id: 'learning', label: 'Learning' },
@@ -95,6 +94,12 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   const {
     handleBack,
     navigateTo,
+    selectTab,
+    setRecordingBook,
+    setRecordingChapter,
+    setRecordingTranslation,
+    setRecordingRangeStart,
+    setRecordingRangeEnd,
     selectedBook,
     selectedChapter,
     selectedVerseNumbers,
@@ -145,6 +150,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
   // straight into Weekly review"). Local to this screen since it only ever
   // acts on the current selection; resets whenever it's closed/reopened.
   const [showStatusOverride, setShowStatusOverride] = useState(false);
+  const [studyToolsOpen, setStudyToolsOpen] = useState(false);
   const [overrideStage, setOverrideStage] = useState<OverrideStage>('steady');
   // The step within the group (an index into LADDER), for Settling, Steady and Kept.
   const [overrideStep, setOverrideStep] = useState<number>(FIRST_WEEKLY_STEP);
@@ -466,11 +472,6 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           }
         />
 
-        <OneTimeTip
-          id="chapterPage"
-          text="Tap verses to select them, then Add to learn them. Already know some by heart? Select them and tap Status instead."
-        />
-
         {/* Chapter progress: one sliver per verse, in the same status colors
             as the dots beside each verse. The count is in the subtitle. */}
         <View>
@@ -682,31 +683,55 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
           )}
         </View>
 
-        {/* The chapter's tools in one row: First words (the verses picked, or
-            the whole chapter when none are), Sections, Takeaways. */}
+        {/* The chapter's tools (First words, Sections, Takeaways) behind one
+            "Study tools" button, with Select all on the same line (UI
+            simplify Job 7). */}
         {activeChapterVerses.length > 0 && !editing && (
-          <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
-            <AppButton
-              size="sm"
-              variant="secondary"
-              Icon={ListTree}
-              label={formatLabel('firstWords')}
-              accessibilityLabel={`${formatLabel('firstWords')}: ${selectedVerseNumbers.length > 0 ? 'the verses you picked' : 'the whole chapter'}`}
-              onPress={() =>
-                startPractice('learn', selectedVerseNumbers.length > 0 ? selectedVerses() : activeChapterVerses, { learnTab: 'outline' })
-              }
-            />
-            <AppButton
-              size="sm"
-              variant="secondary"
-              Icon={Brackets}
-              label="Sections"
-              accessibilityLabel={savedDraft ? 'Edit sections' : 'Add sections'}
-              onPress={startEditingSections}
-            />
-            <AppButton size="sm" variant="secondary" Icon={Bookmark} label="Takeaways" onPress={() => navigateTo('takeaways')} />
+          <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
+            <AppButton size="sm" variant="quiet" Icon={ListTree} label="Study tools" onPress={() => setStudyToolsOpen(true)} />
+            <Pressable
+              onPress={toggleSelectAll}
+              accessibilityRole="button"
+              hitSlop={8}
+              className="active:opacity-60"
+              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space(4) }}
+            >
+              <AppText variant="label" className="font-sans font-semibold text-accent">
+                {selectedVerseNumbers.length === activeChapterVerses.length ? 'Deselect all' : 'Select all'}
+              </AppText>
+            </Pressable>
           </View>
         )}
+        <Dialog visible={studyToolsOpen} onClose={() => setStudyToolsOpen(false)} title="Study tools" placement="center">
+          <GroupedList>
+            <ListRow
+              Icon={ListTree}
+              title={formatLabel('firstWords')}
+              value={selectedVerseNumbers.length > 0 ? `${selectedVerseNumbers.length} picked` : 'Whole chapter'}
+              onPress={() => {
+                setStudyToolsOpen(false);
+                startPractice('learn', selectedVerseNumbers.length > 0 ? selectedVerses() : activeChapterVerses, { learnTab: 'outline' });
+              }}
+            />
+            <ListRow
+              Icon={Brackets}
+              title="Sections"
+              value={savedDraft ? 'Edit' : 'Add'}
+              onPress={() => {
+                setStudyToolsOpen(false);
+                startEditingSections();
+              }}
+            />
+            <ListRow
+              Icon={Bookmark}
+              title="Takeaways"
+              onPress={() => {
+                setStudyToolsOpen(false);
+                navigateTo('takeaways');
+              }}
+            />
+          </GroupedList>
+        </Dialog>
 
         {/* The memory phrase, only once the user has written one. */}
         {phrase && !editing && (
@@ -724,14 +749,6 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             }
             memoryAid={memoryAid}
             onMemoryAid={(aid) => setEditDraft((prev) => prev && { ...prev, memoryAid: aid })}
-          />
-        )}
-
-        {activeChapterVerses.length > 0 && !editing && (
-          <SectionHeader
-            title={selectedVerseNumbers.length > 0 ? `${selectedVerseNumbers.length} selected` : 'Tap a verse to select it'}
-            actionLabel={selectedVerseNumbers.length === activeChapterVerses.length ? 'Deselect all' : 'Select all'}
-            onAction={toggleSelectAll}
           />
         )}
 
@@ -1034,26 +1051,52 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             </AppText>
             <AppButton size="sm" variant="quiet" label="Clear" onPress={() => setSelectedVerseNumbers([])} />
           </View>
-          {/* Four across normally; two by two at large text, where four
-              would each be too narrow for their one word. */}
-          <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
+          {/* Add · Listen · Record · I know these (UI simplify Job 7): an
+              icon over a short label each, so the four fit one row. */}
+          <View className="flex-row" style={{ gap: space(4) }}>
             {[
               {
                 label: 'Add',
                 a11y: 'Add to My Verses',
-                variant: 'primary' as const,
+                Icon: Plus,
                 onPress: () => {
                   addVersesToQueue(selectedVerses(), selectedTranslationId);
                   setSelectedVerseNumbers([]);
                 },
               },
-              { label: 'Listen', a11y: 'Listen', variant: 'secondary' as const, onPress: () => startPractice('listen', selectedVerses()) },
-              { label: 'Learn', a11y: 'Learn', variant: 'secondary' as const, onPress: () => startPractice('learn', selectedVerses()) },
-              { label: 'Status', a11y: 'Set memory status', variant: 'secondary' as const, onPress: () => setShowStatusOverride(true) },
+              { label: 'Listen', a11y: 'Listen', Icon: Headphones, onPress: () => startPractice('listen', selectedVerses()) },
+              {
+                label: 'Record',
+                a11y: 'Record these verses',
+                Icon: Mic,
+                onPress: () => {
+                  const picked = selectedVerses();
+                  if (!selectedBook || !selectedChapter || picked.length === 0) return;
+                  setRecordingBook(selectedBook);
+                  setRecordingChapter(selectedChapter);
+                  setRecordingTranslation(selectedTranslationId);
+                  const whole = picked.length === activeChapterVerses.length;
+                  setRecordingRangeStart(whole ? null : picked[0].verse);
+                  setRecordingRangeEnd(whole ? null : picked[picked.length - 1].verse);
+                  setSelectedVerseNumbers([]);
+                  selectTab('record');
+                },
+              },
+              { label: 'I know these', a11y: 'I already know these', Icon: Check, onPress: () => setShowStatusOverride(true) },
             ].map((b) => (
-              <View key={b.label} style={{ flexGrow: 1, flexBasis: space(64) }}>
-                <AppButton size="sm" variant={b.variant} label={b.label} accessibilityLabel={b.a11y} onPress={b.onPress} />
-              </View>
+              <Pressable
+                key={b.label}
+                onPress={b.onPress}
+                accessibilityRole="button"
+                accessibilityLabel={b.a11y}
+                className="flex-1 items-center rounded-btn active:bg-surface-2"
+                style={{ paddingVertical: space(6), gap: space(4) }}
+              >
+                <b.Icon size={Math.round(22 * scale)} color={palette.accent} strokeWidth={2} />
+                <AppText variant="caption" numberOfLines={2} className="font-sans font-semibold text-accent text-center">
+                  {b.label}
+                </AppText>
+              </Pressable>
             ))}
           </View>
         </View>
@@ -1085,9 +1128,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
       <Dialog
         visible={showStatusOverride && floatingBarShowing}
         onClose={() => setShowStatusOverride(false)}
-        placement="sheet"
+        placement="center"
         title={oneVerse ? 'Already know this one?' : 'Already know these?'}
-        message={`Tell the app where ${oneVerse ? 'this verse is' : 'these verses are'}, and it will review ${them} on that schedule instead of teaching ${them} from scratch.`}
         actions={
           <>
             <AppButton variant="quiet" label="Cancel" onPress={() => setShowStatusOverride(false)} />
