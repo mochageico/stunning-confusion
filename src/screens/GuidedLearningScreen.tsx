@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Check, Compass, RefreshCw, X } from 'lucide-react-native';
+import { Check, Compass, Layers, RefreshCw, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
 import { QueueItem } from '../types';
 import { FadeInView } from '../components/ui';
-import { Dropdown } from '../components/Dropdown';
-import { AppButton, AppIconButton, AppText, useScaledSpace } from '../components/design';
+import { AppButton, AppIconButton, AppText, RadioMark, useScaledSpace } from '../components/design';
+import { OptionsPopup } from '../components/session';
 import { EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import GradedRecitation, { ButtonPair, canSpeakVerses, RecitationMode, RoundFrame } from '../components/GradedRecitation';
 import PeekDrill from '../components/drills/PeekDrill';
@@ -563,7 +563,13 @@ function Sitting({
     };
   };
 
-  const [s, setS] = useState<SessionState>(() => startSession(makeEnv()));
+  // Straight into the first step (UI simplify plan, Job 4): the old opening
+  // page's choices live in the gear now.
+  const [s, setS] = useState<SessionState>(() => {
+    const env = makeEnv();
+    return sessionReducer(startSession(env), { type: 'begin' }, env);
+  });
+  const [gearOpen, setGearOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [rerolls, setRerolls] = useState(0);
@@ -685,11 +691,71 @@ function Sitting({
     else dispatch({ type: 'finish' });
   };
 
+  // The gear: which passage, and starting any verse right now. These were the
+  // old opening page.
+  const gear = (() => {
+    if (!gearOpen) return <OptionsPopup visible={false} onClose={() => setGearOpen(false)} title="Guided learning">{null}</OptionsPopup>;
+    const items = liveItems();
+    const env = makeEnv();
+    const learning = items.filter((i) => i.status === 'learning').sort((a, b) => a.verseNumber - b.verseNumber);
+    const { waiting } = coldCheckQueue(items, env.now, masteryTouches);
+    const waitMin = new Map(waiting.map((w) => [w.item.verseId, w.minutesLeft]));
+    const canJump = s.step.kind !== 'ladder' && s.step.kind !== 'summary';
+    const close = () => setGearOpen(false);
+    return (
+      <OptionsPopup visible onClose={close} title="Guided learning">
+        <View style={{ gap: space(12) }}>
+          {passages.length > 1 ? (
+            <GroupedList header="Passage">
+              {passages.map((p) => (
+                <ListRow
+                  key={p.key}
+                  title={`${p.book} ${p.chapter}:${p.items[0].verseNumber}–${p.items[p.items.length - 1].verseNumber}`}
+                  accessory={<RadioMark selected={p.key === passageKey} />}
+                  onPress={() => {
+                    close();
+                    if (p.key !== passageKey) onPickPassage(p.key);
+                  }}
+                />
+              ))}
+            </GroupedList>
+          ) : null}
+          {learning.length > 0 ? (
+            <GroupedList header={canJump ? 'Start a verse now' : 'Verses'}>
+              {learning.map((i) => {
+                const startable = canJump && runsBanked(i) === 0;
+                const m = waitMin.get(i.verseId);
+                return (
+                  <ListRow
+                    key={i.verseId}
+                    title={`Verse ${i.verseNumber}`}
+                    subtitle={m !== undefined ? `Ready in ${m} min` : i.guidedSetAside ? 'Set aside' : undefined}
+                    accessory={<RunDots done={runsBanked(i)} needed={masteryTouches} />}
+                    onPress={
+                      startable
+                        ? () => {
+                            close();
+                            dispatch({ type: 'startNew', verseId: i.verseId });
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              })}
+            </GroupedList>
+          ) : null}
+        </View>
+      </OptionsPopup>
+    );
+  })();
+
   const step = s.step;
   const frame = (eyebrow: string, title: string, body: React.ReactNode, top?: React.ReactNode, showEnd = true) => (
     <FadeInView style={{ flex: 1 }}>
       <View className="flex-1 bg-canvas p-5">
-        <View className="flex-row items-center justify-between" style={{ marginBottom: space(12), gap: space(12) }}>
+        {/* Same row as the practice window: close, the step, gear. */}
+        <View className="flex-row items-center" style={{ marginBottom: space(12), gap: space(12) }}>
+          {showEnd ? <AppIconButton Icon={X} variant="outline" diameter={40} onPress={onLeave} accessibilityLabel="End session" /> : null}
           <View className="flex-1">
             <AppText variant="caption" className="font-sans font-medium text-ink-3">
               {eyebrow}
@@ -698,7 +764,7 @@ function Sitting({
               {title}
             </AppText>
           </View>
-          {showEnd && <AppIconButton Icon={X} variant="outline" onPress={onLeave} accessibilityLabel="End session" />}
+          <AppIconButton Icon={SlidersHorizontal} variant="outline" diameter={40} onPress={() => setGearOpen(true)} accessibilityLabel="Guided learning settings" />
         </View>
         {notice && (
           <View className="bg-accent-soft rounded-card" style={{ padding: space(10), marginBottom: space(12) }}>
@@ -710,100 +776,17 @@ function Sitting({
         {top}
         {body}
       </View>
+      {gear}
     </FadeInView>
   );
 
   // ==========================================================================
   // OPENING
   // ==========================================================================
+  // Only for a moment: the sitting begins on its first step (see useState above).
   if (step.kind === 'opening') {
-    const items = liveItems();
-    const env = makeEnv();
-    const learning = items.filter((i) => i.status === 'learning').sort((a, b) => a.verseNumber - b.verseNumber);
-    const { ready, waiting } = coldCheckQueue(items, env.now, masteryTouches);
-    const waitMin = new Map(waiting.map((w) => [w.item.verseId, w.minutesLeft]));
-    const readyIds = new Set(ready.map((i) => i.verseId));
-    const window = stitchWindow(items);
-    const next = nextNewVerse(items);
-    const dayKey = localDayKey(getLogicalDate(dayStartHour));
-    const dueCount = reviewsPaused
-      ? 0
-      : state.memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate) && !gradedOnDay(q, dayKey)).length;
-    const learnDay = env.pace > 0;
-
-    const plan = [
-      ready.length > 0 ? `${ready.length} ${ready.length === 1 ? 'check' : 'checks'}` : null,
-      window.length >= 2 ? `stitch ${window[0].verseNumber}–${window[window.length - 1].verseNumber}` : null,
-      next && learnDay ? `new: verse ${next.verseNumber}` : null,
-    ].filter(Boolean);
-
-    const tag = (i: QueueItem) => {
-      if (readyIds.has(i.verseId)) return 'Check';
-      const m = waitMin.get(i.verseId);
-      if (m !== undefined) return `Ready in ${m} min`;
-      return i.guidedSetAside ? 'Set aside' : 'New';
-    };
-
-    return (
-      <FadeInView style={{ flex: 1 }}>
-        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-          <ScreenHeader
-            title="Guided learning"
-            subtitle="It picks the practice for each verse, one step at a time, then ties it to the verses before it."
-            onBack={() => navigateTo('home')}
-            backLabel="Today"
-          />
-
-          {dueCount > 0 && (
-            <View className="bg-surface-2 border border-line rounded-card" style={{ padding: space(12) }}>
-              <AppText variant="label" className="font-sans text-ink-2">
-                You have {dueCount} {dueCount === 1 ? 'review' : 'reviews'} due. Graduating verses waits until they're done.
-              </AppText>
-            </View>
-          )}
-
-          {passages.length > 1 && (
-            <Dropdown
-              value={passageKey}
-              onChange={onPickPassage}
-              options={passages.map((p) => ({ id: p.key, label: `${p.book} ${p.chapter}:${p.items[0].verseNumber}–${p.items[p.items.length - 1].verseNumber}` }))}
-              title="Passage"
-              searchable={false}
-            />
-          )}
-
-          <GroupedList
-            header={rangeOf(items.map(toDrillVerse))}
-            footer={plan.length > 0 ? `Today: ${plan.join(' → ')}` : learnDay ? 'Nothing waiting. Start with a new verse.' : 'Not a learning day. Checks and stitches only, and you can keep going for a new verse.'}
-          >
-            {learning.map((i) => {
-              const startable = runsBanked(i) === 0;
-              return (
-                <ListRow
-                  key={i.verseId}
-                  title={`Verse ${i.verseNumber}`}
-                  subtitle={startable ? `${tag(i)} · tap to start it now` : tag(i)}
-                  accessory={<RunDots done={runsBanked(i)} needed={masteryTouches} />}
-                  onPress={startable ? () => dispatch({ type: 'startNew', verseId: i.verseId }) : undefined}
-                />
-              );
-            })}
-          </GroupedList>
-
-          <View style={{ gap: space(8) }}>
-            <AppButton size="lg" variant="primary" Icon={Compass} label="Begin" onPress={() => dispatch({ type: 'begin' })} />
-            {next && (ready.length > 0 || window.length >= 2) && (
-              <AppButton variant="secondary" label={`Start with verse ${next.verseNumber} instead`} onPress={() => dispatch({ type: 'startNew' })} />
-            )}
-          </View>
-          {next && (ready.length > 0 || window.length >= 2) && (
-            <AppText variant="caption" className="font-sans text-ink-3">
-              Starting with the new verse saves the checks for after it. You can also skip any check or stitch along the way.
-            </AppText>
-          )}
-        </ScrollView>
-      </FadeInView>
-    );
+    setTimeout(() => dispatch({ type: 'begin' }), 0);
+    return null;
   }
 
   // ==========================================================================
@@ -1219,6 +1202,10 @@ step.kind === 'stitch' ? 'Stitch' : 'The join';
   // ==========================================================================
   const items = liveItems().filter((i) => i.status === 'learning' || s.finishedThisSitting.includes(i.verseId));
   const checks = s.log.filter((l) => l.step === 'cold' && l.perfect).length;
+  const todayKey = localDayKey(getLogicalDate(dayStartHour));
+  const dueCount = reviewsPaused
+    ? 0
+    : state.memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate) && !gradedOnDay(q, todayKey)).length;
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
@@ -1257,6 +1244,16 @@ step.kind === 'stitch' ? 'Stitch' : 'The join';
             ))}
           </GroupedList>
         )}
+
+        {/* Was a box on the opening page. One line here instead. */}
+        {dueCount > 0 ? (
+          <View style={{ gap: space(8) }}>
+            <AppText variant="label" className="font-sans text-ink-2">
+              {`${dueCount} ${dueCount === 1 ? 'review is' : 'reviews are'} due today. Finished verses move to reviews once those are done.`}
+            </AppText>
+            <AppButton variant="secondary" Icon={Layers} label="Review now" onPress={() => state.openMixedReview()} />
+          </View>
+        ) : null}
 
         <AppButton size="lg" variant="primary" label="Done" onPress={() => navigateTo('home')} />
       </ScrollView>

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Check, Eye, Layers, X } from 'lucide-react-native';
+import { Check, Eye, Layers, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
 import { ChapterSections, QueueItem, ReviewGrade } from '../types';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { TakeawayAsk } from '../components/TakeawayAsk';
+import { OptionsPopup } from '../components/session';
 import { Badge, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { bracketColor, useThemeColors } from '../components/theme';
 import GradedRecitation, { ButtonPair, RecitationMode, RoundFrame, SpanText } from '../components/GradedRecitation';
@@ -599,125 +600,6 @@ function PracticeRound({
 }
 
 // ----------------------------------------------------------------------------
-// The start sheet
-// ----------------------------------------------------------------------------
-
-function StartSheet({
-  state,
-  due,
-  enabled,
-  counts,
-  onStart,
-}: {
-  state: AppState;
-  due: QueueItem[];
-  enabled: FormatId[];
-  counts: MixCounts;
-  onStart: (chosen: QueueItem[]) => void;
-}) {
-  const space = useScaledSpace();
-  const { navigateTo, memoryQueue, sectionsForChapter, getEstimatedReviewTime, cognitiveLoadSensitivity } = state;
-  const { chapters } = useMemo(() => buildUnits({ due, pool: memoryQueue, sectionsFor: sectionsForChapter }), [due, memoryQueue, sectionsForChapter]);
-  const [off, setOff] = useState<Set<string>>(new Set());
-  const chosen = due.filter((i) => !off.has(chapterKeyOf(i)));
-  const chosenChapters = chapters.filter((c) => !off.has(c.key));
-  const minutes = chosen.length === 0 ? 0 : Math.max(1, getEstimatedReviewTime(chosen, cognitiveLoadSensitivity));
-  const countOf = (key: string) => due.filter((i) => chapterKeyOf(i) === key).length;
-  const practiceOn = enabled.filter((f) => !counts[f]).length;
-  const countingOn = enabled.filter((f) => counts[f]).length;
-
-  return (
-    <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-        <ScreenHeader
-          title={MIX_NAMES.mixedReview}
-          subtitle="Today's reviews, section by section, each in a different way."
-          onBack={() => navigateTo('home')}
-          backLabel="Today"
-        />
-
-        <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(4) }}>
-          <AppText variant="title" className="font-sans font-bold text-ink">
-            {plural(chosen.length, 'verse')} · {plural(chosenChapters.length, 'chapter')}
-          </AppText>
-          <AppText variant="label" className="font-sans text-ink-2">
-            {chosen.length === 0 ? 'Pick at least one chapter.' : `About ${minutes} min`}
-          </AppText>
-        </View>
-
-        <View style={{ gap: space(6) }}>
-          <GroupedList header="Chapters, in Today's order">
-            {chapters.map((c) => {
-              const on = !off.has(c.key);
-              const n = countOf(c.key);
-              return (
-                <Pressable
-                  key={c.key}
-                  onPress={() =>
-                    setOff((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(c.key)) next.delete(c.key);
-                      else next.add(c.key);
-                      return next;
-                    })
-                  }
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: on }}
-                  accessibilityLabel={`${chapterName(c)}, ${plural(n, 'verse')}`}
-                  className="flex-row items-center active:bg-surface-2"
-                  style={{ paddingVertical: space(12), paddingHorizontal: space(14), gap: space(12) }}
-                >
-                  <CheckBox on={on} />
-                  <View className="flex-1" style={{ gap: space(2) }}>
-                    <AppText variant="body" className="font-sans font-semibold text-ink">
-                      {chapterName(c)}
-                    </AppText>
-                    <AppText variant="caption" className="font-sans text-ink-3">
-                      {plural(n, 'verse')}
-                      {c.sectionCount > 0 ? ` · ${plural(c.sectionCount, 'section')}` : ' · no sections yet'}
-                    </AppText>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </GroupedList>
-          {chapters
-            .filter((c) => c.sectionCount === 0)
-            .map((c) => (
-              <View key={c.key} style={{ paddingHorizontal: space(4) }}>
-                <TextLink label={`Add sections to ${chapterName(c)}`} onPress={() => navigateTo('chapterLanding', c.book, c.chapter)} />
-              </View>
-            ))}
-          <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-            A chapter without sections is taken a few verses at a time.
-          </AppText>
-        </View>
-
-        <View style={{ gap: space(6), paddingHorizontal: space(4) }}>
-          <AppText variant="label" className="font-sans text-ink-2">
-            {`Formats: ${plural(countingOn, 'that counts', 'that count')}, ${plural(practiceOn, 'for practice', 'for practice')}.`}
-          </AppText>
-          <TextLink
-            label="Choose formats"
-            onPress={() => {
-              openSettingsAt('formats');
-              navigateTo('settings');
-            }}
-          />
-        </View>
-
-        <View style={{ gap: space(8) }}>
-          <AppButton size="lg" variant="primary" Icon={Layers} label="Start" disabled={chosen.length === 0} onPress={() => onStart(chosen)} />
-          <AppText variant="caption" className="font-sans text-ink-3 text-center">
-            Stop anytime. What you finish counts.
-          </AppText>
-        </View>
-      </ScrollView>
-    </FadeInView>
-  );
-}
-
-// ----------------------------------------------------------------------------
 // The session
 // ----------------------------------------------------------------------------
 
@@ -727,15 +609,34 @@ function Session({
   startedAt,
   counts,
   gapPrefs,
+  chapters,
+  off,
+  onChangeChapters,
 }: {
   state: AppState;
   initial: MixState;
   startedAt: number;
   counts: MixCounts;
   gapPrefs: GapPrefs;
+  /** Every chapter with a review due today, for the gear's chapter list. */
+  chapters: { key: string; book: string; chapter: number; sectionCount: number }[];
+  off: Set<string>;
+  onChangeChapters: (next: Set<string>) => void;
 }) {
   const space = useScaledSpace();
   const palette = useThemeColors();
+  // The gear: which chapters to include, and a way to the formats setting.
+  const [gearOpen, setGearOpen] = useState(false);
+  const [draftOff, setDraftOff] = useState<Set<string>>(off);
+  const openGear = () => {
+    setDraftOff(new Set(off));
+    setGearOpen(true);
+  };
+  const closeGear = () => {
+    setGearOpen(false);
+    const changed = draftOff.size !== off.size || [...draftOff].some((k) => !off.has(k));
+    if (changed) onChangeChapters(draftOff);
+  };
   const { memoryQueueRef, sectionsForChapter, handleReviewCompleted, startPractice, navigateTo, pausedAt, pausedUntil, dayStartHour } = state;
 
   const sRef = useRef<MixState>(initial);
@@ -874,6 +775,13 @@ function Session({
             </AppText>
           )}
 
+          {/* Offered once, here, rather than before starting. */}
+          {plan.chapters
+            .filter((c) => c.sectionCount === 0)
+            .map((c) => (
+              <TextLink key={c.key} label={`Add sections to ${chapterName(c)}`} onPress={() => navigateTo('chapterLanding', c.book, c.chapter)} />
+            ))}
+
           {tomorrowLoad.count > 0 && (
             <View className="bg-fill rounded-card" style={{ padding: space(14), gap: space(2) }}>
               <AppText variant="caption" className="font-sans font-semibold text-ink-3">
@@ -984,12 +892,14 @@ function Session({
     <FadeInView style={{ flex: 1 }}>
       <View className="flex-1 bg-canvas p-5" style={{ gap: space(12) }}>
         <View style={{ gap: space(8) }}>
+          {/* Same row as the practice window: close, progress, gear. */}
           <View className="flex-row items-center" style={{ gap: space(12) }}>
+            <AppIconButton Icon={X} variant="outline" diameter={40} onPress={() => send({ type: 'stop' })} accessibilityLabel="Stop for today" />
             <View className="flex-1">
               <ProgressBar done={s.pos} total={plan.rounds.length} />
             </View>
             <AppButton size="sm" variant="quiet" label="Skip" onPress={() => send({ type: 'skip' })} />
-            <AppIconButton Icon={X} variant="outline" onPress={() => send({ type: 'stop' })} accessibilityLabel="Stop for today" />
+            <AppIconButton Icon={SlidersHorizontal} variant="outline" diameter={40} onPress={openGear} accessibilityLabel="Review settings" />
           </View>
           <AppText variant="caption" className="font-sans font-medium text-ink-3">
             {where}
@@ -1012,6 +922,49 @@ function Session({
         </View>
         <View className="flex-1">{body}</View>
       </View>
+
+      <OptionsPopup visible={gearOpen} onClose={closeGear} title="Review settings">
+        <View style={{ gap: space(12) }}>
+          <GroupedList header="Chapters to include">
+            {chapters.map((c) => {
+              const on = !draftOff.has(c.key);
+              // Keep at least one chapter on.
+              const lastOn = on && chapters.filter((x) => !draftOff.has(x.key)).length === 1;
+              return (
+                <ListRow
+                  key={c.key}
+                  leading={<CheckBox on={on} />}
+                  title={chapterName(c)}
+                  subtitle={c.sectionCount > 0 ? plural(c.sectionCount, 'section') : 'A few verses at a time'}
+                  accessory="none"
+                  onPress={
+                    lastOn
+                      ? undefined
+                      : () =>
+                          setDraftOff((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(c.key)) next.delete(c.key);
+                            else next.add(c.key);
+                            return next;
+                          })
+                  }
+                />
+              );
+            })}
+          </GroupedList>
+          <GroupedList>
+            <ListRow
+              title="Review formats"
+              subtitle="Which ones count, which are practice"
+              onPress={() => {
+                setGearOpen(false);
+                openSettingsAt('formats');
+                navigateTo('settings');
+              }}
+            />
+          </GroupedList>
+        </View>
+      </OptionsPopup>
     </FadeInView>
   );
 }
@@ -1044,12 +997,48 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
     return todayOrder(notGradedOn(memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate)), today));
   }, [memoryQueue, reviewsPaused, dayStartHour]);
 
-  const [session, setSession] = useState<{ state: MixState; startedAt: number } | null>(null);
+  const [session, setSession] = useState<{ state: MixState; startedAt: number; n: number } | null>(null);
+  // Chapters left out (UI simplify plan, Job 4): picked in the session's gear,
+  // not on a setup page. Review on Today goes straight into the first section.
+  const [off, setOff] = useState<Set<string>>(new Set());
+  const { chapters } = useMemo(() => buildUnits({ due, pool: memoryQueue, sectionsFor: sectionsForChapter }), [due, memoryQueue, sectionsForChapter]);
+
+  const begin = (nextOff: Set<string>, startedAt = Date.now(), n = 0) => {
+    if (!enabled) return;
+    const chosen = due.filter((i) => !nextOff.has(chapterKeyOf(i)));
+    if (chosen.length === 0) return;
+    const plan = buildMixPlan({ due: chosen, pool: memoryQueue, sectionsFor: sectionsForChapter, enabled, counts }, Math.random);
+    setSession({ state: mixReducer(startMix(plan, { cleanPct, swapCanBeClean }), { type: 'start' }), startedAt, n });
+  };
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStarted.current || !enabled || due.length === 0) return;
+    autoStarted.current = true;
+    begin(off);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, due.length]);
 
   if (session) {
-    return <Session state={state} initial={session.state} startedAt={session.startedAt} counts={counts} gapPrefs={gapPrefs} />;
+    return (
+      <Session
+        key={session.n}
+        state={state}
+        initial={session.state}
+        startedAt={session.startedAt}
+        counts={counts}
+        gapPrefs={gapPrefs}
+        chapters={chapters}
+        off={off}
+        onChangeChapters={(next) => {
+          setOff(next);
+          // Verses already reviewed today drop out of `due`, so the new plan
+          // picks up where this one is.
+          begin(next, session.startedAt, session.n + 1);
+        }}
+      />
+    );
   }
-  if (!enabled) return <View className="flex-1 bg-canvas" />;
+  if (!enabled || due.length > 0) return <View className="flex-1 bg-canvas" />;
 
   if (due.length === 0) {
     return (
@@ -1065,17 +1054,5 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
       </FadeInView>
     );
   }
-
-  return (
-    <StartSheet
-      state={state}
-      due={due}
-      enabled={enabled}
-      counts={counts}
-      onStart={(chosen) => {
-        const plan = buildMixPlan({ due: chosen, pool: memoryQueue, sectionsFor: sectionsForChapter, enabled, counts }, Math.random);
-        setSession({ state: mixReducer(startMix(plan, { cleanPct, swapCanBeClean }), { type: 'start' }), startedAt: Date.now() });
-      }}
-    />
-  );
+  return null;
 }

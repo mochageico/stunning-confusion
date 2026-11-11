@@ -285,6 +285,18 @@ into the pop-up. Drop the "Tap a verse to start there…" line (R5); keep the
 behavior.
 
 ### Job 4 · Mixed review and Guided learning — `MixedReviewScreen.tsx`, `GuidedLearningScreen.tsx`
+
+**Built 2026-11-10.** Both now open on their first step; the setup pages are
+gone. Header row matches practice: ✕, progress (Mixed) or the step (Guided),
+gear. Mixed review's gear ("Review settings"): chapters to include (checkboxes,
+at least one stays on; changing them rebuilds the rest of the session, and
+verses already reviewed today stay done) and a Review formats row to Settings.
+"Add sections to …" moved to the finish page. Guided's gear: Passage (radio
+list) and "Start a verse now" (verses with no runs yet start on tap; replaces
+"Start with verse N instead"). The reviews-due box became one line plus a
+Review now button on the finish page, and "Graduating" is gone. Not done: the
+finish pages were not moved onto `SessionDone`, and the tab bar still shows
+during these sessions. Not phone-tested.
 Now: each opens on a setup page (chapter checkboxes, "Add sections to…" links,
 formats line; passage dropdown, verse list, warning box, two buttons).
 Target (R2): the Start on Today goes straight into the first step.
