@@ -96,7 +96,7 @@ const TABS = [
   { id: 'verses' as const, label: 'Verses', Icon: BookOpen },
   { id: 'community' as const, label: 'Community', Icon: Users },
   { id: 'record' as const, label: 'Record', Icon: Mic },
-  { id: 'profile' as const, label: 'Profile', Icon: User },
+  { id: 'profile' as const, label: 'Me', Icon: User },
 ];
 
 // ONBOARDING_STEP_INSTRUCTIONS was deleted here. It supplied per-step copy for

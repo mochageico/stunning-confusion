@@ -54,6 +54,7 @@ import { PassMark, PracticeTextSize, SchemeChoice, setAppPref, useAppPrefs } fro
 import { printVerses, shareVersesAsText } from '../lib/exportVerses';
 import { resetTips } from '../lib/tips';
 import { LadderDryRun } from '../dev/LadderDryRun';
+import { MeSummary } from '../components/MeSummary';
 import { THOROUGHNESS_PRESETS } from '../lib/ladder';
 import { forgetAllSpeechSlips, forgetSpeechSlip, SLIP_LEARN_AFTER, useSpeechSlips } from '../lib/speechSlips';
 
@@ -92,7 +93,7 @@ const PAGE_TITLE: Record<Page, string> = {
   audio: 'Playback and sharing',
   offline: 'Offline audio',
   notifications: 'Notifications',
-  privacy: 'Privacy and safety',
+  privacy: 'Privacy and people',
   appearance: 'Appearance',
   help: 'Help and tour',
   ladderDryRun: 'Ladder dry run',
@@ -605,7 +606,7 @@ function AppearancePage() {
 // The screen
 // ----------------------------------------------------------------------------
 
-export default function SettingsScreen({ state }: { state: AppState }) {
+export default function SettingsScreen({ state, asMe = false }: { state: AppState; /** The Me tab: profile summary on top, no back link, sub-pages go back to Me. */ asMe?: boolean }) {
   const space = useScaledSpace();
   const {
     user,
@@ -659,10 +660,10 @@ export default function SettingsScreen({ state }: { state: AppState }) {
   const prev = backHistory[backHistory.length - 1];
   // The Profile tab draws over whatever screen was last open, so its tab
   // says more than the screen does.
-  const cameFrom = (prev && (prev.tab === 'profile' ? 'Profile' : BACK_LABELS[prev.screen])) || 'Back';
+  const cameFrom = (prev && (prev.tab === 'profile' ? 'Me' : BACK_LABELS[prev.screen])) || 'Back';
   const onSubPage = page !== 'home';
-  const goBack = () => (onSubPage && !openedOnPage ? setPage('home') : handleBack());
-  const backLabel = onSubPage && !openedOnPage ? 'Settings' : cameFrom;
+  const goBack = () => (asMe || (onSubPage && !openedOnPage) ? setPage('home') : handleBack());
+  const backLabel = asMe ? 'Me' : onSubPage && !openedOnPage ? 'Settings' : cameFrom;
 
   const [showName, setShowName] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -756,42 +757,37 @@ export default function SettingsScreen({ state }: { state: AppState }) {
 
   const home = (
     <>
-      {/* The account, as a card: who you are, and the way into everything about it. */}
-      <GroupedList>
-        <ListRow title={user.displayName || 'Add your name'} subtitle={user.email || providerLabel} onPress={() => setPage('account')} />
-      </GroupedList>
+      {/* On the Me tab the profile summary takes the account card's place
+          (tapping the name opens Account). */}
+      {asMe ? (
+        <MeSummary state={state} onOpenAccount={() => setPage('account')} onOpenNotificationSettings={() => setPage('notifications')} />
+      ) : (
+        <GroupedList>
+          <ListRow title={user.displayName || 'Add your name'} subtitle={user.email || providerLabel} onPress={() => setPage('account')} />
+        </GroupedList>
+      )}
 
       <GroupedList header="Practice and review">
         <ListRow
-          Icon={Layers}
-          title="Review formats"
-          value={`${mix.counting} count · ${mix.practice} practice`}
-          onPress={() => setPage('formats')}
-        />
-        <ListRow Icon={PenLine} title="Recall and typing" value={`Pass at ${Math.round(prefs.passMark * 100)}%`} onPress={() => setPage('recall')} />
-        <ListRow
           Icon={SlidersHorizontal}
-          title="Memory Plan Designer"
-          value={`${learningDays.length} days · ${newVersesPace} a day · ${THOROUGHNESS_PRESETS.find((p) => p.value === thoroughness)?.label ?? 'Standard'}`}
+          title="Schedule and reviews"
+          value={THOROUGHNESS_PRESETS.find((p) => p.value === thoroughness)?.label ?? 'Standard'}
           onPress={openMemoryPlan}
         />
+        <ListRow
+          Icon={Layers}
+          title="Review formats"
+          value={`${mix.counting} count`}
+          onPress={() => setPage('formats')}
+        />
+        <ListRow Icon={PenLine} title="Recall and typing" value={`${Math.round(prefs.passMark * 100)}%`} onPress={() => setPage('recall')} />
         <ListRow Icon={PauseCircle} title="Pause reviews" value={pausedAt ? 'Paused' : 'Off'} onPress={openPause} />
       </GroupedList>
 
-      <GroupedList header="Bible and text">
-        <ListRow Icon={BookOpen} title="Translation" value={translationLabel(selectedTranslationId)} onPress={() => setPage('text')} />
-        <ListRow Icon={Type} title="Verse text" value={prefs.verseFont === 'serif' ? 'Book' : 'Plain'} onPress={() => setPage('text')} />
-      </GroupedList>
-
-      <GroupedList header="Recordings and audio">
-        <ListRow
-          Icon={Mic}
-          title="Playback and sharing"
-          value={`${studioPlaybackEnabled ? 'Studio' : 'Original'} · ${
-            RECORDING_VISIBILITY_OPTIONS.find((o) => o.id === (defaultRecordingVisibility || 'private'))?.label ?? ''
-          }`}
-          onPress={() => setPage('audio')}
-        />
+      {/* One group for everything else, one row each (UI simplify Job 10). */}
+      <GroupedList header="More">
+        <ListRow Icon={BookOpen} title="Bible and text" value={translationLabel(selectedTranslationId)} onPress={() => setPage('text')} />
+        <ListRow Icon={Mic} title="Audio" value={studioPlaybackEnabled ? 'Studio' : 'Original'} onPress={() => setPage('audio')} />
         {AUDIO_CACHE_SUPPORTED && (
           <ListRow
             Icon={Download}
@@ -800,22 +796,19 @@ export default function SettingsScreen({ state }: { state: AppState }) {
             onPress={() => setPage('offline')}
           />
         )}
-      </GroupedList>
-
-      <GroupedList header="People">
-        <ListRow Icon={BellRing} title="Notifications" onPress={() => setPage('notifications')} />
+        {!asMe && <ListRow Icon={BellRing} title="Notifications" onPress={() => setPage('notifications')} />}
         <ListRow
           Icon={ShieldCheck}
-          title="Privacy and safety"
+          title="Privacy and people"
           value={memoryQueueVisibility === 'friends' ? 'Friends' : 'Only me'}
           onPress={() => setPage('privacy')}
         />
-      </GroupedList>
-
-      <GroupedList header="App" footer={`Version ${Constants.expoConfig?.version || '—'}`}>
         <ListRow Icon={Palette} title="Appearance" value={`${schemeName} · ${accentName}`} onPress={() => setPage('appearance')} />
         <ListRow Icon={CircleHelp} title="Help and tour" onPress={() => setPage('help')} />
       </GroupedList>
+      <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4), marginTop: -space(12) }}>
+        Version {Constants.expoConfig?.version || '—'}
+      </AppText>
 
       {/* Development builds only: REVIEW_LADDER_PLAN.md stage 3. */}
       {__DEV__ ? (
@@ -975,7 +968,11 @@ export default function SettingsScreen({ state }: { state: AppState }) {
         contentContainerClassName="p-5 pb-12"
         contentContainerStyle={{ gap: space(20) }}
       >
-        <ScreenHeader title={PAGE_TITLE[page]} onBack={goBack} backLabel={backLabel} />
+        {asMe && page === 'home' ? (
+          <ScreenHeader title="Me" />
+        ) : (
+          <ScreenHeader title={PAGE_TITLE[page]} onBack={goBack} backLabel={backLabel} />
+        )}
         {page === 'home' ? home : pages[page]}
       </ScrollView>
 

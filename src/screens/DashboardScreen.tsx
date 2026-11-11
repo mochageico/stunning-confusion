@@ -12,7 +12,7 @@ import { STAGE_LABEL, verseStage } from '../lib/stageProgress';
 
 // Opens from Profile (and Today's streak); the back link names which.
 const BACK_LABELS: Partial<Record<string, string>> = {
-  profile: 'Profile',
+  profile: 'Me',
   home: 'Today',
 };
 
@@ -168,6 +168,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
     { label: 'Verses in progress', value: learningCount },
     { label: 'Day streak', value: memoryStreak },
     { label: 'Reviews done', value: totalReviewsCompleted },
+    { label: 'Time studied', value: formatStudyTime(totalStudySeconds) },
   ];
 
   return (
@@ -175,7 +176,7 @@ export default function DashboardScreen({ state }: { state: AppState }) {
       <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
         {/* "Progress Dashboard" was jargon standing in front of a plain
             idea. This screen is the answer to "how am I doing?". */}
-        <ScreenHeader title="My progress" onBack={handleBack} backLabel={(prevScreen && BACK_LABELS[prevScreen]) || 'Back'} />
+        <ScreenHeader title="Milestones" onBack={handleBack} backLabel={(prevScreen && BACK_LABELS[prevScreen]) || 'Back'} />
 
         <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
           {tiles.map((tile) => (
@@ -194,67 +195,6 @@ export default function DashboardScreen({ state }: { state: AppState }) {
           ))}
         </View>
 
-        <GroupedList footer="Total time with a practice or listen session open.">
-          <ListRow Icon={Clock} title="Time studied" value={formatStudyTime(totalStudySeconds)} />
-        </GroupedList>
-
-        {/* One row per phase, stacked -- five columns squeezed the numbers
-            into a strip too narrow to say anything else. The stage colour is
-            only the dot; the verses in each phase scroll sideways beneath it. */}
-        <View style={{ gap: space(6) }}>
-          <SectionHeader title="Where your verses are" />
-          <View className="bg-surface border border-line rounded-card overflow-hidden">
-            {retentionRows.map((row, i) => {
-              const references = summarizeReferences(row.items);
-              return (
-                <View
-                  key={row.key}
-                  className={i > 0 ? 'border-t border-hairline' : ''}
-                  style={{ paddingVertical: space(12), gap: space(8) }}
-                >
-                  <View className="flex-row items-center" style={{ paddingHorizontal: space(14), gap: space(8) }}>
-                    <StageDot stage={row.key} />
-                    <AppText variant="body" className="font-sans text-ink flex-1">
-                      {row.label}
-                    </AppText>
-                    <AppText variant="body" className="font-sans font-semibold text-ink">
-                      {row.items.length}
-                    </AppText>
-                  </View>
-                  {row.note ? (
-                    <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(14) }}>
-                      {row.note}
-                    </AppText>
-                  ) : null}
-                  {row.items.length === 0 ? (
-                    <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(14) }}>
-                      No verses here yet
-                    </AppText>
-                  ) : (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ gap: space(6), paddingHorizontal: space(14), alignItems: 'center' }}
-                    >
-                      {references.map((reference) => (
-                        <View
-                          key={reference.key}
-                          className={`bg-surface-2 rounded-btn ${row.key === 'secure' ? 'border-[1.5px] border-stage-top-edge' : 'border border-line'}`}
-                          style={{ paddingHorizontal: space(8), paddingVertical: space(3) }}
-                        >
-                          <AppText variant="caption" className="font-sans font-medium text-ink-2">
-                            {reference.label}
-                          </AppText>
-                        </View>
-                      ))}
-                    </ScrollView>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
         {/* Past 90 days. Profile once carried its own 15-day strip of this
             same data above the button that led here -- a worse view of a
             thing this screen shows better -- so it was deleted there. */}
@@ -263,9 +203,6 @@ export default function DashboardScreen({ state }: { state: AppState }) {
           <View className="bg-surface border border-line rounded-card" style={{ padding: space(12) }}>
             <ActivityHeatmap days={activityLast90Days} />
           </View>
-          <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-            Each square is a day. It fills in when you review a verse or practice one you're learning; darker means more that day. Tap a square to see its count.
-          </AppText>
         </View>
 
         <View style={{ gap: space(6) }}>

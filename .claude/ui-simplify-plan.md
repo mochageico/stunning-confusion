@@ -423,6 +423,22 @@ Calendar: drop the disclaimer paragraph for a small ⓘ. Keep the two totals and
 the day bars; hide days with nothing after the first week behind "Show 2 weeks".
 
 ### Job 10 · Me — `ProfileScreen.tsx`, `DashboardScreen.tsx`, `SettingsScreen.tsx`
+
+**Built 2026-11-10 as sketched.** The Profile tab is "Me": `ProfileScreen`
+now renders `SettingsScreen` with `asMe`, whose home starts with the new
+`MeSummary` (avatar, name, "41-day streak" → Account; Memorized · Reviews ·
+Studied; Past 13 weeks with History; the next streak and next verse milestone
+plus "All milestones"; Notifications with an unread count, opening a centered
+pop-up of friend nudges with Notification settings at its foot). Then
+Practice and review (Schedule and reviews · Standard, Review formats, Recall
+and typing, Pause reviews) and one "More" group (Bible and text, Audio,
+Offline audio, Privacy and people, Appearance, Help and tour), version line
+under it. Settings pages open in place with Back to Me. "Memory Plan
+Designer" is gone from Settings. Friends / Circles rows left (they live on
+Community). The old My progress screen is "Milestones": it lost "Where your
+verses are", the time-studied footnote and the heatmap paragraph; Time
+studied joined its tiles. Developer stays `__DEV__`-only. The tour's last
+stop says Me. Not phone-tested.
 (Shape depends on D3.)
 - Top: avatar, name, streak. Three numbers. The 90-day chart.
 - Next streak milestone and next verse milestone only (R7); "All milestones"

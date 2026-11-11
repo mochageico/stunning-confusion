@@ -26,7 +26,7 @@ const TRANSLATION_FULL_NAMES: Record<string, string> = Object.fromEntries(
 // one you came from.
 const BACK_LABELS: Partial<Record<string, string>> = {
   record: 'Record',
-  profile: 'Profile',
+  profile: 'Me',
   chapterLanding: 'Chapter',
   audioFeed: 'Recordings',
   myRecordings: 'Your recordings',

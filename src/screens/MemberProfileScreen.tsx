@@ -16,7 +16,7 @@ const BACK_LABELS: Partial<Record<string, string>> = {
   findFriends: 'Add friends',
   messages: 'Messages',
   dmThread: 'Messages',
-  profile: 'Profile',
+  profile: 'Me',
 };
 
 export default function MemberProfileScreen({ state }: { state: AppState }) {

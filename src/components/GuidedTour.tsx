@@ -60,8 +60,8 @@ const STEPS: { tab: Tab; place: string; text: string }[] = [
   },
   {
     tab: 'profile',
-    place: 'Profile',
-    text: 'Your progress and Settings live here. You can take this tour again from Settings any time.',
+    place: 'Me',
+    text: 'Your progress and Settings live here. You can take this tour again from Help and tour.',
   },
 ];
 
