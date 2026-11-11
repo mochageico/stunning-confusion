@@ -7,7 +7,7 @@ import { ChapterSections, QueueItem, ReviewGrade } from '../types';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { TakeawayAsk } from '../components/TakeawayAsk';
-import { OptionsPopup } from '../components/session';
+import { OptionsPopup, SessionDone } from '../components/session';
 import { Badge, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { bracketColor, useThemeColors } from '../components/theme';
 import GradedRecitation, { ButtonPair, RecitationMode, RoundFrame, SpanText } from '../components/GradedRecitation';
@@ -718,30 +718,28 @@ function Session({
     const tomorrow = new Date(getLogicalDate(dayStartHour));
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowLoad = computeDayReviewLoad(memoryQueueRef.current, tomorrow, false, pausedAt, pausedUntil);
+    // The shared finish page (UI simplify R3 / Job 14).
     return (
-      <FadeInView style={{ flex: 1 }}>
-        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-          <View style={{ gap: space(6) }}>
-            <AppText variant="caption" className="font-sans font-semibold text-ink-3">
-              {reviewed === 0
-                ? `${plural(unitsDone, 'section')} · ${minutes} min`
-                : `${stopped ? 'Stopped' : 'Reviews done'} · ${sum.clean.length} of ${reviewed} clean`}
-            </AppText>
-            <AppText variant="display" className="font-sans font-bold text-ink">
-              {reviewed === 0
-                ? 'Nothing counted this time'
-                : slippedItems.length > 0
-                  ? `${slippedItems.length === 1 ? 'One verse' : `${plural(slippedItems.length, 'verse')}`} to touch up`
-                  : stopped
-                    ? 'Stopped for today'
-                    : 'All clean'}
-            </AppText>
-            {slippedItems.length > 0 && (
-              <AppText variant="label" className="font-sans text-ink-2">
-                Say each one once more while it's fresh. It doesn't change your schedule.
-              </AppText>
-            )}
-          </View>
+      <SessionDone
+        safeTop={false}
+        safeBottom={false}
+        title={
+          reviewed === 0
+            ? 'Nothing counted this time'
+            : slippedItems.length > 0
+              ? `${slippedItems.length === 1 ? 'One verse' : `${plural(slippedItems.length, 'verse')}`} to touch up`
+              : stopped
+                ? 'Stopped for today'
+                : 'All clean'
+        }
+        subtitle={slippedItems.length > 0 ? 'Say each one once more while it’s fresh.' : undefined}
+        stats={[
+          { value: reviewed, label: 'reviewed' },
+          { value: sum.clean.length, label: 'clean' },
+          { value: `${minutes}m`, label: 'time' },
+        ]}
+        onDone={() => navigateTo('home')}
+      >
 
           {slippedItems.length > 0 && (
             <View style={{ gap: space(12) }}>
@@ -792,10 +790,7 @@ function Session({
               </AppText>
             </View>
           )}
-
-          <AppButton size="lg" variant="primary" label="Done" onPress={() => navigateTo('home')} />
-        </ScrollView>
-      </FadeInView>
+      </SessionDone>
     );
   }
 

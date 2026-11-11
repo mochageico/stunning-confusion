@@ -225,7 +225,7 @@ export function ChallengeCard({
       visible={confirmingDelete}
       onClose={() => setConfirmingDelete(false)}
       title="Delete this challenge?"
-      message="It's removed for both of you. Verses you've started stay in your queue."
+      message="It's removed for both of you. Verses you've started stay on My Verses."
       actions={
         <>
           <AppButton variant="quiet" label="Keep it" onPress={() => setConfirmingDelete(false)} />

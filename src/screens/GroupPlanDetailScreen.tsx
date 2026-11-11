@@ -520,7 +520,7 @@ export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
         visible={confirmingLeave}
         onClose={() => setConfirmingLeave(false)}
         title="Leave this plan?"
-        message="Its verses you haven't started leave your queue. You can join again later."
+        message="Its verses you haven't started leave My Verses. You can join again later."
         actions={
           <>
             <AppButton variant="quiet" label="Cancel" onPress={() => setConfirmingLeave(false)} />

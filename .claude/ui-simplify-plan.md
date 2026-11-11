@@ -520,6 +520,24 @@ Add verses: drop both footnotes; the range reads "Verses 1 to 4".
 The rest: apply R1, R5, R6 and move on; they are already simple.
 
 ### Job 14 · Lock-in
+
+**Built 2026-11-10.** No bottom sheets anywhere: `Dialog` now opens every
+`placement="sheet"` pop-up centered (one change in blocks.tsx covers the 20
+callers). Banned words: the two visible "queue"s (ChallengeCard, leaving a
+group plan) now say My Verses; the remaining hits are code names, comments
+and the dev-only layout lab. Job 4 gaps: Mixed review and Guided learning end
+on `SessionDone` (reviewed · clean · time; new verses · checks · runs, with
+"Review now · N due" as the quiet second action), and the tab bar hides
+during Mixed review, Guided learning, Reference practice and Pick up the
+thread (`SESSION_SCREENS` in App.tsx; Guided and Mixed get the home-indicator
+inset from the root safe area, `SessionDone` takes `safeBottom={false}`
+there). Sweep: `capture-screens --overflow --all "w=375&scale=1.5"` found no
+horizontal overflow; its only flags were deliberate one-line truncations
+(row snippets, the chapter player's title, date lines in the practice
+window); the chat screens (Messages, a DM, circle chat; untouched here)
+reported chat cards "off screen", left for a chat pass. Filled buttons: no screen state shows more than one, except Today's
+two (D1); per-file counts are dialogs and mutually exclusive steps. Dark mode
+spot-checked on Verses and Me. Final judgment still on the real phone.
 Sweep every screen with `npm run shots -- --overflow --all "w=375&scale=1.5"`
 and in dark mode. Grep visible strings for the banned words. Count filled
 buttons per screen (R1). Final judgment is on the real phone.

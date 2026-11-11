@@ -151,9 +151,12 @@ export function SessionDone({
   onDone,
   secondary,
   safeTop = true,
+  safeBottom = true,
 }: {
   /** False when drawn inside a screen that already sits below the status bar. */
   safeTop?: boolean;
+  /** False when the screen around it already keeps clear of the home indicator. */
+  safeBottom?: boolean;
   title: string;
   subtitle?: string;
   /** Two to four short numbers, e.g. { value: 5, label: 'reviewed' }. */
@@ -212,7 +215,7 @@ export function SessionDone({
 
       <View
         className="bg-surface border-t border-line"
-        style={{ paddingHorizontal: space(16), paddingTop: space(14), paddingBottom: Math.max(insets.bottom, space(14)) + space(10), gap: space(8) }}
+        style={{ paddingHorizontal: space(16), paddingTop: space(14), paddingBottom: (safeBottom ? Math.max(insets.bottom, space(14)) : space(14)) + space(10), gap: space(8) }}
       >
         <AppButton variant="primary" size="lg" label={doneLabel} onPress={onDone} />
         {secondary ? <AppButton variant="quiet" label={secondary.label} onPress={secondary.onPress} /> : null}

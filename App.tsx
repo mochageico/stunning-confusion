@@ -337,7 +337,8 @@ function NowPlayingBar({ state }: { state: AppState }) {
 }
 
 /** Screens that run as a full-screen session, with the tab bar hidden. */
-const SESSION_SCREENS = new Set<string>(['referenceDrill', 'threadDrill']);
+const SESSION_SCREENS = new Set<string>(['referenceDrill', 'threadDrill', 'guided', 'mixedReview']);
+const OWN_BOTTOM_INSET = new Set<string>(['guided', 'mixedReview']);
 
 // How long the loading screen waits for the user's verses before opening
 // the app anyway.
@@ -408,7 +409,10 @@ function AppShell() {
   return (
     <View style={{ flex: 1 }} className="bg-canvas">
       <ThemedStatusBar />
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+      {/* Guided and Mixed review draw their own layout to the bottom edge now
+          the tab bar steps aside, so they get the home-indicator inset here.
+          (Drills on SessionShell add it in their own bottom bar.) */}
+      <SafeAreaView style={{ flex: 1 }} edges={OWN_BOTTOM_INSET.has(state.currentScreen) && sessionScreenActive ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}>
         <View style={{ flex: 1 }}>
           <Screens state={state} />
           {showBars && <PageFade />}

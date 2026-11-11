@@ -641,7 +641,8 @@ export function Dialog({
   const insets = useSafeAreaInsets();
   const { height: winHeight } = useWindowDimensions();
   const space = useScaledSpace();
-  const sheet = placement === 'sheet';
+  // No bottom sheets anywhere (owner, 2026-11-10): "sheet" now opens centered too.
+  const sheet = false && placement === 'sheet';
   const dismiss = dismissable ? onClose : () => {};
 
   return (

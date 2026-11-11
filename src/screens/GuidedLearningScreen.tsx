@@ -6,7 +6,7 @@ import { AppState, isReviewDue } from '../state/useAppState';
 import { QueueItem } from '../types';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, RadioMark, useScaledSpace } from '../components/design';
-import { OptionsPopup } from '../components/session';
+import { OptionsPopup, SessionDone } from '../components/session';
 import { EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import GradedRecitation, { ButtonPair, canSpeakVerses, RecitationMode, RoundFrame } from '../components/GradedRecitation';
 import PeekDrill from '../components/drills/PeekDrill';
@@ -1206,58 +1206,52 @@ step.kind === 'stitch' ? 'Stitch' : 'The join';
   const dueCount = reviewsPaused
     ? 0
     : state.memoryQueue.filter((q) => q.status === 'reviewing' && isReviewDue(q.nextReviewDueDate) && !gradedOnDay(q, todayKey)).length;
+  // The shared finish page (UI simplify R3 / Job 14).
   return (
-    <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-        <View style={{ gap: space(4) }}>
-          <AppText variant="display" className="font-sans font-bold text-ink">
-            {s.log.length === 0 ? 'Nothing this time' : 'Good sitting'}
-          </AppText>
-          <AppText variant="label" className="font-sans text-ink-2">
-            {[
-              s.newDone > 0 ? `${s.newDone} new ${s.newDone === 1 ? 'verse' : 'verses'}` : null,
-              checks > 0 ? `${checks} ${checks === 1 ? 'check' : 'checks'} passed` : null,
-              bankedRef.current > 0 ? `${bankedRef.current} ${bankedRef.current === 1 ? 'run' : 'runs'} counted` : null,
+    <SessionDone
+      safeTop={false}
+      safeBottom={false}
+      title={s.log.length === 0 ? 'Nothing this time' : 'Good sitting'}
+      subtitle={s.log.length === 0 ? 'Come back when a verse is ready.' : undefined}
+      stats={
+        s.log.length === 0
+          ? undefined
+          : [
+              { value: s.newDone, label: s.newDone === 1 ? 'new verse' : 'new verses' },
+              { value: checks, label: checks === 1 ? 'check passed' : 'checks passed' },
+              { value: bankedRef.current, label: bankedRef.current === 1 ? 'run counted' : 'runs counted' },
             ]
-              .filter(Boolean)
-              .join(' · ') || 'Come back when a verse is ready.'}
-          </AppText>
-        </View>
+      }
+      onDone={() => navigateTo('home')}
+      secondary={dueCount > 0 ? { label: `Review now · ${dueCount} due`, onPress: () => state.openMixedReview() } : undefined}
+    >
+      {items.length > 0 && (
+        <GroupedList header="Where each verse stands">
+          {items.map((i) => (
+            <ListRow
+              key={i.verseId}
+              title={`Verse ${i.verseNumber}`}
+              subtitle={i.status === 'learning' ? undefined : 'In reviews'}
+              accessory={<RunDots done={i.status === 'learning' ? runsBanked(i) : masteryTouches} needed={masteryTouches} />}
+            />
+          ))}
+        </GroupedList>
+      )}
 
-        {items.length > 0 && (
-          <GroupedList header="Where each verse stands">
-            {items.map((i) => (
-              <ListRow
-                key={i.verseId}
-                title={`Verse ${i.verseNumber}`}
-                subtitle={i.status === 'learning' ? undefined : 'In reviews'}
-                accessory={<RunDots done={i.status === 'learning' ? runsBanked(i) : masteryTouches} needed={masteryTouches} />}
-              />
-            ))}
-          </GroupedList>
-        )}
+      {notes.length > 0 && (
+        <GroupedList header="What counted">
+          {notes.map((n, i) => (
+            <ListRow key={i} title={n} accessory="none" />
+          ))}
+        </GroupedList>
+      )}
 
-        {notes.length > 0 && (
-          <GroupedList header="What counted">
-            {notes.map((n, i) => (
-              <ListRow key={i} title={n} accessory="none" />
-            ))}
-          </GroupedList>
-        )}
-
-        {/* Was a box on the opening page. One line here instead. */}
-        {dueCount > 0 ? (
-          <View style={{ gap: space(8) }}>
-            <AppText variant="label" className="font-sans text-ink-2">
-              {`${dueCount} ${dueCount === 1 ? 'review is' : 'reviews are'} due today. Finished verses move to reviews once those are done.`}
-            </AppText>
-            <AppButton variant="secondary" Icon={Layers} label="Review now" onPress={() => state.openMixedReview()} />
-          </View>
-        ) : null}
-
-        <AppButton size="lg" variant="primary" label="Done" onPress={() => navigateTo('home')} />
-      </ScrollView>
-    </FadeInView>
+      {dueCount > 0 ? (
+        <AppText variant="label" className="font-sans text-ink-2" style={{ paddingHorizontal: space(4) }}>
+          Finished verses move to reviews once today's are done.
+        </AppText>
+      ) : null}
+    </SessionDone>
   );
 
   // A verse in the step vanished from the queue (deleted mid-sitting): end cleanly.
