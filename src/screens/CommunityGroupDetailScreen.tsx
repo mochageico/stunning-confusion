@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Share, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import * as Clipboard from 'expo-clipboard';
-import { BookOpen, ChevronRight, Link as LinkIcon, LogOut, MessageCircle, Share2, Sliders, Trash2 } from 'lucide-react-native';
+import { BookOpen, ChevronRight, EyeOff, Link as LinkIcon, LogOut, MessageCircle, Share2, Sliders, Trash2 } from 'lucide-react-native';
+import { OverflowMenu } from '../components/session';
 
 import { AppState } from '../state/useAppState';
 import { Circle, CircleMember, GroupPlan } from '../types';
@@ -101,6 +102,11 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setTab('week');
   }, [activeCircle?.id]);
   const chatUnread = !!activeCircle && state.isCircleChatUnread(activeCircle.id);
+  // Open on Chat when there are new messages (UI simplify Job 12).
+  useEffect(() => {
+    if (chatUnread) setTab('chat');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCircle?.id]);
   // What this person is in the middle of, for "Up next" on This week.
   const myPlans = activeCircleGroupPlans.filter((p) => joinedGroupPlanMemberships.some((m) => m.planId === p.planId));
 
@@ -239,15 +245,25 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
           actions={
             <>
               <AppIconButton Icon={Share2} variant="outline" diameter={36} accessibilityLabel="Invite people" onPress={() => setShowInvite(true)} />
-              {isLeaderOrAdmin && (
-                <AppIconButton
-                  Icon={Sliders}
-                  variant="outline"
-                  diameter={36}
-                  accessibilityLabel="Circle settings"
-                  onPress={() => setIsEditingCircleSettings(true)}
-                />
-              )}
+              {/* Circle settings, Stop sharing and Leave / Disband (UI simplify Job 12). */}
+              <OverflowMenu
+                diameter={36}
+                title={activeCircle.name}
+                groups={[
+                  [
+                    ...(isLeaderOrAdmin ? [{ label: 'Circle settings', Icon: Sliders, onPress: () => setIsEditingCircleSettings(true) }] : []),
+                    ...(iShare ? [{ label: 'Stop sharing my progress', Icon: EyeOff, onPress: () => setProgressSharing(activeCircle.id, false) }] : []),
+                  ],
+                  [
+                    {
+                      label: isLeaderOrAdmin ? 'Disband circle' : 'Leave circle',
+                      Icon: isLeaderOrAdmin ? Trash2 : LogOut,
+                      destructive: true,
+                      onPress: () => setShowLeaveDisbandConfirm(true),
+                    },
+                  ],
+                ]}
+              />
             </>
           }
         />
@@ -321,7 +337,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                           );
                         })}
                       </GroupedList>
-                      <AppButton size="sm" variant="quiet" label="Stop sharing my progress" onPress={() => setProgressSharing(activeCircle.id, false)} />
                     </>
                   ) : (
                     <>
@@ -329,7 +344,7 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
                         {startedToday.length === 0
                           ? 'Nobody who shares has started yet.'
                           : `${startedToday.length} ${startedToday.length === 1 ? 'person has' : 'people have'} started today.`}{' '}
-                        Share yours to see who they are. Members who also share can see whether you started today's verses, and nothing else.
+                        Share yours to see who. Others who share see only whether you started.
                       </AppText>
                       <AppButton variant="secondary" label="Share my progress" onPress={() => setProgressSharing(activeCircle.id, true)} />
                     </>
@@ -360,15 +375,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
               </GroupedList>
             )}
 
-            <GroupedList>
-              <ListRow
-                Icon={isLeaderOrAdmin ? Trash2 : LogOut}
-                title={isLeaderOrAdmin ? 'Disband circle' : 'Leave circle'}
-                destructive
-                accessory="none"
-                onPress={() => setShowLeaveDisbandConfirm(true)}
-              />
-            </GroupedList>
           </View>
         )}
 

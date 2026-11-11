@@ -482,6 +482,17 @@ row; each recording is one row with play on the left and Save in ⋯ or as a
 small icon.
 
 ### Job 12 · Community — `CommunityHomeScreen.tsx`, `CommunityGroupDetailScreen.tsx`, `GroupPlanDetailScreen.tsx`, `MemberProfileScreen.tsx`, find / create / preview
+
+**Built 2026-11-10.** Community home: the subtitle and the fold arrows are
+gone (three plain sections: Your circles, Friends, Recent milestones; pull to
+refresh replaces the Refresh link); New circle, Find circles and Add friends
+sit under one + beside Messages (`OverflowMenu` takes an `Icon`); the dashed
+New circle card is gone. Circle page: opens on Chat when it has unread
+messages; Circle settings (leaders), Stop sharing my progress and Leave /
+Disband circle (with its confirm) moved to a ⋯ beside Invite; the sharing
+note is one short line. Not done: the weekly summary stays as it was
+(`CircleTotalsCard`), and the plan, member, find, create and preview pages
+were not touched. Not phone-tested.
 Community home is close. Make the three sections plain (no collapse arrows on
 a page this short), put New circle / Find circles / Add friends under one +
 button in the header.

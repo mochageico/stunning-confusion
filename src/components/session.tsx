@@ -285,12 +285,15 @@ export function OverflowMenu({
   accessibilityLabel = 'More',
   diameter = 40,
   variant = 'outline',
+  Icon: TriggerIcon = MoreHorizontal,
 }: {
   title?: string;
   /** Each inner list is drawn as its own card, so destructive items can sit apart. */
   groups: MenuItem[][];
   accessibilityLabel?: string;
   diameter?: number;
+  /** The button's icon; ⋯ unless a + menu (Community's add menu). */
+  Icon?: IconType;
   /** "bare" for the quiet grey ⋯ on a list row. */
   variant?: 'outline' | 'bare';
 }) {
@@ -307,7 +310,7 @@ export function OverflowMenu({
   return (
     <>
       <AppIconButton
-        Icon={MoreHorizontal}
+        Icon={TriggerIcon}
         variant={variant}
         diameter={diameter}
         iconColor={variant === 'bare' ? palette.ink3 : undefined}

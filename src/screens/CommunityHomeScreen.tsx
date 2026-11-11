@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { Award, Check, ChevronRight, MessageCircle, Plus, UserPlus, Users } from 'lucide-react-native';
+import { Award, Check, ChevronRight, MessageCircle, Plus, Search, UserPlus, Users } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppIconButton, AppText, useScaledSpace } from '../components/design';
-import { Avatar, Badge, CollapsibleSection, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
+import { Avatar, Badge, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
+import { OverflowMenu } from '../components/session';
 import { useThemeColors } from '../components/theme';
 import { formatTimeAgo } from '../lib/format';
 
@@ -61,8 +62,21 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
             people. */}
         <ScreenHeader
           title="Community"
-          subtitle="Memorize alongside friends and circles."
           actions={
+            <View className="flex-row items-center" style={{ gap: space(8) }}>
+            {/* New circle, Find circles and Add friends under one + (UI simplify Job 12). */}
+            <OverflowMenu
+              Icon={Plus}
+              accessibilityLabel="Add"
+              title="Add"
+              groups={[
+                [
+                  { label: 'New circle', Icon: Users, onPress: () => setCommunitySubView('create') },
+                  { label: 'Find circles', Icon: Search, onPress: () => setCommunitySubView('find') },
+                  { label: 'Add friends', Icon: UserPlus, onPress: () => navigateTo('findFriends') },
+                ],
+              ]}
+            />
             <View>
               <AppIconButton
                 Icon={MessageCircle}
@@ -83,6 +97,7 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
                 </View>
               ) : null}
             </View>
+            </View>
           }
         />
 
@@ -90,12 +105,8 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
         {/* Circles as a swipe row of cards: a circle is a place you go, so each
             one gets a card instead of a list row, and "new circle" is the last
             card in the row. */}
-        <CollapsibleSection
-          storageKey="community.circles"
-          title={`Your circles · ${myCircles.length}`}
-          actionLabel="Find circles"
-          onAction={() => setCommunitySubView('find')}
-        >
+        <View style={{ gap: space(6) }}>
+          <SectionHeader title={`Your circles · ${myCircles.length}`} />
           {myCircles.length === 0 ? (
             <View className="bg-surface border border-line rounded-card">
               <EmptyState
@@ -136,28 +147,12 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
                   </Pressable>
                 );
               })}
-              <Pressable
-                onPress={() => setCommunitySubView('create')}
-                accessibilityRole="button"
-                accessibilityLabel="Create a circle"
-                className="border border-dashed border-line rounded-card items-center justify-center active:bg-surface-2"
-                style={{ width: space(120), minHeight: space(112), padding: space(14), gap: space(6) }}
-              >
-                <Plus size={22} color={palette.accent} strokeWidth={2.4} />
-                <AppText variant="caption" className="font-sans font-semibold text-accent text-center">
-                  New circle
-                </AppText>
-              </Pressable>
             </ScrollView>
           )}
-        </CollapsibleSection>
+        </View>
 
-        <CollapsibleSection
-          storageKey="community.friends"
-          title={`Friends · ${friends.length}`}
-          actionLabel="Add friends"
-          onAction={() => navigateTo('findFriends')}
-        >
+        <View style={{ gap: space(6) }}>
+          <SectionHeader title={`Friends · ${friends.length}`} />
           {incomingFriendRequests.length > 0 && (
             <GroupedList>
               <ListRow
@@ -209,9 +204,10 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
               ))}
             </ScrollView>
           )}
-        </CollapsibleSection>
+        </View>
 
-        <CollapsibleSection storageKey="community.milestones" title="Recent milestones" actionLabel="Refresh" onAction={loadActivityFeed}>
+        <View style={{ gap: space(6) }}>
+          <SectionHeader title="Recent milestones" />
           {loadingActivityEvents ? (
             <AppText variant="label" className="font-sans text-ink-3 text-center" style={{ paddingVertical: space(24) }}>
               Loading…
@@ -246,7 +242,7 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
               })}
             </GroupedList>
           )}
-        </CollapsibleSection>
+        </View>
       </ScrollView>
     </FadeInView>
   );
