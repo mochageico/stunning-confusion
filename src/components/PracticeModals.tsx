@@ -11,7 +11,7 @@ import { isRtl, scriptOfVerse } from '../lib/textScript';
 import { WaveBars } from './ui';
 import { AppIconButton, AppText, FontScaleOverrideProvider, RadioMark, useFontScale, useScaledSpace } from './design';
 import { PRACTICE_TEXT_SCALE, useAppPrefs } from '../lib/appPrefs';
-import { Badge, Dialog, GroupedList, ListRow } from './blocks';
+import { Dialog, GroupedList, ListRow } from './blocks';
 import { ModeChip } from './session';
 
 import { useThemeColors } from './theme';
@@ -429,16 +429,27 @@ function PracticeModalsInner({
           </View>
         </View>
       ) : (
-        <View className="flex-row items-center justify-between border-b border-hairline pb-2 mb-3" style={{ gap: 8 }}>
+        // Listen (Job 3): minimize, the reference, the gear. Same row shape
+        // as practice so the two windows feel like one app.
+        <View className="flex-row items-center mb-3" style={{ gap: space(12) }}>
+          <AppIconButton variant="outline" Icon={X} diameter={40} onPress={() => setListenMinimized(true)} accessibilityLabel="Minimize" />
           <View className="flex-1">
             <AppText variant="title" className="font-sans font-bold text-ink leading-tight" numberOfLines={2}>
               {referenceText.replace(/-/g, '‑')}
             </AppText>
           </View>
-          <View className="flex-row items-center gap-2 shrink-0">
-            {!!sessionTotal && sessionTotal > 1 && <Badge label={`${sessionPosition} of ${sessionTotal}`} />}
-            <AppIconButton variant="outline" Icon={X} onPress={() => setListenMinimized(true)} accessibilityLabel="Minimize" />
-          </View>
+          {!!sessionTotal && sessionTotal > 1 ? (
+            <AppText variant="caption" className="font-sans font-semibold text-ink-3">
+              {`${sessionPosition} of ${sessionTotal}`}
+            </AppText>
+          ) : null}
+          <AppIconButton
+            variant="outline"
+            Icon={SlidersHorizontal}
+            diameter={40}
+            onPress={() => setOptionsOpen(true)}
+            accessibilityLabel="Listen settings"
+          />
         </View>
       )}
 
@@ -498,6 +509,8 @@ function PracticeModalsInner({
             onAddChapterPhoto={onAddChapterPhoto}
             palette={palette}
             space={space}
+            optionsOpen={optionsOpen}
+            onCloseOptions={closeOptions}
           />
         )}
 

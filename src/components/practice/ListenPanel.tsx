@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { libraryReaderOf } from '../../lib/libraryAudio';
 import { LibraryCredit } from '../VersePlayButton';
-import { Minus, MoveVertical, Pause, Pencil, Play, Plus, RefreshCw, Repeat, Shuffle, Sliders } from 'lucide-react-native';
+import { LocateFixed, Minus, Pause, Pencil, Play, Plus, RefreshCw, Repeat, Sliders, X } from 'lucide-react-native';
 import { scriptOfVerse } from '../../lib/textScript';
 import { ChipRow } from '../ui';
-import { Dropdown } from '../Dropdown';
 import MemoryGrid from '../MemoryGrid';
 import ListenPhotoView from '../ListenPhotoView';
-import { AppButton, AppIconButton, AppText, type useScaledSpace } from '../design';
-import { EmptyState, SegmentedControl } from '../blocks';
+import { AppButton, AppIconButton, AppText, RadioMark, ToggleRow, useFontScale, type useScaledSpace } from '../design';
+import { Dialog, EmptyState, GroupedList, ListRow, SegmentedControl } from '../blocks';
+import { ModeChip, OptionsPopup } from '../session';
 import { EMPTY_PHOTO_CACHE, LISTEN_REPEATS, LISTEN_SPEED_MAX, LISTEN_SPEED_MIN, LISTEN_SPEED_STEP, ListenProgress } from './shared';
 import type { PracticeModalsProps } from '../PracticeModals';
 import type { useThemeColors } from '../theme';
@@ -46,6 +46,9 @@ interface ListenPanelProps {
   onAddChapterPhoto: PracticeModalsProps['onAddChapterPhoto'];
   palette: ReturnType<typeof useThemeColors>;
   space: ReturnType<typeof useScaledSpace>;
+  /** The header gear's "Listen settings" pop-up. */
+  optionsOpen: boolean;
+  onCloseOptions: () => void;
 }
 
 export default function ListenPanel({
@@ -69,7 +72,10 @@ export default function ListenPanel({
   onAddChapterPhoto,
   palette,
   space,
+  optionsOpen,
+  onCloseOptions,
 }: ListenPanelProps) {
+  const scale = useFontScale();
   const {
     playSource,
     setPlaySource,
@@ -124,68 +130,66 @@ export default function ListenPanel({
     { id: 'all', label: "Today's verses" },
     { id: 'memorization', label: 'Learning now' },
     { id: 'reviewing', label: 'Review' },
-    { id: 'priming', label: 'Coming up next' },
+    { id: 'priming', label: 'Coming up' },
     { id: 'selection', label: 'Selected verses' },
     ...playlists.map((p) => ({ id: playlistSource(p.id), label: p.name })),
-    ...(onSavePlaylist ? [{ id: CREATE_PLAYLIST, label: '+ Create playlist' }] : []),
   ];
+  const sourceLabel = sourceOptions.find((o) => o.id === playSource)?.label ?? 'Selected verses';
+  const [sourceOpen, setSourceOpen] = useState(false);
+
+  // List or memory grid, remembered so Text goes back to whichever you chose.
+  const [textMode, setTextMode] = useState<'verses' | 'memoryGrid'>(listenViewMode === 'memoryGrid' ? 'memoryGrid' : 'verses');
+  const pickTextMode = (m: 'verses' | 'memoryGrid') => {
+    setTextMode(m);
+    if (listenViewMode !== 'photo') setListenViewMode(m);
+  };
+
+  // "28–29" for the slim loop line; chapter:verse when the range crosses chapters.
+  const verseAt = (i: number | null) => (i === null ? null : activePlayVerses[i] ?? null);
+  const loopStart = verseAt(selectionStart);
+  const loopEnd = verseAt(selectionEnd);
+  const short = (v: { chapter: number; verse: number }, other?: { chapter: number } | null) =>
+    other && other.chapter !== v.chapter ? `${v.chapter}:${v.verse}` : `${v.verse}`;
+  const loopLabel = !loopStart
+    ? null
+    : !loopEnd
+      ? `From ${short(loopStart)}`
+      : loopEnd === loopStart
+        ? short(loopStart)
+        : `${short(loopStart, loopEnd)}–${short(loopEnd, loopStart)}`;
+  const clearLoop = () => {
+    setSelectionStart(null);
+    setSelectionEnd(null);
+    setCurrentVerseIndex(0);
+  };
 
   return (
     <View className="flex-1 justify-between">
-      {/* Which verses play, and how they're shown. The verse picker
-          names its current choice rather than a fixed "Verse
-          Selection" label, and the display is a segmented control:
-          two or three short choices, all visible at once. They wrap
-          onto two lines at large text sizes. */}
+      {/* Which verses play (a chip that opens a centered picker) and, when
+          the chapter has a page photo, a Text / Page switch. List vs memory
+          grid lives in the gear. */}
       <View className="flex-row flex-wrap items-center mb-2.5 shrink-0" style={{ gap: 8 }}>
-        <View className="flex-row items-center" style={{ flexGrow: 1, flexBasis: space(150), gap: 8 }}>
-          <View className="flex-1">
-            <Dropdown
-              value={playSource as ListenSource | typeof CREATE_PLAYLIST}
-              onChange={(id) => (id === CREATE_PLAYLIST ? setEditing(null) : setPlaySource(id))}
-              options={sourceOptions}
-              title="Which verses play"
-              searchable={false}
+        <View className="flex-row items-center" style={{ flexGrow: 1, flexShrink: 1, gap: 8 }}>
+          <ModeChip
+            label={sourceLabel}
+            onPress={() => setSourceOpen(true)}
+            accessibilityLabel={`Playing ${sourceLabel}, change`}
+          />
+        </View>
+        {sessionHasPhotos ? (
+          <View style={{ flexBasis: space(150), flexGrow: 0 }}>
+            <SegmentedControl
+              value={listenViewMode === 'photo' ? 'page' : 'text'}
+              onChange={(id) => setListenViewMode(id === 'page' ? 'photo' : textMode)}
+              accessibilityLabel="Display"
+              options={[
+                { id: 'text' as const, label: 'Text' },
+                { id: 'page' as const, label: 'Page' },
+              ]}
             />
           </View>
-          {playingPlaylist && onSavePlaylist && (
-            <AppIconButton
-              variant="outline"
-              Icon={Pencil}
-              accessibilityLabel={`Edit ${playingPlaylist.name}`}
-              onPress={() => setEditing(playingPlaylist)}
-            />
-          )}
-        </View>
-        <View style={{ flexGrow: 1, flexBasis: space(150) }}>
-          <SegmentedControl
-            value={listenViewMode}
-            onChange={setListenViewMode}
-            accessibilityLabel="Display"
-            options={[
-              { id: 'verses' as const, label: 'List' },
-              { id: 'memoryGrid' as const, label: 'Grid' },
-              ...(sessionHasPhotos ? [{ id: 'photo' as const, label: 'Photo' }] : []),
-            ]}
-          />
-        </View>
+        ) : null}
       </View>
-
-      {/* Same control as Today's "Coming up next" section. */}
-      {playSource === 'priming' && setPrimingLookahead && (
-        <View className="flex-row items-center justify-end mb-2.5 shrink-0" style={{ gap: 8 }}>
-          <AppText variant="caption" className="font-sans font-medium text-ink-3">
-            Show
-          </AppText>
-          <Dropdown
-            value={primingLookahead}
-            onChange={(v) => setPrimingLookahead(Number(v))}
-            options={[10, 20, 30, 40, 50].map((n) => ({ id: n, label: `${n}` }))}
-            title="How many to show"
-            compact
-          />
-        </View>
-      )}
 
       {/* Verse Highlight Box — verse-by-verse, not word-by-word: the
           only real timing data this app has is per verse. */}
@@ -317,60 +321,24 @@ export default function ListenPanel({
             />
           </View>
         )}
-        </View>
-
-        {/* Segment status and the Follow toggle. The old floating "Tap
-            verse to set start" corner chip is gone -- it said the same
-            thing this bar already says -- and so is the animated wave
-            indicator that used to sit on the right: it was decoration
-            competing with real controls, and the play button already
-            says whether audio is running. A hairline instead of a
-            filled grey bar, so this reads as the bottom edge of the
-            verse list rather than a fourth stacked band of chrome. */}
-        <View className="border-t border-line px-3 py-2 flex-row justify-between items-center gap-2 z-10">
-          <View className="flex-row items-center gap-2 flex-1">
-            {selectionStart !== null ? (
-              <>
-                <AppButton
-                  size="sm"
-                  variant="quiet"
-                  Icon={RefreshCw}
-                  label="Reset"
-                  onPress={() => { setSelectionStart(null); setSelectionEnd(null); setCurrentVerseIndex(0); }}
-                  className="shrink-0"
-                />
-                {/* Matches the row colours: amber while the segment is
-                    still open, green once it is closed and looping. */}
-                <AppText
-                  variant="caption"
-                  className={`font-sans font-semibold flex-1 ${selectionEnd === null ? 'text-warning' : 'text-success'}`}
-                >
-                  {segmentStatusLabel}
-                </AppText>
-              </>
-            ) : (
-              <AppText variant="caption" className="font-sans text-ink-3 flex-1">
-                Tap a verse to start there, then a later one to loop
-              </AppText>
-            )}
-          </View>
-
-          {/* Follow -- scrolls the list to keep the playing verse on
-              screen. Only offered for the card list, the one view that
-              can actually run the verse off-screen. */}
-          {listenViewMode === 'verses' && (
-            <AppButton // button-ok: a Listen setting pill that draws its own on/off state
-              size="sm"
+        {/* Follow: an icon in the corner that keeps the playing verse on
+            screen. Only for the verse list, the one view that can run the
+            verse off-screen. Tapping a verse to start / loop still works;
+            the hint line that explained it is gone. */}
+        {listenViewMode === 'verses' && (
+          <View className="absolute" style={{ right: space(10), bottom: space(10) }}>
+            <AppIconButton
+              Icon={LocateFixed}
+              diameter={40}
+              iconColor={autoFollow ? palette.accent : palette.ink3}
+              className={`border ${autoFollow ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
               onPress={() => setAutoFollow((on) => !on)}
               accessibilityRole="switch"
               accessibilityState={{ checked: autoFollow }}
-              Icon={MoveVertical}
-              iconColor={autoFollow ? palette.accent : palette.ink3}
-              label="Follow"
-              textClassName={`font-semibold ${autoFollow ? 'text-accent' : 'text-ink-2'}`}
-              className={`rounded-full border shrink-0 ${autoFollow ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
+              accessibilityLabel="Follow the playing verse"
             />
-          )}
+          </View>
+        )}
         </View>
       </View>
 
@@ -468,36 +436,7 @@ export default function ListenPanel({
                     {repeatsPerVerse}× each
                   </AppText>
                 </AppButton>
-
-                {/* Plays the passages in a random order; verses inside a
-                    passage stay in order. */}
-                <AppButton // button-ok: a Listen setting pill that draws its own on/off state
-                  size="sm"
-                  onPress={toggleShuffle}
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: shuffle }}
-                  className={`flex-1 flex-row items-center justify-center gap-1 rounded-full border ${shuffle ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
-                >
-                  <Shuffle size={10} color={shuffle ? palette.accent : palette.ink3} />
-                  <AppText variant="micro" numberOfLines={1} className={`font-sans font-semibold ${shuffle ? 'text-accent' : 'text-ink-2'}`}>
-                    Shuffle
-                  </AppText>
-                </AppButton>
-
-                {/* End-of-list behaviour -- a plain toggle, so it needs no
-                    expander of its own. */}
-                <AppButton // button-ok: a Listen setting pill that draws its own on/off state
-                  size="sm"
-                  onPress={() => setRepeatMode((m) => (m === 'playlist' ? 'off' : 'playlist'))}
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: repeatMode === 'playlist' }}
-                  className={`flex-1 flex-row items-center justify-center gap-1 rounded-full border ${repeatMode === 'playlist' ? 'bg-accent-soft border-accent' : 'bg-surface border-line-strong'}`}
-                >
-                  <Repeat size={10} color={repeatMode === 'playlist' ? palette.accent : palette.ink3} />
-                  <AppText variant="micro" numberOfLines={1} className={`font-sans font-semibold ${repeatMode === 'playlist' ? 'text-accent' : 'text-ink-2'}`}>
-                    {repeatMode === 'playlist' ? 'Loop' : 'Off'}
-                  </AppText>
-                </AppButton>
+                {/* Shuffle and Loop all moved to the gear (Job 3). */}
               </View>
             </View>
 
@@ -519,6 +458,29 @@ export default function ListenPanel({
               repeatsPerVerse={repeatsPerVerse}
               verseRepeatsDone={verseRepeatsDone}
             />
+
+            {/* The looped range, one slim line under the bar: "⟲ 28–29 ✕".
+                Amber while only a start is placed, green once it loops. */}
+            {loopLabel ? (
+              <View className="flex-row items-center justify-center" style={{ gap: space(6), marginTop: -space(6) }}>
+                <Repeat size={Math.round(13 * scale)} color={selectionEnd === null ? palette.warning : palette.success} strokeWidth={2.4} />
+                <AppText
+                  variant="caption"
+                  className={`font-sans font-semibold ${selectionEnd === null ? 'text-warning' : 'text-success'}`}
+                  accessibilityLabel={segmentStatusLabel ?? undefined}
+                >
+                  {loopLabel}
+                </AppText>
+                <AppIconButton
+                  variant="bare"
+                  Icon={X}
+                  diameter={22}
+                  iconColor={palette.ink3}
+                  onPress={clearLoop}
+                  accessibilityLabel="Stop looping these verses"
+                />
+              </View>
+            ) : null}
 
             {/* The built-in Hebrew reading's licence requires its credit wherever it plays. */}
             <LibraryCredit reader={libraryReaderOf(currentSegment?.recording)} />
@@ -555,6 +517,86 @@ export default function ListenPanel({
           </>
         )}
       </View>
+      {/* Which verses play: centered, one tap picks and closes. */}
+      <Dialog visible={sourceOpen} onClose={() => setSourceOpen(false)} title="Which verses play">
+        <View style={{ gap: space(12) }}>
+          <GroupedList>
+            {sourceOptions.map((o) => (
+              <ListRow
+                key={o.id}
+                title={o.label}
+                accessory={<RadioMark selected={o.id === playSource} />}
+                onPress={() => {
+                  setPlaySource(o.id as ListenSource);
+                  setSourceOpen(false);
+                }}
+              />
+            ))}
+          </GroupedList>
+          {playSource === 'priming' && setPrimingLookahead ? (
+            <View style={{ gap: space(6) }}>
+              <AppText variant="caption" className="font-sans font-semibold text-ink-2">
+                Coming up · show up to
+              </AppText>
+              <ChipRow
+                value={primingLookahead}
+                onChange={(v) => setPrimingLookahead(Number(v))}
+                options={[10, 20, 30, 40, 50].map((n) => ({ id: n, label: `${n}` }))}
+              />
+            </View>
+          ) : null}
+          {onSavePlaylist ? (
+            <GroupedList>
+              {playingPlaylist ? (
+                <ListRow
+                  Icon={Pencil}
+                  title={`Edit ${playingPlaylist.name}`}
+                  onPress={() => {
+                    setSourceOpen(false);
+                    setEditing(playingPlaylist);
+                  }}
+                />
+              ) : null}
+              <ListRow
+                Icon={Plus}
+                title="Create playlist"
+                onPress={() => {
+                  setSourceOpen(false);
+                  setEditing(null);
+                }}
+              />
+            </GroupedList>
+          ) : null}
+        </View>
+      </Dialog>
+
+      {/* The header gear: what used to sit on screen as pills. */}
+      <OptionsPopup visible={optionsOpen} onClose={onCloseOptions} title="Listen settings">
+        <View style={{ gap: space(16) }}>
+          <ToggleRow label="Shuffle" hint="Passages in a random order" value={shuffle} onChange={() => toggleShuffle()} />
+          <ToggleRow
+            label="Loop all"
+            hint="Start again from the top at the end"
+            value={repeatMode === 'playlist'}
+            onChange={(on) => setRepeatMode(on ? 'playlist' : 'off')}
+          />
+          <View style={{ gap: space(6) }}>
+            <AppText variant="caption" className="font-sans font-semibold text-ink-2">
+              Show text as
+            </AppText>
+            <SegmentedControl
+              value={textMode}
+              onChange={pickTextMode}
+              accessibilityLabel="Show text as"
+              options={[
+                { id: 'verses' as const, label: 'List' },
+                { id: 'memoryGrid' as const, label: 'Memory grid' },
+              ]}
+            />
+          </View>
+        </View>
+      </OptionsPopup>
+
       {onSavePlaylist && (
         <PlaylistEditor
           visible={editing !== undefined}

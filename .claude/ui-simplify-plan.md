@@ -265,6 +265,19 @@ Target: move into `SessionShell`.
   for its Check / Next button.
 
 ### Job 3 · Listen window — `practice/ListenPanel.tsx`
+
+**Built 2026-11-10.** Header matches practice: minimize ✕, the reference,
+"2 of 5", gear. Under it a "Selected verses ▾" chip opens a centered "Which
+verses play" pop-up (sources, Coming up's "show up to" count, Edit playlist,
+Create playlist), plus a Text / Page switch when the chapter has a page photo.
+Verse list look unchanged (no bold; soft accent playing, soft green loop,
+faded outside). Follow is an icon-only target button in the list's bottom
+right. The "Tap a verse…" line and the status bar are gone; a looped range
+shows as one slim "⟲ 28–29 ✕" line under the progress bar. Speed and "N×
+each" stay as chips; Shuffle, Loop all and List / Memory grid moved to the
+gear's "Listen settings" pop-up. The narrator credit stays on screen (the
+Hebrew reading's licence needs it wherever it plays). Page switch not seen in
+the demo (no photos there). Not phone-tested.
 Target: `SessionShell`. Verse text fills the page. Bottom: a big Play, with
 speed and repeat as two small chips beside it. Shuffle, Loop, Follow, List /
 Grid and the "Selected verses" picker → gear pop-up. The narrator credit moves
