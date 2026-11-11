@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { verseStage } from '../lib/stageProgress';
 import { Pressable, ScrollView, View } from 'react-native';
 import { RefreshCw, Target, X } from 'lucide-react-native';
@@ -9,7 +9,8 @@ import { FadeInView, NumericInput } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
 import { BookPicker } from '../components/BookPicker';
 import { AppButton, AppIconButton, AppTextInput, AppText, Switch, useScaledSpace } from '../components/design';
-import { GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
+import { EmptyState, GroupedList, ListRow, SectionHeader } from '../components/blocks';
+import { OptionsPopup, SessionDone, SessionShell } from '../components/session';
 import {
   buildReferenceRounds,
   formatReference,
@@ -66,23 +67,29 @@ type ReviewSet = (typeof REVIEW_SETS)[number]['id'];
 
 type Phase = 'setup' | 'playing' | 'done';
 
+// The last choices, kept for the session so the next visit starts with them.
+let lastSettings = {
+  book: '', startChapter: '', endChapter: '', startVerse: '', endVerse: '',
+  reviewSet: 'all' as ReviewSet, dueTodayOnly: false, direction: 'both' as DrillDirection, sessionLength: 10, hardMode: false,
+};
+
 export default function ReferenceDrillScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
   const { memoryQueue, navigateTo } = state;
 
-  const [book, setBook] = useState('');
-  const [startChapter, setStartChapter] = useState('');
-  const [endChapter, setEndChapter] = useState('');
+  const [book, setBook] = useState(lastSettings.book);
+  const [startChapter, setStartChapter] = useState(lastSettings.startChapter);
+  const [endChapter, setEndChapter] = useState(lastSettings.endChapter);
   // Verse-level bounds, only applied when the range narrows to a single
   // chapter -- a "verse 5 to verse 20" span means nothing across chapters
   // with different verse counts. Same scoping rule the Goal feature uses.
-  const [startVerse, setStartVerse] = useState('');
-  const [endVerse, setEndVerse] = useState('');
-  const [reviewSet, setReviewSet] = useState<ReviewSet>('all');
-  const [dueTodayOnly, setDueTodayOnly] = useState(false);
-  const [direction, setDirection] = useState<DrillDirection>('both');
-  const [sessionLength, setSessionLength] = useState(10);
-  const [hardMode, setHardMode] = useState(false);
+  const [startVerse, setStartVerse] = useState(lastSettings.startVerse);
+  const [endVerse, setEndVerse] = useState(lastSettings.endVerse);
+  const [reviewSet, setReviewSet] = useState<ReviewSet>(lastSettings.reviewSet);
+  const [dueTodayOnly, setDueTodayOnly] = useState(lastSettings.dueTodayOnly);
+  const [direction, setDirection] = useState<DrillDirection>(lastSettings.direction);
+  const [sessionLength, setSessionLength] = useState(lastSettings.sessionLength);
+  const [hardMode, setHardMode] = useState(lastSettings.hardMode);
 
   const [phase, setPhase] = useState<Phase>('setup');
   const [rounds, setRounds] = useState<ReferenceRound[]>([]);
@@ -157,7 +164,10 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
   const startSession = () => {
     const count = sessionLength === 0 ? uniqueCount : sessionLength;
     const built = buildReferenceRounds(pool, count, direction);
-    if (built.length === 0) return;
+    if (built.length === 0) {
+      setPhase('setup');
+      return;
+    }
     setRounds(built);
     setRoundIndex(0);
     setScore(0);
@@ -193,96 +203,90 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
   );
 
   // ==========================================================================
-  // SETUP
+  // SETTINGS (behind the gear, UI simplify Job 6). The session starts on the
+  // first tap with the last choices; changing one starts a fresh round set
+  // when the pop-up closes.
+  // ==========================================================================
+  const settingsKey = JSON.stringify([book, startChapter, endChapter, startVerse, endVerse, reviewSet, dueTodayOnly, direction, sessionLength, hardMode]);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [optionsKeyAtOpen, setOptionsKeyAtOpen] = useState('');
+  const openOptions = () => {
+    setOptionsKeyAtOpen(settingsKey);
+    setOptionsOpen(true);
+  };
+  const closeOptions = () => {
+    setOptionsOpen(false);
+    lastSettings = { book, startChapter, endChapter, startVerse, endVerse, reviewSet, dueTodayOnly, direction, sessionLength, hardMode };
+    if (settingsKey !== optionsKeyAtOpen) startSession();
+  };
+  // Start on arrival.
+  const [started, setStarted] = useState(false);
+  useEffect(() => {
+    if (started) return;
+    setStarted(true);
+    startSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const optionsPopup = (
+    <OptionsPopup visible={optionsOpen} onClose={closeOptions} title="Reference practice settings">
+      <View style={{ gap: space(8) }}>
+        <SectionHeader title="Which verses" />
+        <BookPicker value={book} onChange={setBook} allowAll allLabel="All my verses" title="Limit to a book" />
+        {!!book && (
+          <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+            {boundField('From chapter', startChapter, setStartChapter)}
+            {boundField('To chapter', endChapter, setEndChapter)}
+          </View>
+        )}
+        {/* Verse bounds appear only once the range is a single chapter --
+            see the singleChapter note above. */}
+        {singleChapter !== null && (
+          <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+            {boundField('From verse', startVerse, setStartVerse)}
+            {boundField('To verse', endVerse, setEndVerse)}
+          </View>
+        )}
+        <AppText variant="caption" className={`font-sans ${uniqueCount > 0 ? 'text-ink-3' : 'text-warning'}`} style={{ paddingHorizontal: space(4) }}>
+          {uniqueCount > 0 ? `${uniqueCount} ${uniqueCount === 1 ? 'verse' : 'verses'}` : 'No verses match.'}
+        </AppText>
+      </View>
+      <GroupedList>
+        <ListRow
+          title="From"
+          accessory={
+            <Dropdown value={reviewSet} onChange={(s) => setReviewSet(s as ReviewSet)} options={REVIEW_SETS} title="Practice verses from" searchable={false} compact />
+          }
+        />
+        <ListRow
+          title="Ask me"
+          accessory={
+            <Dropdown value={direction} onChange={(d) => setDirection(d as DrillDirection)} options={DIRECTIONS} title="Ask me" searchable={false} compact />
+          }
+        />
+        <ListRow
+          title="How many"
+          accessory={<Dropdown value={sessionLength} onChange={setSessionLength} options={SESSION_LENGTHS} title="How many questions" searchable={false} compact />}
+        />
+        <ListRow title="Due today only" accessory={<Switch value={dueTodayOnly} onChange={setDueTodayOnly} accessibilityLabel="Due today only" />} />
+        <ListRow title="Type the answer" accessory={<Switch value={hardMode} onChange={setHardMode} accessibilityLabel="Type the answer" />} />
+      </GroupedList>
+    </OptionsPopup>
+  );
+
+  // ==========================================================================
+  // NOTHING TO ASK (no started verse matches the choices)
   // ==========================================================================
   if (phase === 'setup') {
-    const canStart = uniqueCount > 0;
     return (
-      <FadeInView style={{ flex: 1 }}>
-        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-          <ScreenHeader
-            title="Reference practice"
-            subtitle="Quiz yourself on where your verses are. It's practice only, so it never changes your review schedule."
-            onBack={handleBack}
-            backLabel="Today"
-          />
-
-          {/* Which verses */}
-          <View style={{ gap: space(8) }}>
-            <SectionHeader title="Which verses" />
-            <BookPicker value={book} onChange={setBook} allowAll allLabel="All my verses" title="Limit to a book" />
-            {!!book && (
-              <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
-                {boundField('From chapter', startChapter, setStartChapter)}
-                {boundField('To chapter', endChapter, setEndChapter)}
-              </View>
-            )}
-
-            {/* Verse bounds appear only once the range is a single chapter --
-                see the singleChapter note above. */}
-            {singleChapter !== null && (
-              <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
-                {boundField('From verse', startVerse, setStartVerse)}
-                {boundField('To verse', endVerse, setEndVerse)}
-              </View>
-            )}
-            <AppText variant="caption" className={`font-sans ${canStart ? 'text-ink-3' : 'text-warning'}`} style={{ paddingHorizontal: space(4) }}>
-              {canStart
-                ? `${uniqueCount} ${uniqueCount === 1 ? 'verse' : 'verses'} to practice`
-                : 'No verses match yet. Start memorizing some first, or widen the range.'}
-            </AppText>
-          </View>
-
-          {/* The choices, as settings rows: a picker or a switch on the right
-              of each, one shape for all of them. */}
-          <GroupedList header="Questions">
-            <ListRow
-              title="From"
-              accessory={
-                <Dropdown
-                  value={reviewSet}
-                  onChange={(s) => setReviewSet(s as ReviewSet)}
-                  options={REVIEW_SETS}
-                  title="Practice verses from"
-                  searchable={false}
-                  compact
-                />
-              }
-            />
-            <ListRow
-              title="Ask me"
-              accessory={
-                <Dropdown
-                  value={direction}
-                  onChange={(d) => setDirection(d as DrillDirection)}
-                  options={DIRECTIONS}
-                  title="Ask me"
-                  searchable={false}
-                  compact
-                />
-              }
-            />
-            <ListRow
-              title="How many"
-              accessory={
-                <Dropdown value={sessionLength} onChange={setSessionLength} options={SESSION_LENGTHS} title="How many questions" searchable={false} compact />
-              }
-            />
-            <ListRow
-              title="Due today only"
-              subtitle="Only verses whose review is due today. Still practice: it won't count as their review."
-              accessory={<Switch value={dueTodayOnly} onChange={setDueTodayOnly} accessibilityLabel="Due today only" />}
-            />
-            <ListRow
-              title="Hard mode"
-              subtitle="No multiple choice. Type the reference yourself, and recall verses before you reveal them."
-              accessory={<Switch value={hardMode} onChange={setHardMode} accessibilityLabel="Hard mode" />}
-            />
-          </GroupedList>
-
-          <AppButton size="lg" variant="primary" Icon={Target} label="Start" onPress={startSession} disabled={!canStart} />
-        </ScrollView>
-      </FadeInView>
+      <SessionShell onClose={handleBack} onOptions={openOptions} safeTop={false}>
+        <EmptyState
+          Icon={Target}
+          title="No verses to practice"
+          message={memoryQueue.some((i) => i.status !== 'queued') ? 'Change the choices in the gear.' : 'Start learning some verses first.'}
+        />
+        {optionsPopup}
+      </SessionShell>
     );
   }
 
@@ -292,27 +296,16 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
   if (phase === 'done') {
     const pct = rounds.length === 0 ? 0 : Math.round((score / rounds.length) * 100);
     return (
-      <FadeInView style={{ flex: 1 }}>
-        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5" contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', gap: space(24) }}>
-          <View className="items-center" style={{ gap: space(6) }}>
-            <AppText variant="display" className="font-sans font-bold text-ink" style={{ fontVariant: ['tabular-nums'] }}>
-              {score} of {rounds.length}
-            </AppText>
-            <AppText variant="label" className="font-sans font-medium text-ink-2">
-              {pct}% right
-            </AppText>
-            <AppText variant="caption" className="font-sans text-ink-3 text-center">
-              Practice only. Your review schedule hasn't changed.
-            </AppText>
-          </View>
-
-          <View style={{ gap: space(8) }}>
-            <AppButton size="lg" variant="primary" Icon={RefreshCw} label="Go again" onPress={startSession} />
-            <AppButton variant="secondary" label="Change settings" onPress={() => setPhase('setup')} />
-            <AppButton variant="quiet" label="Done" onPress={handleBack} />
-          </View>
-        </ScrollView>
-      </FadeInView>
+      <SessionDone
+        safeTop={false}
+        title="Practice done"
+        stats={[
+          { value: `${score}/${rounds.length}`, label: 'right' },
+          { value: `${pct}%`, label: 'score' },
+        ]}
+        onDone={handleBack}
+        secondary={{ label: 'Go again', onPress: startSession }}
+      />
     );
   }
 
@@ -337,22 +330,25 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
   );
 
   return (
-    <FadeInView style={{ flex: 1 }}>
-      <View className="flex-1 bg-canvas p-5">
-        {/* Header: progress + score + bail out */}
-        <View className="flex-row items-center justify-between" style={{ marginBottom: space(16), gap: space(12) }}>
-          <View className="flex-1">
-            <AppText variant="caption" className="font-sans font-medium text-ink-3">
-              Question {roundIndex + 1} of {rounds.length}
-            </AppText>
-            <AppText variant="title" className="font-sans font-bold text-ink">
-              {score} right so far
-            </AppText>
-          </View>
-          <AppIconButton Icon={X} variant="outline" onPress={() => setPhase('done')} accessibilityLabel="End practice" />
-        </View>
-
-        <ScrollView className="flex-1" contentContainerStyle={{ gap: space(12), paddingBottom: space(12) }}>
+    <SessionShell
+      safeTop={false}
+      onClose={() => (roundIndex === 0 && !answered ? handleBack() : setPhase('done'))}
+      progress={(roundIndex + (answered ? 1 : 0)) / rounds.length}
+      progressLabel={`${roundIndex + 1} of ${rounds.length}`}
+      onOptions={openOptions}
+      bottomBar={
+        answered ? (
+          <>
+            <View className={`rounded-btn ${lastResult === 'right' ? 'bg-success-soft' : 'bg-danger-soft'}`} style={{ padding: space(10) }}>
+              <AppText variant="label" className={`font-sans font-semibold text-center ${lastResult === 'right' ? 'text-success' : 'text-danger'}`}>
+                {lastResult === 'right' ? 'Right!' : `Not quite. That was ${answerRef}.`}
+              </AppText>
+            </View>
+            <AppButton size="lg" variant="primary" label={roundIndex >= rounds.length - 1 ? 'See how you did' : 'Next question'} onPress={advance} />
+          </>
+        ) : undefined
+      }
+    >
           {currentRound.kind === 'verseToRef' ? (
             <>
               {questionLabel('Where is this?')}
@@ -485,25 +481,7 @@ export default function ReferenceDrillScreen({ state }: { state: AppState }) {
               )}
             </>
           )}
-        </ScrollView>
-
-        {/* Result + advance */}
-        {answered && (
-          <View className="shrink-0" style={{ gap: space(8), paddingTop: space(8) }}>
-            <View className={`rounded-btn ${lastResult === 'right' ? 'bg-success-soft' : 'bg-danger-soft'}`} style={{ padding: space(10) }}>
-              <AppText variant="label" className={`font-sans font-semibold text-center ${lastResult === 'right' ? 'text-success' : 'text-danger'}`}>
-                {lastResult === 'right' ? 'Right!' : `Not quite. That was ${answerRef}.`}
-              </AppText>
-            </View>
-            <AppButton
-              size="lg"
-              variant="primary"
-              label={roundIndex >= rounds.length - 1 ? 'See how you did' : 'Next question'}
-              onPress={advance}
-            />
-          </View>
-        )}
-      </View>
-    </FadeInView>
+      {optionsPopup}
+    </SessionShell>
   );
 }

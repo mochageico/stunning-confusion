@@ -53,9 +53,12 @@ export function SessionShell({
   headerRight,
   bottomBar,
   scroll = true,
+  safeTop = true,
   children,
 }: {
   onClose: () => void;
+  /** False when drawn inside a screen that already sits below the status bar (the tab screens). */
+  safeTop?: boolean;
   /** 0 to 1. Leave out for a session with no fixed length (Listen). */
   progress?: number;
   /** Short text beside the bar, e.g. "2 of 5". */
@@ -87,7 +90,7 @@ export function SessionShell({
   );
 
   return (
-    <View className="absolute inset-0 z-50 bg-canvas" style={{ paddingTop: insets.top }}>
+    <View className="absolute inset-0 z-50 bg-canvas" style={{ paddingTop: safeTop ? insets.top : 0 }}>
       <View className="flex-row items-center" style={{ minHeight: MIN_TOUCH + space(8), paddingHorizontal: space(16), gap: space(12) }}>
         <AppIconButton Icon={X} variant="outline" diameter={40} onPress={onClose} accessibilityLabel="Close" />
         <View className="flex-1">{progress !== undefined ? <SessionProgress value={progress} /> : null}</View>
@@ -147,7 +150,10 @@ export function SessionDone({
   doneLabel = 'Done',
   onDone,
   secondary,
+  safeTop = true,
 }: {
+  /** False when drawn inside a screen that already sits below the status bar. */
+  safeTop?: boolean;
   title: string;
   subtitle?: string;
   /** Two to four short numbers, e.g. { value: 5, label: 'reviewed' }. */
@@ -166,7 +172,7 @@ export function SessionDone({
   const badge = Math.round(72 * scale);
 
   return (
-    <View className="absolute inset-0 z-50 bg-canvas" style={{ paddingTop: insets.top }}>
+    <View className="absolute inset-0 z-50 bg-canvas" style={{ paddingTop: safeTop ? insets.top : 0 }}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: space(20), paddingTop: space(48), paddingBottom: space(24), gap: space(18), alignItems: 'stretch' }}

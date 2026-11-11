@@ -341,6 +341,19 @@ Target:
 - Tip box → `InlineTip` or gone.
 
 ### Job 6 · Practice list (new small page) + the two drill setups — `ThreadDrillScreen.tsx`, `ReferenceDrillScreen.tsx`
+
+**Built 2026-11-10.** Reference practice and Pick up the thread start on the
+first tap with the last choices (kept for the app session). Both run in
+`SessionShell` (✕, progress, "3 of 10", gear) and end on `SessionDone`
+(Reference: right / score; Thread: reviewed / slip spots, then Where you
+slipped with "Drill it", and What counted). The setup forms moved into the
+gear pop-ups ("Reference practice settings", "Thread settings"), without the
+row subtitles; a change restarts the session when Done is tapped. "Hard mode"
+reads "Type the answer". If nothing matches, the shell shows one line and the
+gear. The tab bar hides on these two screens (`SESSION_SCREENS` in App.tsx;
+`SessionShell`/`SessionDone` take `safeTop={false}` inside a tab screen).
+Skipped: the separate Practice list page — Today's ⋯ already lists Reference
+practice, Pick up the thread and Bible (Job 1). Not phone-tested.
 A short page listing the extra practices (Reference practice, Pick up the
 thread, Verse Finder, the Map), one row each with a one-line description.
 Each drill starts on tap with remembered options (R2); its current setup form

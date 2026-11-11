@@ -334,6 +334,9 @@ function NowPlayingBar({ state }: { state: AppState }) {
   );
 }
 
+/** Screens that run as a full-screen session, with the tab bar hidden. */
+const SESSION_SCREENS = new Set<string>(['referenceDrill', 'threadDrill']);
+
 // How long the loading screen waits for the user's verses before opening
 // the app anyway.
 const VERSE_WAIT_CAP_MS = 8000;
@@ -357,7 +360,9 @@ function AppShell() {
   // room, and a stray tap on a tab can't walk away from a live take.
   // The constellation map can take the whole screen too.
   const mapFullscreen = useMapFullscreen();
-  const showBars = !chatScreenActive && keyboardHeight === 0 && !state.isRecording && !mapFullscreen;
+  // Sessions are full screen (UI simplify R3): no tab bar under a drill.
+  const sessionScreenActive = state.currentTab === 'home' && SESSION_SCREENS.has(state.currentScreen);
+  const showBars = !chatScreenActive && !sessionScreenActive && keyboardHeight === 0 && !state.isRecording && !mapFullscreen;
 
   // Signed in but the verses haven't arrived yet: keep the loading screen up
   // so Home doesn't open empty and then fill in. Capped, so a failed or very

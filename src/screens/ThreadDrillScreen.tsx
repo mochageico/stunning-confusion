@@ -9,7 +9,8 @@ import { translationLabel } from '../data';
 import { FadeInView } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
 import { AppButton, AppIconButton, AppText, Switch, useScaledSpace } from '../components/design';
-import { EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
+import { EmptyState, GroupedList, ListRow } from '../components/blocks';
+import { OptionsPopup, SessionDone, SessionShell } from '../components/session';
 import ThreadRound, { ThreadAnswerMode, ThreadRoundResult, ThreadVerse } from '../components/ThreadRound';
 import { GradeInput, wordAccuracy } from '../lib/grading';
 import { creditsEarly } from '../lib/balance';
@@ -130,6 +131,9 @@ const listRefs = (verses: { book: string; chapter: number; verse: number }[]) =>
   return groups.map((g) => `${g.head}:${g.nums.join(', ')}`).join(' · ');
 };
 
+// The last choices, kept for the session so the next visit starts with them.
+let lastSettings = { reviewSet: 'all' as ReviewSet, dueTodayOnly: false, stretchSize: 3, sessionLength: 0, hideVerseNumber: false };
+
 export default function ThreadDrillScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
   const { memoryQueue, navigateTo, threadDrillPreset, setThreadDrillPreset, handleUpdateVerseStatus, validateTouch, reviewsPaused, balanceDays, dayStartHour } = state;
@@ -147,11 +151,11 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
   );
 
   // ---- Filters ----------------------------------------------------------------
-  const [reviewSet, setReviewSet] = useState<ReviewSet>('all');
-  const [dueTodayOnly, setDueTodayOnly] = useState(false);
-  const [stretchSize, setStretchSize] = useState(3);
-  const [sessionLength, setSessionLength] = useState(0);
-  const [hideVerseNumber, setHideVerseNumber] = useState(false);
+  const [reviewSet, setReviewSet] = useState<ReviewSet>(lastSettings.reviewSet);
+  const [dueTodayOnly, setDueTodayOnly] = useState(lastSettings.dueTodayOnly);
+  const [stretchSize, setStretchSize] = useState(lastSettings.stretchSize);
+  const [sessionLength, setSessionLength] = useState(lastSettings.sessionLength);
+  const [hideVerseNumber, setHideVerseNumber] = useState(lastSettings.hideVerseNumber);
 
   // Which verses the filters pick -- the same rules Reference practice uses.
   // While reviews are paused nothing is due, as on Home.
@@ -409,139 +413,123 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
   const handleBack = () => navigateTo('home');
 
   // ==========================================================================
-  // SETUP
+  // SETTINGS (behind the gear, UI simplify Job 6). The session starts on the
+  // first tap with the last choices; a change starts it over when the pop-up
+  // closes.
   // ==========================================================================
-  if (phase === 'setup') {
-    const header = (
-      <ScreenHeader
-        title="Pick up the thread"
-        subtitle="Start from two words in an earlier verse and recite through to the end of your verse. Verses that are due count as reviewed."
-        onBack={handleBack}
-        backLabel="Today"
-      />
-    );
-    if (chapters.length === 0) {
-      return (
-        <FadeInView style={{ flex: 1 }}>
-          <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-            {header}
-            <EmptyState
-              Icon={Route}
-              title="Start two verses in a row"
-              message="A thread starts in one verse you've learned and runs into the next. Once you've started two neighbouring verses in the same chapter, they'll show up here."
+  const settingsKey = JSON.stringify([reviewSet, dueTodayOnly, stretchSize, sessionLength, hideVerseNumber, chapterId, throughVerse, fromVerse]);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const optionsKeyAtOpen = useRef('');
+  const openOptions = () => {
+    optionsKeyAtOpen.current = settingsKey;
+    setOptionsOpen(true);
+  };
+  const closeOptions = () => {
+    setOptionsOpen(false);
+    lastSettings = { reviewSet, dueTodayOnly, stretchSize, sessionLength, hideVerseNumber };
+    if (settingsKey === optionsKeyAtOpen.current) return;
+    if (plannedStretches.length > 0) startFromSettings();
+    else setPhase('setup');
+  };
+
+  // Start on arrival, once any preset from a passing Recall has been applied.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStarted.current || threadDrillPreset) return;
+    autoStarted.current = true;
+    if (plannedStretches.length > 0) startFromSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plannedStretches, threadDrillPreset]);
+
+  const n = plannedStretches.length;
+  const chapterCount = new Set(plannedStretches.map((s) => passageKey(s[0]))).size;
+  const versesFooter = !chapter
+    ? n === 0
+      ? 'Nothing matches.'
+      : `${n} ${n === 1 ? 'stretch' : 'stretches'} across ${chapterCount} ${chapterCount === 1 ? 'chapter' : 'chapters'}`
+    : `Through the end of verse ${throughVerse}`;
+
+  const optionsPopup = (
+    <OptionsPopup visible={optionsOpen} onClose={closeOptions} title="Thread settings">
+      <GroupedList header="Which verses" footer={versesFooter}>
+        <ListRow
+          title="From"
+          accessory={
+            <Dropdown value={reviewSet} onChange={(s) => setReviewSet(s as ReviewSet)} options={REVIEW_SETS} title="Practice verses from" searchable={false} compact />
+          }
+        />
+        <ListRow title="Due today only" accessory={<Switch value={dueTodayOnly} onChange={setDueTodayOnly} accessibilityLabel="Due today only" />} />
+        <ListRow
+          title="Chapter"
+          accessory={
+            <Dropdown
+              value={chapterId}
+              onChange={(id) => chooseChapter(id)}
+              options={[{ id: ALL_CHAPTERS, label: 'All matching' }, ...chapterOptions.map((c) => ({ id: c.id, label: c.label }))]}
+              title="Chapter"
+              searchable={chapterOptions.length > 8}
+              compact
             />
-          </ScrollView>
-        </FadeInView>
-      );
-    }
-
-    const n = plannedStretches.length;
-    const chapterCount = new Set(plannedStretches.map((s) => passageKey(s[0]))).size;
-    const stretchList = plannedStretches.length <= 4 ? plannedStretches.map((s) => rangeLabel(s).replace(/^.* \d+:/, '')).join(', ') : '';
-    const versesFooter = !chapter
-      ? n === 0
-        ? 'Nothing matches. Try another review set, or turn off Due today only.'
-        : `${n} ${n === 1 ? 'stretch' : 'stretches'} across ${chapterCount} ${chapterCount === 1 ? 'chapter' : 'chapters'}.`
-      : `Recite through the end of verse ${throughVerse}${
-          n > 1 ? `, as ${n} overlapping stretches${stretchList ? `: ${stretchList}` : ''}` : ''
-        }.`;
-
-    return (
-      <FadeInView style={{ flex: 1 }}>
-        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-          {header}
-
-          <GroupedList header="Which verses" footer={versesFooter}>
+          }
+        />
+        {chapter && (
+          <>
             <ListRow
-              title="From"
+              title="Through verse"
               accessory={
                 <Dropdown
-                  value={reviewSet}
-                  onChange={(s) => setReviewSet(s as ReviewSet)}
-                  options={REVIEW_SETS}
-                  title="Practice verses from"
+                  value={throughVerse}
+                  onChange={(v) => chooseChapter(chapter.id, v)}
+                  options={throughOptions.map((v) => ({ id: v.verse, label: String(v.verse) }))}
+                  title="Recite through verse"
                   searchable={false}
                   compact
                 />
               }
             />
             <ListRow
-              title="Due today only"
-              subtitle="Only verses whose review is due today."
-              accessory={<Switch value={dueTodayOnly} onChange={setDueTodayOnly} accessibilityLabel="Due today only" />}
-            />
-            <ListRow
-              title="Chapter"
+              title="Starting from verse"
               accessory={
                 <Dropdown
-                  value={chapterId}
-                  onChange={(id) => chooseChapter(id)}
-                  options={[{ id: ALL_CHAPTERS, label: 'All matching' }, ...chapterOptions.map((c) => ({ id: c.id, label: c.label }))]}
-                  title="Chapter"
-                  searchable={chapterOptions.length > 8}
+                  value={fromVerse}
+                  onChange={setFromVerse}
+                  options={fromOptions.map((v) => ({ id: v.verse, label: String(v.verse) }))}
+                  title="Cues start from verse"
+                  searchable={false}
                   compact
                 />
               }
             />
-            {chapter && (
-              <>
-                <ListRow
-                  title="Through verse"
-                  accessory={
-                    <Dropdown
-                      value={throughVerse}
-                      onChange={(v) => chooseChapter(chapter.id, v)}
-                      options={throughOptions.map((v) => ({ id: v.verse, label: String(v.verse) }))}
-                      title="Recite through verse"
-                      searchable={false}
-                      compact
-                    />
-                  }
-                />
-                <ListRow
-                  title="Starting from verse"
-                  accessory={
-                    <Dropdown
-                      value={fromVerse}
-                      onChange={setFromVerse}
-                      options={fromOptions.map((v) => ({ id: v.verse, label: String(v.verse) }))}
-                      title="Cues start from verse"
-                      searchable={false}
-                      compact
-                    />
-                  }
-                />
-              </>
-            )}
-          </GroupedList>
+          </>
+        )}
+      </GroupedList>
+      <GroupedList header="Session">
+        <ListRow
+          title="Verses at a time"
+          accessory={<Dropdown value={stretchSize} onChange={setStretchSize} options={STRETCH_SIZES} title="Verses at a time" searchable={false} compact />}
+        />
+        <ListRow
+          title="How many"
+          accessory={<Dropdown value={sessionLength} onChange={setSessionLength} options={SESSION_LENGTHS} title="How many cues" searchable={false} compact />}
+        />
+        <ListRow title="Hide verse numbers" accessory={<Switch value={hideVerseNumber} onChange={setHideVerseNumber} accessibilityLabel="Hide verse numbers" />} />
+      </GroupedList>
+    </OptionsPopup>
+  );
 
-          <GroupedList header="Session">
-            <ListRow
-              title="Verses at a time"
-              subtitle="Each thread stays inside a short stretch, so it never asks for a whole chapter."
-              accessory={<Dropdown value={stretchSize} onChange={setStretchSize} options={STRETCH_SIZES} title="Verses at a time" searchable={false} compact />}
-            />
-            <ListRow
-              title="How many"
-              accessory={<Dropdown value={sessionLength} onChange={setSessionLength} options={SESSION_LENGTHS} title="How many cues" searchable={false} compact />}
-            />
-            <ListRow
-              title="Hide verse numbers"
-              subtitle="Place the words without being told which verse they're in."
-              accessory={<Switch value={hideVerseNumber} onChange={setHideVerseNumber} accessibilityLabel="Hide verse numbers" />}
-            />
-          </GroupedList>
-
-          <AppButton
-            size="lg"
-            variant="primary"
-            Icon={Route}
-            label={chapter ? `Start ${rangeLabel(run.filter((v) => v.verse >= fromVerse))}` : 'Start'}
-            onPress={startFromSettings}
-            disabled={n === 0}
-          />
-        </ScrollView>
-      </FadeInView>
+  // ==========================================================================
+  // NOTHING TO RUN
+  // ==========================================================================
+  if (phase === 'setup') {
+    return (
+      <SessionShell onClose={handleBack} onOptions={chapters.length > 0 ? openOptions : undefined} safeTop={false}>
+        {chapters.length === 0 ? (
+          <EmptyState Icon={Route} title="Start two verses in a row" message="A thread runs from one learned verse into the next." />
+        ) : (
+          <EmptyState Icon={Route} title="Nothing matches" message="Change the choices in the gear." />
+        )}
+        {optionsPopup}
+      </SessionShell>
     );
   }
 
@@ -600,51 +588,40 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
     const subtitle = oneChapter ? rangeLabel([...new Map(all.map((v) => [verseKey(v), v])).values()].sort((a, b) => a.verse - b.verse)) : `${new Set(all.map(passageKey)).size} chapters`;
 
     return (
-      <FadeInView style={{ flex: 1 }}>
-        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-          <View style={{ gap: space(4) }}>
-            <AppText variant="display" className="font-sans font-bold text-ink">
-              {rounds.length} {rounds.length === 1 ? 'thread' : 'threads'}
-            </AppText>
-            <AppText variant="label" className="font-sans text-ink-2">
-              {session.spot ? `One spot · ${rangeLabel(session.stretches[0])}` : subtitle}
-            </AppText>
-          </View>
+      <SessionDone
+        safeTop={false}
+        title={`${rounds.length} ${rounds.length === 1 ? 'thread' : 'threads'}`}
+        subtitle={session.spot ? `One spot · ${rangeLabel(session.stretches[0])}` : subtitle}
+        stats={[
+          { value: reviewed.length + selfReviewed.length, label: 'reviewed' },
+          { value: spotList.length, label: spotList.length === 1 ? 'slip spot' : 'slip spots' },
+        ]}
+        onDone={handleBack}
+        secondary={{ label: 'Go again', onPress: () => startSession(base ?? session) }}
+      >
+        <GroupedList header="Where you slipped">
+          {spotList.length === 0 ? (
+            <ListRow title="Nowhere" accessory="none" />
+          ) : (
+            spotList.map((s) => (
+              <ListRow
+                key={verseKey(s.verse)}
+                title={label(s.verse)}
+                subtitle={[s.join && `Getting into it: ${runs(s.join)}`, s.inside && `Within it: ${runs(s.inside)}`].filter(Boolean).join('\n')}
+                accessory={<AppButton size="sm" variant="secondary" label="Drill it" onPress={() => drillSpot(s.p, s.index)} />}
+              />
+            ))
+          )}
+        </GroupedList>
 
-          <GroupedList header="Where you slipped">
-            {spotList.length === 0 ? (
-              <ListRow title="Nowhere" subtitle="Every run was clean." accessory="none" />
-            ) : (
-              spotList.map((s) => (
-                <ListRow
-                  key={verseKey(s.verse)}
-                  title={label(s.verse)}
-                  subtitle={[s.join && `Getting into it: ${runs(s.join)}`, s.inside && `Within it: ${runs(s.inside)}`].filter(Boolean).join('\n')}
-                  accessory={<AppButton size="sm" variant="secondary" label="Drill this spot" onPress={() => drillSpot(s.p, s.index)} />}
-                />
-              ))
-            )}
+        {reviewed.length + selfReviewed.length + learned.length > 0 && (
+          <GroupedList header="What counted">
+            {reviewed.length > 0 && <ListRow title="Reviewed" subtitle={refs(reviewed)} accessory="none" />}
+            {selfReviewed.length > 0 && <ListRow title="Reviewed, checked by you" subtitle={refs(selfReviewed)} accessory="none" />}
+            {learned.length > 0 && <ListRow title="Toward learning" subtitle={refs(learned)} accessory="none" />}
           </GroupedList>
-
-          <GroupedList header="What counted" footer="Verses that weren't due, or were already counted this session, were practice.">
-            {reviewed.length + selfReviewed.length + learned.length === 0 ? (
-              <ListRow title="Nothing this time" subtitle="None of these verses had a review due." accessory="none" />
-            ) : (
-              <>
-                {reviewed.length > 0 && <ListRow title="Reviewed" subtitle={refs(reviewed)} accessory="none" />}
-                {selfReviewed.length > 0 && <ListRow title="Reviewed, checked by you" subtitle={refs(selfReviewed)} accessory="none" />}
-                {learned.length > 0 && <ListRow title="Toward learning" subtitle={refs(learned)} accessory="none" />}
-              </>
-            )}
-          </GroupedList>
-
-          <View style={{ gap: space(8) }}>
-            <AppButton size="lg" variant="primary" Icon={RefreshCw} label="Go again" onPress={() => startSession(base ?? session)} />
-            <AppButton variant="secondary" label="Change settings" onPress={() => setPhase('setup')} />
-            <AppButton variant="quiet" label="Done" onPress={handleBack} />
-          </View>
-        </ScrollView>
-      </FadeInView>
+        )}
+      </SessionDone>
     );
   }
 
@@ -654,26 +631,18 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
   const stretch = session.stretches[current.p] ?? [];
   const cue = current.cue;
   return (
-    <FadeInView style={{ flex: 1 }}>
-      <View className="flex-1 bg-canvas p-5">
-        <View className="flex-row items-center justify-between" style={{ marginBottom: space(16), gap: space(12) }}>
-          <View className="flex-1">
-            <AppText variant="caption" className="font-sans font-medium text-ink-3">
-              {session.spot ? 'Drilling one spot · ' : ''}
-              {Math.min(rounds.length + 1, session.total)} of {session.total}
-            </AppText>
-            <AppText variant="title" className="font-sans font-bold text-ink">
-              {rangeLabel(stretch)}
-            </AppText>
-          </View>
-          <AppIconButton
-            Icon={X}
-            variant="outline"
-            onPress={() => (rounds.length > 0 ? setPhase('recap') : setPhase('setup'))}
-            accessibilityLabel="End session"
-          />
-        </View>
-
+    <SessionShell
+      safeTop={false}
+      scroll={false}
+      onClose={() => (rounds.length > 0 ? setPhase('recap') : handleBack())}
+      progress={rounds.length / Math.max(1, session.total)}
+      progressLabel={`${Math.min(rounds.length + 1, session.total)} of ${session.total}`}
+      onOptions={session.spot ? undefined : openOptions}
+    >
+      <View className="flex-1" style={{ paddingHorizontal: space(20), paddingTop: space(12), gap: space(12) }}>
+        <AppText variant="title" className="font-sans font-bold text-ink">
+          {session.spot ? `One spot · ${rangeLabel(stretch)}` : rangeLabel(stretch)}
+        </AppText>
         {cue ? (
           <ThreadRound
             key={`${rounds.length}:${current.p}:${threadCueKey(cue)}`}
@@ -687,9 +656,10 @@ export default function ThreadDrillScreen({ state }: { state: AppState }) {
             spotCheck={!reviewsPaused && stretch.some((v) => v.item.status === 'reviewing' && countsNow(v.item))}
           />
         ) : (
-          <EmptyState Icon={Route} title="No cue to give" message="These verses don't have two words in a row that appear only once." />
+          <EmptyState Icon={Route} title="No cue to give" message="These verses have no two words in a row that appear only once." />
         )}
       </View>
-    </FadeInView>
+      {optionsPopup}
+    </SessionShell>
   );
 }
