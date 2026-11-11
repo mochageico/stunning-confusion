@@ -3,14 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScrollView, View } from 'react-native';
 import {
   BookMarked,
-  CalendarDays,
   Check,
   Compass,
   Flame,
   Headphones,
   Layers,
   List,
-  ListOrdered,
   Plus,
   RotateCcw,
   Route,
@@ -219,11 +217,6 @@ export default function HomeScreen({ state }: { state: AppState }) {
 
   // ---- The "..." menu ------------------------------------------------------
   const menu: MenuItem[][] = [
-    [
-      { label: "Listen to today's scripture", Icon: Headphones, onPress: today.listenToToday },
-      ...(dueCount > 0 ? [{ label: 'Review one at a time', Icon: ListOrdered, onPress: today.reviewOneAtATime }] : []),
-      { label: 'Next 7 days', Icon: CalendarDays, onPress: () => navigateTo('memoryCalendar') },
-    ],
     [
       { label: 'Reference practice', Icon: Target, onPress: () => navigateTo('referenceDrill') },
       { label: 'Pick up the thread', Icon: Route, onPress: () => state.openThreadDrill(null) },
