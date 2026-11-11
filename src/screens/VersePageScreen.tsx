@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { Check, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { BookOpen, Check, ChevronDown, ChevronUp, Headphones, Link2, Trash2 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppText, useFontScale, useScaledSpace } from '../components/design';
-import { Dialog, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
+import { CollapsibleSection, EmptyState, ScreenHeader } from '../components/blocks';
+import { OverflowMenu } from '../components/session';
 import { Dropdown } from '../components/Dropdown';
 import { useThemeColors } from '../components/theme';
 import { StageBar, WeakSpotDot, dayWord, fillFor, slippedNote } from '../components/VerseStages';
@@ -70,7 +71,6 @@ export default function VersePageScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
   const scale = useFontScale();
   const palette = useThemeColors();
-  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [connecting, setConnecting] = useState(false);
   // A long passage shows its first few verses until asked for the rest.
   const [showAllVerses, setShowAllVerses] = useState(false);
@@ -250,10 +250,58 @@ export default function VersePageScreen({ state }: { state: AppState }) {
     );
   };
 
+  // One line of numbers instead of three tiles (UI simplify Job 8).
+  const statsLine = [
+    `${passes} ${passes === 1 ? 'good review' : 'good reviews'}`,
+    `${misses} missed`,
+    ...(daysWith !== null ? [`${daysWith} ${daysWith === 1 ? 'day' : 'days'} with it`] : []),
+  ].join(' · ');
+
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(18) }}>
-        <ScreenHeader title={reference} onBack={handleBack} backLabel="Back" />
+        <ScreenHeader
+          title={reference}
+          onBack={handleBack}
+          backLabel="Back"
+          actions={
+            // Rare and destructive actions live here (R4).
+            <OverflowMenu
+              title={reference}
+              groups={[
+                [
+                  { label: 'Connect to another verse', Icon: Link2, onPress: () => setConnecting(true) },
+                  {
+                    label: 'Open chapter',
+                    Icon: BookOpen,
+                    value: `${ref.book} ${ref.chapter}`,
+                    onPress: () => navigateTo('chapterLanding', ref.book, ref.chapter, { keepBack: true }),
+                  },
+                ],
+                [
+                  {
+                    label: 'Remove from My Verses',
+                    Icon: Trash2,
+                    destructive: true,
+                    confirm: {
+                      title: `Remove ${reference}?`,
+                      message:
+                        stage === 'waiting'
+                          ? 'It comes off your list. You can add it again any time.'
+                          : 'Its progress and history go with it. Adding it again later starts it from the beginning.',
+                      confirmLabel: 'Remove',
+                    },
+                    onPress: () => {
+                      const undo = removeQueueItems(ids);
+                      triggerToast(`Removed ${reference}.`, undo && { action: { label: 'Undo', onPress: undo } });
+                      handleBack();
+                    },
+                  },
+                ],
+              ]}
+            />
+          }
+        />
 
         {/* One page per verse; the translation is a dropdown like everywhere else. */}
         {translations.length > 1 ? (
@@ -304,7 +352,7 @@ export default function VersePageScreen({ state }: { state: AppState }) {
           )}
         </View>
 
-        {/* Where it is on the road */}
+        {/* Where it is on the road, one status line, and the two actions. */}
         <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(16) }}>
           {vertical ? (
             <View style={{ gap: space(10) }}>
@@ -351,21 +399,15 @@ export default function VersePageScreen({ state }: { state: AppState }) {
             </View>
           )}
 
-          <View className="bg-surface-2 rounded-btn" style={{ padding: space(14), gap: space(8) }}>
-            <View className="flex-row flex-wrap items-baseline justify-between" style={{ gap: space(8) }}>
-              <AppText variant="body" className="font-sans font-bold text-ink">
-                {stage === 'waiting' ? 'Waiting to start' : stage === 'learning' ? `Learning, ${progress.position}` : progress.position}
-              </AppText>
-              {next && stage !== 'learning' && stage !== 'waiting' && (
-                <AppText variant="caption" className="font-sans text-ink-2">
-                  Next review: {dayWord(next, now)}
-                </AppText>
-              )}
-            </View>
-            {stage !== 'waiting' && <StageBar stage={stage} fraction={progress.fraction} top={progress.top} thick />}
-            <AppText variant="label" className="font-sans text-ink">
-              {explainer}
+          <View style={{ gap: space(8) }}>
+            <AppText variant="body" className="font-sans font-semibold text-ink">
+              {stage === 'waiting'
+                ? 'Coming up'
+                : [stage === 'learning' ? `Learning, ${progress.position}` : progress.position, next && stage !== 'learning' ? `next ${dayWord(next, now)}` : null]
+                    .filter(Boolean)
+                    .join(' · ')}
             </AppText>
+            {stage !== 'waiting' && <StageBar stage={stage} fraction={progress.fraction} top={progress.top} thick />}
             {partOf && (
               <AppText variant="caption" className="font-sans text-ink-2">
                 {partOf}
@@ -379,33 +421,17 @@ export default function VersePageScreen({ state }: { state: AppState }) {
                 </AppText>
               </View>
             )}
-          </View>
-
-          {stage !== 'waiting' && (
-            <View style={{ gap: space(10) }}>
-              <AppText variant="section" className="font-sans font-semibold text-ink-3">
-                The ladder
+            {stage !== 'waiting' && (
+              <AppText variant="caption" className="font-sans text-ink-3">
+                {statsLine}
               </AppText>
-              {LADDER.map((_, i) => ladderRow(i))}
-            </View>
-          )}
-
-          {stepDates.some(Boolean) && (
-            <AppText variant="caption" className="font-sans text-ink-3">
-              Dates ahead are estimates, if every review goes well.
-            </AppText>
-          )}
+            )}
+          </View>
 
           <View className="flex-row" style={{ gap: space(8) }}>
             {stage === 'waiting' ? (
               <View className="flex-1">
-                <AppButton
-                  variant="primary"
-                  label="Start learning"
-                  onPress={() => {
-                    promoteToLearning(ids);
-                  }}
-                />
+                <AppButton variant="primary" label="Start learning" onPress={() => promoteToLearning(ids)} />
               </View>
             ) : (
               <>
@@ -413,35 +439,32 @@ export default function VersePageScreen({ state }: { state: AppState }) {
                   <AppButton variant="primary" label="Practice" onPress={() => startPractice('learn', verseStates)} />
                 </View>
                 <View className="flex-1">
-                  <AppButton variant="secondary" label="Listen" onPress={() => startPractice('listen', verseStates)} />
+                  {/* Audio keeps its own look: headphones, outlined. */}
+                  <AppButton variant="quiet" Icon={Headphones} label="Listen" onPress={() => startPractice('listen', verseStates)} />
                 </View>
               </>
             )}
           </View>
         </View>
 
+        {/* The full ladder and the verse's history, folded away by default
+            and remembered (R8). */}
         {stage !== 'waiting' && (
-          <View className="flex-row" style={{ gap: space(8) }}>
-            {[
-              { n: passes, label: passes === 1 ? 'good review' : 'good reviews' },
-              { n: misses, label: misses === 1 ? 'missed' : 'missed' },
-              ...(daysWith !== null ? [{ n: daysWith, label: daysWith === 1 ? 'day with it' : 'days with it' }] : []),
-            ].map((t) => (
-              <View key={t.label} className="flex-1 bg-surface border border-line rounded-card" style={{ padding: space(12), gap: space(2) }}>
-                <AppText variant="title" className="font-sans font-bold text-ink">
-                  {t.n}
+          <CollapsibleSection storageKey="versePage.ladder" title="The ladder" defaultCollapsed>
+            <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(10) }}>
+              {LADDER.map((_, i) => ladderRow(i))}
+              {stepDates.some(Boolean) && (
+                <AppText variant="caption" className="font-sans text-ink-3">
+                  Dates ahead assume every review goes well.
                 </AppText>
-                <AppText variant="caption" className="font-sans text-ink-2">
-                  {t.label}
-                </AppText>
-              </View>
-            ))}
-          </View>
+              )}
+            </View>
+          </CollapsibleSection>
         )}
 
         {story.length > 0 && (
-          <GroupedList header="Its story">
-            <View style={{ padding: space(14), gap: space(12) }}>
+          <CollapsibleSection storageKey="versePage.story" title="Its story" defaultCollapsed>
+            <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
               {story.slice(0, 10).map((e, i) => (
                 <View key={i} className="flex-row items-start" style={{ gap: space(12) }}>
                   <AppText variant="label" className="font-sans font-semibold text-ink-2" style={{ minWidth: space(56) }}>
@@ -453,19 +476,8 @@ export default function VersePageScreen({ state }: { state: AppState }) {
                 </View>
               ))}
             </View>
-          </GroupedList>
+          </CollapsibleSection>
         )}
-
-        <GroupedList>
-          <ListRow title="Connect to another verse" value="Join on the Map" onPress={() => setConnecting(true)} />
-          <ListRow
-            title={`${ref.book} ${ref.chapter}`}
-            value="Open chapter"
-            onPress={() => navigateTo('chapterLanding', ref.book, ref.chapter, { keepBack: true })}
-          />
-        </GroupedList>
-
-        <AppButton variant="destructive" label="Remove from My Verses" onPress={() => setConfirmingRemove(true)} />
       </ScrollView>
 
       <ConnectSheet
@@ -478,32 +490,6 @@ export default function VersePageScreen({ state }: { state: AppState }) {
           void addVerseLink(a, b);
           triggerToast('Joined. See it on the Map in My Verses.');
         }}
-      />
-
-      <Dialog
-        visible={confirmingRemove}
-        onClose={() => setConfirmingRemove(false)}
-        title={`Remove ${reference}?`}
-        message={
-          stage === 'waiting'
-            ? 'It comes off your list. You can add it again any time.'
-            : 'Its progress and history go with it. Adding it again later starts it from the beginning.'
-        }
-        actions={
-          <>
-            <AppButton variant="quiet" label="Cancel" onPress={() => setConfirmingRemove(false)} />
-            <AppButton
-              variant="destructive"
-              label="Remove"
-              onPress={() => {
-                setConfirmingRemove(false);
-                const undo = removeQueueItems(ids);
-                triggerToast(`Removed ${reference}.`, undo && { action: { label: 'Undo', onPress: undo } });
-                handleBack();
-              }}
-            />
-          </>
-        }
       />
     </FadeInView>
   );

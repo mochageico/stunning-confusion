@@ -387,6 +387,16 @@ Target:
   is where the instructions now live — no tip box.
 
 ### Job 8 · Verse page — `VersePageScreen.tsx`
+
+**Built 2026-11-10.** Text, the four-stop stage line, then one status line
+("Every week, 3 of 8 reviews · next today") with its bar, the slip note when
+there is one, and the numbers as one grey line ("61 good reviews · 1 missed ·
+123 days with it"). The explainer sentence and the three stat tiles are gone.
+Practice (filled) and Listen (headphones, outlined) sit in the status card.
+The ladder and Its story are folded sections, closed by default and
+remembered. Connect to another verse, Open chapter and Remove from My Verses
+(with confirm) moved to the header's ⋯. No PrimaryBar (not built in Job 0).
+Not phone-tested.
 Now: text, 4-step stage line, status card, the full 8-step ladder, Practice /
 Listen, three stats, Its story, Connect, Open chapter, Remove.
 Target: text, the stage line, one status sentence ("Every week · 3 of 8 ·
