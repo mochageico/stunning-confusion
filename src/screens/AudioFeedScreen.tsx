@@ -219,7 +219,7 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
               <AppButton variant="secondary" Icon={Users} label="Find circles" onPress={() => selectTab('community')} />
             </View>
             <AppText variant="caption" className="font-sans text-ink-3">
-              Meanwhile, record a chapter yourself on the Record tab. Your own readings always play for you.
+              Meanwhile, record a chapter yourself on the Audio tab. Your own readings always play for you.
             </AppText>
           </View>
         ) : (
@@ -347,8 +347,8 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
               title="No recordings match"
               message={
                 feedRecordings.length === 0
-                  ? "Your friends and circles haven't shared a reading yet. Share your own: record on the Record tab and choose Friends & Circles."
-                  : 'Try a wider search, or share your own: record on the Record tab and choose Friends & Circles.'
+                  ? "Your friends and circles haven't shared a reading yet. Share your own: record on the Audio tab and choose Friends & Circles."
+                  : 'Try a wider search, or share your own: record on the Audio tab and choose Friends & Circles.'
               }
             />
           </View>

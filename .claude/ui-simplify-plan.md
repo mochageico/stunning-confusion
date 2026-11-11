@@ -450,6 +450,23 @@ stop says Me. Not phone-tested.
   badge.
 
 ### Job 11 · Audio tab and recordings — `RecordScreen.tsx`, `RecordingDetailScreen.tsx`, `MyRecordingsScreen.tsx`, `AudioFeedScreen.tsx`
+
+**Built 2026-11-10 (Round 2: no listening row).** The Record tab is "Audio"
+(headphones icon) and sits in the middle: Today · Verses · Audio · Community
+· Me (tab id still `record`). Its first page is the new `AudioHub`: a record
+card ("Record yourself reading", the passage, Change, one filled Start
+recording), My recordings (latest 3, play on the left, "date · length ·
+Private / Friends & circles", See all) and From friends and circles (latest
+3, avatar, play, Find more). Import audio moved to the header ⋯ and opens the
+old import page with Back to Audio. The Record / Import switch, the subtitle
+and the pre-recording script preview are gone (the full-screen recording view
+still shows the text). A chat's "Recording for …" banner shows on both pages.
+Recording detail: Speaker and Delete recording moved to a ⋯; the Details card
+is gone (the line under the title already says date · translation · length);
+the visibility hint shortened to the one warning. "Record tab" copy now says
+Audio tab. Not done: Find recordings (`AudioFeedScreen`) keeps its people
+strip and dropdowns, and Verse timing keeps its full section rather than one
+row. Not phone-tested.
 The Record tab becomes the Audio tab (D2, see the Audio sketch): a record card
 (passage, Change, Start recording), a Listening first row with play, My
 recordings (play, title, date · length · who can hear it), From friends and

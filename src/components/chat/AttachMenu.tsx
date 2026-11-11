@@ -227,7 +227,7 @@ export function AttachMenu({
 function RecordingPicker({ state, onPick }: { state: AppState; onPick: (rec: AppState['userRecordings'][number]) => void }) {
   const playable = state.userRecordings.filter((r) => r.audioUrl);
   if (playable.length === 0) {
-    return <EmptyState Icon={Mic} title="No recordings yet" message="Record a passage on the Record tab, then you can send it here." />;
+    return <EmptyState Icon={Mic} title="No recordings yet" message="Record a passage on the Audio tab, then you can send it here." />;
   }
   return (
     <GroupedList>

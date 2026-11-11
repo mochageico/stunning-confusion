@@ -41,7 +41,7 @@ const STEPS: { tab: Tab; place: string; text: string }[] = [
   {
     tab: 'verses',
     place: 'Adding verses',
-    text: 'Tap Add verses at the top to pick any verses from the Bible. They wait in line until one of your learning days comes around.',
+    text: 'Tap + at the top to pick any verses from the Bible. They wait in line until one of your learning days comes around.',
   },
   {
     tab: 'home',
@@ -50,7 +50,7 @@ const STEPS: { tab: Tab; place: string; text: string }[] = [
   },
   {
     tab: 'record',
-    place: 'Record',
+    place: 'Audio',
     text: 'Read a passage aloud and save it. Then listen in your own voice while you practice — in the car, on a walk, anywhere.',
   },
   {

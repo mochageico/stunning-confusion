@@ -5,7 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import { BookOpen, Check, CloudOff, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
+import { BookOpen, Check, CloudOff, Headphones, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
 
 import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
@@ -94,8 +94,10 @@ const TABS = [
   // Your verses and everything about how they're scheduled. Replaced the My
   // Memory Work menu, which was three taps and a long scroll from Today.
   { id: 'verses' as const, label: 'Verses', Icon: BookOpen },
+  // Audio sits in the middle: recordings and listening are what set the app
+  // apart (UI simplify D2). The tab id stays 'record'.
+  { id: 'record' as const, label: 'Audio', Icon: Headphones },
   { id: 'community' as const, label: 'Community', Icon: Users },
-  { id: 'record' as const, label: 'Record', Icon: Mic },
   { id: 'profile' as const, label: 'Me', Icon: User },
 ];
 

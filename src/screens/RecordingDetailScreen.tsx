@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, View } from 'react-native';
-import { Check, Download, Pause, Play, Trash2 } from 'lucide-react-native';
+import { Check, Download, Pause, Play, Trash2, UserRound } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { VerseTimestamp, normalizeRecordingVisibility } from '../types';
@@ -12,6 +12,7 @@ import { usePlaybackProgress } from '../lib/playbackProgress';
 import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/studioAudio';
 import { AppButton, AppIconButton, AppTextInput, AppText, MIN_TOUCH, useScaledSpace } from '../components/design';
 import { Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
+import { OverflowMenu } from '../components/session';
 import { formatDate, formatDuration } from '../lib/format';
 
 // Derived from the single source of truth (data.ts) instead of its own
@@ -25,7 +26,7 @@ const TRANSLATION_FULL_NAMES: Record<string, string> = Object.fromEntries(
 // This page opens from more than one place, so the back link names whichever
 // one you came from.
 const BACK_LABELS: Partial<Record<string, string>> = {
-  record: 'Record',
+  record: 'Audio',
   profile: 'Me',
   chapterLanding: 'Chapter',
   audioFeed: 'Recordings',
@@ -339,6 +340,26 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
           subtitle={recordingMeta({ ...selectedRecording, sourceType: undefined })}
           onBack={handleBack}
           backLabel={(prevScreen && BACK_LABELS[prevScreen]) || 'Back'}
+          actions={
+            // The speaker's name and Delete live here (UI simplify Job 11).
+            <OverflowMenu
+              title={recLabel}
+              groups={[
+                [
+                  {
+                    label: 'Speaker',
+                    Icon: UserRound,
+                    value: selectedRecording.user || 'Me',
+                    onPress: () => {
+                      setSpeakerDraft(selectedRecording.user || 'Me');
+                      setIsEditingSpeaker(true);
+                    },
+                  },
+                ],
+                [{ label: 'Delete recording', Icon: Trash2, destructive: true, onPress: () => setShowDeleteConfirm(true) }],
+              ]}
+            />
+          }
         />
 
         {/* PLAYER. One filled button -- play -- and quiet skips either side. */}
@@ -414,24 +435,6 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
           )}
         </View>
 
-        {/* DETAILS */}
-        <GroupedList header="Details">
-          <ListRow
-            title="Translation"
-            value={TRANSLATION_FULL_NAMES[selectedRecording.translation] || selectedRecording.translation}
-          />
-          <ListRow title="Length" value={formatDuration(durationSec, 'words')} />
-          <ListRow title="Recorded" value={formatDate(selectedRecording.date, 'long')} />
-          <ListRow
-            title="Speaker"
-            value={selectedRecording.user || 'Me'}
-            onPress={() => {
-              setSpeakerDraft(selectedRecording.user || 'Me');
-              setIsEditingSpeaker(true);
-            }}
-          />
-        </GroupedList>
-
         {/* WHO CAN HEAR IT -- only on my own recordings, never on one I
             saved from someone else (that's theirs to decide). */}
         {isMine && (
@@ -443,10 +446,11 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
               accessibilityLabel="Who can hear it"
               options={RECORDING_VISIBILITY_OPTIONS}
             />
-            <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
-              {RECORDING_VISIBILITY_HINT[visibility]}
-              {visibility === 'circle' ? ' Making it private removes it for everyone, including anyone who saved it.' : ''}
-            </AppText>
+            {visibility === 'circle' && (
+              <AppText variant="caption" className="font-sans text-ink-3" style={{ paddingHorizontal: space(4) }}>
+                Making it private removes it for everyone, including anyone who saved it.
+              </AppText>
+            )}
           </View>
         )}
 
@@ -617,11 +621,6 @@ export default function RecordingDetailScreen({ state }: { state: AppState }) {
             ))}
         </View>
 
-        {/* Delete at the foot, as a destructive row, rather than a red caps
-            button beside the title that ran off the screen at 1.5x. */}
-        <GroupedList>
-          <ListRow title="Delete recording" destructive accessory="none" onPress={() => setShowDeleteConfirm(true)} />
-        </GroupedList>
       </ScrollView>
 
       <Dialog

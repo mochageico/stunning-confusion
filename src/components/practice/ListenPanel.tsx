@@ -347,7 +347,7 @@ export default function ListenPanel({
         {!hasAnyAudio ? (
           <EmptyState
             title="No recordings for these verses yet"
-            message="Record one on the Record tab, or pick a narration on the chapter's page."
+            message="Record one on the Audio tab, or pick a narration on the chapter's page."
           />
         ) : (
           <>

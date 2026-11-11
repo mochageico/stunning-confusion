@@ -13,13 +13,8 @@ import type { TextScript } from '../types';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SegmentedControl } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+import { AudioHub } from '../components/AudioHub';
 
-// The two things this screen can be doing. One word each: at 1.5x the longer
-// "Record Live" / "Import Audio" pair stopped fitting on one line each.
-const SUB_MODES = [
-  { id: 'record' as const, label: 'Record' },
-  { id: 'import' as const, label: 'Import' },
-];
 
 /**
  * The Record tab. The passage is one summary row (its pickers live in a
@@ -79,7 +74,9 @@ export default function RecordScreen({ state }: { state: AppState }) {
   // one switch picks which flow this screen shows — switching never touches
   // the other flow's in-progress state (e.g. flipping to Record mid-tagging
   // doesn't clear the picked file; it's still there on return).
-  const [subMode, setSubMode] = useState<'record' | 'import'>('record');
+  // 'hub' is the Audio tab's first page (AudioHub); 'import' is the tagging
+  // flow for audio you already have, opened from the hub's ⋯ (UI simplify Job 11).
+  const [subMode, setSubMode] = useState<'hub' | 'import'>('hub');
 
   const passageChosen = !!recordingBook;
   const verseCount = recordingChapterVerses.length;
@@ -200,43 +197,28 @@ export default function RecordScreen({ state }: { state: AppState }) {
     );
   }
 
+  // Recording for someone's request (said "I will" in a chat). Saving a
+  // recording of this chapter sends it back to them automatically.
+  const requestBanner = state.activeRecordingRequest ? (
+    <View className="bg-accent-soft border border-accent rounded-card flex-row items-center" style={{ padding: space(12), gap: space(10) }}>
+      <View className="flex-1" style={{ gap: space(2) }}>
+        <AppText variant="label" className="font-sans font-semibold text-ink">
+          Recording for {state.activeRecordingRequest.scope === 'dm' ? state.activeRecordingRequest.requesterName : 'your circle'}
+        </AppText>
+        <AppText variant="caption" className="font-sans text-ink-2">
+          {passageLabel(state.activeRecordingRequest.attachment)}
+          {state.activeRecordingRequest.attachment.translationId ? ` · ${state.activeRecordingRequest.attachment.translationId}` : ''}
+        </AppText>
+      </View>
+      <AppButton size="sm" variant="quiet" label="Cancel" onPress={state.cancelRecordingRequest} />
+    </View>
+  ) : null;
+
   const top = (
     <>
-        <ScreenHeader
-          title="Record"
-          subtitle={
-            subMode === 'record'
-              ? 'Recite out loud and tap each verse as you start it.'
-              : 'Tap each verse as it starts in audio you already have.'
-          }
-          actions={
-            <AppIconButton
-              Icon={ListMusic}
-              variant="outline"
-              accessibilityLabel="Your recordings"
-              onPress={() => navigateTo('myRecordings')}
-            />
-          }
-        />
+        <ScreenHeader title="Import audio" onBack={() => setSubMode('hub')} backLabel="Audio" />
 
-        <SegmentedControl value={subMode} onChange={setSubMode} accessibilityLabel="Record or import" options={SUB_MODES} />
-
-        {/* Recording for someone's request (said "I will" in a chat). Saving
-            a recording of this chapter sends it back to them automatically. */}
-        {state.activeRecordingRequest ? (
-          <View className="bg-accent-soft border border-accent rounded-card flex-row items-center" style={{ padding: space(12), gap: space(10) }}>
-            <View className="flex-1" style={{ gap: space(2) }}>
-              <AppText variant="label" className="font-sans font-semibold text-ink">
-                Recording for {state.activeRecordingRequest.scope === 'dm' ? state.activeRecordingRequest.requesterName : 'your circle'}
-              </AppText>
-              <AppText variant="caption" className="font-sans text-ink-2">
-                Save a recording of {passageLabel(state.activeRecordingRequest.attachment)}
-                {state.activeRecordingRequest.attachment.translationId ? ` in the ${state.activeRecordingRequest.attachment.translationId}` : ''} and it's sent to the chat for you.
-              </AppText>
-            </View>
-            <AppButton size="sm" variant="quiet" label="Cancel" onPress={state.cancelRecordingRequest} />
-          </View>
-        ) : null}
+        {requestBanner}
 
         {/* The passage, as one row. Its pickers are in a sheet. */}
         <GroupedList>
@@ -273,39 +255,24 @@ export default function RecordScreen({ state }: { state: AppState }) {
     </>
   );
 
-  // Record mode (and the no-passage prompt): a fixed page, not a scrolling
-  // one, so the script fills exactly the height that's left between the
-  // passage row and the Start button. Inside a scrolling page it grew to its
-  // full length and pushed Start off the bottom.
-  if (subMode === 'record' || !passageChosen) {
+  // The Audio tab's first page. Starting a take goes to the full-screen
+  // recording view above, which shows the text to read from.
+  if (subMode === 'hub') {
     return (
       <FadeInView style={{ flex: 1 }}>
-        <View className="flex-1 bg-canvas p-5" style={{ gap: space(16) }}>
-          {top}
-          {!passageChosen ? (
-            <View className="flex-1 bg-surface border border-line rounded-card justify-center">
-              <EmptyState
-                Icon={BookOpen}
-                title="Pick what to recite"
-                message="Choose a book and chapter, and its text shows up here to read from."
-                actionLabel="Choose a passage"
-                onAction={() => setShowPassage(true)}
-              />
-            </View>
-          ) : (
-            <>
-              <ScriptList fill verses={recordingSelectedVerses} tapped={verseTapTimestamps} live={false} onTap={handleMarkVerseTap} script={script} />
-              <AppButton
-                size="lg"
-                variant="primary"
-                Icon={Mic}
-                label="Start recording"
-                disabled={selectedCount === 0}
-                onPress={handleStartRecording}
-              />
-            </>
-          )}
-        </View>
+        <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+          <AudioHub
+            state={state}
+            passageTitle={passageTitle}
+            passageSubtitle={passageSubtitle}
+            passageChosen={passageChosen}
+            canStart={selectedCount > 0}
+            requestBanner={requestBanner}
+            onChangePassage={() => setShowPassage(true)}
+            onStart={handleStartRecording}
+            onImport={() => setSubMode('import')}
+          />
+        </ScrollView>
         {sheets}
       </FadeInView>
     );

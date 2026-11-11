@@ -78,14 +78,14 @@ export default function MyRecordingsScreen({ state }: { state: AppState }) {
   return (
     <FadeInView style={{ flex: 1 }}>
       <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
-        <ScreenHeader title="Your recordings" onBack={handleBack} backLabel="Record" />
+        <ScreenHeader title="Your recordings" onBack={handleBack} backLabel="Audio" />
 
         {userRecordings.length === 0 && sentToYou.length === 0 ? (
           <View className="bg-surface border border-line rounded-card">
             <EmptyState
               Icon={Mic}
               title="No recordings yet"
-              message="Record or import one on the Record tab, or save one your friends and circles shared."
+              message="Record or import one on the Audio tab, or save one your friends and circles shared."
             />
           </View>
         ) : (
