@@ -501,6 +501,18 @@ progress" and "Disband circle" → the header's settings pop-up. The weekly
 summary becomes one card, not three blocks.
 
 ### Job 13 · First run and small pages — `OnboardingScreen.tsx`, `AuthGateScreen.tsx`, `AddVersesScreen.tsx`, `TakeawaysScreen.tsx`, `BooksScreen.tsx`, `ChaptersScreen.tsx`, `FullHistoryScreen.tsx`
+
+**Built 2026-11-10.** Onboarding is four pages, one question each: How this
+works (three short ticked lines), Pick something to start with (book,
+chapter, from / to, Add these verses), Which days do you learn new verses
+(day chips, new verses per day, one result line), You're set (with "Take a
+1-minute tour first" as a quiet button). A progress bar and ✕ (Back after
+page 1) and Skip sit on top; one Continue (Start on the last page) at the
+bottom. The numbered cards and every explanation box are gone. Add verses:
+the subtitle and both footnotes are gone ("For one verse…", "BSB stays
+picked…"; the already-on-your-list warnings stay); the range reads "Verses
+[1] to [39]". Auth gate, Takeaways, Books, Chapters and Full history already
+had no paragraphs or tips to remove, so they were left. Not phone-tested.
 Onboarding: one question per page with a progress bar and a single Continue
 button (the Duolingo pattern), instead of one long scrolling page. "How this
 works" shrinks to three short lines.

@@ -156,7 +156,7 @@ export default function AddVersesScreen({ state }: { state: AppState }) {
         contentContainerStyle={{ gap: space(20) }}
         keyboardShouldPersistTaps="handled"
       >
-        <ScreenHeader title="Add verses" subtitle="They go to the end of My own verses." onBack={handleBack} />
+        <ScreenHeader title="Add verses" onBack={handleBack} />
 
         <Card gap={12}>
           <View style={{ gap: space(4) }}>
@@ -198,14 +198,16 @@ export default function AddVersesScreen({ state }: { state: AppState }) {
           </View>
 
           <View style={{ gap: space(4) }}>
-            {label('Verses', verseCount ? `of ${verseCount}` : undefined)}
             <View className="flex-row items-center" style={{ gap: space(8) }}>
+              <AppText variant="label" className="text-ink font-sans font-medium shrink-0">
+                Verses
+              </AppText>
               <View className="flex-1">
                 <NumericInput
                   value={startText}
                   onChangeText={setStartText}
                   accessibilityLabel="First verse"
-                  placeholder="First"
+                  placeholder="1"
                   className={numberInput}
                   style={numberStyle}
                 />
@@ -218,15 +220,12 @@ export default function AddVersesScreen({ state }: { state: AppState }) {
                   value={endText}
                   onChangeText={setEndText}
                   accessibilityLabel="Last verse"
-                  placeholder="Last"
+                  placeholder={verseCount ? String(verseCount) : 'Last'}
                   className={numberInput}
                   style={numberStyle}
                 />
               </View>
             </View>
-            <AppText variant="caption" className="font-sans text-ink-3">
-              For one verse, leave the last box empty.
-            </AppText>
           </View>
         </Card>
 
@@ -274,7 +273,7 @@ export default function AddVersesScreen({ state }: { state: AppState }) {
                 ? `${refForVerses(book, chapter, [...sameTranslation].sort((x, y) => x - y))} ${
                     sameTranslation.size === 1 ? 'is' : 'are'
                   } already on your list in ${trLabel}, so ${sameTranslation.size === 1 ? 'it' : 'they'}'ll be skipped.`
-                : `${trLabel} stays picked for next time.`}
+                : ''}
           </AppText>
         </View>
       </ScrollView>

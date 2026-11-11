@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Check, X } from 'lucide-react-native';
+import { Check, ChevronLeft, X } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView, NumericInput, StepperRow, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { AppButton, AppIconButton, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
-import { ScreenHeader } from '../components/blocks';
 
 import { useThemeColors } from '../components/theme';
 // ============================================================================
@@ -45,50 +44,6 @@ const DAY_FULL_NAMES: Record<string, string> = {
   S: 'Saturday',
   Su: 'Sunday',
 };
-
-/** A numbered card. Plain container -- no lock state, by design. */
-function SetupCard({
-  index,
-  title,
-  done,
-  children,
-}: {
-  index: number;
-  title: string;
-  done?: boolean;
-  children: React.ReactNode;
-}) {
-    const palette = useThemeColors();
-  const space = useScaledSpace();
-  const scale = useFontScale();
-  const badge = Math.round(26 * scale);
-
-  return (
-    <View
-      className="rounded-card border border-line bg-surface"
-      style={{ padding: space(14), gap: space(10) }}
-    >
-      <View className="flex-row items-center" style={{ gap: space(8) }}>
-        <View
-          className={`rounded-full items-center justify-center shrink-0 ${done ? 'bg-success' : 'bg-accent'}`}
-          style={{ width: badge, height: badge }}
-        >
-          {done ? (
-            <Check size={Math.round(13 * scale)} color={palette.onAccent} />
-          ) : (
-            <AppText variant="caption" className="font-sans font-black text-on-accent">
-              {index}
-            </AppText>
-          )}
-        </View>
-        <AppText variant="body" className="font-sans font-semibold text-ink flex-1">
-          {title}
-        </AppText>
-      </View>
-      {children}
-    </View>
-  );
-}
 
 export default function OnboardingScreen({ state }: { state: AppState }) {
     const palette = useThemeColors();
@@ -155,164 +110,142 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
   const hasVerses = memoryQueue.length > 0;
   const versesPerWeek = newVersesPace * learningDays.length;
 
-  return (
-    <FadeInView style={{ flex: 1 }}>
-      <ScrollView
-        className="flex-1 bg-canvas"
-        contentContainerClassName="p-5 pb-12"
-        contentContainerStyle={{ gap: space(16) }}
-      >
-        <ScreenHeader
-          eyebrow="Welcome"
-          title="Let's set you up"
-          actions={<AppIconButton Icon={X} variant="outline" diameter={36} accessibilityLabel="Skip setup" onPress={dismissOnboarding} />}
-        />
+  // One question per page, a progress bar and one Continue (UI simplify
+  // Job 13, the Duolingo pattern), instead of one long scrolling page.
+  const [step, setStep] = useState(0);
+  const STEPS = 4;
+  const next = () => setStep((s) => Math.min(STEPS - 1, s + 1));
 
-        {/* CARD 1 -- the idea. This is the piece the old checklist never had:
-            a plain-English statement of the loop, before any settings. */}
-        <SetupCard index={1} title="How this works">
-          <View style={{ gap: space(8) }}>
-            <AppText variant="label" className="font-sans text-ink leading-relaxed">
-              You pick verses you want to know by heart.
-            </AppText>
-            <AppText variant="label" className="font-sans text-ink leading-relaxed">
-              Each day, the app gives you a few new ones to work on — and brings back older ones right before you'd
-              start to forget them.
-            </AppText>
-            <AppText variant="label" className="font-sans text-ink leading-relaxed">
-              Open the app, do what's on the Today screen, and close it. That's the whole thing.
-            </AppText>
-            <View className="rounded-btn bg-surface-2 border border-line" style={{ padding: space(10) }}>
-              <AppText variant="caption" className="font-sans text-ink-2 leading-relaxed">
-                A verse comes back every day for a few weeks, then once a week, then once a month — and then it stops,
-                because by then it's yours. You don't have to schedule any of that.
-              </AppText>
-            </View>
+  const title = ['How this works', 'Pick something to start with', 'Which days do you learn new verses?', "You're set"][step];
+
+  const body = [
+    // 1 -- the idea, in three short lines.
+    <View key="idea" style={{ gap: space(14) }}>
+      {['Pick verses you want to know by heart.', 'Each day, learn a few new ones and review older ones right before you’d forget.', 'Open the app, do what’s on Today, done.'].map((line) => (
+        <View key={line} className="flex-row items-start" style={{ gap: space(10) }}>
+          <View style={{ paddingTop: space(3) }}>
+            <Check size={18} color={palette.accent} strokeWidth={2.6} />
           </View>
-        </SetupCard>
-
-        {/* CARD 2 -- pick something to memorize, and actually queue it. */}
-        <SetupCard index={2} title="Pick something to start with" done={hasVerses}>
-          <AppText variant="caption" className="font-sans text-ink-2 leading-relaxed">
-            A few verses is a better start than a whole chapter. You can always add more later.
+          <AppText variant="body" className="font-sans text-ink flex-1">
+            {line}
           </AppText>
+        </View>
+      ))}
+    </View>,
 
-          <View style={{ gap: space(4) }}>
-            <AppText variant="caption" className="font-sans font-medium text-ink-2">Book</AppText>
-            <BookPicker value={book} onChange={setBook} />
-          </View>
-
-          {/* The three numbers share a row and wrap when the text is big. */}
-          <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
-            <View style={{ flexGrow: 1, flexBasis: space(96), gap: space(4) }}>
-              <AppText variant="caption" className="font-sans font-medium text-ink-2">Chapter</AppText>
-              <NumericInput
-                {...chapterField}
-                className="w-full bg-surface border border-line rounded-btn font-sans text-ink"
-                style={{ minHeight: MIN_TOUCH * 0.8, paddingHorizontal: space(8) }}
-              />
-            </View>
-            <View style={{ flexGrow: 1, flexBasis: space(96), gap: space(4) }}>
-              <AppText variant="caption" className="font-sans font-medium text-ink-2">From verse</AppText>
-              <NumericInput
-                {...startField}
-                className="w-full bg-surface border border-line rounded-btn font-sans text-ink"
-                style={{ minHeight: MIN_TOUCH * 0.8, paddingHorizontal: space(8) }}
-              />
-            </View>
-            <View style={{ flexGrow: 1, flexBasis: space(96), gap: space(4) }}>
-              <AppText variant="caption" className="font-sans font-medium text-ink-2">To verse</AppText>
-              <NumericInput
-                {...endField}
-                className="w-full bg-surface border border-line rounded-btn font-sans text-ink"
-                style={{ minHeight: MIN_TOUCH * 0.8, paddingHorizontal: space(8) }}
-              />
-            </View>
-          </View>
-
-          <AppButton variant="primary" label={adding ? 'Adding…' : 'Add these verses'} disabled={adding} onPress={handleAddVerses} />
-
-          {addedLabel && (
-            <View className="rounded-btn bg-success-soft" style={{ padding: space(10) }}>
-              <AppText variant="caption" className="font-sans font-semibold text-success">{addedLabel}</AppText>
-            </View>
-          )}
-        </SetupCard>
-
-        {/* CARD 3 -- the week. Commits live, same as the My Schedule editor. */}
-        <SetupCard index={3} title="When do you want to do this?" done={learningDays.length > 0}>
-          <AppText variant="caption" className="font-sans text-ink-2 leading-relaxed">
-            Pick the days you'll take on new verses. Reviews still come every day — these are just the days you add
-            something new, so leaving gaps is completely fine.
-          </AppText>
-
-          <View className="flex-row" style={{ gap: space(5) }}>
-            {WEEK_DAYS.map((d) => {
-              const isActive = learningDays.includes(d);
-              return (
-                <Pressable
-                  key={d}
-                  onPress={() => toggleDay(d)}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: isActive }}
-                  accessibilityLabel={DAY_FULL_NAMES[d]}
-                  className={`flex-1 items-center justify-center rounded-full border ${
-                    isActive ? 'bg-accent border-accent' : 'bg-surface border-line-strong'
-                  }`}
-                  style={{ minHeight: MIN_TOUCH * 0.68, paddingVertical: space(4) }}
-                >
-                  <AppText
-                    variant="micro"
-                    className={`font-sans font-bold ${isActive ? 'text-on-accent' : 'text-ink-2'}`}
-                  >
-                    {d}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <View style={{ gap: space(6) }}>
-            <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
-              <AppText variant="caption" className="font-sans font-medium text-ink-2 flex-1">
-                New verses each of those days
-              </AppText>
-              <AppText variant="caption" className="font-sans font-semibold text-ink shrink-0">{newVersesPace}</AppText>
-            </View>
-            <StepperRow
-              value={newVersesPace}
-              min={1}
-              max={10}
-              onChange={(v) => updateRhythm({ newVersesPace: v })}
+    // 2 -- pick something to memorize, and actually queue it.
+    <View key="verses" style={{ gap: space(12) }}>
+      <View style={{ gap: space(4) }}>
+        <AppText variant="caption" className="font-sans font-medium text-ink-2">Book</AppText>
+        <BookPicker value={book} onChange={setBook} />
+      </View>
+      {/* The three numbers share a row and wrap when the text is big. */}
+      <View className="flex-row flex-wrap" style={{ gap: space(10) }}>
+        {[
+          { label: 'Chapter', field: chapterField },
+          { label: 'From verse', field: startField },
+          { label: 'To verse', field: endField },
+        ].map(({ label, field }) => (
+          <View key={label} style={{ flexGrow: 1, flexBasis: space(96), gap: space(4) }}>
+            <AppText variant="caption" className="font-sans font-medium text-ink-2">{label}</AppText>
+            <NumericInput
+              {...field}
+              className="w-full bg-surface border border-line rounded-btn font-sans text-ink"
+              style={{ minHeight: MIN_TOUCH * 0.8, paddingHorizontal: space(8) }}
             />
           </View>
+        ))}
+      </View>
+      <AppButton variant="secondary" label={adding ? 'Adding…' : 'Add these verses'} disabled={adding} onPress={handleAddVerses} />
+      {addedLabel && (
+        <AppText variant="label" className="font-sans font-semibold text-success">
+          {addedLabel}
+        </AppText>
+      )}
+    </View>,
 
-          {/* The consequence, in one line -- so the dials mean something
-              without having to imagine their effect. */}
-          <View className="rounded-btn bg-surface-2 border border-line" style={{ padding: space(10) }}>
-            <AppText variant="caption" className="font-sans text-ink-2 leading-relaxed">
-              {learningDays.length === 0
-                ? "No days picked yet — pick at least one, or nothing new will start."
-                : `That's about ${versesPerWeek} new ${versesPerWeek === 1 ? 'verse' : 'verses'} a week.`}
-            </AppText>
-          </View>
-        </SetupCard>
-
-        <View style={{ gap: space(4) }}>
-          <AppButton size="lg" variant="primary" label={hasVerses ? "I'm ready, start" : 'Go to Today'} onPress={dismissOnboarding} />
-          {/* Offered, never started for you: the tour is optional (see
-              components/GuidedTour.tsx). */}
-          <AppButton
-            variant="secondary"
-            label="Take a 1-minute tour first"
-            onPress={() => {
-              dismissOnboarding();
-              setShowTour(true);
-            }}
-          />
-          <AppButton variant="quiet" label="Skip for now" onPress={dismissOnboarding} className="border-0" />
+    // 3 -- the week. Commits live, same as the My Schedule editor.
+    <View key="days" style={{ gap: space(14) }}>
+      <View className="flex-row" style={{ gap: space(5) }}>
+        {WEEK_DAYS.map((d) => {
+          const isActive = learningDays.includes(d);
+          return (
+            <Pressable
+              key={d}
+              onPress={() => toggleDay(d)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isActive }}
+              accessibilityLabel={DAY_FULL_NAMES[d]}
+              className={`flex-1 items-center justify-center rounded-full border ${isActive ? 'bg-accent border-accent' : 'bg-surface border-line-strong'}`}
+              style={{ minHeight: MIN_TOUCH * 0.8, paddingVertical: space(4) }}
+            >
+              <AppText variant="caption" className={`font-sans font-bold ${isActive ? 'text-on-accent' : 'text-ink-2'}`}>
+                {d}
+              </AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={{ gap: space(6) }}>
+        <View className="flex-row items-center justify-between" style={{ gap: space(8) }}>
+          <AppText variant="label" className="font-sans font-medium text-ink-2 flex-1">
+            New verses each of those days
+          </AppText>
+          <AppText variant="label" className="font-sans font-semibold text-ink shrink-0">{newVersesPace}</AppText>
         </View>
-      </ScrollView>
+        <StepperRow value={newVersesPace} min={1} max={10} onChange={(v) => updateRhythm({ newVersesPace: v })} />
+      </View>
+      <AppText variant="label" className="font-sans text-ink-2">
+        {learningDays.length === 0
+          ? 'Pick at least one day, or nothing new will start.'
+          : `About ${versesPerWeek} new ${versesPerWeek === 1 ? 'verse' : 'verses'} a week. Reviews come every day.`}
+      </AppText>
+    </View>,
+
+    // 4 -- done: start, or take the optional tour first.
+    <View key="done" style={{ gap: space(10) }}>
+      <AppText variant="body" className="font-sans text-ink">
+        {hasVerses ? 'Today has your first verses.' : 'Add verses any time from the Verses tab.'}
+      </AppText>
+      <AppButton
+        variant="quiet"
+        label="Take a 1-minute tour first"
+        onPress={() => {
+          dismissOnboarding();
+          setShowTour(true);
+        }}
+      />
+    </View>,
+  ][step];
+
+  const last = step === STEPS - 1;
+
+  return (
+    <FadeInView style={{ flex: 1 }}>
+      <View className="flex-1 bg-canvas">
+        <View className="flex-row items-center" style={{ minHeight: MIN_TOUCH + space(8), paddingHorizontal: space(16), gap: space(12) }}>
+          {step > 0 ? (
+            <AppIconButton Icon={ChevronLeft} variant="outline" diameter={40} accessibilityLabel="Back" onPress={() => setStep(step - 1)} />
+          ) : (
+            <AppIconButton Icon={X} variant="outline" diameter={40} accessibilityLabel="Skip setup" onPress={dismissOnboarding} />
+          )}
+          <View className="flex-1 bg-fill rounded-full overflow-hidden" style={{ height: 8 /* layout-ok: a progress track */ }}>
+            <View className="bg-accent rounded-full" style={{ height: 8 /* layout-ok: the track's fill */, width: `${((step + 1) / STEPS) * 100}%` }} />
+          </View>
+          <AppButton size="sm" variant="quiet" label="Skip" onPress={dismissOnboarding} className="border-0" />
+        </View>
+
+        <ScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: space(20), paddingTop: space(24), paddingBottom: space(24), gap: space(20) }}>
+          <AppText variant="display" className="font-sans font-bold text-ink" accessibilityRole="header">
+            {title}
+          </AppText>
+          {body}
+        </ScrollView>
+
+        <View className="border-t border-line bg-surface" style={{ paddingHorizontal: space(16), paddingTop: space(14), paddingBottom: space(14) }}>
+          <AppButton size="lg" variant="primary" label={last ? (hasVerses ? 'Start' : 'Go to Today') : 'Continue'} onPress={last ? dismissOnboarding : next} />
+        </View>
+      </View>
     </FadeInView>
   );
 }
