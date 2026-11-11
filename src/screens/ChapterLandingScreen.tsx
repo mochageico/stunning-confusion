@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureDetector } from 'react-native-gesture-handler';
-import { Bookmark, Brackets, Check, ChevronDown, Download, Grid2x2, GripVertical, Headphones, LayoutGrid, List, ListTree, Mic, Pause, Play, Plus, Printer, Search } from 'lucide-react-native';
+import { Bookmark, Brackets, Check, ChevronDown, Download, Grid2x2, GripVertical, Headphones, LayoutGrid, List, ListTree, Mic, Pause, PenLine, Play, Plus, Printer, Search } from 'lucide-react-native';
 
 import { AppState, resolveChapterAudio } from '../state/useAppState';
 import { recordingFitsTranslation } from '../lib/appData';
@@ -1051,8 +1051,8 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
             </AppText>
             <AppButton size="sm" variant="quiet" label="Clear" onPress={() => setSelectedVerseNumbers([])} />
           </View>
-          {/* Add · Listen · Record · I know these (UI simplify Job 7): an
-              icon over a short label each, so the four fit one row. */}
+          {/* Add · Practice · Listen · Record · I know these (UI simplify
+              Job 7): an icon over a short label each, so they fit one row. */}
           <View className="flex-row" style={{ gap: space(4) }}>
             {[
               {
@@ -1064,6 +1064,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   setSelectedVerseNumbers([]);
                 },
               },
+              { label: 'Practice', a11y: 'Practice these verses', Icon: PenLine, onPress: () => startPractice('learn', selectedVerses()) },
               { label: 'Listen', a11y: 'Listen', Icon: Headphones, onPress: () => startPractice('listen', selectedVerses()) },
               {
                 label: 'Record',

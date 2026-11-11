@@ -45,9 +45,9 @@ console.log('Blank answers');
 
 console.log('Building a round');
 {
-  check('Swap count is always 0 to 3', Array.from({ length: 200 }, (_, i) => drawSwapCount(seeded(i + 1))).every((n) => n >= 0 && n <= GAP_MAX_SWAPS));
-  const counts = new Set(Array.from({ length: 300 }, (_, i) => drawSwapCount(seeded(i * 7 + 3))));
-  check('...and all four come up', counts.size === 4, [...counts]);
+  check('Swap count is always 0 to 5', Array.from({ length: 200 }, (_, i) => drawSwapCount(seeded(i + 1))).every((n) => n >= 0 && n <= GAP_MAX_SWAPS) && GAP_MAX_SWAPS === 5);
+  const counts = new Set(Array.from({ length: 600 }, (_, i) => drawSwapCount(seeded(i * 7 + 3))));
+  check('...and all six come up', counts.size === 6, [...counts]);
 
   let bad = 0;
   let noBlank = 0;
@@ -71,15 +71,16 @@ console.log('Building a round');
   }
   check('A round builds for 2 to 6 verses', bad === 0, bad);
   check('Every round has at least one blank', noBlank === 0, noBlank);
-  check('Never more than three blanks', overBlank === 0, overBlank);
-  check('Never more than three planted words', overSwap === 0, overSwap);
+  check('Never more than five blanks', overBlank === 0 && GAP_MAX_BLANKS === 5, overBlank);
+  check('Never more than five planted words', overSwap === 0, overSwap);
   check('A planted word never sits on a blank', overlap === 0, overlap);
   check('A blank is never only on the first verse', missingOpening === 0, missingOpening);
 
   const six = buildGapRound(psalm(6), { rng: seeded(11) })!;
-  check('Six verses get three blanks', six.blanks.length === 3, six.blanks);
+  check('Six verses get five blanks', six.blanks.length === 5, six.blanks);
   const openings = six.blanks.filter((b) => TEXTS[b.verseIndex].toLowerCase().startsWith(b.words[0].toLowerCase().replace(/[^a-z]/g, '')));
-  check('Two of them are verse openings', openings.length >= 2, six.blanks);
+  check('Three of them are verse openings', openings.length >= 3, six.blanks);
+  check('Some blanks hide three words', Array.from({ length: 60 }, (_, i) => buildGapRound(psalm(6), { rng: seeded(i + 1) })!).some((r) => r.blanks.some((b) => b.words.length === 3)));
 
   const one = buildGapRound(psalm(1).concat([]), { rng: seeded(4) })!;
   check('One verse still gets exactly one blank', one.blanks.length === 1, one.blanks);

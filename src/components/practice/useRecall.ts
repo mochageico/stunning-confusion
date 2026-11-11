@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Layers, ListChecks, ListOrdered, ListTree, MessageCircle, Mic, Puzzle, SearchCheck, Signpost } from 'lucide-react-native';
+import { Layers, ListChecks, ListOrdered, ListTree, MessageCircle, Mic, Puzzle, SearchCheck, Signpost, TextCursorInput } from 'lucide-react-native';
 import { ChapterSections, VerseState, QueueItem, TextScript } from '../../types';
 import { isReviewDue } from '../../state/useAppState';
 import { feedbackDone, feedbackMiss } from '../../lib/feedback';
@@ -11,6 +11,7 @@ import { auth } from '../../firebase';
 import { UNRELEASED_TRANSLATION_TESTERS } from '../../data';
 import { splitWords, typedLetters } from '../../lib/textScript';
 import { MIN_JIGSAW_VERSES, MIN_THREAD_VERSES, threadRunEndingAt } from '../../lib/drills';
+import { gapFits } from '../../lib/spotGap';
 import { verseAnnotationKey } from '../MemoryGrid';
 import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePrefs, StrikeLimit } from '../../lib/practicePrefs';
 import { formatDate } from '../../lib/format';
@@ -29,7 +30,7 @@ import { buildReciteOrder, positionsToWords, verseStartPosition } from '../../li
 // .claude/file-split-plan.md).
 // ============================================================================
 
-export type LearnMode = 'recite' | 'buildUp' | 'jigsaw' | 'scramble' | 'spotSwap' | 'outline' | 'putInOrder' | 'whichSection' | 'teachIt';
+export type LearnMode = 'recite' | 'buildUp' | 'jigsaw' | 'scramble' | 'spotSwap' | 'outline' | 'openings' | 'putInOrder' | 'whichSection' | 'teachIt';
 
 export interface UseRecallParams {
   verses: VerseState[];
@@ -539,6 +540,8 @@ export function useRecall({
     // If the incoming group is too short for the jigsaw, don't leave the
     // user parked on a mode that no longer exists.
     if (verses.length < MIN_JIGSAW_VERSES && learnTab === 'jigsaw') setLearnTab('recite');
+    if (learnTab === 'spotSwap' && !gapFits(verses)) setLearnTab('recite');
+    if (learnTab === 'openings' && verses.length < 2) setLearnTab('recite');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verses]);
 
@@ -569,8 +572,9 @@ export function useRecall({
         { id: 'buildUp' as const, label: 'Build up', Icon: Layers },
         ...(verses.length >= MIN_JIGSAW_VERSES ? [{ id: 'jigsaw' as const, label: 'Order', Icon: ListOrdered }] : []),
         { id: 'scramble' as const, label: 'Scramble', Icon: Puzzle },
-        { id: 'spotSwap' as const, label: 'Spot', Icon: SearchCheck },
+        ...(gapFits(verses) ? [{ id: 'spotSwap' as const, label: formatLabel('findWrongWord'), Icon: SearchCheck }] : []),
         { id: 'outline' as const, label: formatLabel('firstWords'), Icon: ListTree },
+        ...(verses.length >= 2 ? [{ id: 'openings' as const, label: formatLabel('openings'), Icon: TextCursorInput }] : []),
         ...(sectionDrillsReady
           ? [
               { id: 'putInOrder' as const, label: formatLabel('putInOrder'), Icon: ListChecks },
@@ -579,7 +583,7 @@ export function useRecall({
           : []),
         { id: 'teachIt' as const, label: formatLabel('teachIt'), Icon: MessageCircle },
       ] as { id: LearnMode; label: string; Icon: typeof Mic }[],
-    [verses.length, sectionDrillsReady]
+    [verses, sectionDrillsReady]
   );
 
   // Pick up the thread is offered after a passing Recall when the last verse

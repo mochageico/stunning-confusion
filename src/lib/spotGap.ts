@@ -12,12 +12,14 @@ import { normalizeToken, scriptOfVerse, splitWords, typedLetters } from './textS
 // back to scoreGap, whose per-verse accuracy feeds the ordinary recall grade.
 // ============================================================================
 
-export const GAP_MAX_SWAPS = 3;
-export const GAP_MAX_BLANKS = 3;
+export const GAP_MAX_SWAPS = 5;
+export const GAP_MAX_BLANKS = 5;
 /** A verse shorter than this has too little left to blank. */
 export const GAP_MIN_BLANK_VERSE_WORDS = 4;
-/** Words a blank hides at most. */
-const GAP_BLANK_WORDS = 2;
+/** Words a blank hides: two, or three about 4 times in 10. */
+const GAP_BLANK_WORDS = 3;
+/** A lone verse this long gets a second blank. */
+const GAP_TWO_BLANK_VERSE_WORDS = 12;
 
 export type Rng = () => number;
 
@@ -72,10 +74,10 @@ const shuffle = <T,>(xs: T[], rng: Rng): T[] => {
   return out;
 };
 
-/** 0 to 3 planted words, weighted toward 1 and 2. */
+/** 0 to 5 planted words, weighted toward 2 to 4 (0 stays possible, so finding none is never a given). */
 export const drawSwapCount = (rng: Rng): number => {
   const r = rng();
-  return r < 0.15 ? 0 : r < 0.5 ? 1 : r < 0.85 ? 2 : 3;
+  return r < 0.05 ? 0 : r < 0.15 ? 1 : r < 0.4 ? 2 : r < 0.7 ? 3 : r < 0.9 ? 4 : 5;
 };
 
 const clauseBoundary = (word: string): boolean => /[:;][”’"')\]]*$/.test(word);
@@ -102,7 +104,8 @@ const planBlanks = (wordsByVerse: string[][], script: TextScript, rng: Rng): Spa
     from + len <= wordsByVerse[v].length &&
     wordsByVerse[v].slice(from, from + len).every((w) => normalizeToken(w, script) !== '');
   const spanAt = (v: number, from: number): Span | null => {
-    const len = usable(v, from, GAP_BLANK_WORDS) ? GAP_BLANK_WORDS : usable(v, from, 1) ? 1 : 0;
+    const wanted = rng() < 0.4 ? GAP_BLANK_WORDS : 2;
+    const len = [wanted, 2, 1].find((l) => l <= wanted && usable(v, from, l)) ?? 0;
     return len > 0 ? { verseIndex: v, start: from, len } : null;
   };
   const longEnough = (v: number) => wordsByVerse[v].length >= GAP_MIN_BLANK_VERSE_WORDS;
@@ -120,15 +123,24 @@ const planBlanks = (wordsByVerse: string[][], script: TextScript, rng: Rng): Spa
 
   if (n === 1) {
     if (!longEnough(0)) return [];
-    const j = joins(0);
-    if (j.length > 0) return [j[Math.floor(rng() * j.length)]];
-    const start = 1 + Math.floor(rng() * Math.max(1, wordsByVerse[0].length - 3));
-    const s = spanAt(0, start);
-    return s ? [s] : [];
+    const out: Span[] = shuffle(joins(0), rng).slice(0, 1);
+    if (out.length === 0) {
+      const start = 1 + Math.floor(rng() * Math.max(1, wordsByVerse[0].length - 3));
+      const s = spanAt(0, start);
+      if (s) out.push(s);
+    }
+    // A long lone verse gets a second gap, well clear of the first.
+    if (out.length === 1 && wordsByVerse[0].length >= GAP_TWO_BLANK_VERSE_WORDS) {
+      const at = out[0].start;
+      const far = Array.from({ length: wordsByVerse[0].length }, (_, i) => i).filter((i) => i >= 1 && Math.abs(i - at) >= 5);
+      const second = far.length > 0 ? spanAt(0, far[Math.floor(rng() * far.length)]) : null;
+      if (second) out.push(second);
+    }
+    return out;
   }
 
-  const want = Math.min(GAP_MAX_BLANKS, Math.max(1, Math.round(n / 2)));
-  const openingsWanted = Math.max(1, want - 1);
+  const want = Math.min(GAP_MAX_BLANKS, Math.max(2, Math.round(n * 0.8)));
+  const openingsWanted = Math.max(1, Math.ceil(want * 0.6));
   const chosen: Span[] = [];
   const takenVerses = new Set<number>();
 
@@ -151,7 +163,7 @@ const planBlanks = (wordsByVerse: string[][], script: TextScript, rng: Rng): Spa
   const sorted = [...joinPool.filter((s) => !takenVerses.has(s.verseIndex)), ...joinPool.filter((s) => takenVerses.has(s.verseIndex))];
   for (const s of sorted) {
     if (chosen.length >= want) break;
-    if (chosen.some((c) => c.verseIndex === s.verseIndex && Math.abs(c.start - s.start) < 3)) continue;
+    if (chosen.some((c) => c.verseIndex === s.verseIndex && Math.abs(c.start - s.start) < 4)) continue;
     chosen.push(s);
     takenVerses.add(s.verseIndex);
   }
@@ -183,7 +195,7 @@ export const buildGapRound = (verses: DrillVerse[], opts: GapOptions = {}): GapR
   });
 
   // Planted words, kept at random and never on a blank.
-  const swapVerses = buildSwapVerses(verses);
+  const swapVerses = buildSwapVerses(verses, 3);
   const decoys = swapVerses.flatMap((sv, v) =>
     sv.tokens.flatMap((t, j) => (t.isDecoy && !blankAt.has(`${v}:${j}`) ? [{ v, j, index: t.index }] : []))
   );

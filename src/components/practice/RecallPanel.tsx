@@ -13,7 +13,7 @@ import { OptionsPopup } from '../session';
 import BuildUpDrill from '../drills/BuildUpDrill';
 import JigsawDrill from '../drills/JigsawDrill';
 import ScrambleDrill from '../drills/ScrambleDrill';
-import SpotSwapDrill from '../drills/SpotSwapDrill';
+import { GapPractice, OpeningsPractice, type FormatCredit } from './ReviewFormats';
 import OutlineDrill from '../drills/OutlineDrill';
 import SectionOrderDrill from '../drills/SectionOrderDrill';
 import WhichSectionDrill from '../drills/WhichSectionDrill';
@@ -180,12 +180,11 @@ export default function RecallPanel({
   overrideRef.current = overrideWordAsCorrect;
   const pressWord = useCallback((g: number) => overrideRef.current(g), []);
 
-  // The gear pop-up. Build up, Spot and First words show their own settings
-  // in it (each drill renders the pop-up, through `gear`); every other mode
-  // uses the one at the end of this component. All of them end with the
-  // by-hand log.
+  // The gear pop-up. Build up and First words show their own settings in it
+  // (each drill renders the pop-up, through `gear`); every other mode uses the
+  // one at the end of this component. All of them end with the by-hand log.
   const modeLabel = learnModes.find((m) => m.id === learnTab)?.label ?? 'Practice';
-  const drillOwnsGear = learnTab === 'buildUp' || learnTab === 'spotSwap' || learnTab === 'outline';
+  const drillOwnsGear = learnTab === 'buildUp' || learnTab === 'outline';
   // Memoized: the drills are React.memo, and a fresh object on every
   // keystroke would redraw the hidden ones while Recall is being typed.
   const logByHand = useMemo(() => (
@@ -208,7 +207,7 @@ export default function RecallPanel({
       title: `${modeLabel} settings`,
       footer: logByHand,
     });
-    return { buildUp: gearFor('buildUp'), spotSwap: gearFor('spotSwap'), outline: gearFor('outline') };
+    return { buildUp: gearFor('buildUp'), outline: gearFor('outline') };
   }, [optionsOpen, learnTab, onCloseOptions, modeLabel, logByHand]);
 
   // First words counts as a review: a verse said from its first words that
@@ -231,6 +230,19 @@ export default function RecallPanel({
       // Graded on the words it hid, not the first words it showed.
       graded: { kind: 'recall', accuracy: r.hiddenAccuracy },
     });
+  };
+
+  // Spot the gap and Openings count as a review like First words: each due
+  // verse is graded on what it was tested on, as a typed recall.
+  const creditFormat = (rows: FormatCredit[]) => {
+    rows.forEach((r) =>
+      onUpdateStatus([{ ...r.verse, status: 'memorized' }], 'memorized', 'type', {
+        perfect: false,
+        quiet: true,
+        via: 'mix',
+        graded: { kind: 'recall', accuracy: r.accuracy },
+      })
+    );
   };
 
   // Each verse of a finished Recall is graded on its own words (a verse past
@@ -590,9 +602,18 @@ export default function RecallPanel({
       <View className="flex-1" style={{ display: learnTab === 'scramble' ? 'flex' : 'none' }}>
         <ScrambleDrill verses={verses} />
       </View>
-      <View className="flex-1" style={{ display: learnTab === 'spotSwap' ? 'flex' : 'none' }}>
-        <SpotSwapDrill verses={verses} gear={gears.spotSwap} />
-      </View>
+      {/* Spot the gap and Openings build a round when opened (a long passage
+          isn't worked over while another tab shows), and both count. */}
+      {learnTab === 'spotSwap' && (
+        <View className="flex-1">
+          <GapPractice verses={verses} isDue={isDueForReview} onCredit={creditFormat} />
+        </View>
+      )}
+      {learnTab === 'openings' && (
+        <View className="flex-1">
+          <OpeningsPractice verses={verses} isDue={isDueForReview} onCredit={creditFormat} />
+        </View>
+      )}
       <View className="flex-1" style={{ display: learnTab === 'outline' ? 'flex' : 'none' }}>
         <OutlineDrill
           verses={verses}
