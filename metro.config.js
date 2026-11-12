@@ -10,6 +10,17 @@ const config = getDefaultConfig(__dirname);
 // is resolved correctly once this is disabled.
 config.resolver.unstable_enablePackageExports = false;
 
+// Launch time (optimization plan 4.1): run each file only when something
+// first uses it, instead of all ~2,000 at start-up. Plain React Native
+// projects ship with this on; Expo leaves it off and its tree-shaking guide
+// warns it "can change the execution order of side-effects". Checked
+// 2026-11-12: every demo screen draws the same as before, all checks pass,
+// the production web build starts, the iOS bundle compiles. Not checked on a
+// phone. If an OTA with this misbehaves, set inlineRequires back to false.
+config.transformer.getTransformOptions = async () => ({
+  transform: { experimentalImportSupport: true, inlineRequires: true },
+});
+
 // compromise (Spot the swap's part-of-speech tagger) publishes its entry
 // points only through package "exports", which is off just above. Point the
 // one entry the app uses at its prebuilt file.
