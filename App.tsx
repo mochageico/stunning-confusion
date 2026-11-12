@@ -33,6 +33,8 @@ import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import ThreadDrillScreen from './src/screens/ThreadDrillScreen';
 import GuidedLearningScreen from './src/screens/GuidedLearningScreen';
 import MixedReviewScreen from './src/screens/MixedReviewScreen';
+import ConstellationsScreen from './src/screens/ConstellationsScreen';
+import ConstellationPreviewScreen from './src/screens/ConstellationPreviewScreen';
 import TodayVersesScreen from './src/screens/TodayVersesScreen';
 import TakeawaysScreen from './src/screens/TakeawaysScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -171,6 +173,10 @@ function Screens({ state }: { state: AppState }) {
         return <GuidedLearningScreen state={state} />;
       case 'mixedReview':
         return <MixedReviewScreen state={state} />;
+      case 'constellations':
+        return <ConstellationsScreen state={state} />;
+      case 'constellationPreview':
+        return <ConstellationPreviewScreen state={state} />;
       default:
         return <HomeScreen state={state} />;
     }

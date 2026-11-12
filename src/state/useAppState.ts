@@ -156,6 +156,9 @@ export type ScreenName =
   | 'threadDrill'
   | 'guided'
   | 'mixedReview'
+  | 'mySky'
+  | 'constellations'
+  | 'constellationPreview'
   | 'takeaways'
   | 'memberProfile'
   | 'groupPlanDetail'
@@ -185,6 +188,9 @@ const HOME_TAB_SCREENS: ScreenName[] = [
   'threadDrill',
   'guided',
   'mixedReview',
+  'mySky',
+  'constellations',
+  'constellationPreview',
 ];
 
 // The Verses tab replaced the My Memory Work menu (2026-10-10): My Verses is

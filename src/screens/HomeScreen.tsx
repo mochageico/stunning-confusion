@@ -25,6 +25,7 @@ import { Dialog, GroupedList, ListRow, SectionHeader } from '../components/block
 import { ActionCard, IconTile, OverflowMenu, type MenuItem } from '../components/session';
 import { formatDate } from '../lib/format';
 import { useThemeColors } from '../components/theme';
+import { ExploreConstellationsButton } from '../components/map/ExploreConstellationsButton';
 import { BalanceNote, FirmUpCard, MovedSheet, WelcomeBackCard } from '../components/TodayCards';
 import { firmUpItems, movedNote, welcomeBack } from '../lib/todayCards';
 import { movedFromDay } from '../lib/passages';
@@ -371,6 +372,8 @@ export default function HomeScreen({ state }: { state: AppState }) {
                 onPress={today.listenToToday}
               />
             </GroupedList>
+
+            <ExploreConstellationsButton onPress={() => navigateTo('constellations')} />
           </>
         )}
       </ScrollView>
