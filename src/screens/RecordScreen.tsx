@@ -9,6 +9,8 @@ import { FadeInView } from '../components/ui';
 import { RecordPassageSheet, type RecordPassage } from '../components/RecordPassageSheet';
 import { textScriptFor, translationLabel } from '../data';
 import { isRtl } from '../lib/textScript';
+import { formatDuration } from '../lib/format';
+import { useRecordingSeconds } from '../lib/recordingClock';
 import type { TextScript } from '../types';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
@@ -28,7 +30,6 @@ export default function RecordScreen({ state }: { state: AppState }) {
   const {
     isRecording,
     isRecordingPaused,
-    recordingSeconds,
     recordingBook,
     recordingChapter,
     recordingTranslation,
@@ -112,24 +113,13 @@ export default function RecordScreen({ state }: { state: AppState }) {
   const script = textScriptFor(recordingTranslation, recordingBook);
 
   const resetDialog = (
-    <Dialog
+    <ResetRecordingDialog
       visible={showResetConfirm}
       onClose={() => setShowResetConfirm(false)}
-      title="Start over?"
-      message={`This throws away the ${formatTime(recordingSeconds)} recorded so far and every verse you tapped. It can't be undone.`}
-      actions={
-        <>
-          <AppButton variant="quiet" label="Keep recording" onPress={() => setShowResetConfirm(false)} />
-          <AppButton
-            variant="destructive"
-            label="Start over"
-            onPress={() => {
-              handleResetRecording();
-              setShowResetConfirm(false);
-            }}
-          />
-        </>
-      }
+      onReset={() => {
+        handleResetRecording();
+        setShowResetConfirm(false);
+      }}
     />
   );
 
@@ -147,7 +137,7 @@ export default function RecordScreen({ state }: { state: AppState }) {
             <AppText variant="title" className="flex-1 font-sans font-bold text-ink" numberOfLines={2}>
               {passageTitle}
             </AppText>
-            <Badge tone="danger" label={`${isRecordingPaused ? 'Paused' : 'Recording'} ${formatTime(recordingSeconds)}`} />
+            <RecordingClockBadge paused={isRecordingPaused} />
           </View>
           {/* Tapping a verse number as you start it is what times each
               verse, the whole mechanism behind verse-by-verse playback. */}
@@ -370,6 +360,35 @@ export default function RecordScreen({ state }: { state: AppState }) {
  * takes all the height its (non-scrolling) parent has left; without, it has
  * a fixed height inside a scrolling page.
  */
+// The two places that show the running time listen to the recording clock
+// themselves (src/lib/recordingClock.ts), so its once-a-second tick redraws
+// only them and not the whole screen.
+
+/** The red "Recording 2:14" badge at the top of a take. */
+function RecordingClockBadge({ paused }: { paused: boolean }) {
+  const seconds = useRecordingSeconds();
+  return <Badge tone="danger" label={`${paused ? 'Paused' : 'Recording'} ${formatDuration(seconds, 'clock')}`} />;
+}
+
+/** "Start over?", naming how much has been recorded so far. */
+function ResetRecordingDialog({ visible, onClose, onReset }: { visible: boolean; onClose: () => void; onReset: () => void }) {
+  const seconds = useRecordingSeconds();
+  return (
+    <Dialog
+      visible={visible}
+      onClose={onClose}
+      title="Start over?"
+      message={`This throws away the ${formatDuration(seconds, 'clock')} recorded so far and every verse you tapped. It can't be undone.`}
+      actions={
+        <>
+          <AppButton variant="quiet" label="Keep recording" onPress={onClose} />
+          <AppButton variant="destructive" label="Start over" onPress={onReset} />
+        </>
+      }
+    />
+  );
+}
+
 function ScriptList({
   verses,
   tapped,

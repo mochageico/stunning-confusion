@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 
 import { DEFAULT_TRANSLATION_ID, getBookByName, getTranslation } from '../data';
+import { getRecordingSeconds, setRecordingSeconds } from '../lib/recordingClock';
 
 // ============================================================================
 // RECORD TAB: PASSAGE AND MIC
@@ -26,10 +27,11 @@ interface RecorderDeps {
 export function useRecorder({ triggerToast, getFirstVerse, onStopped }: RecorderDeps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
-  // Snapshot of recordingSeconds taken the instant recording stops — the Save
-  // Recitation dialog reads this (not recordingSeconds directly), since the
-  // recording timer effect zeroes recordingSeconds out as soon as isRecording
+  // The running seconds live in src/lib/recordingClock.ts, not in state here:
+  // they tick once a second, and as state each tick redrew the whole app.
+  // Snapshot of the recording clock taken the instant recording stops — the
+  // Save Recitation dialog reads this (not the clock directly), since the
+  // recording timer effect zeroes the clock out as soon as isRecording
   // flips false, well before the dialog is dismissed.
   const [lastRecordingDuration, setLastRecordingDuration] = useState(0);
   // Tap-to-mark verse timestamps (Option 1 of timestamp automation): verse
@@ -90,7 +92,7 @@ export function useRecorder({ triggerToast, getFirstVerse, onStopped }: Recorder
   // Real audio recorder (mic capture) for the Record tab.
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   // Captured the instant recording stops — audioRecorder.currentTime resets
-  // once stop() resolves, and recordingSeconds gets zeroed by the recording
+  // once stop() resolves, and the recording clock gets zeroed by the recording
   // timer effect (below) well before the user taps "Confirm & Save" in the
   // dialog, so neither is safe to read directly inside saveRecordedAudio.
   const capturedDurationRef = useRef(0);
@@ -147,7 +149,7 @@ export function useRecorder({ triggerToast, getFirstVerse, onStopped }: Recorder
   };
 
   const handleStopRecording = async () => {
-    capturedDurationRef.current = Math.round(audioRecorder.currentTime) || recordingSeconds || 1;
+    capturedDurationRef.current = Math.round(audioRecorder.currentTime) || getRecordingSeconds() || 1;
     setLastRecordingDuration(capturedDurationRef.current);
     try {
       await audioRecorder.stop();
@@ -213,8 +215,6 @@ export function useRecorder({ triggerToast, getFirstVerse, onStopped }: Recorder
     isRecording,
     setIsRecording,
     isRecordingPaused,
-    recordingSeconds,
-    setRecordingSeconds,
     lastRecordingDuration,
     verseTapTimestamps,
     recordingBook,

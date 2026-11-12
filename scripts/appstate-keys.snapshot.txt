@@ -236,7 +236,6 @@ recordingChapter: number
 recordingChapterVerses: { verse: number; text: string; }[]
 recordingRangeEnd: number | null
 recordingRangeStart: number | null
-recordingSeconds: number
 recordingSelectedVerses: { verse: number; text: string; }[]
 recordingTranslation: string
 refreshCommunity: () => Promise<unknown>

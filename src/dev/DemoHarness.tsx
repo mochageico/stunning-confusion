@@ -61,6 +61,7 @@ import type { AppState } from '../state/useAppState';
 import type { CircleMember, DMThread, SharedTakeaway, TakeawayReply } from '../types';
 import { formatLabel } from '../lib/formatNames';
 import { setSkyFocus } from '../lib/skyFocus';
+import { setRecordingSeconds } from '../lib/recordingClock';
 import { weekBounds } from '../lib/circleTotals';
 import { openSettingsAt } from '../screens/SettingsScreen';
 import { localDayKey } from '../lib/logicalDate';
@@ -643,6 +644,9 @@ export function useDemoState(real: AppState): AppState {
   // The live app state, for poking at actions from the browser console
   // (window.__demoState.setGuidedSetAside(...)). Web demo mode only.
   if (DEMO_ENABLED && Platform.OS === 'web') (globalThis as any).__demoState = real;
+  // The recording clock is not app state, so it gets its own console handle
+  // (window.__setRecordingSeconds(135) moves the Record tab's timer).
+  if (DEMO_ENABLED && Platform.OS === 'web') (globalThis as any).__setRecordingSeconds = setRecordingSeconds;
 
   // Wait for the real auth listener to settle first -- its signed-out branch
   // resets the queue, which would wipe a seed applied any earlier.
@@ -653,6 +657,8 @@ export function useDemoState(real: AppState): AppState {
     else if (params.get('empty') !== '1') real.setMemoryQueue(withDemoFirmUp(params.get('firm') === '1', (s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : s === 'map' || s === 'sky' ? buildQueue(MAP_SPECS) : buildQueue()) as any) as any);
     real.setUserRecordings(recordings as any);
     if (params.get('playing') === '1') real.setPlayingRecProgress(40);
+    // `recording=1` (see the overrides below): the take is 2:14 in.
+    if (params.get('recording') === '1') setRecordingSeconds(134);
     // The Record tab starts with no passage until one is chosen; the demo
     // picks Romans 8 unless `nopassage=1` asks for the empty state.
     if (params.get('nopassage') !== '1') {
@@ -1001,7 +1007,6 @@ export function useDemoState(real: AppState): AppState {
   // `recording=1` shows the Record tab mid-take, without the microphone.
   if (params.get('recording') === '1') {
     overrides.isRecording = true;
-    overrides.recordingSeconds = 134;
     overrides.verseTapTimestamps = { 1: 0, 2: 6, 3: 13 };
   }
   // `playing=1` shows the now-playing bar above the tabs, without real audio.

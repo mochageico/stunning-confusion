@@ -451,7 +451,6 @@ export function useAppState() {
   const {
     isRecording,
     isRecordingPaused,
-    recordingSeconds,
     lastRecordingDuration,
     verseTapTimestamps,
     recordingBook,
@@ -3559,7 +3558,6 @@ export function useAppState() {
     creditGuided,
     isRecording,
     isRecordingPaused,
-    recordingSeconds,
     lastRecordingDuration,
     verseTapTimestamps,
     recordingBook, setRecordingBook,
