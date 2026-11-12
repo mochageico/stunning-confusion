@@ -1,10 +1,13 @@
 // Regression assertions for the constellation rules (src/lib/constellations.ts),
 // run by `npm run check:constellations`.
 
-import type { Echo, QueueItem, StarRef, VerseLink } from '../types';
+import type { Constellation, Echo, QueueItem, StarRef, VerseLink } from '../types';
 import { CONSTELLATIONS } from '../content/constellations';
 import { starVerses, walkCredit, walkOrder } from './mapWalk';
-import { canLabel, echoesFor, echoVisible, isLearned, starIsTop, starKey, starLit, starStage, suggestedNext, userConstellations } from './constellations';
+import {
+  canLabel, echoesFor, echoVisible, EMPTY_SKY, isComplete, isLearned, joinedTo, migrateSky, newlyFound, nextToLearn, progress, revealedStars,
+  searchConstellations, skyAdd, skyMarkFound, skyRemove, starIsTop, starKey, starLit, starStage, startStarId, suggestedNext, userConstellations,
+} from './constellations';
 
 let failures = 0;
 function check(label: string, condition: boolean, detail?: unknown) {
@@ -110,6 +113,72 @@ check('self-check still counts a due review', walkCredit(rev, { ...base, mode: '
 const lrn = item('Psalms', 23, 1, learning);
 check('learning needs graded and perfect', walkCredit(lrn, { ...base, perfect: true }).kind === 'touch' && walkCredit(lrn, { ...base, perfect: true, mode: 'self' }).kind === null && walkCredit(lrn, base).kind === null);
 check('a Complete verse is practice', walkCredit(item('Psalms', 23, 1, { status: 'retained' as const }), base).kind === null);
+
+// ---- Constellations 2: the mystery (CONSTELLATION_SKY_PLAN.md, stage 1) ----
+const sref = (id: string, r: StarRef) => ({ id, ref: r, x: 0, y: 0 });
+const sk: Constellation = {
+  id: 'shepherd', title: 'The Shepherd', description: 'He knows his own.', guide: '', start: 'a',
+  stars: [sref('a', ref('John', 10, 11)), sref('b', ref('John', 10, 14)), sref('c', ref('Psalms', 23, 1, 4)), sref('d', ref('Isaiah', 40, 11)), sref('e', ref('Ezekiel', 34, 11, 12))],
+  lines: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'd' }, { from: 'd', to: 'e' }],
+};
+const sv = (cn: Constellation, q: QueueItem[], f: string[] = []) => [...revealedStars(cn, q, f)].sort().join();
+const holdAll = (book: string, ch: number, a: number, b: number, over: Partial<QueueItem> = {}) => Array.from({ length: b - a + 1 }, (_, i) => item(book, ch, a + i, over));
+
+check('start defaults to the first star', startStarId({ ...sk, start: undefined }) === 'a' && startStarId(sk) === 'a');
+check('a bad start falls back to the first star', startStarId({ ...sk, start: 'zzz' }) === 'a');
+check('joined stars, either direction', joinedTo(sk, 'c').join() === 'b,d', joinedTo(sk, 'c'));
+check('nothing held: the start and its neighbors only', sv(sk, []) === 'a,b', sv(sk, []));
+check('a held star that is still learning shows itself only', sv(sk, [item('Psalms', 23, 1, learning)]) === 'a,b,c', sv(sk, [item('Psalms', 23, 1, learning)]));
+check('a learned middle star shows both neighbors', sv(sk, holdAll('Psalms', 23, 1, 4, daily)) === 'a,b,c,d', sv(sk, holdAll('Psalms', 23, 1, 4, daily)));
+check('learning the start shows nothing new', sv(sk, [item('John', 10, 11, daily)]) === 'a,b');
+check('learning a neighbor of the start shows the next star', sv(sk, [item('John', 10, 14, daily)]) === 'a,b,c');
+check('a verse held far down shows itself, not its neighbors, until learned', sv(sk, [item('Ezekiel', 34, 11, learning)]) === 'a,b,e', sv(sk, [item('Ezekiel', 34, 11, learning)]));
+check('a star of several verses is not learned with one verse held', sv(sk, [item('Psalms', 23, 1, daily)]) === 'a,b,c');
+check('found stays found after the verse is removed', sv(sk, [], ['c', 'd']) === 'a,b,c,d', sv(sk, [], ['c', 'd']));
+check('found ignores star ids that are not in the constellation', sv(sk, [], ['nope']) === 'a,b');
+check('newlyFound: shown now, not yet saved', newlyFound(sk, [], []).join() === 'a,b' && newlyFound(sk, [], ['a', 'b']).length === 0);
+check('newlyFound lists a star the learned verse just uncovered', newlyFound(sk, [item('John', 10, 14, daily)], ['a', 'b']).join() === 'c');
+check('newlyFound never lists a found star', newlyFound(sk, [], ['c']).join() === 'a,b');
+check('not complete with stars hidden', !isComplete(sk, revealedStars(sk, [])));
+check('complete when every star shows', isComplete(sk, revealedStars(sk, [], ['a', 'b', 'c', 'd', 'e'])));
+check('an empty constellation is never complete', !isComplete({ ...sk, stars: [], lines: [] }, new Set()));
+const pq = holdAll('Psalms', 23, 1, 4, daily);
+const pr = progress(sk, pq, revealedStars(sk, pq));
+check('progress counts showing and held stars', pr.found === 4 && pr.total === 5 && pr.known === 1, pr);
+check('next to learn with nothing held: what is joined to the start', nextToLearn(sk, [], revealedStars(sk, [])).join() === 'b', nextToLearn(sk, [], revealedStars(sk, [])));
+const lq = [item('John', 10, 11, daily), item('John', 10, 14, daily)];
+check('next to learn follows learned stars, skips learned ones', nextToLearn(sk, lq, revealedStars(sk, lq)).join() === 'c', nextToLearn(sk, lq, revealedStars(sk, lq)));
+check('a hidden star is never next', !nextToLearn(sk, [], revealedStars(sk, [])).includes('c'));
+
+// Search.
+const two = [sk, CONSTELLATIONS[0]];
+const found = (q: string) => searchConstellations(two, q).map((x) => x.id).join();
+check('empty search returns everything', found('') === 'shepherd,rest-and-trust' && found('   ') === 'shepherd,rest-and-trust');
+check('search by title word', found('shepherd') === 'shepherd' && found('REST') === 'rest-and-trust', [found('shepherd'), found('REST')]);
+check('search by description', found('tired hearts') === 'rest-and-trust', found('tired hearts'));
+check('search by book name', found('john') === 'shepherd' && found('psalm').includes('rest-and-trust'), [found('john'), found('psalm')]);
+check('search by chapter reference', found('Psalm 23') === 'shepherd,rest-and-trust', found('Psalm 23'));
+check('search by short reference with verse', found('Ps 23:1') === 'shepherd,rest-and-trust' && found('ps 23:9') === '', [found('Ps 23:1'), found('ps 23:9')]);
+check('search by numbered book', found('1 Pet 5:7') === 'rest-and-trust' && found('1 peter 5') === 'rest-and-trust', [found('1 Pet 5:7'), found('1 peter 5')]);
+check('search by verse range overlap', found('john 10:12-15') === 'shepherd' && found('john 10:1-3') === '', [found('john 10:12-15'), found('john 10:1-3')]);
+check('search for nothing finds nothing', found('zebra') === '');
+
+// The sky doc.
+const s1 = skyAdd(EMPTY_SKY, sk, pq);
+check('adding a constellation saves what shows as found', s1.added.join() === 'shepherd' && s1.found.shepherd.slice().sort().join() === 'a,b,c,d', s1);
+check('adding twice changes nothing', skyAdd(s1, sk, pq) === s1);
+const s2 = skyRemove(s1, 'shepherd');
+check('removing keeps found stars', s2.added.length === 0 && s2.found.shepherd.length === 4, s2);
+check('removing what is not there changes nothing', skyRemove(EMPTY_SKY, 'x') === EMPTY_SKY);
+check('adding back brings the found stars back', skyAdd(s2, sk, []).found.shepherd.length === 4);
+check('markFound adds and de-duplicates', skyMarkFound(s1, 'shepherd', ['c', 'e']).found.shepherd.slice().sort().join() === 'a,b,c,d,e');
+check('markFound with nothing new returns the same sky', skyMarkFound(s1, 'shepherd', ['a']) === s1);
+const mq = [...pq, item('Matthew', 11, 28)];
+const mig = migrateSky([sk, ...CONSTELLATIONS], mq, []);
+check('migration adds constellations the user holds a star in', mig.added.join() === 'shepherd,rest-and-trust', mig.added);
+check('migration skips hidden ones', migrateSky([sk, ...CONSTELLATIONS], mq, ['shepherd']).added.join() === 'rest-and-trust');
+check('migration adds nothing when nothing is held', migrateSky([sk, ...CONSTELLATIONS], [], []).added.length === 0);
+check('migration saves what shows as found', (mig.found['rest-and-trust'] ?? []).includes('matt11'), mig.found);
 
 if (failures > 0) {
   console.log(`\n${failures} check(s) failed.`);

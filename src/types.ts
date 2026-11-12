@@ -897,8 +897,23 @@ export interface Constellation {
   title: string;
   description: string;
   guide: string;
+  /** The starting star (a star id): you see it, and the stars joined to it, from the first day. Defaults to the first star. */
+  start?: string;
   stars: { id: string; ref: StarRef; x: number; y: number }[];
-  lines: { from: string; to: string }[];
+  /** `note` is the guide's note on this line, shown once both ends are found. */
+  lines: { from: string; to: string; note?: string }[];
+}
+
+/**
+ * Constellations 2 (CONSTELLATION_SKY_PLAN.md): the user's own sky, one doc at
+ * users/{uid}/mapLayout/sky (the existing mapLayout/{layoutId} rule covers it).
+ * `added` = constellation ids in My sky, in the order added. `found` = per
+ * constellation, the star ids ever revealed: a star stays found for good.
+ */
+export interface SkyState {
+  added: string[];
+  found: Record<string, string[]>;
+  v: 1;
 }
 
 /** An NT passage quoting or echoing an OT one (src/content/echoes.json). */

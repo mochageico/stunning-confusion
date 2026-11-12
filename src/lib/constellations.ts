@@ -1,4 +1,4 @@
-import type { Constellation, Echo, QueueItem, StarRef, VerseLink } from '../types';
+import type { Constellation, Echo, QueueItem, SkyState, StarRef, VerseLink } from '../types';
 import { STAGE_ORDER, VerseStage, isTopStep, verseStage } from './stageProgress';
 
 // ============================================================================
@@ -144,3 +144,180 @@ export const echoesFor = (ref: StarRef, echoes: Echo[]): Echo[] =>
 
 /** Once the user holds both ends, the echo is found and shows for good. */
 export const echoVisible = (echo: Echo, queue: QueueItem[]): boolean => starLit(echo.nt, queue) && starLit(echo.ot, queue);
+
+// ============================================================================
+// CONSTELLATIONS 2 -- the mystery (CONSTELLATION_SKY_PLAN.md, stage 1)
+// ----------------------------------------------------------------------------
+// A constellation starts with only its starting star and the stars joined to
+// it showing. Learning a verse (LEARNED_STAGE or later, `isLearned`) shows every
+// star joined to it. A verse the user already holds shows at once. A star that
+// has shown stays found forever (the saved `found` list), whatever happens to
+// the verse afterward. Pure, like the rest of this file.
+// ============================================================================
+
+/** The starting star's id: `start`, else the first star. Empty string if there are no stars. */
+export const startStarId = (c: Constellation): string => {
+  if (c.start && c.stars.some((s) => s.id === c.start)) return c.start;
+  return c.stars[0]?.id ?? '';
+};
+
+/** Ids of the stars joined to this one by a line, either direction, in the constellation's star order. */
+export function joinedTo(c: Constellation, starId: string): string[] {
+  const out = new Set<string>();
+  for (const l of c.lines) {
+    if (l.from === starId) out.add(l.to);
+    else if (l.to === starId) out.add(l.from);
+  }
+  return c.stars.filter((s) => out.has(s.id)).map((s) => s.id);
+}
+
+/**
+ * Star ids showing right now: the start, the stars joined to it, every star
+ * the user holds, the stars joined to a learned star, and every star in `found`.
+ */
+export function revealedStars(c: Constellation, queue: QueueItem[], found: readonly string[] = []): Set<string> {
+  const out = new Set<string>();
+  const start = startStarId(c);
+  if (start) {
+    out.add(start);
+    joinedTo(c, start).forEach((id) => out.add(id));
+  }
+  for (const s of c.stars) {
+    if (!starLit(s.ref, queue)) continue;
+    out.add(s.id);
+    if (isLearned(s.ref, queue)) joinedTo(c, s.id).forEach((id) => out.add(id));
+  }
+  const ids = new Set(c.stars.map((s) => s.id));
+  for (const id of found) if (ids.has(id)) out.add(id);
+  return out;
+}
+
+/** Stars that show now but are not yet in `found` (so they are new), in star order. */
+export function newlyFound(c: Constellation, queue: QueueItem[], found: readonly string[] = []): string[] {
+  const have = new Set(found);
+  const now = revealedStars(c, queue, found);
+  return c.stars.filter((s) => now.has(s.id) && !have.has(s.id)).map((s) => s.id);
+}
+
+/** Every star shows: the full shape draws in. */
+export const isComplete = (c: Constellation, revealed: ReadonlySet<string>): boolean =>
+  c.stars.length > 0 && c.stars.every((s) => revealed.has(s.id));
+
+/**
+ * How far along: `found` showing stars, `total` stars, `known` showing stars the
+ * user holds a verse of (the ones drawn filled).
+ */
+export function progress(c: Constellation, queue: QueueItem[], revealed: ReadonlySet<string>): { found: number; total: number; known: number } {
+  let found = 0;
+  let known = 0;
+  for (const s of c.stars) {
+    if (!revealed.has(s.id)) continue;
+    found++;
+    if (starLit(s.ref, queue)) known++;
+  }
+  return { found, total: c.stars.length, known };
+}
+
+/**
+ * The NEXT marker: showing stars not yet learned that are joined to a learned
+ * star or to the starting star. Star ids, in star order.
+ */
+export function nextToLearn(c: Constellation, queue: QueueItem[], revealed: ReadonlySet<string>): string[] {
+  const byId = new Map(c.stars.map((s) => [s.id, s]));
+  const start = startStarId(c);
+  const out = new Set<string>();
+  for (const l of c.lines) {
+    for (const [from, to] of [[l.from, l.to], [l.to, l.from]] as const) {
+      const a = byId.get(from);
+      const b = byId.get(to);
+      if (!a || !b || !revealed.has(to) || isLearned(b.ref, queue)) continue;
+      if (from === start || isLearned(a.ref, queue)) out.add(to);
+    }
+  }
+  return c.stars.filter((s) => out.has(s.id)).map((s) => s.id);
+}
+
+// ---- the sky doc (users/{uid}/mapLayout/sky), as pure transforms -------------
+
+export const EMPTY_SKY: SkyState = { added: [], found: {}, v: 1 };
+
+const union = (a: readonly string[], b: Iterable<string>): string[] => [...new Set([...a, ...b])];
+
+/**
+ * Puts a constellation in My sky. Whatever shows right now is saved as found
+ * at once, so the reveal moment only plays for stars that appear later. Adding
+ * one that is already there changes nothing.
+ */
+export function skyAdd(sky: SkyState, c: Constellation, queue: QueueItem[]): SkyState {
+  if (sky.added.includes(c.id)) return sky;
+  return {
+    ...sky,
+    added: [...sky.added, c.id],
+    found: { ...sky.found, [c.id]: union(sky.found[c.id] ?? [], revealedStars(c, queue, sky.found[c.id])) },
+  };
+}
+
+/** Takes a constellation out of My sky. Its found stars are kept, so adding it back brings them back. */
+export const skyRemove = (sky: SkyState, id: string): SkyState =>
+  sky.added.includes(id) ? { ...sky, added: sky.added.filter((x) => x !== id) } : sky;
+
+/** Saves stars as found for good. Returns the same object when nothing is new. */
+export function skyMarkFound(sky: SkyState, id: string, starIds: readonly string[]): SkyState {
+  const have = sky.found[id] ?? [];
+  const add = starIds.filter((s) => !have.includes(s));
+  if (add.length === 0) return sky;
+  return { ...sky, found: { ...sky.found, [id]: union(have, add) } };
+}
+
+/**
+ * The first sky, for someone who has none: every curated constellation they
+ * hold a star in and have not hidden (the old `hiddenConstellations` preference),
+ * with what shows now saved as found.
+ */
+export function migrateSky(list: readonly Constellation[], queue: QueueItem[], hidden: readonly string[]): SkyState {
+  let sky = EMPTY_SKY;
+  for (const c of list) {
+    if (hidden.includes(c.id) || !c.stars.some((s) => starLit(s.ref, queue))) continue;
+    sky = skyAdd(sky, c, queue);
+  }
+  return sky;
+}
+
+const normBook = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const wordsOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+
+/** "Psalm 23", "Ps 23:1", "1 pet 5:7-8", "john 3:16" -> book as typed, chapter, optional verse range. Null if it isn't one. */
+function parseRefQuery(q: string): { book: string; chapter: number; start?: number; end?: number } | null {
+  const m = /^\s*([1-3]?\s*[a-z][a-z .]*?)\.?\s*(\d+)(?:\s*:\s*(\d+)(?:\s*[-–—]\s*(\d+))?)?\s*$/i.exec(q);
+  if (!m) return null;
+  const book = normBook(m[1]);
+  if (!book) return null;
+  const start = m[3] ? Number(m[3]) : undefined;
+  return { book, chapter: Number(m[2]), start, end: m[4] ? Number(m[4]) : start };
+}
+
+/** The typed book is this book's name, its first letters ("ps"), or its name without the s ("psalm"). */
+const bookMatches = (typed: string, name: string): boolean => {
+  const n = normBook(name);
+  return n.startsWith(typed) || (n.endsWith('s') && n.slice(0, -1) === typed);
+};
+
+/**
+ * Search the browse page: every word typed matches the title, the description
+ * or a verse's book; or the whole text is a reference ("Psalm 23", "Ps 23:1",
+ * "john 3:16") that lands inside one of its stars. An empty query returns everything.
+ */
+export function searchConstellations(list: readonly Constellation[], query: string): Constellation[] {
+  const words = wordsOf(query);
+  if (words.length === 0) return [...list];
+  const ref = parseRefQuery(query);
+  return list.filter((c) => {
+    if (ref && c.stars.some((s) => {
+      const r = s.ref;
+      if (!bookMatches(ref.book, r.book) || r.chapter !== ref.chapter) return false;
+      return ref.start === undefined || (ref.start <= r.end && (ref.end ?? ref.start) >= r.start);
+    })) return true;
+    const hay = [...wordsOf(`${c.title} ${c.description}`), ...c.stars.flatMap((s) => wordsOf(s.ref.book))];
+    return words.every((w) => hay.some((h) => h.startsWith(w) || (w.length > 2 && h.includes(w))));
+  });
+}

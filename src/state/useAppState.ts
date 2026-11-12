@@ -91,6 +91,7 @@ import { useChapterSections } from './useChapterSections';
 import { useTakeaways } from './useTakeaways';
 import { useVerseLinks } from './useVerseLinks';
 import { useMapLayout } from './useMapLayout';
+import { useSky } from './useSky';
 import { useCircleTakeaways } from './useCircleTakeaways';
 import { useCircleTotals } from './useCircleTotals';
 import { isStop, nextAsk, sectionStatuses, takeawayId } from '../lib/takeaways';
@@ -379,6 +380,9 @@ export function useAppState() {
   // stars settled (see useVerseLinks / useMapLayout, CONSTELLATION_PLAN.md).
   const { verseLinks, loadVerseLinks, addVerseLink, relabelVerseLink, deleteVerseLink } = useVerseLinks({ user });
   const { mapLayout, loadMapLayout, saveMapLayout } = useMapLayout({ user });
+  // My sky: which constellations the user added and which stars they have found
+  // (CONSTELLATION_SKY_PLAN.md). Reads the queue when something is added.
+  const { sky, skyReady, loadSky, addToSky, removeFromSky, markFound } = useSky({ user, getQueue: () => memoryQueueRef.current });
   // Takeaways shared with the user's circles, and their replies (see useCircleTakeaways).
   const {
     circleTakeaways,
@@ -1690,6 +1694,7 @@ export function useAppState() {
         loadTakeaways(currentUser.uid),
         loadVerseLinks(currentUser.uid),
         loadMapLayout(currentUser.uid),
+        loadSky(currentUser.uid),
       ]);
 
       triggerToast('Synced!');
@@ -3827,6 +3832,11 @@ export function useAppState() {
     deleteVerseLink,
     mapLayout,
     saveMapLayout,
+    sky,
+    skyReady,
+    addToSky,
+    removeFromSky,
+    markFound,
   };
 }
 

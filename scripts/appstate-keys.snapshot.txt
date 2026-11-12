@@ -25,6 +25,7 @@ activityEvents: ActivityEvent[]
 activityLast15Days: { day: string; weekday: number; month: number; practice: number; reviews: number; count: number; }[]
 activityLast90Days: { day: string; weekday: number; month: number; practice: number; reviews: number; count: number; }[]
 addChapterPhoto: (book: string, chapter: number, source: PhotoSource) => Promise<boolean>
+addToSky: (id: string) => void
 addVerseLink: (a: StarRef, b: StarRef, extra?: { label?: string | undefined; curated?: string | undefined; solo?: boolean | undefined; }) => Promise<VerseLink>
 addVerseRangeToQueue: (book: string, chapter: number, startVerse: number, endVerse: number, translationId?: string) => Promise<{ added: number; alreadyThere: number; missingText: number; error?: string | undefined; }>
 addVersesToGroupPlan: (circleId: string, planId: string, book: string, chapter: number, startVerse: number, endVerse: number) => Promise<void>
@@ -182,6 +183,7 @@ loadingMyCircles: boolean
 loadingPublicCircles: boolean
 mapLayout: MapLayout | null
 markAccountabilityNudgeRead: (nudgeId: string) => Promise<void>
+markFound: (id: string, starIds: string[]) => void
 masteryTouches: number
 maxReviewCap: number
 maybeAskForNotifications: (reason: string) => Promise<void>
@@ -255,6 +257,7 @@ refreshCommunity: () => Promise<unknown>
 relabelVerseLink: (id: string, label: string) => Promise<void>
 removeCircleMember: (circleId: string, memberUid: string) => Promise<void>
 removeFriend: (friend: Friend) => Promise<void>
+removeFromSky: (id: string) => void
 removeQueueItems: (verseIds: string[]) => (() => void) | undefined
 removeRecordingDownload: (recording: Recording) => Promise<void>
 reorderChapterPhotos: (orderedIds: string[]) => Promise<void>
@@ -397,6 +400,8 @@ showCreatePlanForm: boolean
 showOnboarding: boolean
 showTour: boolean | "questions"
 signOut: () => Promise<void>
+sky: SkyState
+skyReady: boolean
 startPractice: (mode: "listen" | "learn", passageVerses: VerseState[], opts?: { listenSource?: ListenSource | undefined; learnTab?: LearnMode | undefined; } | undefined) => void
 startRecordingForRequest: (scope: "circle" | "dm", containerId: string, message: ChatMessage) => void
 startReviewSession: (groups: QueueItem[][]) => void

@@ -793,6 +793,20 @@ export function useDemoState(real: AppState): AppState {
       real.navigateTo(s as any);
   }, [real.loadingAuth]);
 
+  // My sky (CONSTELLATION_SKY_PLAN.md): two constellations added once the demo
+  // queue is in. Rest and trust is partly found (its learned Matthew 11 star
+  // uncovers 1 Peter 5:7); Desiring & Delighting in God is just added, so only
+  // its starting star and the ones joined to it show. nosky=1 leaves the sky
+  // empty. On screen only: with no signed-in user nothing is written.
+  const skySeeded = useRef(false);
+  useEffect(() => {
+    if (!DEMO_ENABLED || skySeeded.current || real.loadingAuth || real.memoryQueue.length === 0) return;
+    skySeeded.current = true;
+    if (params.get('nosky') === '1') return;
+    real.addToSky('rest-and-trust');
+    real.addToSky('desiring-and-delighting-in-god');
+  }, [real.loadingAuth, real.memoryQueue.length]);
+
   if (!DEMO_ENABLED) return real;
   if (s === 'auth') return { ...real, user: null, loadingAuth: false };
   if (s === 'loading') return { ...real, loadingAuth: true };
@@ -815,6 +829,7 @@ export function useDemoState(real: AppState): AppState {
     loadingAuth: false,
     // Sample data is all in place already; nothing to wait for.
     queueReady: true,
+    skyReady: true,
     myCircles: circles,
     loadingMyCircles: false,
     publicCircles,
