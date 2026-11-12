@@ -65,3 +65,9 @@ translations a stranger can pick.
   file and deployed (`npx firebase-tools deploy --only firestore:indexes
   --non-interactive`). Check with `npx firebase-tools firestore:indexes
   --database ai-studio-da1c3045-26bb-470c-883c-0b120417bcda`.
+- **Revisit: chat unread dots** (`useSocial.ts`, the "One tiny listener per
+  circle" effect). Each circle a person is in keeps one live database
+  listener open for its newest message. Fine for a few circles. If people
+  start joining many (say 10 or more), revisit: each listener is a little
+  phone memory and one read per new message. Left as is in optimization plan
+  Phase 5 (2026-11-12).
