@@ -126,11 +126,3 @@ export function useAppFields<K extends Key>(...keys: K[]): Pick<AppState, K> {
   };
   return useSyncExternalStore(subscribe, read, read);
 }
-
-/**
- * The whole app state, redrawing on every change -- the old way, for code
- * not yet moved to useAppFields.
- */
-export function useWholeAppState(): AppState {
-  return useSyncExternalStore(subscribe, now, now);
-}

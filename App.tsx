@@ -7,8 +7,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { BookOpen, CloudOff, Headphones, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
 
-import { AppState, useAppState } from './src/state/useAppState';
-import { notifyAppState, setAppState, useAppFields, useWholeAppState } from './src/state/appStore';
+import { useAppState } from './src/state/useAppState';
+import { notifyAppState, setAppState, useAppFields } from './src/state/appStore';
 import PracticeModals from './src/components/PracticeModals';
 import { FadeInView, NumericKeyboardAccessory, useKeyboardHeight } from './src/components/ui';
 import { BottomBars, FloatingTabBar, PageFade, useAboveTabBar } from './src/components/TabBar';
@@ -82,11 +82,6 @@ import { useThemeColors } from './src/components/theme';
 // The original web app has no router — it's a hand-rolled state machine on
 // `currentTab` / `currentScreen`. This mirrors that structure 1:1 instead of
 // introducing React Navigation, to keep the port low-risk.
-/** Temporary (Phase 2): a screen not yet on useAppFields gets the whole state. */
-function W(Screen: React.ComponentType<{ state: AppState }>) {
-  return <WithWholeState>{(s) => <Screen state={s} />}</WithWholeState>;
-}
-
 function CommunityScreen() {
   const state = useAppFields('viewingGroupDetail', 'communitySubView', 'previewCircle');
   if (state.viewingGroupDetail) return <CommunityGroupDetailScreen />;
@@ -527,11 +522,6 @@ function AppShell() {
       <NumericKeyboardAccessory />
     </View>
   );
-}
-
-/** Temporary (Phase 2.1): hands the whole state to code not yet on useAppFields. */
-function WithWholeState({ children }: { children: (state: AppState) => React.ReactNode }) {
-  return <>{children(useWholeAppState())}</>;
 }
 
 function PracticeModalHost() {
