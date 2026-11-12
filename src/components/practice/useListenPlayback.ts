@@ -4,8 +4,8 @@ import { setAudioModeAsync, useAudioPlayer, type AudioPlayer, type AudioStatus }
 import { resolvePlaybackUrl } from '../../lib/studioAudio';
 import { VerseState, QueueItem, Recording, ChapterPhoto, ListenPlaylist } from '../../types';
 import { isReviewDue } from '../../state/useAppState';
-import { libraryTimingsKey, resolveVerseAudio } from '../../lib/libraryAudio';
-import { useLibraryTimings } from '../../state/useLibraryAudio';
+import { libraryReaderFor, libraryTimingsKey, resolveVerseAudio } from '../../lib/libraryAudio';
+import { useLibraryTimingsState } from '../../state/useLibraryAudio';
 import { chapterPhotoKey, sortChapterPhotos } from '../../lib/chapterPhotos';
 import { groupPassages, shufflePassages } from './shared';
 
@@ -252,9 +252,23 @@ export function useListenPlayback({
   // no verseTimestamps entry for it, simply has no segment -- it's still
   // shown in the reading pane (so the list doesn't mysteriously skip verses)
   // but playback skips over it, since there's nothing to play.
-  // Hebrew Old Testament verses fall back to the built-in reading, whose
-  // timings load per chapter (see lib/libraryAudio.ts).
-  const libraryTimings = useLibraryTimings(activePlayVerses);
+  // BSB and Hebrew Old Testament verses fall back to the built-in reading,
+  // whose timings load per chapter (see lib/libraryAudio.ts).
+  const { timings: libraryTimings, pending: libraryPending } = useLibraryTimingsState(activePlayVerses);
+  // The built-in reading these verses would use, if any -- for Listen's empty
+  // state, to tell "still loading" or "couldn't load" from "no audio for this
+  // translation".
+  const libraryReader = useMemo(() => {
+    for (const v of activePlayVerses) {
+      const r = libraryReaderFor(v.translationId, v.book);
+      if (r) return r;
+    }
+    return null;
+  }, [activePlayVerses]);
+  const translationIds = useMemo(
+    () => [...new Set(activePlayVerses.map((v) => v.translationId).filter((t): t is string => !!t))],
+    [activePlayVerses]
+  );
   const playableSegments = useMemo(() => {
     return activePlayVerses.map((verseObj) => {
       const key = libraryTimingsKey(verseObj.translationId, verseObj.book, verseObj.chapter);
@@ -978,6 +992,9 @@ export function useListenPlayback({
     verseCardRefs,
     playableSegments,
     hasAnyAudio,
+    libraryPending,
+    libraryReader,
+    translationIds,
     currentSegment,
     photoVerse,
     photosForCurrentChapter,

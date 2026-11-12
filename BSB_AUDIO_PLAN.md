@@ -19,7 +19,9 @@ files by name when committing (never `git add -A`). After each stage, update the
 2026-11-05 (99.93% of clips clean, every verse keeps audio); stage 4 done
 2026-11-05 (1.50 GB uploaded to `audioLibrary/souer/`); stage 5 done
 2026-11-05 (BSB verses play the reading in Listen, Coming up next and the
-chapter page; not yet on phones). Stage 6 next. Stage 0
+chapter page; not yet on phones); stage 6 built 2026-11-11 on
+`feat/bsb-audio-stage6` (empty state, Coming up tip, Hear it now on setup), to
+merge after `feat/mixed-review-formats`. Phone checks left. Stage 0
 found that Souer does **not** read section headings or cross-references, so
 stages 1–2 are simpler than written; see stage 0's "As built". The exception
 is Song of Songs speaker labels and the Proverbs 22–24 "Saying" headings (stage 3's "As built").
@@ -558,6 +560,46 @@ can't see on day one doesn't sell the app.
 Check on a phone: built-in audio plays in Listen with the screen locked, and
 Coming up next plays a mix of the user's recordings and built-in audio with no
 stutter at the switch.
+
+### As built (2026-11-11)
+
+Built on `feat/bsb-audio-stage6`, which branches from `feat/mixed-review-formats`
+(b05365c) rather than main. Since the plan was written, that branch reworked
+Today: "Coming up next" is now "Coming up", Today has a "Listen to today's
+scripture" row, and the Record tab is now the Audio tab. So this stage has to
+merge after that branch does.
+
+- **Listen's empty state** (`ListenPanel.tsx`) now has three cases:
+  - **Still loading:** "Loading the BSB reading…" while the timings load.
+    `useLibraryTimingsState` in `useLibraryAudio.ts` reports `pending`.
+    Before this, Listen briefly said there was no audio on every BSB chapter
+    not yet cached.
+  - **Didn't load:** "Couldn't load the BSB reading. Check your connection,
+    then open Listen again." (offline, most likely)
+  - **No reading for the translation:** "No audio for KJV yet. Record your own
+    on the Audio tab, or pick a narration on the chapter's page." Verses in
+    mixed translations say "these verses" instead.
+- **Coming up tip:** a `OneTimeTip` with id `comingUp` on Today, above "Listen
+  to today's scripture", shown only while something is coming up: "Hear your
+  next verses before you start learning them. Tap Listen to today's
+  scripture: it plays what's coming up, too." The copy avoids the banned words.
+  It points at Today's row rather than sitting in the Today's verses list,
+  because Today is where people see it.
+- **First run:** on setup's "Pick something to start with" page, adding
+  verses shows a **Hear it now** button with the credit under it. It plays the
+  passage just added from the built-in reading. `PassagePreview` in
+  `VersePlayButton.tsx` reuses the verse player, and nothing shows for a
+  translation with no reading.
+- **App Store listing:** added to `LAUNCH_CHECKLIST.md` under "App Store listing".
+- **Demo:** `?s=modalListen&tr=KJV` shows the no-reading empty state.
+- **Checked in the web demo:**
+  - Today shows the tip with Got it.
+  - KJV Listen shows "No audio for KJV yet".
+  - On setup, Add these verses then Hear it now plays
+    `souer/BSB_50_Php_004.mp3`.
+  - Not seen in the demo: the loading and couldn't-load states.
+- **Still to do on a phone:** the checks above (screen locked, no stutter at
+  the switch).
 
 ---
 

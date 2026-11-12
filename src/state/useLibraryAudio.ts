@@ -60,6 +60,15 @@ export interface ChapterRef {
  * Greek NT ...) are never fetched.
  */
 export function useLibraryTimings(refs: ChapterRef[]): ReadonlyMap<string, LibraryChapterTimings> {
+  return useLibraryTimingsState(refs).timings;
+}
+
+/**
+ * The same, plus `pending`: true while a chapter that has a built-in reading
+ * is still being fetched, so a screen can wait instead of saying there's no
+ * audio. Once the fetch settles (loaded, or failed offline) it's false.
+ */
+export function useLibraryTimingsState(refs: ChapterRef[]): { timings: ReadonlyMap<string, LibraryChapterTimings>; pending: boolean } {
   const keys = useMemo(() => {
     const set = new Set<string>();
     for (const r of refs) {
@@ -71,14 +80,21 @@ export function useLibraryTimings(refs: ChapterRef[]): ReadonlyMap<string, Libra
   const keysSig = keys.join('|');
 
   const [loaded, setLoaded] = useState<ReadonlyMap<string, LibraryChapterTimings>>(() => fromMemory(keys));
+  // The keysSig whose fetches have all settled.
+  const [settled, setSettled] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoaded(fromMemory(keys));
     const missing = keys.filter((k) => !memory.has(k));
-    if (missing.length === 0) return;
+    if (missing.length === 0) {
+      setSettled(keysSig);
+      return;
+    }
     Promise.all(missing.map(loadTimings)).then(() => {
-      if (!cancelled) setLoaded(fromMemory(keys));
+      if (cancelled) return;
+      setLoaded(fromMemory(keys));
+      setSettled(keysSig);
     });
     return () => {
       cancelled = true;
@@ -87,7 +103,8 @@ export function useLibraryTimings(refs: ChapterRef[]): ReadonlyMap<string, Libra
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keysSig]);
 
-  return loaded;
+  const pending = settled !== keysSig && keys.some((k) => !memory.has(k));
+  return { timings: loaded, pending };
 }
 
 function fromMemory(keys: string[]): ReadonlyMap<string, LibraryChapterTimings> {
