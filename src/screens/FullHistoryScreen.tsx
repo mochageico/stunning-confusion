@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, View } from 'react-native';
 
 import { FadeInView } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
@@ -49,18 +49,69 @@ export default function FullHistoryScreen() {
     return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [memoryQueue]);
 
-  const filteredItems = timelineItems.filter((item) => {
-    if (bookFilter && item.book !== bookFilter) return false;
-    if (dateFilter !== 'all') {
-      const cutoff = new Date(Date.now() - Number(dateFilter) * 24 * 3600 * 1000);
-      if (new Date(item.date) < cutoff) return false;
-    }
-    return true;
-  });
+  const filteredItems = useMemo(
+    () =>
+      timelineItems.filter((item) => {
+        if (bookFilter && item.book !== bookFilter) return false;
+        if (dateFilter !== 'all') {
+          const cutoff = new Date(Date.now() - Number(dateFilter) * 24 * 3600 * 1000);
+          if (new Date(item.date) < cutoff) return false;
+        }
+        return true;
+      }),
+    [timelineItems, bookFilter, dateFilter],
+  );
+
+  // A list that draws only the rows near the screen: a long-time user has
+  // hundreds of events (826 in the big=1 demo took 462 ms to draw at once).
+  // Each row draws its slice of the card and of the timeline rule, so the
+  // stacked rows look like the one card they replace.
+  const lastIndex = filteredItems.length - 1;
+  const renderItem = useCallback(
+    ({ item, index }: { item: HistoryEntry; index: number }) => {
+      const first = index === 0;
+      const last = index === lastIndex;
+      return (
+        <View
+          className={`bg-surface border-x border-line ${first ? 'border-t rounded-t-card' : ''} ${last ? 'border-b rounded-b-card' : ''}`}
+          style={{ paddingHorizontal: space(14), paddingTop: first ? space(14) : 0, paddingBottom: last ? space(14) : 0 }}
+        >
+          <View className="border-l border-line" style={{ paddingLeft: space(16), marginLeft: space(4), paddingBottom: last ? 0 : space(16) }}>
+            <View>
+              <View
+                className={`absolute w-2 h-2 rounded-full ${item.kind === 'memorized' ? 'bg-success' : 'bg-accent'}`}
+                style={{ left: -space(16) - 4.5, top: space(6) }}
+              />
+              <AppText variant="label" className="font-sans font-semibold text-ink">
+                {item.title}
+              </AppText>
+              <AppText variant="caption" className="font-sans text-ink-3">
+                {formatDate(item.date)}
+                {item.kind === 'memorized' ? ' · memorized for good' : ''}
+              </AppText>
+            </View>
+          </View>
+        </View>
+      );
+    },
+    [lastIndex, space],
+  );
 
   return (
     <FadeInView style={{ flex: 1 }}>
-      <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
+      <FlatList
+        data={filteredItems}
+        keyExtractor={(item, index) => `${item.kind}|${item.title}|${index}`}
+        renderItem={renderItem}
+        // Rows skip redrawing unless this changes (which row is last does).
+        extraData={renderItem}
+        initialNumToRender={14}
+        maxToRenderPerBatch={14}
+        windowSize={11}
+        className="flex-1 bg-canvas"
+        contentContainerClassName="p-5 pb-12"
+        ListHeaderComponent={
+      <View style={{ gap: space(20), paddingBottom: filteredItems.length === 0 ? 0 : space(6) }}>
         <ScreenHeader title="History" onBack={handleBack} />
 
         {/* Filters: side by side, wrapping one above the other at large text. */}
@@ -95,31 +146,12 @@ export default function FullHistoryScreen() {
             }
           />
         ) : (
-          <View style={{ gap: space(6) }}>
-            <SectionHeader title={`${filteredItems.length} ${filteredItems.length === 1 ? 'event' : 'events'}`} />
-            {/* A timeline: a dot per event on a thin rule down the left. */}
-            <View className="bg-surface border border-line rounded-card" style={{ padding: space(14) }}>
-              <View className="border-l border-line" style={{ paddingLeft: space(16), marginLeft: space(4), gap: space(16) }}>
-                {filteredItems.map((item, idx) => (
-                  <View key={idx}>
-                    <View
-                      className={`absolute w-2 h-2 rounded-full ${item.kind === 'memorized' ? 'bg-success' : 'bg-accent'}`}
-                      style={{ left: -space(16) - 4.5, top: space(6) }}
-                    />
-                    <AppText variant="label" className="font-sans font-semibold text-ink">
-                      {item.title}
-                    </AppText>
-                    <AppText variant="caption" className="font-sans text-ink-3">
-                      {formatDate(item.date)}
-                      {item.kind === 'memorized' ? ' · memorized for good' : ''}
-                    </AppText>
-                  </View>
-                ))}
-              </View>
-            </View>
-          </View>
+          // Then a timeline: a dot per event on a thin rule down the left.
+          <SectionHeader title={`${filteredItems.length} ${filteredItems.length === 1 ? 'event' : 'events'}`} />
         )}
-      </ScrollView>
+      </View>
+        }
+      />
     </FadeInView>
   );
 }
