@@ -14,7 +14,7 @@ import { CONSTELLATIONS } from '../../content/constellations';
 import { layout, LayoutResult, Pt, starLabel, StarMove, viewBounds } from '../../lib/mapLayout';
 import { MapCamera, MapCanvas } from './MapCanvas';
 import { EchoGhosts, MapDrawing, TITLE_SIZE } from './MapDrawing';
-import { CardActions, EchoCard, heldPage, LineCard, StarCard } from './MapCards';
+import { CardActions, EchoCard, LineCard, StarCard } from './MapCards';
 import ConnectSheet from './ConnectSheet';
 import AddStarSheet from './AddStarSheet';
 import { GuideSheet } from './ConstellationSheets';

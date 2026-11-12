@@ -16,8 +16,6 @@ activeCircleMessages: ChatMessage[]
 activeDMMessages: ChatMessage[]
 activeDMThread: DMThread | null
 activeDMThreadActive: boolean
-activeFeedFilter: "friends" | "global" | "group"
-activeGroupId: string
 activeModal: "listen" | "learn" | null
 activeQuiz: { threadId: string; messageId: string; fromName: string; attachment: QuizAttachment; } | null
 activeRecordingRequest: ActiveRecordingRequest | null
@@ -55,7 +53,6 @@ cleanPct: number
 clearAudioDownloads: () => Promise<void>
 clearGroupPlanMembershipsForCircle: (circleId: string) => void
 clearImportedAudio: () => void
-clearSlipped: (verseIds: string[]) => Promise<void>
 closeCircleChat: () => void
 closeCirclePreview: () => void
 closeCommunityGuidelines: () => void
@@ -102,7 +99,6 @@ formatTime: (totalSec: number) => string
 friends: Friend[]
 getEstimatedReviewTime: (queue: QueueItem[], sensitivity: "low" | "medium" | "high") => number
 getGreeting: () => "Good night" | "Good morning" | "Good afternoon" | "Good evening"
-getMemoryLoadForecast: (queue: QueueItem[], sensitivity: "low" | "medium" | "high", learningDaysList: string[], pace: number, days: number) => { date: Date; isLearnDay: boolean; loadMins: number; versesCount: number; }[]
 getNewVerseRoom: () => number
 getNextPullPreview: () => DailyPullResult
 getTodayAbbreviation: () => string
@@ -142,7 +138,7 @@ isTodayLearningDay: () => boolean
 isVerseSelected: (vNum: number) => boolean
 joinCircle: (circleId: string, circleName?: string | undefined, inviteCode?: string | undefined) => Promise<void>
 joinCircleByCode: (codeInput: string) => Promise<void>
-joinGroupPlan: (plan: GroupPlan, priority?: "group" | "individual" | "additive") => Promise<void>
+joinGroupPlan: (plan: GroupPlan, priority?: "individual" | "group" | "additive") => Promise<void>
 joinedGroupPlanDetails: GroupPlan[]
 joinedGroupPlanMemberships: GroupPlanMembership[]
 lastRecordingDuration: number
@@ -155,22 +151,13 @@ leaveCircle: (circleId: string) => Promise<void>
 leaveGroupPlan: (planId: string) => Promise<void>
 listenPlaylists: ListenPlaylist[]
 listenSource: "all" | "selection" | "memorization" | "reviewing" | "priming" | `playlist:${string}`
-loadActiveCircleData: (circleId: string, opts?: { silent?: boolean | undefined; } | undefined) => Promise<void>
-loadActivityFeed: (opts?: { silent?: boolean | undefined; } | undefined) => Promise<void>
 loadCircleDaily: (circleId: string) => Promise<void>
-loadCircleFriends: (circles: Circle[]) => Promise<void>
 loadCircleStats: (circleId: string) => Promise<void>
 loadCircleTakeaways: (circleId: string) => Promise<void>
 loadFriendQuizVerses: (friendUid: string) => Promise<{ book: string; chapter: number; verseNumber: number; status: string; translationId?: string | undefined; }[] | null>
-loadFriendRequests: () => Promise<void>
-loadFriends: () => Promise<void>
-loadMyCircles: () => Promise<void>
 loadPublicCircles: () => Promise<void>
-loadReceivedAccountabilityNudges: () => Promise<void>
-loadSharedRecordings: (opts?: { silent?: boolean | undefined; } | undefined) => Promise<void>
 loadUserData: (currentUser: any) => Promise<void>
 loadingAccountabilityNudges: boolean
-loadingActiveChallenges: boolean
 loadingActiveCircle: boolean
 loadingActiveCircleMessages: boolean
 loadingActiveDMMessages: boolean
@@ -188,7 +175,6 @@ masteryTouches: number
 maxReviewCap: number
 maybeAskForNotifications: (reason: string) => Promise<void>
 memorizedCount: number
-memorizedPercent: number
 memoryGridColumns: 2 | 4
 memoryQueue: QueueItem[]
 memoryQueueRef: RefObject<QueueItem[]>
@@ -269,7 +255,6 @@ resetImportTaps: () => void
 respondToCard: (scope: ChatScope, containerId: string, messageId: string, status: "willDo" | "notNow" | "done", extra?: { sharedRecordingId?: string | undefined; score?: number | undefined; }) => Promise<void>
 responsesByMessageId: { [x: string]: ChatResponse[]; }
 resumeReviews: () => void
-reviewNotes: ReviewNote[]
 reviewSessionPosition: number
 reviewSessionTotal: number
 reviewsPaused: boolean
@@ -315,46 +300,33 @@ sendCircleMessage: (text: string, attachment?: ChatAttachment | undefined) => Pr
 sendDMMessage: (text: string, attachment?: ChatAttachment | undefined) => Promise<boolean>
 sendFriendRequest: (toUid: string, toName: string) => Promise<void>
 sendRecordingToChat: (rec: Recording, scope: "circle" | "dm", containerId: string) => Promise<boolean>
-setActiveFeedFilter: (value: SetStateAction<"friends" | "global" | "group">) => void
-setActiveModal: (value: SetStateAction<"listen" | "learn" | null>) => void
 setAudioCacheCap: (bytes: number) => Promise<void>
 setAudioSearchQuery: (value: SetStateAction<string>) => void
-setBackHistory: (value: SetStateAction<{ screen: ScreenName; book: string | null; chapter: number | null; tab?: TabName | undefined; }[]>) => void
 setChapterPhotoVerseRange: (photo: ChapterPhoto, verseStart: number | null, verseEnd: number | null) => Promise<void>
 setChapterViewMode: (value: SetStateAction<"list" | "grid" | "memoryGrid">) => void
-setCognitiveLoadSensitivity: (value: SetStateAction<"low" | "medium" | "high">) => void
 setCommunitySubView: (value: SetStateAction<"home" | "find" | "create" | "preview">) => void
 setCreateGroupDesc: (value: SetStateAction<string>) => void
 setCreateGroupName: (value: SetStateAction<string>) => void
 setCreateGroupPrivacy: (value: SetStateAction<"private" | "public">) => void
 setCurrentScreen: (value: SetStateAction<ScreenName>) => void
-setCurrentTab: (value: SetStateAction<TabName>) => void
-setDayStartHour: (value: SetStateAction<number>) => void
 setFeedBookFilter: (value: SetStateAction<string>) => void
 setFeedChapterFilter: (value: SetStateAction<string>) => void
-setFeedRecordings: (value: SetStateAction<Recording[]>) => void
 setFeedTranslationFilter: (value: SetStateAction<string>) => void
 setFindSearchQuery: (value: SetStateAction<string>) => void
-setGroupPlanPriority: (planId: string, priority: "group" | "individual" | "additive") => Promise<void>
+setGroupPlanPriority: (planId: string, priority: "individual" | "group" | "additive") => Promise<void>
 setGuidedAnchors: (verseId: string, anchors: number[]) => void
 setGuidedPassageKey: (value: SetStateAction<string | null>) => void
 setGuidedSetAside: (verseId: string, on: boolean) => void
-setGuidedShakyJoins: (shaky: string[], steady: string[]) => void
 setInviteCodeInput: (value: SetStateAction<string>) => void
 setIsEditingCircleSettings: (value: SetStateAction<boolean>) => void
 setIsEditingSync: (value: SetStateAction<boolean>) => void
-setIsRecording: (value: SetStateAction<boolean>) => void
 setLastShareChoice: (ids: string[]) => void
-setLearningDays: (value: SetStateAction<string[]>) => void
 setListenModePlaying: (value: SetStateAction<boolean>) => void
 setMasteryTouches: (value: SetStateAction<number>) => void
-setMaxReviewCap: (value: SetStateAction<number>) => void
 setMemoryGridColumns: (columns: 2 | 4) => void
 setMemoryQueue: (value: SetStateAction<QueueItem[]>) => void
-setModalVerses: (value: SetStateAction<VerseState[]>) => void
 setNewPlanDesc: (value: SetStateAction<string>) => void
 setNewPlanName: (value: SetStateAction<string>) => void
-setNewVersesPace: (value: SetStateAction<number>) => void
 setPausedAt: (value: SetStateAction<string | null>) => void
 setPausedUntil: (value: SetStateAction<string | null>) => void
 setPickedRecordingVisibility: (value: SetStateAction<RecordingVisibility>) => void
@@ -366,19 +338,13 @@ setRecordingBook: (value: SetStateAction<string>) => void
 setRecordingChapter: (value: SetStateAction<number>) => void
 setRecordingRangeEnd: (value: SetStateAction<number | null>) => void
 setRecordingRangeStart: (value: SetStateAction<number | null>) => void
-setRecordingSeconds: (value: SetStateAction<number>) => void
 setRecordingTranslation: (value: SetStateAction<string>) => void
-setSabbathDay: (value: SetStateAction<string>) => void
-setSabbathEnabled: (value: SetStateAction<boolean>) => void
 setSaveRecordingDialog: (value: SetStateAction<boolean>) => void
 setSelectedAddBook: (value: SetStateAction<string>) => void
 setSelectedAddChapter: (value: SetStateAction<number>) => void
-setSelectedBook: (value: SetStateAction<string | null>) => void
-setSelectedChapter: (value: SetStateAction<number | null>) => void
 setSelectedChapterAudios: (value: SetStateAction<Record<string, Recording | null>>) => void
 setSelectedRecording: (value: SetStateAction<Recording | null>) => void
 setSelectedTranslationId: (id: string) => void
-setSelectedUserProfile: (value: any) => void
 setSelectedVerseNumbers: (value: SetStateAction<number[]>) => void
 setShowAudioSelector: (value: SetStateAction<boolean>) => void
 setShowCreatePlanForm: (value: SetStateAction<boolean>) => void
@@ -387,8 +353,6 @@ setShowTour: (value: SetStateAction<boolean | "questions">) => void
 setStudioAbOverride: (value: SetStateAction<boolean | null>) => void
 setStudioPlaybackEnabled: (enabled: boolean) => void
 setThreadDrillPreset: (value: SetStateAction<ThreadDrillPreset | null>) => void
-setTypedRecordingName: (value: SetStateAction<string>) => void
-setUser: (value: any) => void
 setUserRecordings: (value: SetStateAction<Recording[]>) => void
 setUserSearchQuery: (value: SetStateAction<string>) => void
 setVersePageRef: (value: SetStateAction<VersePageRef | null>) => void
@@ -419,16 +383,13 @@ toggleSelectAll: () => void
 toggleVerseHighlight: (key: string) => void
 toggleVerseSelection: (vNum: number) => void
 totalStudySeconds: number
-totalVersesCount: number
 triggerDailyPull: (opts?: { bypassShield?: boolean | undefined; } | undefined) => Promise<void>
 triggerMockDueReviews: () => Promise<void>
 triggerToast: (msg: string, opts?: ToastOptions | undefined) => void
-typedRecordingName: string
 unblockUser: (uid: string) => Promise<void>
 unreadCircleCount: number
 unreadDMCount: number
 unregisterPushToken: () => Promise<void>
-untouchedCount: number
 updateAccountabilityDailyCap: (cap: number) => Promise<void>
 updateCircleSettings: (circleId: string, fields: Partial<Pick<Circle, "name" | "description" | "isPublic">>) => Promise<void>
 updateDefaultRecordingVisibility: (vis: RecordingVisibility) => Promise<void>

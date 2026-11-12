@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { verseStage } from '../lib/stageProgress';
-import { Pressable, ScrollView, View } from 'react-native';
-import { RefreshCw, Target, X } from 'lucide-react-native';
+import { Pressable, View } from 'react-native';
+import { Target } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
 import { scriptOfVerse } from '../lib/textScript';
-import { FadeInView, NumericInput } from '../components/ui';
+import { NumericInput } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
 import { BookPicker } from '../components/BookPicker';
-import { AppButton, AppIconButton, AppTextInput, AppText, Switch, useScaledSpace } from '../components/design';
+import { AppButton, AppTextInput, AppText, Switch, useScaledSpace } from '../components/design';
 import { EmptyState, GroupedList, ListRow, SectionHeader } from '../components/blocks';
 import { OptionsPopup, SessionDone, SessionShell } from '../components/session';
 import {

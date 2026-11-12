@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { Bookmark, Brackets, Check, ChevronDown, Download, Grid2x2, GripVertical, Headphones, LayoutGrid, List, ListTree, Mic, Pause, PenLine, Play, Plus, Printer, Search } from 'lucide-react-native';
@@ -23,7 +23,7 @@ import { BIBLE_TRANSLATIONS, copyrightFor, textScriptFor, translationLabel } fro
 import { isRtl, joinWords, splitWords } from '../lib/textScript';
 import { FIRST_WEEKLY_STEP, LADDER, LADDER_GROUPS, stepReviewCount, type LadderGroup } from '../lib/ladder';
 import { AppButton, AppIconButton, AppText, AppTextInput, RangeCaption, useFontScale, useScaledSpace } from '../components/design';
-import { Dialog, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
+import { Dialog, GroupedList, ListRow, ScreenHeader, SegmentedControl } from '../components/blocks';
 import { useDragSelect } from '../components/useDragSelect';
 import {
   BracketGutter,

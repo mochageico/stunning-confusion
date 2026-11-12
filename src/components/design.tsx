@@ -791,23 +791,6 @@ export function CollapsibleCard({
   );
 }
 
-/** A card's title row: the title on the left, anything else (a count, a
- *  small button) on the right, with a hairline under it. Sentence case. */
-export function CardHeader({ title, children }: { title: string; children?: React.ReactNode }) {
-  const space = useScaledSpace();
-  return (
-    <View
-      className="flex-row items-center justify-between border-b border-hairline"
-      style={{ paddingBottom: space(8), gap: space(8) }}
-    >
-      <AppText variant="body" className="font-sans font-semibold text-ink flex-1">
-        {title}
-      </AppText>
-      {children}
-    </View>
-  );
-}
-
 // ============================================================
 // SettingRow — a label on the left, its value on the right.
 //

@@ -21,7 +21,6 @@ export default function CommunityHomeScreen({ state }: { state: AppState }) {
     viewMemberProfileById,
     activityEvents,
     loadingActivityEvents,
-    loadActivityFeed,
     friends,
     incomingFriendRequests,
     navigateTo,

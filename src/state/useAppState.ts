@@ -424,9 +424,7 @@ export function useAppState() {
   // The practice overlay, chained review sessions and study time (see usePracticeSession).
   const {
     activeModal,
-    setActiveModal,
     modalVerses,
-    setModalVerses,
     listenSource,
     practiceLearnTab,
     threadDrillPreset,
@@ -452,10 +450,8 @@ export function useAppState() {
   // The Record tab's passage and live mic capture (see useRecorder).
   const {
     isRecording,
-    setIsRecording,
     isRecordingPaused,
     recordingSeconds,
-    setRecordingSeconds,
     lastRecordingDuration,
     verseTapTimestamps,
     recordingBook,
@@ -504,7 +500,6 @@ export function useAppState() {
 
   const [saveRecordingDialog, setSaveRecordingDialog] = useState(false);
   const [pickedRecordingVisibility, setPickedRecordingVisibility] = useState<RecordingVisibility>('private');
-  const [typedRecordingName, setTypedRecordingName] = useState('');
   // Opens the Save dialog for a finished take, pre-picking your usual visibility.
   const openSaveRecordingDialog = (source: 'live' | 'import') => {
     setPendingRecordingSource(source);
@@ -526,7 +521,6 @@ export function useAppState() {
   // but Your recordings lists the unsaved ones under "Sent to you".
   const [receivedRecordings, setReceivedRecordings] = useState<Recording[]>([]);
   const [audioSearchQuery, setAudioSearchQuery] = useState('');
-  const [activeFeedFilter, setActiveFeedFilter] = useState<'global' | 'group' | 'friends'>('global');
   const [feedBookFilter, setFeedBookFilter] = useState<string>('');
   const [feedChapterFilter, setFeedChapterFilter] = useState<string>('');
   // A BIBLE_TRANSLATIONS id ('BSB'/'WEB'/'KJV'/'ESV'), or '' for all. Matched
@@ -613,7 +607,6 @@ export function useAppState() {
     inviteCodeInput,
     setInviteCodeInput,
     loadMyCircles,
-    loadCircleFriends,
     loadActivityFeed,
     loadPublicCircles,
     loadActiveCircleData,
@@ -709,7 +702,6 @@ export function useAppState() {
   // 1:1 challenges in chats (see useChallenges).
   const {
     activeChallenges,
-    loadingActiveChallenges,
     myChallengeBadges,
     sendChallenge,
     acceptChallenge,
@@ -1150,7 +1142,6 @@ export function useAppState() {
   }, [user]);
 
   const loadUserData = async (currentUser: any) => {
-    console.log('loadUserData started for UID:', currentUser.uid);
     // Set while the auto-sync waits for this load to replace the queue (see
     // wasOffline below); always lifted again at the end.
     let syncPaused = false;
@@ -1210,7 +1201,6 @@ export function useAppState() {
       // server didn't answer -- only at launch: later, what's on screen is newer.
       const copy = !wasOffline && (!qSnap || !vSnap || !planSnap) ? await loadLocalCopy(currentUser.uid) : null;
       if (copy) console.log('[offline] opening from the copy on this device, saved', copy.savedAt.queue);
-      console.log('User data fetched. Verses:', vSnap?.size, 'Queue:', qSnap?.size);
 
       // 1. Profile
 
@@ -1251,7 +1241,6 @@ export function useAppState() {
         // before writing: right after an install the first read has come
         // back "missing" for a profile that exists, and the old plain
         // setDoc then wiped it -- circleIds, settings, study time and all.
-        console.log('Creating new profile...');
         try {
           const created = await runTransaction(db, async (tx) => {
             const fresh = await tx.get(profileRef);
@@ -1259,7 +1248,6 @@ export function useAppState() {
             tx.set(profileRef, newProfile);
             return true;
           });
-          console.log(created ? 'Profile created successfully.' : 'Profile already existed; left untouched.');
           // Brand-new account, never seen the Getting Started checklist.
           if (created) setShowOnboarding(true);
         } catch (e) {
@@ -1368,7 +1356,6 @@ export function useAppState() {
       } else if (planSnap) {
         // Only when the server said there's no plan: a read that failed
         // (offline) must never write defaults over the real one.
-        console.log('Creating new memory plan...');
         try {
           await setDoc(planRef, {
             masteryTouches: 3,
@@ -1380,7 +1367,6 @@ export function useAppState() {
           });
           resolvedLadderVersion = LADDER_VERSION;
           settingsFromServer = true;
-          console.log('Memory plan created successfully.');
         } catch (e) {
           handleFirestoreError(e, OperationType.WRITE, `memoryPlans/${currentUser.uid}`);
         }
@@ -2217,7 +2203,6 @@ export function useAppState() {
     isTodayLearningDay,
     validateTouch,
     getEstimatedReviewTime,
-    getMemoryLoadForecast,
     triggerDailyPull,
     removeQueueItems,
     getNextPullPreview,
@@ -2231,12 +2216,9 @@ export function useAppState() {
     triggerMockDueReviews,
     handleUpdateVerseStatus,
     setGuidedSetAside,
-    setGuidedShakyJoins,
     setGuidedAnchors,
     pullVerseIntoLearning,
     creditGuided,
-    reviewNotes,
-    clearSlipped,
     pullMovedToday,
     getNewVerseRoom,
   } = useReviewEngine({
@@ -2263,11 +2245,8 @@ export function useAppState() {
   // windows and streak roll over at the day boundary.
   const statsDayKey = localDayKey(getLogicalDate(dayStartHour));
   const {
-    totalVersesCount,
     memorizedCount,
     learningCount,
-    untouchedCount,
-    memorizedPercent,
     activityLast15Days,
     activityLast90Days,
     memoryStreak,
@@ -3535,18 +3514,18 @@ export function useAppState() {
     verses, setVerses,
     memoryQueue, memoryQueueRef, setMemoryQueue, updateMemoryQueue, countRangeProgress,
     primingLookahead, setPrimingLookahead,
-    cognitiveLoadSensitivity, setCognitiveLoadSensitivity,
+    cognitiveLoadSensitivity,
     selectedAddBook, setSelectedAddBook,
     selectedAddChapter, setSelectedAddChapter,
-    user, setUser,
+    user,
     loadingAuth,
     queueReady,
     offline, pendingSends, noSignal,
-    currentTab, setCurrentTab,
+    currentTab,
     currentScreen, setCurrentScreen,
-    selectedBook, setSelectedBook,
-    selectedChapter, setSelectedChapter,
-    backHistory, setBackHistory,
+    selectedBook,
+    selectedChapter,
+    backHistory,
     selectedVerseNumbers, setSelectedVerseNumbers,
     chapterViewMode, setChapterViewMode,
     highlightedVerses, toggleVerseHighlight,
@@ -3564,24 +3543,23 @@ export function useAppState() {
     // the layout lab's mock state only.
     updateRhythm,
     updateMasteryTouches,
-    learningDays, setLearningDays,
-    newVersesPace, setNewVersesPace,
-    maxReviewCap, setMaxReviewCap,
-    activeModal, setActiveModal,
-    modalVerses, setModalVerses, listenSource, practiceLearnTab,
+    learningDays,
+    newVersesPace,
+    maxReviewCap,
+    activeModal,
+    modalVerses, listenSource, practiceLearnTab,
     threadDrillPreset, setThreadDrillPreset,
     openThreadDrill,
     guidedPassageKey, setGuidedPassageKey,
     openGuided,
     openMixedReview,
     setGuidedSetAside,
-    setGuidedShakyJoins,
     setGuidedAnchors,
     pullVerseIntoLearning,
     creditGuided,
-    isRecording, setIsRecording,
+    isRecording,
     isRecordingPaused,
-    recordingSeconds, setRecordingSeconds,
+    recordingSeconds,
     lastRecordingDuration,
     verseTapTimestamps,
     recordingBook, setRecordingBook,
@@ -3604,7 +3582,6 @@ export function useAppState() {
     memoryQueueVisibility,
     updateMemoryQueueVisibility,
     pickedRecordingVisibility, setPickedRecordingVisibility,
-    typedRecordingName, setTypedRecordingName,
     // import-audio tagging flow
     importedAudioUri,
     importedAudioName,
@@ -3619,18 +3596,17 @@ export function useAppState() {
     handleFinishImportTagging,
     feedRecordings: visibleFeedRecordings,
     receivedRecordings: receivedRecordings.filter((r) => !blockedUids.has(r.userId || (r as Recording & { ownerId?: string }).ownerId || "")),
-    setFeedRecordings, loadingFeedRecordings, loadSharedRecordings, saveSharedRecordingToLibrary,
+    loadingFeedRecordings, saveSharedRecordingToLibrary,
     audioSearchQuery, setAudioSearchQuery,
-    activeFeedFilter, setActiveFeedFilter,
     feedBookFilter, setFeedBookFilter,
     feedChapterFilter, setFeedChapterFilter,
     feedTranslationFilter, setFeedTranslationFilter,
     selectedChapterAudios, setSelectedChapterAudios,
     showAudioSelector, setShowAudioSelector,
     masteryTouches, setMasteryTouches,
-    sabbathEnabled, setSabbathEnabled,
-    sabbathDay, setSabbathDay,
-    dayStartHour, setDayStartHour,
+    sabbathEnabled,
+    sabbathDay,
+    dayStartHour,
     pausedAt, setPausedAt,
     pausedUntil, setPausedUntil,
     reviewsPaused,
@@ -3638,8 +3614,6 @@ export function useAppState() {
     thoroughness, cleanPct, lateMovesBack, swapCanBeClean, balanceDays, updateLadderSettings,
     welcomeBackDays,
     lateNotes,
-    reviewNotes,
-    clearSlipped,
     pullMovedToday,
     getNewVerseRoom,
     joinedGroupPlanMemberships,
@@ -3649,16 +3623,16 @@ export function useAppState() {
     myCircles, loadingMyCircles,
     publicCircles, loadingPublicCircles,
     activeCircle, activeCircleMembers, activeCircleGroupPlans, loadingActiveCircle,
-    circleFriends, loadCircleFriends,
-    activityEvents: visibleActivityEvents, loadingActivityEvents, loadActivityFeed,
+    circleFriends,
+    activityEvents: visibleActivityEvents, loadingActivityEvents,
     /** Pull-to-refresh on the Community screens. */
     refreshCommunity: () => refreshCommunityRef.current(),
-    friends, loadingFriends, loadFriends,
-    incomingFriendRequests: visibleIncomingFriendRequests, outgoingFriendRequests, loadFriendRequests,
+    friends, loadingFriends,
+    incomingFriendRequests: visibleIncomingFriendRequests, outgoingFriendRequests,
     userSearchQuery, setUserSearchQuery, userSearchResults: visibleUserSearchResults, searchingUsers, searchUsers,
     sendFriendRequest, acceptFriendRequest, declineFriendRequest, cancelFriendRequest, removeFriend,
     accountabilityDailyCap, updateAccountabilityDailyCap,
-    receivedAccountabilityNudges, loadingAccountabilityNudges, loadReceivedAccountabilityNudges,
+    receivedAccountabilityNudges, loadingAccountabilityNudges,
     canSendAccountabilityNudge, sendAccountabilityNudge, markAccountabilityNudgeRead, dismissAccountabilityNudge,
     dmThreads: visibleDmThreads, loadingDmThreads, activeDMThread, activeDMMessages, loadingActiveDMMessages,
     activeDMThreadActive: activeDMThreadActive && !blockedUids.has(activeDMThread?.otherUid ?? ''),
@@ -3666,11 +3640,10 @@ export function useAppState() {
     activeCircleChatId, activeCircleMessages: visibleCircleMessages, loadingActiveCircleMessages,
     openCircleChat, closeCircleChat, sendCircleMessage,
     reactionsByMessageId, toggleReaction,
-    activeChallenges, loadingActiveChallenges, myChallengeBadges,
+    activeChallenges, myChallengeBadges,
     sendChallenge, acceptChallenge, declineChallenge, deleteChallenge,
     selectedRecording, setSelectedRecording,
     communitySubView, setCommunitySubView,
-    activeGroupId,
     previewCircle, openCirclePreview, closeCirclePreview,
     isEditingCircleSettings, setIsEditingCircleSettings,
     showCreatePlanForm, setShowCreatePlanForm,
@@ -3686,7 +3659,7 @@ export function useAppState() {
     nowPlayingRecording,
     seekRecordingBy,
     seekRecordingToTime,
-    selectedUserProfile, setSelectedUserProfile,
+    selectedUserProfile,
 
     // navigation
     navigateTo,
@@ -3711,9 +3684,7 @@ export function useAppState() {
     triggerToast,
 
     // scripture circles
-    loadMyCircles,
     loadPublicCircles,
-    loadActiveCircleData,
     openCircle,
     createCircle,
     joinCircle,
@@ -3751,7 +3722,6 @@ export function useAppState() {
     isTodayLearningDay,
     validateTouch,
     getEstimatedReviewTime,
-    getMemoryLoadForecast,
     isReviewDue,
     triggerDailyPull,
     promoteToLearning,
@@ -3770,11 +3740,8 @@ export function useAppState() {
     reviewSessionTotal,
 
     // computed metrics
-    totalVersesCount,
     memorizedCount,
     learningCount,
-    untouchedCount,
-    memorizedPercent,
     activityLast15Days,
     activityLast90Days,
     memoryStreak,

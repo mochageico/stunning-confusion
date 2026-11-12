@@ -59,7 +59,6 @@ export function GuideSheet({
   /** "Remove from my sky" (asks first). Its verses stay on My Verses and the stars it found stay found. */
   onRemove?: () => void;
 }) {
-  const space = useScaledSpace();
   const [confirming, setConfirming] = useState(false);
   return (
     <>

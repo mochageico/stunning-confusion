@@ -47,15 +47,6 @@ export function readSpeechRecording(uri: string): SpeechRecordingInfo | null {
   }
 }
 
-/** One line for a tester toast, e.g. "Saved audio: WAV 16000 Hz, 16-bit, mono, 12.4 s, 397 KB". */
-export function describeSpeechRecording(uri: string): string {
-  const info = readSpeechRecording(uri);
-  const name = uri.split('/').pop() ?? uri;
-  if (!info) return `Saved audio: couldn't read ${name}`;
-  const channels = info.channels === 1 ? 'mono' : `${info.channels} channels`;
-  return `Saved audio: WAV ${info.sampleRate} Hz, ${info.bitsPerSample}-bit, ${channels}, ${info.seconds.toFixed(1)} s, ${Math.round(info.bytes / 1024)} KB`;
-}
-
 /** A piece as sent: base64 WAV, and where it sits in the recording. */
 export interface SentPiece {
   audio: string;

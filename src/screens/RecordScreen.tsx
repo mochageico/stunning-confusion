@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BookOpen, Check, FileAudio, ListMusic, Mic, Pause, Play, RotateCcw, Square } from 'lucide-react-native';
+import { BookOpen, Check, FileAudio, Pause, Play, RotateCcw, Square } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { passageLabel } from '../lib/chatAttachments';
@@ -11,7 +11,7 @@ import { textScriptFor, translationLabel } from '../data';
 import { isRtl } from '../lib/textScript';
 import type { TextScript } from '../types';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
-import { Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SegmentedControl } from '../components/blocks';
+import { Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { AudioHub } from '../components/AudioHub';
 
@@ -62,7 +62,6 @@ export default function RecordScreen({ state }: { state: AppState }) {
     handleMarkImportTap,
     resetImportTaps,
     handleFinishImportTagging,
-    navigateTo,
   } = state;
 
   const scale = useFontScale();

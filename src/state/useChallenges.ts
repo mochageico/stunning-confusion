@@ -4,13 +4,10 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDocs,
   onSnapshot,
   query,
-  setDoc,
   updateDoc,
   where,
-  writeBatch,
 } from 'firebase/firestore';
 
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Check, Compass, Layers, RefreshCw, SlidersHorizontal, X } from 'lucide-react-native';
+import { Check, Compass, RefreshCw, SlidersHorizontal, X } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
 import { QueueItem } from '../types';
@@ -8,7 +8,7 @@ import { FadeInView, useKeyboardLift } from '../components/ui';
 import { AppButton, AppIconButton, AppText, RadioMark, useScaledSpace } from '../components/design';
 import { OptionsPopup, SessionDone } from '../components/session';
 import { EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
-import GradedRecitation, { ButtonPair, canSpeakVerses, RecitationMode, RoundFrame } from '../components/GradedRecitation';
+import GradedRecitation, { ButtonPair, RecitationMode, RoundFrame } from '../components/GradedRecitation';
 import PeekDrill from '../components/drills/PeekDrill';
 import PickPhraseDrill from '../components/drills/PickPhraseDrill';
 import ScrambleDrill from '../components/drills/ScrambleDrill';
@@ -17,7 +17,7 @@ import JigsawDrill from '../components/drills/JigsawDrill';
 import VersePlayButton from '../components/VersePlayButton';
 import { chunkIntoPhrases, threadSlips, ThreadSlip, threadSpan, threadStartVerseCounts, ThreadCue } from '../lib/drills';
 import { reviewPassAccuracy, WordOutcome } from '../lib/recitation';
-import { blankExceptFirstLetter, joinWords, normalizeToken, scriptOfVerse, splitWords } from '../lib/textScript';
+import { blankExceptFirstLetter, normalizeToken, scriptOfVerse, splitWords } from '../lib/textScript';
 import { loadPracticePrefs, savePracticePrefs } from '../lib/practicePrefs';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { gradedOnDay } from '../lib/retention';
@@ -44,7 +44,6 @@ import {
   sessionReducer,
   SessionState,
   startSession,
-  stitchWindow,
   toDrillVerse,
 } from '../lib/guided';
 

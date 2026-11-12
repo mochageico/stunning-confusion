@@ -1,9 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { PanResponder, Pressable, Text, View } from 'react-native';
+import { PanResponder, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Eraser } from 'lucide-react-native';
 
-import { AppButton, AppText } from './design';
+import { AppButton } from './design';
 
 import { useThemeColors } from './theme';
 // ============================================================================

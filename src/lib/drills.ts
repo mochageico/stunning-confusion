@@ -808,7 +808,6 @@ export const buildUpStages = (
  * identical fully-visible text is parroting, not recall.
  */
 export const BUILD_UP_REPS = ['read', 'hint', 'blind'] as const;
-export type BuildUpRep = (typeof BUILD_UP_REPS)[number];
 
 export const scoreSwapAttempt = (swapVerses: SwapVerse[], selected: Set<number>): SwapScore => {
   const allTokens = swapVerses.flatMap((v) => v.tokens);

@@ -4,7 +4,6 @@ import Constants from 'expo-constants';
 import {
   BellRing,
   BookOpen,
-  CalendarDays,
   Check,
   CircleHelp,
   Compass,
@@ -22,9 +21,7 @@ import {
   Share2,
   ShieldCheck,
   SlidersHorizontal,
-  TrendingUp,
   Trash2,
-  Type,
 } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
@@ -43,7 +40,7 @@ import {
   STRIKE_LIMITS,
   StrikeLimit,
 } from '../lib/practicePrefs';
-import { AppButton, AppText, AppTextInput, ChoiceCard, ToggleRow, useFontScale, useScaledSpace } from '../components/design';
+import { AppButton, AppText, AppTextInput, ChoiceCard, ToggleRow, useScaledSpace } from '../components/design';
 import { Badge, Dialog, GroupedList, ListRow, RowDivider, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { Dropdown } from '../components/Dropdown';
 import { ACCENTS, useAccent, useThemeColors } from '../components/theme';
@@ -638,8 +635,6 @@ export default function SettingsScreen({ state, asMe = false }: { state: AppStat
     pauseReviews,
     resumeReviews,
     memoryQueue,
-    learningDays,
-    newVersesPace,
     selectedTranslationId,
     thoroughness,
   } = state;

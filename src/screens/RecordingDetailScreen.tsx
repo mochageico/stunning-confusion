@@ -5,24 +5,20 @@ import { Check, Download, Pause, Play, Trash2, UserRound } from 'lucide-react-na
 import { AppState } from '../state/useAppState';
 import { VerseTimestamp, normalizeRecordingVisibility } from '../types';
 import { FadeInView } from '../components/ui';
-import { BIBLE_TRANSLATIONS, RECORDING_VISIBILITY_HINT, RECORDING_VISIBILITY_OPTIONS, translationLabel } from '../data';
+import { RECORDING_VISIBILITY_OPTIONS, translationLabel } from '../data';
 import { recordingLabel, recordingMeta } from '../lib/recordingLabel';
 import { cacheableTarget } from '../lib/audioCache';
 import { usePlaybackProgress } from '../lib/playbackProgress';
 import { hasPlayableAudio, hasStudioAudio, studioStatusLabel } from '../lib/studioAudio';
 import { AppButton, AppIconButton, AppTextInput, AppText, MIN_TOUCH, useScaledSpace } from '../components/design';
-import { Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
+import { Dialog, EmptyState, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { OverflowMenu } from '../components/session';
-import { formatDate, formatDuration } from '../lib/format';
+import { formatDuration } from '../lib/format';
 
 // Derived from the single source of truth (data.ts) instead of its own
 // separately-hardcoded lookup -- previously listed NIV/NKJV/NLT despite zero
 // real text ever being imported for them, and had already drifted from
 // RecordScreen's own copy of the same list (see scripts/import-bible/).
-const TRANSLATION_FULL_NAMES: Record<string, string> = Object.fromEntries(
-  BIBLE_TRANSLATIONS.map((t) => [t.id, t.name])
-);
-
 // This page opens from more than one place, so the back link names whichever
 // one you came from.
 const BACK_LABELS: Partial<Record<string, string>> = {

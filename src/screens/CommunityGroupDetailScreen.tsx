@@ -10,7 +10,7 @@ import { Circle, CircleMember, GroupPlan } from '../types';
 import { FadeInView, ProgressBar } from '../components/ui';
 import { groupPlanProgress } from '../lib/groupPlanProgress';
 import { DAY_ABBREVS, getLogicalDate, localDayKey } from '../lib/logicalDate';
-import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
+import { AppButton, AppIconButton, AppText, AppTextInput, useScaledSpace } from '../components/design';
 import { Avatar, Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { buildInviteUrl } from '../lib/invites';
@@ -44,7 +44,6 @@ function PanelHeader({ title, actionLabel, onAction }: { title: string; actionLa
 export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
   const space = useScaledSpace();
-  const scale = useFontScale();
   const [refreshing, setRefreshing] = useState(false);
   const {
     user,

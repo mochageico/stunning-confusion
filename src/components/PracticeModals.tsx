@@ -7,7 +7,7 @@ import { VerseState, QueueItem, Recording, ChapterPhoto, ChapterSections, Listen
 import type { ReviewCompletedOpts } from '../state/useAppState';
 import type { OutlineExtra } from '../lib/outline';
 import type { SelfCheckAnswer } from '../lib/grading';
-import { isRtl, scriptOfVerse } from '../lib/textScript';
+import { scriptOfVerse } from '../lib/textScript';
 import { WaveBars, useKeyboardLift } from './ui';
 import { AppIconButton, AppText, FontScaleOverrideProvider, RadioMark, useFontScale, useScaledSpace } from './design';
 import { PRACTICE_TEXT_SCALE, useAppPrefs } from '../lib/appPrefs';
@@ -246,10 +246,6 @@ function PracticeModalsInner({
   // (maskLetters / maskExceptFirstLetter) included, since an English-only
   // mask leaves Hebrew words fully visible.
   const passageScript = useMemo(() => (verses.length > 0 ? scriptOfVerse(verses[0]) : 'latin'), [verses]);
-  // Rows that set words or a verse beside its number (word tiles, Order's
-  // numbered slots) run right-to-left for Hebrew; the text itself gets
-  // `script={passageScript}` on its AppText.
-  const passageRow = isRtl(passageScript) ? 'flex-row-reverse' : 'flex-row';
 
   // Recall and the learn-mode drills (see practice/useRecall).
   const recall = useRecall({

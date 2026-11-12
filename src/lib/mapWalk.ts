@@ -1,5 +1,4 @@
 import type { QueueItem, StarRef } from '../types';
-import { starLit } from './constellations';
 
 // ============================================================================
 // WALK THE CONSTELLATION -- the rules
@@ -98,8 +97,6 @@ export function starVerses(ref: StarRef, queue: QueueItem[]): WalkVerse[] {
     .sort((a, b) => a.verseNumber - b.verseNumber)
     .map((q) => ({ book: q.book, chapter: q.chapter, verse: q.verseNumber, text: q.text, translationId: q.translationId || 'ESV', item: q }));
 }
-
-export const starHeld = (ref: StarRef, queue: QueueItem[]): boolean => starLit(ref, queue);
 
 export type WalkCredit = 'review' | 'touch' | null;
 

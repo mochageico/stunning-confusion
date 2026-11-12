@@ -5,7 +5,7 @@ import { Check, ChevronLeft, X } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView, NumericInput, StepperRow, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
-import { AppButton, AppIconButton, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
+import { AppButton, AppIconButton, AppText, MIN_TOUCH, useScaledSpace } from '../components/design';
 
 import { useThemeColors } from '../components/theme';
 // ============================================================================

@@ -10,13 +10,13 @@ import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScale
 import { EmptyState, ScreenHeader, SectionHeader } from '../components/blocks';
 import { FilterChips, OverflowMenu } from '../components/session';
 import { PRIORITY_LABELS } from '../components/QueueSources';
-import { TopChips, StageDot, StageCountBar, StageSectionHeader, StageStrip, VerseStageRow, stageCaption } from '../components/VerseStages';
+import { TopChips, StageDot, StageCountBar, StageSectionHeader, VerseStageRow } from '../components/VerseStages';
 import VersesByBook from '../components/VersesByBook';
 import { writtenCount } from '../lib/takeaways';
 import { VersesTabs } from '../components/VersesTabs';
 import { reorderQueueGroups } from '../lib/queueReorder';
 import { STAGE_LABEL, STAGE_ORDER, StageGroup, VerseStage, groupByStage, referenceFor, stageCounts } from '../lib/stageProgress';
-import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, learnedCount, projectStartDates } from '../lib/forecast';
+import { ForecastPlan, learnedCount, projectStartDates } from '../lib/forecast';
 import { translationLabel } from '../data';
 import { matchesVerseQuery } from '../lib/verseSearch';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
@@ -98,8 +98,6 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     isReviewDue,
     reviewsPaused,
     dayStartHour,
-    handleUpdateVerseStatus,
-    validateTouch,
     takeaways,
     thoroughness,
     masteryTouches,

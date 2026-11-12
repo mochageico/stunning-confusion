@@ -1,4 +1,4 @@
-import type { GroupPlan, GroupPlanMembership, QueueItem } from '../types';
+import type { QueueItem } from '../types';
 import { computeDailyPull } from './groupPlanScheduler';
 import {
   applyOutcome,
@@ -73,11 +73,6 @@ export interface CalendarDayProjection {
   newVerseItems: QueueItem[];
   /** Minutes the day is expected to take, learning and reviews together. */
   minutes: number;
-}
-
-export interface CalendarOpts {
-  plan: CalendarPlanSettings;
-  sensitivity?: LoadSensitivity;
 }
 
 const startOfDay = (date: Date): Date => {

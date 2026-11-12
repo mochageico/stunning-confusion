@@ -53,8 +53,6 @@ interface ListenPanelProps {
 
 export default function ListenPanel({
   listen,
-  verses,
-  allVerses,
   memoryQueue,
   primingLookahead,
   setPrimingLookahead,

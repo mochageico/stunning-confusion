@@ -2,7 +2,7 @@ import { ScrollView, View } from 'react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
-import { AppText, Card, useScaledSpace } from '../components/design';
+import { Card, useScaledSpace } from '../components/design';
 import { ScreenHeader, SectionHeader } from '../components/blocks';
 import { RhythmEditor } from '../components/RhythmEditor';
 import { ReviewSettings } from '../components/ReviewSettings';

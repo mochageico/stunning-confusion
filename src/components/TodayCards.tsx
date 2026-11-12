@@ -1,11 +1,10 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { ArrowRight, X } from 'lucide-react-native';
 
 import type { QueueItem } from '../types';
 import type { FirmUpItem, MovedNote, WelcomeBack } from '../lib/todayCards';
 import type { CalendarDayProjection } from '../lib/ladderCalendar';
-import type { LadderGroup } from '../lib/ladder';
-import { AppButton, AppIconButton, AppText, CollapsibleCard, useScaledSpace } from './design';
+import { AppButton, AppIconButton, AppText, useScaledSpace } from './design';
 import { Dialog, RowDivider } from './blocks';
 import { useThemeColors } from './theme';
 
@@ -195,17 +194,6 @@ export function MovedSheet({
 // Next 7 days
 // ----------------------------------------------------------------------------
 
-const BAR_FILL: Record<LadderGroup | 'learning', string> = {
-  settling: 'bg-stage-daily',
-  steady: 'bg-stage-weekly',
-  kept: 'bg-stage-complete',
-  secure: 'bg-stage-top',
-  learning: 'bg-stage-learning',
-};
-const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const DAY_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const GROUPS: LadderGroup[] = ['settling', 'steady', 'kept', 'secure'];
-
 /** How heavy the heaviest day is against the rest, for the one-line note; null when nothing stands out. */
 export function heaviestDay(days: readonly CalendarDayProjection[]): CalendarDayProjection | null {
   const busy = days.filter((d) => !d.isSabbath && !d.isPaused && d.minutes > 0);
@@ -213,65 +201,4 @@ export function heaviestDay(days: readonly CalendarDayProjection[]): CalendarDay
   const avg = busy.reduce((n, d) => n + d.minutes, 0) / busy.length;
   const top = busy.reduce((best, d) => (d.minutes > best.minutes ? d : best), busy[0]);
   return top.minutes >= avg * 1.5 && top.minutes >= avg + 3 ? top : null;
-}
-
-/**
- * The week ahead as a small chart, folded away under "Listen to all of today's
- * verses": today is the point of the screen, the week ahead is for the curious.
- * One bar a day, stacked by where each passage sits on the ladder.
- */
-export function NextSevenDays({ days, onOpenCalendar }: { days: readonly CalendarDayProjection[]; onOpenCalendar: () => void }) {
-  const space = useScaledSpace();
-  const week = days.slice(0, 7);
-  const max = Math.max(1, ...week.map((d) => d.minutes));
-  const active = week.filter((d) => !d.isSabbath && !d.isPaused);
-  const avg = active.length > 0 ? Math.round(active.reduce((n, d) => n + d.minutes, 0) / active.length) : 0;
-  const heavy = heaviestDay(week);
-  const heavyName = heavy ? DAY_LONG[heavy.date.getDay()] : null;
-  // Short on purpose: the title and summary share the header row (the heaviest day is named inside).
-  const summary = `about ${avg} min a day`;
-  const CHART_H = 96;
-  return (
-    <CollapsibleCard storageKey="home.next7" title="Next 7 days" summary={summary} defaultCollapsed>
-      <View className="flex-row items-end" style={{ gap: space(8), height: CHART_H }}>
-        {week.map((d, i) => {
-          const reviewMinutes = GROUPS.reduce((n, g) => n + d.groupSeconds[g], 0) / 60;
-          const learning = Math.max(0, d.minutes - reviewMinutes);
-          const h = d.isSabbath || d.minutes === 0 ? 3 : Math.max(8, Math.round((d.minutes / max) * CHART_H));
-          return (
-            <View
-              key={d.date.toISOString()}
-              accessibilityLabel={`${i === 0 ? 'Today' : DAY_LONG[d.date.getDay()]}, ${d.isSabbath ? 'Sabbath, no reviews' : `about ${d.minutes} minutes`}`}
-              className={`flex-1 rounded-sm overflow-hidden ${d.isSabbath || d.minutes === 0 ? 'bg-hairline' : ''} ${heavy === d ? 'border-2 border-warning' : ''}`}
-              // layout-ok: a chart bar holds no text.
-              style={{ height: h }}
-            >
-              {/* Top to bottom: the groups furthest along, then Settling, then Learning. */}
-              {GROUPS.slice()
-                .reverse()
-                .map((g) => (d.groupSeconds[g] > 0 ? <View key={g} className={BAR_FILL[g]} style={{ flex: d.groupSeconds[g] / 60 }} /> : null))}
-              {learning > 0 ? <View className={BAR_FILL.learning} style={{ flex: learning }} /> : null}
-            </View>
-          );
-        })}
-      </View>
-      <View className="flex-row" style={{ gap: space(8) }}>
-        {week.map((d, i) => (
-          <AppText key={d.date.toISOString()} variant="micro" className="font-sans text-ink-3 flex-1 text-center" numberOfLines={1}>
-            {i === 0 ? 'Today' : DAY_SHORT[d.date.getDay()]}
-          </AppText>
-        ))}
-      </View>
-      {heavy && heavyName ? (
-        <AppText variant="caption" className="font-sans text-ink-2">
-          {heavyName} is your heaviest day, about {heavy.minutes} minutes: several reviews land together.
-        </AppText>
-      ) : null}
-      <Pressable onPress={onOpenCalendar} accessibilityRole="link" hitSlop={8} className="self-start active:opacity-60">
-        <AppText variant="label" className="font-sans font-semibold text-accent">
-          See the full calendar
-        </AppText>
-      </Pressable>
-    </CollapsibleCard>
-  );
 }

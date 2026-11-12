@@ -4,7 +4,7 @@
 // active plan's settings; nothing here reads React state or Firestore.
 import type { QueueItem } from '../types';
 import { isDayPaused } from './reviewCalendar';
-import { advancePastSabbath, DAY_ABBREVS, getLogicalDate, localDayKey, nthOccurrenceOfWeekday } from './logicalDate';
+import { advancePastSabbath, DAY_ABBREVS, getLogicalDate, localDayKey } from './logicalDate';
 
 /** The active plan's settings that move due dates around. */
 export interface ReviewClock {

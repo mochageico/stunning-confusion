@@ -608,7 +608,6 @@ function Session({
   state,
   initial,
   startedAt,
-  counts,
   gapPrefs,
   chapters,
   off,
@@ -712,7 +711,6 @@ function Session({
   if (s.status === 'finished' || s.status === 'stopped') {
     const sum = mixSummary(s);
     const reviewed = sum.grades.size;
-    const unitsDone = new Set(s.credits.map((c) => c.unitIndex)).size;
     const minutes = Math.max(1, Math.round(((endedAt ?? Date.now()) - startedAt) / 60000));
     const stopped = s.status === 'stopped';
     const slippedItems = sum.missed.map((id) => itemById.get(id)).filter((i): i is QueueItem => !!i);

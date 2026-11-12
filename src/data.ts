@@ -1,4 +1,4 @@
-import { VerseState, Recording, Rhythm, RecordingVisibility } from './types';
+import { Recording, Rhythm, RecordingVisibility } from './types';
 import { BibleBook, BibleTranslation, TextScript, TranslationCapabilities } from './types';
 
 // Shared by the Save-Recording dialog (App.tsx), RecordingDetailScreen and

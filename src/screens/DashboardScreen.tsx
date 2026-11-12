@@ -1,12 +1,10 @@
 import { ScrollView, View } from 'react-native';
-import { Clock } from 'lucide-react-native';
 
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppText, useFontScale, useScaledSpace } from '../components/design';
-import { GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
+import { ScreenHeader, SectionHeader } from '../components/blocks';
 import { ActivityHeatmap } from '../components/ActivityHeatmap';
-import { StageDot } from '../components/VerseStages';
 import { LADDER_GROUPS } from '../lib/ladder';
 import { STAGE_LABEL, verseStage } from '../lib/stageProgress';
 
@@ -23,46 +21,6 @@ const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100, 365];
 const MEMORIZED_MILESTONES = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000];
 
 // A whole memorized chapter is 20-odd chips saying almost the same thing.
-// Collapse each book+chapter into one chip, with its verse numbers folded
-// into runs: "Ephesians 1:1-23", "Psalm 23:1-3, 6". Groups keep the order
-// they first appear in the queue; duplicate references across translations
-// collapse into one, since the chip shows a reference, not a text.
-function summarizeReferences(items: { book: string; chapter: number; verseNumber: number }[]) {
-  const groups: { key: string; book: string; chapter: number; verses: Set<number> }[] = [];
-  const byKey = new Map<string, (typeof groups)[number]>();
-
-  for (const item of items) {
-    const key = `${item.book}|${item.chapter}`;
-    let group = byKey.get(key);
-    if (!group) {
-      group = { key, book: item.book, chapter: item.chapter, verses: new Set<number>() };
-      byKey.set(key, group);
-      groups.push(group);
-    }
-    group.verses.add(item.verseNumber);
-  }
-
-  return groups.map((group) => {
-    const verses = [...group.verses].sort((a, b) => a - b);
-    const runs: string[] = [];
-    let start = verses[0];
-    let prev = verses[0];
-
-    for (let i = 1; i <= verses.length; i += 1) {
-      const current = verses[i];
-      if (current === prev + 1) {
-        prev = current;
-        continue;
-      }
-      runs.push(start === prev ? `${start}` : `${start}-${prev}`);
-      start = current;
-      prev = current;
-    }
-
-    return { key: group.key, label: `${group.book} ${group.chapter}:${runs.join(', ')}` };
-  });
-}
-
 function formatStudyTime(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -139,7 +97,6 @@ export default function DashboardScreen({ state }: { state: AppState }) {
     backHistory,
     navigateTo,
     memoryQueue,
-    memorizedCount,
     learningCount,
     memoryStreak,
     totalStudySeconds,

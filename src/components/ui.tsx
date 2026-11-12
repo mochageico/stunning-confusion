@@ -537,20 +537,6 @@ export function FadeInView({ children, style }: { children: React.ReactNode; sty
   return <Animated.View style={[{ opacity, transform: [{ translateY }] }, style]}>{children}</Animated.View>;
 }
 
-export function PulseView({ children, style }: { children: React.ReactNode; style?: any }) {
-  const opacity = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.4, duration: 750, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 750, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [opacity]);
-  return <Animated.View style={[{ opacity }, style]}>{children}</Animated.View>;
-}
 
 export function SpinView({ children, style }: { children: React.ReactNode; style?: any }) {
   const rotate = useRef(new Animated.Value(0)).current;

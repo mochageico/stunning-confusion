@@ -1,11 +1,11 @@
 import './global.css';
 import React from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import { BookOpen, Check, CloudOff, Headphones, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
+import { BookOpen, CloudOff, Headphones, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
 
 import { AppState, useAppState } from './src/state/useAppState';
 import PracticeModals from './src/components/PracticeModals';
@@ -66,7 +66,7 @@ import CircleChatScreen from './src/screens/CircleChatScreen';
 import QuizScreen from './src/screens/QuizScreen';
 import { CommunityGuidelinesSheet } from './src/components/CommunityGuidelinesSheet';
 import { NotificationAskSheet } from './src/components/NotificationAskSheet';
-import { APP_FONTS, AppButton, AppIconButton, AppText, ChoiceCard, FontScaleOverrideProvider, useScaledSpace, VerseFontContext } from './src/components/design';
+import { APP_FONTS, AppButton, AppIconButton, AppText, FontScaleOverrideProvider, useScaledSpace, VerseFontContext } from './src/components/design';
 import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from './src/components/blocks';
 import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
 import BlocksGallery from './src/dev/BlocksGallery';
@@ -353,7 +353,6 @@ const OWN_BOTTOM_INSET = new Set<string>(['guided', 'mixedReview']);
 const VERSE_WAIT_CAP_MS = 8000;
 
 function AppShell() {
-  const palette = useThemeColors();
   // Demo mode (sample data, no sign-in) for checking UI work -- a no-op unless
   // the web preview URL carries ?s=<screen>, and never in a production build.
   // See src/dev/DemoHarness.tsx.

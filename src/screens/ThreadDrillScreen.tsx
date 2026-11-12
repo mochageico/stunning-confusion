@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { verseStage } from '../lib/stageProgress';
-import { ScrollView, View } from 'react-native';
-import { RefreshCw, Route, X } from 'lucide-react-native';
+import { View } from 'react-native';
+import { Route } from 'lucide-react-native';
 
 import { AppState, isReviewDue } from '../state/useAppState';
 import { QueueItem, VerseState } from '../types';
 import { translationLabel } from '../data';
-import { FadeInView } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
-import { AppButton, AppIconButton, AppText, Switch, useScaledSpace } from '../components/design';
+import { AppButton, AppText, Switch, useScaledSpace } from '../components/design';
 import { EmptyState, GroupedList, ListRow } from '../components/blocks';
 import { OptionsPopup, SessionDone, SessionShell } from '../components/session';
 import ThreadRound, { ThreadAnswerMode, ThreadRoundResult, ThreadVerse } from '../components/ThreadRound';

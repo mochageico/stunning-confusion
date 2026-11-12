@@ -6,7 +6,6 @@ import type { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Dialog, ScreenHeader } from '../components/blocks';
-import { useThemeColors } from '../components/theme';
 import { MiniConstellation } from '../components/map/MiniConstellation';
 import { listenVerses, versesForStars } from '../components/map/addStars';
 import { GuideBody } from '../components/map/ConstellationSheets';
@@ -27,7 +26,6 @@ import { verseCounts } from './ConstellationsScreen';
 
 export default function ConstellationPreviewScreen({ state }: { state: AppState }) {
   const { handleBack, navigateTo, memoryQueue, sky, addToSky, addVersesToQueue, selectedTranslationId, startPractice, triggerToast } = state;
-  const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
   const { width: winWidth } = useWindowDimensions();

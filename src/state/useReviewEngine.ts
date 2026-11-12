@@ -9,7 +9,7 @@ import { computeDailyPull, PersonalPacingSettings, scheduledDue } from '../lib/g
 import { formatDate } from '../lib/format';
 import { VerseRange } from '../lib/verseRange';
 import { buildVerseId } from '../lib/appData';
-import { DAY_ABBREVS, getLogicalDate, localDayKey, nextOccurrenceOfWeekday } from '../lib/logicalDate';
+import { DAY_ABBREVS, getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { FIRST_WEEKLY_STEP, nextDue, stepInfo, TOP_STEP } from '../lib/ladder';
 import { reconcile } from '../lib/passages';
 import { gradeVerse, joinMessage, mergeChanged, type ReviewNote } from '../lib/ladderEngine';
@@ -23,7 +23,6 @@ import {
   isReviewDue,
   isTouchSpaced,
   newVerseRoom,
-  nextDueDateISO as nextDueDateISOFor,
   sensitivityMultiplier,
 } from '../lib/retention';
 import type { ReviewCompletedOpts } from './useAppState';
@@ -69,7 +68,6 @@ export function useReviewEngine({
   joinedGroupPlanDetails,
   syncChallengeProgress,
   selectedTranslationId,
-  verses,
   setVerses,
   triggerToast,
 }: UseReviewEngineDeps) {
@@ -115,9 +113,6 @@ export function useReviewEngine({
   // The scheduling math itself lives in src/lib/retention.ts; these bind it
   // to the active plan's settings.
   const reviewClock = { dayStartHour, sabbathEnabled, sabbathDay, pausedAt, pausedUntil };
-
-  // Next-due date `days` from today, nudged off the Sabbath.
-  const nextDueDateISO = (days: number) => nextDueDateISOFor(days, reviewClock);
 
   const validateTouch = (item: QueueItem, _type: 'speak' | 'type' | 'reveal'): boolean => isTouchSpaced(item);
 

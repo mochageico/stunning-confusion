@@ -22,7 +22,6 @@ import {
   ListOrdered,
   Mic,
   MoreHorizontal,
-  Palette,
   RotateCcw,
   Share2,
   Sprout,
