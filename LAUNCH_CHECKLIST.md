@@ -54,3 +54,14 @@ Signed-out visitors see made-up sample recordings labelled ESV, NIV and NKJV
 (`SUGGESTED_FEED_RECORDINGS` in `src/data.ts`). It's only labels, not text,
 but it advertises translations the app doesn't offer. Relabel them to
 translations a stranger can pick.
+
+## Database
+
+- **Indexes deployed** 2026-11-12: 17 indexes, one for every query on a
+  collection that grows with users (`firestore.indexes.json`, optimization
+  plan Phase 3). The database is Enterprise edition, which makes no indexes by
+  itself: a query without one reads, and bills, the whole collection. A new
+  `where(` / `orderBy(` on a shared collection needs its index added to that
+  file and deployed (`npx firebase-tools deploy --only firestore:indexes
+  --non-interactive`). Check with `npx firebase-tools firestore:indexes
+  --database ai-studio-da1c3045-26bb-470c-883c-0b120417bcda`.
