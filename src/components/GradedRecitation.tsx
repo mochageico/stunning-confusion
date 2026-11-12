@@ -548,15 +548,8 @@ export default function GradedRecitation({
         follow={graded.length > 0 ? pointer / graded.length : 0}
         footer={
           <View style={{ gap: space(8) }}>
-            <View className="flex-row flex-wrap items-center justify-between" style={{ gap: space(8) }}>
-              <AppText variant="caption" className="font-sans font-medium text-ink-3 px-1">
-                {pointer} of {graded.length}
-              </AppText>
-              <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
-                {pointer > 0 && <AppButton size="sm" variant="quiet" label="Reset" onPress={resetTyping} />}
-                <AppButton size="sm" variant="secondary" label="Show this word" onPress={showWord} />
-              </View>
-            </View>
+            {/* Only the typing box is pinned above the keyboard; the buttons
+                sit under the text, so the text keeps the room. */}
             <View className="flex-row items-center" style={{ gap: space(8) }}>
               <AppTextInput
                 value=""
@@ -579,7 +572,6 @@ export default function GradedRecitation({
                 />
               )}
             </View>
-            {footerExtra}
           </View>
         }
       >
@@ -600,6 +592,16 @@ export default function GradedRecitation({
             };
           }}
         />
+        <View className="flex-row flex-wrap items-center justify-between" style={{ gap: space(8) }}>
+          <AppText variant="caption" className="font-sans font-medium text-ink-3 px-1">
+            {pointer} of {graded.length}
+          </AppText>
+          <View className="flex-row flex-wrap" style={{ gap: space(8) }}>
+            {pointer > 0 && <AppButton size="sm" variant="quiet" label="Reset" onPress={resetTyping} />}
+            <AppButton size="sm" variant="secondary" label="Show this word" onPress={showWord} />
+          </View>
+        </View>
+        {footerExtra}
       </RoundFrame>
     );
   }

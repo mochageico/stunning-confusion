@@ -767,11 +767,13 @@ function Sitting({
           </View>
           <AppIconButton Icon={SlidersHorizontal} variant="outline" diameter={40} onPress={() => setGearOpen(true)} accessibilityLabel="Guided learning settings" />
         </View>
-        {notice && (
-          <View className="bg-accent-soft rounded-card" style={{ padding: space(10), marginBottom: space(12) }}>
-            <AppText variant="label" className="font-sans text-ink">
+        {/* Closeable, and out of the way while the keyboard is up. */}
+        {notice && lift === 0 && (
+          <View className="bg-accent-soft rounded-card flex-row items-start" style={{ padding: space(10), marginBottom: space(12), gap: space(8) }}>
+            <AppText variant="label" className="font-sans text-ink flex-1">
               {notice}
             </AppText>
+            <AppIconButton Icon={X} variant="bare" diameter={28} onPress={() => setNotice(null)} accessibilityLabel="Dismiss" />
           </View>
         )}
         {top}
