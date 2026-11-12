@@ -329,11 +329,13 @@ export default function ConstellationMap({
     setFadeToken(instant ? null : {});
   };
   const zoomInto = (id: string) => {
+    userMoved.current = true;
     if (id === focus) return;
     setFocusTo(id);
     camera.current?.frame(viewBounds(result, id), insets(id), false, true);
   };
   const zoomOut = () => {
+    userMoved.current = true;
     setFocusTo(null);
     camera.current?.frame(viewBounds(result), insets(null), false, true);
   };
@@ -347,6 +349,15 @@ export default function ConstellationMap({
     camera.current?.frame(viewBounds(result, start ?? undefined), insets(start), true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sized, skyReady, result]);
+
+  // The map's box can change size just after it opens (the tip appearing or going, the header wrapping):
+  // until the user has moved the camera themselves, frame the same view again at the new size.
+  const userMoved = useRef(false);
+  useEffect(() => {
+    if (!framedOnce.current || userMoved.current) return;
+    camera.current?.frame(viewBounds(result, focus ?? undefined), insets(focus), true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapHeight]);
 
   // The zoomed-into constellation left the sky (removed): back out to the whole sky.
   useEffect(() => {
@@ -401,6 +412,7 @@ export default function ConstellationMap({
   };
   const onTap = useCallback(
     (x: number, y: number, zoom: number) => {
+      userMoved.current = true;
       if (focus === null) {
         const t = titleAt([x, y]);
         if (t) {
