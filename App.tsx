@@ -177,13 +177,13 @@ function Screens() {
       case 'audioFeed':
         return W(AudioFeedScreen);
       case 'referenceDrill':
-        return W(ReferenceDrillScreen);
+        return <ReferenceDrillScreen />;
       case 'threadDrill':
-        return W(ThreadDrillScreen);
+        return <ThreadDrillScreen />;
       case 'guided':
-        return W(GuidedLearningScreen);
+        return <GuidedLearningScreen />;
       case 'mixedReview':
-        return W(MixedReviewScreen);
+        return <MixedReviewScreen />;
       case 'constellations':
         return <ConstellationsScreen />;
       case 'constellationPreview':

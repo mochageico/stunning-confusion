@@ -3,7 +3,7 @@ import { verseStage } from '../lib/stageProgress';
 import { View } from 'react-native';
 import { Route } from 'lucide-react-native';
 
-import { AppState, isReviewDue } from '../state/useAppState';
+import { isReviewDue } from '../state/useAppState';
 import { QueueItem, VerseState } from '../types';
 import { translationLabel } from '../data';
 import { Dropdown } from '../components/Dropdown';
@@ -23,6 +23,7 @@ import {
   threadRunEndingAt,
   threadStartVerseCounts,
 } from '../lib/drills';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // PICK UP THE THREAD
@@ -133,7 +134,11 @@ const listRefs = (verses: { book: string; chapter: number; verse: number }[]) =>
 // The last choices, kept for the session so the next visit starts with them.
 let lastSettings = { reviewSet: 'all' as ReviewSet, dueTodayOnly: false, stretchSize: 3, sessionLength: 0, hideVerseNumber: false };
 
-export default function ThreadDrillScreen({ state }: { state: AppState }) {
+export default function ThreadDrillScreen() {
+  const state = useAppFields(
+    'balanceDays', 'dayStartHour', 'handleUpdateVerseStatus', 'memoryQueue', 'navigateTo',
+    'reviewsPaused', 'setThreadDrillPreset', 'threadDrillPreset', 'validateTouch',
+  );
   const space = useScaledSpace();
   const { memoryQueue, navigateTo, threadDrillPreset, setThreadDrillPreset, handleUpdateVerseStatus, validateTouch, reviewsPaused, balanceDays, dayStartHour } = state;
   // Due today, or inside the balance window ahead of its scheduled day: either counts as a review.

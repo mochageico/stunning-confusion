@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Check, Eye, Layers, SlidersHorizontal, X } from 'lucide-react-native';
 
-import { AppState, isReviewDue } from '../state/useAppState';
+import { isReviewDue } from '../state/useAppState';
 import { ChapterSections, QueueItem, ReviewGrade } from '../types';
 import { FadeInView, useKeyboardLift } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
@@ -59,6 +59,7 @@ import {
   todayOrder,
   verseGrade,
 } from '../lib/mix';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // MIXED REVIEW -- the screen (MIXED_REVIEW_PLAN.md, stage 5)
@@ -605,7 +606,6 @@ function PracticeRound({
 // ----------------------------------------------------------------------------
 
 function Session({
-  state,
   initial,
   startedAt,
   gapPrefs,
@@ -613,7 +613,6 @@ function Session({
   off,
   onChangeChapters,
 }: {
-  state: AppState;
   initial: MixState;
   startedAt: number;
   counts: MixCounts;
@@ -623,6 +622,10 @@ function Session({
   off: Set<string>;
   onChangeChapters: (next: Set<string>) => void;
 }) {
+  const state = useAppFields(
+    'dayStartHour', 'handleReviewCompleted', 'memoryQueue', 'memoryQueueRef', 'navigateTo',
+    'pausedAt', 'pausedUntil', 'sectionsForChapter', 'sky', 'startPractice',
+  );
   const space = useScaledSpace();
   const palette = useThemeColors();
   const lift = useKeyboardLift();
@@ -971,7 +974,11 @@ function Session({
 // The route
 // ----------------------------------------------------------------------------
 
-export default function MixedReviewScreen({ state }: { state: AppState }) {
+export default function MixedReviewScreen() {
+  const state = useAppFields(
+    'cleanPct', 'dayStartHour', 'memoryQueue', 'navigateTo', 'reviewsPaused', 'sectionsForChapter',
+    'swapCanBeClean',
+  );
   const space = useScaledSpace();
   const { memoryQueue, reviewsPaused, navigateTo, sectionsForChapter, cleanPct, swapCanBeClean, dayStartHour } = state;
 
@@ -1020,7 +1027,6 @@ export default function MixedReviewScreen({ state }: { state: AppState }) {
     return (
       <Session
         key={session.n}
-        state={state}
         initial={session.state}
         startedAt={session.startedAt}
         counts={counts}

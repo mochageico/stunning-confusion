@@ -3,7 +3,7 @@ import { verseStage } from '../lib/stageProgress';
 import { Pressable, View } from 'react-native';
 import { Target } from 'lucide-react-native';
 
-import { AppState, isReviewDue } from '../state/useAppState';
+import { isReviewDue } from '../state/useAppState';
 import { scriptOfVerse } from '../lib/textScript';
 import { NumericInput } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
@@ -19,6 +19,7 @@ import {
   ReferenceItem,
   ReferenceRound,
 } from '../lib/drills';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // REFERENCE <-> VERSE DRILL
@@ -73,7 +74,8 @@ let lastSettings = {
   reviewSet: 'all' as ReviewSet, dueTodayOnly: false, direction: 'both' as DrillDirection, sessionLength: 10, hardMode: false,
 };
 
-export default function ReferenceDrillScreen({ state }: { state: AppState }) {
+export default function ReferenceDrillScreen() {
+  const state = useAppFields('memoryQueue', 'navigateTo');
   const space = useScaledSpace();
   const { memoryQueue, navigateTo } = state;
 

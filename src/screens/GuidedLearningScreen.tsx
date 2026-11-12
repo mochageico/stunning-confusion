@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Check, Compass, RefreshCw, SlidersHorizontal, X } from 'lucide-react-native';
 
-import { AppState, isReviewDue } from '../state/useAppState';
+import { isReviewDue } from '../state/useAppState';
 import { QueueItem } from '../types';
 import { FadeInView, useKeyboardLift } from '../components/ui';
 import { AppButton, AppIconButton, AppText, RadioMark, useScaledSpace } from '../components/design';
@@ -46,6 +46,7 @@ import {
   startSession,
   toDrillVerse,
 } from '../lib/guided';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // GUIDED LEARNING -- the screen
@@ -522,19 +523,24 @@ function RungBar({ ladder }: { ladder: Ladder }) {
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 
 function Sitting({
-  state,
   passageKey,
   passages,
   onPickPassage,
   jigsawWarmUp,
 }: {
-  state: AppState;
   passageKey: string;
   passages: Passage[];
   onPickPassage: (key: string) => void;
   /** The saved warm-up setting; the warm-up step can turn it off mid-sitting. */
   jigsawWarmUp: boolean;
 }) {
+  const state = useAppFields(
+    'audioCache', 'creditGuided', 'dayStartHour', 'getTodayAbbreviation', 'learningDays',
+    'masteryTouches', 'memoryQueue', 'memoryQueueRef', 'navigateTo', 'newVersesPace',
+    'openMixedReview', 'pullVerseIntoLearning', 'reviewsPaused', 'selectedChapterAudios',
+    'setGuidedAnchors', 'setGuidedSetAside', 'setPlayingRecordingId', 'studioPlaybackEnabled',
+    'userRecordings',
+  );
   const space = useScaledSpace();
   const lift = useKeyboardLift();
   const { navigateTo, masteryTouches, newVersesPace, learningDays, dayStartHour, reviewsPaused, memoryQueueRef } = state;
@@ -1266,7 +1272,10 @@ step.kind === 'stitch' ? 'Stitch' : 'The join';
 // The route: picks the passage, then hands over to the sitting
 // ----------------------------------------------------------------------------
 
-export default function GuidedLearningScreen({ state }: { state: AppState }) {
+export default function GuidedLearningScreen() {
+  const state = useAppFields(
+    'guidedPassageKey', 'memoryQueue', 'navigateTo', 'pullVerseIntoLearning', 'setGuidedPassageKey',
+  );
   const space = useScaledSpace();
   const { memoryQueue, guidedPassageKey, setGuidedPassageKey, navigateTo } = state;
 
@@ -1339,7 +1348,7 @@ export default function GuidedLearningScreen({ state }: { state: AppState }) {
     );
   }
 
-  return <Sitting key={resolved.key} state={state} passageKey={resolved.key} passages={passages} jigsawWarmUp={jigsawWarmUp} onPickPassage={(k) => {
+  return <Sitting key={resolved.key} passageKey={resolved.key} passages={passages} jigsawWarmUp={jigsawWarmUp} onPickPassage={(k) => {
     setChosen(k);
     setLocked(k);
   }} />;
