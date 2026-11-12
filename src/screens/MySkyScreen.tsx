@@ -60,6 +60,7 @@ export default function MySkyScreen({ state }: { state: AppState }) {
           onBrowse={() => state.navigateTo('constellations')}
           onRemoveFromSky={(id) => void state.removeFromSky(id)}
           onListen={listen}
+          onFound={state.markFound}
           play={{
             userRecordings: state.userRecordings,
             selectedChapterAudios: state.selectedChapterAudios,

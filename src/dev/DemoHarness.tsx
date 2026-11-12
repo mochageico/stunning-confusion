@@ -801,13 +801,19 @@ export function useDemoState(real: AppState): AppState {
   // uncovers 1 Peter 5:7); Desiring & Delighting in God is just added, so only
   // its starting star and the ones joined to it show. nosky=1 leaves the sky
   // empty. On screen only: with no signed-in user nothing is written.
+  // reveal=1 adds them before the queue is in (the queue's still empty when the
+  // sky is saved), so 1 Peter 5:7 has not been "found" yet and plays the reveal
+  // when My sky opens; reveal=complete also marks the rest of Rest and trust
+  // found, so that star is the last and the payoff plays too.
   const skySeeded = useRef(false);
   useEffect(() => {
-    if (!DEMO_ENABLED || skySeeded.current || real.loadingAuth || real.memoryQueue.length === 0) return;
+    const reveal = params.get('reveal');
+    if (!DEMO_ENABLED || skySeeded.current || real.loadingAuth || (real.memoryQueue.length === 0 && !reveal)) return;
     skySeeded.current = true;
     if (params.get('nosky') === '1') return;
     real.addToSky('rest-and-trust');
     real.addToSky('desiring-and-delighting-in-god');
+    if (reveal === 'complete') real.markFound('rest-and-trust', ['heb4', 'phil4', 'rom8']);
   }, [real.loadingAuth, real.memoryQueue.length]);
 
   if (!DEMO_ENABLED) return real;

@@ -7,6 +7,7 @@ import { ChapterSections, QueueItem, ReviewGrade } from '../types';
 import { FadeInView, useKeyboardLift } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { TakeawayAsk } from '../components/TakeawayAsk';
+import { NewStarsNote } from '../components/map/NewStarsNote';
 import { OptionsPopup, SessionDone } from '../components/session';
 import { Badge, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { bracketColor, useThemeColors } from '../components/theme';
@@ -767,6 +768,9 @@ function Session({
 
           {/* A section may have just reached weekly reviews with this session's credits. */}
           <TakeawayAsk state={state} />
+
+          {/* A learned verse uncovers the stars joined to it in My sky. */}
+          <NewStarsNote sky={state.sky} queue={state.memoryQueue} navigateTo={navigateTo} />
 
           {sum.notCovered.length > 0 && (
             <AppText variant="label" className="font-sans text-ink-2">

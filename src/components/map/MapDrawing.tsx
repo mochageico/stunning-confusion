@@ -163,6 +163,9 @@ interface DrawingProps {
   /** My sky: each constellation's name, drawn over it on the whole sky. */
   titles?: { id: string; text: string; x: number; y: number }[];
   titleOpacity?: number;
+  /** My sky: constellations (group ids) that are complete: their lines are gold. */
+  goldGroups?: ReadonlySet<string>;
+  goldColor?: string;
 }
 
 const GLOW_ID = 'hiddenGlow';
@@ -190,6 +193,8 @@ export const MapDrawing = React.memo(function MapDrawing({
   nextColor,
   titles,
   titleOpacity = 1,
+  goldGroups,
+  goldColor,
 }: DrawingProps) {
   const lit = (k: string) => looks[k]?.lit ?? false;
   const lightMap = isLightColor(paper);
@@ -218,6 +223,7 @@ export const MapDrawing = React.memo(function MapDrawing({
         const fade = Math.min(appear[l.from] ?? 1, appear[l.to] ?? 1) * seen(l.from);
         if (fade <= 0.01) return null;
         const own = l.kind === 'user' && !!userLineColor;
+        const gold = l.kind === 'curated' && !!goldColor && !!goldGroups?.has(l.id);
         return (
           <Line
             key={`${l.id}:${l.from}~${l.to}`}
@@ -225,9 +231,9 @@ export const MapDrawing = React.memo(function MapDrawing({
             y1={a[1]}
             x2={b[0]}
             y2={b[1]}
-            stroke={chosen ? palette.accent : own ? userLineColor : both ? palette.ink2 : palette.ink3}
-            strokeWidth={chosen ? 3 : both || own ? 1.6 : 1.2}
-            strokeOpacity={(both || chosen || own ? 1 : 0.6) * fade}
+            stroke={chosen ? palette.accent : own ? userLineColor : gold ? goldColor : both ? palette.ink2 : palette.ink3}
+            strokeWidth={chosen ? 3 : gold ? 2.2 : both || own ? 1.6 : 1.2}
+            strokeOpacity={(both || chosen || own || gold ? 1 : 0.6) * fade}
             strokeDasharray={own ? '7 5' : undefined}
             strokeLinecap="round"
           />

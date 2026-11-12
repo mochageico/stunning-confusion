@@ -237,6 +237,35 @@ export function nextToLearn(c: Constellation, queue: QueueItem[], revealed: Read
   return c.stars.filter((s) => out.has(s.id)).map((s) => s.id);
 }
 
+/**
+ * The star a new star's line draws in from: a showing neighbor, one the user
+ * has learned first. Null when none of its neighbors shows (a held star found
+ * on its own).
+ */
+export function joinedFrom(c: Constellation, queue: QueueItem[], starId: string, revealed: ReadonlySet<string>): string | null {
+  const byId = new Map(c.stars.map((s) => [s.id, s]));
+  const near = joinedTo(c, starId).filter((id) => id !== starId && revealed.has(id));
+  const learned = near.find((id) => isLearned(byId.get(id)!.ref, queue));
+  return learned ?? near[0] ?? null;
+}
+
+/**
+ * Stars that have appeared in the user's sky but not been looked at yet (not
+ * saved as found): what a review or learning summary can say "1 new star
+ * appeared in The Shepherd" about. Only constellations that are in My sky,
+ * in the order added; none with nothing new.
+ */
+export function skyNewStars(sky: SkyState, list: readonly Constellation[], queue: QueueItem[]): { id: string; title: string; starIds: string[] }[] {
+  const out: { id: string; title: string; starIds: string[] }[] = [];
+  for (const id of sky.added) {
+    const c = list.find((x) => x.id === id);
+    if (!c) continue;
+    const starIds = newlyFound(c, queue, sky.found[id] ?? []);
+    if (starIds.length > 0) out.push({ id, title: c.title, starIds });
+  }
+  return out;
+}
+
 // ---- the sky doc (users/{uid}/mapLayout/sky), as pure transforms -------------
 
 export const EMPTY_SKY: SkyState = { added: [], found: {}, v: 1 };

@@ -8,7 +8,7 @@ import type { VersePageRef } from '../../state/useAppState';
 import { AppButton, AppText, useScaledSpace } from '../design';
 import { ScreenHeader } from '../blocks';
 import { OneTimeTip } from '../OneTimeTip';
-import { starKey, starLit } from '../../lib/constellations';
+import { isComplete, joinedFrom, newlyFound, revealedStars, starKey, starLit } from '../../lib/constellations';
 import { CONSTELLATIONS } from '../../content/constellations';
 import { layout, LayoutResult, Pt, starLabel, StarMove, viewBounds } from '../../lib/mapLayout';
 import { MapCamera, MapCanvas } from './MapCanvas';
@@ -22,6 +22,16 @@ import WalkConstellation, { WalkDeps } from './WalkConstellation';
 import { echoViews, foundEchoes, hitTest, lineLabels as lineLabelsFor, skyView, starLooks } from './mapModel';
 import { BACKDROP_STARS, SKY, useSkyPalette } from './skyPalette';
 import { FoundStarPopup, HiddenStarPopup, type SkyPlayProps } from './SkyPopups';
+import { PAYOFF_MS, PayoffOverlay, REVEAL_MS, REVEAL_RELEASE, RevealBanner, RevealOverlay, type RevealStar, useClock, useReduceMotion } from './SkyReveal';
+
+/** What the last reveal showed: the new stars, the constellations it completed, and what the banner says. */
+interface Reveal {
+  token: object;
+  stars: RevealStar[];
+  completed: string[];
+  banner: { text: string; key: string; group: string };
+}
+const BANNER_MS = 7000;
 
 // ============================================================================
 // MY SKY -- the map, reworked (CONSTELLATION_SKY_PLAN.md, stage 3)
@@ -185,6 +195,7 @@ export default function ConstellationMap({
   onRemoveFromSky,
   onListen,
   play,
+  onFound,
 }: {
   queue: QueueItem[];
   /** What's in My sky and which stars were found (useSky). */
@@ -218,6 +229,8 @@ export default function ConstellationMap({
   onListen: (items: QueueItem[]) => void;
   /** What the star popup's play button needs. */
   play: SkyPlayProps;
+  /** Stars that just appeared have been shown: save them as found for good (useSky markFound). */
+  onFound: (constellationId: string, starIds: string[]) => void;
 }) {
   const space = useScaledSpace();
   const palette = useSkyPalette();
@@ -377,6 +390,78 @@ export default function ConstellationMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addedKey, result]);
 
+  // ---- The reveal moment and the payoff (Stage 4) ----
+  // Stars that appeared since the sky was last looked at play a short reveal
+  // (the line draws in from the learned star, the star lights with a ring),
+  // are saved as found, and a banner says so. Runs when the sky opens and
+  // again whenever a learn or review save lands while it is open.
+  const reduceMotion = useReduceMotion();
+  const [reveal, setReveal] = useState<Reveal | null>(null);
+  const [banner, setBanner] = useState<Reveal['banner'] | null>(null);
+  useEffect(() => {
+    if (!skyReady || !sized || !framedOnce.current || result.stars.length === 0) return;
+    const keyOf = (cid: string, sid: string) => result.stars.find((s) => s.curated?.constellationId === cid && s.curated.starId === sid)?.key;
+    const stars: RevealStar[] = [];
+    const completed: string[] = [];
+    let first: Reveal['banner'] | null = null;
+    for (const id of sky.added) {
+      const c = CONSTELLATIONS.find((x) => x.id === id);
+      if (!c) continue;
+      const fresh = newlyFound(c, queue, sky.found[id]);
+      if (fresh.length === 0) continue;
+      const shown = revealedStars(c, queue, sky.found[id]);
+      const before = new Set([...shown].filter((x) => !fresh.includes(x)));
+      for (const sid of fresh) {
+        const key = keyOf(id, sid);
+        if (!key) continue;
+        const from = joinedFrom(c, queue, sid, before) ?? joinedFrom(c, queue, sid, shown);
+        stars.push({ key, fromKey: from ? keyOf(id, from) ?? null : null });
+        const ref = c.stars.find((s) => s.id === sid)?.ref;
+        if (!first && ref) first = { text: '', key, group: id };
+        if (first && first.key === key && ref) first.text = starLabel(ref);
+      }
+      if (isComplete(c, shown)) completed.push(id);
+      onFound(id, fresh);
+    }
+    if (stars.length === 0 || !first) return;
+    const text = stars.length === 1 ? `A new star appeared · ${first.text} · tap it to read` : `${stars.length} new stars appeared · tap one to read`;
+    const next = { ...first, text };
+    setReveal({ token: {}, stars, completed, banner: next });
+    setBanner(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sky, queue, skyReady, sized, result]);
+  useEffect(() => {
+    if (!banner) return;
+    const timer = setTimeout(() => setBanner(null), BANNER_MS);
+    return () => clearTimeout(timer);
+  }, [banner]);
+  const openBanner = () => {
+    if (!banner) return;
+    setBanner(null);
+    if (banner.group !== focus) zoomInto(banner.group);
+    setSelection({ kind: looks[banner.key]?.lit ? 'star' : 'found', key: banner.key });
+  };
+  // One clock: the reveal's REVEAL_MS, then (when it completed a constellation) the gold lines' PAYOFF_MS.
+  const completedNow = reveal?.completed ?? [];
+  const clockMs = REVEAL_MS + (completedNow.length > 0 ? PAYOFF_MS : 0);
+  const clock = useClock(reveal && !reduceMotion ? reveal.token : null, clockMs);
+  const animating = !!reveal && !reduceMotion && clock < 1;
+  const revealT = Math.min(1, (clock * clockMs) / REVEAL_MS);
+  const payoffT = completedNow.length > 0 ? Math.max(0, Math.min(1, (clock * clockMs - REVEAL_MS) / PAYOFF_MS)) : 1;
+  // A new star stays a glow until its line has drawn in; a completed constellation turns gold once its lines have.
+  const holdKeys = animating && revealT < REVEAL_RELEASE ? reveal!.stars.map((s) => s.key).join('|') : '';
+  const drawHidden = useMemo(() => (holdKeys ? new Set([...view.hidden, ...holdKeys.split('|')]) : view.hidden), [view, holdKeys]);
+  const goldKey = Object.values(view.info)
+    .filter((i) => i.complete && !(animating && completedNow.includes(i.constellation.id)))
+    .map((i) => i.constellation.id)
+    .join('|');
+  const goldGroups = useMemo(() => new Set(goldKey ? goldKey.split('|') : []), [goldKey]);
+  const payoffLines = useMemo(
+    () => (animating && completedNow.length > 0 ? result.lines.filter((l) => l.kind === 'curated' && completedNow.includes(l.id)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [animating, reveal, result]
+  );
+
   // ---- A star on its own ----
   const addSoloStar = (ref: StarRef) => {
     // Verses outside My Verses join it through the usual add path; ones already there are left alone.
@@ -475,7 +560,7 @@ export default function ConstellationMap({
         title: focusInfo ? focusInfo.constellation.title : 'Your links',
         subtitle: focusInfo
           ? focusInfo.complete
-            ? `All ${focusInfo.total} found`
+            ? `Complete · all ${focusInfo.total} lit`
             : `${focusInfo.found} found · ${focusInfo.total - focusInfo.found} still hidden`
           : `${focusGroup?.keys.length ?? 0} ${focusGroup?.keys.length === 1 ? 'star' : 'stars'}`,
         backLabel: 'My sky',
@@ -649,14 +734,18 @@ export default function ConstellationMap({
             dim={false}
             palette={palette}
             paper={paper}
-            hidden={view.hidden}
+            hidden={drawHidden}
             groupOpacity={groupOpacity}
             userLineColor={SKY.link}
             glowColor={SKY.glow}
             nextColor={SKY.next}
             titles={titleOpacity > 0.01 ? titles : undefined}
             titleOpacity={titleOpacity}
+            goldGroups={goldGroups}
+            goldColor={SKY.gold}
           />
+          {animating && reveal ? <RevealOverlay stars={reveal.stars} positions={positions} t={revealT} /> : null}
+          {animating && payoffLines.length > 0 ? <PayoffOverlay lines={payoffLines} positions={positions} t={payoffT} color={SKY.gold} /> : null}
           <EchoGhosts
             from={selectedStar ? positions[selectedStar] ?? null : null}
             views={echoes}
@@ -677,6 +766,8 @@ export default function ConstellationMap({
             <Minus size={20} color={SKY.ink} />
           </NightButton>
         </View>
+
+        {banner && !card ? <RevealBanner text={banner.text} onPress={openBanner} /> : null}
 
         {(card || empty || bottomRow) && (
           <View style={{ position: 'absolute', left: space(10), right: space(10), bottom: space(10), maxHeight: cardMax }}>

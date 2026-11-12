@@ -5,8 +5,8 @@ import type { Constellation, Echo, QueueItem, StarRef, VerseLink } from '../type
 import { CONSTELLATIONS } from '../content/constellations';
 import { starVerses, walkCredit, walkOrder } from './mapWalk';
 import {
-  canLabel, echoesFor, echoVisible, EMPTY_SKY, isComplete, isLearned, joinedTo, migrateSky, newlyFound, nextToLearn, progress, revealedStars,
-  searchConstellations, skyAdd, skyMarkFound, skyRemove, starIsTop, starKey, starLit, starStage, startStarId, suggestedNext, userConstellations,
+  canLabel, echoesFor, echoVisible, EMPTY_SKY, isComplete, isLearned, joinedFrom, joinedTo, migrateSky, newlyFound, nextToLearn, progress, revealedStars,
+  searchConstellations, skyAdd, skyNewStars, skyMarkFound, skyRemove, starIsTop, starKey, starLit, starStage, startStarId, suggestedNext, userConstellations,
 } from './constellations';
 
 let failures = 0;
@@ -179,6 +179,20 @@ check('migration adds constellations the user holds a star in', mig.added.join()
 check('migration skips hidden ones', migrateSky([sk, ...CONSTELLATIONS], mq, ['shepherd']).added.join() === 'rest-and-trust');
 check('migration adds nothing when nothing is held', migrateSky([sk, ...CONSTELLATIONS], [], []).added.length === 0);
 check('migration saves what shows as found', (mig.found['rest-and-trust'] ?? []).includes('matt11'), mig.found);
+
+// ---- Stage 4: the reveal moment ----
+const allShown = revealedStars(sk, [], ['a', 'b']);
+check('a new star draws in from the learned neighbor', joinedFrom(sk, [item('John', 10, 14, daily)], 'c', revealedStars(sk, [item('John', 10, 14, daily)])) === 'b');
+check('a new star prefers the learned neighbor over a merely showing one', joinedFrom(sk, [...holdAll('Psalms', 23, 1, 4, daily)], 'b', revealedStars(sk, holdAll('Psalms', 23, 1, 4, daily))) === 'c');
+check('a held star found on its own has no line to draw', joinedFrom(sk, [item('Ezekiel', 34, 11, learning)], 'e', revealedStars(sk, [item('Ezekiel', 34, 11, learning)])) === null);
+check('joinedFrom ignores neighbors that are still hidden', joinedFrom(sk, [], 'c', allShown) === 'b');
+const skyA = { added: ['shepherd'], found: { shepherd: ['a', 'b'] }, v: 1 as const };
+const lqNew = [item('John', 10, 14, daily)];
+check('skyNewStars: a star the learned verse uncovered', JSON.stringify(skyNewStars(skyA, [sk], lqNew)) === JSON.stringify([{ id: 'shepherd', title: 'The Shepherd', starIds: ['c'] }]), skyNewStars(skyA, [sk], lqNew));
+check('skyNewStars: nothing new, nothing said', skyNewStars(skyA, [sk], []).length === 0);
+check('skyNewStars: not for constellations outside the sky', skyNewStars({ ...skyA, added: [] }, [sk], lqNew).length === 0);
+check('skyNewStars: gone once marked found', skyNewStars(skyMarkFound(skyA, 'shepherd', ['c']), [sk], lqNew).length === 0);
+check('the last star found completes the constellation', !isComplete(sk, revealedStars(sk, [], ['a', 'b', 'c', 'd'])) && isComplete(sk, revealedStars(sk, [item('Ezekiel', 34, 11, learning)], ['a', 'b', 'c', 'd'])));
 
 if (failures > 0) {
   console.log(`\n${failures} check(s) failed.`);

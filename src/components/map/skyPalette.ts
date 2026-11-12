@@ -27,6 +27,8 @@ export const SKY = {
   link: '#6FB0FF',
   /** The NEXT marker and the focused star's ring. */
   next: '#F5D27A',
+  /** A completed constellation's lines (Stage 4's payoff). */
+  gold: '#FFC83D',
 } as const;
 
 /** The dark palette, with the night sky's ink laid over it. */
