@@ -765,7 +765,7 @@ function Session({
           )}
 
           {/* A section may have just reached weekly reviews with this session's credits. */}
-          <TakeawayAsk state={state} />
+          <TakeawayAsk />
 
           {/* A learned verse uncovers the stars joined to it in My sky. */}
           <NewStarsNote sky={state.sky} queue={state.memoryQueue} navigateTo={navigateTo} />

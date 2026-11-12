@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
-import { AppState } from '../state/useAppState';
 import type { CalendarDayProjection } from '../lib/ladderCalendar';
 import { useCalendarDays } from '../state/useCalendarDays';
 import { LADDER, LADDER_GROUPS, type LadderGroup } from '../lib/ladder';
@@ -11,6 +10,7 @@ import { AppButton, AppText, useScaledSpace } from '../components/design';
 import { Dialog, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { VersesTabs } from '../components/VersesTabs';
 import { heaviestDay } from '../components/TodayCards';
+import { useAppFields } from '../state/appStore';
 
 // MEMORY CALENDAR -- the Verses tab's Calendar section: the next two weeks as
 // a list, one row a day. Bar length is how long the day takes, split by where
@@ -37,7 +37,8 @@ function versesLabel(first: number, last: number) {
   return first === last ? `${first}` : `${first}–${last}`;
 }
 
-export default function MemoryCalendarScreen({ state }: { state: AppState }) {
+export default function MemoryCalendarScreen() {
+  const state = useAppFields('joinedGroupPlanDetails', 'navigateTo', 'switchVersesTab');
   const space = useScaledSpace();
   const { navigateTo, switchVersesTab, joinedGroupPlanDetails } = state;
 
@@ -45,7 +46,7 @@ export default function MemoryCalendarScreen({ state }: { state: AppState }) {
   // The first week shows in full; later days with nothing on them wait behind "Show 2 weeks".
   const [showAllDays, setShowAllDays] = useState(false);
 
-  const days = useCalendarDays(state, DAYS_AHEAD);
+  const days = useCalendarDays(DAYS_AHEAD);
   const hasWork = (d: CalendarDayProjection) => d.dueReviews.length > 0 || d.minutes > 0;
   const hiddenDays = days.filter((d, i) => i >= FIRST_WEEK && !hasWork(d)).length;
 

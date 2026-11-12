@@ -8,6 +8,7 @@ import { RhythmEditor } from '../components/RhythmEditor';
 import { QueueSources } from '../components/QueueSources';
 import HomeScreen from './HomeScreen';
 import type { AppState } from '../state/useAppState';
+import { setAppState } from '../state/appStore';
 import type { Rhythm, GroupPlan, GroupPlanMembership } from '../types';
 
 // ============================================================================
@@ -272,9 +273,11 @@ function PhoneFrame({ children }: { children: React.ReactNode }) {
 /** The real Home screen at true device width. */
 function LiveHome() {
   const mock = useMockHomeState();
+  // The lab mounts instead of the app, so nothing else publishes app state.
+  setAppState(mock as unknown as AppState);
   return (
     <PhoneFrame>
-      <HomeScreen state={mock as unknown as AppState} />
+      <HomeScreen />
     </PhoneFrame>
   );
 }

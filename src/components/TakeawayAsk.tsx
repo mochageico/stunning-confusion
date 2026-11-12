@@ -2,12 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { BookmarkCheck, Check } from 'lucide-react-native';
 
-import type { AppState } from '../state/useAppState';
 import type { TakeawaySpot } from '../state/useTakeaways';
 import { PendingAsk } from '../lib/takeaways';
 import { nextSharedTo, rememberedChoice } from '../lib/takeawaySharing';
 import { AppButton, AppText, AppTextInput, Switch, useFontScale, useScaledSpace } from './design';
 import { bracketColor, useThemeColors } from './theme';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // THE ASK -- "What's the main point?"
@@ -145,7 +145,8 @@ export function ShareSwitch({
  * last choice (once that has loaded from the device) until the user changes
  * it. Returns [choice, change, the circle ids the switch offers].
  */
-export function useNewShareChoice(state: AppState): [string[], (ids: string[]) => void, string[]] {
+export function useNewShareChoice(): [string[], (ids: string[]) => void, string[]] {
+  const state = useAppFields('lastShareChoice', 'myCircles');
   const offered = state.myCircles.map((c) => c.id);
   const remembered = rememberedChoice(state.lastShareChoice, offered);
   const [choice, setChoice] = useState<string[]>(remembered);
@@ -231,13 +232,14 @@ export function TakeawayForm({
  * a short line and two buttons, the form opening in place on "Write it".
  * Otherwise (the end of a Mixed review) the form is open from the start.
  */
-export function TakeawayAsk({ state, quiet = false }: { state: AppState; quiet?: boolean }) {
+export function TakeawayAsk({ quiet = false }: { quiet?: boolean }) {
+  const state = useAppFields('myCircles', 'nextTakeawayAsk', 'saveTakeaway', 'setLastShareChoice');
   const ask = state.nextTakeawayAsk;
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
   const [open, setOpen] = useState(!quiet);
-  const [share, setShare, offered] = useNewShareChoice(state);
+  const [share, setShare, offered] = useNewShareChoice();
   if (!ask) return null;
 
   const spot = spotOf(ask);

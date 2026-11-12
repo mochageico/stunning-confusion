@@ -17,7 +17,6 @@ import {
   Volume2,
 } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppText, Card, useFontScale, useScaledSpace } from '../components/design';
 import { TakeawayAsk } from '../components/TakeawayAsk';
@@ -30,6 +29,7 @@ import { BalanceNote, FirmUpCard, MovedSheet, WelcomeBackCard } from '../compone
 import { firmUpItems, movedNote, welcomeBack } from '../lib/todayCards';
 import { movedFromDay } from '../lib/passages';
 import { groupTouches, toVerseStates, useToday } from '../state/useToday';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // Today (UI simplify plan, Job 1, option A from the sketches).
@@ -82,7 +82,15 @@ function WeekStrip({ days }: { days: { weekday: number; count: number; day: stri
   );
 }
 
-export default function HomeScreen({ state }: { state: AppState }) {
+export default function HomeScreen() {
+  const state = useAppFields(
+    'activityLast15Days', 'balanceDays', 'cognitiveLoadSensitivity', 'getEstimatedReviewTime',
+    'getGreeting', 'getNewVerseRoom', 'getTodayPullPreview', 'joinedGroupPlanDetails', 'lateNotes',
+    'masteryTouches', 'maxReviewCap', 'memoryQueue', 'memoryStreak', 'navigateTo', 'openGuided',
+    'openMixedReview', 'openThreadDrill', 'pausedUntil', 'pullMovedToday', 'resumeReviews',
+    'reviewsPaused', 'setShowTour', 'startPractice', 'triggerDailyPull', 'triggerMockDueReviews',
+    'user', 'welcomeBackDays',
+  );
   const {
     user,
     memoryQueue,
@@ -108,7 +116,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
     activityLast15Days,
   } = state;
 
-  const today = useToday(state);
+  const today = useToday();
   const { todayKey, learningGroups, dueReviewItems, doneTodayItems, estMinutes } = today;
 
   const space = useScaledSpace();
@@ -345,7 +353,7 @@ export default function HomeScreen({ state }: { state: AppState }) {
             </View>
 
             {/* One-off notes, only when they apply. */}
-            <TakeawayAsk state={state} quiet />
+            <TakeawayAsk quiet />
             {welcome && <WelcomeBackCard data={welcome} onDismiss={dismissWelcome} />}
             <FirmUpCard items={firmUps} onStart={(verses) => startPractice('learn', toVerseStates(verses))} />
             {showBalanceNote && moved && (

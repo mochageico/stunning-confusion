@@ -226,7 +226,7 @@ function Opened({ state, takeaway, onClose }: { state: AppState; takeaway: Takea
 
   // The switch starts on the circles it's shared with; a stop never written
   // starts on the last choice, like the ask.
-  const [newChoice, setNewChoice, offered] = useNewShareChoice(state);
+  const [newChoice, setNewChoice, offered] = useNewShareChoice();
   const [choice, setChoice] = useState<string[]>(() => sharedChoiceFor(takeaway, offered));
   const share = empty ? newChoice : choice;
   const setShare = empty ? setNewChoice : setChoice;

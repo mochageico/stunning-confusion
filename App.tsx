@@ -82,12 +82,18 @@ import { useThemeColors } from './src/components/theme';
 // The original web app has no router — it's a hand-rolled state machine on
 // `currentTab` / `currentScreen`. This mirrors that structure 1:1 instead of
 // introducing React Navigation, to keep the port low-risk.
-function CommunityScreen({ state }: { state: AppState }) {
-  if (state.viewingGroupDetail) return <CommunityGroupDetailScreen state={state} />;
-  if (state.communitySubView === 'preview' && state.previewCircle) return <CommunityPreviewScreen state={state} />;
-  if (state.communitySubView === 'find') return <CommunityFindScreen state={state} />;
-  if (state.communitySubView === 'create') return <CommunityCreateScreen state={state} />;
-  return <CommunityHomeScreen state={state} />;
+/** Temporary (Phase 2): a screen not yet on useAppFields gets the whole state. */
+function W(Screen: React.ComponentType<{ state: AppState }>) {
+  return <WithWholeState>{(s) => <Screen state={s} />}</WithWholeState>;
+}
+
+function CommunityScreen() {
+  const state = useAppFields('viewingGroupDetail', 'communitySubView', 'previewCircle');
+  if (state.viewingGroupDetail) return W(CommunityGroupDetailScreen);
+  if (state.communitySubView === 'preview' && state.previewCircle) return W(CommunityPreviewScreen);
+  if (state.communitySubView === 'find') return W(CommunityFindScreen);
+  if (state.communitySubView === 'create') return W(CommunityCreateScreen);
+  return W(CommunityHomeScreen);
 }
 
 const TABS = [
@@ -109,110 +115,114 @@ const TABS = [
 // Getting-Started walkthrough. Both the banner and the walkthrough are gone --
 // see the note at the top of OnboardingScreen.tsx for why.
 
-function Screens({ state }: { state: AppState }) {
+function Screens() {
+  const state = useAppFields(
+    'currentScreen', 'currentTab', 'selectedRecording', 'selectedUserProfile', 'viewingGroupPlan',
+    'activeDMThread', 'activeCircleChatId', 'activeQuiz',
+  );
   if (state.currentScreen === 'recordingDetail' && state.selectedRecording) {
-    return <RecordingDetailScreen state={state} />;
+    return W(RecordingDetailScreen);
   }
   if (state.currentScreen === 'myRecordings') {
-    return <MyRecordingsScreen state={state} />;
+    return W(MyRecordingsScreen);
   }
   if (state.currentScreen === 'memberProfile' && state.selectedUserProfile) {
-    return <MemberProfileScreen state={state} />;
+    return W(MemberProfileScreen);
   }
   if (state.currentScreen === 'groupPlanDetail' && state.viewingGroupPlan) {
-    return <GroupPlanDetailScreen state={state} />;
+    return W(GroupPlanDetailScreen);
   }
   if (state.currentScreen === 'fullHistory') {
-    return <FullHistoryScreen state={state} />;
+    return W(FullHistoryScreen);
   }
   // Opens over whichever tab you're on (Today or Verses), so Back returns
   // there.
   if (state.currentScreen === 'addVerses') {
-    return <AddVersesScreen state={state} />;
+    return W(AddVersesScreen);
   }
   if (state.currentScreen === 'dashboard') {
-    return <DashboardScreen state={state} />;
+    return W(DashboardScreen);
   }
   if (state.currentScreen === 'settings') {
-    return <SettingsScreen state={state} />;
+    return W(SettingsScreen);
   }
   if (state.currentScreen === 'findFriends') {
-    return <FindFriendsScreen state={state} />;
+    return W(FindFriendsScreen);
   }
   if (state.currentScreen === 'messages') {
-    return <MessagesScreen state={state} />;
+    return W(MessagesScreen);
   }
   if (state.currentScreen === 'dmThread' && state.activeDMThread) {
-    return <DMThreadScreen state={state} />;
+    return W(DMThreadScreen);
   }
   if (state.currentScreen === 'circleChat' && state.activeCircleChatId) {
-    return <CircleChatScreen state={state} />;
+    return W(CircleChatScreen);
   }
   if (state.currentScreen === 'quiz' && state.activeQuiz) {
-    return <QuizScreen state={state} />;
+    return W(QuizScreen);
   }
 
   if (state.currentTab === 'home') {
     switch (state.currentScreen) {
       case 'home':
-        return <HomeScreen state={state} />;
+        return <HomeScreen />;
       case 'todayVerses':
-        return <TodayVersesScreen state={state} />;
+        return <TodayVersesScreen />;
       case 'books':
-        return <BooksScreen state={state} />;
+        return W(BooksScreen);
       case 'chapters':
-        return <ChaptersScreen state={state} />;
+        return W(ChaptersScreen);
       case 'chapterLanding':
-        return <ChapterLandingScreen state={state} />;
+        return W(ChapterLandingScreen);
       case 'audioFeed':
-        return <AudioFeedScreen state={state} />;
+        return W(AudioFeedScreen);
       case 'referenceDrill':
-        return <ReferenceDrillScreen state={state} />;
+        return W(ReferenceDrillScreen);
       case 'threadDrill':
-        return <ThreadDrillScreen state={state} />;
+        return W(ThreadDrillScreen);
       case 'guided':
-        return <GuidedLearningScreen state={state} />;
+        return W(GuidedLearningScreen);
       case 'mixedReview':
-        return <MixedReviewScreen state={state} />;
+        return W(MixedReviewScreen);
       case 'constellations':
-        return <ConstellationsScreen state={state} />;
+        return W(ConstellationsScreen);
       case 'constellationPreview':
-        return <ConstellationPreviewScreen state={state} />;
+        return W(ConstellationPreviewScreen);
       case 'mySky':
-        return <MySkyScreen state={state} />;
+        return W(MySkyScreen);
       default:
-        return <HomeScreen state={state} />;
+        return <HomeScreen />;
     }
   }
 
   if (state.currentTab === 'verses') {
     switch (state.currentScreen) {
       case 'memoryPlan':
-        return <MemoryPlanScreen state={state} />;
+        return W(MemoryPlanScreen);
       case 'verseSources':
-        return <VerseSourcesScreen state={state} />;
+        return W(VerseSourcesScreen);
       case 'memoryCalendar':
-        return <MemoryCalendarScreen state={state} />;
+        return <MemoryCalendarScreen />;
       case 'takeaways':
-        return <TakeawaysScreen state={state} />;
+        return W(TakeawaysScreen);
       case 'verseRoad':
-        return <VerseRoadScreen state={state} />;
+        return W(VerseRoadScreen);
       case 'versePage':
-        return <VersePageScreen state={state} />;
+        return W(VersePageScreen);
       default:
-        return <ActivePlanScreen state={state} />;
+        return W(ActivePlanScreen);
     }
   }
 
   if (state.currentTab === 'community') {
-    return <CommunityScreen state={state} />;
+    return <CommunityScreen />;
   }
 
   if (state.currentTab === 'record') {
-    return <RecordScreen state={state} />;
+    return W(RecordScreen);
   }
 
-  return <ProfileScreen state={state} />;
+  return W(ProfileScreen);
 }
 
 // A Dialog that needs an answer: tapping outside mustn't quietly throw a
@@ -444,7 +454,7 @@ function AppShell() {
           (Drills on SessionShell add it in their own bottom bar.) */}
       <SafeAreaView style={{ flex: 1 }} edges={OWN_BOTTOM_INSET.has(state.currentScreen) && sessionScreenActive ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}>
         <View style={{ flex: 1 }}>
-          <WithWholeState>{(s) => <Screens state={s} />}</WithWholeState>
+          <Screens />
           {showBars && <PageFade />}
         </View>
       </SafeAreaView>

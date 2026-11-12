@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { BookOpen, Check, ClipboardCheck, Headphones, Layers, Sprout } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
 import { AppButton, AppText, useFontScale, useScaledSpace } from '../components/design';
@@ -13,6 +12,7 @@ import ManualLogFlow from '../components/practice/ManualLogFlow';
 import { logManualAnswers } from '../components/practice/ManualLogSheet';
 import type { SelfCheckAnswer } from '../lib/grading';
 import { REVIEW_STAGES, groupTouches, toVerseStates, useToday, type TodayGroup } from '../state/useToday';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // Today's verses (UI simplify plan, Job 1): the whole of today as one list,
@@ -32,9 +32,13 @@ function StageDot({ className }: { className: string }) {
   return <View className={`rounded-full ${className}`} style={{ width: d, height: d }} />;
 }
 
-export default function TodayVersesScreen({ state }: { state: AppState }) {
+export default function TodayVersesScreen() {
+  const state = useAppFields(
+    'getTodayPullPreview', 'handleUpdateVerseStatus', 'lateNotes', 'masteryTouches', 'memoryQueue',
+    'navigateTo', 'primingLookahead', 'setPrimingLookahead',
+  );
   const { navigateTo, masteryTouches, primingLookahead, setPrimingLookahead, lateNotes, memoryQueue, handleUpdateVerseStatus } = state;
-  const today = useToday(state);
+  const today = useToday();
   const space = useScaledSpace();
   const scale = useFontScale();
   const palette = useThemeColors();

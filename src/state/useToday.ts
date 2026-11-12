@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 
-import type { AppState } from './useAppState';
 import type { QueueItem, VerseState } from '../types';
 import { translationLabel } from '../data';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { gradedOnDay } from '../lib/retention';
 import { verseStage } from '../lib/stageProgress';
+import { useAppFields } from './appStore';
 
 // ============================================================================
 // useToday — what is on Today, sorted once and shared by the Today screen and
@@ -64,7 +64,13 @@ export const REVIEW_STAGES = [
 ] as const;
 export type ReviewStageKey = (typeof REVIEW_STAGES)[number]['key'];
 
-export function useToday(state: AppState) {
+export function useToday() {
+  const state = useAppFields(
+    'cognitiveLoadSensitivity', 'dayStartHour', 'getEstimatedReviewTime', 'isReviewDue',
+    'masteryTouches', 'maxReviewCap', 'memoryQueue', 'pausedAt', 'pausedUntil', 'primingLookahead',
+    'reviewsPaused', 'sabbathDay', 'sabbathEnabled', 'startPractice', 'startReviewSession',
+    'triggerToast',
+  );
   const {
     memoryQueue,
     masteryTouches,
