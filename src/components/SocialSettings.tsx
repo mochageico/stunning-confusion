@@ -2,13 +2,17 @@ import { useState } from 'react';
 import { Linking, View } from 'react-native';
 import { Ban, Bell, Clock } from 'lucide-react-native';
 
-import type { AppState } from '../state/useAppState';
 import { AppButton, Switch, useScaledSpace } from './design';
 import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from './blocks';
 import { TimeWheelDialog, formatClock } from './TimeWheel';
+import { useAppFields } from '../state/appStore';
 
 /** Settings > Notifications: the review reminder and which social pushes come through. */
-export function NotificationSettings({ state }: { state: AppState }) {
+export function NotificationSettings() {
+  const state = useAppFields(
+    'notificationPermission', 'notificationPrefs', 'requestNotificationPermission',
+    'updateNotificationPrefs',
+  );
   const space = useScaledSpace();
   const { notificationPrefs: prefs, notificationPermission: permission, updateNotificationPrefs: update } = state;
 
@@ -61,13 +65,14 @@ export function NotificationSettings({ state }: { state: AppState }) {
           accessory={<Switch value={prefs.friendActivity} onChange={(v) => update({ friendActivity: v })} accessibilityLabel="Friend notifications" />}
         />
       </GroupedList>
-      {prefs.reviewReminder ? <ReminderTime state={state} /> : null}
+      {prefs.reviewReminder ? <ReminderTime /> : null}
     </View>
   );
 }
 
 /** When the daily reminder comes: one set time, or a random time in a window. */
-function ReminderTime({ state }: { state: AppState }) {
+function ReminderTime() {
+  const state = useAppFields('notificationPrefs', 'updateNotificationPrefs');
   const space = useScaledSpace();
   const { notificationPrefs: prefs, updateNotificationPrefs: update } = state;
   const [editing, setEditing] = useState<'start' | 'end' | null>(null);
@@ -112,7 +117,8 @@ function ReminderTime({ state }: { state: AppState }) {
 }
 
 /** Settings > Blocked people, with Unblock. */
-export function BlockedPeopleSettings({ state }: { state: AppState }) {
+export function BlockedPeopleSettings() {
+  const state = useAppFields('blockedUsers', 'unblockUser');
   const [confirm, setConfirm] = useState<{ uid: string; name: string } | null>(null);
   const { blockedUsers } = state;
   return (
@@ -153,7 +159,8 @@ export function BlockedPeopleSettings({ state }: { state: AppState }) {
 }
 
 /** Where the community guidelines can be read again. */
-export function GuidelinesRow({ state }: { state: AppState }) {
+export function GuidelinesRow() {
+  const state = useAppFields('requireCommunityGuidelines');
   return (
     <GroupedList>
       <ListRow title="Community guidelines" onPress={state.requireCommunityGuidelines} />

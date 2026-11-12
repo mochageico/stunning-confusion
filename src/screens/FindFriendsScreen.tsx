@@ -1,14 +1,20 @@
 import { ScrollView, View } from 'react-native';
 import { Check, Search, UserPlus, X } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
 import { Avatar, Badge, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { useDebouncedText } from '../lib/useDebouncedText';
+import { useAppFields } from '../state/appStore';
 
-export default function FindFriendsScreen({ state }: { state: AppState }) {
+export default function FindFriendsScreen() {
+  const state = useAppFields(
+    'acceptFriendRequest', 'cancelFriendRequest', 'declineFriendRequest', 'friends', 'handleBack',
+    'incomingFriendRequests', 'outgoingFriendRequests', 'searchUsers', 'searchingUsers',
+    'sendFriendRequest', 'setUserSearchQuery', 'userSearchQuery', 'userSearchResults',
+    'viewMemberProfileById',
+  );
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();

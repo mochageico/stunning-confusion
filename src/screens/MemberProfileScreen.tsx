@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Ban, Bell, Flag, MessageCircle, Trophy, UserMinus, UserPlus, Users } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { ChallengeCreateSheet } from '../components/ChallengeCard';
 import { BlockConfirmDialog, ReportSheet } from '../components/chat/ReportSheet';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
 import { Avatar, Badge, Dialog, GroupedList, ListRow, ScreenHeader, SectionHeader, StatRow } from '../components/blocks';
+import { useAppFields } from '../state/appStore';
 
 // Reachable from a friends list, a circle's members, a milestone, a search and
 // a chat; the back link names whichever it was.
@@ -19,7 +19,31 @@ const BACK_LABELS: Partial<Record<string, string>> = {
   profile: 'Me',
 };
 
-export default function MemberProfileScreen({ state }: { state: AppState }) {
+// Whether a nudge can go out reads the log of nudges sent, which is not in
+// app state, so this button redraws on every app-state change. Kept on its
+// own so that is all that redraws.
+function NudgeButton({ uid, stacked, onPress }: { uid: string; stacked: boolean; onPress: (canNudge: boolean) => void }) {
+  const { canSendAccountabilityNudge } = useAppFields('canSendAccountabilityNudge');
+  const canNudge = canSendAccountabilityNudge(uid);
+  return (
+    <AppButton
+      variant="secondary"
+      Icon={Bell}
+      label="Nudge"
+      style={{ flex: stacked ? undefined : 1, opacity: canNudge ? 1 : 0.55 }}
+      onPress={() => onPress(canNudge)}
+    />
+  );
+}
+
+export default function MemberProfileScreen() {
+  const state = useAppFields(
+    'acceptFriendRequest', 'backHistory', 'blockUser', 'blockedUids',
+    'cancelFriendRequest', 'declineFriendRequest', 'friends', 'handleBack', 'incomingFriendRequests',
+    'openDMThread', 'outgoingFriendRequests', 'removeFriend', 'reportContent', 'selectedUserProfile',
+    'sendAccountabilityNudge', 'sendChallenge', 'sendFriendRequest', 'triggerToast', 'unblockUser',
+    'user',
+  );
   const space = useScaledSpace();
   const scale = useFontScale();
   const {
@@ -29,7 +53,6 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
     openDMThread,
     user,
     friends,
-    canSendAccountabilityNudge,
     sendAccountabilityNudge,
     removeFriend,
     triggerToast,
@@ -55,7 +78,6 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
   const prevScreen = backHistory[backHistory.length - 1]?.screen;
   const isSelf = selectedUserProfile.uid === user?.uid;
   const isFriend = friends.some((f) => f.uid === selectedUserProfile.uid);
-  const canNudge = canSendAccountabilityNudge(selectedUserProfile.uid);
   // Friending was previously only reachable from the Find Friends search
   // screen, which meant arriving at someone's profile any other way (circle
   // member list, activity feed, a DM) left no way to add them.
@@ -99,7 +121,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
       })()
     : [];
 
-  const openNudge = () => {
+  const openNudge = (canNudge: boolean) => {
     if (!canNudge) {
       triggerToast('You already nudged this friend today. You can send another tomorrow.');
       return;
@@ -135,13 +157,7 @@ export default function MemberProfileScreen({ state }: { state: AppState }) {
             {isFriend && (
               // Side by side until the text is big, then stacked.
               <View className={scale >= 1.3 ? '' : 'flex-row'} style={{ gap: space(10) }}>
-                <AppButton
-                  variant="secondary"
-                  Icon={Bell}
-                  label="Nudge"
-                  style={{ flex: scale >= 1.3 ? undefined : 1, opacity: canNudge ? 1 : 0.55 }}
-                  onPress={openNudge}
-                />
+                <NudgeButton uid={selectedUserProfile.uid} stacked={scale >= 1.3} onPress={openNudge} />
                 <AppButton
                   variant="secondary"
                   Icon={Trophy}

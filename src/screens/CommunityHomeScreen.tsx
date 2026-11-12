@@ -2,15 +2,21 @@ import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { Award, Check, ChevronRight, MessageCircle, Plus, Search, UserPlus, Users } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppIconButton, AppText, useScaledSpace } from '../components/design';
 import { Avatar, Badge, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 import { OverflowMenu } from '../components/session';
 import { useThemeColors } from '../components/theme';
 import { formatTimeAgo } from '../lib/format';
+import { useAppFields } from '../state/appStore';
 
-export default function CommunityHomeScreen({ state }: { state: AppState }) {
+export default function CommunityHomeScreen() {
+  const state = useAppFields(
+    'activityEvents', 'friends', 'guidelinesAcceptedAt', 'incomingFriendRequests',
+    'isCircleChatUnread', 'loadingActivityEvents', 'myCircles', 'navigateTo', 'openCircle',
+    'refreshCommunity', 'requireCommunityGuidelines', 'setCommunitySubView', 'unreadDMCount', 'user',
+    'viewMemberProfileById',
+  );
   const palette = useThemeColors();
   const space = useScaledSpace();
   const {

@@ -2,14 +2,19 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Search, Users, X } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
 import { EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { useDebouncedText } from '../lib/useDebouncedText';
+import { useAppFields } from '../state/appStore';
 
-export default function CommunityFindScreen({ state }: { state: AppState }) {
+export default function CommunityFindScreen() {
+  const state = useAppFields(
+    'findSearchQuery', 'joinCircle', 'joinCircleByCode', 'loadPublicCircles', 'loadingPublicCircles',
+    'myCircles', 'openCircle', 'openCirclePreview', 'publicCircles', 'setCommunitySubView',
+    'setFindSearchQuery',
+  );
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();

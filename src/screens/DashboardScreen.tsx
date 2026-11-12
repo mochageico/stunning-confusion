@@ -1,12 +1,12 @@
 import { ScrollView, View } from 'react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppText, useFontScale, useScaledSpace } from '../components/design';
 import { ScreenHeader, SectionHeader } from '../components/blocks';
 import { ActivityHeatmap } from '../components/ActivityHeatmap';
 import { LADDER_GROUPS } from '../lib/ladder';
 import { STAGE_LABEL, verseStage } from '../lib/stageProgress';
+import { useAppFields } from '../state/appStore';
 
 // Opens from Profile (and Today's streak); the back link names which.
 const BACK_LABELS: Partial<Record<string, string>> = {
@@ -90,7 +90,11 @@ function MilestoneGrid({
 }
 
 
-export default function DashboardScreen({ state }: { state: AppState }) {
+export default function DashboardScreen() {
+  const state = useAppFields(
+    'activityLast90Days', 'backHistory', 'handleBack', 'learningCount', 'memoryQueue',
+    'memoryStreak', 'navigateTo', 'totalStudySeconds',
+  );
   const space = useScaledSpace();
   const {
     handleBack,

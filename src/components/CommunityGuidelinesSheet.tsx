@@ -1,8 +1,8 @@
 import { View } from 'react-native';
 
-import type { AppState } from '../state/useAppState';
 import { AppButton, AppText, useScaledSpace } from './design';
 import { Dialog } from './blocks';
+import { useAppFields } from '../state/appStore';
 
 const RULES: { title: string; body: string }[] = [
   { title: 'Be kind', body: 'Encourage each other. No harassment, bullying, threats or hate of any kind.' },
@@ -17,7 +17,8 @@ const RULES: { title: string; body: string }[] = [
  * app where people can message each other or share content. Accepting is
  * remembered per account (users/{uid}/settings/community).
  */
-export function CommunityGuidelinesSheet({ state }: { state: AppState }) {
+export function CommunityGuidelinesSheet() {
+  const state = useAppFields('acceptCommunityGuidelines', 'closeCommunityGuidelines', 'guidelinesPromptOpen');
   const space = useScaledSpace();
   return (
     <Dialog

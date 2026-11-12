@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppText, AppTextInput, OptionCards, useScaledSpace } from '../components/design';
 import { ScreenHeader } from '../components/blocks';
+import { useAppFields } from '../state/appStore';
 
 const PRIVACY_OPTIONS = [
   { id: 'public' as const, title: 'Public', desc: 'Listed in Find circles. Anyone can join right away.' },
   { id: 'private' as const, title: 'Private', desc: 'Hidden from search. People join with the invite code you share.' },
 ];
 
-export default function CommunityCreateScreen({ state }: { state: AppState }) {
+export default function CommunityCreateScreen() {
+  const state = useAppFields(
+    'createCircle', 'createGroupPrivacy', 'setCommunitySubView', 'setCreateGroupPrivacy',
+  );
   const space = useScaledSpace();
   const {
     setCommunitySubView,

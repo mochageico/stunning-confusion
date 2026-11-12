@@ -1,11 +1,15 @@
 import { View } from 'react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { ChatView } from '../components/chat/ChatView';
 import { ScreenHeader } from '../components/blocks';
+import { useAppFields } from '../state/appStore';
 
-export default function CircleChatScreen({ state }: { state: AppState }) {
+export default function CircleChatScreen() {
+  const state = useAppFields(
+    'activeCircle', 'activeCircleChatId', 'activeCircleMessages', 'closeCircleChat', 'handleBack',
+    'loadingActiveCircleMessages', 'user',
+  );
   const { user, activeCircle, activeCircleChatId, activeCircleMessages, loadingActiveCircleMessages, closeCircleChat, handleBack } = state;
 
   if (!activeCircle || !activeCircleChatId) return null;
@@ -21,7 +25,6 @@ export default function CircleChatScreen({ state }: { state: AppState }) {
         <ScreenHeader inline title={activeCircle.name} eyebrow="Group chat" onBack={goBack} backLabel="Circle" />
       </View>
       <ChatView
-        state={state}
         scope="circle"
         containerId={activeCircleChatId}
         messages={activeCircleMessages}

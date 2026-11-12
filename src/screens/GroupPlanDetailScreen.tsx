@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { LogOut, Trash2 } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView, NumericInput, ProgressBar, StepperRow } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { ALL_BIBLE_BOOKS, DEFAULT_TRANSLATION_ID, getBookByName } from '../data';
@@ -12,6 +11,7 @@ import { AppButton, AppText, AppTextInput, ChoiceCard, useScaledSpace } from '..
 import { CollapsibleSection, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 import { groupPlanProgress, upcomingPlanDays } from '../lib/groupPlanProgress';
 import { DAY_FULL_NAMES, getLogicalDate } from '../lib/logicalDate';
+import { useAppFields } from '../state/appStore';
 
 // Plain language, and ordered by how most people actually want it: joining a
 // group thing usually means you want the group's verses to lead. The old
@@ -92,7 +92,12 @@ function groupVerseIds(verseIds: string[]): VerseIdGroup[] {
 }
 
 
-export default function GroupPlanDetailScreen({ state }: { state: AppState }) {
+export default function GroupPlanDetailScreen() {
+  const state = useAppFields(
+    'addVersesToGroupPlan', 'dayStartHour', 'deleteGroupPlan', 'handleBack', 'joinGroupPlan',
+    'joinedGroupPlanMemberships', 'leaveGroupPlan', 'memoryQueue', 'setGroupPlanPriority',
+    'triggerToast', 'updateGroupPlan', 'user', 'viewingGroupPlan',
+  );
   const space = useScaledSpace();
   const {
     user,

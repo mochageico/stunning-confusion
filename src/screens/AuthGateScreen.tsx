@@ -5,10 +5,10 @@ import { BookOpen } from 'lucide-react-native';
 import { FadeInView, useKeyboardHeight } from '../components/ui';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { useEmailAuth } from '../state/useEmailAuth';
-import { AppState } from '../state/useAppState';
 import { AppButton, AppTextInput, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { SegmentedControl } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+import { useAppFields } from '../state/appStore';
 
 const AUTH_MODES = [
   { id: 'signIn' as const, label: 'Sign in' },
@@ -21,7 +21,8 @@ const AUTH_MODES = [
 // listener in useAppState flips `user`, this screen unmounts, and (for a
 // brand-new account) the Getting Started setup takes over from App.tsx's
 // normal showOnboarding overlay.
-export default function AuthGateScreen({ state }: { state: AppState }) {
+export default function AuthGateScreen() {
+  const state = useAppFields('triggerToast');
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();

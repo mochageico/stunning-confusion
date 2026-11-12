@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Target } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { fetchChapterText } from '../state/useScripture';
 import { threadSpan } from '../lib/drills';
 import { normalizeToken, scriptOfVerse } from '../lib/textScript';
@@ -12,6 +11,7 @@ import GradedRecitation, { canSpeakVerses, RecitationMode, RecitationVerse } fro
 import { FadeInView } from '../components/ui';
 import { AppButton, AppText, useScaledSpace } from '../components/design';
 import { EmptyState, ScreenHeader } from '../components/blocks';
+import { useAppFields } from '../state/appStore';
 
 /**
  * A friend's quiz (sent from a DM, see chatAttachments.ts): one of my own
@@ -19,7 +19,8 @@ import { EmptyState, ScreenHeader } from '../components/blocks';
  * word, and the score sent back to the chat. Practice only -- it never calls
  * the review engine, so it can't move a verse forward or back.
  */
-export default function QuizScreen({ state }: { state: AppState }) {
+export default function QuizScreen() {
+  const state = useAppFields('activeQuiz', 'closeQuiz', 'finishQuiz', 'handleBack');
   const space = useScaledSpace();
   const { activeQuiz, closeQuiz, handleBack, finishQuiz } = state;
   const [verse, setVerse] = useState<RecitationVerse | null | undefined>(undefined);

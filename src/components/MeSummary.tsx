@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Bell, BellDot, ChevronRight, X } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { AppIconButton, AppText, useFontScale, useScaledSpace } from './design';
 import { Avatar, Badge, Dialog, GroupedList, ListRow, SectionHeader } from './blocks';
 import { ActivityHeatmap } from './ActivityHeatmap';
 import { useThemeColors } from './theme';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // The top of the Me tab (UI simplify Job 10): who you are and how it's going.
@@ -26,7 +26,11 @@ function shortStudyTime(totalSeconds: number): string {
   return `${Math.floor(totalSeconds / 60)}m`;
 }
 
-export function MeSummary({ state, onOpenAccount, onOpenNotificationSettings }: { state: AppState; onOpenAccount: () => void; onOpenNotificationSettings: () => void }) {
+export function MeSummary({ onOpenAccount, onOpenNotificationSettings }: { onOpenAccount: () => void; onOpenNotificationSettings: () => void }) {
+  const state = useAppFields(
+    'activityLast90Days', 'dismissAccountabilityNudge', 'markAccountabilityNudgeRead', 'memoryQueue',
+    'memoryStreak', 'navigateTo', 'receivedAccountabilityNudges', 'totalStudySeconds', 'user',
+  );
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();

@@ -89,11 +89,11 @@ function W(Screen: React.ComponentType<{ state: AppState }>) {
 
 function CommunityScreen() {
   const state = useAppFields('viewingGroupDetail', 'communitySubView', 'previewCircle');
-  if (state.viewingGroupDetail) return W(CommunityGroupDetailScreen);
-  if (state.communitySubView === 'preview' && state.previewCircle) return W(CommunityPreviewScreen);
-  if (state.communitySubView === 'find') return W(CommunityFindScreen);
-  if (state.communitySubView === 'create') return W(CommunityCreateScreen);
-  return W(CommunityHomeScreen);
+  if (state.viewingGroupDetail) return <CommunityGroupDetailScreen />;
+  if (state.communitySubView === 'preview' && state.previewCircle) return <CommunityPreviewScreen />;
+  if (state.communitySubView === 'find') return <CommunityFindScreen />;
+  if (state.communitySubView === 'create') return <CommunityCreateScreen />;
+  return <CommunityHomeScreen />;
 }
 
 const TABS = [
@@ -127,10 +127,10 @@ function Screens() {
     return <MyRecordingsScreen />;
   }
   if (state.currentScreen === 'memberProfile' && state.selectedUserProfile) {
-    return W(MemberProfileScreen);
+    return <MemberProfileScreen />;
   }
   if (state.currentScreen === 'groupPlanDetail' && state.viewingGroupPlan) {
-    return W(GroupPlanDetailScreen);
+    return <GroupPlanDetailScreen />;
   }
   if (state.currentScreen === 'fullHistory') {
     return <FullHistoryScreen />;
@@ -141,25 +141,25 @@ function Screens() {
     return <AddVersesScreen />;
   }
   if (state.currentScreen === 'dashboard') {
-    return W(DashboardScreen);
+    return <DashboardScreen />;
   }
   if (state.currentScreen === 'settings') {
-    return W(SettingsScreen);
+    return <SettingsScreen />;
   }
   if (state.currentScreen === 'findFriends') {
-    return W(FindFriendsScreen);
+    return <FindFriendsScreen />;
   }
   if (state.currentScreen === 'messages') {
-    return W(MessagesScreen);
+    return <MessagesScreen />;
   }
   if (state.currentScreen === 'dmThread' && state.activeDMThread) {
-    return W(DMThreadScreen);
+    return <DMThreadScreen />;
   }
   if (state.currentScreen === 'circleChat' && state.activeCircleChatId) {
-    return W(CircleChatScreen);
+    return <CircleChatScreen />;
   }
   if (state.currentScreen === 'quiz' && state.activeQuiz) {
-    return W(QuizScreen);
+    return <QuizScreen />;
   }
 
   if (state.currentTab === 'home') {
@@ -222,7 +222,7 @@ function Screens() {
     return <RecordScreen />;
   }
 
-  return W(ProfileScreen);
+  return <ProfileScreen />;
 }
 
 // A Dialog that needs an answer: tapping outside mustn't quietly throw a
@@ -445,7 +445,7 @@ function AppShell() {
       <View style={{ flex: 1 }} className="bg-canvas">
         <ThemedStatusBar />
         <SafeAreaView style={{ flex: 1 }}>
-          <WithWholeState>{(s) => <AuthGateScreen state={s} />}</WithWholeState>
+          <AuthGateScreen />
         </SafeAreaView>
         <ToastLayer />
       </View>
@@ -474,7 +474,7 @@ function AppShell() {
         <BottomBars>
           {/* The tour card sits here rather than over the screen, so the
               screen it's describing stays fully in view above it. */}
-          {state.showTour === true && <WithWholeState>{(s) => <TourCard state={s} />}</WithWholeState>}
+          {state.showTour === true && <TourCard />}
           <OfflinePill />
           <NowPlayingBar />
           <FloatingTabBar
@@ -499,7 +499,7 @@ function AppShell() {
       {state.showOnboarding && (
         <View className="absolute inset-0 bg-canvas z-50">
           <SafeAreaView style={{ flex: 1 }}>
-            <WithWholeState>{(s) => <OnboardingScreen state={s} />}</WithWholeState>
+            <OnboardingScreen />
           </SafeAreaView>
         </View>
       )}
@@ -511,13 +511,13 @@ function AppShell() {
       {state.showTour === 'questions' && (
         <View className="absolute inset-0 bg-canvas z-50">
           <SafeAreaView style={{ flex: 1 }}>
-            <WithWholeState>{(s) => <CommonQuestionsScreen state={s} />}</WithWholeState>
+            <CommonQuestionsScreen />
           </SafeAreaView>
         </View>
       )}
 
-      <WithWholeState>{(s) => <CommunityGuidelinesSheet state={s} />}</WithWholeState>
-      <WithWholeState>{(s) => <NotificationAskSheet state={s} />}</WithWholeState>
+      <CommunityGuidelinesSheet />
+      <NotificationAskSheet />
 
       <ToastLayer />
 

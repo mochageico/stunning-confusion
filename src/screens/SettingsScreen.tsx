@@ -24,7 +24,6 @@ import {
   Trash2,
 } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { auth } from '../firebase';
 import { FadeInView } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS, translationLabel } from '../data';
@@ -54,6 +53,7 @@ import { LadderDryRun } from '../dev/LadderDryRun';
 import { MeSummary } from '../components/MeSummary';
 import { THOROUGHNESS_PRESETS } from '../lib/ladder';
 import { forgetAllSpeechSlips, forgetSpeechSlip, SLIP_LEARN_AFTER, useSpeechSlips } from '../lib/speechSlips';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // SETTINGS
@@ -483,7 +483,8 @@ function LearnedSlips() {
 // Bible and text
 // ----------------------------------------------------------------------------
 
-function TextPage({ state }: { state: AppState }) {
+function TextPage() {
+  const state = useAppFields('selectedTranslationId', 'setSelectedTranslationId');
   const space = useScaledSpace();
   const prefs = useAppPrefs();
   const { selectedTranslationId, setSelectedTranslationId } = state;
@@ -603,7 +604,16 @@ function AppearancePage() {
 // The screen
 // ----------------------------------------------------------------------------
 
-export default function SettingsScreen({ state, asMe = false }: { state: AppState; /** The Me tab: profile summary on top, no back link, sub-pages go back to Me. */ asMe?: boolean }) {
+export default function SettingsScreen({ asMe = false }: { /** The Me tab: profile summary on top, no back link, sub-pages go back to Me. */ asMe?: boolean }) {
+  const state = useAppFields(
+    'accountabilityDailyCap', 'audioCache', 'backHistory', 'clearAudioDownloads', 'dayStartHour',
+    'defaultRecordingVisibility', 'deleteAccount', 'handleBack', 'memoryQueue',
+    'memoryQueueVisibility', 'navigateTo', 'pauseReviews', 'pausedAt', 'pausedUntil',
+    'resumeReviews', 'sabbathDay', 'sabbathEnabled', 'selectedTranslationId', 'setAudioCacheCap',
+    'setShowOnboarding', 'setShowTour', 'setStudioPlaybackEnabled', 'signOut',
+    'studioPlaybackEnabled', 'thoroughness', 'triggerToast', 'updateAccountabilityDailyCap',
+    'updateDefaultRecordingVisibility', 'updateDisplayName', 'updateMemoryQueueVisibility', 'user',
+  );
   const space = useScaledSpace();
   const {
     user,
@@ -755,7 +765,7 @@ export default function SettingsScreen({ state, asMe = false }: { state: AppStat
       {/* On the Me tab the profile summary takes the account card's place
           (tapping the name opens Account). */}
       {asMe ? (
-        <MeSummary state={state} onOpenAccount={() => setPage('account')} onOpenNotificationSettings={() => setPage('notifications')} />
+        <MeSummary onOpenAccount={() => setPage('account')} onOpenNotificationSettings={() => setPage('notifications')} />
       ) : (
         <GroupedList>
           <ListRow title={user.displayName || 'Add your name'} subtitle={user.email || providerLabel} onPress={() => setPage('account')} />
@@ -855,7 +865,7 @@ export default function SettingsScreen({ state, asMe = false }: { state: AppStat
     ),
     formats: <FormatsPage mix={mix} />,
     recall: <RecallPage />,
-    text: <TextPage state={state} />,
+    text: <TextPage />,
     audio: (
       <>
         <ChoiceSection
@@ -905,7 +915,7 @@ export default function SettingsScreen({ state, asMe = false }: { state: AppStat
         </GroupedList>
       </>
     ),
-    notifications: <NotificationSettings state={state} />,
+    notifications: <NotificationSettings />,
     privacy: (
       <>
         <ChoiceSection
@@ -927,8 +937,8 @@ export default function SettingsScreen({ state, asMe = false }: { state: AppStat
           ]}
           caption="The most nudges you'll get in a day, from all friends together. A friend is told if you've reached it."
         />
-        <BlockedPeopleSettings state={state} />
-        <GuidelinesRow state={state} />
+        <BlockedPeopleSettings />
+        <GuidelinesRow />
       </>
     ),
     appearance: <AppearancePage />,

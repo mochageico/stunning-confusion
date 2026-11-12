@@ -1,10 +1,10 @@
 import { ScrollView, View } from 'react-native';
 import { Compass, X } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useScaledSpace } from '../components/design';
 import { ScreenHeader, SectionHeader } from '../components/blocks';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // COMMON QUESTIONS
@@ -41,7 +41,8 @@ const ANSWERS: { q: string; a: string }[] = [
   },
 ];
 
-export default function CommonQuestionsScreen({ state }: { state: AppState }) {
+export default function CommonQuestionsScreen() {
+  const state = useAppFields('setShowTour');
   const { setShowTour } = state;
   const space = useScaledSpace();
 

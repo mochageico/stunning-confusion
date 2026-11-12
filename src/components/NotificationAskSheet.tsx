@@ -1,10 +1,10 @@
 import { Bell } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import type { AppState } from '../state/useAppState';
 import { AppButton, AppText, useScaledSpace } from './design';
 import { Dialog } from './blocks';
 import { useThemeColors } from './theme';
+import { useAppFields } from '../state/appStore';
 
 /**
  * The gentle ask before the phone's own permission prompt, shown once at a
@@ -12,7 +12,10 @@ import { useThemeColors } from './theme';
  * circle). iOS only lets an app show its prompt once, so it's worth asking
  * when the answer is most likely yes. See maybeAskForNotifications.
  */
-export function NotificationAskSheet({ state }: { state: AppState }) {
+export function NotificationAskSheet() {
+  const state = useAppFields(
+    'dismissNotificationAsk', 'notificationAskReason', 'requestNotificationPermission',
+  );
   const space = useScaledSpace();
   const palette = useThemeColors();
   const reason = state.notificationAskReason;

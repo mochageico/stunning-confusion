@@ -5,6 +5,7 @@ import { AppState } from '../state/useAppState';
 import { AppButton, AppText, useScaledSpace } from './design';
 import { FadeInView } from './ui';
 import { dismissTip, setTipsPaused } from '../lib/tips';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // THE TOUR
@@ -71,7 +72,8 @@ const STEPS: { tab: Tab; place: string; text: string }[] = [
 let savedStep = 0;
 
 /** The tour card. App.tsx shows it above the tab bar while `showTour === true`. */
-export function TourCard({ state }: { state: AppState }) {
+export function TourCard() {
+  const state = useAppFields('selectTab', 'setShowTour');
   const { selectTab, setShowTour } = state;
   const space = useScaledSpace();
   const [step, setStepState] = useState(savedStep);

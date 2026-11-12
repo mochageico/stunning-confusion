@@ -5,7 +5,6 @@ import * as Clipboard from 'expo-clipboard';
 import { BookOpen, ChevronRight, EyeOff, Link as LinkIcon, LogOut, MessageCircle, Share2, Sliders, Trash2 } from 'lucide-react-native';
 import { OverflowMenu } from '../components/session';
 
-import { AppState } from '../state/useAppState';
 import { Circle, CircleMember, GroupPlan } from '../types';
 import { FadeInView, ProgressBar } from '../components/ui';
 import { groupPlanProgress } from '../lib/groupPlanProgress';
@@ -16,6 +15,7 @@ import { useThemeColors } from '../components/theme';
 import { buildInviteUrl } from '../lib/invites';
 import { combineCircle, weekBounds } from '../lib/circleTotals';
 import { CircleTotalsCard } from '../components/CircleTotalsCard';
+import { useAppFields } from '../state/appStore';
 
 const PRIVACY_OPTIONS = [
   { id: 'public' as const, label: 'Public' },
@@ -93,7 +93,17 @@ function NewPlanForm({ onCancel, onCreate }: { onCancel: () => void; onCreate: (
   );
 }
 
-export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
+export default function CommunityGroupDetailScreen() {
+  const state = useAppFields(
+    'activeCircle', 'activeCircleGroupPlans', 'activeCircleMembers', 'circleDaily', 'circleStats',
+    'clearGroupPlanMembershipsForCircle', 'createGroupPlan', 'dayStartHour', 'disbandCircle',
+    'isCircleChatUnread', 'isEditingCircleSettings', 'joinedGroupPlanMemberships', 'leaveCircle',
+    'loadCircleDaily', 'loadCircleStats', 'loadingActiveCircle', 'memoryQueue', 'myProgressSharing',
+    'navigateTo', 'openCircleChat', 'refreshCommunity', 'removeCircleMember',
+    'setIsEditingCircleSettings', 'setProgressSharing', 'setShowCreatePlanForm',
+    'setViewingGroupDetail', 'setViewingGroupPlan', 'showCreatePlanForm', 'triggerToast',
+    'updateCircleSettings', 'user', 'viewMemberProfileById',
+  );
   const palette = useThemeColors();
   const space = useScaledSpace();
   const [refreshing, setRefreshing] = useState(false);

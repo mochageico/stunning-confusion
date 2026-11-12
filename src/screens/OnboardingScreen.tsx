@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Check, ChevronLeft, X } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView, NumericInput, StepperRow, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { AppButton, AppIconButton, AppText, MIN_TOUCH, useScaledSpace } from '../components/design';
 
 import { useThemeColors } from '../components/theme';
+import { useAppFields } from '../state/appStore';
 // ============================================================================
 // FIRST-RUN SETUP
 //
@@ -45,7 +45,11 @@ const DAY_FULL_NAMES: Record<string, string> = {
   Su: 'Sunday',
 };
 
-export default function OnboardingScreen({ state }: { state: AppState }) {
+export default function OnboardingScreen() {
+    const state = useAppFields(
+      'addVerseRangeToQueue', 'dismissOnboarding', 'learningDays', 'memoryQueue', 'newVersesPace',
+      'setShowTour', 'triggerToast', 'updateRhythm',
+    );
     const palette = useThemeColors();
   const {
     dismissOnboarding,

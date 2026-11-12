@@ -3,7 +3,6 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Lock, MoreHorizontal, UserPlus } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView, useKeyboardHeight } from '../components/ui';
 import { ChallengeCard, ChallengeCreateSheet } from '../components/ChallengeCard';
 import { ChatView } from '../components/chat/ChatView';
@@ -11,8 +10,15 @@ import { BlockConfirmDialog, ReportSheet } from '../components/chat/ReportSheet'
 import { AppButton, AppIconButton, AppText, useScaledSpace } from '../components/design';
 import { Dialog, ScreenHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+import { useAppFields } from '../state/appStore';
 
-export default function DMThreadScreen({ state }: { state: AppState }) {
+export default function DMThreadScreen() {
+  const state = useAppFields(
+    'acceptChallenge', 'activeChallenges', 'activeDMMessages', 'activeDMThread',
+    'activeDMThreadActive', 'blockUser', 'blockedUids', 'closeDMThread', 'declineChallenge',
+    'deleteChallenge', 'handleBack', 'loadingActiveDMMessages', 'outgoingFriendRequests',
+    'reportContent', 'sendChallenge', 'sendFriendRequest', 'user', 'viewMemberProfileById',
+  );
   const space = useScaledSpace();
   const palette = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -91,7 +97,6 @@ export default function DMThreadScreen({ state }: { state: AppState }) {
       </View>
 
       <ChatView
-        state={state}
         scope="dm"
         containerId={other.id}
         messages={activeDMMessages}

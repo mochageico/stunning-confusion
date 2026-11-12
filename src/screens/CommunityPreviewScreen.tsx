@@ -1,14 +1,17 @@
 import { ScrollView, View } from 'react-native';
 import { Globe, Lock, User } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppText, useScaledSpace } from '../components/design';
 import { GroupedList, ListRow, ScreenHeader } from '../components/blocks';
+import { useAppFields } from '../state/appStore';
 
 // A circle you haven't joined, as a read-only page: none of the member, plan
 // or chat machinery, since a non-member has no access to it.
-export default function CommunityPreviewScreen({ state }: { state: AppState }) {
+export default function CommunityPreviewScreen() {
+  const state = useAppFields(
+    'closeCirclePreview', 'joinCircle', 'myCircles', 'openCircle', 'previewCircle', 'user',
+  );
   const space = useScaledSpace();
   const { user, previewCircle, myCircles, closeCirclePreview, openCircle, joinCircle } = state;
 

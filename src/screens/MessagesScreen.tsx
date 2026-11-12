@@ -1,11 +1,11 @@
 import { ScrollView, View } from 'react-native';
 import { ChevronRight, MessageCircle } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Avatar, Badge, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+import { useAppFields } from '../state/appStore';
 
 function timeAgo(iso: string): string {
   if (!iso) return '';
@@ -18,7 +18,11 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d`;
 }
 
-export default function MessagesScreen({ state }: { state: AppState }) {
+export default function MessagesScreen() {
+  const state = useAppFields(
+    'dmThreads', 'friends', 'handleBack', 'isDMThreadUnread', 'loadingDmThreads',
+    'myChallengeBadges', 'openDMThread', 'user',
+  );
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();

@@ -4,7 +4,6 @@ import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CloudOff, Plus, Send } from 'lucide-react-native';
 
-import type { AppState } from '../../state/useAppState';
 import type { ChatScope } from '../../state/useSocial';
 import type { ChatMessage } from '../../types';
 import { REACTION_EMOJIS } from '../../data';
@@ -17,6 +16,7 @@ import { Avatar, Dialog } from '../blocks';
 import { AttachmentCard, CardActions } from './AttachmentCard';
 import { BlockConfirmDialog, ReportSheet } from './ReportSheet';
 import { AttachMenu } from './AttachMenu';
+import { useAppFields } from '../../state/appStore';
 
 // ============================================================================
 // ONE CHAT
@@ -35,7 +35,6 @@ import { AttachMenu } from './AttachMenu';
 const GROUP_GAP_MS = 5 * 60 * 1000;
 
 export function ChatView({
-  state,
   scope,
   containerId,
   messages,
@@ -47,7 +46,6 @@ export function ChatView({
   composerReplacement,
   onChallenge,
 }: {
-  state: AppState;
   scope: ChatScope;
   containerId: string;
   messages: ChatMessage[];
@@ -63,6 +61,13 @@ export function ChatView({
   /** DM only: the + menu's "Race a passage". */
   onChallenge?: () => void;
 }) {
+  const state = useAppFields(
+    'activeDMThread', 'blockUser', 'deleteChatMessage', 'guidelinesAcceptedAt',
+    'isChatRecordingSaved', 'maybeAskForNotifications', 'navigateTo', 'noSignal', 'openQuiz',
+    'playChatRecording', 'reactionsByMessageId', 'readMarkerFor', 'reportContent',
+    'requireCommunityGuidelines', 'respondToCard', 'responsesByMessageId', 'saveChatRecording',
+    'sendCircleMessage', 'sendDMMessage', 'startRecordingForRequest', 'toggleReaction', 'user',
+  );
   const space = useScaledSpace();
   const palette = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -296,7 +301,7 @@ export function ChatView({
         onConfirm={() => blockFor && state.blockUser(blockFor.uid, blockFor.name)}
       />
 
-      <AttachMenu state={state} visible={attachOpen} scope={scope} containerId={containerId} onClose={() => setAttachOpen(false)} onChallenge={onChallenge} />
+      <AttachMenu visible={attachOpen} scope={scope} containerId={containerId} onClose={() => setAttachOpen(false)} onChallenge={onChallenge} />
     </View>
   );
 }

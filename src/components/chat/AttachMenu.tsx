@@ -20,6 +20,7 @@ import { ChipRow, NumericKeyboardAccessory } from '../ui';
 import { AppButton, AppText, useScaledSpace } from '../design';
 import { Dialog, EmptyState, GroupedList, ListRow } from '../blocks';
 import { PassageRangeForm } from '../ChallengeCard';
+import { useAppFields } from '../../state/appStore';
 
 // Its own Modal, so its number fields need their own "Done" bar (see ui.tsx).
 const ATTACH_ACCESSORY_ID = 'chatAttachNumericDoneBar';
@@ -42,14 +43,12 @@ const HIDE_OPTIONS = [
  * top of a sheet.
  */
 export function AttachMenu({
-  state,
   visible,
   scope,
   containerId,
   onClose,
   onChallenge,
 }: {
-  state: AppState;
   visible: boolean;
   scope: ChatScope;
   containerId: string;
@@ -57,6 +56,10 @@ export function AttachMenu({
   /** DM only: open the race sheet. */
   onChallenge?: () => void;
 }) {
+  const state = useAppFields(
+    'activeDMThread', 'friends', 'guidelinesAcceptedAt', 'postChatMessage',
+    'requireCommunityGuidelines', 'selectedTranslationId', 'sendRecordingToChat', 'user',
+  );
   const space = useScaledSpace();
   const pickerTranslations = usePickerTranslations();
   const translationOptions = pickerTranslations.map((t) => ({ id: t.id, label: translationLabel(t.id) }));
@@ -160,7 +163,7 @@ export function AttachMenu({
         </>
       ) : null}
 
-      {step === 'recording' ? <RecordingPicker state={state} onPick={async (rec) => {
+      {step === 'recording' ? <RecordingPicker onPick={async (rec) => {
         const ok = await state.sendRecordingToChat(rec, scope, containerId);
         if (ok) onClose();
       }} /> : null}
@@ -196,7 +199,6 @@ export function AttachMenu({
 
       {step === 'quiz' && other ? (
         <QuizPicker
-          state={state}
           friendUid={other.otherUid}
           friendName={other.otherName}
           onPick={async (v, hidePercent) => {
@@ -224,7 +226,8 @@ export function AttachMenu({
   );
 }
 
-function RecordingPicker({ state, onPick }: { state: AppState; onPick: (rec: AppState['userRecordings'][number]) => void }) {
+function RecordingPicker({ onPick }: { onPick: (rec: AppState['userRecordings'][number]) => void }) {
+  const state = useAppFields('userRecordings');
   const playable = state.userRecordings.filter((r) => r.audioUrl);
   if (playable.length === 0) {
     return <EmptyState Icon={Mic} title="No recordings yet" message="Record a passage on the Audio tab, then you can send it here." />;
@@ -239,16 +242,15 @@ function RecordingPicker({ state, onPick }: { state: AppState; onPick: (rec: App
 }
 
 function QuizPicker({
-  state,
   friendUid,
   friendName,
   onPick,
 }: {
-  state: AppState;
   friendUid: string;
   friendName: string;
   onPick: (verse: QuizVerse, hidePercent: number) => void;
 }) {
+  const state = useAppFields('loadFriendQuizVerses');
   const space = useScaledSpace();
   const [verses, setVerses] = useState<QuizVerse[] | null | undefined>(undefined);
   const [hidePercent, setHidePercent] = useState(50);

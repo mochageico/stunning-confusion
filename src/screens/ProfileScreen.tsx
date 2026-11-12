@@ -1,5 +1,5 @@
-import { AppState } from '../state/useAppState';
 import SettingsScreen from './SettingsScreen';
+import { useAppFields } from '../state/appStore';
 
 /**
  * The Me tab (UI simplify Job 10): Profile, My progress and Settings in one
@@ -8,6 +8,6 @@ import SettingsScreen from './SettingsScreen';
  * live on Community; the full milestone list is "All milestones" (the old
  * My progress screen).
  */
-export default function ProfileScreen({ state }: { state: AppState }) {
-  return <SettingsScreen state={state} asMe />;
+export default function ProfileScreen() {
+  return <SettingsScreen asMe />;
 }
