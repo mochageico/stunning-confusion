@@ -10,6 +10,7 @@ module.exports = function (api) {
     // a native-only Expo Go freeze under investigation, so restored to
     // isolate the next experiment -- a NativeWind version pin -- as a
     // single variable.)
-    plugins: ['react-native-worklets/plugin'],
+    // babel-lucide-per-icon.js: bundle only the icons the app imports.
+    plugins: ['./babel-lucide-per-icon.js', 'react-native-worklets/plugin'],
   };
 };
