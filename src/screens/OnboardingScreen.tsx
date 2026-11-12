@@ -5,6 +5,7 @@ import { Check, ChevronLeft, X } from 'lucide-react-native';
 import { AppState } from '../state/useAppState';
 import { FadeInView, NumericInput, StepperRow, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
+import { PassagePreview } from '../components/VersePlayButton';
 import { AppButton, AppIconButton, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
 
 import { useThemeColors } from '../components/theme';
@@ -56,6 +57,7 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
     newVersesPace,
     memoryQueue,
     triggerToast,
+    selectedTranslationId,
   } = state;
 
   const space = useScaledSpace();
@@ -69,6 +71,9 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
   const [endVerse, setEndVerse] = useState(7);
   const [adding, setAdding] = useState(false);
   const [addedLabel, setAddedLabel] = useState<string | null>(null);
+  // The passage just added (or already there), for "Hear it now": a new user
+  // hears Scripture in the first minute.
+  const [addedPassage, setAddedPassage] = useState<{ book: string; chapter: number; startVerse: number; endVerse: number } | null>(null);
 
   const chapterField = useClampedNumberField(chapter, setChapter, (n) => Math.max(1, n));
   const startField = useClampedNumberField(
@@ -100,6 +105,7 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
       return;
     }
     const ref = `${book} ${chapter}:${startVerse}${endVerse > startVerse ? `-${endVerse}` : ''}`;
+    setAddedPassage({ book, chapter, startVerse, endVerse });
     if (result.added === 0) {
       setAddedLabel(`${ref} is already on your list.`);
       return;
@@ -162,6 +168,7 @@ export default function OnboardingScreen({ state }: { state: AppState }) {
           {addedLabel}
         </AppText>
       )}
+      {addedPassage && <PassagePreview translationId={selectedTranslationId} {...addedPassage} label="Hear it now" />}
     </View>,
 
     // 3 -- the week. Commits live, same as the My Schedule editor.

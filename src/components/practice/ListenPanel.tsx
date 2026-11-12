@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { libraryReaderOf } from '../../lib/libraryAudio';
+import { translationLabel } from '../../data';
 import { LibraryCredit } from '../VersePlayButton';
 import { LocateFixed, Minus, Pause, Pencil, Play, Plus, RefreshCw, Repeat, Sliders, X } from 'lucide-react-native';
 import { scriptOfVerse } from '../../lib/textScript';
@@ -107,6 +108,8 @@ export default function ListenPanel({
     verseCardRefs,
     playableSegments,
     hasAnyAudio,
+    libraryPending,
+    libraryReader,
     currentSegment,
     photoVerse,
     photosForCurrentChapter,
@@ -344,10 +347,22 @@ export default function ListenPanel({
 
       {/* Custom Control and Audio Looping Panel */}
       <View className="gap-3 bg-surface pt-2">
-        {!hasAnyAudio ? (
+        {!hasAnyAudio && libraryPending ? (
+          <EmptyState title={`Loading the ${libraryReader?.label ?? 'reading'}…`} />
+        ) : !hasAnyAudio && libraryReader ? (
+          // There is a built-in reading, but it didn't load (offline, most likely).
           <EmptyState
-            title="No recordings for these verses yet"
-            message="Record one on the Audio tab, or pick a narration on the chapter's page."
+            title={`Couldn't load the ${libraryReader.label}`}
+            message="Check your connection, then open Listen again."
+          />
+        ) : !hasAnyAudio ? (
+          <EmptyState
+            title={
+              listen.translationIds.length === 1
+                ? `No audio for ${translationLabel(listen.translationIds[0])} yet`
+                : 'No audio for these verses yet'
+            }
+            message="Record your own on the Audio tab, or pick a narration on the chapter's page."
           />
         ) : (
           <>

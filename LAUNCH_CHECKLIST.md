@@ -54,3 +54,13 @@ Signed-out visitors see made-up sample recordings labelled ESV, NIV and NKJV
 (`SUGGESTED_FEED_RECORDINGS` in `src/data.ts`). It's only labels, not text,
 but it advertises translations the app doesn't offer. Relabel them to
 translations a stranger can pick.
+
+## App Store listing
+
+### Say the app reads the BSB aloud
+
+Every BSB chapter has a built-in reading by Bob Souer (public domain, see
+`BSB_AUDIO_PLAN.md`). Put a concrete line in the description and on a
+screenshot, e.g. "Listen to any BSB chapter, read by Bob Souer". Good
+screenshots for it: a chapter page with "BSB reading · Bob Souer", and Listen
+playing Coming up.
