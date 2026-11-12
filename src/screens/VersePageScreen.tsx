@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { BookOpen, Check, ChevronDown, ChevronUp, Headphones, Link2, Trash2 } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { CollapsibleSection, EmptyState, ScreenHeader } from '../components/blocks';
@@ -28,6 +27,7 @@ import {
   versesWord,
 } from '../lib/stageProgress';
 import { LADDER, stepInfo, stepReviewCount } from '../lib/ladder';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // One verse's page (or a run of neighbours that sit at the same point on the
@@ -53,7 +53,12 @@ const estimateDate = (d: Date, now: Date) =>
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-export default function VersePageScreen({ state }: { state: AppState }) {
+export default function VersePageScreen() {
+  const state = useAppFields(
+    'addVerseLink', 'handleBack', 'masteryTouches', 'memoryQueue', 'navigateTo', 'promoteToLearning',
+    'removeQueueItems', 'setVersePageRef', 'startPractice', 'triggerToast', 'verseLinks',
+    'versePageRef',
+  );
   const {
     versePageRef,
     setVersePageRef,

@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Check, ChevronRight, Plus, Search } from 'lucide-react-native';
 
-import type { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
 import { EmptyState, ScreenHeader } from '../components/blocks';
@@ -15,6 +14,7 @@ import { CONSTELLATIONS } from '../content/constellations';
 import { isLearned, revealedStars, searchConstellations } from '../lib/constellations';
 import { openConstellationPreview } from '../lib/constellationPreview';
 import type { Constellation, QueueItem } from '../types';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // Constellations (CONSTELLATION_SKY_PLAN.md, stage 2): the browse page, opened
@@ -40,7 +40,8 @@ export function verseCounts(c: Constellation, queue: QueueItem[]): { total: numb
   return { total, known };
 }
 
-export default function ConstellationsScreen({ state }: { state: AppState }) {
+export default function ConstellationsScreen() {
+  const state = useAppFields('addToSky', 'handleBack', 'memoryQueue', 'navigateTo', 'sky');
   const { handleBack, navigateTo, memoryQueue, sky, addToSky } = state;
   const palette = useThemeColors();
   const scale = useFontScale();

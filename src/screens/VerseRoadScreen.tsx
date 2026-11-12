@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Check, ChevronRight } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Badge, ScreenHeader } from '../components/blocks';
@@ -14,6 +13,7 @@ import { Dropdown } from '../components/Dropdown';
 import { StageStrip } from '../components/VerseStages';
 import { HORIZON_LABEL, Horizon, ForecastPlan, forecastCounts, horizonDate, learnedCount, projectStartDates } from '../lib/forecast';
 import { STAGE_ORDER } from '../lib/stageProgress';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // The road: every passage drawn as a climb from Learning (bottom) to the top
@@ -46,7 +46,12 @@ const TICK: Record<VerseStage, string> = {
 
 type Segment = VerseStage | 'top';
 
-export default function VerseRoadScreen({ state }: { state: AppState }) {
+export default function VerseRoadScreen() {
+  const state = useAppFields(
+    'handleBack', 'joinedGroupPlanDetails', 'joinedGroupPlanMemberships', 'learningDays',
+    'masteryTouches', 'memoryQueue', 'navigateTo', 'newVersesPace', 'openVersePage', 'pausedAt',
+    'pausedUntil', 'sabbathDay', 'sabbathEnabled', 'thoroughness',
+  );
   const {
     memoryQueue, handleBack, openVersePage, navigateTo, masteryTouches, thoroughness, learningDays, newVersesPace,
     sabbathEnabled, sabbathDay, joinedGroupPlanDetails, joinedGroupPlanMemberships, pausedAt, pausedUntil,

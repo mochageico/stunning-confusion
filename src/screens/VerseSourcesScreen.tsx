@@ -1,14 +1,18 @@
 import { ScrollView } from 'react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { useScaledSpace } from '../components/design';
 import { ScreenHeader } from '../components/blocks';
 import { QueueSources } from '../components/QueueSources';
+import { useAppFields } from '../state/appStore';
 
 // WHERE VERSES COME FROM -- only reachable once you've joined a group plan,
 // since with one source there's nothing to weigh. Was a card on My Verses.
-export default function VerseSourcesScreen({ state }: { state: AppState }) {
+export default function VerseSourcesScreen() {
+  const state = useAppFields(
+    'getNextPullPreview', 'handleBack', 'joinedGroupPlanDetails', 'joinedGroupPlanMemberships',
+    'memoryQueue', 'setGroupPlanPriority',
+  );
   const {
     handleBack,
     memoryQueue,

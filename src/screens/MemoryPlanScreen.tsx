@@ -1,12 +1,12 @@
 import { ScrollView, View } from 'react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { Card, useScaledSpace } from '../components/design';
 import { ScreenHeader, SectionHeader } from '../components/blocks';
 import { RhythmEditor } from '../components/RhythmEditor';
 import { ReviewSettings } from '../components/ReviewSettings';
 import { VersesTabs } from '../components/VersesTabs';
+import { useAppFields } from '../state/appStore';
 
 // MEMORY PLAN DESIGNER -- the Verses tab's Plan section. One plan per account:
 // My Schedule (which days you take on new verses, how many, how long reviews
@@ -14,7 +14,13 @@ import { VersesTabs } from '../components/VersesTabs';
 // as clean, what lateness does). Everything commits live, so there is no Save.
 // It used to be four screens: My Schedule, a list of saved plans, a plan
 // editor and a missed-review policy.
-export default function MemoryPlanScreen({ state }: { state: AppState }) {
+export default function MemoryPlanScreen() {
+  const state = useAppFields(
+    'balanceDays', 'cleanPct', 'cognitiveLoadSensitivity', 'dayStartHour', 'lateMovesBack',
+    'learningDays', 'masteryTouches', 'maxReviewCap', 'newVersesPace', 'pausedAt', 'pausedUntil',
+    'sabbathDay', 'sabbathEnabled', 'switchVersesTab', 'thoroughness', 'updateLadderSettings',
+    'updateMasteryTouches', 'updateRhythm',
+  );
   const {
     switchVersesTab,
     learningDays,

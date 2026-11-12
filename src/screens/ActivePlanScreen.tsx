@@ -3,7 +3,6 @@ import { FlatList, Pressable, View } from 'react-native';
 import { ArrowUp, ArrowUpDown, Bookmark, ChevronRight, GripVertical, History, Layers, Milestone, Play, Plus, Search, Trash2 } from 'lucide-react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 
-import { AppState } from '../state/useAppState';
 import { QueueItem, GroupedQueueItem } from '../types';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
@@ -23,6 +22,7 @@ import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { gradedOnDay } from '../lib/retention';
 
 import { useThemeColors } from '../components/theme';
+import { useAppFields } from '../state/appStore';
 function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
   if (items.length === 0) return [];
   const groups: GroupedQueueItem[] = [];
@@ -82,7 +82,14 @@ let returnScroll: { view: VersesFilter; y: number } | null = null;
 // left it. Waiting opens first on a fresh start, the stage you act on most.
 let lastOpenStages: Record<VerseStage, boolean> = { waiting: true, learning: false, settling: false, steady: false, kept: false, secure: false };
 
-export default function ActivePlanScreen({ state }: { state: AppState }) {
+export default function ActivePlanScreen() {
+  const state = useAppFields(
+    'dayStartHour', 'isReviewDue', 'joinedGroupPlanDetails', 'joinedGroupPlanMemberships',
+    'learningDays', 'masteryTouches', 'memoryQueue', 'navigateTo', 'newVersesPace', 'openVersePage',
+    'pausedAt', 'pausedUntil', 'promoteToLearning', 'removeQueueItems', 'reviewsPaused',
+    'sabbathDay', 'sabbathEnabled', 'switchVersesTab', 'takeaways', 'thoroughness', 'triggerToast',
+    'updateMemoryQueue',
+  );
   const {
     navigateTo,
     openVersePage,

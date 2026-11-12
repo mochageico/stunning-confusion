@@ -6,9 +6,9 @@ import { AppButton, AppText, useFontScale, useScaledSpace } from './design';
 import { Dialog } from './blocks';
 import ChapterPhotoViewer from './ChapterPhotoViewer';
 import { MAX_PHOTOS_PER_CHAPTER, type PhotoSource } from '../lib/chapterPhotos';
-import type { AppState } from '../state/useAppState';
 
 import { useThemeColors } from './theme';
+import { useAppFields } from '../state/appStore';
 
 /**
  * Bible page photos on Chapter Landing: the right end of the recording card.
@@ -19,14 +19,16 @@ import { useThemeColors } from './theme';
  * past one line beside the recording.
  */
 export default function ChapterPhotoStrip({
-  state,
   book,
   chapter,
 }: {
-  state: AppState;
   book: string;
   chapter: number;
 }) {
+  const state = useAppFields(
+    'activeChapterVerses', 'addChapterPhoto', 'cacheChapterPhoto', 'deleteChapterPhoto',
+    'photoCache', 'photosForChapter', 'reorderChapterPhotos', 'setChapterPhotoVerseRange',
+  );
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();

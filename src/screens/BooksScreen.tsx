@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { ScrollView, View, Pressable } from 'react-native';
 import { Search, X } from 'lucide-react-native';
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppTextInput, useFontScale, useScaledSpace } from '../components/design';
 import { EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 
 import { useThemeColors } from '../components/theme';
-export default function BooksScreen({ state }: { state: AppState }) {
+import { useAppFields } from '../state/appStore';
+export default function BooksScreen() {
+  const state = useAppFields('BOOKS', 'handleBack', 'navigateTo');
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();

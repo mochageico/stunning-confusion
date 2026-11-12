@@ -2,12 +2,12 @@ import { useRef } from 'react';
 import { View } from 'react-native';
 
 import type { StarRef } from '../types';
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { useScaledSpace } from '../components/design';
 import ConstellationMap from '../components/map/ConstellationMap';
 import { takeSkyFocus } from '../lib/skyFocus';
 import { listenVerses } from '../components/map/addStars';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // MY SKY (CONSTELLATION_SKY_PLAN.md, stage 3): the user's own night sky, reached
@@ -19,7 +19,14 @@ import { listenVerses } from '../components/map/addStars';
 //   setSkyFocus(constellationId); navigateTo('mySky');   // lib/skyFocus.ts
 // ============================================================================
 
-export default function MySkyScreen({ state }: { state: AppState }) {
+export default function MySkyScreen() {
+  const state = useAppFields(
+    'addVerseLink', 'addVersesToQueue', 'audioCache', 'deleteVerseLink', 'handleUpdateVerseStatus',
+    'isReviewDue', 'mapLayout', 'markFound', 'memoryQueue', 'navigateTo', 'openVersePage',
+    'relabelVerseLink', 'removeFromSky', 'reviewsPaused', 'saveMapLayout', 'selectedChapterAudios',
+    'selectedTranslationId', 'setPlayingRecordingId', 'sky', 'skyReady', 'startPractice',
+    'studioPlaybackEnabled', 'triggerToast', 'userRecordings', 'validateTouch', 'verseLinks',
+  );
   const space = useScaledSpace();
   // Read once when the screen opens, and cleared, so coming back later opens on the whole sky.
   const focusId = useRef<string | null | undefined>(undefined);

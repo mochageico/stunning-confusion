@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Bookmark, ChevronDown, ChevronRight, ChevronUp, MessageCircle, Send, Trash2, Users } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { replyKey } from '../state/useCircleTakeaways';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
@@ -14,6 +13,7 @@ import { sectionIndexOf } from '../lib/sections';
 import { buildPath, PathEntry, sectionStatuses } from '../lib/takeaways';
 import { authorShort, circleList, nextSharedTo, REPLY_MAX, replyCountText, sharedChoiceFor, visibleReplies } from '../lib/takeawaySharing';
 import type { SharedTakeaway, Takeaway } from '../types';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // THE TAKEAWAYS PATH
@@ -206,7 +206,11 @@ function Path({ entries, onOpen }: { entries: PathEntry[]; onOpen: (id: string) 
   );
 }
 
-function Opened({ state, takeaway, onClose }: { state: AppState; takeaway: Takeaway; onClose: () => void }) {
+function Opened({ takeaway, onClose }: { takeaway: Takeaway; onClose: () => void }) {
+  const state = useAppFields(
+    'deleteTakeaway', 'memoryQueue', 'myCircles', 'saveTakeaway', 'sectionsForChapter',
+    'setLastShareChoice',
+  );
   const space = useScaledSpace();
   const palette = useThemeColors();
   const [showVerses, setShowVerses] = useState(false);
@@ -352,7 +356,10 @@ function CircleItem({ item, replies, myUid, onOpen }: { item: SharedTakeaway; re
   );
 }
 
-function CircleView({ state, circleId, onOpen }: { state: AppState; circleId: string; onOpen: (docId: string) => void }) {
+function CircleView({ circleId, onOpen }: { circleId: string; onOpen: (docId: string) => void }) {
+  const state = useAppFields(
+    'blockedUids', 'circleTakeaways', 'loadCircleTakeaways', 'takeawayReplies', 'user',
+  );
   const space = useScaledSpace();
   const { loadCircleTakeaways } = state;
   useEffect(() => {
@@ -398,7 +405,11 @@ function CircleView({ state, circleId, onOpen }: { state: AppState; circleId: st
 }
 
 /** A shared takeaway, opened: the takeaway, the author's note, then the replies and a reply box. */
-function OpenedShared({ state, item, circleName, onClose }: { state: AppState; item: SharedTakeaway; circleName: string; onClose: () => void }) {
+function OpenedShared({ item, circleName, onClose }: { item: SharedTakeaway; circleName: string; onClose: () => void }) {
+  const state = useAppFields(
+    'blockedUids', 'deleteTakeawayReply', 'postTakeawayReply', 'takeawayReplies', 'user',
+    'watchTakeawayReplies',
+  );
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
@@ -502,7 +513,11 @@ function OpenedShared({ state, item, circleName, onClose }: { state: AppState; i
   );
 }
 
-export default function TakeawaysScreen({ state }: { state: AppState }) {
+export default function TakeawaysScreen() {
+  const state = useAppFields(
+    'chapterSections', 'circleTakeaways', 'handleBack', 'memoryQueue', 'myCircles',
+    'sectionsForChapter', 'takeaways',
+  );
   const { memoryQueue, sectionsForChapter, takeaways, handleBack, myCircles } = state;
   const space = useScaledSpace();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -523,7 +538,7 @@ export default function TakeawaysScreen({ state }: { state: AppState }) {
   if (view === 'mine' && opened) {
     return (
       <FadeInView style={{ flex: 1 }}>
-        <Opened state={state} takeaway={opened} onClose={() => setOpenId(null)} />
+        <Opened takeaway={opened} onClose={() => setOpenId(null)} />
       </FadeInView>
     );
   }
@@ -531,7 +546,7 @@ export default function TakeawaysScreen({ state }: { state: AppState }) {
   if (sharedItem && circle) {
     return (
       <FadeInView style={{ flex: 1 }}>
-        <OpenedShared state={state} item={sharedItem} circleName={circle.name} onClose={() => setOpenShared(null)} />
+        <OpenedShared item={sharedItem} circleName={circle.name} onClose={() => setOpenShared(null)} />
       </FadeInView>
     );
   }
@@ -574,7 +589,7 @@ export default function TakeawaysScreen({ state }: { state: AppState }) {
                   wrap
                 />
               )}
-              <CircleView state={state} circleId={circle.id} onOpen={setOpenShared} />
+              <CircleView circleId={circle.id} onOpen={setOpenShared} />
             </>
           )
         ) : entries.length === 0 ? (

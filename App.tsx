@@ -133,12 +133,12 @@ function Screens() {
     return W(GroupPlanDetailScreen);
   }
   if (state.currentScreen === 'fullHistory') {
-    return W(FullHistoryScreen);
+    return <FullHistoryScreen />;
   }
   // Opens over whichever tab you're on (Today or Verses), so Back returns
   // there.
   if (state.currentScreen === 'addVerses') {
-    return W(AddVersesScreen);
+    return <AddVersesScreen />;
   }
   if (state.currentScreen === 'dashboard') {
     return W(DashboardScreen);
@@ -169,11 +169,11 @@ function Screens() {
       case 'todayVerses':
         return <TodayVersesScreen />;
       case 'books':
-        return W(BooksScreen);
+        return <BooksScreen />;
       case 'chapters':
-        return W(ChaptersScreen);
+        return <ChaptersScreen />;
       case 'chapterLanding':
-        return W(ChapterLandingScreen);
+        return <ChapterLandingScreen />;
       case 'audioFeed':
         return W(AudioFeedScreen);
       case 'referenceDrill':
@@ -185,11 +185,11 @@ function Screens() {
       case 'mixedReview':
         return W(MixedReviewScreen);
       case 'constellations':
-        return W(ConstellationsScreen);
+        return <ConstellationsScreen />;
       case 'constellationPreview':
-        return W(ConstellationPreviewScreen);
+        return <ConstellationPreviewScreen />;
       case 'mySky':
-        return W(MySkyScreen);
+        return <MySkyScreen />;
       default:
         return <HomeScreen />;
     }
@@ -198,19 +198,19 @@ function Screens() {
   if (state.currentTab === 'verses') {
     switch (state.currentScreen) {
       case 'memoryPlan':
-        return W(MemoryPlanScreen);
+        return <MemoryPlanScreen />;
       case 'verseSources':
-        return W(VerseSourcesScreen);
+        return <VerseSourcesScreen />;
       case 'memoryCalendar':
         return <MemoryCalendarScreen />;
       case 'takeaways':
-        return W(TakeawaysScreen);
+        return <TakeawaysScreen />;
       case 'verseRoad':
-        return W(VerseRoadScreen);
+        return <VerseRoadScreen />;
       case 'versePage':
-        return W(VersePageScreen);
+        return <VersePageScreen />;
       default:
-        return W(ActivePlanScreen);
+        return <ActivePlanScreen />;
     }
   }
 

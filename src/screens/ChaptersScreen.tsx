@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { BOOKS } from '../data';
 import { AppText, useScaledSpace } from '../components/design';
 import { EmptyState, ScreenHeader } from '../components/blocks';
+import { useAppFields } from '../state/appStore';
 
-export default function ChaptersScreen({ state }: { state: AppState }) {
+export default function ChaptersScreen() {
+  const state = useAppFields('handleBack', 'navigateTo', 'selectedBook');
   const space = useScaledSpace();
   const { handleBack, navigateTo, selectedBook } = state;
   // The grid's real width, so tiles can be sized to fill each row exactly.

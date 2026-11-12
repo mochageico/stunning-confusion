@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
 import { Dropdown } from '../components/Dropdown';
@@ -9,6 +8,7 @@ import { AppText, useScaledSpace } from '../components/design';
 import { EmptyState, ScreenHeader, SectionHeader } from '../components/blocks';
 
 import { formatDate } from '../lib/format';
+import { useAppFields } from '../state/appStore';
 
 // A dropdown rather than a row of chips: four date ranges in chips truncated
 // to "Last 30 D…" at large text.
@@ -21,7 +21,8 @@ const DATE_FILTER_OPTIONS = [
 
 type HistoryEntry = { title: string; kind: 'started' | 'memorized'; book: string; date: string };
 
-export default function FullHistoryScreen({ state }: { state: AppState }) {
+export default function FullHistoryScreen() {
+  const state = useAppFields('handleBack', 'memoryQueue');
   const { handleBack, memoryQueue } = state;
   const space = useScaledSpace();
   const [bookFilter, setBookFilter] = useState('');

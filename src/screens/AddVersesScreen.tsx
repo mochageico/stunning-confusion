@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Info, Plus } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { FadeInView, NumericInput } from '../components/ui';
 import { AppButton, AppText, Card, useFontScale, useScaledSpace } from '../components/design';
 import { ScreenHeader, SectionHeader } from '../components/blocks';
@@ -12,6 +11,7 @@ import { useThemeColors } from '../components/theme';
 import { getBookByName, textScriptFor, translationLabel } from '../data';
 import { useChapterText } from '../state/useScripture';
 import { usePickerTranslations } from '../state/usePickerTranslations';
+import { useAppFields } from '../state/appStore';
 
 
 /** "Romans 8:28" or "Romans 8:28-30". */
@@ -36,7 +36,12 @@ const refForVerses = (book: string, chapter: number, verses: number[]) =>
 // device), and changing it here changes it on the chapter page too -- one
 // choice, not two that drift apart.
 // ============================================================================
-export default function AddVersesScreen({ state }: { state: AppState }) {
+export default function AddVersesScreen() {
+  const state = useAppFields(
+    'addVerseRangeToQueue', 'handleBack', 'memoryQueue', 'selectedAddBook', 'selectedAddChapter',
+    'selectedTranslationId', 'setSelectedAddBook', 'setSelectedAddChapter',
+    'setSelectedTranslationId', 'triggerToast',
+  );
   const translationOptions = usePickerTranslations().map((t) => ({ id: t.id, label: translationLabel(t.id) }));
   const {
     handleBack,

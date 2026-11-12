@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { ScrollView, View, useWindowDimensions } from 'react-native';
 import { BookOpen, Check, Headphones, Plus } from 'lucide-react-native';
 
-import type { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Dialog, ScreenHeader } from '../components/blocks';
@@ -14,6 +13,7 @@ import { guideNotes, isLearned, listenOrder, progress, revealedStars, starLit } 
 import { usePreviewId } from '../lib/constellationPreview';
 import { starLabel } from '../lib/mapLayout';
 import { verseCounts } from './ConstellationsScreen';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // Constellation preview (CONSTELLATION_SKY_PLAN.md, stage 2, sketch "Mystery
@@ -24,7 +24,11 @@ import { verseCounts } from './ConstellationsScreen';
 // the app's theme.
 // ============================================================================
 
-export default function ConstellationPreviewScreen({ state }: { state: AppState }) {
+export default function ConstellationPreviewScreen() {
+  const state = useAppFields(
+    'addToSky', 'addVersesToQueue', 'handleBack', 'memoryQueue', 'navigateTo',
+    'selectedTranslationId', 'sky', 'startPractice', 'triggerToast',
+  );
   const { handleBack, navigateTo, memoryQueue, sky, addToSky, addVersesToQueue, selectedTranslationId, startPractice, triggerToast } = state;
   const scale = useFontScale();
   const space = useScaledSpace();

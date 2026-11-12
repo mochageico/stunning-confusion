@@ -4,7 +4,7 @@ import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flat
 import { GestureDetector } from 'react-native-gesture-handler';
 import { Bookmark, Brackets, Check, ChevronDown, Download, Grid2x2, GripVertical, Headphones, LayoutGrid, List, ListTree, Mic, Pause, PenLine, Play, Plus, Printer, Search } from 'lucide-react-native';
 
-import { AppState, resolveChapterAudio } from '../state/useAppState';
+import { resolveChapterAudio } from '../state/useAppState';
 import { recordingFitsTranslation } from '../lib/appData';
 import { cacheableTarget } from '../lib/audioCache';
 import { ChipRow, DiscreteSlider, FadeInView } from '../components/ui';
@@ -55,6 +55,7 @@ import {
 
 import { useThemeColors } from '../components/theme';
 import { usePlaybackProgress } from '../lib/playbackProgress';
+import { useAppFields } from '../state/appStore';
 type OverrideStage = 'learning' | LadderGroup;
 const OVERRIDE_STAGE_OPTIONS: { id: OverrideStage; label: string }[] = [
   { id: 'learning', label: 'Learning' },
@@ -86,7 +87,22 @@ function dueLabel(dueDate: string | undefined): string | null {
   return `Due ${when}`;
 }
 
-export default function ChapterLandingScreen({ state }: { state: AppState }) {
+export default function ChapterLandingScreen() {
+  const state = useAppFields(
+    'activeChapterTextError', 'activeChapterTextLoading', 'activeChapterVerses', 'addVersesToQueue',
+    'audioCache', 'chapterViewMode', 'downloadingRecordingIds', 'formatTime', 'handleBack',
+    'highlightedVerses', 'isVerseSelected', 'memoryGridColumns', 'navigateTo',
+    'overrideVerseMemoryStatus', 'playingRecordingId', 'reorderChapterRecordings',
+    'saveChapterOffline', 'saveChapterSections', 'saveVerseDoodle', 'sectionsForChapter',
+    'selectTab', 'selectedBook', 'selectedChapter', 'selectedChapterAudios', 'selectedTranslationId',
+    'selectedVerseNumbers', 'setChapterViewMode', 'setFeedBookFilter', 'setFeedChapterFilter',
+    'setMemoryGridColumns', 'setPlayingRecProgress', 'setPlayingRecordingId', 'setRecordingBook',
+    'setRecordingChapter', 'setRecordingRangeEnd', 'setRecordingRangeStart',
+    'setRecordingTranslation', 'setSelectedChapterAudios', 'setSelectedTranslationId',
+    'setSelectedVerseNumbers', 'setShowAudioSelector', 'showAudioSelector', 'startPractice',
+    'studioPlaybackEnabled', 'thoroughness', 'toggleSelectAll', 'toggleVerseHighlight',
+    'toggleVerseSelection', 'triggerToast', 'userRecordings', 'verseDoodles',
+  );
   const pickerTranslations = usePickerTranslations();
   const palette = useThemeColors();
   const scale = useFontScale();
@@ -506,7 +522,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
               trailing={
                 <>
                   <View className="self-stretch bg-line" style={{ width: 1 }} />
-                  <ChapterPhotoStrip state={state} book={selectedBook || ''} chapter={selectedChapter ?? 0} />
+                  <ChapterPhotoStrip book={selectedBook || ''} chapter={selectedChapter ?? 0} />
                 </>
               }
             />
@@ -562,7 +578,7 @@ export default function ChapterLandingScreen({ state }: { state: AppState }) {
                   </Pressable>
                 )}
                 <View className="self-stretch bg-line" style={{ width: 1 }} />
-                <ChapterPhotoStrip state={state} book={selectedBook || ''} chapter={selectedChapter ?? 0} />
+                <ChapterPhotoStrip book={selectedBook || ''} chapter={selectedChapter ?? 0} />
               </View>
 
               {/* Real playback progress bar */}
