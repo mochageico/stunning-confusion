@@ -135,17 +135,11 @@ In order of how much they are worth. Each one stands alone.
 
 **Risk.** Low. **Worth.** Small unless the measurement says otherwise.
 
-### 4. Verse history that grows forever
+### 4. Verse history — not a problem (corrected 2026-11-12)
 
-**Problem.** Each verse keeps every practice touch in `touchLogs` with no limit (`reviewLogs` is capped at 500). All verses load at launch, so launch and every save get slowly heavier over the years.
+The first version of this audit said practice history grows without limit. That was wrong. `touchLogs` only grows while a verse is being learned, and `reviewLogs` is capped at 500 per verse. Nothing to do.
 
-**Plan.**
-
-1. Count the real sizes on your account.
-2. Decide what the app needs from old touches (the heatmap and streak need dates only).
-3. Cap `touchLogs` the way `reviewLogs` is capped, or keep one line per day for anything older than a few months.
-
-**Risk.** Medium, since it changes saved data. Back up first, as the ladder migration did.
+The detailed plan for items 1 to 3 is in `.claude/optimization-plan.md`.
 
 ### 5. Repo size and tidiness
 
