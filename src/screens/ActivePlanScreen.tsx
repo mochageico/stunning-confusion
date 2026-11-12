@@ -12,9 +12,6 @@ import { FilterChips, OverflowMenu } from '../components/session';
 import { PRIORITY_LABELS } from '../components/QueueSources';
 import { TopChips, StageDot, StageCountBar, StageSectionHeader, StageStrip, VerseStageRow, stageCaption } from '../components/VerseStages';
 import VersesByBook from '../components/VersesByBook';
-import ConstellationMap from '../components/map/ConstellationMap';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMapFullscreen } from '../lib/mapFullscreen';
 import { writtenCount } from '../lib/takeaways';
 import { VersesTabs } from '../components/VersesTabs';
 import { reorderQueueGroups } from '../lib/queueReorder';
@@ -70,8 +67,8 @@ function groupQueueItems(items: QueueItem[]): GroupedQueueItem[] {
   return groups;
 }
 
-type VersesView = 'stage' | 'book' | 'map';
-type VersesFilter = 'all' | 'due' | 'comingUp' | 'book' | 'map';
+type VersesView = 'stage' | 'book';
+type VersesFilter = 'all' | 'due' | 'comingUp' | 'book';
 const EMPTY_STARTS = new Map<string, Date>();
 // Remembered for the session, so coming back from a verse page lands on the
 // filter you left. Not saved to the device: All is the right place to open.
@@ -111,21 +108,11 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     sabbathDay,
     pausedAt,
     pausedUntil,
-    verseLinks,
-    addVersesToQueue,
-    addVerseLink,
-    relabelVerseLink,
-    deleteVerseLink,
-    mapLayout,
-    saveMapLayout,
-    selectedTranslationId,
   } = state;
 
   const space = useScaledSpace();
   const palette = useThemeColors();
   const scale = useFontScale();
-  const insets = useSafeAreaInsets();
-  const mapFullscreen = useMapFullscreen();
   // One chip row picks what the list shows (UI simplify Job 5): it replaced
   // the Due only button and the By stage / By book / Map dropdown.
   const [filter, setFilterState] = useState<VersesFilter>(lastFilter);
@@ -133,7 +120,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     lastFilter = f;
     setFilterState(f);
   };
-  const view: VersesView = filter === 'book' ? 'book' : filter === 'map' ? 'map' : 'stage';
+  const view: VersesView = filter === 'book' ? 'book' : 'stage';
   const dueOnly = filter === 'due';
   const comingUpOnly = filter === 'comingUp';
 
@@ -435,7 +422,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
   // list) is what made opening this tab slow. Waiting (with its drag list)
   // and Complete (its chips) stay one item each.
   const items: ListItem[] = useMemo(() => {
-    if (!listsReady || total === 0 || view === 'map') return [];
+    if (!listsReady || total === 0) return [];
     if (view === 'book') return [{ kind: 'book', key: 'book' }];
     if (comingUpOnly) return [{ kind: 'waiting', key: 'waiting', stage: 'waiting' }];
     // Due only leaves out what has nothing due: Waiting (nothing waiting is
@@ -574,7 +561,6 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
         { id: 'due', label: dueTodayCount > 0 ? `Due · ${dueTodayCount}` : 'Due' },
         { id: 'comingUp', label: waitingCount > 0 ? `Coming up · ${waitingCount}` : 'Coming up' },
         { id: 'book', label: 'By book' },
-        { id: 'map', label: 'Map' },
       ]}
     />
   );
@@ -609,43 +595,7 @@ export default function ActivePlanScreen({ state }: { state: AppState }) {
     </View>
   );
 
-  // The map pans and zooms, so it can't sit inside the scrolling list: it
-  // gets the screen below the switch to itself (components/map).
-  if (view === 'map' && total > 0) {
-    return (
-      <FadeInView style={{ flex: 1 }}>
-        <View
-          className="flex-1 bg-canvas"
-          style={
-            mapFullscreen
-              ? { paddingHorizontal: space(8), paddingTop: space(8), paddingBottom: Math.max(insets.bottom, space(8)), gap: space(8) }
-              : { paddingHorizontal: space(20), paddingTop: space(20), paddingBottom: space(8), gap: space(14) }
-          }
-        >
-          {/* Fullscreen hides these but keeps the map where it is in the tree, so it isn't rebuilt. */}
-          {!mapFullscreen && (
-            <ScreenHeader title="Verses" subtitle={summary} actions={headerActions} />
-          )}
-          {!mapFullscreen && <VersesTabs value="activePlan" onChange={switchVersesTab} />}
-          {!mapFullscreen && viewSwitch}
-          <ConstellationMap
-            queue={memoryQueue}
-            verseLinks={verseLinks}
-            mapLayout={mapLayout}
-            saveMapLayout={saveMapLayout}
-            translationId={selectedTranslationId}
-            onOpenVerse={(page) => openVersePage(page)}
-            addVersesToQueue={addVersesToQueue}
-            addVerseLink={addVerseLink}
-            relabelVerseLink={relabelVerseLink}
-            deleteVerseLink={deleteVerseLink}
-            walk={{ handleUpdateVerseStatus, validateTouch, isReviewDue, reviewsPaused }}
-          />
-        </View>
-      </FadeInView>
-    );
-  }
-
+  // (The Map view that used to be here moved to My sky, its own screen: screens/MySkyScreen.tsx.)
   return (
     <FadeInView style={{ flex: 1 }}>
       <FlatList

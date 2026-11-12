@@ -151,7 +151,23 @@ interface DrawingProps {
   palette: ThemeColors;
   /** The map's background, for label halos. */
   paper: string;
+  /** My sky: stars still hidden are soft glows with no label and no line. */
+  hidden?: ReadonlySet<string>;
+  /** My sky: how visible each constellation is (by group id, default 1): the others fade while one is zoomed into. */
+  groupOpacity?: Record<string, number>;
+  /** My sky: the user's own lines, dashed in this color. */
+  userLineColor?: string;
+  /** My sky: the hidden stars' glow, and the NEXT marker. */
+  glowColor?: string;
+  nextColor?: string;
+  /** My sky: each constellation's name, drawn over it on the whole sky. */
+  titles?: { id: string; text: string; x: number; y: number }[];
+  titleOpacity?: number;
 }
+
+const GLOW_ID = 'hiddenGlow';
+const GLOW_RADIUS = 21;
+export const TITLE_SIZE = 26;
 
 /** Everything but the ghosts. Memoized: the camera moving never redraws it. */
 export const MapDrawing = React.memo(function MapDrawing({
@@ -167,20 +183,41 @@ export const MapDrawing = React.memo(function MapDrawing({
   dim,
   palette,
   paper,
+  hidden,
+  groupOpacity,
+  userLineColor,
+  glowColor,
+  nextColor,
+  titles,
+  titleOpacity = 1,
 }: DrawingProps) {
   const lit = (k: string) => looks[k]?.lit ?? false;
   const lightMap = isLightColor(paper);
+  const isHidden = (k: string) => !!hidden?.has(k);
+  const groupOf = new Map(result.stars.map((s) => [s.key, s.group]));
+  const seen = (key: string) => groupOpacity?.[groupOf.get(key) ?? ''] ?? 1;
   return (
     <G opacity={dim ? 0.5 : 1}>
       <TopDefs />
+      {glowColor && (
+        <Defs>
+          <RadialGradient id={GLOW_ID} cx="0.5" cy="0.5" r="0.5">
+            <Stop offset="0" stopColor={glowColor} stopOpacity={0.55} />
+            <Stop offset="0.45" stopColor={glowColor} stopOpacity={0.28} />
+            <Stop offset="1" stopColor={glowColor} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+      )}
       {/* Lines first, under the stars. Brighter where both ends are lit. */}
       {result.lines.map((l) => {
         const a = positions[l.from];
         const b = positions[l.to];
-        if (!a || !b) return null;
+        if (!a || !b || isHidden(l.from) || isHidden(l.to)) return null;
         const both = lit(l.from) && lit(l.to);
         const chosen = selectedLine === `${l.from}~${l.to}`;
-        const fade = Math.min(appear[l.from] ?? 1, appear[l.to] ?? 1);
+        const fade = Math.min(appear[l.from] ?? 1, appear[l.to] ?? 1) * seen(l.from);
+        if (fade <= 0.01) return null;
+        const own = l.kind === 'user' && !!userLineColor;
         return (
           <Line
             key={`${l.id}:${l.from}~${l.to}`}
@@ -188,9 +225,10 @@ export const MapDrawing = React.memo(function MapDrawing({
             y1={a[1]}
             x2={b[0]}
             y2={b[1]}
-            stroke={chosen ? palette.accent : both ? palette.ink2 : palette.ink3}
-            strokeWidth={chosen ? 3 : both ? 1.6 : 1.2}
-            strokeOpacity={(both || chosen ? 1 : 0.6) * fade}
+            stroke={chosen ? palette.accent : own ? userLineColor : both ? palette.ink2 : palette.ink3}
+            strokeWidth={chosen ? 3 : both || own ? 1.6 : 1.2}
+            strokeOpacity={(both || chosen || own ? 1 : 0.6) * fade}
+            strokeDasharray={own ? '7 5' : undefined}
             strokeLinecap="round"
           />
         );
@@ -200,7 +238,7 @@ export const MapDrawing = React.memo(function MapDrawing({
       {found.map((f) => {
         const a = positions[f.from];
         const b = positions[f.to];
-        if (!a || !b) return null;
+        if (!a || !b || isHidden(f.from) || isHidden(f.to) || seen(f.from) <= 0.01) return null;
         return (
           <Line
             key={`echo:${f.id}`}
@@ -210,7 +248,7 @@ export const MapDrawing = React.memo(function MapDrawing({
             y2={b[1]}
             stroke={palette.ink3}
             strokeWidth={2}
-            strokeOpacity={0.8}
+            strokeOpacity={0.8 * seen(f.from)}
             strokeDasharray="0.1 6"
             strokeLinecap="round"
           />
@@ -223,7 +261,7 @@ export const MapDrawing = React.memo(function MapDrawing({
           const text = lineLabels[`${l.from}~${l.to}`];
           const a = positions[l.from];
           const b = positions[l.to];
-          if (!text || !a || !b) return null;
+          if (!text || !a || !b || isHidden(l.from) || isHidden(l.to) || seen(l.from) < 0.5) return null;
           return <LineLabel key={`ll:${l.from}~${l.to}`} a={a} b={b} text={text} color={palette.ink2} halo={paper} />;
         })}
 
@@ -231,8 +269,17 @@ export const MapDrawing = React.memo(function MapDrawing({
         const p = positions[s.key];
         if (!p) return null;
         const look = looks[s.key];
-        const grow = appear[s.key] ?? 1;
+        const grow = (appear[s.key] ?? 1) * seen(s.key);
+        if (grow <= 0.01) return null;
         const selected = selectedKey === s.key;
+        if (isHidden(s.key)) {
+          // Not found yet: a soft glow, nothing to read.
+          return (
+            <G key={s.key} opacity={grow}>
+              <Circle cx={p[0]} cy={p[1]} r={GLOW_RADIUS} fill={`url(#${GLOW_ID})`} />
+            </G>
+          );
+        }
         return (
           <G key={s.key} opacity={grow}>
             {selected && <Circle cx={p[0]} cy={p[1]} r={18} fill={palette.accent} fillOpacity={0.16} stroke={palette.accent} strokeWidth={1.5} />}
@@ -246,11 +293,17 @@ export const MapDrawing = React.memo(function MapDrawing({
                 <Circle cx={p[0]} cy={p[1]} r={STAR_RADIUS - 1.5} fill={palette.ink} />
               </>
             ) : (
+              <Circle cx={p[0]} cy={p[1]} r={STAR_RADIUS - 1} fill={paper} stroke={palette.ink3} strokeWidth={1.5} />
+            )}
+            {/* The NEXT marker: a dashed ring, and the word when there's room to read it. */}
+            {look?.suggested && (
               <>
-                {look?.suggested && (
-                  <Circle cx={p[0]} cy={p[1]} r={STAR_RADIUS + 5} fill="none" stroke={palette.accent} strokeWidth={1.5} strokeDasharray="3 3" />
+                <Circle cx={p[0]} cy={p[1]} r={STAR_RADIUS + 6} fill="none" stroke={nextColor ?? palette.accent} strokeWidth={1.5} strokeDasharray="3 3" />
+                {showLabels && (
+                  <SvgText x={p[0]} y={p[1] - STAR_RADIUS - 9} fontSize={9} fontFamily="Inter_700Bold" fontWeight="700" textAnchor="middle" fill={nextColor ?? palette.accent}>
+                    NEXT
+                  </SvgText>
                 )}
-                <Circle cx={p[0]} cy={p[1]} r={STAR_RADIUS - 1} fill={paper} stroke={palette.ink3} strokeWidth={1.5} />
               </>
             )}
             {showLabels && (
@@ -259,6 +312,18 @@ export const MapDrawing = React.memo(function MapDrawing({
           </G>
         );
       })}
+
+      {/* Each constellation's name, over it, while the whole sky is in view. */}
+      {titles?.map((t) => (
+        <G key={`title:${t.id}`} opacity={titleOpacity}>
+          <SvgText x={t.x} y={t.y} fontSize={TITLE_SIZE} fontFamily={LABEL_FONT} fontWeight="700" textAnchor="middle" stroke={paper} strokeWidth={5} strokeLinejoin="round" fill={paper}>
+            {t.text}
+          </SvgText>
+          <SvgText x={t.x} y={t.y} fontSize={TITLE_SIZE} fontFamily={LABEL_FONT} fontWeight="700" textAnchor="middle" fill={palette.ink}>
+            {t.text}
+          </SvgText>
+        </G>
+      ))}
     </G>
   );
 });

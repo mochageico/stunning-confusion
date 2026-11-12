@@ -1,5 +1,17 @@
-import type { Echo, QueueItem, StarRef, VerseLink } from '../../types';
-import { echoesFor, refsOverlap, starIsTop, starKey, starLit, starStage, suggestedNext } from '../../lib/constellations';
+import type { Constellation, Echo, QueueItem, StarRef, VerseLink } from '../../types';
+import {
+  echoesFor,
+  isComplete,
+  joinedTo,
+  nextToLearn,
+  progress,
+  refsOverlap,
+  revealedStars,
+  starIsTop,
+  starKey,
+  starLit,
+  starStage,
+} from '../../lib/constellations';
 import { echoGhosts, LayoutResult, MapStar, Pt, starLabel, STAR_RADIUS, LABEL_GAP, LABEL_HEIGHT } from '../../lib/mapLayout';
 import type { VerseStage } from '../../lib/stageProgress';
 import { CONSTELLATIONS } from '../../content/constellations';
@@ -27,12 +39,9 @@ export interface StarLook {
   suggested: boolean;
 }
 
-/** Lit, stage and suggested for every star on the map. */
-export function starLooks(result: LayoutResult, queue: QueueItem[]): Record<string, StarLook> {
-  const suggested = new Set<string>();
-  for (const c of CONSTELLATIONS) {
-    for (const id of suggestedNext(c, queue)) suggested.add(`${c.id}/${id}`);
-  }
+/** Lit, stage and suggested (the NEXT marker) for every star on the map. `next` holds `constellationId/starId` of each star to mark. */
+export function starLooks(result: LayoutResult, queue: QueueItem[], next: ReadonlySet<string>): Record<string, StarLook> {
+  const suggested = next;
   const out: Record<string, StarLook> = {};
   for (const s of result.stars) {
     const stage = starStage(s.ref, queue);
@@ -162,7 +171,9 @@ export function hitTest(
   zoom: number,
   result: LayoutResult,
   positions: Record<string, Pt>,
-  ghosts: Pt[]
+  ghosts: Pt[],
+  /** My sky: stars still hidden answer only on the glow (no label to tap), and no line to one can be tapped. */
+  hidden?: ReadonlySet<string>
 ): MapHit {
   const starR = Math.max(28 / zoom, STAR_RADIUS + 4);
   for (let i = 0; i < ghosts.length; i++) {
@@ -175,7 +186,7 @@ export function hitTest(
     let d = dist(p[0], p[1], q[0], q[1]);
     // On its label: as good as on the star.
     const top = q[1] + STAR_RADIUS + LABEL_GAP;
-    if (p[1] >= top - 2 && p[1] <= top + LABEL_HEIGHT + 4 && Math.abs(p[0] - q[0]) <= s.labelWidth / 2 + 4) d = Math.min(d, 1);
+    if (!hidden?.has(s.key) && p[1] >= top - 2 && p[1] <= top + LABEL_HEIGHT + 4 && Math.abs(p[0] - q[0]) <= s.labelWidth / 2 + 4) d = Math.min(d, 1);
     if (d <= starR && (!best || d < best.d)) best = { key: s.key, d };
   }
   if (best) return { kind: 'star', key: best.key };
@@ -184,7 +195,7 @@ export function hitTest(
   for (const l of result.lines) {
     const a = positions[l.from];
     const b = positions[l.to];
-    if (!a || !b) continue;
+    if (!a || !b || hidden?.has(l.from) || hidden?.has(l.to)) continue;
     const d = segDist(p, a, b);
     if (d <= lineR && (!line || d < line.d)) line = { l, d };
   }
@@ -207,4 +218,58 @@ export function lineLabels(result: LayoutResult, links: VerseLink[]): Record<str
     if (label) out[`${l.from}~${l.to}`] = label;
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// My sky: the mystery, worked out per star of the laid-out map
+
+export interface SkyConstellationInfo {
+  constellation: Constellation;
+  revealed: Set<string>;
+  found: number;
+  total: number;
+  known: number;
+  complete: boolean;
+  /** Star ids to mark NEXT. */
+  next: string[];
+}
+
+export interface SkyView {
+  /** Per constellation id in the sky. */
+  info: Record<string, SkyConstellationInfo>;
+  /** Map star keys still hidden: drawn as glows, no label, no lines. */
+  hidden: Set<string>;
+  /** `constellationId/starId` of each star carrying the NEXT marker. */
+  next: Set<string>;
+  /** For a hidden star: the passage that is joined to it, to learn first. */
+  joinedRef: Record<string, StarRef | null>;
+}
+
+/** What shows in each constellation of the sky, and which map stars are hidden. Pure. */
+export function skyView(added: readonly string[], foundBy: Record<string, string[]>, queue: QueueItem[], result: LayoutResult): SkyView {
+  const info: Record<string, SkyConstellationInfo> = {};
+  const next = new Set<string>();
+  for (const id of added) {
+    const c = CONSTELLATIONS.find((x) => x.id === id);
+    if (!c) continue;
+    const revealed = revealedStars(c, queue, foundBy[id] ?? []);
+    const p = progress(c, queue, revealed);
+    const nx = nextToLearn(c, queue, revealed);
+    nx.forEach((sid) => next.add(`${c.id}/${sid}`));
+    info[id] = { constellation: c, revealed, ...p, complete: isComplete(c, revealed), next: nx };
+  }
+  const hidden = new Set<string>();
+  const joinedRef: Record<string, StarRef | null> = {};
+  for (const s of result.stars) {
+    if (!s.curated) continue;
+    const i = info[s.curated.constellationId];
+    if (!i || i.revealed.has(s.curated.starId)) continue;
+    hidden.add(s.key);
+    // The neighbor to learn: one that shows (so the user can see it), else any.
+    const c = i.constellation;
+    const neighbors = joinedTo(c, s.curated.starId);
+    const pick = neighbors.find((n) => i.revealed.has(n)) ?? neighbors[0];
+    joinedRef[s.key] = c.stars.find((x) => x.id === pick)?.ref ?? null;
+  }
+  return { info, hidden, next, joinedRef };
 }

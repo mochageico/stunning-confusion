@@ -35,6 +35,7 @@ import GuidedLearningScreen from './src/screens/GuidedLearningScreen';
 import MixedReviewScreen from './src/screens/MixedReviewScreen';
 import ConstellationsScreen from './src/screens/ConstellationsScreen';
 import ConstellationPreviewScreen from './src/screens/ConstellationPreviewScreen';
+import MySkyScreen from './src/screens/MySkyScreen';
 import TodayVersesScreen from './src/screens/TodayVersesScreen';
 import TakeawaysScreen from './src/screens/TakeawaysScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -177,6 +178,8 @@ function Screens({ state }: { state: AppState }) {
         return <ConstellationsScreen state={state} />;
       case 'constellationPreview':
         return <ConstellationPreviewScreen state={state} />;
+      case 'mySky':
+        return <MySkyScreen state={state} />;
       default:
         return <HomeScreen state={state} />;
     }

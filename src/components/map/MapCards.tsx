@@ -365,7 +365,7 @@ export function EchoCard({
 }
 
 /** A passage's text: the held translation from the queue if there is one, else fetched. */
-function useRangeText(ref: StarRef, queue: QueueItem[], fallbackTranslation: string): string {
+export function useRangeText(ref: StarRef, queue: QueueItem[], fallbackTranslation: string): string {
   const page = heldPage(ref, queue);
   const translationId = page?.translationId ?? fallbackTranslation;
   const { data } = useChapterText(translationId, getBookByName(ref.book)?.id ?? null, ref.chapter);

@@ -1,50 +1,56 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, useWindowDimensions } from 'react-native';
-import { Maximize2, Minimize2, Minus, Plus } from 'lucide-react-native';
+import { Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
+import { Footprints, Headphones, Minus, Plus } from 'lucide-react-native';
 
-import type { MapLayout, QueueItem, StarRef, VerseLink, VerseState } from '../../types';
+import type { MapLayout, QueueItem, SkyState, StarRef, VerseLink, VerseState } from '../../types';
 import type { VersePageRef } from '../../state/useAppState';
-import { AppButton, AppIconButton, AppText, useScaledSpace } from '../design';
-import { useThemeColors } from '../theme';
+import { AppButton, AppText, useScaledSpace } from '../design';
+import { ScreenHeader } from '../blocks';
 import { OneTimeTip } from '../OneTimeTip';
-import { setAppPref, useAppPrefs } from '../../lib/appPrefs';
-import { setMapFullscreen, useMapFullscreen } from '../../lib/mapFullscreen';
 import { starKey, starLit } from '../../lib/constellations';
 import { CONSTELLATIONS } from '../../content/constellations';
-import { layout, LayoutResult, Pt, StarMove, viewBounds } from '../../lib/mapLayout';
+import { layout, LayoutResult, Pt, starLabel, StarMove, viewBounds } from '../../lib/mapLayout';
 import { MapCamera, MapCanvas } from './MapCanvas';
-import { EchoGhosts, MapDrawing } from './MapDrawing';
-import { CardActions, EchoCard, LineCard, StarCard } from './MapCards';
-import { JumpChips } from './JumpChips';
+import { EchoGhosts, MapDrawing, TITLE_SIZE } from './MapDrawing';
+import { CardActions, EchoCard, heldPage, LineCard, StarCard } from './MapCards';
 import ConnectSheet from './ConnectSheet';
 import AddStarSheet from './AddStarSheet';
-import { ConstellationListSheet, GuideSheet } from './ConstellationSheets';
+import { GuideSheet } from './ConstellationSheets';
 import { versesForStars } from './addStars';
 import WalkConstellation, { WalkDeps } from './WalkConstellation';
-import { echoViews, foundEchoes, hitTest, lineLabels as lineLabelsFor, starLooks } from './mapModel';
+import { echoViews, foundEchoes, hitTest, lineLabels as lineLabelsFor, skyView, starLooks } from './mapModel';
+import { BACKDROP_STARS, SKY, useSkyPalette } from './skyPalette';
+import { FoundStarPopup, HiddenStarPopup, type SkyPlayProps } from './SkyPopups';
 
 // ============================================================================
-// CONSTELLATION MAP -- the Map view of My Verses (CONSTELLATION_PLAN.md, stage 4)
+// MY SKY -- the map, reworked (CONSTELLATION_SKY_PLAN.md, stage 3)
 // ----------------------------------------------------------------------------
-// Curated constellations, plus the user's verses that are linked to something
-// (unlinked ones stay off the map). Stars arrange themselves (lib/mapLayout.ts)
-// and stay put: the settled spots are saved, and when a link changes the map,
-// the stars that moved glide from their old spot to the new one.
+// The user's own canvas: always a night sky, even in light mode. It holds only
+// the constellations they added (sky.added) plus their own links. Every star
+// of those is laid out (lib/mapLayout.ts) so nothing moves when a hidden one
+// is found, but a star not found yet is drawn as a soft glow, with no name and
+// no line to it (the mystery: lib/constellations.ts revealedStars).
 //
-// Tap a star for its card; tap a line for the line's; tap empty sky to clear.
-// A star with an echo shows it only while it's tapped -- a faint ghost star
-// and a dotted line -- until the user holds both ends, when the dotted line
-// stays for good.
+// Tap a constellation (a star, a line, or its name) and the camera glides in
+// to it over ~0.8 s while the others fade; Back glides out. Inside one: the
+// NEXT marker, the "Learn X to uncover what's joined to it" hint, and Listen /
+// Walk it. A hidden glow opens a centered popup; a found star the user doesn't
+// hold opens the small star popup; a held star keeps its card (stage, echoes,
+// Connect). Pinch and pan work at any time; the CONSTELLATION_PLAN.md camera,
+// walk, echoes, connect and line labels are all unchanged.
 // ============================================================================
 
 const MOVE_MS = 700;
 const GHOST_FADE_MS = 260;
-const WHOLE = 'whole';
-const SHOW_HIDE = 'showhide';
-const ADD_STAR = 'addstar';
+const FOCUS_MS = 800;
+/** How visible the other constellations stay while one is zoomed into. */
+const FADED = 0.1;
 
 type Selection =
   | { kind: 'star'; key: string }
+  | { kind: 'hidden'; key: string }
+  | { kind: 'found'; key: string }
   | { kind: 'line'; from: string; to: string; lineKind: 'curated' | 'user'; id: string }
   | { kind: 'echo'; key: string; index: number }
   | null;
@@ -65,6 +71,29 @@ function useTween(token: unknown, ms: number): number {
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [token, ms]);
+  return t;
+}
+
+/**
+ * 0 → 1 over `ms`, ease-in-out, in `steps` jumps: the drawing is repainted on
+ * each jump, and repainting every star every frame is what made the map stutter.
+ */
+function useSteppedTween(token: unknown, ms: number, steps: number): number {
+  const [t, setT] = useState(1);
+  useEffect(() => {
+    if (token === null || token === undefined) return;
+    let raf = 0;
+    const start = Date.now();
+    const step = () => {
+      const k = Math.min(1, (Date.now() - start) / ms);
+      const eased = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+      setT(Math.round(eased * steps) / steps);
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    setT(0);
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [token, ms, steps]);
   return t;
 }
 
@@ -90,8 +119,54 @@ function useMovedPositions(result: LayoutResult, animate: boolean) {
   }, [moves, t, result]);
 }
 
+/** A round button for the night sky (the app's themed buttons would be pale in light mode). */
+function NightButton({ label, onPress, children, wide }: { label: string; onPress: () => void; children: React.ReactNode; wide?: boolean }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      className="items-center justify-center active:opacity-60"
+      // layout-ok: round icon button, no text
+      style={{ width: wide ? undefined : 40, height: 40, borderRadius: 20, backgroundColor: SKY.bgSoft, borderWidth: 1, borderColor: SKY.edge }}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+/** Listen / Walk it, in the night sky's colors. */
+function SkyAction({ label, Icon, primary, onPress }: { label: string; Icon: typeof Headphones; primary?: boolean; onPress: () => void }) {
+  const space = useScaledSpace();
+  const ink = primary ? SKY.bg : SKY.ink;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      className="flex-1 flex-row items-center justify-center active:opacity-70"
+      style={{
+        minHeight: 48,
+        borderRadius: 14,
+        gap: space(8),
+        paddingHorizontal: space(12),
+        backgroundColor: primary ? SKY.ink : 'transparent',
+        borderWidth: 1.5,
+        borderColor: primary ? SKY.ink : SKY.edge,
+      }}
+    >
+      <Icon size={18} color={ink} />
+      <AppText variant="label" className="font-sans font-semibold" style={{ color: ink }}>
+        {label}
+      </AppText>
+    </Pressable>
+  );
+}
+
 export default function ConstellationMap({
   queue,
+  sky,
+  skyReady,
   verseLinks,
   mapLayout,
   saveMapLayout,
@@ -104,8 +179,18 @@ export default function ConstellationMap({
   onJoined,
   onAdded,
   walk,
+  focusId,
+  onLeave,
+  onBrowse,
+  onRemoveFromSky,
+  onListen,
+  play,
 }: {
   queue: QueueItem[];
+  /** What's in My sky and which stars were found (useSky). */
+  sky: SkyState;
+  /** False until the sky doc has loaded: nothing is shown as empty before then. */
+  skyReady: boolean;
   verseLinks: Record<string, VerseLink>;
   mapLayout: MapLayout | null;
   saveMapLayout: (layout: MapLayout) => void;
@@ -118,19 +203,26 @@ export default function ConstellationMap({
   relabelVerseLink: (id: string, label: string) => Promise<void>;
   deleteVerseLink: (id: string) => Promise<void>;
   onJoined?: () => void;
-  /** A star was put on the map on its own. */
+  /** A star was put on the sky on its own. */
   onAdded?: () => void;
   /** What Walk the constellation needs to credit a review. */
   walk: WalkDeps;
+  /** Open zoomed into this constellation (a group id), read once when the sky opens. */
+  focusId?: string | null;
+  /** Back from the whole sky (the browse page). */
+  onLeave: () => void;
+  /** The empty sky's "Find constellations". */
+  onBrowse: () => void;
+  onRemoveFromSky: (constellationId: string) => void;
+  /** Listen to these verses (the ones held, in the constellation's order). */
+  onListen: (items: QueueItem[]) => void;
+  /** What the star popup's play button needs. */
+  play: SkyPlayProps;
 }) {
   const space = useScaledSpace();
-  const palette = useThemeColors();
-  const paper = palette.surface;
+  const palette = useSkyPalette();
+  const paper = SKY.bg;
 
-  // ---- Which curated constellations are shown (a choice kept on this device) ----
-  const { hiddenConstellations } = useAppPrefs();
-  const shownConstellations = useMemo(() => CONSTELLATIONS.filter((c) => !hiddenConstellations.includes(c.id)), [hiddenConstellations]);
-  const [listOpen, setListOpen] = useState(false);
   const [guideFor, setGuideFor] = useState<string | null>(null);
   const [connectFrom, setConnectFrom] = useState<StarRef | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -149,7 +241,13 @@ export default function ConstellationMap({
     onConnect: (ref) => setConnectFrom(ref),
   };
 
-  // ---- Layout: once per change, never per frame ----
+  // ---- Layout: once per change, never per frame. Only the sky's constellations go in. ----
+  const addedKey = sky.added.join('|');
+  const shownConstellations = useMemo(
+    () => sky.added.map((id) => CONSTELLATIONS.find((c) => c.id === id)).filter((c): c is NonNullable<typeof c> => !!c),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [addedKey]
+  );
   const links = useMemo(() => Object.values(verseLinks), [verseLinks]);
   const { result, animate } = useMemo(
     () => ({
@@ -165,85 +263,108 @@ export default function ConstellationMap({
   }, [result]);
   const { positions, appear } = useMovedPositions(result, animate);
 
-  const looks = useMemo(() => starLooks(result, queue), [result, queue]);
+  // ---- The mystery: which stars show, which are glows ----
+  const view = useMemo(() => skyView(sky.added, sky.found, queue, result), [sky, queue, result]);
+  const looks = useMemo(() => starLooks(result, queue, view.next), [result, queue, view]);
   const found = useMemo(() => foundEchoes(result, queue), [result, queue]);
   const lineLabels = useMemo(() => lineLabelsFor(result, links), [result, links]);
   const starsByKey = useMemo(() => new Map(result.stars.map((s) => [s.key, s])), [result]);
-  const ownLinks = links.filter((l) => !l.curated).length;
-  const empty = ownLinks === 0;
+  const empty = skyReady && result.stars.length === 0;
 
   // ---- Selection ----
   const [selection, setSelection] = useState<Selection>(null);
   const selectedStar = selection?.kind === 'star' || selection?.kind === 'echo' ? selection.key : null;
-  // A star that left the map (its link was deleted) can't stay selected.
+  // A star that left the sky (a constellation removed, a link deleted) can't stay selected.
   useEffect(() => {
-    if (selectedStar && !starsByKey.has(selectedStar)) setSelection(null);
+    if (selection && 'key' in selection && !starsByKey.has(selection.key)) setSelection(null);
     else if (selection?.kind === 'line' && !(starsByKey.has(selection.from) && starsByKey.has(selection.to))) setSelection(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStar, starsByKey]);
-  const echoes = useMemo(() => (selectedStar ? echoViews(result, selectedStar, found) : []), [result, selectedStar, found]);
+  }, [selection, starsByKey]);
+  // Echoes only from stars that are found, and none that point at a star still hidden.
+  const echoes = useMemo(
+    () => (selectedStar ? echoViews(result, selectedStar, found).filter((e) => !(e.thereKey && view.hidden.has(e.thereKey))) : []),
+    [result, selectedStar, found, view]
+  );
   const ghostT = useTween(selectedStar, GHOST_FADE_MS);
   const ghosts = useMemo(() => echoes.map((e, i) => ({ p: e.ghost, i })).filter((g): g is { p: Pt; i: number } => !!g.p), [echoes]);
 
-  // ---- Camera ----
+  // ---- Camera and zoom ----
   const camera = useRef<MapCamera>(null);
-  const fullscreen = useMapFullscreen();
-  // Leaving the Map (or My Verses) must give the tab bar back.
-  useEffect(() => () => setMapFullscreen(false), []);
   const windowHeight = useWindowDimensions().height;
   const [showLabels, setShowLabels] = useState(true);
-  const [chip, setChip] = useState(WHOLE);
+  /** The constellation zoomed into (a group id), or null for the whole sky. */
+  const [focus, setFocus] = useState<string | null>(null);
   const [sized, setSized] = useState(false);
   // layout-ok: measured height, not a style
   const [mapHeight, setMapHeight] = useState(0);
   const cardHeight = useRef(0);
   const framedOnce = useRef(false);
-  // The empty-state note sits over the bottom of the map: frame above it.
-  const insets = () => ({ top: 8, bottom: selection ? cardHeight.current + 12 : empty ? 96 : 8 });
+  // Room kept clear at the bottom: the tapped card, or the Listen / Walk row while zoomed in.
+  const insets = (f: string | null = focus) => ({ top: 8, bottom: selection ? cardHeight.current + 12 : f ? 120 : 8 });
 
-  // Open on the user's biggest constellation (the first curated one if they
-  // have none yet): the whole map is usually too far out to read names.
-  useEffect(() => {
-    if (!sized || framedOnce.current) return;
-    framedOnce.current = true;
-    const first = result.groups.find((g) => g.kind === 'user') ?? result.groups[0];
-    if (first) setChip(first.id);
-    camera.current?.frame(viewBounds(result, first?.id), insets(), true);
-  }, [sized, result]);
-
-  // Showing or hiding a constellation changes what's on the map: look at all of it again.
-  const shownBefore = useRef(shownConstellations);
-  useEffect(() => {
-    if (shownBefore.current === shownConstellations) return;
-    shownBefore.current = shownConstellations;
-    setChip(WHOLE);
-    camera.current?.frame(viewBounds(result), insets());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shownConstellations]);
-
-  // The map's room changes with full screen: look at the same constellation again once it has resized.
-  const fullscreenBefore = useRef(fullscreen);
-  useEffect(() => {
-    if (fullscreenBefore.current === fullscreen) return;
-    fullscreenBefore.current = fullscreen;
-    const t = setTimeout(() => camera.current?.frame(viewBounds(result, chip === WHOLE ? undefined : chip), insets()), 150);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen]);
-
-  const pickChip = (id: string) => {
-    if (id === SHOW_HIDE) {
-      setListOpen(true);
-      return;
+  // The fade: each group's visibility moves from where it was to where the new focus wants it.
+  const [fadeToken, setFadeToken] = useState<object | null>(null);
+  const fadeFrom = useRef<Record<string, number>>({});
+  const fadeTo = useRef<Record<string, number>>({});
+  const fadeT = useSteppedTween(fadeToken, FOCUS_MS, 10);
+  const groupOpacity = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const g of result.groups) {
+      const to = fadeTo.current[g.id] ?? 1;
+      const from = fadeFrom.current[g.id] ?? to;
+      out[g.id] = from + (to - from) * fadeT;
     }
-    if (id === ADD_STAR) {
-      setAddOpen(true);
-      return;
-    }
-    setChip(id);
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, fadeT, fadeToken]);
+  const titleOpacity = focus === null ? fadeT : 1 - fadeT;
+
+  const setFocusTo = (next: string | null, instant = false) => {
+    const target: Record<string, number> = {};
+    for (const g of result.groups) target[g.id] = next === null || g.id === next ? 1 : FADED;
+    fadeFrom.current = Object.fromEntries(result.groups.map((g) => [g.id, instant ? target[g.id] : groupOpacity[g.id] ?? 1]));
+    fadeTo.current = target;
+    setFocus(next);
     setSelection(null);
-    camera.current?.frame(viewBounds(result, id === WHOLE ? undefined : id), insets());
+    setFadeToken(instant ? null : {});
   };
+  const zoomInto = (id: string) => {
+    if (id === focus) return;
+    setFocusTo(id);
+    camera.current?.frame(viewBounds(result, id), insets(id), false, true);
+  };
+  const zoomOut = () => {
+    setFocusTo(null);
+    camera.current?.frame(viewBounds(result), insets(null), false, true);
+  };
+
+  // Open on the whole sky (or zoomed into the constellation we were sent to).
+  useEffect(() => {
+    if (!sized || !skyReady || framedOnce.current) return;
+    framedOnce.current = true;
+    const start = focusId && result.groups.some((g) => g.id === focusId) ? focusId : null;
+    setFocusTo(start, true);
+    camera.current?.frame(viewBounds(result, start ?? undefined), insets(start), true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sized, skyReady, result]);
+
+  // The zoomed-into constellation left the sky (removed): back out to the whole sky.
+  useEffect(() => {
+    if (focus && !result.groups.some((g) => g.id === focus)) {
+      setFocusTo(null, true);
+      camera.current?.frame(viewBounds(result), insets(null));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
+  // A constellation added while the sky is open: look at all of it again.
+  const addedBefore = useRef(addedKey);
+  useEffect(() => {
+    if (addedBefore.current === addedKey) return;
+    addedBefore.current = addedKey;
+    if (focus === null) camera.current?.frame(viewBounds(result), insets(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addedKey, result]);
 
   // ---- A star on its own ----
   const addSoloStar = (ref: StarRef) => {
@@ -262,68 +383,108 @@ export default function ConstellationMap({
     if (!key || !starsByKey.has(key)) return;
     focusStar.current = null;
     const group = result.groups.find((g) => g.keys.includes(key));
-    if (group) setChip(group.id);
+    if (group) zoomInto(group.id);
     setSelection({ kind: 'star', key });
-    camera.current?.frame(viewBounds(result, group?.id), insets());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
+  // ---- Taps ----
+  /** The constellation name under a map point, on the whole sky. */
+  const titleAt = (p: Pt): string | null => {
+    for (const g of result.groups) {
+      const w = titleOf(g.id).length * TITLE_SIZE * 0.6;
+      const b = g.bounds;
+      const cx = b.x + b.w / 2;
+      if (Math.abs(p[0] - cx) <= w / 2 && p[1] >= b.y - TITLE_SIZE - 6 && p[1] <= b.y + 8) return g.id;
+    }
+    return null;
+  };
   const onTap = useCallback(
     (x: number, y: number, zoom: number) => {
-      const hit = hitTest([x, y], zoom, result, positions, selectedStar ? ghosts.map((g) => g.p) : []);
+      if (focus === null) {
+        const t = titleAt([x, y]);
+        if (t) {
+          zoomInto(t);
+          return;
+        }
+      }
+      const hit = hitTest([x, y], zoom, result, positions, selectedStar ? ghosts.map((g) => g.p) : [], view.hidden);
+      const groupOfKey = (k: string) => starsByKey.get(k)?.group;
       if (hit.kind === 'ghost' && selectedStar) setSelection({ kind: 'echo', key: selectedStar, index: ghosts[hit.index].i });
-      else if (hit.kind === 'star') setSelection({ kind: 'star', key: hit.key });
-      else if (hit.kind === 'line') setSelection({ kind: 'line', from: hit.from, to: hit.to, lineKind: hit.lineKind, id: hit.id });
-      else setSelection(null);
+      else if (hit.kind === 'star') {
+        const g = groupOfKey(hit.key);
+        // The first tap on a constellation zooms into it; the next ones open its stars.
+        if (g && g !== focus) zoomInto(g);
+        else if (view.hidden.has(hit.key)) setSelection({ kind: 'hidden', key: hit.key });
+        else setSelection({ kind: looks[hit.key]?.lit ? 'star' : 'found', key: hit.key });
+      } else if (hit.kind === 'line') {
+        const g = groupOfKey(hit.from);
+        if (g && g !== focus) zoomInto(g);
+        else setSelection({ kind: 'line', from: hit.from, to: hit.to, lineKind: hit.lineKind, id: hit.id });
+      } else setSelection(null);
     },
-    [result, positions, ghosts, selectedStar]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [result, positions, ghosts, selectedStar, focus, view, looks, starsByKey, groupOpacity]
   );
 
-  // ---- Chips ----
-  const chips = useMemo(() => {
-    const degree = new Map<string, number>();
-    for (const l of result.lines) {
-      degree.set(l.from, (degree.get(l.from) ?? 0) + 1);
-      degree.set(l.to, (degree.get(l.to) ?? 0) + 1);
-    }
-    const out = [{ id: WHOLE, label: 'Whole map' }];
-    for (const g of result.groups) {
-      if (g.kind === 'curated') {
-        out.push({ id: g.id, label: CONSTELLATIONS.find((c) => c.id === g.id)?.title ?? g.id });
-      } else {
-        // The user's own have no names: call them after their busiest star.
-        const hub = [...g.keys].sort((a, b) => (degree.get(b) ?? 0) - (degree.get(a) ?? 0) || (a < b ? -1 : 1))[0];
-        const name = starsByKey.get(hub)?.label ?? hub;
-        out.push({ id: g.id, label: g.keys.length > 1 ? `${name} and ${g.keys.length - 1} more` : name });
-      }
-    }
-    out.push({ id: ADD_STAR, label: 'Add a star' });
-    out.push({ id: SHOW_HIDE, label: 'Show or hide' });
-    return out;
-  }, [result, starsByKey]);
-  const chipConstellation = CONSTELLATIONS.find((c) => c.id === chip);
+  // ---- Names, header, bottom row ----
+  const titleOf = (groupId: string) => CONSTELLATIONS.find((c) => c.id === groupId)?.title ?? 'Your links';
+  const titles = useMemo(
+    () => result.groups.map((g) => ({ id: g.id, text: titleOf(g.id), x: g.bounds.x + g.bounds.w / 2, y: g.bounds.y - 4 })),
+    [result]
+  );
+  const focusInfo = focus ? view.info[focus] : undefined;
+  const focusGroup = focus ? result.groups.find((g) => g.id === focus) : undefined;
   // A group can be walked once two of its stars are in My Verses.
   const walkable = (groupId: string) => {
     const g = result.groups.find((x) => x.id === groupId);
     return !!g && g.keys.filter((k) => starsByKey.get(k) && starLit(starsByKey.get(k)!.ref, queue)).length >= 2;
   };
-  useEffect(() => {
-    if (chip !== WHOLE && !result.groups.some((g) => g.id === chip)) setChip(WHOLE);
-  }, [chip, result]);
-
-  // A star placed on its own, with nothing joined to it, can be taken off the map again.
-  const soloIdsFor = (key: string): string[] | null => {
-    const ids = links.filter((l) => l.solo && starKey(l.a) === key).map((l) => l.id);
-    const joined = result.lines.some((l) => l.kind === 'user' && (l.from === key || l.to === key));
-    return ids.length > 0 && !joined ? ids : null;
+  /** The held verses of a group's found stars, in the group's order. */
+  const listenItems = (groupId: string): QueueItem[] => {
+    const g = result.groups.find((x) => x.id === groupId);
+    const out: QueueItem[] = [];
+    for (const k of g?.keys ?? []) {
+      const s = starsByKey.get(k);
+      if (!s || view.hidden.has(k)) continue;
+      const page = heldPage(s.ref, queue);
+      if (!page) continue;
+      for (const v of page.verses) {
+        const item = queue.find((q) => q.book === s.ref.book && q.chapter === s.ref.chapter && q.verseNumber === v && (q.translationId || 'BSB') === page.translationId);
+        if (item && !out.includes(item)) out.push(item);
+      }
+    }
+    return out;
   };
-  const removeSoloStar = (key: string) => {
-    setSelection(null);
-    for (const id of soloIdsFor(key) ?? []) void deleteVerseLink(id);
-  };
+  const totalFound = Object.values(view.info).reduce((n, i) => n + i.found, 0);
+  const constellationCount = Object.keys(view.info).length;
+  const header = focus
+    ? {
+        title: focusInfo ? focusInfo.constellation.title : 'Your links',
+        subtitle: focusInfo
+          ? focusInfo.complete
+            ? `All ${focusInfo.total} found`
+            : `${focusInfo.found} found · ${focusInfo.total - focusInfo.found} still hidden`
+          : `${focusGroup?.keys.length ?? 0} ${focusGroup?.keys.length === 1 ? 'star' : 'stars'}`,
+        backLabel: 'My sky',
+        onBack: zoomOut,
+      }
+    : {
+        title: 'My sky',
+        subtitle: empty
+          ? undefined
+          : constellationCount > 0
+            ? `${constellationCount} ${constellationCount === 1 ? 'constellation' : 'constellations'} · ${totalFound} ${totalFound === 1 ? 'star' : 'stars'} found`
+            : undefined,
+        backLabel: 'Constellations',
+        onBack: onLeave,
+      };
+  // "Learn John 10:11 to uncover what's joined to it."
+  const nextStar = focusInfo?.next[0] ? focusInfo.constellation.stars.find((s) => s.id === focusInfo.next[0]) : undefined;
+  const hint = focusInfo && nextStar ? `Learn ${starLabel(nextStar.ref)} to uncover what's joined to it.` : null;
 
-  // ---- The card ----
-  const titleOf = (constellationId?: string) => CONSTELLATIONS.find((c) => c.id === constellationId)?.title;
+  // ---- Cards ----
+  const titleOfConstellation = (constellationId?: string) => CONSTELLATIONS.find((c) => c.id === constellationId)?.title;
   // A card never takes more than the bottom half of the screen (or the map, if that's smaller); past that it scrolls.
   const cardMax = Math.max(120, Math.min(mapHeight ? mapHeight - space(20) : windowHeight, Math.round(windowHeight * 0.5)));
   const onCardLayout = (full: number) => {
@@ -340,6 +501,18 @@ export default function ConstellationMap({
       camera.current?.reveal([positions[selectedStar], ...ghosts.map((g) => g.p)], cardHeight.current + 12);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStar, ghostSpots]);
+
+  // A star on its own, with nothing joined to it, can be taken off the sky again.
+  const soloIdsFor = (key: string): string[] | null => {
+    const ids = links.filter((l) => l.solo && starKey(l.a) === key).map((l) => l.id);
+    const joined = result.lines.some((l) => l.kind === 'user' && (l.from === key || l.to === key));
+    return ids.length > 0 && !joined ? ids : null;
+  };
+  const removeSoloStar = (key: string) => {
+    setSelection(null);
+    for (const id of soloIdsFor(key) ?? []) void deleteVerseLink(id);
+  };
+
   let card: React.ReactNode = null;
   if (selection?.kind === 'star') {
     const s = starsByKey.get(selection.key);
@@ -347,7 +520,7 @@ export default function ConstellationMap({
       card = (
         <StarCard
           refr={s.ref}
-          constellationTitle={titleOf(s.curated?.constellationId)}
+          constellationTitle={titleOfConstellation(s.curated?.constellationId)}
           queue={queue}
           echoes={echoes}
           onCompare={(index) => setSelection({ kind: 'echo', key: selection.key, index })}
@@ -360,11 +533,11 @@ export default function ConstellationMap({
         />
       );
   } else if (selection?.kind === 'echo') {
-    const view = echoes[selection.index];
-    if (view)
+    const v = echoes[selection.index];
+    if (v)
       card = (
         <EchoCard
-          view={view}
+          view={v}
           queue={queue}
           translationId={translationId}
           onBack={() => setSelection({ kind: 'star', key: selection.key })}
@@ -389,7 +562,7 @@ export default function ConstellationMap({
           b={b.ref}
           key={`${selection.from}~${selection.to}`}
           label={lineLabels[`${selection.from}~${selection.to}`]}
-          constellationTitle={selection.lineKind === 'curated' ? titleOf(selection.id) : undefined}
+          constellationTitle={selection.lineKind === 'curated' ? titleOfConstellation(selection.id) : undefined}
           queue={queue}
           onClose={() => setSelection(null)}
           onLayout={(h) => (cardHeight.current = Math.min(h, cardMax))}
@@ -411,23 +584,36 @@ export default function ConstellationMap({
       );
     }
   }
+  const hiddenKey = selection?.kind === 'hidden' ? selection.key : null;
+  const foundRef = selection?.kind === 'found' ? starsByKey.get(selection.key)?.ref ?? null : null;
+  const closePopup = () => setSelection(null);
+
+  const bottomRow = !card && !empty && focus !== null;
 
   return (
     <View className="flex-1" style={{ gap: space(10) }}>
-      <OneTimeTip id="constellationMap" text="Tap any star to see its passage. Some stars hide something more." />
-      <View style={{ gap: space(6) }}>
-        <JumpChips chips={chips} value={chip} onPick={pickChip} />
-        {chipConstellation || chip !== WHOLE ? (
-          <View className="flex-row items-center" style={{ gap: space(8), paddingHorizontal: space(4) }}>
-            <AppText variant="caption" className="font-sans text-ink-2 flex-1">
-              {chipConstellation?.description ?? ''}
-            </AppText>
-            {walkable(chip) ? <AppButton variant="secondary" size="sm" label="Walk this constellation" onPress={() => setWalkGroup(chip)} /> : null}
-          </View>
-        ) : null}
-      </View>
+      <ScreenHeader
+        title={header.title}
+        subtitle={header.subtitle}
+        backLabel={header.backLabel}
+        onBack={header.onBack}
+        actions={
+          focus && focusInfo ? (
+            <AppButton variant="secondary" size="sm" label="Guide" onPress={() => setGuideFor(focus)} />
+          ) : !focus && !empty && skyReady ? (
+            <AppButton variant="secondary" size="sm" label="Add a star" onPress={() => setAddOpen(true)} />
+          ) : undefined
+        }
+      />
+      <OneTimeTip id="constellationMap" text="Tap a constellation to zoom in. A soft glow is a star you haven't found yet." />
 
-      <View className="flex-1 bg-surface border border-line rounded-card" style={{ overflow: 'hidden' }}>
+      <View className="flex-1 rounded-card" style={{ overflow: 'hidden', backgroundColor: SKY.bg, borderWidth: 1, borderColor: SKY.edge }}>
+        {/* A scatter of faint background stars, behind everything. */}
+        <Svg width="100%" height="100%" style={{ position: 'absolute', left: 0, top: 0 }} pointerEvents="none">
+          {BACKDROP_STARS.map((s, i) => (
+            <Circle key={i} cx={`${s.x}%`} cy={`${s.y}%`} r={s.r} fill={SKY.ink} fillOpacity={s.o * 0.7} />
+          ))}
+        </Svg>
         <MapCanvas
           ref={camera}
           bounds={result.bounds}
@@ -446,11 +632,18 @@ export default function ConstellationMap({
             found={found}
             lineLabels={lineLabels}
             showLabels={showLabels}
-            selectedKey={selectedStar}
+            selectedKey={selectedStar ?? hiddenKey}
             selectedLine={selection?.kind === 'line' ? `${selection.from}~${selection.to}` : null}
-            dim={empty}
+            dim={false}
             palette={palette}
             paper={paper}
+            hidden={view.hidden}
+            groupOpacity={groupOpacity}
+            userLineColor={SKY.link}
+            glowColor={SKY.glow}
+            nextColor={SKY.next}
+            titles={titleOpacity > 0.01 ? titles : undefined}
+            titleOpacity={titleOpacity}
           />
           <EchoGhosts
             from={selectedStar ? positions[selectedStar] ?? null : null}
@@ -464,35 +657,41 @@ export default function ConstellationMap({
         </MapCanvas>
 
         {/* Zoom without pinching. */}
-        <View style={{ position: 'absolute', top: space(10), right: space(10) }}>
-          <AppIconButton
-            Icon={fullscreen ? Minimize2 : Maximize2}
-            variant="outline"
-            diameter={40}
-            className="bg-surface"
-            accessibilityLabel={fullscreen ? 'Leave full screen' : 'Full screen'}
-            onPress={() => setMapFullscreen(!fullscreen)}
-          />
-        </View>
-        <View style={{ position: 'absolute', top: space(10) + 40 + space(18), right: space(10), gap: space(8) }}>
-          <AppIconButton Icon={Plus} variant="outline" diameter={40} className="bg-surface" accessibilityLabel="Zoom in" onPress={() => camera.current?.zoomBy(1.5)} />
-          <AppIconButton Icon={Minus} variant="outline" diameter={40} className="bg-surface" accessibilityLabel="Zoom out" onPress={() => camera.current?.zoomBy(1 / 1.5)} />
+        <View style={{ position: 'absolute', top: space(10), right: space(10), gap: space(8) }}>
+          <NightButton label="Zoom in" onPress={() => camera.current?.zoomBy(1.5)}>
+            <Plus size={20} color={SKY.ink} />
+          </NightButton>
+          <NightButton label="Zoom out" onPress={() => camera.current?.zoomBy(1 / 1.5)}>
+            <Minus size={20} color={SKY.ink} />
+          </NightButton>
         </View>
 
-        {(card || empty) && (
+        {(card || empty || bottomRow) && (
           <View style={{ position: 'absolute', left: space(10), right: space(10), bottom: space(10), maxHeight: cardMax }}>
             {card ? (
               // Never taller than the map: a long echo scrolls inside its card.
               <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>
                 {card}
               </ScrollView>
-            ) : (
-              <View className="bg-surface border border-line-strong rounded-card" style={{ padding: space(14) }}>
-                <AppText variant="label" className="font-sans text-ink">
-                  Add a star, or connect two of your verses, and they'll shine here next to these.
+            ) : empty ? (
+              <View style={{ padding: space(16), gap: space(10), borderRadius: 16, backgroundColor: SKY.bgSoft, borderWidth: 1, borderColor: SKY.edge }}>
+                <AppText variant="label" className="font-sans" style={{ color: SKY.ink }}>
+                  Your sky is empty. Add a constellation and its stars will appear here.
                 </AppText>
-                <View className="flex-row" style={{ marginTop: space(8) }}>
-                  <AppButton size="md" variant="secondary" label="Add a star" onPress={() => setAddOpen(true)} />
+                <View className="flex-row">
+                  <AppButton size="md" variant="primary" label="Find constellations" onPress={onBrowse} />
+                </View>
+              </View>
+            ) : (
+              <View style={{ gap: space(8) }}>
+                {hint ? (
+                  <AppText variant="caption" className="font-sans text-center" style={{ color: SKY.ink2 }}>
+                    {hint}
+                  </AppText>
+                ) : null}
+                <View className="flex-row" style={{ gap: space(10) }}>
+                  <SkyAction primary label="Listen" Icon={Headphones} onPress={() => focus && onListen(listenItems(focus))} />
+                  {focus && walkable(focus) ? <SkyAction label="Walk it" Icon={Footprints} onPress={() => setWalkGroup(focus)} /> : null}
                 </View>
               </View>
             )}
@@ -500,6 +699,14 @@ export default function ConstellationMap({
         )}
       </View>
 
+      <HiddenStarPopup
+        visible={!!hiddenKey}
+        joined={hiddenKey ? view.joinedRef[hiddenKey] ?? null : null}
+        queue={queue}
+        actions={actions}
+        onClose={closePopup}
+      />
+      <FoundStarPopup refr={foundRef} queue={queue} translationId={translationId} play={play} actions={actions} onClose={closePopup} />
       <AddStarSheet
         visible={addOpen}
         queue={queue}
@@ -521,19 +728,17 @@ export default function ConstellationMap({
       />
       <GuideSheet
         constellation={CONSTELLATIONS.find((c) => c.id === guideFor) ?? null}
-        queue={queue}
         onClose={() => setGuideFor(null)}
-        onAddRest={(refs) => void addStars(refs)}
         onWalk={guideFor && walkable(guideFor) ? () => { setWalkGroup(guideFor); setGuideFor(null); } : undefined}
-      />
-      <ConstellationListSheet
-        visible={listOpen}
-        constellations={CONSTELLATIONS}
-        hidden={hiddenConstellations}
-        onToggle={(id, show) =>
-          setAppPref('hiddenConstellations', show ? hiddenConstellations.filter((x) => x !== id) : [...hiddenConstellations, id])
+        onRemove={
+          guideFor
+            ? () => {
+                const id = guideFor;
+                setGuideFor(null);
+                onRemoveFromSky(id);
+              }
+            : undefined
         }
-        onClose={() => setListOpen(false)}
       />
       {walkGroup ? (
         <WalkConstellation result={result} groupId={walkGroup} queue={queue} deps={walk} onClose={() => setWalkGroup(null)} />

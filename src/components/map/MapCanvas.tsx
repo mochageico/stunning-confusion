@@ -39,12 +39,14 @@ const FRAME_MAX_ZOOM = 1.6;
 /** At least this much of the map stays on screen, so it can't be flung away and lost. */
 const KEEP_ON_SCREEN = 80;
 const FRAME_MS = 480;
+/** My sky's zoom into (and back out of) a constellation: slower, eased at both ends. */
+const GLIDE_MS = 800;
 /** How much extra drawing is painted past each edge of the box, as a share of the box. */
 const OVERSCAN = 0.4;
 
 export interface MapCamera {
   /** Animates the view to show this map rectangle, clear of the given screen insets. */
-  frame: (rect: Rect, insets?: { top?: number; bottom?: number }, instant?: boolean) => void;
+  frame: (rect: Rect, insets?: { top?: number; bottom?: number }, instant?: boolean, glide?: boolean) => void;
   /**
    * Pans (no zoom change) so these map points sit clear of the bottom inset
    * and the sides. The first one (the tapped star) wins if they can't all fit.
@@ -247,7 +249,7 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
   };
 
   useImperativeHandle(ref, () => ({
-    frame(rect, insets = {}, instant = false) {
+    frame(rect, insets = {}, instant = false, glide = false) {
       const w = boxW.value;
       const h = boxH.value;
       if (!w || !h) return;
@@ -264,9 +266,10 @@ export const MapCanvas = forwardRef<MapCamera, Props>(function MapCanvas({ bound
         ty.value = nty;
         bake(z, ntx, nty);
       } else {
-        zoom.value = withTiming(z, timing, done);
-        tx.value = withTiming(ntx, timing);
-        ty.value = withTiming(nty, timing);
+        const t = glide ? { duration: GLIDE_MS, easing: Easing.inOut(Easing.cubic) } : timing;
+        zoom.value = withTiming(z, t, done);
+        tx.value = withTiming(ntx, t);
+        ty.value = withTiming(nty, t);
       }
       onLabelsChange?.(z >= LABEL_ZOOM);
     },

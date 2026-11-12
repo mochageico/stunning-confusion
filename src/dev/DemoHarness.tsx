@@ -59,6 +59,7 @@ import { Platform } from 'react-native';
 import type { AppState } from '../state/useAppState';
 import type { CircleMember, DMThread, SharedTakeaway, TakeawayReply } from '../types';
 import { formatLabel } from '../lib/formatNames';
+import { setSkyFocus } from '../lib/skyFocus';
 import { weekBounds } from '../lib/circleTotals';
 import { openSettingsAt } from '../screens/SettingsScreen';
 import { localDayKey } from '../lib/logicalDate';
@@ -641,7 +642,7 @@ export function useDemoState(real: AppState): AppState {
     if (!DEMO_ENABLED || booted.current || real.loadingAuth) return;
     booted.current = true;
     if (params.get('big') === '1') real.setMemoryQueue(buildBigQueue() as any);
-    else if (params.get('empty') !== '1') real.setMemoryQueue(withDemoFirmUp(params.get('firm') === '1', (s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : s === 'map' ? buildQueue(MAP_SPECS) : buildQueue()) as any) as any);
+    else if (params.get('empty') !== '1') real.setMemoryQueue(withDemoFirmUp(params.get('firm') === '1', (s === 'guided' ? buildGuidedQueue() : s === 'mixedReview' ? buildMixQueue() : s === 'takeaways' || s === 'takeawayAsk' ? buildTakeawayQueue() : s === 'map' || s === 'sky' ? buildQueue(MAP_SPECS) : buildQueue()) as any) as any);
     real.setUserRecordings(recordings as any);
     if (params.get('playing') === '1') real.setPlayingRecProgress(40);
     // The Record tab starts with no passage until one is chosen; the demo
@@ -768,10 +769,12 @@ export function useDemoState(real: AppState): AppState {
       // start=1 goes straight into the session.
       if (params.get('start') === '1') tapWhenShown('Start');
     }
-    else if (s === 'map') {
+    // ?s=sky (My sky; ?s=map is the same). nolinks=1: no links of their own.
+    // nosky=1: the empty sky. focus=<constellation id>: opens zoomed into it.
+    else if (s === 'map' || s === 'sky') {
       if (params.get('nolinks') !== '1') seedMapLinks(real);
-      real.navigateTo('activePlan');
-      tapWhenShown('Map', 'radio');
+      if (params.get('focus')) setSkyFocus(params.get('focus'));
+      real.navigateTo('mySky');
     }
     else if (s === 'memoryPlan') real.navigateTo('memoryPlan');
     else if (s === 'memoryCalendar') real.navigateTo('memoryCalendar');

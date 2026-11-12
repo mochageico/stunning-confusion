@@ -1,11 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View } from 'react-native';
 
-import type { Constellation, QueueItem, StarRef } from '../../types';
+import type { Constellation } from '../../types';
 import { AppButton, AppText, Switch, useScaledSpace } from '../design';
 import { Dialog } from '../blocks';
-import { starLit } from '../../lib/constellations';
-import { starLabel } from '../../lib/mapLayout';
 
 // ============================================================================
 // Two small sheets for the curated constellations: the guide (opened from a
@@ -16,40 +14,31 @@ import { starLabel } from '../../lib/mapLayout';
 /** The guide: title, description, the writing, and a way to take the rest of the passages. */
 export function GuideSheet({
   constellation,
-  queue,
   onClose,
-  onAddRest,
   onWalk,
+  onRemove,
 }: {
   constellation: Constellation | null;
-  queue: QueueItem[];
   onClose: () => void;
-  onAddRest: (refs: StarRef[]) => void;
   /** Set when two of its stars are in My Verses. */
   onWalk?: () => void;
+  /** "Remove from my sky" (asks first). Its verses stay on My Verses and the stars it found stay found. */
+  onRemove?: () => void;
 }) {
   const space = useScaledSpace();
-  const missing = constellation ? constellation.stars.filter((s) => !starLit(s.ref, queue)).map((s) => s.ref) : [];
+  const [confirming, setConfirming] = useState(false);
   return (
+    <>
     <Dialog
-      visible={!!constellation}
+      visible={!!constellation && !confirming}
       onClose={onClose}
       placement="sheet"
       title={constellation?.title}
       actions={
         <>
           <AppButton variant="quiet" label="Close" onPress={onClose} />
+          {onRemove ? <AppButton variant="quiet" label="Remove from my sky" onPress={() => setConfirming(true)} /> : null}
           {onWalk ? <AppButton variant="secondary" label="Walk this constellation" onPress={onWalk} /> : null}
-          {missing.length > 0 ? (
-            <AppButton
-              variant="primary"
-              label="Add the rest to My Verses"
-              onPress={() => {
-                onAddRest(missing);
-                onClose();
-              }}
-            />
-          ) : null}
         </>
       }
     >
@@ -61,14 +50,29 @@ export function GuideSheet({
           <AppText variant="body" className="font-serif text-ink">
             {constellation.guide.trim() || 'The guide for this one is still being written.'}
           </AppText>
-          {missing.length > 0 ? (
-            <AppText variant="caption" className="font-sans text-ink-2">
-              Not in My Verses yet: {missing.map(starLabel).join(', ')}.
-            </AppText>
-          ) : null}
         </View>
       ) : null}
     </Dialog>
+    <Dialog
+      visible={confirming}
+      onClose={() => setConfirming(false)}
+      title="Remove from my sky?"
+      message="The verses you added stay on My Verses, and you can add this constellation back any time. Stars you have found stay found."
+      actions={
+        <>
+          <AppButton variant="quiet" label="Keep it" onPress={() => setConfirming(false)} />
+          <AppButton
+            variant="destructive"
+            label="Remove"
+            onPress={() => {
+              setConfirming(false);
+              onRemove?.();
+            }}
+          />
+        </>
+      }
+    />
+    </>
   );
 }
 
