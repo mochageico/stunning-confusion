@@ -635,6 +635,8 @@ function injectIosFontEmulation() {
  * Always calls the same hooks either way, so it is safe to call
  * unconditionally from AppShell.
  */
+let cachedOverrides: (Partial<AppState> & Record<string, unknown>) | null = null;
+
 export function useDemoState(real: AppState): AppState {
   const params = PARAMS ?? new URLSearchParams();
   const s = params.get('s') || 'home';
@@ -834,6 +836,9 @@ export function useDemoState(real: AppState): AppState {
   if (s === 'auth') return { ...real, user: null, loadingAuth: false };
   if (s === 'loading') return { ...real, loadingAuth: true };
 
+  // Built once per page load: fresh arrays on every render would make every
+  // screen look changed to the app-state picker (src/state/appStore.ts).
+  const overrides = (cachedOverrides ??= ((): Partial<AppState> & Record<string, unknown> => {
   const circleMsgs = msgs([
     ['u2', 'Morning all! Anyone else stuck on verse 38?'],
     ['demo', 'Yes — the list of "neither… nor" is brutal.'],
@@ -1014,5 +1019,7 @@ export function useDemoState(real: AppState): AppState {
     overrides.playingRecordingId = recordings[0].id;
     overrides.nowPlayingRecording = recordings[0] as any;
   }
+  return overrides;
+  })());
   return { ...real, ...overrides } as AppState;
 }

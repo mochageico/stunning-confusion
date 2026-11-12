@@ -2392,7 +2392,9 @@ export function useAppState() {
 
   // Merge real verse text with this user's personal progress (tracked in memoryQueue)
   // to build the VerseState list the Chapter Landing screen renders.
-  const activeChapterVerses: VerseState[] = activeChapterTextData
+  // Memoized so screens that pick it (appStore) skip redraws when it hasn't
+  // changed; statsDayKey turns "Due: Today" over at the day boundary.
+  const activeChapterVerses: VerseState[] = useMemo(() => activeChapterTextData
     ? Object.keys(activeChapterTextData.verses)
         .map(Number)
         .sort((a, b) => a - b)
@@ -2434,7 +2436,7 @@ export function useAppState() {
             translationId: selectedTranslationId,
           };
         })
-    : [];
+    : [], [activeChapterTextData, memoryQueue, selectedBook, selectedChapter, selectedTranslationId, dayStartHour, reviewsPaused, statsDayKey]);
 
   // Real chapter text for the Record tab's teleprompter (previously showed
   // verses.filter(...) — this user's own partial memory-queue verses for the
@@ -2443,12 +2445,12 @@ export function useAppState() {
   // dropdown entirely). Tap-to-mark timestamps need the complete verse list.
   const recordingBookId = recordingBook ? getBookByName(recordingBook)?.id ?? null : null;
   const { data: recordingChapterTextData } = useChapterText(recordingTranslation, recordingBookId, recordingChapter);
-  const recordingChapterVerses: { verse: number; text: string }[] = recordingChapterTextData
+  const recordingChapterVerses: { verse: number; text: string }[] = useMemo(() => recordingChapterTextData
     ? Object.keys(recordingChapterTextData.verses)
         .map(Number)
         .sort((a, b) => a - b)
         .map((verseNum) => ({ verse: verseNum, text: recordingChapterTextData.verses[String(verseNum)] }))
-    : [];
+    : [], [recordingChapterTextData]);
 
   // Picked verse range for partial-chapter recording — null bounds fall back
   // to the full chapter. The passage sheet sets book, chapter and range
@@ -2457,9 +2459,9 @@ export function useAppState() {
   // used to reset it here, which would also wipe a range restored on launch.)
   const recordingRangeStartClamped = recordingRangeStart ?? 1;
   const recordingRangeEndClamped = recordingRangeEnd ?? recordingChapterVerses.length;
-  const recordingSelectedVerses = recordingChapterVerses.filter(
+  const recordingSelectedVerses = useMemo(() => recordingChapterVerses.filter(
     (v) => v.verse >= recordingRangeStartClamped && v.verse <= recordingRangeEndClamped
-  );
+  ), [recordingChapterVerses, recordingRangeStartClamped, recordingRangeEndClamped]);
   const isRecordingFullChapterRange =
     recordingRangeStartClamped === 1 && recordingRangeEndClamped === recordingChapterVerses.length;
 
@@ -3476,15 +3478,20 @@ export function useAppState() {
   // separately stop them reaching me 1:1; in a circle's shared spaces this
   // hiding is all a block can do.)
   const { blockedUids } = social;
-  const visibleDmThreads = dmThreads.filter((t) => !blockedUids.has(t.otherUid));
-  const visibleActivityEvents = activityEvents.filter((e) => !blockedUids.has(e.uid));
-  const visibleFeedRecordings = feedRecordings.filter((r) => {
+  // Memoized so screens that pick these (appStore) skip redraws when nothing changed.
+  const visibleDmThreads = useMemo(() => dmThreads.filter((t) => !blockedUids.has(t.otherUid)), [dmThreads, blockedUids]);
+  const visibleActivityEvents = useMemo(() => activityEvents.filter((e) => !blockedUids.has(e.uid)), [activityEvents, blockedUids]);
+  const visibleFeedRecordings = useMemo(() => feedRecordings.filter((r) => {
     const owner = r.userId || (r as Recording & { ownerId?: string }).ownerId;
     return !owner || !blockedUids.has(owner);
-  });
-  const visibleIncomingFriendRequests = incomingFriendRequests.filter((r) => !blockedUids.has(r.fromUid));
-  const visibleUserSearchResults = userSearchResults.filter((r) => !blockedUids.has(r.uid));
-  const visibleCircleMessages = activeCircleMessages.filter((m) => !blockedUids.has(m.fromUid));
+  }), [feedRecordings, blockedUids]);
+  const visibleIncomingFriendRequests = useMemo(() => incomingFriendRequests.filter((r) => !blockedUids.has(r.fromUid)), [incomingFriendRequests, blockedUids]);
+  const visibleUserSearchResults = useMemo(() => userSearchResults.filter((r) => !blockedUids.has(r.uid)), [userSearchResults, blockedUids]);
+  const visibleCircleMessages = useMemo(() => activeCircleMessages.filter((m) => !blockedUids.has(m.fromUid)), [activeCircleMessages, blockedUids]);
+  const visibleReceivedRecordings = useMemo(
+    () => receivedRecordings.filter((r) => !blockedUids.has(r.userId || (r as Recording & { ownerId?: string }).ownerId || "")),
+    [receivedRecordings, blockedUids]
+  );
 
   return {
     ...social,
@@ -3589,7 +3596,7 @@ export function useAppState() {
     resetImportTaps,
     handleFinishImportTagging,
     feedRecordings: visibleFeedRecordings,
-    receivedRecordings: receivedRecordings.filter((r) => !blockedUids.has(r.userId || (r as Recording & { ownerId?: string }).ownerId || "")),
+    receivedRecordings: visibleReceivedRecordings,
     loadingFeedRecordings, saveSharedRecordingToLibrary,
     audioSearchQuery, setAudioSearchQuery,
     feedBookFilter, setFeedBookFilter,

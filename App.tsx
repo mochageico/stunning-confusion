@@ -8,6 +8,7 @@ import { useFonts } from 'expo-font';
 import { BookOpen, CloudOff, Headphones, Home as HomeIcon, Mic, Pause, User, Users } from 'lucide-react-native';
 
 import { AppState, useAppState } from './src/state/useAppState';
+import { notifyAppState, setAppState, useAppFields, useWholeAppState } from './src/state/appStore';
 import PracticeModals from './src/components/PracticeModals';
 import { FadeInView, NumericKeyboardAccessory, useKeyboardHeight } from './src/components/ui';
 import { BottomBars, FloatingTabBar, PageFade, useAboveTabBar } from './src/components/TabBar';
@@ -297,10 +298,12 @@ function NowPlayingProgress() {
 // playing, so playback keeps going (and stays controllable) while navigating
 // to a different tab — previously play/pause controls only existed on the
 // screen you started playback from.
-function NowPlayingBar({ state }: { state: AppState }) {
+function NowPlayingBar() {
   const palette = useThemeColors();
   const space = useScaledSpace();
-  const { playingRecordingId, nowPlayingRecording, setPlayingRecordingId, setSelectedRecording, navigateTo } = state;
+  const { playingRecordingId, nowPlayingRecording, setPlayingRecordingId, setSelectedRecording, navigateTo } = useAppFields(
+    'playingRecordingId', 'nowPlayingRecording', 'setPlayingRecordingId', 'setSelectedRecording', 'navigateTo',
+  );
 
   if (!playingRecordingId || !nowPlayingRecording) return null;
 
@@ -358,11 +361,27 @@ const recordRenderTime: React.ProfilerOnRenderCallback = (_id, _phase, actualDur
   (g.__prof ??= []).push(Math.round(actualDuration));
 };
 
-function AppShell() {
+// Runs the app state and publishes it to src/state/appStore.ts, where each
+// screen picks the fields it uses. Its children come in from above as props,
+// so they do not redraw with it; only the components whose fields changed do.
+function AppStateHost({ children }: { children: React.ReactNode }) {
   // Demo mode (sample data, no sign-in) for checking UI work -- a no-op unless
   // the web preview URL carries ?s=<screen>, and never in a production build.
   // See src/dev/DemoHarness.tsx.
   const state = useDemoState(useAppState());
+  setAppState(state);
+  React.useLayoutEffect(() => {
+    notifyAppState();
+  });
+  return <>{children}</>;
+}
+
+function AppShell() {
+  const state = useAppFields(
+    'currentScreen', 'currentTab', 'isRecording', 'user', 'queueReady', 'loadingAuth',
+    'showTour', 'selectTab', 'unreadDMCount', 'unreadCircleCount', 'incomingFriendRequests',
+    'activeModal', 'saveRecordingDialog', 'showOnboarding',
+  );
   // Chat screens go full-screen (no tab bar / now-playing bar below them) --
   // partly for a standard chat-app feel, but mainly so KeyboardAvoidingView's
   // bottom edge is the true physical screen bottom instead of sitting above
@@ -410,9 +429,9 @@ function AppShell() {
       <View style={{ flex: 1 }} className="bg-canvas">
         <ThemedStatusBar />
         <SafeAreaView style={{ flex: 1 }}>
-          <AuthGateScreen state={state} />
+          <WithWholeState>{(s) => <AuthGateScreen state={s} />}</WithWholeState>
         </SafeAreaView>
-        <ToastLayer state={state} />
+        <ToastLayer />
       </View>
     );
   }
@@ -425,7 +444,7 @@ function AppShell() {
           (Drills on SessionShell add it in their own bottom bar.) */}
       <SafeAreaView style={{ flex: 1 }} edges={OWN_BOTTOM_INSET.has(state.currentScreen) && sessionScreenActive ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}>
         <View style={{ flex: 1 }}>
-          <Screens state={state} />
+          <WithWholeState>{(s) => <Screens state={s} />}</WithWholeState>
           {showBars && <PageFade />}
         </View>
       </SafeAreaView>
@@ -439,9 +458,9 @@ function AppShell() {
         <BottomBars>
           {/* The tour card sits here rather than over the screen, so the
               screen it's describing stays fully in view above it. */}
-          {state.showTour === true && <TourCard state={state} />}
-          <OfflinePill state={state} />
-          <NowPlayingBar state={state} />
+          {state.showTour === true && <WithWholeState>{(s) => <TourCard state={s} />}</WithWholeState>}
+          <OfflinePill />
+          <NowPlayingBar />
           <FloatingTabBar
             tabs={TABS}
             current={state.currentTab}
@@ -453,7 +472,66 @@ function AppShell() {
       )}
 
       {/* Interactive Full Practice Screen Overlay */}
-      {state.activeModal && (
+      {state.activeModal && <PracticeModalHost />}
+
+      {state.saveRecordingDialog && <WithWholeState>{(s) => <SaveRecordingDialog state={s} />}</WithWholeState>}
+
+      {/* First-run setup -- same full-screen-overlay convention as the
+          practice modal above, sitting above the tab router rather than
+          going through currentScreen routing, so it shows regardless of
+          whatever screen/tab was active when it fires. */}
+      {state.showOnboarding && (
+        <View className="absolute inset-0 bg-canvas z-50">
+          <SafeAreaView style={{ flex: 1 }}>
+            <WithWholeState>{(s) => <OnboardingScreen state={s} />}</WithWholeState>
+          </SafeAreaView>
+        </View>
+      )}
+
+      {/* Common questions -- opened from the tour's last card or Settings,
+          never automatically. (The tour itself is the card in BottomBars.)
+          Rendered after setup so that if both are somehow open, setup (the
+          one with unanswered questions) isn't buried underneath it. */}
+      {state.showTour === 'questions' && (
+        <View className="absolute inset-0 bg-canvas z-50">
+          <SafeAreaView style={{ flex: 1 }}>
+            <WithWholeState>{(s) => <CommonQuestionsScreen state={s} />}</WithWholeState>
+          </SafeAreaView>
+        </View>
+      )}
+
+      <WithWholeState>{(s) => <CommunityGuidelinesSheet state={s} />}</WithWholeState>
+      <WithWholeState>{(s) => <NotificationAskSheet state={s} />}</WithWholeState>
+
+      <ToastLayer />
+
+      {/* The shared "Done" bar for every numeric TextInput in the app -- see
+          NumericInput in ui.tsx. Registered once here for all normal screens;
+          Modals are their own iOS view controller and register their own. */}
+      <NumericKeyboardAccessory />
+    </View>
+  );
+}
+
+/** Temporary (Phase 2.1): hands the whole state to code not yet on useAppFields. */
+function WithWholeState({ children }: { children: (state: AppState) => React.ReactNode }) {
+  return <>{children(useWholeAppState())}</>;
+}
+
+function PracticeModalHost() {
+  const state = useAppFields(
+    'activeModal', 'modalVerses', 'verses', 'abortReviewSession', 'advanceReviewSession',
+    'reviewSessionPosition', 'reviewSessionTotal', 'handleUpdateVerseStatus', 'openThreadDrill',
+    'memoryQueue', 'primingLookahead', 'reviewsPaused', 'setPrimingLookahead', 'listenSource',
+    'listenPlaylists', 'saveListenPlaylist', 'deleteListenPlaylist', 'selectedTranslationId',
+    'userRecordings', 'selectedChapterAudios', 'studioPlaybackEnabled', 'audioCache',
+    'cacheRecordingAudio', 'setListenModePlaying', 'playingRecordingId', 'setPlayingRecordingId',
+    'highlightedVerses', 'toggleVerseHighlight', 'verseDoodles', 'saveVerseDoodle',
+    'memoryGridColumns', 'chapterPhotos', 'photoCache', 'cacheChapterPhoto', 'practiceLearnTab',
+    'sectionsForChapter', 'saveOutlineExtra', 'saveTakeawayDraft', 'addChapterPhoto',
+  );
+  if (!state.activeModal) return null;
+  return (
         <PracticeModals
           type={state.activeModal}
           verses={state.modalVerses}
@@ -501,44 +579,6 @@ function AppShell() {
             void state.addChapterPhoto(book, chapter, 'camera');
           }}
         />
-      )}
-
-      {state.saveRecordingDialog && <SaveRecordingDialog state={state} />}
-
-      {/* First-run setup -- same full-screen-overlay convention as the
-          practice modal above, sitting above the tab router rather than
-          going through currentScreen routing, so it shows regardless of
-          whatever screen/tab was active when it fires. */}
-      {state.showOnboarding && (
-        <View className="absolute inset-0 bg-canvas z-50">
-          <SafeAreaView style={{ flex: 1 }}>
-            <OnboardingScreen state={state} />
-          </SafeAreaView>
-        </View>
-      )}
-
-      {/* Common questions -- opened from the tour's last card or Settings,
-          never automatically. (The tour itself is the card in BottomBars.)
-          Rendered after setup so that if both are somehow open, setup (the
-          one with unanswered questions) isn't buried underneath it. */}
-      {state.showTour === 'questions' && (
-        <View className="absolute inset-0 bg-canvas z-50">
-          <SafeAreaView style={{ flex: 1 }}>
-            <CommonQuestionsScreen state={state} />
-          </SafeAreaView>
-        </View>
-      )}
-
-      <CommunityGuidelinesSheet state={state} />
-      <NotificationAskSheet state={state} />
-
-      <ToastLayer state={state} />
-
-      {/* The shared "Done" bar for every numeric TextInput in the app -- see
-          NumericInput in ui.tsx. Registered once here for all normal screens;
-          Modals are their own iOS view controller and register their own. */}
-      <NumericKeyboardAccessory />
-    </View>
   );
 }
 
@@ -551,7 +591,7 @@ function AppShell() {
 // first sentence leads in bold when there's more after it; the rail on the left
 // says whether it's a note or a failure. Hold a finger on it to keep it up,
 // tap to put it away.
-function ToastLayer({ state }: { state: AppState }) {
+function ToastLayer() {
   const toast = useToast();
   const bottom = useAboveTabBar();
   if (!toast) return null;
@@ -597,8 +637,9 @@ function ToastLayer({ state }: { state: AppState }) {
 // Quiet note while the app runs from the copy on the phone
 // (OFFLINE_MODE_PLAN.md stage 5), with how many verses are waiting to send.
 // Goes away by itself once the server answers again.
-function OfflinePill({ state }: { state: AppState }) {
+function OfflinePill() {
   const palette = useThemeColors();
+  const state = useAppFields('noSignal', 'pendingSends');
   if (!state.noSignal) return null;
   const waiting = state.pendingSends;
   return (
@@ -676,12 +717,17 @@ export default function App() {
   }
 
   // Demo prof=1: time every redraw of the app (see DEMO_PROFILE).
+  const host = (
+    <AppStateHost>
+      <AppShell />
+    </AppStateHost>
+  );
   const appShell = DEMO_PROFILE ? (
     <React.Profiler id="app" onRender={recordRenderTime}>
-      <AppShell />
+      {host}
     </React.Profiler>
   ) : (
-    <AppShell />
+    host
   );
 
   return (
