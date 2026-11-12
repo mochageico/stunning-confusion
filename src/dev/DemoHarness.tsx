@@ -29,7 +29,8 @@
 // Extra params: ios=1 reproduces iPhone font rendering in the browser (no
 // synthesized bold, so a weight that isn't a real loaded face shows as the
 // Regular it is on the phone); empty=1 skips the seeded queue; big=1 seeds
-// 700 verses instead, for timing the screens that draw every verse;
+// 700 verses instead, for timing the screens that draw every verse; prof=1
+// records how long each redraw of the app takes in globalThis.__prof;
 // accent=<id> opens in that accent (navy, evergreen, burgundy, plum, walnut,
 // ink) without changing the one saved in Settings; scale=1.5 renders at that
 // text size, as if set in iOS Settings; notdue=1 (with modalLearn) practices
@@ -83,6 +84,13 @@ export const DEMO_ACCENT: string | null = DEMO_ENABLED && PARAMS ? PARAMS.get('a
 /** The text size the demo URL asks for, if any. App.tsx applies it. */
 export const DEMO_FONT_SCALE: number | null =
   DEMO_ENABLED && PARAMS && PARAMS.get('scale') ? Number(PARAMS.get('scale')) || null : null;
+
+/**
+ * prof=1: App.tsx times every redraw of the app and pushes the milliseconds
+ * onto globalThis.__prof. To measure, empty the list, change something, then
+ * read the list (see .claude/optimization-plan.md, task 0.1).
+ */
+export const DEMO_PROFILE: boolean = !!(DEMO_ENABLED && PARAMS && PARAMS.get('prof') === '1');
 
 const DAY = 86400000;
 const now = Date.now();

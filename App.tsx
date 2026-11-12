@@ -68,7 +68,7 @@ import { CommunityGuidelinesSheet } from './src/components/CommunityGuidelinesSh
 import { NotificationAskSheet } from './src/components/NotificationAskSheet';
 import { APP_FONTS, AppButton, AppIconButton, AppText, FontScaleOverrideProvider, useScaledSpace, VerseFontContext } from './src/components/design';
 import { Dialog, GroupedList, ListRow, SectionHeader, SegmentedControl } from './src/components/blocks';
-import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
+import { DEMO_ACCENT, DEMO_FONT_SCALE, DEMO_PROFILE, DEMO_SCREEN, useDemoState } from './src/dev/DemoHarness';
 import BlocksGallery from './src/dev/BlocksGallery';
 import RecapGallery from './src/dev/RecapGallery';
 import { dismissToast, pauseToast, resumeToast, useToast } from './src/lib/toastStore';
@@ -351,6 +351,12 @@ const OWN_BOTTOM_INSET = new Set<string>(['guided', 'mixedReview']);
 // How long the loading screen waits for the user's verses before opening
 // the app anyway.
 const VERSE_WAIT_CAP_MS = 8000;
+
+/** Demo prof=1: one entry per redraw, in whole milliseconds, on globalThis.__prof. */
+const recordRenderTime: React.ProfilerOnRenderCallback = (_id, _phase, actualDuration) => {
+  const g = globalThis as any;
+  (g.__prof ??= []).push(Math.round(actualDuration));
+};
 
 function AppShell() {
   // Demo mode (sample data, no sign-in) for checking UI work -- a no-op unless
@@ -669,6 +675,15 @@ export default function App() {
     return <View style={{ flex: 1, backgroundColor: '#EFECE6' }} />;
   }
 
+  // Demo prof=1: time every redraw of the app (see DEMO_PROFILE).
+  const appShell = DEMO_PROFILE ? (
+    <React.Profiler id="app" onRender={recordRenderTime}>
+      <AppShell />
+    </React.Profiler>
+  ) : (
+    <AppShell />
+  );
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -680,14 +695,14 @@ export default function App() {
             </SafeAreaView>
           ) : DEMO_FONT_SCALE ? (
             <FontScaleOverrideProvider scale={DEMO_FONT_SCALE}>
-              {DEMO_SCREEN === 'blocks' ? <BlocksGallery /> : DEMO_SCREEN === 'ladderRecap' ? <RecapGallery /> : <AppShell />}
+              {DEMO_SCREEN === 'blocks' ? <BlocksGallery /> : DEMO_SCREEN === 'ladderRecap' ? <RecapGallery /> : appShell}
             </FontScaleOverrideProvider>
           ) : DEMO_SCREEN === 'blocks' ? (
             <BlocksGallery />
           ) : DEMO_SCREEN === 'ladderRecap' ? (
             <RecapGallery />
           ) : (
-            <AppShell />
+            appShell
           )}
           </VerseFontProvider>
         </ThemeProvider>
