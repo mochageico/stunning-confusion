@@ -13,7 +13,7 @@ import { LayoutResult, STAR_RADIUS, viewBounds } from '../../lib/mapLayout';
 import { FORMATS, formatLabel } from '../../lib/formatNames';
 import { readMixCounts, MIX_COUNTS_PREF } from '../../lib/mix';
 import { loadPracticePrefs } from '../../lib/practicePrefs';
-import { starVerses, walkCredit, WalkCredit, walkOrder } from '../../lib/mapWalk';
+import { shownGraph, starVerses, walkCredit, WalkCredit, walkOrder, walkStarts } from '../../lib/mapWalk';
 import WalkRound, { WalkMode, WalkRoundResult } from './WalkRound';
 import { GradeInput, wordAccuracy } from '../../lib/grading';
 
@@ -58,9 +58,12 @@ function WalkMap({
   start,
   chosen,
   onChoose,
+  hidden,
 }: {
   result: LayoutResult;
   groupId: string;
+  /** Stars not found yet: not drawn, so the walk never gives them away. */
+  hidden: ReadonlySet<string>;
   held: Set<string>;
   visited: Set<string>;
   target: string | null;
@@ -76,8 +79,8 @@ function WalkMap({
   // Labels grow with a wide constellation so they stay about the same on screen.
   const font = Math.max(11, b.w / 22);
   const r = Math.max(STAR_RADIUS, b.w / 60);
-  const stars = result.stars.filter((s) => keys.has(s.key));
-  const lines = result.lines.filter((l) => keys.has(l.from) && keys.has(l.to));
+  const stars = result.stars.filter((s) => keys.has(s.key) && !hidden.has(s.key));
+  const lines = result.lines.filter((l) => keys.has(l.from) && keys.has(l.to) && !hidden.has(l.from) && !hidden.has(l.to));
   return (
     <View className="bg-surface border border-line rounded-card" style={{ height: MAP_HEIGHT, overflow: 'hidden' }}>
       <Svg width="100%" height="100%" viewBox={`${b.x - PAD} ${b.y - PAD / 2} ${b.w + PAD * 2} ${b.h + PAD}`} preserveAspectRatio="xMidYMid meet">
@@ -129,19 +132,31 @@ export default function WalkConstellation({
   groupId,
   queue,
   deps,
+  hidden,
   onClose,
 }: {
   result: LayoutResult;
   groupId: string;
   queue: QueueItem[];
   deps: WalkDeps;
+  /** Map star keys not found yet (skyView().hidden): left out of the walk entirely. */
+  hidden: ReadonlySet<string>;
   onClose: () => void;
 }) {
   const space = useScaledSpace();
   const group = result.groups.find((g) => g.id === groupId);
   const title = CONSTELLATIONS.find((c) => c.id === groupId)?.title ?? 'Your constellation';
   const starsByKey = useMemo(() => new Map(result.stars.map((s) => [s.key, s])), [result]);
-  const held = useMemo(() => new Set((group?.keys ?? []).filter((k) => starsByKey.get(k) && starLit(starsByKey.get(k)!.ref, queue))), [group, starsByKey, queue]);
+  // The walk's own graph: found stars only, and the lines between them.
+  const graph = useMemo(
+    () =>
+      shownGraph(
+        { keys: group?.keys ?? [], lines: result.lines.filter((l) => group?.keys.includes(l.from) && group?.keys.includes(l.to)) },
+        (k) => hidden.has(k)
+      ),
+    [group, result, hidden]
+  );
+  const held = useMemo(() => new Set(graph.keys.filter((k) => starsByKey.get(k) && starLit(starsByKey.get(k)!.ref, queue))), [graph, starsByKey, queue]);
 
   // Whether the walk counts: the Settings switch, read once when it opens.
   const [counts, setCounts] = useState(FORMATS.walk.counts);
@@ -149,9 +164,10 @@ export default function WalkConstellation({
     loadPracticePrefs().then((saved) => setCounts(readMixCounts(saved[MIX_COUNTS_PREF]).walk));
   }, []);
 
-  const heldKeys = useMemo(() => [...held].sort(), [held]);
+  // Where a walk can start: a held star that has another held star to walk to through found stars.
+  const starts = useMemo(() => walkStarts(graph, (k) => held.has(k)), [graph, held]);
   const [phase, setPhase] = useState<Phase>('start');
-  const [startKey, setStartKey] = useState<string | null>(heldKeys[0] ?? null);
+  const [startKey, setStartKey] = useState<string | null>(starts[0] ?? null);
   const [order, setOrder] = useState<string[]>([]);
   const [step, setStep] = useState(0);
   const [tally, setTally] = useState({ walked: 0, credited: 0, skipped: 0 });
@@ -162,7 +178,6 @@ export default function WalkConstellation({
 
   const begin = () => {
     if (!startKey || !group) return;
-    const graph = { keys: group.keys, lines: result.lines.filter((l) => group.keys.includes(l.from) && group.keys.includes(l.to)) };
     const o = walkOrder(graph, startKey, (k) => held.has(k));
     frozenQueue.current = queue;
     credited.current = new Set();
@@ -260,6 +275,7 @@ export default function WalkConstellation({
         result={result}
         groupId={groupId}
         held={held}
+        hidden={hidden}
         visited={visited}
         target={targetKey}
         start={phase === 'start' ? null : startKey}
@@ -269,11 +285,11 @@ export default function WalkConstellation({
 
       {phase === 'start' && (
         <RoundFrame
-          footer={<AppButton size="lg" variant="primary" label="Start here" disabled={!startKey || held.size < 2} onPress={begin} />}
+          footer={<AppButton size="lg" variant="primary" label="Start here" disabled={!startKey || starts.length === 0} onPress={begin} />}
         >
           <AppText variant="body" className="font-sans text-ink">
-            {held.size < 2
-              ? 'Walking needs at least two of these stars in My Verses.'
+            {starts.length === 0
+              ? 'Walking needs at least two found stars that are joined and in My Verses.'
               : `Tap the star to start from${startKey && starsByKey.get(startKey) ? ` (now ${starsByKey.get(startKey)!.label})` : ''}. The next star along a line appears as an empty circle, and you say what's there.`}
           </AppText>
           <AppText variant="caption" className="font-sans text-ink-2">

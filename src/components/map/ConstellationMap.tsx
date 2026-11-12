@@ -8,7 +8,8 @@ import type { VersePageRef } from '../../state/useAppState';
 import { AppButton, AppText, useScaledSpace } from '../design';
 import { ScreenHeader } from '../blocks';
 import { OneTimeTip } from '../OneTimeTip';
-import { isComplete, joinedFrom, newlyFound, revealedStars, starKey, starLit } from '../../lib/constellations';
+import { isComplete, joinedFrom, listenOrder, newlyFound, revealedStars, starKey, starLit } from '../../lib/constellations';
+import { canWalk, shownGraph } from '../../lib/mapWalk';
 import { CONSTELLATIONS } from '../../content/constellations';
 import { layout, LayoutResult, Pt, starLabel, StarMove, viewBounds } from '../../lib/mapLayout';
 import { MapCamera, MapCanvas } from './MapCanvas';
@@ -225,8 +226,8 @@ export default function ConstellationMap({
   /** The empty sky's "Find constellations". */
   onBrowse: () => void;
   onRemoveFromSky: (constellationId: string) => void;
-  /** Listen to these verses (the ones held, in the constellation's order). */
-  onListen: (items: QueueItem[]) => void;
+  /** Listen to these stars (the found ones, in line order); the screen fetches any verse the user does not hold. */
+  onListen: (refs: StarRef[]) => void;
   /** What the star popup's play button needs. */
   play: SkyPlayProps;
   /** Stars that just appeared have been shown: save them as found for good (useSky markFound). */
@@ -295,7 +296,7 @@ export default function ConstellationMap({
   }, [selection, starsByKey]);
   // Echoes only from stars that are found, and none that point at a star still hidden.
   const echoes = useMemo(
-    () => (selectedStar ? echoViews(result, selectedStar, found).filter((e) => !(e.thereKey && view.hidden.has(e.thereKey))) : []),
+    () => (selectedStar ? echoViews(result, selectedStar, found, view.hidden) : []),
     [result, selectedStar, found, view]
   );
   const ghostT = useTween(selectedStar, GHOST_FADE_MS);
@@ -532,26 +533,22 @@ export default function ConstellationMap({
   );
   const focusInfo = focus ? view.info[focus] : undefined;
   const focusGroup = focus ? result.groups.find((g) => g.id === focus) : undefined;
-  // A group can be walked once two of its stars are in My Verses.
+  // A group can be walked once two of its found stars are in My Verses and joined (by showing stars).
   const walkable = (groupId: string) => {
     const g = result.groups.find((x) => x.id === groupId);
-    return !!g && g.keys.filter((k) => starsByKey.get(k) && starLit(starsByKey.get(k)!.ref, queue)).length >= 2;
+    if (!g) return false;
+    const graph = shownGraph({ keys: g.keys, lines: result.lines.filter((l) => g.keys.includes(l.from) && g.keys.includes(l.to)) }, (k) => view.hidden.has(k));
+    return canWalk(graph, (k) => !!starsByKey.get(k) && starLit(starsByKey.get(k)!.ref, queue));
   };
-  /** The held verses of a group's found stars, in the group's order. */
-  const listenItems = (groupId: string): QueueItem[] => {
-    const g = result.groups.find((x) => x.id === groupId);
-    const out: QueueItem[] = [];
-    for (const k of g?.keys ?? []) {
-      const s = starsByKey.get(k);
-      if (!s || view.hidden.has(k)) continue;
-      const page = heldPage(s.ref, queue);
-      if (!page) continue;
-      for (const v of page.verses) {
-        const item = queue.find((q) => q.book === s.ref.book && q.chapter === s.ref.chapter && q.verseNumber === v && (q.translationId || 'BSB') === page.translationId);
-        if (item && !out.includes(item)) out.push(item);
-      }
+  /** The stars Listen plays in a group: the found ones, in line order (a constellation's own order; your links as they sit). */
+  const listenRefs = (groupId: string): StarRef[] => {
+    const info = view.info[groupId];
+    if (info) {
+      const byId = new Map(info.constellation.stars.map((s) => [s.id, s.ref]));
+      return listenOrder(info.constellation, info.revealed).map((id) => byId.get(id)).filter((r): r is StarRef => !!r);
     }
-    return out;
+    const g = result.groups.find((x) => x.id === groupId);
+    return (g?.keys ?? []).filter((k) => !view.hidden.has(k)).map((k) => starsByKey.get(k)?.ref).filter((r): r is StarRef => !!r);
   };
   const totalFound = Object.values(view.info).reduce((n, i) => n + i.found, 0);
   const constellationCount = Object.keys(view.info).length;
@@ -793,7 +790,7 @@ export default function ConstellationMap({
                   </AppText>
                 ) : null}
                 <View className="flex-row" style={{ gap: space(10) }}>
-                  <SkyAction primary label="Listen" Icon={Headphones} onPress={() => focus && onListen(listenItems(focus))} />
+                  <SkyAction primary label="Listen" Icon={Headphones} onPress={() => focus && onListen(listenRefs(focus))} />
                   {focus && walkable(focus) ? <SkyAction label="Walk it" Icon={Footprints} onPress={() => setWalkGroup(focus)} /> : null}
                 </View>
               </View>
@@ -831,6 +828,7 @@ export default function ConstellationMap({
       />
       <GuideSheet
         constellation={CONSTELLATIONS.find((c) => c.id === guideFor) ?? null}
+        revealed={guideFor ? view.info[guideFor]?.revealed : undefined}
         onClose={() => setGuideFor(null)}
         onWalk={guideFor && walkable(guideFor) ? () => { setWalkGroup(guideFor); setGuideFor(null); } : undefined}
         onRemove={
@@ -844,7 +842,7 @@ export default function ConstellationMap({
         }
       />
       {walkGroup ? (
-        <WalkConstellation result={result} groupId={walkGroup} queue={queue} deps={walk} onClose={() => setWalkGroup(null)} />
+        <WalkConstellation result={result} groupId={walkGroup} queue={queue} deps={walk} hidden={view.hidden} onClose={() => setWalkGroup(null)} />
       ) : null}
     </View>
   );

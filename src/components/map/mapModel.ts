@@ -111,9 +111,11 @@ export const echoSentence = (e: Echo): string =>
 /**
  * The echoes of the tapped star. Quotes before allusions. Every one whose
  * other end isn't on the map gets a ghost star and a dotted line, fanned out
- * around the star; the card lists them all.
+ * around the star; the card lists them all. In My sky, `hidden` (map star keys
+ * not found yet) leaves out any echo whose other end is one of them, so an echo
+ * never gives a hidden star away.
  */
-export function echoViews(result: LayoutResult, key: string, found: FoundEcho[]): EchoView[] {
+export function echoViews(result: LayoutResult, key: string, found: FoundEcho[], hidden?: ReadonlySet<string>): EchoView[] {
   const star = result.stars.find((s) => s.key === key);
   if (!star) return [];
   const list = [...echoesFor(star.ref, ECHOES)].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'quote' ? -1 : 1));
@@ -127,6 +129,7 @@ export function echoViews(result: LayoutResult, key: string, found: FoundEcho[])
     if (seen.has(k)) continue;
     seen.add(k);
     const other = starOn(result, there);
+    if (other && hidden?.has(other.key)) continue;
     const view: EchoView = { echo: e, here, there, sentence: echoSentence(e), found: false };
     if (other && other.key !== key) {
       view.thereKey = other.key;

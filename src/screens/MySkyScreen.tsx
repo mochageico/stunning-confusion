@@ -1,13 +1,13 @@
 import { useRef } from 'react';
 import { View } from 'react-native';
 
-import type { QueueItem } from '../types';
+import type { StarRef } from '../types';
 import { AppState } from '../state/useAppState';
 import { FadeInView } from '../components/ui';
 import { useScaledSpace } from '../components/design';
 import ConstellationMap from '../components/map/ConstellationMap';
 import { takeSkyFocus } from '../lib/skyFocus';
-import { toVerseStates } from '../state/useToday';
+import { listenVerses } from '../components/map/addStars';
 
 // ============================================================================
 // MY SKY (CONSTELLATION_SKY_PLAN.md, stage 3): the user's own night sky, reached
@@ -25,12 +25,15 @@ export default function MySkyScreen({ state }: { state: AppState }) {
   const focusId = useRef<string | null | undefined>(undefined);
   if (focusId.current === undefined) focusId.current = takeSkyFocus();
 
-  const listen = (items: QueueItem[]) => {
-    if (items.length === 0) {
-      state.triggerToast('Learn a verse in this constellation first, then you can listen to it.');
+  // Listen plays the stars that are found, in line order: what the user holds as they hold it,
+  // the rest fetched (the same rule as the preview page's Listen).
+  const listen = async (refs: StarRef[]) => {
+    const verses = await listenVerses(refs, state.memoryQueue, state.selectedTranslationId);
+    if (verses.length === 0) {
+      state.triggerToast('Nothing to listen to yet.');
       return;
     }
-    state.startPractice('listen', toVerseStates(items), { listenSource: 'selection' });
+    state.startPractice('listen', verses, { listenSource: 'selection' });
   };
 
   return (
@@ -59,7 +62,7 @@ export default function MySkyScreen({ state }: { state: AppState }) {
           onLeave={() => state.navigateTo('constellations')}
           onBrowse={() => state.navigateTo('constellations')}
           onRemoveFromSky={(id) => void state.removeFromSky(id)}
-          onListen={listen}
+          onListen={(refs) => void listen(refs)}
           onFound={state.markFound}
           play={{
             userRecordings: state.userRecordings,

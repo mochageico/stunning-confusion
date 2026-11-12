@@ -250,6 +250,42 @@ export function joinedFrom(c: Constellation, queue: QueueItem[], starId: string,
 }
 
 /**
+ * The order Listen plays a constellation in: the stars that show, following the
+ * lines from the starting star (depth first, neighbors in star order), then any
+ * showing star the lines don't reach from there, in star order. Hidden stars
+ * are never played and never crossed. Star ids.
+ */
+export function listenOrder(c: Constellation, revealed: ReadonlySet<string>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const visit = (id: string) => {
+    if (seen.has(id) || !revealed.has(id)) return;
+    seen.add(id);
+    out.push(id);
+    for (const n of joinedTo(c, id)) visit(n);
+  };
+  visit(startStarId(c));
+  for (const s of c.stars) visit(s.id);
+  return out;
+}
+
+/**
+ * The guide's notes on lines, each shown once both of its ends are found.
+ * In line order; lines without a note are left out.
+ */
+export function guideNotes(c: Constellation, revealed: ReadonlySet<string>): { from: StarRef; to: StarRef; note: string }[] {
+  const byId = new Map(c.stars.map((s) => [s.id, s.ref]));
+  const out: { from: StarRef; to: StarRef; note: string }[] = [];
+  for (const l of c.lines) {
+    const note = l.note?.trim();
+    const from = byId.get(l.from);
+    const to = byId.get(l.to);
+    if (note && from && to && revealed.has(l.from) && revealed.has(l.to)) out.push({ from, to, note });
+  }
+  return out;
+}
+
+/**
  * Stars that have appeared in the user's sky but not been looked at yet (not
  * saved as found): what a review or learning summary can say "1 new star
  * appeared in The Shepherd" about. Only constellations that are in My sky,

@@ -51,6 +51,25 @@ export function walkOrder(graph: WalkGraph, start: string, held: (key: string) =
   return out;
 }
 
+/**
+ * The graph a walk uses in My sky: only stars that show (`hidden` says which
+ * do not), and only the lines between two showing stars. A hidden star is not
+ * crossed either: the walk cannot pass through what the user hasn't found.
+ */
+export function shownGraph(graph: WalkGraph, hidden: (key: string) => boolean): WalkGraph {
+  const keys = graph.keys.filter((k) => !hidden(k));
+  const ok = new Set(keys);
+  return { keys, lines: graph.lines.filter((l) => ok.has(l.from) && ok.has(l.to)) };
+}
+
+/** Stars a walk can start from: held stars that have somewhere to walk to. */
+export function walkStarts(graph: WalkGraph, held: (key: string) => boolean): string[] {
+  return graph.keys.filter((k) => held(k) && walkOrder(graph, k, held).length > 0).sort();
+}
+
+/** A walk needs two held stars that show and are joined (directly or through showing stars). */
+export const canWalk = (graph: WalkGraph, held: (key: string) => boolean): boolean => walkStarts(graph, held).length > 0;
+
 /** A verse of a star the user holds, with the item that would be credited. */
 export interface WalkVerse {
   book: string;

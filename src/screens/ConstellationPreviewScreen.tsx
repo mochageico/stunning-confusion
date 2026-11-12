@@ -8,9 +8,10 @@ import { AppButton, AppText, useFontScale, useScaledSpace } from '../components/
 import { Dialog, ScreenHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { MiniConstellation } from '../components/map/MiniConstellation';
-import { versesForStars } from '../components/map/addStars';
+import { listenVerses, versesForStars } from '../components/map/addStars';
+import { GuideBody } from '../components/map/ConstellationSheets';
 import { CONSTELLATIONS } from '../content/constellations';
-import { isLearned, progress, revealedStars, starLit } from '../lib/constellations';
+import { guideNotes, isLearned, listenOrder, progress, revealedStars, starLit } from '../lib/constellations';
 import { usePreviewId } from '../lib/constellationPreview';
 import { starLabel } from '../lib/mapLayout';
 import { verseCounts } from './ConstellationsScreen';
@@ -55,7 +56,7 @@ export default function ConstellationPreviewScreen({ state }: { state: AppState 
   const counts = verseCounts(c, memoryQueue);
   const hiddenVerses = c.stars.reduce((n, s) => (revealed.has(s.id) ? n : n + (s.ref.end - s.ref.start + 1)), 0);
   const prog = progress(c, memoryQueue, revealed);
-  const drawing = Math.min(Math.round(winWidth - 40 - 2 * space(12)), Math.round(250 * Math.max(1, scale * 0.9)));
+  const drawing = Math.max(120, Math.min(Math.round(winWidth - 40 - 2 * space(12)), Math.round(250 * Math.max(1, scale * 0.9))));
 
   const addVerse = async (starId: string) => {
     const s = c.stars.find((x) => x.id === starId);
@@ -69,13 +70,14 @@ export default function ConstellationPreviewScreen({ state }: { state: AppState 
     }
   };
 
-  // Listen plays the stars that show, in the constellation's own order.
+  // Listen plays the stars that show (found), in line order: the same rule as My sky's Listen.
   const listen = async () => {
-    const refs = c.stars.filter((s) => revealed.has(s.id)).map((s) => s.ref);
+    const byId = new Map(c.stars.map((s) => [s.id, s.ref]));
+    const refs = listenOrder(c, revealed).map((id) => byId.get(id)!);
     if (refs.length === 0 || busy) return;
     setBusy(true);
     try {
-      const verses = await versesForStars(refs, selectedTranslationId);
+      const verses = await listenVerses(refs, memoryQueue, selectedTranslationId);
       if (verses.length > 0) startPractice('listen', verses);
       else triggerToast('Nothing to listen to yet.');
     } finally {
@@ -113,7 +115,7 @@ export default function ConstellationPreviewScreen({ state }: { state: AppState 
             <AppButton variant="primary" Icon={Plus} label="Add to my sky" onPress={addToSkyAndOpen} />
           )}
           <AppButton variant="secondary" Icon={Headphones} label="Listen" disabled={busy || prog.found === 0} onPress={() => void listen()} />
-          {c.guide.trim() ? <AppButton variant="quiet" Icon={BookOpen} label="Read the guide" onPress={() => setGuideOpen(true)} /> : null}
+          {c.guide.trim() || guideNotes(c, revealed).length > 0 ? <AppButton variant="quiet" Icon={BookOpen} label="Read the guide" onPress={() => setGuideOpen(true)} /> : null}
         </View>
 
         <View style={{ gap: space(6) }}>
@@ -167,9 +169,7 @@ export default function ConstellationPreviewScreen({ state }: { state: AppState 
       </ScrollView>
 
       <Dialog visible={guideOpen} onClose={() => setGuideOpen(false)} title={c.title}>
-        <AppText variant="body" className="font-sans text-ink">
-          {c.guide}
-        </AppText>
+        <GuideBody constellation={c} revealed={revealed} />
       </Dialog>
     </FadeInView>
   );

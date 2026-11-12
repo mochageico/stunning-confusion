@@ -3,9 +3,9 @@
 
 import type { Constellation, Echo, QueueItem, StarRef, VerseLink } from '../types';
 import { CONSTELLATIONS } from '../content/constellations';
-import { starVerses, walkCredit, walkOrder } from './mapWalk';
+import { canWalk, shownGraph, starVerses, walkCredit, walkOrder, walkStarts } from './mapWalk';
 import {
-  canLabel, echoesFor, echoVisible, EMPTY_SKY, isComplete, isLearned, joinedFrom, joinedTo, migrateSky, newlyFound, nextToLearn, progress, revealedStars,
+  canLabel, echoesFor, guideNotes, listenOrder, echoVisible, EMPTY_SKY, isComplete, isLearned, joinedFrom, joinedTo, migrateSky, newlyFound, nextToLearn, progress, revealedStars,
   searchConstellations, skyAdd, skyNewStars, skyMarkFound, skyRemove, starIsTop, starKey, starLit, starStage, startStarId, suggestedNext, userConstellations,
 } from './constellations';
 
@@ -193,6 +193,32 @@ check('skyNewStars: nothing new, nothing said', skyNewStars(skyA, [sk], []).leng
 check('skyNewStars: not for constellations outside the sky', skyNewStars({ ...skyA, added: [] }, [sk], lqNew).length === 0);
 check('skyNewStars: gone once marked found', skyNewStars(skyMarkFound(skyA, 'shepherd', ['c']), [sk], lqNew).length === 0);
 check('the last star found completes the constellation', !isComplete(sk, revealedStars(sk, [], ['a', 'b', 'c', 'd'])) && isComplete(sk, revealedStars(sk, [item('Ezekiel', 34, 11, learning)], ['a', 'b', 'c', 'd'])));
+
+// ---- Stage 5: walk, Listen and the guide respect the mystery ----
+// Map star keys for the fixture: a-e in a chain, a start with b joined to it.
+const wg = { keys: ['a', 'b', 'c', 'd', 'e'], lines: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'd' }, { from: 'd', to: 'e' }] };
+const shownG = shownGraph(wg, (k) => k === 'c' || k === 'd' || k === 'e');
+check('a hidden star is dropped from the walk graph', shownG.keys.join() === 'a,b', shownG.keys);
+check('and so is every line to it', shownG.lines.length === 1 && shownG.lines[0].from === 'a' && shownG.lines[0].to === 'b', shownG.lines);
+check('a walk does not cross a hidden star', walkOrder(shownGraph(wg, (k) => k === 'c'), 'a', () => true).join() === 'b', walkOrder(shownGraph(wg, (k) => k === 'c'), 'a', () => true));
+check('a walk needs two found, held stars that are joined', canWalk(shownGraph(wg, (k) => k === 'c'), (k) => k === 'a' || k === 'b') && !canWalk(shownGraph(wg, (k) => k === 'c'), (k) => k === 'a'));
+check('two held stars with a hidden star between them cannot walk', !canWalk(shownGraph(wg, (k) => k === 'c'), (k) => k === 'a' || k === 'd'));
+check('with the star between them found, they can', canWalk(shownGraph(wg, () => false), (k) => k === 'a' || k === 'd'));
+check('walk starts: held stars with somewhere to walk', walkStarts(shownGraph(wg, (k) => k === 'c'), (k) => k === 'a' || k === 'b' || k === 'd').join() === 'a,b', walkStarts(shownGraph(wg, (k) => k === 'c'), (k) => k === 'a' || k === 'b' || k === 'd'));
+check('one held star walks nowhere', walkStarts(wg, (k) => k === 'a').length === 0);
+
+const lo = (revealed: string[]) => listenOrder(sk, new Set(revealed)).join();
+check('listen: only the found stars, in line order from the start', lo(['a', 'b', 'c']) === 'a,b,c', lo(['a', 'b', 'c']));
+check('listen: a hidden star is not played or crossed', lo(['a', 'b', 'd', 'e']) === 'a,b,d,e', lo(['a', 'b', 'd', 'e']));
+check('listen: a found star the lines do not reach comes last, in star order', lo(['a', 'b', 'e', 'd']) === 'a,b,d,e', lo(['a', 'b', 'e', 'd']));
+check('listen: nothing found, nothing played', lo([]) === '');
+check('listen: starts at the starting star, not the first listed', listenOrder({ ...sk, start: 'c' }, new Set(['a', 'b', 'c', 'd'])).join() === 'c,b,a,d', listenOrder({ ...sk, start: 'c' }, new Set(['a', 'b', 'c', 'd'])).join());
+
+const noted: Constellation = { ...sk, lines: [{ from: 'a', to: 'b', note: 'The shepherd lays down his life.' }, { from: 'b', to: 'c', note: ' ' }, { from: 'c', to: 'd', note: 'He carries the lambs.' }, { from: 'd', to: 'e' }] };
+check('guide: a note shows once both ends are found', guideNotes(noted, new Set(['a', 'b'])).length === 1);
+check('guide: a note with a hidden end stays hidden', guideNotes(noted, new Set(['a', 'b', 'c'])).length === 1 && guideNotes(noted, new Set(['a', 'c', 'd'])).length === 1 && guideNotes(noted, new Set(['a', 'b', 'c', 'd']))[1].note === 'He carries the lambs.');
+check('guide: blank and missing notes are left out', guideNotes(noted, new Set(['a', 'b', 'c', 'd', 'e'])).length === 2);
+check('guide: nothing found beyond the start, no notes', guideNotes(noted, new Set(['a'])).length === 0);
 
 if (failures > 0) {
   console.log(`\n${failures} check(s) failed.`);

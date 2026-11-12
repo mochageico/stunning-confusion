@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 
 import type { Constellation } from '../../types';
+import { guideNotes } from '../../lib/constellations';
+import { starLabel } from '../../lib/mapLayout';
 import { AppButton, AppText, Switch, useScaledSpace } from '../design';
 import { Dialog } from '../blocks';
 
@@ -11,14 +13,47 @@ import { Dialog } from '../blocks';
 // map's last chip). The guide never appears on the map itself.
 // ============================================================================
 
+/**
+ * The guide's text: the description, the overall guide, and the guide's note on
+ * each line once both of its ends are found (so a note never gives away a star
+ * that is still hidden). `revealed` = the star ids that show.
+ */
+export function GuideBody({ constellation, revealed }: { constellation: Constellation; revealed?: ReadonlySet<string> }) {
+  const space = useScaledSpace();
+  const notes = revealed ? guideNotes(constellation, revealed) : [];
+  return (
+    <View style={{ gap: space(12) }}>
+      <AppText variant="label" className="font-sans text-ink-2">
+        {constellation.description}
+      </AppText>
+      <AppText variant="body" className="font-serif text-ink">
+        {constellation.guide.trim() || 'The guide for this one is still being written.'}
+      </AppText>
+      {notes.map((n, i) => (
+        <View key={i} style={{ gap: space(2) }}>
+          <AppText variant="caption" className="font-sans font-semibold text-ink-3">
+            {`${starLabel(n.from)} → ${starLabel(n.to)}`}
+          </AppText>
+          <AppText variant="body" className="font-serif text-ink">
+            {n.note}
+          </AppText>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 /** The guide: title, description, the writing, and a way to take the rest of the passages. */
 export function GuideSheet({
   constellation,
+  revealed,
   onClose,
   onWalk,
   onRemove,
 }: {
   constellation: Constellation | null;
+  /** The star ids that show: line notes appear once both ends are in it. */
+  revealed?: ReadonlySet<string>;
   onClose: () => void;
   /** Set when two of its stars are in My Verses. */
   onWalk?: () => void;
@@ -42,16 +77,7 @@ export function GuideSheet({
         </>
       }
     >
-      {constellation ? (
-        <View style={{ gap: space(12) }}>
-          <AppText variant="label" className="font-sans text-ink-2">
-            {constellation.description}
-          </AppText>
-          <AppText variant="body" className="font-serif text-ink">
-            {constellation.guide.trim() || 'The guide for this one is still being written.'}
-          </AppText>
-        </View>
-      ) : null}
+      {constellation ? <GuideBody constellation={constellation} revealed={revealed} /> : null}
     </Dialog>
     <Dialog
       visible={confirming}
