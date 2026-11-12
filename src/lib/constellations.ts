@@ -72,23 +72,6 @@ export function isLearned(ref: StarRef, queue: QueueItem[]): boolean {
 export const canLabel = (link: Pick<VerseLink, 'a' | 'b'>, queue: QueueItem[]): boolean =>
   isLearned(link.a, queue) && isLearned(link.b, queue);
 
-/**
- * Curated stars worth suggesting: not held yet, with a line coming in from a
- * star at Settling or later. Returns star ids.
- */
-export function suggestedNext(c: Constellation, queue: QueueItem[]): string[] {
-  const byId = new Map(c.stars.map((s) => [s.id, s]));
-  const out = new Set<string>();
-  for (const line of c.lines) {
-    const from = byId.get(line.from);
-    const to = byId.get(line.to);
-    if (!from || !to || starLit(to.ref, queue)) continue;
-    const stage = starStage(from.ref, queue);
-    if (stage && rank(stage) >= rank(LEARNED_STAGE)) out.add(to.id);
-  }
-  return c.stars.filter((s) => out.has(s.id)).map((s) => s.id);
-}
-
 export interface UserConstellation {
   /** The smallest star key in the group. */
   id: string;

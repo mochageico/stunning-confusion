@@ -5,6 +5,7 @@ import Svg, { Circle, Defs, Line, RadialGradient, Stop } from 'react-native-svg'
 import type { Constellation, QueueItem } from '../../types';
 import { starLit } from '../../lib/constellations';
 import { useThemeColors } from '../theme';
+import { SKY } from './skyPalette';
 
 // ============================================================================
 // MiniConstellation -- a constellation drawn small, from its 0-100 coordinates
@@ -20,18 +21,6 @@ import { useThemeColors } from '../theme';
 // sky whatever the theme is (the "My sky" tile is always night); otherwise it
 // follows the app's theme tokens.
 // ============================================================================
-
-/** The night sky's own colors: the "My sky" tile is dark in light mode too. */
-export const NIGHT_SKY = {
-  // theme-ok: the night sky is the same in light and dark mode, so these are not theme tokens.
-  bg: '#0E1424',
-  // theme-ok: night sky.
-  star: '#F4F1E8',
-  // theme-ok: night sky.
-  line: '#7F8FB5',
-  // theme-ok: night sky.
-  glow: '#9FB2E0',
-} as const;
 
 const PAD = 10;
 const VIEW = 100;
@@ -56,10 +45,10 @@ export function MiniConstellation({ constellation, revealed, queue, night = fals
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const h = height ?? width;
 
-  const ink = night ? NIGHT_SKY.star : palette.ink;
-  const lineColor = night ? NIGHT_SKY.line : palette.ink3;
-  const filled = night ? NIGHT_SKY.star : palette.accent;
-  const glow = night ? NIGHT_SKY.glow : palette.accent;
+  const ink = night ? SKY.ink : palette.ink;
+  const lineColor = night ? SKY.ink3 : palette.ink3;
+  const filled = night ? SKY.ink : palette.accent;
+  const glow = night ? SKY.glow : palette.accent;
 
   // Fit the stars' own bounds into the box, keeping their proportions.
   const pos = useMemo(() => {

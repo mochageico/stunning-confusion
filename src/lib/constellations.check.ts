@@ -6,7 +6,7 @@ import { CONSTELLATIONS } from '../content/constellations';
 import { canWalk, shownGraph, starVerses, walkCredit, walkOrder, walkStarts } from './mapWalk';
 import {
   canLabel, echoesFor, guideNotes, listenOrder, echoVisible, EMPTY_SKY, isComplete, isLearned, joinedFrom, joinedTo, migrateSky, newlyFound, nextToLearn, progress, revealedStars,
-  searchConstellations, skyAdd, skyNewStars, skyMarkFound, skyRemove, starIsTop, starKey, starLit, starStage, startStarId, suggestedNext, userConstellations,
+  searchConstellations, skyAdd, skyNewStars, skyMarkFound, skyRemove, starIsTop, starKey, starLit, starStage, startStarId, userConstellations,
 } from './constellations';
 
 let failures = 0;
@@ -63,15 +63,10 @@ const l1 = link('l1', ps, rom);
 check('cannot label with one end unlearned', !canLabel(l1, allDaily));
 check('can label when both ends are learned', canLabel(l1, [...allDaily, item('Romans', 8, 38)]));
 
-// Suggested next.
+// The curated placeholder is well formed.
 const c = CONSTELLATIONS[0];
 const ids = new Set(c.stars.map((s) => s.id));
 check('placeholder constellation is well formed', c.stars.length === 6 && c.lines.every((l) => ids.has(l.from) && ids.has(l.to)));
-check('nothing suggested with nothing held', suggestedNext(c, []).length === 0);
-check('a Daily star suggests the next one', suggestedNext(c, allDaily).join() === 'matt11', suggestedNext(c, allDaily));
-check('a still-learning star suggests nothing', suggestedNext(c, [item('Psalms', 23, 1, learning)]).length === 0);
-const withNext = [...allDaily, item('Matthew', 11, 28)];
-check('a held next star is not suggested; the one after it is', suggestedNext(c, withNext).join() === '1pet5', suggestedNext(c, withNext));
 
 // User constellations: connected components.
 const A = ref('John', 3, 16), B = ref('Romans', 5, 8), C = ref('Psalms', 1, 1), D = ref('Psalms', 1, 2), E = ref('Acts', 1, 8);

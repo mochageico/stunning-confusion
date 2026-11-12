@@ -73,7 +73,6 @@ import BlocksGallery from './src/dev/BlocksGallery';
 import RecapGallery from './src/dev/RecapGallery';
 import { dismissToast, pauseToast, resumeToast, useToast } from './src/lib/toastStore';
 import { usePlaybackProgress } from './src/lib/playbackProgress';
-import { useMapFullscreen } from './src/lib/mapFullscreen';
 import { ACCENTS, AccentId, ThemeProvider, loadStoredAccent, useColorSchemeInUse } from './src/components/theme';
 import { loadAppPrefs, setAppPref, useAppPrefs } from './src/lib/appPrefs';
 import { startSpeechSlipSync } from './src/lib/speechSlips';
@@ -370,11 +369,9 @@ function AppShell() {
   const keyboardHeight = useKeyboardHeight();
   // And while recording: the Record tab goes full screen so the text has the
   // room, and a stray tap on a tab can't walk away from a live take.
-  // The constellation map can take the whole screen too.
-  const mapFullscreen = useMapFullscreen();
   // Sessions are full screen (UI simplify R3): no tab bar under a drill.
   const sessionScreenActive = state.currentTab === 'home' && SESSION_SCREENS.has(state.currentScreen);
-  const showBars = !chatScreenActive && !sessionScreenActive && keyboardHeight === 0 && !state.isRecording && !mapFullscreen;
+  const showBars = !chatScreenActive && !sessionScreenActive && keyboardHeight === 0 && !state.isRecording;
 
   // Signed in but the verses haven't arrived yet: keep the loading screen up
   // so Home doesn't open empty and then fill in. Capped, so a failed or very

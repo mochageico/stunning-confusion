@@ -9,7 +9,8 @@ import { EmptyState, ScreenHeader } from '../components/blocks';
 import { FilterChips } from '../components/session';
 import { useThemeColors } from '../components/theme';
 import { AppButton } from '../components/design';
-import { MiniConstellation, NIGHT_SKY } from '../components/map/MiniConstellation';
+import { MiniConstellation } from '../components/map/MiniConstellation';
+import { SKY } from '../components/map/skyPalette';
 import { CONSTELLATIONS } from '../content/constellations';
 import { isLearned, revealedStars, searchConstellations } from '../lib/constellations';
 import { openConstellationPreview } from '../lib/constellationPreview';
@@ -79,7 +80,7 @@ export default function ConstellationsScreen({ state }: { state: AppState }) {
           accessibilityRole="button"
           accessibilityLabel="My sky"
           className="flex-row items-center rounded-card active:opacity-80"
-          style={{ backgroundColor: NIGHT_SKY.bg, padding: space(14), gap: space(12) }}
+          style={{ backgroundColor: SKY.bg, padding: space(14), gap: space(12) }}
         >
           <View className="flex-row items-center" style={{ gap: space(4) }}>
             {minis.length === 0 ? (
@@ -91,16 +92,16 @@ export default function ConstellationsScreen({ state }: { state: AppState }) {
             )}
           </View>
           <View className="flex-1" style={{ gap: space(2) }}>
-            <AppText variant="title" className="font-sans font-bold" style={{ color: NIGHT_SKY.star }}>
+            <AppText variant="title" className="font-sans font-bold" style={{ color: SKY.ink }}>
               My sky
             </AppText>
-            <AppText variant="caption" className="font-sans" style={{ color: NIGHT_SKY.line }}>
+            <AppText variant="caption" className="font-sans" style={{ color: SKY.ink3 }}>
               {mine.length === 0
                 ? 'Nothing here yet. Add a constellation below.'
                 : `${mine.length} ${mine.length === 1 ? 'constellation' : 'constellations'} · ${starsLit} ${starsLit === 1 ? 'star' : 'stars'} lit`}
             </AppText>
           </View>
-          <ChevronRight size={Math.round(22 * scale)} color={NIGHT_SKY.line} />
+          <ChevronRight size={Math.round(22 * scale)} color={SKY.ink3} />
         </Pressable>
 
         <View

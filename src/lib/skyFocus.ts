@@ -7,7 +7,7 @@
 //   setSkyFocus('the-shepherd'); navigateTo('mySky');
 //
 // My sky reads it once when it opens (takeSkyFocus) and clears it. Kept outside
-// the app state on purpose (like mapFullscreen): no screen redraws for it.
+// the app state on purpose (like toastStore): no screen redraws for it.
 
 let pending: string | null = null;
 

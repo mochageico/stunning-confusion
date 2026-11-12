@@ -4,7 +4,7 @@ import Svg, { Circle, Line } from 'react-native-svg';
 
 import { AppText, useFontScale, useScaledSpace } from '../design';
 import { useThemeColors } from '../theme';
-import { NIGHT_SKY } from './MiniConstellation';
+import { SKY } from './skyPalette';
 
 // Today's one constellation button (CONSTELLATION_SKY_PLAN.md, stage 2): a tiny
 // four-star zigzag on a dark tile, "Explore scripture constellations", and
@@ -31,13 +31,13 @@ export function ExploreConstellationsButton({ onPress }: { onPress: () => void }
       className="flex-row items-center bg-surface border border-line rounded-card active:opacity-70"
       style={{ padding: space(12), gap: space(12) }}
     >
-      <View className="rounded-btn items-center justify-center" style={{ backgroundColor: NIGHT_SKY.bg, width: tile, height: tile }}>
+      <View className="rounded-btn items-center justify-center" style={{ backgroundColor: SKY.bg, width: tile, height: tile }}>
         <Svg width={tile} height={tile} viewBox="0 0 100 100">
           {ZIGZAG.slice(1).map((p, i) => (
-            <Line key={i} x1={ZIGZAG[i][0]} y1={ZIGZAG[i][1]} x2={p[0]} y2={p[1]} stroke={NIGHT_SKY.line} strokeWidth={4} strokeLinecap="round" />
+            <Line key={i} x1={ZIGZAG[i][0]} y1={ZIGZAG[i][1]} x2={p[0]} y2={p[1]} stroke={SKY.ink3} strokeWidth={4} strokeLinecap="round" />
           ))}
           {ZIGZAG.map((p, i) => (
-            <Circle key={i} cx={p[0]} cy={p[1]} r={8} fill={NIGHT_SKY.star} />
+            <Circle key={i} cx={p[0]} cy={p[1]} r={8} fill={SKY.ink} />
           ))}
         </Svg>
       </View>

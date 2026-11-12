@@ -37,7 +37,7 @@ export interface AppPrefs {
   /** The practice screen's text, on top of the phone's own text size. */
   practiceTextSize: PracticeTextSize;
   colorScheme: SchemeChoice;
-  /** Curated constellations hidden from the Map (ids). On this device, like the rest. */
+  /** Old: constellations hidden from the old map (ids). Only read once, to make a first My sky (state/useSky.ts); nothing sets it any more. */
   hiddenConstellations: string[];
 }
 

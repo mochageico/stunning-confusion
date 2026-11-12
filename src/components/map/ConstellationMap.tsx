@@ -575,7 +575,8 @@ export default function ConstellationMap({
       };
   // "Learn John 10:11 to uncover what's joined to it."
   const nextStar = focusInfo?.next[0] ? focusInfo.constellation.stars.find((s) => s.id === focusInfo.next[0]) : undefined;
-  const hint = focusInfo && nextStar ? `Learn ${starLabel(nextStar.ref)} to uncover what's joined to it.` : null;
+  // (Nothing is left to uncover once the constellation is complete.)
+  const hint = focusInfo && !focusInfo.complete && nextStar ? `Learn ${starLabel(nextStar.ref)} to uncover what's joined to it.` : null;
 
   // ---- Cards ----
   const titleOfConstellation = (constellationId?: string) => CONSTELLATIONS.find((c) => c.id === constellationId)?.title;
