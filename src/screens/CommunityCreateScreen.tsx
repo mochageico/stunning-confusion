@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { AppState } from '../state/useAppState';
@@ -14,14 +15,14 @@ export default function CommunityCreateScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
   const {
     setCommunitySubView,
-    createGroupName,
-    setCreateGroupName,
-    createGroupDesc,
-    setCreateGroupDesc,
     createGroupPrivacy,
     setCreateGroupPrivacy,
     createCircle,
   } = state;
+  // The two text boxes keep their text here, not in app state, so a keystroke
+  // redraws this screen only.
+  const [createGroupName, setCreateGroupName] = useState('');
+  const [createGroupDesc, setCreateGroupDesc] = useState('');
 
   const handleCreateCircle = async () => {
     await createCircle(createGroupName, createGroupDesc, createGroupPrivacy === 'public');

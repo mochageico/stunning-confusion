@@ -10,6 +10,7 @@ import { Dropdown } from '../components/Dropdown';
 import { BIBLE_TRANSLATIONS, getBookByName, translationLabel } from '../data';
 import { recordingLabel } from '../lib/recordingLabel';
 import { formatDate, formatDuration } from '../lib/format';
+import { useDebouncedText } from '../lib/useDebouncedText';
 import { AppButton, AppIconButton, AppTextInput, AppText, useFontScale, useScaledSpace } from '../components/design';
 import { Avatar, Badge, EmptyState, ScreenHeader, type BadgeTone } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
@@ -35,8 +36,8 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     user,
     handleBack,
     backHistory,
-    audioSearchQuery,
-    setAudioSearchQuery,
+    audioSearchQuery: savedAudioSearchQuery,
+    setAudioSearchQuery: saveAudioSearchQuery,
     feedBookFilter,
     setFeedBookFilter,
     feedChapterFilter,
@@ -58,6 +59,9 @@ export default function AudioFeedScreen({ state }: { state: AppState }) {
     selectTab,
     triggerToast,
   } = state;
+  // The search text lives here while typing and reaches app state after a
+  // pause, so a keystroke redraws this screen only (see useDebouncedText).
+  const [audioSearchQuery, setAudioSearchQuery] = useDebouncedText(savedAudioSearchQuery, saveAudioSearchQuery);
 
   // Whose recordings to show: '' is everyone you know, else one sharer's key
   // (their uid; the guest-preview mock feed has names only).

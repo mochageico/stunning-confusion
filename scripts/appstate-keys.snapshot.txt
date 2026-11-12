@@ -62,8 +62,6 @@ cognitiveLoadSensitivity: "low" | "medium" | "high"
 communitySubView: "home" | "find" | "create" | "preview"
 countRangeProgress: (queue: QueueItem[], range: VerseRange) => number
 createCircle: (name: string, description: string, isPublic: boolean) => Promise<void>
-createGroupDesc: string
-createGroupName: string
 createGroupPlan: (circleId: string, input: { name: string; description: string; }) => Promise<void>
 createGroupPrivacy: "private" | "public"
 creditGuided: (items: QueueItem[], kind: "touch" | "review", drill: "speak" | "type", accuracy?: ReadonlyMap<string, number> | undefined) => Promise<QueueItem[]>
@@ -124,7 +122,6 @@ importTapTimestamps: { [x: number]: number; }
 importedAudioName: string | null
 importedAudioUri: string | null
 incomingFriendRequests: FriendRequest[]
-inviteCodeInput: string
 isChatRecordingSaved: (sharedRecordingId: string) => boolean
 isCircleChatUnread: (circleId: string) => boolean
 isDMThreadUnread: (t: DMThread) => boolean
@@ -137,7 +134,7 @@ isReviewDue: (dueDateISO: string | null | undefined, referenceDate?: Date) => bo
 isTodayLearningDay: () => boolean
 isVerseSelected: (vNum: number) => boolean
 joinCircle: (circleId: string, circleName?: string | undefined, inviteCode?: string | undefined) => Promise<void>
-joinCircleByCode: (codeInput: string) => Promise<void>
+joinCircleByCode: (codeInput: string) => Promise<boolean>
 joinGroupPlan: (plan: GroupPlan, priority?: "individual" | "group" | "additive") => Promise<void>
 joinedGroupPlanDetails: GroupPlan[]
 joinedGroupPlanMemberships: GroupPlanMembership[]
@@ -185,8 +182,6 @@ myChallengeBadges: Challenge[]
 myCircles: Circle[]
 myProgressSharing: { [x: string]: boolean; }
 navigateTo: (screen: ScreenName, book?: string | null, chapter?: number | null, options?: { keepBack?: boolean | undefined; }) => void
-newPlanDesc: string
-newPlanName: string
 newVersesPace: number
 nextTakeawayAsk: PendingAsk | null
 noSignal: boolean
@@ -304,8 +299,6 @@ setAudioSearchQuery: (value: SetStateAction<string>) => void
 setChapterPhotoVerseRange: (photo: ChapterPhoto, verseStart: number | null, verseEnd: number | null) => Promise<void>
 setChapterViewMode: (value: SetStateAction<"list" | "grid" | "memoryGrid">) => void
 setCommunitySubView: (value: SetStateAction<"home" | "find" | "create" | "preview">) => void
-setCreateGroupDesc: (value: SetStateAction<string>) => void
-setCreateGroupName: (value: SetStateAction<string>) => void
 setCreateGroupPrivacy: (value: SetStateAction<"private" | "public">) => void
 setCurrentScreen: (value: SetStateAction<ScreenName>) => void
 setFeedBookFilter: (value: SetStateAction<string>) => void
@@ -316,7 +309,6 @@ setGroupPlanPriority: (planId: string, priority: "individual" | "group" | "addit
 setGuidedAnchors: (verseId: string, anchors: number[]) => void
 setGuidedPassageKey: (value: SetStateAction<string | null>) => void
 setGuidedSetAside: (verseId: string, on: boolean) => void
-setInviteCodeInput: (value: SetStateAction<string>) => void
 setIsEditingCircleSettings: (value: SetStateAction<boolean>) => void
 setIsEditingSync: (value: SetStateAction<boolean>) => void
 setLastShareChoice: (ids: string[]) => void
@@ -324,8 +316,6 @@ setListenModePlaying: (value: SetStateAction<boolean>) => void
 setMasteryTouches: (value: SetStateAction<number>) => void
 setMemoryGridColumns: (columns: 2 | 4) => void
 setMemoryQueue: (value: SetStateAction<QueueItem[]>) => void
-setNewPlanDesc: (value: SetStateAction<string>) => void
-setNewPlanName: (value: SetStateAction<string>) => void
 setPausedAt: (value: SetStateAction<string | null>) => void
 setPausedUntil: (value: SetStateAction<string | null>) => void
 setPickedRecordingVisibility: (value: SetStateAction<RecordingVisibility>) => void

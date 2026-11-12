@@ -83,8 +83,6 @@ export function useCircles({
     setCommunitySubView('find');
   };
 
-  const [inviteCodeInput, setInviteCodeInput] = useState<string>('');
-
   // ==========================================
   // SCRIPTURE CIRCLES (real Firestore community groups)
   // ==========================================
@@ -396,11 +394,13 @@ export function useCircles({
   // (see loadActiveCircleData); until then, a public one is still found by
   // the old query on the circle doc itself, which only works for public
   // circles now that private circle docs are members-only.
-  const joinCircleByCode = async (codeInput: string) => {
+  // Resolves true once the join went through, so the screen that holds the
+  // code box can empty it (the box's text is not app state).
+  const joinCircleByCode = async (codeInput: string): Promise<boolean> => {
     const code = codeInput.trim().toUpperCase();
     if (!code) {
       triggerToast('Enter an invite code first.');
-      return;
+      return false;
     }
     try {
       let circleId: string | null = null;
@@ -419,13 +419,14 @@ export function useCircles({
       }
       if (!circleId) {
         triggerToast(`No circle found for code "${code}".`);
-        return;
+        return false;
       }
       await joinCircle(circleId, circleName, code);
-      setInviteCodeInput('');
+      return true;
     } catch (err) {
       console.error('Failed to join by code:', err);
       triggerToast("Couldn't join with that code. Try again.");
+      return false;
     }
   };
 
@@ -584,8 +585,6 @@ export function useCircles({
     previewCircle,
     openCirclePreview,
     closeCirclePreview,
-    inviteCodeInput,
-    setInviteCodeInput,
     loadMyCircles,
     loadCircleFriends,
     loadActivityFeed,

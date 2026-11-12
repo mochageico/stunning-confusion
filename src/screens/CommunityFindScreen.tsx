@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Search, Users, X } from 'lucide-react-native';
 
@@ -7,6 +7,7 @@ import { FadeInView } from '../components/ui';
 import { AppButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
 import { EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+import { useDebouncedText } from '../lib/useDebouncedText';
 
 export default function CommunityFindScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
@@ -14,10 +15,8 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
   const {
     setCommunitySubView,
-    inviteCodeInput,
-    setInviteCodeInput,
-    findSearchQuery,
-    setFindSearchQuery,
+    findSearchQuery: savedFindSearchQuery,
+    setFindSearchQuery: saveFindSearchQuery,
     myCircles,
     publicCircles,
     loadingPublicCircles,
@@ -27,6 +26,11 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
     openCircle,
     openCirclePreview,
   } = state;
+  // Both text boxes keep their text here while typing, so a keystroke redraws
+  // this screen only. The search reaches app state after a pause (see
+  // useDebouncedText); the invite code is handed over when Join is tapped.
+  const [findSearchQuery, setFindSearchQuery] = useDebouncedText(savedFindSearchQuery, saveFindSearchQuery);
+  const [inviteCodeInput, setInviteCodeInput] = useState('');
 
   useEffect(() => {
     loadPublicCircles();
@@ -70,7 +74,14 @@ export default function CommunityFindScreen({ state }: { state: AppState }) {
                   style={{ minWidth: 0, paddingVertical: space(10), letterSpacing: 1 }}
                 />
               </View>
-              <AppButton variant="primary" label="Join" onPress={() => joinCircleByCode(inviteCodeInput)} />
+              <AppButton
+                variant="primary"
+                label="Join"
+                onPress={async () => {
+                  // Joined: empty the box.
+                  if (await joinCircleByCode(inviteCodeInput)) setInviteCodeInput('');
+                }}
+              />
             </View>
             <AppText variant="caption" className="font-sans text-ink-3">
               Private circles don't appear in the search below.

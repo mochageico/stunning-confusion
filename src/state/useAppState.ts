@@ -603,8 +603,6 @@ export function useAppState() {
     previewCircle,
     openCirclePreview,
     closeCirclePreview,
-    inviteCodeInput,
-    setInviteCodeInput,
     loadMyCircles,
     loadActivityFeed,
     loadPublicCircles,
@@ -728,13 +726,11 @@ export function useAppState() {
   // (GroupPlanDetailScreen), using local ephemeral form state there instead
   // of more global fields here.
   const [showCreatePlanForm, setShowCreatePlanForm] = useState<boolean>(false);
-  const [newPlanName, setNewPlanName] = useState<string>('');
-  const [newPlanDesc, setNewPlanDesc] = useState<string>('');
 
-  // Community Search, Filters & Creation inputs
+  // Community Search, Filters & Creation inputs. The text boxes on these
+  // screens (new plan, new circle, invite code) keep their own text; only the
+  // search text is kept here, written after a pause in typing.
   const [findSearchQuery, setFindSearchQuery] = useState<string>('');
-  const [createGroupName, setCreateGroupName] = useState<string>('');
-  const [createGroupDesc, setCreateGroupDesc] = useState<string>('');
   const [createGroupPrivacy, setCreateGroupPrivacy] = useState<'public' | 'private'>('public');
 
   // Dashboard Metrics popover / progress modal helper
@@ -3645,12 +3641,7 @@ export function useAppState() {
     previewCircle, openCirclePreview, closeCirclePreview,
     isEditingCircleSettings, setIsEditingCircleSettings,
     showCreatePlanForm, setShowCreatePlanForm,
-    newPlanName, setNewPlanName,
-    newPlanDesc, setNewPlanDesc,
     findSearchQuery, setFindSearchQuery,
-    inviteCodeInput, setInviteCodeInput,
-    createGroupName, setCreateGroupName,
-    createGroupDesc, setCreateGroupDesc,
     createGroupPrivacy, setCreateGroupPrivacy,
     playingRecordingId, setPlayingRecordingId,
     setPlayingRecProgress,

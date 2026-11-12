@@ -6,6 +6,7 @@ import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from '../components/design';
 import { Avatar, Badge, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
+import { useDebouncedText } from '../lib/useDebouncedText';
 
 export default function FindFriendsScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
@@ -13,8 +14,8 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
   const space = useScaledSpace();
   const {
     handleBack,
-    userSearchQuery,
-    setUserSearchQuery,
+    userSearchQuery: savedUserSearchQuery,
+    setUserSearchQuery: saveUserSearchQuery,
     userSearchResults,
     searchingUsers,
     searchUsers,
@@ -27,6 +28,10 @@ export default function FindFriendsScreen({ state }: { state: AppState }) {
     cancelFriendRequest,
     viewMemberProfileById,
   } = state;
+  // The search text lives here while typing and reaches app state after a
+  // 300 ms pause, so a keystroke redraws this screen only. That pause is also
+  // the search-as-you-type delay: useFriends searches as soon as it arrives.
+  const [userSearchQuery, setUserSearchQuery] = useDebouncedText(savedUserSearchQuery, saveUserSearchQuery, 300);
 
   // The avatar gives way at large text: the row has a name, a note and up to
   // two buttons to fit, and on an SE the name was wrapping a word per line.

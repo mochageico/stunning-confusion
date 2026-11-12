@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   collection,
   deleteDoc,
@@ -36,7 +36,6 @@ export function useFriends({ triggerToast }: FriendsDeps) {
     Array<{ uid: string; displayName: string; avatarUrl: string }>
   >([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
-  const userSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ==========================================
   // REAL FRIENDS SYSTEM — search, requests, accept/decline, unfriend.
@@ -160,22 +159,18 @@ export function useFriends({ triggerToast }: FriendsDeps) {
     }
   };
 
-  // Live "as you type" friend search, debounced so it does not fire a
-  // Firestore query on every keystroke. searchUsers itself already does a
-  // prefix match on displayNameLower, so this just makes results appear
-  // while typing instead of requiring Enter or the Search button.
+  // Live "as you type" friend search. The pause that keeps it from firing a
+  // Firestore query on every keystroke is in the search box itself
+  // (FindFriendsScreen, useDebouncedText): the text only arrives here once
+  // typing stops for 300 ms, so this searches at once. searchUsers itself
+  // already does a prefix match on displayNameLower, so this just makes
+  // results appear while typing instead of requiring Enter or the Search button.
   useEffect(() => {
-    if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current);
     if (!userSearchQuery.trim()) {
       setUserSearchResults([]);
       return;
     }
-    userSearchDebounceRef.current = setTimeout(() => {
-      searchUsers(userSearchQuery);
-    }, 300);
-    return () => {
-      if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current);
-    };
+    searchUsers(userSearchQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userSearchQuery]);
 

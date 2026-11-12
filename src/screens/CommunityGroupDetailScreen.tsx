@@ -41,6 +41,58 @@ function PanelHeader({ title, actionLabel, onAction }: { title: string; actionLa
   );
 }
 
+// The New plan form. It keeps its own text (not app state, not the screen's),
+// so a keystroke redraws only this card. It starts empty each time it opens.
+function NewPlanForm({ onCancel, onCreate }: { onCancel: () => void; onCreate: (name: string, description: string) => void }) {
+  const space = useScaledSpace();
+  const [name, setName] = useState('');
+  const [desc, setDesc] = useState('');
+  const fieldLabel = (text: string) => (
+    <AppText variant="caption" className="font-sans font-medium text-ink-2">
+      {text}
+    </AppText>
+  );
+  const inputBox = 'bg-surface border border-line rounded-btn text-ink font-sans';
+  const inputStyle = { paddingHorizontal: space(12), paddingVertical: space(10) };
+  return (
+    <FadeInView>
+      <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
+        <View style={{ gap: space(4) }}>
+          {fieldLabel('Plan name')}
+          <AppTextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="e.g. Romans 8 together"
+            accessibilityLabel="Plan name"
+            variant="body"
+            className={inputBox}
+            style={inputStyle}
+          />
+        </View>
+        <View style={{ gap: space(4) }}>
+          {fieldLabel('Description (optional)')}
+          <AppTextInput
+            value={desc}
+            onChangeText={setDesc}
+            placeholder="What is this plan for?"
+            accessibilityLabel="Plan description"
+            multiline
+            numberOfLines={2}
+            textAlignVertical="top"
+            variant="body"
+            className={inputBox}
+            style={{ ...inputStyle, minHeight: space(72) }}
+          />
+        </View>
+        <View className="flex-row flex-wrap justify-end" style={{ gap: space(8) }}>
+          <AppButton variant="quiet" label="Cancel" onPress={onCancel} />
+          <AppButton variant="primary" label="Create plan" onPress={() => onCreate(name, desc)} />
+        </View>
+      </View>
+    </FadeInView>
+  );
+}
+
 export default function CommunityGroupDetailScreen({ state }: { state: AppState }) {
   const palette = useThemeColors();
   const space = useScaledSpace();
@@ -63,10 +115,6 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setIsEditingCircleSettings,
     showCreatePlanForm,
     setShowCreatePlanForm,
-    newPlanName,
-    setNewPlanName,
-    newPlanDesc,
-    setNewPlanDesc,
     joinedGroupPlanMemberships,
     setViewingGroupPlan,
     navigateTo,
@@ -176,12 +224,10 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
     setShowCreatePlanForm(false);
   };
 
-  const handleCreatePlan = async () => {
+  const handleCreatePlan = async (name: string, description: string) => {
     if (!activeCircle) return;
-    await createGroupPlan(activeCircle.id, { name: newPlanName, description: newPlanDesc });
+    await createGroupPlan(activeCircle.id, { name, description });
     setShowCreatePlanForm(false);
-    setNewPlanName('');
-    setNewPlanDesc('');
   };
 
   const openGroupPlan = (plan: GroupPlan) => {
@@ -398,51 +444,13 @@ export default function CommunityGroupDetailScreen({ state }: { state: AppState 
         <PanelHeader
           title={`${activeCircleGroupPlans.length} ${activeCircleGroupPlans.length === 1 ? 'plan' : 'plans'}`}
           actionLabel={isLeaderOrAdmin ? (showCreatePlanForm ? 'Cancel' : 'New plan') : undefined}
-          onAction={() => {
-            setShowCreatePlanForm(!showCreatePlanForm);
-            setNewPlanName('');
-            setNewPlanDesc('');
-          }}
+          onAction={() => setShowCreatePlanForm(!showCreatePlanForm)}
         />
 
           {/* Title and description only. The verses and weekly pace are set
               up afterward, on the plan's own page. */}
           {showCreatePlanForm && isLeaderOrAdmin && (
-            <FadeInView>
-              <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(12) }}>
-                <View style={{ gap: space(4) }}>
-                  {fieldLabel('Plan name')}
-                  <AppTextInput
-                    value={newPlanName}
-                    onChangeText={setNewPlanName}
-                    placeholder="e.g. Romans 8 together"
-                    accessibilityLabel="Plan name"
-                    variant="body"
-                    className={inputBox}
-                    style={inputStyle}
-                  />
-                </View>
-                <View style={{ gap: space(4) }}>
-                  {fieldLabel('Description (optional)')}
-                  <AppTextInput
-                    value={newPlanDesc}
-                    onChangeText={setNewPlanDesc}
-                    placeholder="What is this plan for?"
-                    accessibilityLabel="Plan description"
-                    multiline
-                    numberOfLines={2}
-                    textAlignVertical="top"
-                    variant="body"
-                    className={inputBox}
-                    style={{ ...inputStyle, minHeight: space(72) }}
-                  />
-                </View>
-                <View className="flex-row flex-wrap justify-end" style={{ gap: space(8) }}>
-                  <AppButton variant="quiet" label="Cancel" onPress={() => setShowCreatePlanForm(false)} />
-                  <AppButton variant="primary" label="Create plan" onPress={handleCreatePlan} />
-                </View>
-              </View>
-            </FadeInView>
+            <NewPlanForm onCancel={() => setShowCreatePlanForm(false)} onCreate={handleCreatePlan} />
           )}
 
           {activeCircleGroupPlans.length === 0 ? (
