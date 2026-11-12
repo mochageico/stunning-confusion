@@ -9,7 +9,7 @@ This builds ON the existing map (CONSTELLATION_PLAN.md, all stages built 2026-10
 `src/components/map/*`, `src/content/constellations.ts`, `src/content/echoes.json`.
 Keep what works there (layout engine, camera, walk, echoes, connect + labels).
 
-**Progress:** (master, overnight run started 2026-11-11, branch `feat/constellation-sky`) Defaults taken for open questions: no placeholders on browse; Verses-tab Map option dropped; Today button opens browse. Stage 1: starting. Stages 2-6: not started.
+**Progress:** (master, overnight run started 2026-11-11, branch `feat/constellation-sky`) Defaults taken for open questions: no placeholders on browse; Verses-tab Map option dropped; Today button opens browse. Stage 1: running in session sky-stage-1 (local_d1a7df8a-7bfa-4c03-988e-320cebdcdb3d). Stages 2-6: not started.
 
 ---
 
