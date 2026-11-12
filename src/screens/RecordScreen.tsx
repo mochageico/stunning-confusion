@@ -3,7 +3,6 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookOpen, Check, FileAudio, Pause, Play, RotateCcw, Square } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { passageLabel } from '../lib/chatAttachments';
 import { FadeInView } from '../components/ui';
 import { RecordPassageSheet, type RecordPassage } from '../components/RecordPassageSheet';
@@ -16,6 +15,7 @@ import { AppButton, AppIconButton, AppText, useFontScale, useScaledSpace } from 
 import { Badge, Dialog, EmptyState, GroupedList, ListRow, ScreenHeader } from '../components/blocks';
 import { useThemeColors } from '../components/theme';
 import { AudioHub } from '../components/AudioHub';
+import { useAppFields } from '../state/appStore';
 
 
 /**
@@ -24,7 +24,19 @@ import { AudioHub } from '../components/AudioHub';
  * is running the whole tab goes over to the text: the header, the mode
  * switch, the passage row and the tab bar step aside.
  */
-export default function RecordScreen({ state }: { state: AppState }) {
+export default function RecordScreen() {
+  const state = useAppFields(
+    'activeRecordingRequest', 'cancelRecordingRequest', 'clearImportedAudio', 'formatTime',
+    'handleFinishImportTagging', 'handleMarkImportTap', 'handleMarkVerseTap', 'handlePauseRecording',
+    'handleResetRecording', 'handleResumeRecording', 'handleStartRecording', 'handleStopRecording',
+    'importPlayerStatus', 'importTapTimestamps', 'importedAudioName', 'importedAudioUri',
+    'isRecording', 'isRecordingFullChapterRange', 'isRecordingPaused', 'pickImportAudio',
+    'recordingBook', 'recordingChapter', 'recordingChapterVerses', 'recordingRangeEnd',
+    'recordingRangeStart', 'recordingSelectedVerses', 'recordingTranslation', 'resetImportTaps',
+    'seekImportAudioBy', 'setRecordingBook', 'setRecordingChapter', 'setRecordingRangeEnd',
+    'setRecordingRangeStart', 'setRecordingTranslation', 'toggleImportPlayback',
+    'verseTapTimestamps',
+  );
   const palette = useThemeColors();
   const insets = useSafeAreaInsets();
   const {
@@ -251,7 +263,6 @@ export default function RecordScreen({ state }: { state: AppState }) {
       <FadeInView style={{ flex: 1 }}>
         <ScrollView className="flex-1 bg-canvas" contentContainerClassName="p-5 pb-12" contentContainerStyle={{ gap: space(20) }}>
           <AudioHub
-            state={state}
             passageTitle={passageTitle}
             passageSubtitle={passageSubtitle}
             passageChosen={passageChosen}

@@ -1,13 +1,13 @@
 import { Pressable, View } from 'react-native';
 import { FileAudio, Mic, Pause, Play } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { Recording, normalizeRecordingVisibility } from '../types';
 import { AppButton, AppIconButton, AppText, useScaledSpace } from './design';
 import { Avatar, GroupedList, ListRow, ScreenHeader, SectionHeader } from './blocks';
 import { OverflowMenu } from './session';
 import { formatDate, formatDuration } from '../lib/format';
 import { recordingLabel } from '../lib/recordingLabel';
+import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // The Audio tab's first page (UI simplify Job 11, the "Record" sketch): a
@@ -19,7 +19,6 @@ import { recordingLabel } from '../lib/recordingLabel';
 const SHOWN = 3;
 
 export function AudioHub({
-  state,
   passageTitle,
   passageSubtitle,
   passageChosen,
@@ -29,7 +28,6 @@ export function AudioHub({
   onStart,
   onImport,
 }: {
-  state: AppState;
   passageTitle: string;
   passageSubtitle: string;
   passageChosen: boolean;
@@ -40,6 +38,10 @@ export function AudioHub({
   onStart: () => void;
   onImport: () => void;
 }) {
+  const state = useAppFields(
+    'feedRecordings', 'navigateTo', 'playingRecordingId', 'setPlayingRecProgress',
+    'setPlayingRecordingId', 'setSelectedRecording', 'user', 'userRecordings',
+  );
   const space = useScaledSpace();
   const { userRecordings, feedRecordings, user, navigateTo, setSelectedRecording, playingRecordingId, setPlayingRecordingId, setPlayingRecProgress } = state;
 

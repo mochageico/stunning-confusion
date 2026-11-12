@@ -121,10 +121,10 @@ function Screens() {
     'activeDMThread', 'activeCircleChatId', 'activeQuiz',
   );
   if (state.currentScreen === 'recordingDetail' && state.selectedRecording) {
-    return W(RecordingDetailScreen);
+    return <RecordingDetailScreen />;
   }
   if (state.currentScreen === 'myRecordings') {
-    return W(MyRecordingsScreen);
+    return <MyRecordingsScreen />;
   }
   if (state.currentScreen === 'memberProfile' && state.selectedUserProfile) {
     return W(MemberProfileScreen);
@@ -175,7 +175,7 @@ function Screens() {
       case 'chapterLanding':
         return <ChapterLandingScreen />;
       case 'audioFeed':
-        return W(AudioFeedScreen);
+        return <AudioFeedScreen />;
       case 'referenceDrill':
         return <ReferenceDrillScreen />;
       case 'threadDrill':
@@ -219,7 +219,7 @@ function Screens() {
   }
 
   if (state.currentTab === 'record') {
-    return W(RecordScreen);
+    return <RecordScreen />;
   }
 
   return W(ProfileScreen);
@@ -227,7 +227,13 @@ function Screens() {
 
 // A Dialog that needs an answer: tapping outside mustn't quietly throw a
 // recording away, so the only ways out are Discard and Save.
-function SaveRecordingDialog({ state }: { state: AppState }) {
+function SaveRecordingDialog() {
+  const state = useAppFields(
+    'defaultRecordingVisibility', 'formatTime', 'importPlayerStatus', 'isRecordingFullChapterRange',
+    'lastRecordingDuration', 'pendingRecordingSource', 'pickedRecordingVisibility', 'recordingBook',
+    'recordingChapter', 'recordingSelectedVerses', 'recordingTranslation', 'saveRecordedAudio',
+    'setPickedRecordingVisibility', 'setSaveRecordingDialog', 'triggerToast',
+  );
   const space = useScaledSpace();
   const {
     recordingBook,
@@ -484,7 +490,7 @@ function AppShell() {
       {/* Interactive Full Practice Screen Overlay */}
       {state.activeModal && <PracticeModalHost />}
 
-      {state.saveRecordingDialog && <WithWholeState>{(s) => <SaveRecordingDialog state={s} />}</WithWholeState>}
+      {state.saveRecordingDialog && <SaveRecordingDialog />}
 
       {/* First-run setup -- same full-screen-overlay convention as the
           practice modal above, sitting above the tab router rather than

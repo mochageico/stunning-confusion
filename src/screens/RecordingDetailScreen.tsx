@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, View } from 'react-native';
 import { Check, Download, Pause, Play, Trash2, UserRound } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { VerseTimestamp, normalizeRecordingVisibility } from '../types';
 import { FadeInView } from '../components/ui';
 import { RECORDING_VISIBILITY_OPTIONS, translationLabel } from '../data';
@@ -14,6 +13,7 @@ import { AppButton, AppIconButton, AppTextInput, AppText, MIN_TOUCH, useScaledSp
 import { Dialog, EmptyState, ScreenHeader, SectionHeader, SegmentedControl } from '../components/blocks';
 import { OverflowMenu } from '../components/session';
 import { formatDuration } from '../lib/format';
+import { useAppFields } from '../state/appStore';
 
 // Derived from the single source of truth (data.ts) instead of its own
 // separately-hardcoded lookup -- previously listed NIV/NKJV/NLT despite zero
@@ -95,7 +95,17 @@ function DraggableMarker({
   );
 }
 
-export default function RecordingDetailScreen({ state }: { state: AppState }) {
+export default function RecordingDetailScreen() {
+  const state = useAppFields(
+    'audioCache', 'backHistory', 'buildVerseTimestamps', 'deleteRecording',
+    'downloadingRecordingIds', 'handleBack', 'isEditingSync', 'playingRecordingId',
+    'removeRecordingDownload', 'saveRecordingOffline', 'saveSharedRecordingToLibrary',
+    'saveVerseSyncOffsets', 'seekRecordingBy', 'seekRecordingToTime', 'selectedRecording',
+    'selectedRecordingChapterTextData', 'setIsEditingSync', 'setPlayingRecProgress',
+    'setPlayingRecordingId', 'setSelectedRecording', 'setStudioAbOverride', 'studioAbOverride',
+    'studioPlaybackEnabled', 'triggerToast', 'updateRecordingSpeaker', 'updateRecordingVisibility',
+    'user', 'userRecordings',
+  );
   const space = useScaledSpace();
   const {
     selectedRecording,

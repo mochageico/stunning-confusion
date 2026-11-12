@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Check, MoreHorizontal, Pause, Play, Plus, Search, UserPlus, Users, Volume2, X } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { Recording } from '../types';
 import { FadeInView } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
@@ -16,6 +15,7 @@ import { Avatar, Badge, EmptyState, ScreenHeader, type BadgeTone } from '../comp
 import { useThemeColors } from '../components/theme';
 import { Dialog } from '../components/blocks';
 import { BlockConfirmDialog, ReportSheet } from '../components/chat/ReportSheet';
+import { useAppFields } from '../state/appStore';
 
 // Opens from Today and from a chapter's page; the back link names which.
 const BACK_LABELS: Partial<Record<string, string>> = {
@@ -28,7 +28,15 @@ const BACK_LABELS: Partial<Record<string, string>> = {
 const MOCK_FRIENDS = new Set(['Sarah Miller', 'Elizabeth K.']);
 const MOCK_CIRCLE = new Set(['Brother Thomas', 'Mark Davis']);
 
-export default function AudioFeedScreen({ state }: { state: AppState }) {
+export default function AudioFeedScreen() {
+  const state = useAppFields(
+    'audioSearchQuery', 'backHistory', 'blockUser', 'circleFriends', 'feedBookFilter',
+    'feedChapterFilter', 'feedRecordings', 'feedTranslationFilter', 'friends', 'handleBack',
+    'loadingFeedRecordings', 'myCircles', 'navigateTo', 'playingRecordingId', 'reportContent',
+    'saveSharedRecordingToLibrary', 'selectTab', 'setAudioSearchQuery', 'setFeedBookFilter',
+    'setFeedChapterFilter', 'setFeedTranslationFilter', 'setPlayingRecProgress',
+    'setPlayingRecordingId', 'setSelectedRecording', 'triggerToast', 'user', 'userRecordings',
+  );
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();

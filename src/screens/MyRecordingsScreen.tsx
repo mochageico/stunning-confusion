@@ -1,7 +1,6 @@
 import { ScrollView, View } from 'react-native';
 import { Mic, Pause, Play, Plus } from 'lucide-react-native';
 
-import { AppState } from '../state/useAppState';
 import { Recording, normalizeRecordingVisibility } from '../types';
 import { FadeInView } from '../components/ui';
 import { AppButton, AppIconButton, AppText, useScaledSpace } from '../components/design';
@@ -9,11 +8,17 @@ import { Avatar, EmptyState, GroupedList, ListRow, ScreenHeader, SectionHeader }
 import { translationLabel } from '../data';
 import { formatDate, formatDuration } from '../lib/format';
 import { recordingLabel, recordingMeta } from '../lib/recordingLabel';
+import { useAppFields } from '../state/appStore';
 
 // Every recording you can play, in three groups: sent to you in a chat and
 // not saved yet, recorded by you, and saved from someone else. It used to be
 // one mixed list, where a saved recording looked just like your own.
-export default function MyRecordingsScreen({ state }: { state: AppState }) {
+export default function MyRecordingsScreen() {
+  const state = useAppFields(
+    'handleBack', 'navigateTo', 'playingRecordingId', 'receivedRecordings',
+    'saveSharedRecordingToLibrary', 'setPlayingRecProgress', 'setPlayingRecordingId',
+    'setSelectedRecording', 'userRecordings',
+  );
   const space = useScaledSpace();
   const {
     userRecordings,
