@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { BookOpen } from 'lucide-react-native';
 
 import { FadeInView, useKeyboardHeight } from '../components/ui';
 import { useGoogleSignIn } from '../state/useGoogleSignIn';
 import { useEmailAuth } from '../state/useEmailAuth';
-import { AppButton, AppTextInput, AppText, useFontScale, useScaledSpace } from '../components/design';
+import { AppButton, AppTextInput, AppText, useScaledSpace } from '../components/design';
 import { SegmentedControl } from '../components/blocks';
-import { useThemeColors } from '../components/theme';
+import LevMark from '../components/LevMark';
+import { ThemeScope } from '../components/theme';
 import { useAppFields } from '../state/appStore';
 
 const AUTH_MODES = [
@@ -21,10 +21,19 @@ const AUTH_MODES = [
 // listener in useAppState flips `user`, this screen unmounts, and (for a
 // brand-new account) the Getting Started setup takes over from App.tsx's
 // normal showOnboarding overlay.
+// Always dark, in the warm Walnut accent, whatever the user's theme setting:
+// a new user hasn't chosen one yet, and the Hebrew lettering is made for a
+// dark page.
 export default function AuthGateScreen() {
+  return (
+    <ThemeScope scheme="dark" accentId="walnut">
+      <AuthGateContent />
+    </ThemeScope>
+  );
+}
+
+function AuthGateContent() {
   const state = useAppFields('triggerToast');
-  const palette = useThemeColors();
-  const scale = useFontScale();
   const space = useScaledSpace();
   const { triggerToast } = state;
   const { signInWithGoogle } = useGoogleSignIn();
@@ -78,7 +87,6 @@ export default function AuthGateScreen() {
 
   const inputBox = 'bg-surface border border-line rounded-btn text-ink font-sans';
   const inputStyle = { paddingHorizontal: space(12), paddingVertical: space(12) };
-  const logoSize = Math.round(64 * scale);
 
   return (
     <FadeInView style={{ flex: 1 }}>
@@ -93,12 +101,14 @@ export default function AuthGateScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View className="items-center" style={{ gap: space(10) }}>
-          <View className="rounded-card bg-accent items-center justify-center" style={{ width: logoSize, height: logoSize }}>
-            <BookOpen size={Math.round(30 * scale)} color={palette.onAccent} />
-          </View>
-          <AppText variant="display" className="font-sans font-bold text-ink text-center">Scripture Memory</AppText>
-          <AppText variant="body" className="font-sans text-ink-2 text-center" style={{ maxWidth: 300 }}>
-            Learn verses, keep them, and practice with friends.
+          <LevMark withMeaning />
+          {/* layout-ok: a short rule, holds no text. */}
+          <View className="bg-line-strong" style={{ width: 36, height: 1, marginVertical: space(4) }} />
+          <AppText variant="body" className="font-serif italic text-ink text-center" style={{ maxWidth: 280 }}>
+            “I have hidden Your word in my heart.”
+          </AppText>
+          <AppText variant="caption" className="font-sans text-ink-3 text-center">
+            Psalm 119:11
           </AppText>
         </View>
 

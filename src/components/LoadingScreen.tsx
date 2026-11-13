@@ -3,6 +3,7 @@ import { Animated, Easing, View } from 'react-native';
 
 import { AppText } from './design';
 import { FadeInView } from './ui';
+import LevMark from './LevMark';
 import { useThemeColors } from './theme';
 import { LoadingVerse, pickLoadingVerse } from '../lib/loadingVerses';
 
@@ -58,9 +59,7 @@ export default function LoadingScreen() {
   return (
     <View style={{ flex: 1 }} className="bg-canvas items-center justify-center px-8">
       <View className="items-center" style={{ gap: 18 }}>
-        <AppText variant="display" className="font-serif text-ink" maxScale={1.2} accessibilityRole="header">
-          Lev
-        </AppText>
+        <LevMark />
         <SlidingBar />
       </View>
       {verse && (

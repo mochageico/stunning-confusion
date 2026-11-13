@@ -319,6 +319,23 @@ export function ThemeProvider({ initialAccent, children }: { initialAccent: Acce
   );
 }
 
+/**
+ * Draws its children in a fixed scheme and accent, whatever the user chose.
+ * The sign-in screen uses it to stay dark: a new user hasn't picked anything
+ * yet, and the Hebrew lettering is made for a dark page. Classes and
+ * useThemeColors() inside the scope both see the forced palette.
+ */
+export function ThemeScope({ scheme, accentId, children }: { scheme: ColorScheme; accentId: AccentId; children: React.ReactNode }) {
+  const colors = useMemo(() => buildThemeColors(accentId, scheme), [accentId, scheme]);
+  const scopeVars = useMemo(() => vars(cssVarValues(colors)), [colors]);
+  const value = useMemo(() => ({ colors, accentId, setAccentId: () => {}, scheme }), [colors, accentId, scheme]);
+  return (
+    <ThemeContext.Provider value={value}>
+      <View style={[{ flex: 1 }, scopeVars]}>{children}</View>
+    </ThemeContext.Provider>
+  );
+}
+
 /** The palette as hex strings, for props that can't take a className. */
 export function useThemeColors(): ThemeColors {
   return useContext(ThemeContext).colors;
