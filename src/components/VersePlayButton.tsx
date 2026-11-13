@@ -5,7 +5,14 @@ import { Pause, Play } from 'lucide-react-native';
 
 import { Recording } from '../types';
 import { AppButton, AppText, useScaledSpace } from './design';
-import { LibraryReader, libraryReaderOf, libraryTimingsKey, resolveVerseAudio } from '../lib/libraryAudio';
+import {
+  LibraryReader,
+  libraryReaderFor,
+  libraryReaderOf,
+  libraryRecording,
+  libraryTimingsKey,
+  resolveVerseAudio,
+} from '../lib/libraryAudio';
 import { resolvePlaybackUrl } from '../lib/studioAudio';
 import { useLibraryTimings } from '../state/useLibraryAudio';
 
@@ -70,7 +77,39 @@ export function LibraryCredit({ reader }: { reader: LibraryReader | null }) {
   );
 }
 
-function Player({ url, startSec, endSec, onStart }: { url: string; startSec: number; endSec: number; onStart?: () => void }) {
+/**
+ * A passage's built-in reading as one Play button, e.g. right after setup adds
+ * someone's first verses. Plays the verses start..end as long as they run on
+ * in one file (always, for BSB). Nothing when the translation has no reading
+ * or its timings haven't loaded.
+ */
+export function PassagePreview(props: { translationId: string; book: string; chapter: number; startVerse: number; endVerse: number; label?: string }) {
+  const { translationId, book, chapter, startVerse, endVerse } = props;
+  const refs = useMemo(() => [{ book, chapter, translationId }], [book, chapter, translationId]);
+  const timingsMap = useLibraryTimings(refs);
+  const space = useScaledSpace();
+  const reader = libraryReaderFor(translationId, book);
+  const key = libraryTimingsKey(translationId, book, chapter);
+  const timings = key ? timingsMap.get(key) : undefined;
+  const first = timings?.verses[String(startVerse)];
+  if (!reader || !timings || !first) return null;
+  let endSec = first.endSec;
+  for (let v = startVerse + 1; v <= endVerse; v++) {
+    const t = timings.verses[String(v)];
+    if (!t || t.file !== first.file) break;
+    endSec = t.endSec;
+  }
+  const url = libraryRecording(reader, book, timings, first.file).audioUrl;
+  if (!url) return null;
+  return (
+    <View style={{ gap: space(4) }}>
+      <Player url={url} startSec={first.startSec} endSec={endSec} label={props.label} />
+      <LibraryCredit reader={reader} />
+    </View>
+  );
+}
+
+function Player({ url, startSec, endSec, onStart, label }: { url: string; startSec: number; endSec: number; onStart?: () => void; label?: string }) {
   const player = useAudioPlayer(url);
   const [playing, setPlaying] = useState(false);
   // Only true once the seek has landed, so a stale playhead past endSec
@@ -107,5 +146,5 @@ function Player({ url, startSec, endSec, onStart }: { url: string; startSec: num
     });
   };
 
-  return <AppButton variant="secondary" Icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'} onPress={playing ? stop : start} />;
+  return <AppButton variant="secondary" Icon={playing ? Pause : Play} label={playing ? 'Pause' : label ?? 'Play'} onPress={playing ? stop : start} />;
 }

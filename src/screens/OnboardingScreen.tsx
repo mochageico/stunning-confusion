@@ -4,7 +4,8 @@ import { Check, ChevronLeft, X } from 'lucide-react-native';
 
 import { FadeInView, NumericInput, StepperRow, useClampedNumberField } from '../components/ui';
 import { BookPicker } from '../components/BookPicker';
-import { AppButton, AppIconButton, AppText, MIN_TOUCH, useScaledSpace } from '../components/design';
+import { PassagePreview } from '../components/VersePlayButton';
+import { AppButton, AppIconButton, AppText, MIN_TOUCH, useFontScale, useScaledSpace } from '../components/design';
 
 import { useThemeColors } from '../components/theme';
 import { useAppFields } from '../state/appStore';
@@ -48,7 +49,7 @@ const DAY_FULL_NAMES: Record<string, string> = {
 export default function OnboardingScreen() {
     const state = useAppFields(
       'addVerseRangeToQueue', 'dismissOnboarding', 'learningDays', 'memoryQueue', 'newVersesPace',
-      'setShowTour', 'triggerToast', 'updateRhythm',
+      'selectedTranslationId', 'setShowTour', 'triggerToast', 'updateRhythm',
     );
     const palette = useThemeColors();
   const {
@@ -60,6 +61,7 @@ export default function OnboardingScreen() {
     newVersesPace,
     memoryQueue,
     triggerToast,
+    selectedTranslationId,
   } = state;
 
   const space = useScaledSpace();
@@ -73,6 +75,9 @@ export default function OnboardingScreen() {
   const [endVerse, setEndVerse] = useState(7);
   const [adding, setAdding] = useState(false);
   const [addedLabel, setAddedLabel] = useState<string | null>(null);
+  // The passage just added (or already there), for "Hear it now": a new user
+  // hears Scripture in the first minute.
+  const [addedPassage, setAddedPassage] = useState<{ book: string; chapter: number; startVerse: number; endVerse: number } | null>(null);
 
   const chapterField = useClampedNumberField(chapter, setChapter, (n) => Math.max(1, n));
   const startField = useClampedNumberField(
@@ -104,6 +109,7 @@ export default function OnboardingScreen() {
       return;
     }
     const ref = `${book} ${chapter}:${startVerse}${endVerse > startVerse ? `-${endVerse}` : ''}`;
+    setAddedPassage({ book, chapter, startVerse, endVerse });
     if (result.added === 0) {
       setAddedLabel(`${ref} is already on your list.`);
       return;
@@ -166,6 +172,7 @@ export default function OnboardingScreen() {
           {addedLabel}
         </AppText>
       )}
+      {addedPassage && <PassagePreview translationId={selectedTranslationId} {...addedPassage} label="Hear it now" />}
     </View>,
 
     // 3 -- the week. Commits live, same as the My Schedule editor.

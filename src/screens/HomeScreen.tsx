@@ -19,6 +19,7 @@ import {
 import { FadeInView } from '../components/ui';
 import { AppButton, AppText, Card, useFontScale, useScaledSpace } from '../components/design';
 import { TakeawayAsk } from '../components/TakeawayAsk';
+import { OneTimeTip } from '../components/OneTimeTip';
 import { Dialog, GroupedList, ListRow, SectionHeader } from '../components/blocks';
 import { ActionCard, IconTile, OverflowMenu, type MenuItem } from '../components/session';
 import { formatDate } from '../lib/format';
@@ -365,6 +366,14 @@ export default function HomeScreen() {
               />
             )}
 
+            {/* Listening ahead is what the app is built around, so the first
+                time something is waiting, say what it's for. */}
+            {today.comingUpGroups.length > 0 && (
+              <OneTimeTip
+                id="comingUp"
+                text="Hear your next verses before you start learning them. Tap Listen to today's scripture: it plays what's coming up, too."
+              />
+            )}
             {/* Listen, then Practice (any verses, any mode; not tied to
                 today's reviews -- FREE_PRACTICE_PLAN.md), then Today's verses. */}
             <GroupedList>

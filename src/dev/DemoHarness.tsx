@@ -1004,7 +1004,8 @@ export function useDemoState(real: AppState): AppState {
       chapter: x.chapter,
       verse: x.verseNumber,
       text: x.text,
-      translationId: x.translationId,
+      // tr=KJV shows Listen's empty state for a translation with no reading.
+      translationId: params.get('tr') || x.translationId,
       status: 'learning',
     })) as any;
   }
