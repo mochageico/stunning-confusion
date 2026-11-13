@@ -13,6 +13,7 @@ import { OptionsPopup } from '../session';
 import BuildUpDrill from '../drills/BuildUpDrill';
 import JigsawDrill from '../drills/JigsawDrill';
 import ScrambleDrill from '../drills/ScrambleDrill';
+import ReferenceQuizDrill from '../drills/ReferenceQuizDrill';
 import { GapPractice, OpeningsPractice, type FormatCredit } from './ReviewFormats';
 import OutlineDrill from '../drills/OutlineDrill';
 import SectionOrderDrill from '../drills/SectionOrderDrill';
@@ -184,7 +185,7 @@ export default function RecallPanel({
   // (each drill renders the pop-up, through `gear`); every other mode uses the
   // one at the end of this component. All of them end with the by-hand log.
   const modeLabel = learnModes.find((m) => m.id === learnTab)?.label ?? 'Practice';
-  const drillOwnsGear = learnTab === 'buildUp' || learnTab === 'outline';
+  const drillOwnsGear = learnTab === 'buildUp' || learnTab === 'outline' || learnTab === 'references';
   // Memoized: the drills are React.memo, and a fresh object on every
   // keystroke would redraw the hidden ones while Recall is being typed.
   const logByHand = useMemo(() => (
@@ -207,7 +208,7 @@ export default function RecallPanel({
       title: `${modeLabel} settings`,
       footer: logByHand,
     });
-    return { buildUp: gearFor('buildUp'), outline: gearFor('outline') };
+    return { buildUp: gearFor('buildUp'), outline: gearFor('outline'), references: gearFor('references') };
   }, [optionsOpen, learnTab, onCloseOptions, modeLabel, logByHand]);
 
   // First words counts as a review: a verse said from its first words that
@@ -612,6 +613,12 @@ export default function RecallPanel({
       {learnTab === 'openings' && (
         <View className="flex-1">
           <OpeningsPractice verses={verses} isDue={isDueForReview} onCredit={creditFormat} />
+        </View>
+      )}
+      {/* References: multiple choice on verse numbers. Practice only. */}
+      {learnTab === 'references' && (
+        <View className="flex-1">
+          <ReferenceQuizDrill verses={verses} gear={gears.references} />
         </View>
       )}
       <View className="flex-1" style={{ display: learnTab === 'outline' ? 'flex' : 'none' }}>

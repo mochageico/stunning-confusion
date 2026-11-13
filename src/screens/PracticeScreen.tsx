@@ -8,6 +8,8 @@ import { PickedTray, VerseSourcePicker, rangeLabel, usePickedVerses, verseKey } 
 import { LEARN_MODE_ICONS, type LearnMode } from '../components/practice/useRecall';
 import { PRACTICE_MODES, modeFits, type PracticeModeInfo } from '../lib/practiceModes';
 import { drillSections, hasEnoughSections } from '../lib/sectionDrills';
+import { referencesFit } from '../lib/referenceQuiz';
+import ReferenceQuizDrill from '../components/drills/ReferenceQuizDrill';
 import { toVerseStates } from '../state/useToday';
 import { useAppFields } from '../state/appStore';
 import type { VerseState } from '../types';
@@ -23,7 +25,8 @@ import type { VerseState } from '../types';
 //      "Practice", run on exactly the picked verses. No Due / Pick switch.
 // Picks from several chapters run one chapter at a time (user's call,
 // 2026-11-13): the pop-up is built around one passage. When one closes, this
-// page offers the next. (References, stage 4, will mix them in one round.)
+// page offers the next. References (stage 4) is the exception: it runs on
+// this page with every picked chapter mixed into one round.
 // A mode shows when it fits at least one chapter; chapters it doesn't fit
 // are skipped and named under it.
 // ============================================================================
@@ -95,15 +98,25 @@ export default function PracticeScreen() {
 
   const verseCount = picked.size;
 
+  const allVerses = useMemo(() => groups.flatMap((g) => g.verses), [groups]);
+
   const modes = useMemo(
     () =>
       PRACTICE_MODES.map((mode) => {
-        const fits = groups.filter((g) => modeFits(mode.id, g.verses, g.sectionDrillsReady));
+        // References mixes every chapter into one round; a chapter with only
+        // one pick has nothing to choose between, so it sits out.
+        const fits =
+          mode.id === 'references'
+            ? referencesFit(allVerses)
+              ? groups.filter((g) => referencesFit(g.verses))
+              : []
+            : groups.filter((g) => modeFits(mode.id, g.verses, g.sectionDrillsReady));
         const skipped = groups.filter((g) => !fits.includes(g));
         return { mode, fits, skipped };
       }).filter((m) => m.fits.length > 0),
-    [groups]
+    [groups, allVerses]
   );
+  const [quizOpen, setQuizOpen] = useState(false);
 
   const open = (r: Run) => {
     setRun(r);
@@ -160,11 +173,33 @@ export default function PracticeScreen() {
       title={mode.label}
       subtitle={skipped.length > 0 ? `Skips ${skipped.map((g) => g.label).join(', ')}` : undefined}
       onPress={() => {
+        if (mode.id === 'references') {
+          setRun(null);
+          setQuizOpen(true);
+          return;
+        }
         const fits = modes.find((m) => m.mode.id === mode.id)!.fits;
         open({ mode, groups: fits, at: 0 });
       }}
     />
   );
+  // References runs right on this page, every picked chapter in one round.
+  if (quizOpen) {
+    return (
+      <FadeInView style={{ flex: 1 }}>
+        <View className="flex-1 bg-canvas p-5" style={{ gap: space(12) }}>
+          <ScreenHeader
+            title="References"
+            onBack={() => setQuizOpen(false)}
+            backLabel="Practice"
+            subtitle={groups.map((g) => g.label).join(' · ')}
+          />
+          <ReferenceQuizDrill verses={allVerses} />
+        </View>
+      </FadeInView>
+    );
+  }
+
   const counting = modes.filter((m) => m.mode.counts);
   const practiceOnly = modes.filter((m) => !m.mode.counts);
 

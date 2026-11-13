@@ -100,7 +100,8 @@
     "check:appstate": "node scripts/check-appstate-keys.cjs",
     "shots": "node scripts/capture-screens.cjs",
     "scan:fonts": "node scripts/scan-fonts.cjs",
-    "scan:copy": "node scripts/scan-copy.cjs"
+    "scan:copy": "node scripts/scan-copy.cjs",
+    "check:refquiz": "node scripts/run-refquiz-check.cjs"
   },
   "private": true
 }

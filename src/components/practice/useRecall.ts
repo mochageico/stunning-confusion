@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Layers, ListChecks, ListOrdered, ListTree, MessageCircle, Mic, Puzzle, SearchCheck, Signpost, TextCursorInput } from 'lucide-react-native';
+import { Hash, Layers, ListChecks, ListOrdered, ListTree, MessageCircle, Mic, Puzzle, SearchCheck, Signpost, TextCursorInput } from 'lucide-react-native';
 import { ChapterSections, VerseState, QueueItem, TextScript } from '../../types';
 import { isReviewDue } from '../../state/useAppState';
 import { feedbackDone, feedbackMiss } from '../../lib/feedback';
@@ -17,6 +17,7 @@ import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePre
 import { formatDate } from '../../lib/format';
 import { drillSections, hasEnoughSections } from '../../lib/sectionDrills';
 import { availableModes } from '../../lib/practiceModes';
+import { referencesFit } from '../../lib/referenceQuiz';
 import { GradeInput, wordAccuracy } from '../../lib/grading';
 import { buildReciteOrder, positionsToWords, verseStartPosition } from '../../lib/reciteOrder';
 
@@ -30,7 +31,7 @@ import { buildReciteOrder, positionsToWords, verseStartPosition } from '../../li
 // .claude/file-split-plan.md).
 // ============================================================================
 
-export type LearnMode = 'recite' | 'buildUp' | 'jigsaw' | 'scramble' | 'spotSwap' | 'outline' | 'openings' | 'putInOrder' | 'whichSection' | 'teachIt';
+export type LearnMode = 'recite' | 'buildUp' | 'jigsaw' | 'scramble' | 'spotSwap' | 'outline' | 'openings' | 'references' | 'putInOrder' | 'whichSection' | 'teachIt';
 
 /** Each mode's icon in the mode menu and on the Practice page. */
 export const LEARN_MODE_ICONS: Record<LearnMode, typeof Mic> = {
@@ -41,6 +42,7 @@ export const LEARN_MODE_ICONS: Record<LearnMode, typeof Mic> = {
   spotSwap: SearchCheck,
   outline: ListTree,
   openings: TextCursorInput,
+  references: Hash,
   putInOrder: ListChecks,
   whichSection: Signpost,
   teachIt: MessageCircle,
@@ -556,6 +558,7 @@ export function useRecall({
     if (verses.length < MIN_JIGSAW_VERSES && learnTab === 'jigsaw') setLearnTab('recite');
     if (learnTab === 'spotSwap' && !gapFits(verses)) setLearnTab('recite');
     if (learnTab === 'openings' && verses.length < 2) setLearnTab('recite');
+    if (learnTab === 'references' && !referencesFit(verses)) setLearnTab('recite');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verses]);
 

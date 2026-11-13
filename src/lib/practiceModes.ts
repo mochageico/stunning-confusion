@@ -15,6 +15,7 @@ import type { LearnMode } from '../components/practice/useRecall';
 import { MIN_JIGSAW_VERSES, type DrillVerse } from './drills';
 import { gapFits } from './spotGap';
 import { formatLabel } from './formatNames';
+import { referencesFit } from './referenceQuiz';
 
 export interface PracticeModeInfo {
   id: LearnMode;
@@ -30,6 +31,8 @@ export const PRACTICE_MODES: readonly PracticeModeInfo[] = [
   { id: 'spotSwap', label: formatLabel('findWrongWord'), counts: true },
   { id: 'outline', label: formatLabel('firstWords'), counts: true },
   { id: 'openings', label: formatLabel('openings'), counts: true },
+  // FREE_PRACTICE_PLAN.md stage 4: multiple choice on verse numbers.
+  { id: 'references', label: 'References', counts: false },
   { id: 'putInOrder', label: formatLabel('putInOrder'), counts: false },
   { id: 'whichSection', label: formatLabel('whichSection'), counts: false },
   { id: 'teachIt', label: formatLabel('teachIt'), counts: false },
@@ -45,6 +48,8 @@ export function modeFits(id: LearnMode, verses: DrillVerse[], sectionDrillsReady
       return gapFits(verses);
     case 'openings':
       return verses.length >= 2;
+    case 'references':
+      return referencesFit(verses);
     case 'putInOrder':
     case 'whichSection':
       return sectionDrillsReady;
