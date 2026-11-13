@@ -15,8 +15,8 @@ import { gapFits } from '../../lib/spotGap';
 import { verseAnnotationKey } from '../MemoryGrid';
 import { DEFAULT_STRIKE_LIMIT, isStrikeLimit, loadPracticePrefs, savePracticePrefs, StrikeLimit } from '../../lib/practicePrefs';
 import { formatDate } from '../../lib/format';
-import { formatLabel } from '../../lib/formatNames';
 import { drillSections, hasEnoughSections } from '../../lib/sectionDrills';
+import { availableModes } from '../../lib/practiceModes';
 import { GradeInput, wordAccuracy } from '../../lib/grading';
 import { buildReciteOrder, positionsToWords, verseStartPosition } from '../../lib/reciteOrder';
 
@@ -31,6 +31,20 @@ import { buildReciteOrder, positionsToWords, verseStartPosition } from '../../li
 // ============================================================================
 
 export type LearnMode = 'recite' | 'buildUp' | 'jigsaw' | 'scramble' | 'spotSwap' | 'outline' | 'openings' | 'putInOrder' | 'whichSection' | 'teachIt';
+
+/** Each mode's icon in the mode menu and on the Practice page. */
+export const LEARN_MODE_ICONS: Record<LearnMode, typeof Mic> = {
+  recite: Mic,
+  buildUp: Layers,
+  jigsaw: ListOrdered,
+  scramble: Puzzle,
+  spotSwap: SearchCheck,
+  outline: ListTree,
+  openings: TextCursorInput,
+  putInOrder: ListChecks,
+  whichSection: Signpost,
+  teachIt: MessageCircle,
+};
 
 export interface UseRecallParams {
   verses: VerseState[];
@@ -564,25 +578,10 @@ export function useRecall({
     if (!sectionDrillsReady && (learnTab === 'putInOrder' || learnTab === 'whichSection')) setLearnTab('recite');
   }, [sectionDrillsReady, learnTab]);
 
-  // Jigsaw is only meaningful with enough tiles to genuinely scramble.
+  // Which modes fit (Order needs 3+ verses, and so on) lives in
+  // lib/practiceModes.ts, shared with the Practice page's mode list.
   const learnModes = useMemo(
-    () =>
-      [
-        { id: 'recite' as const, label: 'Recall', Icon: Mic },
-        { id: 'buildUp' as const, label: 'Build up', Icon: Layers },
-        ...(verses.length >= MIN_JIGSAW_VERSES ? [{ id: 'jigsaw' as const, label: 'Order', Icon: ListOrdered }] : []),
-        { id: 'scramble' as const, label: 'Scramble', Icon: Puzzle },
-        ...(gapFits(verses) ? [{ id: 'spotSwap' as const, label: formatLabel('findWrongWord'), Icon: SearchCheck }] : []),
-        { id: 'outline' as const, label: formatLabel('firstWords'), Icon: ListTree },
-        ...(verses.length >= 2 ? [{ id: 'openings' as const, label: formatLabel('openings'), Icon: TextCursorInput }] : []),
-        ...(sectionDrillsReady
-          ? [
-              { id: 'putInOrder' as const, label: formatLabel('putInOrder'), Icon: ListChecks },
-              { id: 'whichSection' as const, label: formatLabel('whichSection'), Icon: Signpost },
-            ]
-          : []),
-        { id: 'teachIt' as const, label: formatLabel('teachIt'), Icon: MessageCircle },
-      ] as { id: LearnMode; label: string; Icon: typeof Mic }[],
+    () => availableModes(verses, sectionDrillsReady).map((m) => ({ id: m.id, label: m.label, Icon: LEARN_MODE_ICONS[m.id] })),
     [verses, sectionDrillsReady]
   );
 

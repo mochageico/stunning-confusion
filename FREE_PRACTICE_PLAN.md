@@ -62,4 +62,5 @@ Each stage ends with the CLAUDE.md verify line (tsc + checks) and a demo-mode lo
 
 1. **References choices come only from the picked verses** in that chapter, the nearest neighbors first. If only 2 verses are picked, there are only 2 choices: never pad with unpicked verses.
 2. **The Practice picker starts empty** every time.
+4. **Picks from several chapters:** References mixes them all into one round. Every other mode runs one chapter at a time. When a chapter's pop-up closes, the Practice page offers "Next passage" or "Stop". A mode shows when it fits at least one chapter and names the chapters it skips (built in stage 3).
 3. **Hebrew and Greek verses are left out of References for now.** Hide the mode when the pick has fewer than 2 verses left after dropping them.
