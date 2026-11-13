@@ -65,7 +65,7 @@ createCircle: (name: string, description: string, isPublic: boolean) => Promise<
 createGroupPlan: (circleId: string, input: { name: string; description: string; }) => Promise<void>
 createGroupPrivacy: "private" | "public"
 creditGuided: (items: QueueItem[], kind: "touch" | "review", drill: "speak" | "type", accuracy?: ReadonlyMap<string, number> | undefined) => Promise<QueueItem[]>
-currentScreen: "home" | "todayVerses" | "practice" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "activePlan" | "addVerses" | "memoryPlan" | "verseSources" | "memoryCalendar" | "verseRoad" | "versePage" | "referenceDrill" | "threadDrill" | "guided" | "mixedReview" | "mySky" | "constellations" | "constellationPreview" | "takeaways" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
+currentScreen: "home" | "todayVerses" | "practice" | "books" | "chapters" | "chapterLanding" | "audioFeed" | "activePlan" | "addVerses" | "memoryPlan" | "verseSources" | "memoryCalendar" | "verseRoad" | "versePage" | "threadDrill" | "guided" | "mixedReview" | "mySky" | "constellations" | "constellationPreview" | "takeaways" | "memberProfile" | "groupPlanDetail" | "fullHistory" | "dashboard" | "settings" | "recordingDetail" | "myRecordings" | "findFriends" | "messages" | "dmThread" | "circleChat" | "quiz"
 currentTab: "home" | "verses" | "community" | "record" | "profile"
 dayStartHour: number
 declineChallenge: (challenge: Challenge) => Promise<void>

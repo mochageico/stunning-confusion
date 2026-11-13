@@ -14,7 +14,7 @@
 //
 // Screens: home, books, chapters, chapterLanding, audioFeed, memoryPlan,
 // activePlan, map (My Verses' Map view; see MAP_SPECS), addVerses, verseSources, memoryCalendar, verseRoad, versePage,
-// referenceDrill, threadDrill, guided, sections, outline, sectionOrder,
+// threadDrill, guided, sections, outline, sectionOrder,
 // whichSection, teachIt, mixedReview, takeaways, takeawayAsk,
 // memberProfile, groupPlanDetail, fullHistory, dashboard, settings,
 // findFriends, messages, dmThread, circleChat, recordingDetail, community,

@@ -4,6 +4,8 @@ A Practice page that isn't tied to today's reviews: pick any verses the way the 
 
 Mockups: https://claude.ai/artifact/8n9CxrKRMdpngyFbhif3RM (private to the owner)
 
+**Status (2026-11-13): all 6 stages built** on `feat/constellation-sky`, checked in demo mode only. Not yet tried on a phone or shipped by OTA.
+
 ## Locked decisions (2026-11-13)
 
 - **Home:** "Reference practice" and "Pick up the thread" leave the "More for today" menu. The menu is renamed "More". Pick up the thread is not added anywhere new. It is still offered after a passing Recall and lives in Mixed review as "Keep going".

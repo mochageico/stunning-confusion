@@ -153,7 +153,6 @@ export type ScreenName =
   | 'memoryCalendar'
   | 'verseRoad'
   | 'versePage'
-  | 'referenceDrill'
   | 'threadDrill'
   | 'guided'
   | 'mixedReview'
@@ -186,7 +185,6 @@ const HOME_TAB_SCREENS: ScreenName[] = [
   'chapters',
   'chapterLanding',
   'audioFeed',
-  'referenceDrill',
   'threadDrill',
   'guided',
   'mixedReview',

@@ -30,7 +30,6 @@ import VerseSourcesScreen from './src/screens/VerseSourcesScreen';
 import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import VerseRoadScreen from './src/screens/VerseRoadScreen';
 import VersePageScreen from './src/screens/VersePageScreen';
-import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
 import PracticeScreen from './src/screens/PracticeScreen';
 import ThreadDrillScreen from './src/screens/ThreadDrillScreen';
 import GuidedLearningScreen from './src/screens/GuidedLearningScreen';
@@ -174,8 +173,6 @@ function Screens() {
         return <ChapterLandingScreen />;
       case 'audioFeed':
         return <AudioFeedScreen />;
-      case 'referenceDrill':
-        return <ReferenceDrillScreen />;
       case 'threadDrill':
         return <ThreadDrillScreen />;
       case 'guided':
@@ -362,7 +359,7 @@ function NowPlayingBar() {
 }
 
 /** Screens that run as a full-screen session, with the tab bar hidden. */
-const SESSION_SCREENS = new Set<string>(['referenceDrill', 'threadDrill', 'guided', 'mixedReview']);
+const SESSION_SCREENS = new Set<string>(['threadDrill', 'guided', 'mixedReview']);
 const OWN_BOTTOM_INSET = new Set<string>(['guided', 'mixedReview']);
 
 // How long the loading screen waits for the user's verses before opening
