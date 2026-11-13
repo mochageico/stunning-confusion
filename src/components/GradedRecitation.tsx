@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 
 import { threadSpan, ThreadSpanVerse } from '../lib/drills';
-import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, SpeechRecognizer, tokenizeWords, willSaveSpeechAudio, WordOutcome } from '../lib/recitation';
+import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, reconcileSpeechWindow, SpeechRecognizer, tokenizeWords, willSaveSpeechAudio, WordOutcome } from '../lib/recitation';
 import { blankExceptFirstLetter, blankLetters, joinWords, normalizeToken, scriptOfVerse, typedLetters, wordGap } from '../lib/textScript';
 import { Mic } from 'lucide-react-native';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
@@ -29,6 +29,8 @@ export type RecitationMode = 'speak' | 'type';
 
 /** Auto-stops listening once the last words are heard and most of the stretch has been said. */
 const AUTO_FINISH_SHARE = 0.6;
+/** The live fill while listening has no typed or hand-fixed words to protect. */
+const NO_PROTECTED: ReadonlySet<number> = new Set();
 
 /** Whether this device can grade speech for these verses. */
 export const canSpeakVerses = (verses: RecitationVerse[]): boolean => {
@@ -310,9 +312,14 @@ export default function GradedRecitation({
 
   // --- Speech -----------------------------------------------------------------
   const engineRef = useRef<SpeechRecognizer | null>(null);
-  const [transcript, setTranscript] = useState('');
   const transcriptRef = useRef('');
   const finishedRef = useRef(false);
+  // While listening, the blanks fill in as words are heard, the way Recall
+  // does it (reconcileSpeechWindow). Display only: the grade still comes from
+  // the whole transcript once listening ends.
+  const [live, setLive] = useState<{ pointer: number; outcomes: Record<number, WordOutcome> }>({ pointer: 0, outcomes: {} });
+  const livePointerRef = useRef(0);
+  const liveAnchorRef = useRef(0);
 
   // Second pass (SPEECH_SECOND_PASS_PLAN.md): on iPhone the attempt's audio
   // is saved, and once graded Whisper re-hears it; a word Apple missed but
@@ -360,8 +367,13 @@ export default function GradedRecitation({
       onTranscript: (full) => {
         if (!live()) return;
         transcriptRef.current = full;
-        setTranscript(full);
         const heard = tokenizeWords(full);
+        const patch = reconcileSpeechWindow(expectedTokens, heard, liveAnchorRef.current, 0, NO_PROTECTED, livePointerRef.current);
+        liveAnchorRef.current = patch.nextAlignAnchor;
+        if (patch.pointer !== livePointerRef.current || Object.keys(patch.outcomes).length > 0) {
+          livePointerRef.current = patch.pointer;
+          setLive((prev) => ({ pointer: patch.pointer, outcomes: { ...prev.outcomes, ...patch.outcomes } }));
+        }
         if (heard.length >= expectedTokens.length * AUTO_FINISH_SHARE && heard.slice(-2).join(' ') === tail) finishSpeaking();
       },
       onEnd: () => {
@@ -506,8 +518,15 @@ export default function GradedRecitation({
   if (stage === 'speak') {
     return (
       <RoundFrame
+        follow={graded.length > 0 ? live.pointer / graded.length : 0}
         footer={
           <View style={{ gap: space(8) }}>
+            <View className="flex-row items-center justify-center" style={{ gap: space(8) }}>
+              <WaveBars active count={16} />
+              <AppText variant="caption" className="font-sans font-medium text-ink-3">
+                {`Listening · ${Math.min(live.pointer, graded.length)} of ${graded.length}`}
+              </AppText>
+            </View>
             {onSwitchMode && <AppButton variant="quiet" label="Type instead" onPress={() => switchTo('type')} />}
             <ButtonPair
               left={<AppButton variant="secondary" label="Cancel" onPress={cancelSpeaking} />}
@@ -517,26 +536,20 @@ export default function GradedRecitation({
         }
       >
         {header}
-        {shownWords && (
-          <SpanText
-            verses={verses}
-            span={span}
-            highlightWords={highlightWords}
-            show={(i, w) =>
-              shownWords.has(i)
-                ? { text: w, className: 'font-serif text-ink' }
-                : { text: blankLetters(w, script), className: 'font-serif text-ink-3' }
+        {/* The same blanks as typing: each word appears as it is heard. */}
+        <SpanText
+          verses={verses}
+          span={span}
+          highlightWords={highlightWords}
+          show={(i, w) => {
+            if (i < live.pointer) {
+              const o = live.outcomes[i];
+              return { text: w, className: `font-serif ${o === 'missed' ? 'text-danger' : o === 'close' ? 'text-warning' : 'text-ink'}` };
             }
-          />
-        )}
-        <View className="bg-surface-2 border border-line rounded-card" style={{ padding: space(14), gap: space(10), minHeight: space(120) }}>
-          <View className="h-6 items-center justify-center">
-            <WaveBars active count={16} />
-          </View>
-          <AppText variant="label" className="font-serif italic text-ink-2">
-            {transcript || 'Listening'}
-          </AppText>
-        </View>
+            if (shownWords?.has(i)) return { text: w, className: `font-serif ${i === live.pointer ? 'bg-accent-soft text-accent' : 'text-ink-2'}` };
+            return { text: blankLetters(w, script), className: i === live.pointer ? 'font-serif font-bold text-accent' : 'font-serif text-ink-3' };
+          }}
+        />
       </RoundFrame>
     );
   }

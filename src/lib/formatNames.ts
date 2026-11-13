@@ -31,8 +31,9 @@ export type FormatId =
 
 export const FORMATS: Record<FormatId, { label: string; counts: boolean; canCount?: false }> = {
   recite: { label: 'Recite', counts: true },
-  // Today's "Pick up the thread".
-  keepGoing: { label: 'Keep going', counts: true },
+  // One name everywhere for "start from a cue mid-passage and recite on"
+  // (2026-11-13; was "Keep going" here). The id stays so saved choices carry over.
+  keepGoing: { label: 'Pick up the thread', counts: true },
   // Outline mode.
   firstWords: { label: 'First words', counts: true },
   // First letters of each verse's opening, then a self-check of the rest.

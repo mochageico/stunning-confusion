@@ -262,9 +262,15 @@ export default function ThreadDrillScreen() {
     if (c && c.verses.some((v) => v.verse === preset.verse && threadRunEndingAt(c.verses, v).length >= MIN_THREAD_VERSES)) {
       setReviewSet('all');
       setDueTodayOnly(false);
-      // Usually one short stretch here, where "once through" is a single cue.
-      setSessionLength(5);
+      // One short stretch that ends on the verse just recalled, said once.
+      // (Before 2026-11-13 this ran 5 cues from the top of the chapter and
+      // could finish without reaching the verse the button named.) Go again
+      // on the recap gives another cue.
+      setSessionLength(0);
       chooseChapter(id, preset.verse);
+      const runStart = threadRunEndingAt(c.verses, preset)[0]?.verse ?? preset.verse - 1;
+      const span = stretchSize === 0 ? 3 : stretchSize;
+      setFromVerse(Math.min(preset.verse - 1, Math.max(runStart, preset.verse - span + 1)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapters]);

@@ -5,6 +5,7 @@ import type { QueueItem } from '../../types';
 import type { ReviewNote, ReviewTag } from '../../lib/ladderEngine';
 import { seamCue, toDrillVerse } from '../../lib/guided';
 import { passageOf } from '../../lib/passages';
+import { formatLabel } from '../../lib/formatNames';
 import { AppButton, AppText, useScaledSpace } from '../design';
 import { Badge, GroupedList, ListRow, type BadgeTone } from '../blocks';
 import ThreadRound, { type ThreadRoundResult, type ThreadVerse } from '../ThreadRound';
@@ -107,7 +108,7 @@ export function FixTransitions({
     return (
       <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(4) }}>
         <AppText variant="body" className="font-sans font-semibold text-ink">
-          Transitions fixed
+          Weak spots cleared
         </AppText>
         <AppText variant="label" className="font-sans text-ink-2">
           The dots on the verses you said through are gone.
@@ -125,7 +126,7 @@ export function FixTransitions({
     return (
       <View style={{ gap: space(10) }}>
         <AppText variant="label" className="font-sans font-semibold text-ink-2">
-          {`Fix the transitions · ${index + 1} of ${targets.length}`}
+          {`${formatLabel('keepGoing')} · ${index + 1} of ${targets.length}`}
         </AppText>
         <ThreadRound
           key={`${verseId}:${tries}`}
@@ -151,7 +152,7 @@ export function FixTransitions({
     <View className="bg-surface border border-line rounded-card" style={{ padding: space(14), gap: space(10) }}>
       <View style={{ gap: space(4) }}>
         <AppText variant="body" className="font-sans font-semibold text-ink">
-          Fix the transitions
+          {`${formatLabel('keepGoing')}: weak spots`}
         </AppText>
         <AppText variant="label" className="font-sans text-ink-2">
           {`About a minute. You'll say the end of the verse before, then run into ${targets.length === 1 ? 'the verse' : 'each verse'} that slipped. Saying it clears its dot. It doesn't count as a review.`}

@@ -1,5 +1,6 @@
 import { QueueItem } from '../types';
-import { buildSwapVerses, chunkIntoPhrases, pickThreadCue, threadCueKey, ThreadCue } from './drills';
+import { chunkIntoPhrases, pickThreadCue, threadCueKey, ThreadCue } from './drills';
+import { gapFits } from './spotGap';
 import { scriptOfVerse, splitWords } from './textScript';
 
 // ============================================================================
@@ -140,7 +141,7 @@ export const touchAllowed = (item: QueueItem, now: number): boolean => {
 // ============================================================================
 
 /** Recognition drills: you pick, order or reveal, nothing is graded. */
-export type GuidedDrillId = 'peek' | 'scramble' | 'swap' | 'listen' | 'backwards';
+export type GuidedDrillId = 'peek' | 'scramble' | 'gap' | 'listen' | 'backwards';
 export type RungKind = 'read' | 'lookUp' | 'drill' | 'blanks' | 'partly' | 'fully';
 /** What a drill rung is for; picks which drills suit it. */
 export type DrillSlot = 'first' | 'order' | 'ear' | 'back';
@@ -157,7 +158,7 @@ export interface Rung {
 /** Drills each slot prefers, best first. */
 const SLOT_DRILLS: Record<DrillSlot, GuidedDrillId[]> = {
   first: ['peek'],
-  order: ['scramble', 'swap'],
+  order: ['scramble', 'gap'],
   ear: ['listen'],
   back: ['backwards'],
 };
@@ -181,19 +182,18 @@ export interface Ladder {
 
 export type LadderEvent = 'done' | 'pass' | 'miss' | 'reroll' | 'knowIt' | 'easier';
 
-/** Drills that work inside a single verse. Jigsaw is stitch-only. Peek works on any verse. */
-export const eligibleDrills = (verse: GuidedDrillVerse, passageVerses: GuidedDrillVerse[]): GuidedDrillId[] => {
+/**
+ * Drills that work inside a single verse. Jigsaw is stitch-only. Peek works on
+ * any verse. `gap` is Spot the gap, the same drill review and Practice use,
+ * on this one verse (it replaced Spot the swap here, 2026-11-13).
+ */
+export const eligibleDrills = (verse: GuidedDrillVerse, _passageVerses: GuidedDrillVerse[]): GuidedDrillId[] => {
   const script = scriptOfVerse(verse);
   const out: GuidedDrillId[] = ['peek'];
   const phrases = chunkIntoPhrases(verse.text, script).length;
   if (phrases >= 3) out.push('scramble', 'backwards');
   if (phrases >= 2) out.push('listen');
-  const pool = passageVerses.some((v) => v.verse === verse.verse && v.chapter === verse.chapter && v.book === verse.book)
-    ? passageVerses
-    : [...passageVerses, verse];
-  const id = `${verse.book}-${verse.chapter}-${verse.verse}`;
-  const swap = buildSwapVerses(pool).find((sv) => sv.id === id);
-  if (swap && swap.tokens.some((t) => t.isDecoy)) out.push('swap');
+  if (gapFits([verse])) out.push('gap');
   return out;
 };
 
@@ -620,7 +620,7 @@ export const guidedCredit = (item: QueueItem, outcome: GuidedOutcome, ctx: Guide
     if (!ctx.isDue(item.nextReviewDueDate)) return { kind: null, label: 'Not due yet, so practice only' };
     return { kind: 'review', label: outcome.mode === 'self' ? 'Counts as a review, checked by you' : 'Counts as a review' };
   }
-  return { kind: null, label: item.status === 'retained' ? 'Retained, so practice only' : 'Not started, so practice only' };
+  return { kind: null, label: item.status === 'retained' ? 'Complete, so practice only' : 'Not started, so practice only' };
 };
 
 // ============================================================================

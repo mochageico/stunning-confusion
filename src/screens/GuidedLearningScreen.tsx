@@ -12,7 +12,8 @@ import GradedRecitation, { ButtonPair, RecitationMode, RoundFrame } from '../com
 import PeekDrill from '../components/drills/PeekDrill';
 import PickPhraseDrill from '../components/drills/PickPhraseDrill';
 import ScrambleDrill from '../components/drills/ScrambleDrill';
-import SpotSwapDrill from '../components/drills/SpotSwapDrill';
+import SpotGapDrill from '../components/drills/SpotGapDrill';
+import { formatLabel } from '../lib/formatNames';
 import JigsawDrill from '../components/drills/JigsawDrill';
 import VersePlayButton from '../components/VersePlayButton';
 import { chunkIntoPhrases, threadSlips, ThreadSlip, threadSpan, threadStartVerseCounts, ThreadCue } from '../lib/drills';
@@ -62,7 +63,7 @@ import { useAppFields } from '../state/appStore';
 const DRILL_LABEL: Record<GuidedDrillId, string> = {
   peek: 'Peek',
   scramble: 'Put the phrases in order',
-  swap: 'Spot the swap',
+  gap: formatLabel('findWrongWord'),
   listen: 'Listen and fill the gap',
   backwards: 'Work backwards',
 };
@@ -299,7 +300,9 @@ function DrillStage({
       <View className="flex-1">
         {drill === 'peek' && <PeekDrill verse={verse} onComplete={done} />}
         {drill === 'scramble' && <ScrambleDrill verses={single} onComplete={done} />}
-        {drill === 'swap' && <SpotSwapDrill verses={passage} onlyVerse={verse.verse} onComplete={done} />}
+        {drill === 'gap' && (
+          <SpotGapDrill verses={single} hideNumbers={false} shuffle={false} resultNote="A warm-up, so nothing is logged." onScored={done} />
+        )}
         {drill === 'listen' && (
           <View className="flex-1" style={{ gap: space(10) }}>
             {audio}
@@ -942,7 +945,7 @@ function Sitting({
     }
 
     const eyebrow =
-step.kind === 'stitch' ? 'Stitch' : 'The join';
+      step.kind === 'stitch' ? 'Stitch' : formatLabel('keepGoing');
     const activity: GuidedActivity = kind;
     const caption =
       kind === 'stitch'

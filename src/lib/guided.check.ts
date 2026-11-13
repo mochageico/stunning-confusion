@@ -106,7 +106,7 @@ console.log('Ladder');
   );
   check('The two blanks steps hide 20% then 50%', thirty.rungs.filter((r) => r.kind === 'blanks').map((r) => r.share).join() === '0.2,0.5');
   check('The first drill is Peek on every length', [twelveWords, thirty].every((l) => l.rungs[2].drill === 'peek'));
-  check('Nothing but the last two steps is plain typing: no First letters or Build up anywhere', thirty.rungs.every((r) => r.drill === undefined || ['peek', 'scramble', 'swap', 'listen', 'backwards'].includes(r.drill)));
+  check('Nothing but the last two steps is plain typing: no First letters or Build up anywhere', thirty.rungs.every((r) => r.drill === undefined || ['peek', 'scramble', 'gap', 'listen', 'backwards'].includes(r.drill)));
   check('startAt skips the early steps', createLadder(long30, passageVerses, { startAt: 2 }, seeded(2)).pos === 2);
 
   let dupes = 0;
