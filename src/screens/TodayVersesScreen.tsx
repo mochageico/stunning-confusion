@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { BookOpen, Check, ClipboardCheck, Headphones, Layers, Sprout } from 'lucide-react-native';
+import { BookOpen, Check, ClipboardCheck, Headphones, Layers, Sprout, Target } from 'lucide-react-native';
 
 import { FadeInView } from '../components/ui';
 import { Dropdown } from '../components/Dropdown';
@@ -11,13 +11,14 @@ import { lateNoteFor } from '../lib/todayCards';
 import ManualLogFlow from '../components/practice/ManualLogFlow';
 import { logManualAnswers } from '../components/practice/ManualLogSheet';
 import type { SelfCheckAnswer } from '../lib/grading';
-import { REVIEW_STAGES, groupTouches, toVerseStates, useToday, type TodayGroup } from '../state/useToday';
+import { REVIEW_STAGES, groupTouches, reviewedSummary, toVerseStates, useToday, type TodayGroup } from '../state/useToday';
 import { useAppFields } from '../state/appStore';
 
 // ============================================================================
 // Today's verses (UI simplify plan, Job 1): the whole of today as one list,
-// opened from Today's "Today's verses" row. Review (done ones ticked), Learning,
-// and Coming up (listen only). Rows carry no buttons: tapping one opens a
+// opened from Today's "Today's verses" row. Review (what's still due),
+// Learning, Coming up (listen only), then Reviewed today at the very bottom
+// with how each went (FREE_PRACTICE_PLAN.md stage 5). Rows carry no buttons: tapping one opens a
 // small centered pop-up with what you can do with that passage.
 // ============================================================================
 
@@ -49,11 +50,12 @@ export default function TodayVersesScreen() {
   const pullPreview = state.getTodayPullPreview();
   const startsToday = new Set(Object.values(pullPreview.fromPlans).flat());
 
-  const reviewRows = [
-    ...today.doneTodayGroups.map((g) => ({ group: g, kind: 'done' as const, stage: null })),
-    ...REVIEW_STAGES.flatMap((stage) => today.reviewGroupsByStage[stage.key].map((g) => ({ group: g, kind: 'review' as const, stage }))),
-  ];
-  const passageCount = reviewRows.length + today.learningGroups.length + today.comingUpGroups.length;
+  // Review lists only what's still due; what's done today has its own
+  // section at the very bottom (FREE_PRACTICE_PLAN.md stage 5).
+  const reviewRows = REVIEW_STAGES.flatMap((stage) => today.reviewGroupsByStage[stage.key].map((g) => ({ group: g, stage })));
+  const doneRows = today.doneTodayGroups.map((g) => ({ group: g, ...reviewedSummary(g.items, today.todayKey) }));
+  const versesLeft = today.dueReviewItems.length;
+  const passageCount = reviewRows.length + doneRows.length + today.learningGroups.length + today.comingUpGroups.length;
 
   const logVerses = useMemo(() => (logGroup ? toVerseStates(logGroup.items) : []), [logGroup]);
   const submitLog = (answers: SelfCheckAnswer[], canMoveUp: boolean) => {
@@ -81,30 +83,17 @@ export default function TodayVersesScreen() {
         <AppButton variant="quiet" size="lg" Icon={Headphones} label="Listen to today's scripture" onPress={today.listenToToday} />
 
         {reviewRows.length > 0 ? (
-          <GroupedList
-            header={`Review · ${today.doneTodayItems.length} of ${today.doneTodayItems.length + today.dueReviewItems.length} verses done`}
-          >
-            {reviewRows.map(({ group, kind, stage }) =>
-              kind === 'done' ? (
-                <ListRow
-                  key={`done-${group.label}`}
-                  leading={<Check size={Math.round(20 * scale)} color={palette.success} strokeWidth={2.6} />}
-                  title={group.label}
-                  subtitle="Done today"
-                  onPress={() => setOpen({ group, kind })}
-                  accessory="none"
-                />
-              ) : (
-                <ListRow
-                  key={group.label}
-                  leading={<StageDot className={stage!.dot} />}
-                  title={group.label}
-                  subtitle={lateNoteFor(group.items, lateNotes) ?? undefined}
-                  value={stage!.label}
-                  onPress={() => setOpen({ group, kind })}
-                />
-              )
-            )}
+          <GroupedList header={`Review · ${versesLeft} ${versesLeft === 1 ? 'verse' : 'verses'} left`}>
+            {reviewRows.map(({ group, stage }) => (
+              <ListRow
+                key={group.label}
+                leading={<StageDot className={stage.dot} />}
+                title={group.label}
+                subtitle={lateNoteFor(group.items, lateNotes) ?? undefined}
+                value={stage.label}
+                onPress={() => setOpen({ group, kind: 'review' })}
+              />
+            ))}
           </GroupedList>
         ) : null}
 
@@ -147,6 +136,21 @@ export default function TodayVersesScreen() {
           </View>
         ) : null}
 
+        {doneRows.length > 0 ? (
+          <GroupedList header={`Reviewed today · ${today.doneTodayItems.length} ${today.doneTodayItems.length === 1 ? 'verse' : 'verses'}`}>
+            {doneRows.map(({ group, grade, how }) => (
+              <ListRow
+                key={`done-${group.label}`}
+                leading={<Check size={Math.round(20 * scale)} color={palette.success} strokeWidth={2.6} />}
+                title={group.label}
+                subtitle={how}
+                value={grade}
+                onPress={() => setOpen({ group, kind: 'done' })}
+              />
+            ))}
+          </GroupedList>
+        ) : null}
+
         {passageCount === 0 ? (
           <AppText variant="label" className="font-sans text-ink-3 text-center">
             Nothing on today yet.
@@ -160,6 +164,11 @@ export default function TodayVersesScreen() {
           <View style={{ gap: space(8) }}>
             {open.kind === 'review' ? (
               <AppButton variant="primary" Icon={Layers} label="Review" onPress={act(() => today.practiceGroup('learn', open.group.items))} />
+            ) : null}
+            {/* Practice on a reviewed passage: the practice pop-up with its
+                mode menu. It was reviewed today, so nothing counts again. */}
+            {open.kind === 'done' ? (
+              <AppButton variant="primary" Icon={Target} label="Practice" onPress={act(() => today.practiceGroup('learn', open.group.items))} />
             ) : null}
             {open.kind === 'learning' ? (
               <AppButton variant="primary" Icon={Sprout} label="Learn" onPress={act(() => today.practiceGroup('learn', open.group.items))} />

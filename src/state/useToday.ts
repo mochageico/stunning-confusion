@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import type { QueueItem, VerseState } from '../types';
+import type { DayResult, QueueItem, VerseState } from '../types';
 import { translationLabel } from '../data';
 import { getLogicalDate, localDayKey } from '../lib/logicalDate';
 import { gradedOnDay } from '../lib/retention';
@@ -41,6 +41,35 @@ export function groupQueueItems(items: QueueItem[]): TodayGroup[] {
     const translationSuffix = translationId && translationId !== 'ESV' ? ` (${translationLabel(translationId)})` : '';
     return { label: `${book} ${chapter}:${versesStr}${translationSuffix}`, book, chapter, translationId, items: list };
   });
+}
+
+/** Graded today, whether or not the passage's review has been applied yet. */
+export const reviewedOnDay = (item: Pick<QueueItem, 'dayResult' | 'dayReview'>, day: string): boolean =>
+  gradedOnDay(item, day) || item.dayReview?.day === day;
+
+/** Today's result for one verse, from whichever field holds it. */
+const todayResult = (item: QueueItem, day: string): Omit<DayResult, 'day'> | null =>
+  item.dayResult?.day === day ? item.dayResult : item.dayReview?.day === day ? item.dayReview.result : null;
+
+const VIA_LABEL: Record<NonNullable<DayResult['via']>, string> = {
+  thread: 'Pick up the thread',
+  guided: 'Guided learning',
+  outline: 'First words',
+  mix: 'Mixed review',
+  map: 'Walk the constellation',
+};
+
+/**
+ * How a passage's review went today, for its Reviewed today row: the
+ * manual log's words (Perfect / Passed / Need practice, from the weakest
+ * verse) and what it was done in. Review times aren't stored, so no time.
+ */
+export function reviewedSummary(items: QueueItem[], day: string): { grade: 'Perfect' | 'Passed' | 'Need practice'; how: string } {
+  const results = items.map((i) => todayResult(i, day)).filter((r): r is Omit<DayResult, 'day'> => !!r);
+  const grade = results.some((r) => r.grade === 'blank') ? 'Need practice' : results.every((r) => r.grade === 'clean') ? 'Perfect' : 'Passed';
+  const first = results[0];
+  const how = first?.via ? VIA_LABEL[first.via] : first?.selfCheck ? 'Self-check' : 'Recall';
+  return { grade, how };
 }
 
 export function toVerseStates(items: QueueItem[]): VerseState[] {
@@ -101,7 +130,14 @@ export function useToday() {
     const dueReviewItems = reviewsPaused
       ? []
       : memoryQueue.filter((item) => item.status === 'reviewing' && isReviewDue(item.nextReviewDueDate) && !gradedOnDay(item, todayKey));
-    const doneTodayItems = memoryQueue.filter((item) => (item.status === 'reviewing' || item.status === 'retained') && gradedOnDay(item, todayKey));
+    // Reviewed today: a verse graded today whose passage is still waiting on
+    // its other verses (dayResult), or whose passage review already went
+    // through (dayReview). Checking dayResult alone missed every finished
+    // passage, since applying a review moves the result into dayReview
+    // (passages.ts) -- which is why nothing ever showed as done (2026-11-13).
+    const doneTodayItems = memoryQueue.filter(
+      (item) => (item.status === 'reviewing' || item.status === 'retained') && reviewedOnDay(item, todayKey)
+    );
     const queuedLookahead = memoryQueue.filter((item) => item.status === 'queued').slice(0, primingLookahead);
     const estMinutes = getEstimatedReviewTime(memoryQueue, cognitiveLoadSensitivity);
 
