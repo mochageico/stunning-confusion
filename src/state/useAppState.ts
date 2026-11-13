@@ -141,6 +141,7 @@ export { buildVerseId, isReviewDue, mapQueueItemsToVerseStates, resolveChapterAu
 export type ScreenName =
   | 'home'
   | 'todayVerses'
+  | 'practice'
   | 'books'
   | 'chapters'
   | 'chapterLanding'
@@ -180,6 +181,7 @@ export type ScreenName =
 const HOME_TAB_SCREENS: ScreenName[] = [
   'home',
   'todayVerses',
+  'practice',
   'books',
   'chapters',
   'chapterLanding',

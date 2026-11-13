@@ -11,7 +11,6 @@ import {
   List,
   Plus,
   RotateCcw,
-  Route,
   Sprout,
   Target,
   Volume2,
@@ -36,10 +35,12 @@ import { useAppFields } from '../state/appStore';
 //
 // Top to bottom: date, streak and the "..." menu; the greeting; the last seven
 // days; one Today card with the two big buttons (Review, Learn next verses);
-// any one-off notes; then two rows -- Today's verses (the full list, its own
-// page) and Listen to today's scripture. Everything else that used to sit on
-// this page (Recite one at a time, Next 7 days, the extra practices, Bible,
-// Find recordings, Add verses, Reset) lives in the "..." menu.
+// any one-off notes; then three rows -- Listen to today's scripture, Practice
+// (any verses, any mode: FREE_PRACTICE_PLAN.md) and Today's verses (the full
+// list, its own page). Bible, Find recordings, Add verses and Reset live in
+// the "More" menu. Reference practice and Pick up the thread left it
+// 2026-11-13: References is a Practice mode now, and the thread is still
+// offered after a passing Recall.
 // ============================================================================
 
 const WELCOME_DISMISSED_KEY = 'home:welcomeDismissedDay';
@@ -87,7 +88,7 @@ export default function HomeScreen() {
     'activityLast15Days', 'balanceDays', 'cognitiveLoadSensitivity', 'getEstimatedReviewTime',
     'getGreeting', 'getNewVerseRoom', 'getTodayPullPreview', 'joinedGroupPlanDetails', 'lateNotes',
     'masteryTouches', 'maxReviewCap', 'memoryQueue', 'memoryStreak', 'navigateTo', 'openGuided',
-    'openMixedReview', 'openThreadDrill', 'pausedUntil', 'pullMovedToday', 'resumeReviews',
+    'openMixedReview', 'pausedUntil', 'pullMovedToday', 'resumeReviews',
     'reviewsPaused', 'setShowTour', 'startPractice', 'triggerDailyPull', 'triggerMockDueReviews',
     'user', 'welcomeBackDays',
   );
@@ -227,8 +228,6 @@ export default function HomeScreen() {
   // ---- The "..." menu ------------------------------------------------------
   const menu: MenuItem[][] = [
     [
-      { label: 'Reference practice', Icon: Target, onPress: () => navigateTo('referenceDrill') },
-      { label: 'Pick up the thread', Icon: Route, onPress: () => state.openThreadDrill(null) },
       { label: 'Bible', Icon: BookMarked, onPress: () => navigateTo('books') },
       { label: 'Find recordings', Icon: Volume2, onPress: () => navigateTo('audioFeed') },
       { label: 'Add verses', Icon: Plus, onPress: () => navigateTo('addVerses') },
@@ -276,7 +275,7 @@ export default function HomeScreen() {
                   </AppText>
                 </View>
               ) : null}
-              {hasVerses ? <OverflowMenu title="More for today" groups={menu} accessibilityLabel="More for today" diameter={36} /> : null}
+              {hasVerses ? <OverflowMenu title="More" groups={menu} accessibilityLabel="More" diameter={36} /> : null}
             </View>
           </View>
           <AppText variant="display" className="font-sans font-bold text-ink" style={{ letterSpacing: -0.4 }} accessibilityRole="header">
@@ -366,18 +365,26 @@ export default function HomeScreen() {
               />
             )}
 
+            {/* Listen, then Practice (any verses, any mode; not tied to
+                today's reviews -- FREE_PRACTICE_PLAN.md), then Today's verses. */}
             <GroupedList>
-              <ListRow
-                leading={<IconTile Icon={List} />}
-                title="Today's verses"
-                subtitle={`${passageCount} ${passageCount === 1 ? 'passage' : 'passages'}`}
-                onPress={() => navigateTo('todayVerses')}
-              />
               <ListRow
                 leading={<IconTile Icon={Headphones} />}
                 title="Listen to today's scripture"
                 subtitle="Reviews and what's coming up"
                 onPress={today.listenToToday}
+              />
+              <ListRow
+                leading={<IconTile Icon={Target} />}
+                title="Practice"
+                subtitle="Any verses, any mode"
+                onPress={() => navigateTo('practice')}
+              />
+              <ListRow
+                leading={<IconTile Icon={List} />}
+                title="Today's verses"
+                subtitle={`${passageCount} ${passageCount === 1 ? 'passage' : 'passages'}`}
+                onPress={() => navigateTo('todayVerses')}
               />
             </GroupedList>
 

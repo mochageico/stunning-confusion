@@ -31,6 +31,7 @@ import MemoryCalendarScreen from './src/screens/MemoryCalendarScreen';
 import VerseRoadScreen from './src/screens/VerseRoadScreen';
 import VersePageScreen from './src/screens/VersePageScreen';
 import ReferenceDrillScreen from './src/screens/ReferenceDrillScreen';
+import PracticeScreen from './src/screens/PracticeScreen';
 import ThreadDrillScreen from './src/screens/ThreadDrillScreen';
 import GuidedLearningScreen from './src/screens/GuidedLearningScreen';
 import MixedReviewScreen from './src/screens/MixedReviewScreen';
@@ -163,6 +164,8 @@ function Screens() {
         return <HomeScreen />;
       case 'todayVerses':
         return <TodayVersesScreen />;
+      case 'practice':
+        return <PracticeScreen />;
       case 'books':
         return <BooksScreen />;
       case 'chapters':
