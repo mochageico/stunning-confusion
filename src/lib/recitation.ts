@@ -548,7 +548,9 @@ const backtraceOutcomes = (
   startI: number,
   startJ: number,
   /** Optional: filled with the spoken word each expected word was paired with (null when none). */
-  heard?: (string | null)[]
+  heard?: (string | null)[],
+  /** Optional: filled, per expected word, with how many spoken words were used up before it. */
+  spokenBefore?: number[]
 ): (WordOutcome | null)[] => {
   const outcomes: (WordOutcome | null)[] = new Array(expected.length).fill(null);
   // Skipped words are only flagged during the walk and graded afterwards by
@@ -565,6 +567,7 @@ const backtraceOutcomes = (
   while (i > 0 && j > 0) {
     if (inGap) {
       outcomes[i - 1] = skippedOutcome(expected[i - 1], i - 1);
+      if (spokenBefore) spokenBefore[i - 1] = j;
       inGap = i > 1 && gap[i][j] === gap[i - 1][j] + continueSkipCost(expected[i - 1]);
       i -= 1;
       continue;
@@ -584,6 +587,7 @@ const backtraceOutcomes = (
       for (let k = 1; k <= joined.eSpan; k++) {
         outcomes[i - k] = 'perfect';
         if (heard) heard[i - k] = heardWords;
+        if (spokenBefore) spokenBefore[i - k] = j - joined.sSpan;
       }
       i -= joined.eSpan;
       j -= joined.sSpan;
@@ -593,6 +597,7 @@ const backtraceOutcomes = (
     if (dp[i][j] === dp[i - 1][j - 1] + cost) {
       outcomes[i - 1] = cost === MATCH_COST ? 'perfect' : cost === CLOSE_MATCH_COST ? 'close' : 'missed';
       if (heard) heard[i - 1] = spoken[j - 1];
+      if (spokenBefore) spokenBefore[i - 1] = j - 1;
       i -= 1;
       j -= 1;
     } else if (dp[i][j] === gap[i][j]) {
@@ -603,6 +608,7 @@ const backtraceOutcomes = (
   }
   while (i > 0) {
     outcomes[i - 1] = skippedOutcome(expected[i - 1], i - 1);
+    if (spokenBefore) spokenBefore[i - 1] = 0;
     i -= 1;
   }
   forgiveDroppedRuns(expected, skipped, outcomes);
@@ -712,6 +718,8 @@ export interface LiveAlignResult {
   outcomes: (WordOutcome | null)[];
   /** How many words into the window are now confirmed (exclusive end). */
   pointer: number;
+  /** Per expected word up to the pointer: how many of the spoken window's words were used up before it. */
+  spokenBefore: number[];
 }
 
 /**
@@ -752,8 +760,9 @@ export const alignRecitationWindow = (expectedWindow: string[], spokenWindow: st
     }
   }
 
-  const outcomes = backtraceOutcomes(expectedWindow, spokenWindow, tables, bestI, n);
-  return { outcomes, pointer: bestI };
+  const spokenBefore: number[] = new Array(bestI).fill(0);
+  const outcomes = backtraceOutcomes(expectedWindow, spokenWindow, tables, bestI, n, undefined, spokenBefore);
+  return { outcomes, pointer: bestI, spokenBefore };
 };
 
 // ----------------------------------------------------------------------------
@@ -791,7 +800,26 @@ export interface ReconcileResult {
   pointer: number;
   /** Where the next call's expected-word window should start. */
   nextAlignAnchor: number;
+  /**
+   * Pass back as `spokenFloor` next call: the spoken words used up before
+   * nextAlignAnchor, less SPOKEN_FLOOR_SLACK. Never below the floor passed in.
+   *
+   * Without it the spoken window was only "the last 30 words", so words
+   * already matched behind the anchor stayed in it and were matched a second
+   * time against similar phrases ahead. Romans 8:5-6 (real report): stopping
+   * at "...according to the Spirit set their minds on the" filled 20 more
+   * words, into verse 6, because the first half of verse 5 lined up again
+   * with the second half.
+   */
+  nextSpokenFloor: number;
 }
+
+/**
+ * Spoken words kept before the floor. The engine rewrites words it has not
+ * finalized, and their count can shift by one or two; the slack keeps a word
+ * just past the anchor from losing the spoken word it was matched with.
+ */
+export const SPOKEN_FLOOR_SLACK = 2;
 
 /**
  * Pure reconciliation step for live speech: given the full expected
@@ -816,9 +844,10 @@ export const reconcileSpeechWindow = (
   protectedIndices: ReadonlySet<number>,
   currentPointer: number
 ): ReconcileResult => {
-  const noop = { outcomes: {}, pointer: currentPointer, nextAlignAnchor: alignAnchor };
+  const noop = { outcomes: {}, pointer: currentPointer, nextAlignAnchor: alignAnchor, nextSpokenFloor: spokenFloor };
 
-  const spokenWindow = spokenTokens.slice(Math.max(spokenFloor, spokenTokens.length - ALIGN_WINDOW_SPOKEN));
+  const windowStart = Math.max(spokenFloor, spokenTokens.length - ALIGN_WINDOW_SPOKEN);
+  const spokenWindow = spokenTokens.slice(windowStart);
   if (spokenWindow.length === 0) return noop;
 
   const expectedWindow = expectedTokens.slice(alignAnchor, alignAnchor + ALIGN_WINDOW_EXPECTED);
@@ -846,7 +875,29 @@ export const reconcileSpeechWindow = (
   const advanceTo = Math.max(protectedFloor, globalTo - ALIGN_REVISION_BUFFER);
   const nextAlignAnchor = Math.max(alignAnchor, advanceTo);
 
-  return { outcomes, pointer, nextAlignAnchor };
+  const local = nextAlignAnchor - alignAnchor;
+  const used = local > 0 && local < result.spokenBefore.length ? windowStart + result.spokenBefore[local] - SPOKEN_FLOOR_SLACK : 0;
+  const nextSpokenFloor = Math.max(spokenFloor, used);
+
+  return { outcomes, pointer, nextAlignAnchor, nextSpokenFloor };
+};
+
+/**
+ * Whether listening can stop by itself: the passage's last two words were
+ * just heard AND the live fill (reconcileSpeechWindow's pointer) has reached
+ * the passage's end.
+ *
+ * The pointer is what makes this safe. The old rule was "the last two words
+ * heard, and 60% as many words heard as the passage has", which stopped
+ * 2 Corinthians 5:17-19 at the end of verse 18: verse 18 ends "the ministry
+ * of reconciliation", verse 19 ends "the message of reconciliation", and
+ * verses 17-18 are 39 of the 64 words. All of verse 19 was then graded
+ * missed, every time.
+ */
+export const shouldAutoFinish = (expectedTokens: string[], heardTokens: string[], livePointer: number): boolean => {
+  const n = expectedTokens.length;
+  if (n < 2 || heardTokens.length < 2 || livePointer < n) return false;
+  return heardTokens[heardTokens.length - 1] === expectedTokens[n - 1] && heardTokens[heardTokens.length - 2] === expectedTokens[n - 2];
 };
 
 // ============================================================================

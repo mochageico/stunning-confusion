@@ -197,15 +197,20 @@ export function SessionDone({
 
         {stats && stats.length ? (
           <View className="bg-surface border border-line rounded-card flex-row" style={{ paddingVertical: space(14) }}>
+            {/* The dividers are their own thin views. A left border on the
+                cell drew a whole box around it on iPhone. */}
             {stats.map((s, i) => (
-              <View key={s.label} className={`flex-1 items-center ${i ? 'border-l border-hairline' : ''}`} style={{ paddingHorizontal: space(6) }}>
-                <AppText variant="display" className="font-sans font-bold text-ink">
-                  {String(s.value)}
-                </AppText>
-                <AppText variant="caption" className="font-sans text-ink-3 text-center">
-                  {s.label}
-                </AppText>
-              </View>
+              <React.Fragment key={s.label}>
+                {i ? <View className="bg-hairline self-stretch" style={{ width: 1 }} /* layout-ok: divider, no text */ /> : null}
+                <View className="flex-1 items-center" style={{ paddingHorizontal: space(6) }}>
+                  <AppText variant="display" className="font-sans font-bold text-ink">
+                    {String(s.value)}
+                  </AppText>
+                  <AppText variant="caption" className="font-sans text-ink-3 text-center">
+                    {s.label}
+                  </AppText>
+                </View>
+              </React.Fragment>
             ))}
           </View>
         ) : null}
@@ -380,14 +385,17 @@ export function ActionCard({
   title: string;
   subtitle?: string;
   Icon: IconType;
-  onPress: () => void;
-  tone?: 'primary' | 'soft';
+  /** Left out for the `done` tone, which is a plain card, not a button. */
+  onPress?: () => void;
+  /** `done`: the same card gone quiet, for "Reviews done" (a check, no chevron). */
+  tone?: 'primary' | 'soft' | 'done';
   disabled?: boolean;
 }) {
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
   const primary = tone === 'primary';
+  const done = tone === 'done';
   const fg = primary ? palette.onAccent : palette.accent;
   const tile = Math.round(42 * scale);
   // Past 1.3x on a small phone the tile leaves the title too little room
@@ -398,15 +406,15 @@ export function ActionCard({
     // button-ok: a two-line card button with an icon tile; AppButton is one line of label.
     <Pressable
       onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
+      disabled={disabled || !onPress}
+      accessibilityRole={onPress ? 'button' : 'text'}
       accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title}
       accessibilityState={disabled ? { disabled: true } : undefined}
-      className={`flex-row items-center rounded-card active:opacity-80 ${primary ? 'bg-accent' : 'bg-accent-soft'}`}
+      className={`flex-row items-center rounded-card ${onPress ? 'active:opacity-80' : ''} ${primary ? 'bg-accent' : done ? 'bg-surface-2 border border-line' : 'bg-accent-soft'}`}
       style={[{ paddingVertical: space(14), paddingHorizontal: space(16), gap: space(14), minHeight: Math.round(72 * scale) }, disabled ? { opacity: 0.45 } : null]}
     >
       {/* layout-ok: an icon tile. */}
-      {showTile ? <View className={`items-center justify-center rounded-btn overflow-hidden ${primary ? '' : 'bg-surface'}`} style={{ width: tile, height: tile }}>
+      {showTile ? <View className={`items-center justify-center rounded-btn overflow-hidden ${primary ? '' : done ? 'bg-accent-soft' : 'bg-surface'}`} style={{ width: tile, height: tile }}>
         {/* On the accent the tile is the text color at 16%. Drawn as its own
             layer so the opacity doesn't fade the icon; the icon sits in a
             View so it stacks above that layer on web. */}
@@ -416,20 +424,20 @@ export function ActionCard({
           />
         ) : null}
         <View>
-          <Icon size={Math.round(22 * scale)} color={fg} strokeWidth={2} />
+          <Icon size={Math.round(22 * scale)} color={fg} strokeWidth={done ? 2.6 : 2} />
         </View>
       </View> : null}
       <View className="flex-1" style={{ gap: space(1) }}>
-        <AppText variant="title" className={`font-sans font-bold ${primary ? 'text-on-accent' : 'text-accent'}`}>
+        <AppText variant="title" className={`font-sans font-bold ${primary ? 'text-on-accent' : done ? 'text-ink' : 'text-accent'}`}>
           {title}
         </AppText>
         {subtitle ? (
-          <AppText variant="label" className={`font-sans ${primary ? 'text-on-accent' : 'text-ink-2'}`} style={primary ? { opacity: 0.85 } : undefined}>
+          <AppText variant="label" className={`font-sans ${primary ? 'text-on-accent' : done ? 'text-ink-3' : 'text-ink-2'}`} style={primary ? { opacity: 0.85 } : undefined}>
             {subtitle}
           </AppText>
         ) : null}
       </View>
-      <ChevronRight size={Math.round(20 * scale)} color={fg} strokeWidth={2.2} />
+      {done ? null : <ChevronRight size={Math.round(20 * scale)} color={fg} strokeWidth={2.2} />}
     </Pressable>
   );
 }

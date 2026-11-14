@@ -138,7 +138,7 @@ export default function MemoryGrid({
           <View key={key} onLayout={onBoxLayout ? (e) => onBoxLayout(index, e) : undefined} style={{ width: widthPct }} className={`rounded-xl border relative ${boxClass}`}>
             {isSelected && !isActive && (
               <View className="absolute -top-1.5 -right-1.5 bg-ink w-3.5 h-3.5 rounded-full items-center justify-center border border-surface z-10">
-                <AppText variant="micro" className="text-on-accent font-black">✓</AppText>
+                <AppText variant="micro" className="text-on-strong font-black">✓</AppText>
               </View>
             )}
             <View className={`${row} items-center justify-between px-2 pt-1.5`}>

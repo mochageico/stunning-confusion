@@ -19,7 +19,9 @@
   --ink-3: 110 103 94;
   --accent: 41 76 130;
   --accent-soft: 227 230 234;
+  --accent-fill: 41 76 130;
   --on-accent: 255 255 255;
+  --on-strong: 255 255 255;
   --success: 39 111 75;
   --success-soft: 229 236 228;
   --warning: 140 90 11;

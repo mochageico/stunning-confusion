@@ -81,7 +81,7 @@ export default function ConstellationsScreen() {
           accessibilityRole="button"
           accessibilityLabel="My sky"
           className="flex-row items-center rounded-card active:opacity-80"
-          style={{ backgroundColor: SKY.bg, padding: space(14), gap: space(12) }}
+          style={{ backgroundColor: SKY.bg, borderWidth: 1, borderColor: SKY.edge, padding: space(14), gap: space(12) }}
         >
           <View className="flex-row items-center" style={{ gap: space(4) }}>
             {minis.length === 0 ? (

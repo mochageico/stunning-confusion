@@ -99,7 +99,7 @@ export default React.memo(function JigsawDrill({
               ) : (
                 <View className={`${passageRow} items-start gap-2`}>
                   <View className={`px-1.5 py-0.5 rounded ${showResult ? (isRight ? 'bg-success' : 'bg-danger') : 'bg-accent'}`}>
-                    <AppText variant="micro" className="font-sans font-bold text-on-accent">{slotIdx + 1}</AppText>
+                    <AppText variant="micro" className={`font-sans font-bold ${showResult ? 'text-on-strong' : 'text-on-accent'}`}>{slotIdx + 1}</AppText>
                   </View>
                   <AppText variant="label" script={script} className="font-serif leading-snug text-ink flex-1">{tile.text}</AppText>
                 </View>

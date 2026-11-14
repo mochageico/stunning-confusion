@@ -221,7 +221,7 @@ export default function VersePageScreen() {
         // layout-ok: a stop marker holds only an icon.
         style={{ width: current ? stopSize + 8 : stopSize, height: current ? stopSize + 8 : stopSize }}
       >
-        {passed && <Check size={Math.round(12 * scale)} color={palette.onAccent} strokeWidth={3.4} />}
+        {passed && <Check size={Math.round(12 * scale)} color={palette.onStrong} strokeWidth={3.4} />}
       </View>
     );
   };
@@ -240,7 +240,7 @@ export default function VersePageScreen() {
           // layout-ok: a step marker holds only an icon.
           style={{ width: stopSize - 4, height: stopSize - 4 }}
         >
-          {passed && <Check size={Math.round(11 * scale)} color={palette.onAccent} strokeWidth={3.4} />}
+          {passed && <Check size={Math.round(11 * scale)} color={palette.onStrong} strokeWidth={3.4} />}
         </View>
         {/* The detail wraps under the label when the text is large, instead of squeezing it. */}
         <View className="flex-1 flex-row flex-wrap items-baseline justify-between" style={{ columnGap: space(8) }}>

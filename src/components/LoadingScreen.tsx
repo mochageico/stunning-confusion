@@ -34,7 +34,7 @@ function SlidingBar() {
       {/* Plain style, not className: NativeWind doesn't reach Animated.View. */}
       <Animated.View
         // layout-ok: the bar's moving segment holds no text.
-        style={{ width: 48, height: 3, borderRadius: 2, backgroundColor: palette.accent, transform: [{ translateX }] }}
+        style={{ width: 48, height: 3, borderRadius: 2, backgroundColor: palette.accentFill, transform: [{ translateX }] }}
       />
     </View>
   );

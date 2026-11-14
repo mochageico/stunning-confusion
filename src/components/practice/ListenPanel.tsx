@@ -9,7 +9,8 @@ import { ChipRow } from '../ui';
 import MemoryGrid from '../MemoryGrid';
 import ListenPhotoView from '../ListenPhotoView';
 import { AppButton, AppIconButton, AppText, RadioMark, ToggleRow, useFontScale, type useScaledSpace } from '../design';
-import { Dialog, EmptyState, GroupedList, ListRow, SegmentedControl } from '../blocks';
+import { Dialog, EmptyState, GroupedList, ListRow } from '../blocks';
+import { Dropdown } from '../Dropdown';
 import { ModeChip, OptionsPopup } from '../session';
 import { EMPTY_PHOTO_CACHE, LISTEN_REPEATS, LISTEN_SPEED_MAX, LISTEN_SPEED_MIN, LISTEN_SPEED_STEP, ListenProgress } from './shared';
 import type { PracticeModalsProps } from '../PracticeModals';
@@ -126,7 +127,6 @@ export default function ListenPanel({
 
   // Playlist editor: closed, a new playlist (null), or one being edited.
   const [editing, setEditing] = useState<ListenPlaylist | null | undefined>(undefined);
-  const playingPlaylist = playlists.find((p) => playSource === playlistSource(p.id));
   const sourceOptions: { id: ListenSource | typeof CREATE_PLAYLIST; label: string }[] = [
     { id: 'all', label: "Today's verses" },
     { id: 'memorization', label: 'Learning now' },
@@ -138,12 +138,13 @@ export default function ListenPanel({
   const sourceLabel = sourceOptions.find((o) => o.id === playSource)?.label ?? 'Selected verses';
   const [sourceOpen, setSourceOpen] = useState(false);
 
-  // List or memory grid, remembered so Text goes back to whichever you chose.
-  const [textMode, setTextMode] = useState<'verses' | 'memoryGrid'>(listenViewMode === 'memoryGrid' ? 'memoryGrid' : 'verses');
-  const pickTextMode = (m: 'verses' | 'memoryGrid') => {
-    setTextMode(m);
-    if (listenViewMode !== 'photo') setListenViewMode(m);
-  };
+  // How the scripture is shown: one dropdown beside the playlist chip. The
+  // page photo is only offered when this session has one.
+  const viewOptions: { id: 'verses' | 'memoryGrid' | 'photo'; label: string }[] = [
+    { id: 'verses', label: 'List' },
+    { id: 'memoryGrid', label: 'Memory grid' },
+    ...(sessionHasPhotos ? [{ id: 'photo' as const, label: 'Page photo' }] : []),
+  ];
 
   // "28–29" for the slim loop line; chapter:verse when the range crosses chapters.
   const verseAt = (i: number | null) => (i === null ? null : activePlayVerses[i] ?? null);
@@ -166,9 +167,8 @@ export default function ListenPanel({
 
   return (
     <View className="flex-1 justify-between">
-      {/* Which verses play (a chip that opens a centered picker) and, when
-          the chapter has a page photo, a Text / Page switch. List vs memory
-          grid lives in the gear. */}
+      {/* Which verses play (a chip that opens a centered picker) and a
+          dropdown for how they are shown: list, memory grid, or page photo. */}
       <View className="flex-row flex-wrap items-center mb-2.5 shrink-0" style={{ gap: 8 }}>
         <View className="flex-row items-center" style={{ flexGrow: 1, flexShrink: 1, gap: 8 }}>
           <ModeChip
@@ -177,19 +177,7 @@ export default function ListenPanel({
             accessibilityLabel={`Playing ${sourceLabel}, change`}
           />
         </View>
-        {sessionHasPhotos ? (
-          <View style={{ flexBasis: space(150), flexGrow: 0 }}>
-            <SegmentedControl
-              value={listenViewMode === 'photo' ? 'page' : 'text'}
-              onChange={(id) => setListenViewMode(id === 'page' ? 'photo' : textMode)}
-              accessibilityLabel="Display"
-              options={[
-                { id: 'text' as const, label: 'Text' },
-                { id: 'page' as const, label: 'Page' },
-              ]}
-            />
-          </View>
-        ) : null}
+        <Dropdown compact value={listenViewMode} options={viewOptions} onChange={setListenViewMode} title="Show scripture as" />
       </View>
 
       {/* Verse Highlight Box — verse-by-verse, not word-by-word: the
@@ -534,17 +522,42 @@ export default function ListenPanel({
       <Dialog visible={sourceOpen} onClose={() => setSourceOpen(false)} title="Which verses play">
         <View style={{ gap: space(12) }}>
           <GroupedList>
-            {sourceOptions.map((o) => (
-              <ListRow
-                key={o.id}
-                title={o.label}
-                accessory={<RadioMark selected={o.id === playSource} />}
-                onPress={() => {
-                  setPlaySource(o.id as ListenSource);
-                  setSourceOpen(false);
-                }}
-              />
-            ))}
+            {sourceOptions.map((o) => {
+              // A playlist's own row carries its edit pencil, beside its name.
+              const playlist = onSavePlaylist ? playlists.find((p) => playlistSource(p.id) === o.id) : undefined;
+              const mark = <RadioMark selected={o.id === playSource} />;
+              return (
+                <ListRow
+                  key={o.id}
+                  title={o.label}
+                  accessory={
+                    playlist ? (
+                      <View className="flex-row items-center" style={{ gap: space(10) }}>
+                        <AppIconButton
+                          variant="bare"
+                          Icon={Pencil}
+                          diameter={32}
+                          iconSize={16}
+                          iconColor={palette.ink3}
+                          onPress={() => {
+                            setSourceOpen(false);
+                            setEditing(playlist);
+                          }}
+                          accessibilityLabel={`Edit ${playlist.name}`}
+                        />
+                        {mark}
+                      </View>
+                    ) : (
+                      mark
+                    )
+                  }
+                  onPress={() => {
+                    setPlaySource(o.id as ListenSource);
+                    setSourceOpen(false);
+                  }}
+                />
+              );
+            })}
           </GroupedList>
           {playSource === 'priming' && setPrimingLookahead ? (
             <View style={{ gap: space(6) }}>
@@ -560,16 +573,6 @@ export default function ListenPanel({
           ) : null}
           {onSavePlaylist ? (
             <GroupedList>
-              {playingPlaylist ? (
-                <ListRow
-                  Icon={Pencil}
-                  title={`Edit ${playingPlaylist.name}`}
-                  onPress={() => {
-                    setSourceOpen(false);
-                    setEditing(playingPlaylist);
-                  }}
-                />
-              ) : null}
               <ListRow
                 Icon={Plus}
                 title="Create playlist"
@@ -593,20 +596,6 @@ export default function ListenPanel({
             value={repeatMode === 'playlist'}
             onChange={(on) => setRepeatMode(on ? 'playlist' : 'off')}
           />
-          <View style={{ gap: space(6) }}>
-            <AppText variant="caption" className="font-sans font-semibold text-ink-2">
-              Show text as
-            </AppText>
-            <SegmentedControl
-              value={textMode}
-              onChange={pickTextMode}
-              accessibilityLabel="Show text as"
-              options={[
-                { id: 'verses' as const, label: 'List' },
-                { id: 'memoryGrid' as const, label: 'Memory grid' },
-              ]}
-            />
-          </View>
         </View>
       </OptionsPopup>
 

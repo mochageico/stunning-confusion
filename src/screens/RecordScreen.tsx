@@ -449,10 +449,10 @@ function ScriptList({
                 }`}
                 style={{ minWidth: space(26), minHeight: space(24), paddingHorizontal: space(4), gap: space(2), marginTop: space(2) }}
               >
-                {live && isTapped ? <Check size={Math.round(11 * scale)} color={palette.onAccent} strokeWidth={3} /> : null}
+                {live && isTapped ? <Check size={Math.round(11 * scale)} color={palette.onStrong} strokeWidth={3} /> : null}
                 <AppText
                   variant="caption"
-                  className={`font-sans font-semibold ${live ? 'text-on-accent' : 'text-ink-3'}`}
+                  className={`font-sans font-semibold ${live ? (isTapped ? 'text-on-strong' : 'text-on-accent') : 'text-ink-3'}`}
                   style={{ fontVariant: ['tabular-nums'] }}
                 >
                   {v.verse}

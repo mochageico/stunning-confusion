@@ -148,7 +148,7 @@ export default React.memo(function SectionOrderDrill({
               ) : (
                 <View className={`${rowDir} items-start`} style={{ gap: space(8) }}>
                   <View className={`rounded ${showResult ? (isRight ? 'bg-success' : 'bg-danger') : 'bg-accent'}`} style={{ paddingHorizontal: space(6), paddingVertical: space(2) }}>
-                    <AppText variant="micro" className="font-sans font-bold text-on-accent">{slotIdx + 1}</AppText>
+                    <AppText variant="micro" className={`font-sans font-bold ${showResult ? 'text-on-strong' : 'text-on-accent'}`}>{slotIdx + 1}</AppText>
                   </View>
                   <View className="flex-1" style={{ gap: space(2) }}>
                     <AppText variant="label" script={script} className="font-serif leading-snug text-ink">{tile.text}</AppText>

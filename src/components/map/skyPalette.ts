@@ -12,19 +12,24 @@ import { buildThemeColors, useAccent, type ThemeColors } from '../theme';
 // is reused as is. Popups and buttons outside the canvas stay in the app theme.
 // ============================================================================
 
+// The night is a warm near-black with no hue of its own (it was deep blue until
+// 2026-11-14): beside any accent the page then reads as two colors, the accent
+// and star gold, instead of three.
 export const SKY = {
   /** The sky itself. */
-  bg: '#0A1128',
+  bg: '#0B0A09',
   /** A little lighter, for the panel under the canvas. */
-  bgSoft: '#111B3A',
-  edge: '#26345F',
-  ink: '#F2F5FF',
-  ink2: '#B9C4E2',
-  ink3: '#7D8BB2',
-  /** Hidden stars: a soft blue-white glow. */
-  glow: '#9DB8F5',
-  /** The user's own links: blue, dashed. */
-  link: '#6FB0FF',
+  bgSoft: '#1A1816',
+  edge: '#2E2B27',
+  ink: '#F2EEE7',
+  ink2: '#CFC8BD',
+  ink3: '#9D958A',
+  /** Hidden stars: a soft warm-white glow. */
+  glow: '#E9DFC8',
+  /** The user's own links: pale, dashed. */
+  link: '#CFC8BD',
+  /** Gold stars on the Home button. */
+  star: '#E8BE45',
   /** The NEXT marker and the focused star's ring. */
   next: '#F5D27A',
   /** A completed constellation's lines (Stage 4's payoff). */

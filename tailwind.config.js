@@ -16,6 +16,12 @@ module.exports = {
       // ThemeProvider (src/components/theme.tsx), because the accent is the
       // user's choice and changes at runtime. Write `text-ink`, `bg-surface`,
       // `bg-accent`, never a hex literal. global.css holds first-paint values.
+      // `bg-accent` draws the accent FILL: the same color in light mode, a
+      // deeper shade in dark mode (theme.tsx, ACCENTS.darkFill). Text on it is
+      // `text-on-accent`. `text-accent` / `border-accent` stay the readable tint.
+      backgroundColor: {
+        accent: 'rgb(var(--accent-fill) / <alpha-value>)',
+      },
       colors: {
         canvas: 'rgb(var(--canvas) / <alpha-value>)',
         surface: 'rgb(var(--surface) / <alpha-value>)',
@@ -30,7 +36,9 @@ module.exports = {
         'ink-3': 'rgb(var(--ink-3) / <alpha-value>)',
         accent: 'rgb(var(--accent) / <alpha-value>)',
         'accent-soft': 'rgb(var(--accent-soft) / <alpha-value>)',
+        'accent-fill': 'rgb(var(--accent-fill) / <alpha-value>)',
         'on-accent': 'rgb(var(--on-accent) / <alpha-value>)',
+        'on-strong': 'rgb(var(--on-strong) / <alpha-value>)',
         success: 'rgb(var(--success) / <alpha-value>)',
         'success-soft': 'rgb(var(--success-soft) / <alpha-value>)',
         warning: 'rgb(var(--warning) / <alpha-value>)',

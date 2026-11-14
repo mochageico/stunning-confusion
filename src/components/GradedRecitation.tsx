@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 
 import { threadSpan, ThreadSpanVerse } from '../lib/drills';
-import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, reconcileSpeechWindow, SpeechRecognizer, tokenizeWords, willSaveSpeechAudio, WordOutcome } from '../lib/recitation';
+import { getSpeechRecognizer, gradeTranscriptDetailed, classifyFirstLetterAttempt, reconcileSpeechWindow, shouldAutoFinish, SpeechRecognizer, tokenizeWords, willSaveSpeechAudio, WordOutcome } from '../lib/recitation';
 import { blankExceptFirstLetter, blankLetters, joinWords, normalizeToken, scriptOfVerse, typedLetters, wordGap } from '../lib/textScript';
 import { Mic } from 'lucide-react-native';
 import { AppButton, AppIconButton, AppText, AppTextInput, useFontScale, useScaledSpace } from './design';
@@ -27,8 +27,6 @@ import { useThemeColors } from './theme';
 export type RecitationVerse = { book: string; chapter: number; verse: number; text: string; translationId?: string };
 export type RecitationMode = 'speak' | 'type';
 
-/** Auto-stops listening once the last words are heard and most of the stretch has been said. */
-const AUTO_FINISH_SHARE = 0.6;
 /** The live fill while listening has no typed or hand-fixed words to protect. */
 const NO_PROTECTED: ReadonlySet<number> = new Set();
 
@@ -320,6 +318,7 @@ export default function GradedRecitation({
   const [live, setLive] = useState<{ pointer: number; outcomes: Record<number, WordOutcome> }>({ pointer: 0, outcomes: {} });
   const livePointerRef = useRef(0);
   const liveAnchorRef = useRef(0);
+  const liveSpokenFloorRef = useRef(0);
 
   // Second pass (SPEECH_SECOND_PASS_PLAN.md): on iPhone the attempt's audio
   // is saved, and once graded Whisper re-hears it; a word Apple missed but
@@ -362,19 +361,19 @@ export default function GradedRecitation({
     // Wakes the second-pass function while you speak, so it's ready when you finish.
     if (expectAudio) warmSecondPass();
     const expectedTokens = tokenizeWords(expectedText);
-    const tail = expectedTokens.slice(-2).join(' ');
     engine.start({
       onTranscript: (full) => {
         if (!live()) return;
         transcriptRef.current = full;
         const heard = tokenizeWords(full);
-        const patch = reconcileSpeechWindow(expectedTokens, heard, liveAnchorRef.current, 0, NO_PROTECTED, livePointerRef.current);
+        const patch = reconcileSpeechWindow(expectedTokens, heard, liveAnchorRef.current, liveSpokenFloorRef.current, NO_PROTECTED, livePointerRef.current);
         liveAnchorRef.current = patch.nextAlignAnchor;
+        liveSpokenFloorRef.current = patch.nextSpokenFloor;
         if (patch.pointer !== livePointerRef.current || Object.keys(patch.outcomes).length > 0) {
           livePointerRef.current = patch.pointer;
           setLive((prev) => ({ pointer: patch.pointer, outcomes: { ...prev.outcomes, ...patch.outcomes } }));
         }
-        if (heard.length >= expectedTokens.length * AUTO_FINISH_SHARE && heard.slice(-2).join(' ') === tail) finishSpeaking();
+        if (shouldAutoFinish(expectedTokens, heard, patch.pointer)) finishSpeaking();
       },
       onEnd: () => {
         // The engine stopping on its own (silence) ends the attempt with what

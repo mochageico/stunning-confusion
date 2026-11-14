@@ -26,6 +26,7 @@ import {
   setLearnedSlips,
   slipKey,
   reconcileSpeechWindow,
+  shouldAutoFinish,
   tokenizeWords,
   wordsRoughlyEqual,
   WordOutcome,
@@ -88,7 +89,7 @@ const feedTranscript = (session: Session, expectedTokens: string[], transcriptSo
   const outcomes = { ...session.outcomes, ...patch.outcomes };
   const source = { ...session.source };
   for (const key of Object.keys(patch.outcomes)) source[Number(key)] = 'speech';
-  return { outcomes, source, pointer: patch.pointer, alignAnchor: patch.nextAlignAnchor, spokenFloor: session.spokenFloor };
+  return { outcomes, source, pointer: patch.pointer, alignAnchor: patch.nextAlignAnchor, spokenFloor: patch.nextSpokenFloor };
 };
 
 /** Simulates a typed keystroke or manual tap-to-fix committing a word directly. */
@@ -721,6 +722,61 @@ scenario('28. A whole chapter grades quickly', () => {
   const ms = Date.now() - started;
   check(`${outcomes.length} words graded in under 1.5 s on this machine`, ms < 1500, `${ms} ms`);
   console.log(`        (${outcomes.length} words in ${ms} ms)`);
+});
+
+scenario('29. Listening does not stop at an earlier verse that ends like the passage', () => {
+  // 2 Corinthians 5:17-19 (real report): verse 18 ends "the ministry of
+  // reconciliation", verse 19 "the message of reconciliation".
+  const passage =
+    'Therefore, if anyone is in Christ, he is a new creation. The old has passed away; behold, the new has come. ' +
+    'All this is from God, who through Christ reconciled us to himself and gave us the ministry of reconciliation; ' +
+    'that is, in Christ God was reconciling the world to himself, not counting their trespasses against them, ' +
+    'and entrusting to us the message of reconciliation.';
+  const expected = tokenizeWords(passage);
+  const said = tokenizeWords(passage);
+  const endOfVerse18 = said.indexOf('reconciliation') + 1;
+  let anchor = 0;
+  let pointer = 0;
+  let stoppedAt = -1;
+  for (let n = 1; n <= said.length && stoppedAt < 0; n++) {
+    const heard = said.slice(0, n);
+    const patch = reconcileSpeechWindow(expected, heard, anchor, 0, new Set(), pointer);
+    anchor = patch.nextAlignAnchor;
+    pointer = patch.pointer;
+    if (shouldAutoFinish(expected, heard, pointer)) stoppedAt = n;
+  }
+  check('still listening at the end of verse 18', stoppedAt !== endOfVerse18, `stopped at word ${stoppedAt}`);
+  check('stops by itself at the last word', stoppedAt === said.length, `stopped at word ${stoppedAt} of ${said.length}`);
+  check('never stops with the last words unheard', !shouldAutoFinish(expected, said.slice(0, -1), expected.length));
+});
+
+scenario('30. Words already used are not heard a second time further on', () => {
+  // Romans 8:5-6 (real report): the user stopped at "...according to the
+  // Spirit set their minds on the", 31 words in. The fill ran on to word 51,
+  // into verse 6, because the first half of verse 5 was still in the spoken
+  // window and got lined up against the second half.
+  const expected = tokenizeWords(
+    'For those who live according to the flesh set their minds on the things of the flesh, ' +
+      'but those who live according to the Spirit set their minds on the things of the Spirit. ' +
+      'For to set the mind on the flesh is death, but to set the mind on the Spirit is life and peace. ' +
+      "Who shall bring any charge against God's elect? It is God who justifies."
+  );
+  const said = tokenizeWords(
+    'For those who live according to the flesh set their minds on the things of the flesh ' +
+      'but those who live according to the Spirit set their minds on the'
+  );
+  for (const chunk of [1, 2, 3, 5]) {
+    let session = newSession();
+    let furthest = 0;
+    for (let end = chunk; end < said.length + chunk; end += chunk) {
+      session = feedTranscript(session, expected, said.slice(0, Math.min(end, said.length)).join(' '));
+      furthest = Math.max(furthest, session.pointer);
+    }
+    // 30 or 31: the last word said is a lone "the", which the fill may hold until more arrives.
+    check(`${chunk} word(s) at a time: the fill never runs past where the speaking stopped (word 31)`, session.pointer >= 30 && furthest <= 31, `pointer ${session.pointer}, furthest ${furthest}`);
+    const missed = Object.values(session.outcomes).filter((o) => o === 'missed').length;
+    check(`${chunk} word(s) at a time: nothing said is graded missed`, missed === 0, `${missed} missed`);
+  }
 });
 
 // ============================================================================

@@ -8,7 +8,7 @@ import {
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, Crosshair, Maximize2, X } from 'lucide-react-native';
+import { Camera, Crosshair, Expand, X } from 'lucide-react-native';
 
 import { AppIconButton, AppText } from './design';
 import { useThemeColors } from './theme';
@@ -158,15 +158,19 @@ export default function ListenPhotoView({
             </AppText>
           </View>
 
-          <Pressable
-            onPress={() => setExpanded(true)}
-            className="absolute bottom-2 right-2 bg-white/90 border border-line rounded items-center justify-center"
-            // layout-ok: an icon button, no text
-            style={{ width: 28, height: 28 }}
-            hitSlop={6}
-          >
-            <Maximize2 size={14} color={palette.ink} />
-          </Pressable>
+          {/* Full screen: the same round corner button the verse list uses
+              for Follow, so it reads as a control and is big enough to hit. */}
+          <View className="absolute bottom-2 right-2">
+            <AppIconButton
+              Icon={Expand}
+              diameter={40}
+              iconSize={18}
+              iconColor={palette.ink}
+              className="bg-surface border border-line-strong"
+              onPress={() => setExpanded(true)}
+              accessibilityLabel="Show the page full screen"
+            />
+          </View>
 
           {/* Only worth saying once the latch is actually released -- a
               "Following playback" badge in the default state would be chrome

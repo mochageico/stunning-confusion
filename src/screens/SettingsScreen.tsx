@@ -585,9 +585,9 @@ function AppearancePage() {
                 >
                   <View
                     className="rounded-full items-center justify-center"
-                    style={{ width: d, height: d, backgroundColor: scheme === 'light' ? a.light : a.dark }}
+                    style={{ width: d, height: d, backgroundColor: scheme === 'light' ? a.light : a.darkFill }}
                   >
-                    {active ? <Check size={18} color={palette.onAccent} strokeWidth={3} /> : null}
+                    {active ? <Check size={18} color={a.id === 'ink' ? palette.onStrong : '#FFFFFF' /* theme-ok: on the swatch's own deep fill */} strokeWidth={3} /> : null}
                   </View>
                 </Pressable>
               );

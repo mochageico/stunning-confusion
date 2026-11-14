@@ -186,7 +186,7 @@ function SectionHandle({
           backgroundColor: bracketColor(palette, index),
         }}
       >
-        <GripHorizontal size={Math.round(14 * scale)} color={palette.onAccent} strokeWidth={2.4} />
+        <GripHorizontal size={Math.round(14 * scale)} color={palette.onStrong} strokeWidth={2.4} />
       </View>
     </GestureDetector>
   );

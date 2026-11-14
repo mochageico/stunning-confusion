@@ -20,6 +20,10 @@ import { availableModes } from '../../lib/practiceModes';
 import { referencesFit } from '../../lib/referenceQuiz';
 import { GradeInput, wordAccuracy } from '../../lib/grading';
 import { buildReciteOrder, positionsToWords, verseStartPosition } from '../../lib/reciteOrder';
+import { localDayKey } from '../../lib/logicalDate';
+
+/** A firm-up that has come due (tomorrow's, set by today's review, has not). The engine checks the exact day. */
+const hasFirmUpNow = (item: QueueItem): boolean => !!item.firmUp && item.firmUp.day <= localDayKey(new Date());
 
 // ============================================================================
 // RECALL (LEARN MODE)
@@ -624,7 +628,10 @@ export function useRecall({
               (!v.translationId || (q.translationId || 'ESV') === v.translationId)
           ),
         }))
-        .filter(({ item }) => item?.status === 'reviewing' && !isReviewDue(item.nextReviewDueDate)),
+        // A verse with a firm-up today is graded even though its next review
+        // isn't due: that grade is what wins the review back. Without this
+        // the run was called practice and the Firm up card never went away.
+        .filter(({ item }) => item?.status === 'reviewing' && !isReviewDue(item.nextReviewDueDate) && !hasFirmUpNow(item)),
     [verses, memoryQueue]
   );
 
@@ -739,6 +746,9 @@ export function useRecall({
       recitePointer
     );
     alignAnchorRef.current = patch.nextAlignAnchor;
+    // Speech already used up behind the anchor leaves the window, so it can't
+    // be matched again against a similar phrase further on.
+    spokenTokenFloorRef.current = patch.nextSpokenFloor;
     if (Object.keys(patch.outcomes).length === 0 && patch.pointer === recitePointer) return;
 
     const seconds = (Date.now() - listenStartMsRef.current) / 1000;

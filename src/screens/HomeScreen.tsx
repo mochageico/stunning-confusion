@@ -53,7 +53,8 @@ function WeekStrip({ days }: { days: { weekday: number; count: number; day: stri
   const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
-  const d = Math.round(30 * scale);
+  // Small on purpose: the week is a quiet record, not the page's headline.
+  const d = Math.round(22 * scale);
   return (
     <View className="flex-row justify-between" style={{ paddingHorizontal: space(2) }}>
       {days.map((day, i) => {
@@ -72,7 +73,7 @@ function WeekStrip({ days }: { days: { weekday: number; count: number; day: stri
               className={`rounded-full items-center justify-center ${active ? 'bg-stage-complete' : today ? 'bg-surface border-2 border-stage-complete' : 'bg-fill'}`}
               style={{ width: d, height: d }}
             >
-              {active ? <Check size={Math.round(15 * scale)} color={palette.onAccent} strokeWidth={3} /> : null}
+              {active ? <Check size={Math.round(11 * scale)} color={palette.onStrong} strokeWidth={3} /> : null}
             </View>
             <AppText variant="micro" className={`font-sans ${today ? 'font-bold text-ink' : 'text-ink-3'}`}>
               {WEEKDAY_LETTERS[day.weekday]}
@@ -337,12 +338,13 @@ export default function HomeScreen() {
                   onPress={() => state.openMixedReview()}
                 />
               ) : (
-                <View className="flex-row items-center bg-success-soft rounded-btn" style={{ padding: space(14), gap: space(10) }}>
-                  <Check size={Math.round(20 * scale)} color={palette.success} strokeWidth={2.6} />
-                  <AppText variant="label" className="font-sans font-semibold text-success flex-1">
-                    {doneCount > 0 ? 'Reviews done for today' : 'No reviews due today'}
-                  </AppText>
-                </View>
+                // The same card as Review, gone quiet: no green, no button.
+                <ActionCard
+                  Icon={Check}
+                  tone="done"
+                  title={doneCount > 0 ? 'Reviews done' : 'No reviews due'}
+                  subtitle={doneCount > 0 ? `${doneCount} ${doneCount === 1 ? 'verse' : 'verses'} today` : 'Nothing to review today'}
+                />
               )}
 
               {firstLearning || hasQueued ? (

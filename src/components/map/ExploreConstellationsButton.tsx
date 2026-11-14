@@ -3,7 +3,6 @@ import { ChevronRight } from 'lucide-react-native';
 import Svg, { Circle, Line } from 'react-native-svg';
 
 import { AppText, useFontScale, useScaledSpace } from '../design';
-import { useThemeColors } from '../theme';
 import { SKY } from './skyPalette';
 
 // Today's one constellation button (CONSTELLATION_SKY_PLAN.md, stage 2): a tiny
@@ -18,7 +17,6 @@ const ZIGZAG: [number, number][] = [
 ];
 
 export function ExploreConstellationsButton({ onPress }: { onPress: () => void }) {
-  const palette = useThemeColors();
   const scale = useFontScale();
   const space = useScaledSpace();
   const tile = Math.round(48 * scale);
@@ -28,28 +26,31 @@ export function ExploreConstellationsButton({ onPress }: { onPress: () => void }
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="Explore scripture constellations. See how verses connect."
-      className="flex-row items-center bg-surface border border-line rounded-card active:opacity-70"
-      style={{ padding: space(12), gap: space(12) }}
+      className="flex-row items-center rounded-card active:opacity-70"
+      // The whole button is the night (always, in light mode too), with gold
+      // stars drawn straight on it: no separate tile.
+      style={{ padding: space(12), gap: space(12), backgroundColor: SKY.bg, borderWidth: 1, borderColor: SKY.edge }}
     >
-      <View className="rounded-btn items-center justify-center" style={{ backgroundColor: SKY.bg, width: tile, height: tile }}>
+      {/* layout-ok: a drawing, no text */}
+      <View className="items-center justify-center" style={{ width: tile, height: tile }}>
         <Svg width={tile} height={tile} viewBox="0 0 100 100">
           {ZIGZAG.slice(1).map((p, i) => (
             <Line key={i} x1={ZIGZAG[i][0]} y1={ZIGZAG[i][1]} x2={p[0]} y2={p[1]} stroke={SKY.ink3} strokeWidth={4} strokeLinecap="round" />
           ))}
           {ZIGZAG.map((p, i) => (
-            <Circle key={i} cx={p[0]} cy={p[1]} r={8} fill={SKY.ink} />
+            <Circle key={i} cx={p[0]} cy={p[1]} r={8} fill={SKY.star} />
           ))}
         </Svg>
       </View>
       <View className="flex-1" style={{ gap: space(2) }}>
-        <AppText variant="body" className="font-sans font-semibold text-ink">
+        <AppText variant="body" className="font-sans font-semibold" style={{ color: SKY.ink }}>
           Explore scripture constellations
         </AppText>
-        <AppText variant="caption" className="font-sans text-ink-3">
+        <AppText variant="caption" className="font-sans" style={{ color: SKY.ink3 }}>
           See how verses connect
         </AppText>
       </View>
-      <ChevronRight size={Math.round(20 * scale)} color={palette.ink3} />
+      <ChevronRight size={Math.round(20 * scale)} color={SKY.ink3} />
     </Pressable>
   );
 }

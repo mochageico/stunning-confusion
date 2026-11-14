@@ -27,13 +27,18 @@ import { useAppPrefs } from '../lib/appPrefs';
 
 export type ColorScheme = 'light' | 'dark';
 
+// `dark` is the light tint used for accent TEXT and icons in dark mode (a deep
+// color is unreadable as text on a dark page). `darkFill` is the deeper shade
+// used for accent FILLS in dark mode (buttons, selected chips), with white on
+// it, so burgundy looks like burgundy instead of pink. Ink has no deep shade:
+// its fill stays parchment with dark text.
 export const ACCENTS = [
-  { id: 'navy', name: 'Navy', light: '#294C82', dark: '#8FB0E8' },
-  { id: 'evergreen', name: 'Evergreen', light: '#2D6A4F', dark: '#7CC4A0' },
-  { id: 'burgundy', name: 'Burgundy', light: '#8A2E3B', dark: '#E59AA6' },
-  { id: 'plum', name: 'Plum', light: '#6A3F8E', dark: '#C4A5E8' },
-  { id: 'walnut', name: 'Walnut', light: '#7A4E2B', dark: '#D9AE84' },
-  { id: 'ink', name: 'Ink', light: '#2B2824', dark: '#E6E0D6' },
+  { id: 'navy', name: 'Navy', light: '#294C82', dark: '#8FB0E8', darkFill: '#3F5FA8' },
+  { id: 'evergreen', name: 'Evergreen', light: '#2D6A4F', dark: '#7CC4A0', darkFill: '#2F7D5C' },
+  { id: 'burgundy', name: 'Burgundy', light: '#8A2E3B', dark: '#E59AA6', darkFill: '#A8475A' },
+  { id: 'plum', name: 'Plum', light: '#6A3F8E', dark: '#C4A5E8', darkFill: '#7E55A8' },
+  { id: 'walnut', name: 'Walnut', light: '#7A4E2B', dark: '#D9AE84', darkFill: '#96643A' },
+  { id: 'ink', name: 'Ink', light: '#2B2824', dark: '#E6E0D6', darkFill: '#E6E0D6' },
 ] as const;
 
 export type AccentId = (typeof ACCENTS)[number]['id'];
@@ -128,10 +133,14 @@ export interface ThemeColors {
   ink2: string;
   ink3: string;
   accent: string;
+  /** The accent as a FILL (`bg-accent` draws this). Same as accent in light; a deeper shade in dark. */
+  accentFill: string;
   /** 13% accent over the surface color: selected rows, the active tab, info panels. */
   accentSoft: string;
-  /** Text and icons on an accent fill. */
+  /** Text and icons on an accent fill (`bg-accent`). */
   onAccent: string;
+  /** Text and icons on any OTHER strong fill: ink, success, danger, a stage or bracket color. */
+  onStrong: string;
   success: string;
   successSoft: string;
   warning: string;
@@ -185,11 +194,18 @@ export function buildThemeColors(accentId: AccentId, scheme: ColorScheme): Theme
   const n = NEUTRALS[scheme];
   const accentDef = ACCENTS.find((a) => a.id === accentId) ?? ACCENTS[0];
   const accent = scheme === 'light' ? accentDef.light : accentDef.dark;
+  const accentFill = scheme === 'light' ? accentDef.light : accentDef.darkFill;
+  // White on a deep fill, near-black on a pale one (Ink in dark mode).
+  const [fr, fg, fb] = hexToRgb(accentFill);
+  const onAccent = fr * 0.299 + fg * 0.587 + fb * 0.114 > 150 ? '#0B0B0D' : '#FFFFFF';
   const s = STATUS[scheme];
   const softAmount = scheme === 'light' ? 0.12 : 0.14;
   return {
     ...n,
     accent,
+    accentFill,
+    onAccent,
+    onStrong: n.onAccent,
     accentSoft: mix(accent, n.surface, 0.13),
     success: s.success,
     successSoft: mix(s.success, n.surface, softAmount),
@@ -220,8 +236,10 @@ const CSS_VARS: Record<keyof ThemeColors, string> = {
   ink2: '--ink-2',
   ink3: '--ink-3',
   accent: '--accent',
+  accentFill: '--accent-fill',
   accentSoft: '--accent-soft',
   onAccent: '--on-accent',
+  onStrong: '--on-strong',
   success: '--success',
   successSoft: '--success-soft',
   warning: '--warning',
